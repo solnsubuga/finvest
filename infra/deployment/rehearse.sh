@@ -121,6 +121,12 @@ code() { "${curl_local[@]}" --resolve "$1:$port:127.0.0.1" --output /dev/null --
 head -c 2000000 /dev/zero > "$work/large-body"
 [[ $("${curl_local[@]}" --output /dev/null --write-out '%{http_code}' --data-binary "@$work/large-body" \
   -H 'Content-Type: application/json' "https://$host:$port/client/sign-in") == 413 ]]
+# An upload route takes that body through to the API, and refuses one over 12 MiB.
+[[ $("${curl_local[@]}" --output /dev/null --write-out '%{http_code}' --data-binary "@$work/large-body" \
+  -H 'Content-Type: application/octet-stream' "https://$host:$port/staff/reconciliation/statements") != 413 ]]
+head -c 13000000 /dev/zero > "$work/huge-body"
+[[ $("${curl_local[@]}" --output /dev/null --write-out '%{http_code}' --data-binary "@$work/huge-body" \
+  -H 'Content-Type: application/octet-stream' "https://$host:$port/staff/reconciliation/statements") == 413 ]]
 [[ $(code unknown.example /) == 000 ]]
 # Staging asks search engines to leave every address out.
 for name in staging.finvestug.com admin-staging.finvestug.com "$host"; do
