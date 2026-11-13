@@ -94,7 +94,8 @@ export function toInvestingError(error: unknown): InvestingError {
       const codes = error.fields.map((field) => field.code);
       if (codes.includes("below_minimum")) return new InvestingError("below_minimum");
       if (codes.includes("product_not_open")) return new InvestingError("product_not_open");
-      return new InvestingError("unavailable");
+      // Still a definite refusal: nothing was saved, so the next try may take a new key.
+      return new InvestingError("invalid");
     }
     default:
       return new InvestingError("unavailable");
