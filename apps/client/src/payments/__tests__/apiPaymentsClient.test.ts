@@ -23,6 +23,8 @@ const investment = (status = "awaiting_payment", currency = "UGX") => ({
   payout_id: null, product_code: "TB91", product_name: "91 Day Treasury Bill", rolled_into_id: null,
   start_date: null, status, term_days: null, total_at_maturity_minor: null, value_minor: 0,
   waiting_for_destination: false,
+  can_withdraw: false,
+  withdrawal_requested_at: null,
 });
 
 const payment = (overrides: Record<string, unknown> = {}) => ({
