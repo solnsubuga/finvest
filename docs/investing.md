@@ -232,7 +232,7 @@ Agreed with the payments and payouts threads on 13 November 2026. Starting and d
 
 A client may withdraw a running investment early, once, up to the day before a fixed term matures. An open term can be withdrawn at any time. They name one of their approved payout destinations that is past its first day's safety wait, and send an idempotency key (`POST /client/investments/{id}/withdraw`).
 
-**Switched off until it is paid end to end.** `FINVEST_EARLY_WITHDRAWAL_OPEN` is false by default, everywhere. While it is off, `can_withdraw` is false on every investment and the route answers `conflict` before anything is saved. The withdrawn money is published to the dealing desk, which funds it, and the payout follows; a publish made before the consumer exists is never replayed. The PR that wires the dealing funding consumer and `investments.pay_early_withdrawal` proves the whole path with it on in tests. It stays off in production until the owner says to turn it on.
+**Switched off until it is paid end to end.** `FINVEST_EARLY_WITHDRAWAL_OPEN` is false by default, everywhere. While it is off, `can_withdraw` is false on every investment and the route answers `conflict` before anything is saved. The withdrawn money is published to the dealing desk, which funds it, and the payout follows; a publish made before the consumer exists is never replayed. Both consumers are now wired and the journey `tests/journeys/test_06_early_withdrawal.py` pays a withdrawal end to end. It stays off in production until the owner says to turn it on.
 
 It pays the principal plus the interest earned after tax so far, with no fee: exactly the `value_minor` the client was shown. Interest stops at the request, so the figure cannot move while the money is found. The owner decided this on 2026-11-13 (see [decisions.md](decisions.md)).
 
@@ -240,7 +240,7 @@ It pays the principal plus the interest earned after tax so far, with no fee: ex
 2. **The move to payouts.** The worker posts `investment.withdrawn_early`: the holding and the interest go to the client's payout pending account for the investment, in one entry. The investment becomes `withdrawn`, the worker records `investments.withdrawn_early`, and it publishes `investments.withdrawn_early` with `{investment_id, client_id, product_code, principal_minor, currency, amount_minor}` for the dealing desk.
 3. **The payout.** The dealing desk funds the withdrawal from the liquidity buffer or a sale and publishes `dealing.withdrawal_funded`. The consumer `investments.pay_early_withdrawal` checks the amount is exactly what was withdrawn, then creates the payout with the key `early:<funding id>`. A refusal fails the job for staff, and the money stays in the payout pending account.
 
-Whichever merges second wires the two consumers: `dealing.events.FUND_EARLY_WITHDRAWAL` into the `investments.withdrawn_early` publish, and `investments.events.PAY_EARLY_WITHDRAWAL` into `dealing.withdrawals.FUNDED_CONSUMERS`.
+The two consumers are wired: `dealing.events.FUND_EARLY_WITHDRAWAL` is named in the `investments.withdrawn_early` publish, and `investments.events.PAY_EARLY_WITHDRAWAL` in `dealing.withdrawals.FUNDED_CONSUMERS`.
 
 The database fences each step (migration 0064). Only the client asks, once, while the investment runs, before the maturity date and by the database clock. Only the worker withdraws an investment someone asked for. A withdrawn investment changes only to record its payout, once. Accrual and the choice for maturity stop at the request.
 
