@@ -67,3 +67,9 @@ jobs:
             echo "The demo plans or insights were bundled into a production build" >&2
             exit 1
           fi
+          # Nor the demo goals, which show savings that were never made, nor any rate before
+          # tax, which clients never see.
+          if grep -rIl -e "School fees, Term 1" -e "demo-goal-" -e "taxBps" -e "annualRateBps" dist; then
+            echo "The demo goals or a rate before tax were bundled into a production build" >&2
+            exit 1
+          fi

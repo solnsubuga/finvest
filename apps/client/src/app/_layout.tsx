@@ -6,6 +6,7 @@ import { SafeAreaProvider } from "react-native-safe-area-context";
 
 import { AuthProvider } from "@/auth/AuthProvider";
 import { AutoinvestProvider } from "@/autoinvest/AutoinvestProvider";
+import { GoalsProvider } from "@/goals/GoalsProvider";
 import { InsightsProvider } from "@/insights/InsightsProvider";
 import { PaymentsProvider } from "@/payments/PaymentsProvider";
 import { colors, fontAssets } from "@/theme";
@@ -32,12 +33,14 @@ export default function RootLayout() {
         <PaymentsProvider>
           <AutoinvestProvider>
             <InsightsProvider>
-              <Stack
-                screenOptions={{
-                  headerShown: false,
-                  contentStyle: { backgroundColor: colors.paper },
-                }}
-              />
+              <GoalsProvider>
+                <Stack
+                  screenOptions={{
+                    headerShown: false,
+                    contentStyle: { backgroundColor: colors.paper },
+                  }}
+                />
+              </GoalsProvider>
             </InsightsProvider>
           </AutoinvestProvider>
         </PaymentsProvider>

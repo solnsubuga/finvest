@@ -29,6 +29,7 @@ const paths = {
   repeat: [
     "M17 3l3 3-3 3M4 12V9a3 3 0 013-3h13M7 21l-3-3 3-3M20 12v3a3 3 0 01-3 3H4",
   ],
+  plus: ["M12 5v14M5 12h14"],
 } as const;
 
 export type IconName = keyof typeof paths;
