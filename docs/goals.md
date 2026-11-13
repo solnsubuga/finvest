@@ -74,7 +74,7 @@ A closed goal is not followed: its investments keep rolling over as the client's
 | `PUT /client/goals/{id}` | Change the name, what it is for, the target or the date |
 | `POST /client/goals/{id}/close` | Close it |
 | `POST /client/goals/{id}/savings` | Confirm a saving: returns the new investment awaiting payment. Takes an `Idempotency-Key`. Pay for it with the investment's ID as the purpose. |
-| `GET /staff/goals`, `GET /staff/goals/{id}` | Staff with `investments.view` |
+| `GET /staff/goals`, `GET /staff/goals/{id}` | Staff with `goals.view` |
 
 Client responses carry net figures and the yearly rate after tax as a label. No tax rate, tax amount or figure before tax.
 

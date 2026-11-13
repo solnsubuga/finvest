@@ -9,9 +9,20 @@ describe("formatMoney", () => {
     expect(formatMoney({ currency: "UGX", minor: 1_234_567_890 })).toBe("UGX 1,234,567,890");
   });
 
+  it("places the point for dollars, which are counted in cents", () => {
+    expect(formatMoney({ currency: "USD", minor: 50_000 })).toBe("USD 500.00");
+    expect(formatMoney({ currency: "USD", minor: 123_456_789 })).toBe("USD 1,234,567.89");
+    expect(formatMoney({ currency: "USD", minor: 105 })).toBe("USD 1.05");
+    expect(formatMoney({ currency: "USD", minor: 7 })).toBe("USD 0.07");
+    expect(formatMoney({ currency: "USD", minor: 0 })).toBe("USD 0.00");
+    expect(formatMoney({ currency: "USD", minor: -250 })).toBe("USD -2.50");
+    expect(formatMoney({ currency: "UGX", minor: -1_500 })).toBe("UGX -1,500");
+  });
+
   it("refuses an amount that is not a whole number", () => {
     expect(() => formatMoney({ currency: "UGX", minor: 1000.5 })).toThrow();
     expect(() => formatMoney({ currency: "UGX", minor: Number.NaN })).toThrow();
+    expect(() => formatMoney({ currency: "USD", minor: 0.5 })).toThrow();
   });
 });
 

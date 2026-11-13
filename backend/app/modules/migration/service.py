@@ -83,6 +83,8 @@ class SignOffView:
     proposed_at: datetime
     state: SignOffState
     decided_by: str | None
+    # Why it was rejected. A rejection always gives one; an approval may.
+    decision_reason: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -174,7 +176,8 @@ _INSERT_SIGN_OFF = text(
     "VALUES (:id, :key, :figures, :reason, :proposed_by, :proposed_at)"
 )
 _SIGN_OFF_COLUMNS = (
-    "s.id, s.key, s.figures, s.reason, s.proposed_by, s.proposed_at, d.outcome, d.decided_by"
+    "s.id, s.key, s.figures, s.reason, s.proposed_by, s.proposed_at, d.outcome, d.decided_by, "
+    "d.reason AS decision_reason"
 )
 _SIGN_OFFS = text(
     f"SELECT {_SIGN_OFF_COLUMNS} FROM migration_sign_offs AS s "  # noqa: S608
@@ -384,15 +387,14 @@ async def overview(session: AsyncSession) -> Overview:
     lines = total_lines(entry.totals, trial.new_totals) if entry and confirmed else ()
     differing = {line.key: line.figures for line in lines if not line.agrees} | trial.differing
 
-    # The latest sign-off per key counts, and only for exactly the figures that stand now.
+    # The latest sign-off per key is shown, and only for exactly the figures that stand now.
+    # A rejected one stays so its proposer can read why; only an approved one counts.
     latest: dict[str, SignOffView] = {}
     for sign_off_row in (await session.execute(_SIGN_OFFS)).all():
         sign_off = _sign_off(sign_off_row)
         latest[sign_off.key] = sign_off
     current = {
-        key: sign_off
-        for key, sign_off in latest.items()
-        if differing.get(key) == sign_off.figures and sign_off.state != "rejected"
+        key: sign_off for key, sign_off in latest.items() if differing.get(key) == sign_off.figures
     }
     blockers: list[BlockerCode] = []
     if trial.error_count:
@@ -468,8 +470,8 @@ async def propose_sign_off(
     figures = state.differing.get(key)
     if figures is None:
         raise _invalid("key", "does_not_differ")
-    if key in state.sign_offs:
-        # Already proposed or approved for these figures.
+    if key in state.sign_offs and state.sign_offs[key].state != "rejected":
+        # Already proposed or approved for these figures. A rejected one may be proposed again.
         raise ApplicationError("conflict")
     view = SignOffView(
         id=push_id(),
@@ -576,6 +578,7 @@ async def decide_sign_off(
         sign_off.proposed_at,
         outcome,
         _id(staff),
+        note,
     )
 
 
@@ -634,6 +637,7 @@ def _sign_off(row: Row[Any]) -> SignOffView:
         proposed_at=row.proposed_at,
         state=row.outcome or "proposed",
         decided_by=row.decided_by,
+        decision_reason=row.decision_reason,
     )
 
 

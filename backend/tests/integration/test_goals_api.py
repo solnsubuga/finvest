@@ -13,6 +13,8 @@ from app.modules.identity.hashing import PasswordHasher
 from app.modules.identity.service import IdentityService
 from tests.support.clock import FakeClock
 from tests.support.database import TestDatabase
+from tests.support.http import Api as StaffApi
+from tests.support.http import running_api
 from tests.support.ledger import key
 
 pytestmark = pytest.mark.integration
@@ -136,3 +138,23 @@ async def test_another_clients_goal_is_not_found(api: Api) -> None:
 async def test_a_client_session_does_not_open_the_staff_routes(api: Api) -> None:
     response = await api.http.get("/staff/goals", headers=await signed_in(api))
     assert response.status_code == 401
+
+
+@pytest.fixture
+async def staff_api(test_database: TestDatabase, app_database: Database) -> AsyncIterator[StaffApi]:
+    async with running_api(test_database, app_database) as running:
+        yield running
+
+
+@pytest.mark.parametrize("role", ["admin", "operations", "finance"])
+async def test_staff_with_goals_view_open_the_staff_routes(staff_api: StaffApi, role: str) -> None:
+    await staff_api.staff(role)
+    response = await staff_api.http.get("/staff/goals")
+    assert response.status_code == 200, response.json()
+
+
+@pytest.mark.parametrize("role", ["compliance", "support"])
+async def test_staff_without_goals_view_are_refused(staff_api: StaffApi, role: str) -> None:
+    await staff_api.staff(role)
+    assert (await staff_api.http.get("/staff/goals")).status_code == 403
+    assert (await staff_api.http.get(f"/staff/goals/{key()}")).status_code == 403

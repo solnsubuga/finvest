@@ -3,6 +3,7 @@ import { renderRouter } from "expo-router/testing-library";
 
 import { DEMO_PASSWORD } from "@/auth/stubAuthClient";
 import { PaymentError } from "@/payments/types";
+import { WARM_ROUTER_MS, warmRouter } from "@/testing/warmRouter";
 
 const PDF = { uri: "file:///receipt.pdf", name: "transfer-receipt.pdf", mimeType: "application/pdf", size: 219_136 };
 
@@ -108,6 +109,8 @@ async function fill(number = "TXN123456") {
   await fireEvent.changeText(screen.getByTestId("receipt-bank"), "Demo Bank");
   await fireEvent.changeText(screen.getByTestId("receipt-number"), number);
 }
+
+beforeAll(warmRouter, WARM_ROUTER_MS);
 
 describe("paying for an investment by bank transfer", () => {
   beforeAll(() => {
