@@ -87,6 +87,8 @@ Every notification is kept in the app. Push, SMS and email are the client's choi
 
 Security alerts cannot be silenced. A client can change their channels, but SMS or email must stay on, because the point of a security alert is to reach a client whose phone or app may be in someone else's hands. PostgreSQL enforces this as well as the API.
 
+If a client chose email but not SMS for security alerts, and their email address is suppressed (it bounced for good or reported our mail as spam), or they have no email address, the alert goes by SMS instead, so it still reaches them outside the app. Other kinds of alert do not fall back: they wait in the app.
+
 SMS is on by default only for money and security, because each text is paid for.
 
 ## Sending beyond the app
@@ -127,9 +129,9 @@ The router posts each event, unchanged, to `POST /webhooks/resend` on the API (`
 1. The route checks the Svix signature (`svix-id`, `svix-timestamp`, `svix-signature`) with the hook secret from `RESEND_HOOK_SECRET`, the router's `whsec_...` secret, not the one in Resend's dashboard. A missing or wrong signature, or one more than five minutes old, gets 401. With no secret set, the route answers 404.
 2. It saves the event in `notification_email_events` under its `svix-id` and queues `notifications.email_event`, in one transaction, then answers 204. A retry of the same event saves nothing and queues nothing. Types we do not act on (opens, clicks, contact and domain events) get 204 and are dropped. A signed body we cannot read gets 422.
 3. The worker sets `delivery` and `delivery_at` on the message with that Resend id. Delivery only moves forward: a late `email.sent` never undoes `email.delivered`. If no message has that id yet, because the send's result is not saved yet, the job retries for ten minutes and then keeps the event as unmatched.
-4. A bounce Resend does not call `Transient`, and any spam complaint, adds the address to `notification_email_suppressions`. From then on `notifications.send` does not email that address: the message ends `failed` with `failure_code = 'suppressed'`.
+4. A bounce Resend does not call `Transient`, and any spam complaint, adds the address to `notification_email_suppressions`. From then on `notifications.send` does not email that address: the message ends `failed` with `failure_code = 'suppressed'`. A module that emails a client itself, such as documents, asks `contract.is_suppressed(session, address)` first, from the worker.
 
-Only facts are kept. Each address is stored as the sha256 of its lower-cased form, never in the clear, and the subject and the rest of the body are dropped on arrival. The API can record an event and cannot read one back. Nothing lifts a suppression yet; when an address needs it, that is a console action still to build.
+Only facts are kept. Each address is stored as the sha256 of its lower-cased form, never in the clear, and the subject and the rest of the body are dropped on arrival. The API can record an event and cannot read one back.
 
 ### Lifting a suppression
 
