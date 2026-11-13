@@ -151,12 +151,14 @@ CREATE FUNCTION identity_apply_client_lock(p_change_id text) RETURNS boolean
     $$
 """
 
+# Named to run after 0009's tr_identity_clients_never_unclaimed_again (triggers fire in name
+# order), so a move back to unclaimed is refused with that trigger's own reason.
 RULES = [
     "REVOKE ALL ON FUNCTION finvest_identity_client_locks_guard() FROM PUBLIC",
     "REVOKE ALL ON FUNCTION finvest_identity_clients_status_guard() FROM PUBLIC",
     "CREATE TRIGGER identity_client_locks_guard BEFORE INSERT OR UPDATE ON identity_client_locks "
     "FOR EACH ROW EXECUTE FUNCTION finvest_identity_client_locks_guard()",
-    "CREATE TRIGGER identity_clients_status_guard BEFORE UPDATE OF status ON identity_clients "
+    "CREATE TRIGGER tr_identity_clients_status_guard BEFORE UPDATE OF status ON identity_clients "
     "FOR EACH ROW EXECUTE FUNCTION finvest_identity_clients_status_guard()",
     "REVOKE ALL ON identity_client_locks FROM PUBLIC",
     # No DELETE for anyone: why an account was shut, and by whom, is part of the record.
@@ -193,7 +195,7 @@ $$
 def downgrade() -> None:
     op.execute(EMPTY_GUARD)
     op.execute("DROP FUNCTION identity_apply_client_lock(text)")
-    op.execute("DROP TRIGGER identity_clients_status_guard ON identity_clients")
+    op.execute("DROP TRIGGER tr_identity_clients_status_guard ON identity_clients")
     op.execute("DROP TABLE identity_client_locks")
     op.execute("DROP FUNCTION finvest_identity_clients_status_guard()")
     op.execute("DROP FUNCTION finvest_identity_client_locks_guard()")

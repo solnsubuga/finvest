@@ -164,7 +164,7 @@ async def test_a_claim_passes_the_client_status_guard(api: Api) -> None:
     await api.codes.claim_complete(challenge, sent, PASSWORD, "token")
     async with api.owner.transaction() as session:
         guards = await session.scalar(
-            text("SELECT count(*) FROM pg_trigger WHERE tgname = 'identity_clients_status_guard'")
+            text("SELECT count(*) FROM pg_trigger WHERE tgname = 'tr_identity_clients_status_guard'")
         )
         status = await session.scalar(
             text("SELECT status FROM identity_clients WHERE id = :id"), {"id": client_id}

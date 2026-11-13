@@ -1,6 +1,92 @@
 {
   "components": {
     "schemas": {
+      "AccountView": {
+        "additionalProperties": false,
+        "properties": {
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "email": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Email"
+          },
+          "has_authenticator": {
+            "title": "Has Authenticator",
+            "type": "boolean"
+          },
+          "has_passkey": {
+            "title": "Has Passkey",
+            "type": "boolean"
+          },
+          "id": {
+            "maxLength": 20,
+            "minLength": 20,
+            "pattern": "^[-0-9A-Z_a-z]{20}$",
+            "title": "Id",
+            "type": "string"
+          },
+          "last_signed_in_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Signed In At"
+          },
+          "phone": {
+            "title": "Phone",
+            "type": "string"
+          },
+          "restricted_until": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Restricted Until"
+          },
+          "status": {
+            "enum": [
+              "active",
+              "locked",
+              "closed"
+            ],
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "phone",
+          "email",
+          "status",
+          "created_at",
+          "restricted_until",
+          "has_passkey",
+          "has_authenticator",
+          "last_signed_in_at"
+        ],
+        "title": "AccountView",
+        "type": "object"
+      },
       "Amount-Output": {
         "additionalProperties": false,
         "description": "An amount in the smallest unit of its currency: whole shillings, or cents.",
@@ -666,6 +752,97 @@
         "title": "ClientLoginStart",
         "type": "object"
       },
+      "ClientPageView": {
+        "additionalProperties": false,
+        "properties": {
+          "account": {
+            "$ref": "#/components/schemas/AccountView"
+          },
+          "can_lock": {
+            "title": "Can Lock",
+            "type": "boolean"
+          },
+          "complaints": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/app__modules__console__api__ComplaintSummary"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Complaints"
+          },
+          "conversation": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ConversationSummary"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "destinations": {
+            "items": {
+              "$ref": "#/components/schemas/DestinationView"
+            },
+            "title": "Destinations",
+            "type": "array"
+          },
+          "identity_check": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/IdentityCheckView"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "locks": {
+            "items": {
+              "$ref": "#/components/schemas/LockView"
+            },
+            "title": "Locks",
+            "type": "array"
+          },
+          "owed": {
+            "items": {
+              "$ref": "#/components/schemas/OwedView"
+            },
+            "title": "Owed",
+            "type": "array"
+          },
+          "verified_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Verified Name"
+          }
+        },
+        "required": [
+          "account",
+          "verified_name",
+          "identity_check",
+          "owed",
+          "destinations",
+          "locks",
+          "conversation",
+          "complaints",
+          "can_lock"
+        ],
+        "title": "ClientPageView",
+        "type": "object"
+      },
       "ClientSessionView": {
         "additionalProperties": false,
         "properties": {
@@ -910,57 +1087,6 @@
         "title": "ComplaintNote",
         "type": "object"
       },
-      "ComplaintSummary": {
-        "additionalProperties": false,
-        "properties": {
-          "average_days_to_close_tenths": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Average Days To Close Tenths"
-          },
-          "closed_this_quarter": {
-            "title": "Closed This Quarter",
-            "type": "integer"
-          },
-          "open": {
-            "title": "Open",
-            "type": "integer"
-          },
-          "overdue": {
-            "title": "Overdue",
-            "type": "integer"
-          },
-          "received_this_quarter": {
-            "title": "Received This Quarter",
-            "type": "integer"
-          },
-          "target_working_days": {
-            "title": "Target Working Days",
-            "type": "integer"
-          },
-          "upheld_this_quarter": {
-            "title": "Upheld This Quarter",
-            "type": "integer"
-          }
-        },
-        "required": [
-          "open",
-          "overdue",
-          "received_this_quarter",
-          "closed_this_quarter",
-          "upheld_this_quarter",
-          "average_days_to_close_tenths",
-          "target_working_days"
-        ],
-        "title": "ComplaintSummary",
-        "type": "object"
-      },
       "ConfirmCode": {
         "additionalProperties": false,
         "properties": {
@@ -1102,6 +1228,52 @@
         "title": "ConversationItem",
         "type": "object"
       },
+      "ConversationSummary": {
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "maxLength": 20,
+            "minLength": 20,
+            "pattern": "^[-0-9A-Z_a-z]{20}$",
+            "title": "Id",
+            "type": "string"
+          },
+          "last_message_at": {
+            "format": "date-time",
+            "title": "Last Message At",
+            "type": "string"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          },
+          "topic": {
+            "title": "Topic",
+            "type": "string"
+          },
+          "waiting_since": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Waiting Since"
+          }
+        },
+        "required": [
+          "id",
+          "topic",
+          "status",
+          "last_message_at",
+          "waiting_since"
+        ],
+        "title": "ConversationSummary",
+        "type": "object"
+      },
       "Currency": {
         "enum": [
           "UGX",
@@ -1109,6 +1281,32 @@
         ],
         "title": "Currency",
         "type": "string"
+      },
+      "DecideLock": {
+        "additionalProperties": false,
+        "properties": {
+          "decision": {
+            "enum": [
+              "approved",
+              "rejected",
+              "withdrawn"
+            ],
+            "title": "Decision",
+            "type": "string"
+          },
+          "reason": {
+            "maxLength": 500,
+            "minLength": 1,
+            "title": "Reason",
+            "type": "string"
+          }
+        },
+        "required": [
+          "decision",
+          "reason"
+        ],
+        "title": "DecideLock",
+        "type": "object"
       },
       "DecideWording": {
         "additionalProperties": false,
@@ -1161,6 +1359,73 @@
           "approve"
         ],
         "title": "DecisionRequest",
+        "type": "object"
+      },
+      "DestinationView": {
+        "additionalProperties": false,
+        "properties": {
+          "bank_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Bank Code"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "holder_name": {
+            "title": "Holder Name",
+            "type": "string"
+          },
+          "id": {
+            "maxLength": 20,
+            "minLength": 20,
+            "pattern": "^[-0-9A-Z_a-z]{20}$",
+            "title": "Id",
+            "type": "string"
+          },
+          "kind": {
+            "title": "Kind",
+            "type": "string"
+          },
+          "masked_account": {
+            "title": "Masked Account",
+            "type": "string"
+          },
+          "network": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Network"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "kind",
+          "network",
+          "bank_code",
+          "masked_account",
+          "holder_name",
+          "status",
+          "created_at"
+        ],
+        "title": "DestinationView",
         "type": "object"
       },
       "DifferenceView": {
@@ -1769,6 +2034,66 @@
         "title": "Health",
         "type": "object"
       },
+      "IdentityCheckView": {
+        "additionalProperties": false,
+        "properties": {
+          "account_number": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Account Number"
+          },
+          "decided_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Decided At"
+          },
+          "id": {
+            "maxLength": 20,
+            "minLength": 20,
+            "pattern": "^[-0-9A-Z_a-z]{20}$",
+            "title": "Id",
+            "type": "string"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          },
+          "submitted_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Submitted At"
+          }
+        },
+        "required": [
+          "id",
+          "status",
+          "submitted_at",
+          "decided_at",
+          "account_number"
+        ],
+        "title": "IdentityCheckView",
+        "type": "object"
+      },
       "Inbox": {
         "additionalProperties": false,
         "properties": {
@@ -2015,6 +2340,132 @@
           "id"
         ],
         "title": "LinkView",
+        "type": "object"
+      },
+      "LockView": {
+        "additionalProperties": false,
+        "properties": {
+          "client_id": {
+            "maxLength": 20,
+            "minLength": 20,
+            "pattern": "^[-0-9A-Z_a-z]{20}$",
+            "title": "Client Id",
+            "type": "string"
+          },
+          "decided_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Decided At"
+          },
+          "decided_by": {
+            "anyOf": [
+              {
+                "maxLength": 20,
+                "minLength": 20,
+                "pattern": "^[-0-9A-Z_a-z]{20}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Decided By"
+          },
+          "decided_by_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Decided By Name"
+          },
+          "decision_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Decision Reason"
+          },
+          "id": {
+            "maxLength": 20,
+            "minLength": 20,
+            "pattern": "^[-0-9A-Z_a-z]{20}$",
+            "title": "Id",
+            "type": "string"
+          },
+          "kind": {
+            "enum": [
+              "lock",
+              "unlock"
+            ],
+            "title": "Kind",
+            "type": "string"
+          },
+          "proposed_at": {
+            "format": "date-time",
+            "title": "Proposed At",
+            "type": "string"
+          },
+          "proposed_by": {
+            "maxLength": 20,
+            "minLength": 20,
+            "pattern": "^[-0-9A-Z_a-z]{20}$",
+            "title": "Proposed By",
+            "type": "string"
+          },
+          "proposed_by_name": {
+            "title": "Proposed By Name",
+            "type": "string"
+          },
+          "reason": {
+            "title": "Reason",
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "proposed",
+              "approved",
+              "rejected",
+              "withdrawn"
+            ],
+            "title": "Status",
+            "type": "string"
+          },
+          "yours": {
+            "title": "Yours",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "id",
+          "kind",
+          "client_id",
+          "reason",
+          "proposed_by",
+          "proposed_by_name",
+          "proposed_at",
+          "status",
+          "decided_by",
+          "decided_by_name",
+          "decided_at",
+          "decision_reason",
+          "yours"
+        ],
+        "title": "LockView",
         "type": "object"
       },
       "LogComplaint": {
@@ -2762,6 +3213,42 @@
         "title": "OverviewView",
         "type": "object"
       },
+      "OwedView": {
+        "additionalProperties": false,
+        "properties": {
+          "account_code": {
+            "title": "Account Code",
+            "type": "string"
+          },
+          "account_reference": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Account Reference"
+          },
+          "amount_minor": {
+            "title": "Amount Minor",
+            "type": "integer"
+          },
+          "currency": {
+            "title": "Currency",
+            "type": "string"
+          }
+        },
+        "required": [
+          "account_code",
+          "account_reference",
+          "amount_minor",
+          "currency"
+        ],
+        "title": "OwedView",
+        "type": "object"
+      },
       "PasskeyItem": {
         "additionalProperties": false,
         "properties": {
@@ -3431,6 +3918,31 @@
         "title": "ProposalView",
         "type": "object"
       },
+      "ProposeLock": {
+        "additionalProperties": false,
+        "properties": {
+          "kind": {
+            "enum": [
+              "lock",
+              "unlock"
+            ],
+            "title": "Kind",
+            "type": "string"
+          },
+          "reason": {
+            "maxLength": 500,
+            "minLength": 1,
+            "title": "Reason",
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind",
+          "reason"
+        ],
+        "title": "ProposeLock",
+        "type": "object"
+      },
       "ProposeWording": {
         "additionalProperties": false,
         "properties": {
@@ -3636,7 +4148,7 @@
             "type": "array"
           },
           "summary": {
-            "$ref": "#/components/schemas/ComplaintSummary"
+            "$ref": "#/components/schemas/app__modules__support__api__ComplaintSummary"
           }
         },
         "required": [
@@ -4036,6 +4548,23 @@
           "maturity_date"
         ],
         "title": "SavingView",
+        "type": "object"
+      },
+      "SearchResult": {
+        "additionalProperties": false,
+        "properties": {
+          "clients": {
+            "items": {
+              "$ref": "#/components/schemas/AccountView"
+            },
+            "title": "Clients",
+            "type": "array"
+          }
+        },
+        "required": [
+          "clients"
+        ],
+        "title": "SearchResult",
         "type": "object"
       },
       "SecondSteps": {
@@ -5165,6 +5694,7 @@
                 "complaints.manage",
                 "complaints.close",
                 "clients.view",
+                "clients.lock",
                 "money_movement.view",
                 "reconciliation.view",
                 "investments.view",
@@ -5902,6 +6432,60 @@
         "title": "PlanView",
         "type": "object"
       },
+      "app__modules__console__api__ComplaintSummary": {
+        "additionalProperties": false,
+        "properties": {
+          "category": {
+            "title": "Category",
+            "type": "string"
+          },
+          "due_on": {
+            "format": "date",
+            "title": "Due On",
+            "type": "string"
+          },
+          "id": {
+            "maxLength": 20,
+            "minLength": 20,
+            "pattern": "^[-0-9A-Z_a-z]{20}$",
+            "title": "Id",
+            "type": "string"
+          },
+          "overdue": {
+            "title": "Overdue",
+            "type": "boolean"
+          },
+          "received_at": {
+            "format": "date-time",
+            "title": "Received At",
+            "type": "string"
+          },
+          "reference": {
+            "title": "Reference",
+            "type": "string"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          },
+          "summary": {
+            "title": "Summary",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "reference",
+          "category",
+          "summary",
+          "status",
+          "received_at",
+          "due_on",
+          "overdue"
+        ],
+        "title": "ComplaintSummary",
+        "type": "object"
+      },
       "app__modules__goals__api__PlanView": {
         "additionalProperties": false,
         "description": "An estimate at today's rates, after tax. Never a promise.",
@@ -6022,6 +6606,57 @@
           "currency"
         ],
         "title": "Amount",
+        "type": "object"
+      },
+      "app__modules__support__api__ComplaintSummary": {
+        "additionalProperties": false,
+        "properties": {
+          "average_days_to_close_tenths": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Average Days To Close Tenths"
+          },
+          "closed_this_quarter": {
+            "title": "Closed This Quarter",
+            "type": "integer"
+          },
+          "open": {
+            "title": "Open",
+            "type": "integer"
+          },
+          "overdue": {
+            "title": "Overdue",
+            "type": "integer"
+          },
+          "received_this_quarter": {
+            "title": "Received This Quarter",
+            "type": "integer"
+          },
+          "target_working_days": {
+            "title": "Target Working Days",
+            "type": "integer"
+          },
+          "upheld_this_quarter": {
+            "title": "Upheld This Quarter",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "open",
+          "overdue",
+          "received_this_quarter",
+          "closed_this_quarter",
+          "upheld_this_quarter",
+          "average_days_to_close_tenths",
+          "target_working_days"
+        ],
+        "title": "ComplaintSummary",
         "type": "object"
       }
     }
@@ -11637,6 +12272,369 @@
         "summary": "Public Quote",
         "tags": [
           "public investing"
+        ]
+      }
+    },
+    "/staff/clients/locks/{lock_id}/decision": {
+      "post": {
+        "description": "Approve or reject someone else's lock or unlock, or withdraw your own.",
+        "operationId": "decide_lock_staff_clients_locks__lock_id__decision_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "lock_id",
+            "required": true,
+            "schema": {
+              "maxLength": 20,
+              "minLength": 20,
+              "pattern": "^[-0-9A-Z_a-z]{20}$",
+              "title": "Lock Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DecideLock"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LockView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          }
+        },
+        "summary": "Decide Lock",
+        "tags": [
+          "staff clients"
+        ]
+      }
+    },
+    "/staff/clients/search": {
+      "get": {
+        "description": "Find a client by ID, account number or mobile number.",
+        "operationId": "search_staff_clients_search_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "q",
+            "required": true,
+            "schema": {
+              "maxLength": 40,
+              "minLength": 1,
+              "title": "Q",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SearchResult"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          }
+        },
+        "summary": "Search",
+        "tags": [
+          "staff clients"
+        ]
+      }
+    },
+    "/staff/clients/{client_id}": {
+      "get": {
+        "description": "Everything staff need about one client, on one page.",
+        "operationId": "client_page_staff_clients__client_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "client_id",
+            "required": true,
+            "schema": {
+              "maxLength": 20,
+              "minLength": 20,
+              "pattern": "^[-0-9A-Z_a-z]{20}$",
+              "title": "Client Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ClientPageView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          }
+        },
+        "summary": "Client Page",
+        "tags": [
+          "staff clients"
+        ]
+      }
+    },
+    "/staff/clients/{client_id}/locks": {
+      "post": {
+        "description": "Ask for the client to be locked or unlocked. A different member of staff decides.",
+        "operationId": "propose_lock_staff_clients__client_id__locks_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "client_id",
+            "required": true,
+            "schema": {
+              "maxLength": 20,
+              "minLength": 20,
+              "pattern": "^[-0-9A-Z_a-z]{20}$",
+              "title": "Client Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ProposeLock"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LockView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          }
+        },
+        "summary": "Propose Lock",
+        "tags": [
+          "staff clients"
         ]
       }
     },
