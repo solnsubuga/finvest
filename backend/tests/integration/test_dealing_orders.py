@@ -285,10 +285,12 @@ async def test_a_client_or_the_system_can_neither_prepare_nor_read_orders(
     assert hidden.value.code == "not_found"
 
 
-async def test_the_worker_has_no_access_to_orders(worker_database: Database) -> None:
+async def test_the_worker_reads_orders_but_never_changes_them(worker_database: Database) -> None:
+    async with worker_database.actor_transaction(SYSTEM) as session:
+        await session.execute(text("SELECT count(*) FROM dealing_orders"))
     with pytest.raises(DBAPIError, match="permission denied"):
         async with worker_database.actor_transaction(SYSTEM) as session:
-            await session.execute(text("SELECT count(*) FROM dealing_orders"))
+            await session.execute(text("UPDATE dealing_orders SET status = 'withdrawn'"))
 
 
 # What the database refuses whatever the application does -----------------------------------------
@@ -365,11 +367,21 @@ async def test_the_database_refuses_a_rejection_by_whoever_recorded_the_result(
             )
 
 
-async def test_no_order_can_be_settled_until_holdings_exist(app_database: Database) -> None:
+async def test_no_order_is_settled_without_its_ledger_entry_and_bills(
+    app_database: Database,
+) -> None:
     daniel, grace = new_staff(), new_staff()
     order = await recorded(app_database, daniel, grace)
-    with pytest.raises(DBAPIError, match="cannot go from result_recorded to settled"):
+    with pytest.raises(DBAPIError, match="settled by a second person, and only settled"):
         await change(app_database, grace, order.id, "status = 'settled'")
+    with pytest.raises(DBAPIError, match="needs the ledger entry and bills its result shows"):
+        await change(
+            app_database,
+            grace,
+            order.id,
+            f"status = 'settled', settled_by = '{grace.id}', settled_at = now(), "
+            f"settlement_entry_id = '{order.id}'",
+        )
 
 
 async def test_a_step_cannot_be_skipped(app_database: Database) -> None:
@@ -412,8 +424,11 @@ async def test_a_finished_order_never_changes_and_is_never_removed(
         async with app_database.actor_transaction(grace) as session:
             await session.execute(text("DELETE FROM dealing_orders"))
     # Not even the table owner removes one.
-    for statement in ("DELETE FROM dealing_orders", "TRUNCATE dealing_orders"):
-        with pytest.raises(DBAPIError, match="never removed"):
+    for statement in (
+        "DELETE FROM dealing_orders",
+        "TRUNCATE dealing_orders, dealing_lots, dealing_lot_sales",
+    ):
+        with pytest.raises(DBAPIError, match=r"never (removed|changed or removed)"):
             async with migrator_database.transaction() as session:
                 await session.execute(text(statement))
 

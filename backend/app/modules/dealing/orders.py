@@ -7,12 +7,12 @@ their own order or rejects a result they recorded, and what an order is for neve
 Which staff may prepare, approve or record is a permission, checked by the route before it
 calls in.
 
-Settling an order is not here yet. It posts the ledger entry and creates the bills held, and
-arrives with the holdings tables. Until then no order can be sold from, so a sale is refused.
+Confirming a result settles the order: it posts the ledger entry and records the bills bought
+or the lots a sale took, and migration 0081 checks all three agree with the recorded result.
 """
 
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import date, datetime
 from typing import Any
 
 from sqlalchemy import Row, text
@@ -20,6 +20,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.modules.audit import service as audit
 from app.modules.audit.domain.events import AuditActor, AuditCategory, AuditEvent
+from app.modules.dealing import holdings
+from app.modules.dealing.domain.holdings import InvalidLot, draw
 from app.modules.dealing.domain.orders import (
     LOT_SIZES,
     Fill,
@@ -29,14 +31,22 @@ from app.modules.dealing.domain.orders import (
     OrderStatus,
     Refusal,
     check_approval,
+    check_confirmation,
     check_new_order,
     check_result,
     check_result_rejection,
     check_send_back,
     check_withdrawal,
 )
+from app.modules.dealing.domain.settlement import (
+    Settlement,
+    accounts,
+    settlement_entry,
+)
 from app.modules.investments import service as investments
 from app.modules.investments.domain.products import Product, ProductKind
+from app.modules.ledger import service as ledger
+from app.modules.ledger.domain.errors import DayClosed, InsufficientFunds
 from app.shared.actors import Actor
 from app.shared.business_day import business_date
 from app.shared.clock import Clock
@@ -64,6 +74,9 @@ class OrderView:
     result_recorded_by: str | None
     result_recorded_at: datetime | None
     result_rejection_note: str | None
+    settled_by: str | None
+    settled_at: datetime | None
+    settlement_entry_id: str | None
 
     @property
     def order(self) -> Order:
@@ -83,7 +96,7 @@ _COLUMNS = (
     "id, kind, product_code, currency, face_minor, status, prepared_by, prepared_at, decided_by, "
     "decided_at, decision_note, result_face_minor, result_amount_minor, result_settled_on, "
     "result_matures_on, custodian_reference, result_recorded_by, result_recorded_at, "
-    "result_rejection_note"
+    "result_rejection_note, settled_by, settled_at, settlement_entry_id"
 )
 _BY_ID = text(f"SELECT {_COLUMNS} FROM dealing_orders WHERE id = :id")  # noqa: S608
 _LOCKED = text(f"SELECT {_COLUMNS} FROM dealing_orders WHERE id = :id FOR UPDATE")  # noqa: S608
@@ -112,6 +125,23 @@ _REJECT_RESULT = text(
     "result_amount_minor = NULL, result_settled_on = NULL, result_matures_on = NULL, "
     "custodian_reference = NULL, result_recorded_by = NULL, result_recorded_at = NULL, "
     "result_rejection_note = :note WHERE id = :id"
+)
+_SETTLE = text(
+    "UPDATE dealing_orders SET status = 'settled', settled_by = :by, settled_at = :now, "
+    "settlement_entry_id = :entry_id WHERE id = :id"
+)
+_INSERT_LOT = text(
+    "INSERT INTO dealing_lots (id, order_id, product_code, currency, face_minor, cost_minor, "
+    "settled_on, matures_on, custodian_reference) VALUES (:id, :order_id, :product_code, "
+    ":currency, :face, :cost, :settled_on, :matures_on, :reference)"
+)
+_INSERT_SALE_PART = text(
+    "INSERT INTO dealing_lot_sales (lot_id, order_id, face_minor, cost_minor) "
+    "VALUES (:lot_id, :order_id, :face, :cost)"
+)
+# One instrument at a time: two sales of the same bills are worked out one after the other.
+_LOCK_INSTRUMENT = text(
+    "SELECT pg_advisory_xact_lock(hashtext('dealing_instrument'), hashtext(:instrument))"
 )
 
 
@@ -167,7 +197,8 @@ async def prepare_order(
         raise _invalid("face", "not_positive") from error
     if face.currency is not product.currency:
         raise _invalid("face", Refusal.CURRENCY_MISMATCH.value)
-    refusal = check_new_order(order, LOT_SIZES[product.currency], _face_held(product))
+    held = await _face_held(session, product, clock)
+    refusal = check_new_order(order, LOT_SIZES[product.currency], held)
     if refusal is not None:
         raise _refused(refusal)
     order_id = push_id()
@@ -244,7 +275,9 @@ async def record_result(
             business_date(clock.now()),
             discount_only=product.kind is ProductKind.TREASURY_BILL,
             term_days=product.term_days,
-            face_held=_face_held(product),
+            face_held=await _face_held(
+                session, product, clock, matures_on=fill.matures_on if fill else None
+            ),
         )
     )
     status = OrderStatus.UNSUCCESSFUL if fill is None else OrderStatus.RESULT_RECORDED
@@ -283,6 +316,83 @@ async def reject_result(
     return await get_order(session, view.id)
 
 
+async def confirm_result(
+    session: AsyncSession, staff: Actor, order_id: str, clock: Clock
+) -> OrderView:
+    """Confirm a recorded result against the custodian's note, as a second person.
+
+    This settles the order in the caller's transaction: the journal entry on the trust bank
+    account, dated on the settlement date, and the lot bought or the parts of lots sold. A sale
+    takes bills of the maturity it recorded, oldest purchase first. Refused when the bank
+    account holds too little for a purchase or the settlement date is in a closed day.
+    """
+    view = await _locked(session, staff, order_id)
+    _allow(check_confirmation(view.order, _id(staff)))
+    fill = view.result
+    assert fill is not None
+    currency = fill.face.currency
+    account_ids = {
+        code: (await ledger.open_account(session, spec, clock)).id
+        for code, spec in accounts(currency).items()
+    }
+    parts: list[tuple[str, Money, Money]] = []
+    if view.kind.buys:
+        cost = fill.amount
+    else:
+        await session.execute(
+            _LOCK_INSTRUMENT, {"instrument": f"{view.product_code}:{fill.matures_on.isoformat()}"}
+        )
+        lots = await holdings.lots_of(
+            session, view.product_code, fill.matures_on, on=fill.settled_on
+        )
+        try:
+            draws = draw([held.lot for held in lots], fill.face)
+        except InvalidLot:
+            raise _refused(Refusal.MORE_THAN_HELD) from None
+        parts = [(lots[part.lot].id, part.face, part.cost_released) for part in draws]
+        cost = sum((released for _, _, released in parts), Money.zero(currency))
+    draft = settlement_entry(Settlement(view.id, view.kind, fill, cost), account_ids)
+    try:
+        entry = await ledger.post_entry(session, draft, clock)
+    except InsufficientFunds:
+        raise _invalid("amount", "not_enough_cash") from None
+    except DayClosed:
+        raise _invalid("settled_on", "day_closed") from None
+    if view.kind.buys:
+        await session.execute(
+            _INSERT_LOT,
+            {
+                "id": push_id(),
+                "order_id": view.id,
+                "product_code": view.product_code,
+                "currency": currency.value,
+                "face": fill.face.minor,
+                "cost": cost.minor,
+                "settled_on": fill.settled_on,
+                "matures_on": fill.matures_on,
+                "reference": fill.custodian_reference,
+            },
+        )
+    for lot_id, face, released in parts:
+        await session.execute(
+            _INSERT_SALE_PART,
+            {"lot_id": lot_id, "order_id": view.id, "face": face.minor, "cost": released.minor},
+        )
+    await session.execute(
+        _SETTLE, {"id": view.id, "by": staff.id, "now": clock.now(), "entry_id": entry.id}
+    )
+    await _audit(
+        session,
+        staff,
+        "approval",
+        "dealing.order.settled",
+        view.id,
+        clock,
+        reason="Confirmed against the custodian's note as the second person",
+    )
+    return await get_order(session, view.id)
+
+
 # Internals ---------------------------------------------------------------------------------------
 
 
@@ -296,9 +406,17 @@ def _id(actor: Actor) -> str:
     return actor.id
 
 
-def _face_held(product: Product) -> Money:
-    """Face value held in the product that can be sold. Nothing, until holdings are recorded."""
-    return Money.zero(product.currency)
+async def _face_held(
+    session: AsyncSession, product: Product, clock: Clock, *, matures_on: date | None = None
+) -> Money:
+    """Face value held today in the product, or in one maturity of it, that a sale could take."""
+    return await holdings.face_held(
+        session,
+        product.code,
+        product.currency,
+        on=business_date(clock.now()),
+        matures_on=matures_on,
+    )
 
 
 async def _product(session: AsyncSession, code: str, clock: Clock) -> Product:
@@ -356,6 +474,9 @@ def _view(row: Row[Any]) -> OrderView:
         result_recorded_by=row.result_recorded_by,
         result_recorded_at=row.result_recorded_at,
         result_rejection_note=row.result_rejection_note,
+        settled_by=row.settled_by,
+        settled_at=row.settled_at,
+        settlement_entry_id=row.settlement_entry_id,
     )
 
 

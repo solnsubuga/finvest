@@ -7,6 +7,7 @@ between cost and what comes back is recognised only when cash arrives, at a sale
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import date
 
@@ -58,6 +59,44 @@ def sell(lot: Lot, face_sold: Money, proceeds: Money) -> Sale:
     released = lot.cost.mul_ratio(face_sold.minor, lot.face.minor, Rounding.DOWN)
     remaining = Lot(lot.face - face_sold, lot.cost - released, lot.matures_on)
     return Sale(cost_released=released, result=proceeds - released, remaining=remaining)
+
+
+@dataclass(frozen=True, slots=True)
+class Draw:
+    """The part of one lot a sale takes."""
+
+    # Position of the lot in the sequence given to `draw`.
+    lot: int
+    face: Money
+    cost_released: Money
+
+
+def draw(lots: Sequence[Lot], face_sold: Money) -> tuple[Draw, ...]:
+    """Take `face_sold` from `lots` in the order given, each lot's cost following `sell`.
+
+    The caller passes the lots of one instrument, oldest purchase first, so the oldest cost
+    leaves the books first. Refused when the lots hold less than `face_sold`.
+    """
+    if not face_sold.is_positive:
+        raise InvalidLot("The face sold is above zero")
+    if any(lot.face.currency is not face_sold.currency for lot in lots):
+        raise InvalidLot("The lots and the sale are in one currency")
+    draws: list[Draw] = []
+    left = face_sold
+    for index, lot in enumerate(lots):
+        if left.is_zero:
+            break
+        taken = min(left, lot.face)
+        released = (
+            lot.cost
+            if taken == lot.face
+            else lot.cost.mul_ratio(taken.minor, lot.face.minor, Rounding.DOWN)
+        )
+        draws.append(Draw(index, taken, released))
+        left = left - taken
+    if not left.is_zero:
+        raise InvalidLot("The lots hold less than the face sold")
+    return tuple(draws)
 
 
 def income_at_maturity(lot: Lot, on: date) -> Money:
