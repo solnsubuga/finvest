@@ -84,6 +84,19 @@ ROWS = {
         "now()); COMMIT",
         "refusing to drop automatic investing plans",
     ),
+    "0111_goal_rollovers": (
+        "BEGIN; SELECT set_config('finvest.actor_kind', 'system', true); "
+        "INSERT INTO goals (id, client_id, name, category, currency, target_minor, "
+        "product_code, created_at, updated_at) VALUES ('-Nabc0000000000000A1', "
+        "'-Nabc0000000000000B1', 'School fees', 'school_fees', 'UGX', 2000000, 'TREA-91', "
+        "now(), now()); "
+        "INSERT INTO goal_savings (investment_id, goal_id, client_id, created_at) VALUES "
+        "('-Nabc0000000000000C1', '-Nabc0000000000000A1', '-Nabc0000000000000B1', now()); "
+        "INSERT INTO goal_savings (investment_id, goal_id, client_id, created_at, "
+        "rolled_from_investment_id) VALUES ('-Nabc0000000000000C2', '-Nabc0000000000000A1', "
+        "'-Nabc0000000000000B1', now(), '-Nabc0000000000000C1'); COMMIT",
+        "refusing to drop the rollovers of goal savings",
+    ),
     "0060_investment_products": (
         "BEGIN; SELECT set_config('finvest.actor_kind', 'staff', true); "
         "SELECT set_config('finvest.actor_id', '-Nabc0000000000000B1', true); "
