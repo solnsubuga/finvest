@@ -58,6 +58,8 @@ The site shows no placeholder of any kind (the owner's rule). `pnpm test:build` 
 - Service promises chosen for now, such as how long an identity check takes and how many working days a complaint takes. Change them there.
 - Facts only Finvest can supply: phone number, office address, registered company name, regulator, licence number, custodian bank and auditor. Each is `null` until Finvest gives it, and while it is `null` the pages leave that line out. Fill one in and the line appears in the footer, on Safety, Home, Help and About. Never fill one with a guess: a made-up licence or phone number on a public page is worse than a missing one.
 
+The registered company name, regulator and licence number must be filled in before launch: `pnpm placeholders` lists them while they are empty, and `--strict` fails.
+
 ## Claims to sign off before launch
 
 Some statements are written out in full because the page needs them, but the owner and counsel must still confirm they are true: that there is no fee to invest, that bills are held in each client's name, that the books are checked daily, and the rest of `scripts/claims.json`. `pnpm placeholders` lists every claim that has no `confirmedBy`, and `--strict` fails while any is open. When you add a statement of this kind to a page, add it to that file.
