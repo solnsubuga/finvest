@@ -152,10 +152,11 @@ def name_tokens(name: str) -> frozenset[str]:
 def compare_names(id_name: str, proof_name: str) -> NameMatch:
     """Compare the ID name with the name on a statement, letter, card or network record.
 
-    Ugandan documents put the surname first or last, so order is ignored. Two things make a
-    `PARTIAL` match, which only a person can accept: a missing middle name, when at least two
-    names agree, and a name spelt slightly differently (Mohammed and Muhammad), when every
-    other name agrees exactly. A single shared name is never enough.
+    Only how a name is written is forgiven: case, spacing, punctuation, accents and order
+    (Ugandan documents put the surname first or last). One thing makes a `PARTIAL` match,
+    which only a person can accept: a name left out, such as a middle name, when at least
+    two names agree. A name spelt differently (Nakato and Nakate, Mohammed and Muhammad) is
+    a different name and is refused, by the owner's rule. A single shared name is never enough.
     """
     on_id, on_proof = name_tokens(id_name), name_tokens(proof_name)
     if not on_id or not on_proof:
@@ -165,43 +166,7 @@ def compare_names(id_name: str, proof_name: str) -> NameMatch:
     shared = on_id & on_proof
     if len(shared) >= 2 and shared in (on_id, on_proof):
         return NameMatch.PARTIAL
-    if shared and len(on_id) == len(on_proof) and _spelt_alike(on_id - shared, on_proof - shared):
-        return NameMatch.PARTIAL
     return NameMatch.DIFFERENT
-
-
-# A spelling variant: both names long enough to mean something, and at most two letters apart.
-_VARIANT_MIN_LENGTH = 5
-_VARIANT_MAX_EDITS = 2
-
-
-def _spelt_alike(left: frozenset[str], right: frozenset[str]) -> bool:
-    """True if the leftover names pair off one to one as spelling variants of each other."""
-    if not left:
-        return not right
-    first = min(left)
-    return any(
-        _is_variant(first, other) and _spelt_alike(left - {first}, right - {other})
-        for other in sorted(right)
-    )
-
-
-def _is_variant(one: str, other: str) -> bool:
-    if min(len(one), len(other)) < _VARIANT_MIN_LENGTH or one[0] != other[0]:
-        return False
-    return _edit_distance(one, other) <= _VARIANT_MAX_EDITS
-
-
-def _edit_distance(one: str, other: str) -> int:
-    previous = list(range(len(other) + 1))
-    for row, a in enumerate(one, start=1):
-        current = [row]
-        for column, b in enumerate(other, start=1):
-            current.append(
-                min(previous[column] + 1, current[column - 1] + 1, previous[column - 1] + (a != b))
-            )
-        previous = current
-    return previous[-1]
 
 
 # ---------------------------------------------------------------------------------------------

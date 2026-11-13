@@ -29,7 +29,7 @@ The name on the proof is compared with the name on the client's ID. Case, accent
 | Result | Meaning | Can staff approve? |
 | --- | --- | --- |
 | Exact | The same names | Yes |
-| Partial | One has a name the other lacks and at least two names agree, or one name is spelt slightly differently (Mohammed and Muhammad) and every other name agrees | Yes, if they judge it is the same person |
+| Partial | One has a name the other lacks, such as a middle name, and at least two names agree | Yes, if they judge it is the same person |
 | Different | Anything else | Never |
 
 The comparison is made on the server from the ID name and the name the staff member read on the proof. It is never taken from the request, and it never approves a destination by itself. A different name is refused outright, for a bank account and for a mobile money number alike. No member of staff and no pair of staff can override it.

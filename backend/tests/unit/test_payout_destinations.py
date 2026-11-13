@@ -171,10 +171,7 @@ def test_the_same_names_in_any_order_match_exactly(id_name: str, proof_name: str
     [
         ("Nakato Sarah Grace", "Sarah Nakato"),
         ("Sarah Nakato", "Nakato Sarah Grace"),
-        ("Mohammed Ssali", "Muhammad Ssali"),
-        ("Ssali Mohammed Kato", "Kato Muhammed Ssali"),
-        ("Catherine Namusoke", "Cathrine Namusoke"),
-        ("Nakato Sarah", "Nakatto Sarah"),
+        ("NAKATO, Sarah-Grace", "grace sarah nakato mary"),
     ],
 )
 def test_a_missing_name_is_for_a_person_to_judge(id_name: str, proof_name: str) -> None:
@@ -192,14 +189,17 @@ def test_a_missing_name_is_for_a_person_to_judge(id_name: str, proof_name: str) 
         ("", ""),
         ("Nakato Sarah", "..."),
         ("Nakato Sarah", "Nakatos Arah"),
-        ("Mohammed Ssali", "Muhammad Ssale"),  # no name agrees exactly
+        # A name spelt differently is a different name, however close.
+        ("Mohammed Ssali", "Muhammad Ssali"),
+        ("Ssali Mohammed Kato", "Kato Muhammed Ssali"),
+        ("Catherine Namusoke", "Cathrine Namusoke"),
+        ("Nakato Sarah", "Nakatto Sarah"),
+        ("Nakato Sarah", "Nakate Sarah"),
+        ("Namara Sarah", "Namata Sarah"),
+        ("Nakato Sarah", "Nakato Sara"),
         ("Mohammed", "Muhammad"),
-        ("Nakato Sarah", "Nakato Sara"),  # too short to call a spelling variant
-        ("Nakato Sarah", "Nakato Peter"),
-        ("Nakato Babirye", "Nakato Nabirye"),  # a different first letter is a different name
-        ("Nakato Namusoke", "Nakato Namugga"),
+        ("Nakato Babirye", "Nakato Nabirye"),
         ("Mohammed Ssali Kato", "Muhammad Ssali"),
-        ("Katherine Namusoke", "Kathryn Namusoke"),  # three letters apart
     ],
 )
 def test_other_names_are_different(id_name: str, proof_name: str) -> None:
