@@ -86,6 +86,9 @@ class InvestmentFacts:
     status: InvestmentStatus
     start_date: date | None
     maturity_date: date | None
+    # At maturity: the investment its money rolled into, and the payout carrying it, if any.
+    rolled_into_id: str | None = None
+    payout_id: str | None = None
 
 
 # The one place an investment's status becomes words on a statement. Every status has a label,
@@ -94,17 +97,33 @@ STATUS_LABELS: dict[InvestmentStatus, str] = {
     InvestmentStatus.AWAITING_PAYMENT: "Payment received, starting",
     InvestmentStatus.ACTIVE: "Running",
     InvestmentStatus.CANCELLED: "Cancelled",
+    InvestmentStatus.MATURED: "Matured",
 }
 
 
 def holding_status(facts: InvestmentFacts, *, period: Period, value_at_end: Money) -> str:
+    """How an investment stood at the end of the period, in words.
+
+    The status is read today, so an investment that has matured since the period ended is
+    shown as it was then. At maturity its money leaves the holding: into a new investment when
+    it rolls over (shown as a holding of its own), or to the client's payout account, where it
+    still counts as theirs until the payout is sent.
+    """
+    matured_by_then = facts.maturity_date is not None and facts.maturity_date <= period.end
+    if facts.status is InvestmentStatus.MATURED and matured_by_then:
+        if facts.rolled_into_id is not None:
+            return "Matured and reinvested"
+        if value_at_end.is_zero:
+            return "Matured and paid out"
+        if facts.payout_id is not None:
+            return "Matured, being paid out"
+        return "Matured, waiting to be paid out"
     if value_at_end.is_zero:
         return "Paid out"
-    if (
-        facts.status is InvestmentStatus.ACTIVE
-        and facts.maturity_date is not None
-        and facts.maturity_date <= period.end
-    ):
+    if facts.status is InvestmentStatus.MATURED:
+        # Matured after the period ended: it was still running then.
+        return STATUS_LABELS[InvestmentStatus.ACTIVE]
+    if facts.status is InvestmentStatus.ACTIVE and matured_by_then:
         return "Matured"
     return STATUS_LABELS[facts.status]
 

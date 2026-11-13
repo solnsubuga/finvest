@@ -5,6 +5,8 @@ import * as SplashScreen from "expo-splash-screen";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 
 import { AuthProvider } from "@/auth/AuthProvider";
+import { AutoinvestProvider } from "@/autoinvest/AutoinvestProvider";
+import { InsightsProvider } from "@/insights/InsightsProvider";
 import { PaymentsProvider } from "@/payments/PaymentsProvider";
 import { colors, fontAssets } from "@/theme";
 
@@ -28,9 +30,16 @@ export default function RootLayout() {
     <SafeAreaProvider>
       <AuthProvider>
         <PaymentsProvider>
-          <Stack
-            screenOptions={{ headerShown: false, contentStyle: { backgroundColor: colors.paper } }}
-          />
+          <AutoinvestProvider>
+            <InsightsProvider>
+              <Stack
+                screenOptions={{
+                  headerShown: false,
+                  contentStyle: { backgroundColor: colors.paper },
+                }}
+              />
+            </InsightsProvider>
+          </AutoinvestProvider>
         </PaymentsProvider>
       </AuthProvider>
     </SafeAreaProvider>

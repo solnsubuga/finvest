@@ -18,13 +18,58 @@ export type Destination = {
  */
 export const destinations: Destination[] = [
   { name: "index", href: "/", label: "Home", icon: "home", inTabBar: true },
-  { name: "invest", href: "/invest", label: "Invest", icon: "invest", inTabBar: true },
-  { name: "portfolio", href: "/portfolio", label: "Portfolio", icon: "portfolio", inTabBar: false },
-  { name: "goals", href: "/goals", label: "Goals", icon: "goals", inTabBar: true },
-  { name: "activity", href: "/activity", label: "Activity", icon: "activity", inTabBar: true },
-  { name: "documents", href: "/documents", label: "Documents", icon: "documents", inTabBar: false },
-  { name: "profile", href: "/profile", label: "Profile", icon: "profile", inTabBar: false },
+  {
+    name: "invest",
+    href: "/invest",
+    label: "Invest",
+    icon: "invest",
+    inTabBar: true,
+  },
+  {
+    name: "portfolio",
+    href: "/portfolio",
+    label: "Portfolio",
+    icon: "portfolio",
+    inTabBar: false,
+  },
+  {
+    name: "insights",
+    href: "/insights",
+    label: "Insights",
+    icon: "insights",
+    inTabBar: false,
+  },
+  {
+    name: "goals",
+    href: "/goals",
+    label: "Goals",
+    icon: "goals",
+    inTabBar: true,
+  },
+  {
+    name: "activity",
+    href: "/activity",
+    label: "Activity",
+    icon: "activity",
+    inTabBar: true,
+  },
+  {
+    name: "documents",
+    href: "/documents",
+    label: "Documents",
+    icon: "documents",
+    inTabBar: false,
+  },
+  {
+    name: "profile",
+    href: "/profile",
+    label: "Profile",
+    icon: "profile",
+    inTabBar: false,
+  },
   { name: "help", href: "/help", label: "Help", icon: "help", inTabBar: false },
 ];
 
-export const tabBarDestinations = destinations.filter((destination) => destination.inTabBar);
+export const tabBarDestinations = destinations.filter(
+  (destination) => destination.inTabBar,
+);

@@ -23,13 +23,37 @@ HEADERS = {
 # Every request body is JSON, a few kilobytes at most. A route that takes a file names its path
 # prefix here with its own limit, so a large body is never read anywhere else.
 DEFAULT_BODY_LIMIT = 256 * 1024
-BODY_LIMITS: dict[str, int] = {}
+# A `*` stands for one path segment, such as an ID: `/client/investments/*/payments/`.
+BODY_LIMITS: dict[str, int] = {
+    # A bank transfer's receipt: at most 10 MiB, plus the form fields and multipart framing.
+    # The edge allows 12 MiB on the same path.
+    "/client/investments/*/payments/bank-transfer": 11 * 1024 * 1024,
+}
+
+
+def _matches(prefix: str, path: str) -> bool:
+    """Whether `path` starts with `prefix`, where a `*` in `prefix` is any one segment."""
+    if "*" not in prefix:
+        return path.startswith(prefix)
+    wanted = prefix.split("/")
+    given = path.split("/")
+    if len(given) < len(wanted):
+        return False
+    for index, part in enumerate(wanted):
+        last = index == len(wanted) - 1
+        if part == "*":
+            if not given[index]:
+                return False
+        elif last:
+            if not given[index].startswith(part):
+                return False
+        elif given[index] != part:
+            return False
+    return True
 
 
 def body_limit(path: str) -> int:
-    longest = max(
-        (prefix for prefix in BODY_LIMITS if path.startswith(prefix)), key=len, default=""
-    )
+    longest = max((prefix for prefix in BODY_LIMITS if _matches(prefix, path)), key=len, default="")
     return BODY_LIMITS.get(longest, DEFAULT_BODY_LIMIT)
 
 

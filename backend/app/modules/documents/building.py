@@ -250,6 +250,8 @@ async def _holdings(
                     status=investment.status,
                     start_date=investment.start_date,
                     maturity_date=investment.maturity_date,
+                    rolled_into_id=investment.rolled_into_id,
+                    payout_id=investment.payout_id,
                 ),
                 period=period,
                 value_at_end=at_end.get(reference, Money.zero(currency)),

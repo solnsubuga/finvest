@@ -105,3 +105,27 @@ def test_a_holding_is_labelled_from_its_status_dates_and_value(
 def test_totals_keep_currencies_apart() -> None:
     totals = totals_by_currency([ugx(5), Money(3, Currency.USD), ugx(-2)])
     assert totals == {Currency.UGX: ugx(3), Currency.USD: Money(3, Currency.USD)}
+
+
+M = InvestmentStatus.MATURED
+
+
+@pytest.mark.parametrize(
+    ("matures", "rolled_into", "payout", "value", "label"),
+    [
+        (date(2026, 11, 20), "inv-2", None, 0, "Matured and reinvested"),
+        (date(2026, 11, 20), None, "pay-1", 0, "Matured and paid out"),
+        (date(2026, 11, 20), None, "pay-1", 5, "Matured, being paid out"),
+        (date(2026, 11, 20), None, None, 5, "Matured, waiting to be paid out"),
+        # Matured after the period ended: it was still running at the end of the period.
+        (date(2026, 12, 5), "inv-2", None, 5, "Running"),
+    ],
+)
+def test_a_matured_investment_reads_as_it_stood_at_the_end_of_the_period(
+    matures: date, rolled_into: str | None, payout: str | None, value: int, label: str
+) -> None:
+    facts = InvestmentFacts(
+        "inv-1", "91 Day Treasury Bill", ugx(5), M, ON, matures, rolled_into, payout
+    )
+    period = Period(date(2026, 11, 1), date(2026, 11, 30))
+    assert holding_status(facts, period=period, value_at_end=ugx(value)) == label
