@@ -5,6 +5,7 @@ import {
   DEMO_PHONE,
   DEMO_PHONE_AUTHENTICATOR,
   RECENT_SIGN_IN_MS,
+  SETUP_LIFETIME_MS,
 } from "../stubAuthClient";
 import { AuthError, describeAuthError } from "../types";
 
@@ -248,6 +249,19 @@ describe("setting up a second step", () => {
     expect(await codeOf(auth.confirmAuthenticatorSetup(DEMO_CODE))).toBe("sign_in_again");
     // Looking at what is set up is still allowed, and nothing was added.
     expect(await auth.listSecondSteps()).toEqual(["code"]);
+  });
+
+  it("ends a started set-up after five minutes, and a new one works", async () => {
+    let time = 0;
+    const auth = createStubAuthClient({ delayMs: 0, now: () => time });
+    await signUp(auth);
+    await auth.startAuthenticatorSetup();
+    time = SETUP_LIFETIME_MS + 1;
+    expect(await codeOf(auth.confirmAuthenticatorSetup(DEMO_CODE))).toBe("expired");
+    expect(await auth.listSecondSteps()).toEqual(["code"]);
+    await auth.startAuthenticatorSetup();
+    await auth.confirmAuthenticatorSetup(DEMO_CODE);
+    expect(await auth.listSecondSteps()).toEqual(["authenticator", "code"]);
   });
 
   it("says in plain words that nothing was added when the device prompt is dismissed", () => {

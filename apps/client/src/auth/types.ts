@@ -130,7 +130,7 @@ const messages: Record<AuthErrorCode, string> = {
   leaked_password:
     "This password has appeared in a known leak, so it is not safe to use. Choose a different one.",
   sign_in_again:
-    "For your safety, log in again before you change how you sign in. It only takes a moment.",
+    "For your safety, log in again before you change how you sign in. We will bring you straight back here.",
   cancelled: "Nothing was added. You can try again when you are ready.",
   expired: "That took too long, so we stopped for your safety. Please start again.",
   unavailable: "We could not reach Finvest. Check your connection and try again.",
