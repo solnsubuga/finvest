@@ -75,6 +75,8 @@ The toolchain is decided. The commands arrive with the scaffolding PRs, and this
 | Local stack | Docker Compose, with `make dev` to start everything |
 | Delivery | GitHub Actions on every PR |
 
+JavaScript packages share one pnpm workspace (`pnpm-workspace.yaml`). Run `pnpm install` once at the repository root. Commands for the console are in [apps/console/README.md](apps/console/README.md) and for the tokens in [packages/tokens/README.md](packages/tokens/README.md).
+
 Until a command is documented here or in a directory README, do not assume it exists. Check the directory first.
 
 ## Testing expectations

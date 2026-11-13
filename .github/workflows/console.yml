@@ -1,0 +1,52 @@
+name: Console and tokens
+
+on:
+  pull_request:
+    paths:
+      - "apps/console/**"
+      - "packages/tokens/**"
+      - "package.json"
+      - "pnpm-lock.yaml"
+      - "pnpm-workspace.yaml"
+      - ".github/workflows/console.yml"
+  push:
+    branches: [main]
+    paths:
+      - "apps/console/**"
+      - "packages/tokens/**"
+      - "package.json"
+      - "pnpm-lock.yaml"
+      - "pnpm-workspace.yaml"
+      - ".github/workflows/console.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: console-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Tokens
+        working-directory: packages/tokens
+        run: |
+          pnpm typecheck
+          pnpm test
+      - name: Console
+        working-directory: apps/console
+        run: |
+          pnpm lint
+          pnpm typecheck
+          pnpm test
+          pnpm build
