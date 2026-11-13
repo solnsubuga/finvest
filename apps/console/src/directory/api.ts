@@ -3,8 +3,7 @@
  *
  * The support and complaints routes return `client_id` and staff IDs, never
  * names: those modules do not read identity tables. The console looks the
- * names up here. Until the clients and team routes exist, the only
- * implementation is the sample in `stub.ts`.
+ * names up here: `http.ts` over the real API, `stub.ts` for samples.
  */
 
 export interface ClientCard {
