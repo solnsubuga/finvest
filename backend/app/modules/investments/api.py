@@ -112,6 +112,11 @@ class PayOutRequest(Contract):
     destination_id: PushId
 
 
+class WithdrawalRequest(Contract):
+    # One of the client's approved payout destinations.
+    destination_id: PushId
+
+
 class ClientInvestmentOut(Contract):
     id: PushId
     product_code: str
@@ -137,6 +142,10 @@ class ClientInvestmentOut(Contract):
     rolled_into_id: PushId | None
     payout_id: PushId | None
     waiting_for_destination: bool
+    # Whether the client may ask to withdraw it early now, and when they did. An early
+    # withdrawal pays `value_minor`: interest stops when it is asked for.
+    can_withdraw: bool
+    withdrawal_requested_at: datetime | None
 
 
 class RateOut(Contract):
@@ -308,6 +317,8 @@ def _client_out(view: service.ClientInvestment) -> ClientInvestmentOut:
         rolled_into_id=view.rolled_into_id,
         payout_id=view.payout_id,
         waiting_for_destination=view.waiting_for_destination,
+        can_withdraw=view.can_withdraw,
+        withdrawal_requested_at=view.withdrawal_requested_at,
     )
 
 
@@ -563,6 +574,30 @@ async def pay_out_matured(
             "validation_failed",
             fields=[FieldProblem(field_path=["destination_id"], code=refused.code)],
         ) from None
+    return _client_out(view)
+
+
+@client_router.post("/investments/{investment_id}/withdraw")
+async def withdraw_early(
+    request: Request,
+    client: CurrentClient,
+    clock: AppClock,
+    key: IdempotencyKey,
+    investment_id: str,
+    body: WithdrawalRequest,
+) -> ClientInvestmentOut:
+    """Ask to withdraw a running investment early. It pays `value_minor` from the investment
+    as shown: interest stops now. The money is sent once the dealing desk has funded it."""
+    async with _transaction(request, client.actor) as session:
+        await service.request_withdrawal(
+            session,
+            client.actor,
+            investment_id,
+            destination_id=body.destination_id,
+            idempotency_key=key,
+            clock=clock,
+        )
+        view = await service.client_investment(session, client.actor, investment_id, clock)
     return _client_out(view)
 
 

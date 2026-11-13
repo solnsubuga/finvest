@@ -1178,6 +1178,10 @@
             "title": "Can Change Maturity",
             "type": "boolean"
           },
+          "can_withdraw": {
+            "title": "Can Withdraw",
+            "type": "boolean"
+          },
           "client_rate_percent": {
             "title": "Client Rate Percent",
             "type": "string"
@@ -1326,6 +1330,18 @@
           "waiting_for_destination": {
             "title": "Waiting For Destination",
             "type": "boolean"
+          },
+          "withdrawal_requested_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Withdrawal Requested At"
           }
         },
         "required": [
@@ -1351,7 +1367,9 @@
           "total_at_maturity_minor",
           "rolled_into_id",
           "payout_id",
-          "waiting_for_destination"
+          "waiting_for_destination",
+          "can_withdraw",
+          "withdrawal_requested_at"
         ],
         "title": "ClientInvestmentOut",
         "type": "object"
@@ -3669,7 +3687,8 @@
           "awaiting_payment",
           "active",
           "cancelled",
-          "matured"
+          "matured",
+          "withdrawn"
         ],
         "title": "InvestmentStatus",
         "type": "string"
@@ -9421,6 +9440,23 @@
         "title": "Verdict",
         "type": "string"
       },
+      "WithdrawalRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "destination_id": {
+            "maxLength": 20,
+            "minLength": 20,
+            "pattern": "^[-0-9A-Z_a-z]{20}$",
+            "title": "Destination Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "destination_id"
+        ],
+        "title": "WithdrawalRequest",
+        "type": "object"
+      },
       "WordingList": {
         "additionalProperties": false,
         "properties": {
@@ -14291,6 +14327,117 @@
         "summary": "Pay By Mobile Money",
         "tags": [
           "client payments"
+        ]
+      }
+    },
+    "/client/investments/{investment_id}/withdraw": {
+      "post": {
+        "description": "Ask to withdraw a running investment early. It pays `value_minor` from the investment\nas shown: interest stops now. The money is sent once the dealing desk has funded it.",
+        "operationId": "withdraw_early_client_investments__investment_id__withdraw_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "investment_id",
+            "required": true,
+            "schema": {
+              "title": "Investment Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "A value the caller chooses once per intended action and sends again on every retry of it. Pattern: `[A-Za-z0-9._:-]{8,128}`.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "A value the caller chooses once per intended action and sends again on every retry of it. Pattern: `[A-Za-z0-9._:-]{8,128}`.",
+              "title": "Idempotency-Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/WithdrawalRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ClientInvestmentOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          }
+        },
+        "summary": "Withdraw Early",
+        "tags": [
+          "client investing"
         ]
       }
     },
