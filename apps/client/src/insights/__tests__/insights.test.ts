@@ -1,4 +1,4 @@
-import { daysUntil, earnedBars, thousands } from "../chart";
+import { barValue, daysUntil, dollars, earnedBars, thousands } from "../chart";
 import { createStubInsightsClient } from "../stubInsightsClient";
 import { InsightsMonth } from "../types";
 
@@ -20,6 +20,15 @@ it("labels bars in thousands without rounding up", () => {
   expect(thousands(1_234_567)).toBe("1,234.5");
 });
 
+it("labels dollar bars in dollars and cents, from the cents", () => {
+  expect(dollars(1_250)).toBe("12.50");
+  expect(dollars(7)).toBe("0.07");
+  expect(dollars(0)).toBe("0.00");
+  expect(dollars(123_456_789)).toBe("1,234,567.89");
+  expect(barValue({ currency: "USD", minor: 1_250 })).toBe("12.50");
+  expect(barValue({ currency: "UGX", minor: 31_408 })).toBe("31.4");
+});
+
 it("scales bars to the tallest month and marks the current one", () => {
   const bars = earnedBars([month("2026-10-01", 61_800), month("2026-11-01", 30_900)], 100);
   expect(bars.map((bar) => [bar.label, bar.height, bar.current])).toEqual([
@@ -35,7 +44,7 @@ it("counts days to a date", () => {
 
 it("has history for the demo accounts and none for a new one", async () => {
   const now = () => new Date("2026-11-13T09:00:00Z");
-  const demo = await createStubInsightsClient("+256772123456", now).getInsights(6);
+  const demo = await createStubInsightsClient("+256772123456", now).getInsights(6, "UGX");
   expect(demo.months.map((m) => m.month)).toEqual([
     "2026-06-01",
     "2026-07-01",
@@ -45,8 +54,13 @@ it("has history for the demo accounts and none for a new one", async () => {
     "2026-11-01",
   ]);
   expect(demo.months[5]?.earned).toEqual(ugx(31_408));
-  const fresh = await createStubInsightsClient("+256772555010", now).getInsights(6);
+  const fresh = await createStubInsightsClient("+256772555010", now).getInsights(6, "UGX");
   expect(fresh.months.every((m) => m.earned.minor === 0)).toBe(true);
   expect(fresh.upcoming).toEqual([]);
-  await expect(createStubInsightsClient("+256772555099", now).getInsights(6)).rejects.toThrow();
+  await expect(createStubInsightsClient("+256772555099", now).getInsights(6, "UGX")).rejects.toThrow();
+  // The demo holds no dollars.
+  const usd = await createStubInsightsClient("+256772123456", now).getInsights(6, "USD");
+  expect(usd.currency).toBe("USD");
+  expect(usd.investedNow).toEqual({ currency: "USD", minor: 0 });
+  await expect(createStubInsightsClient("+256772123456", now).heldCurrencies()).resolves.toEqual(["UGX"]);
 });

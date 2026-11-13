@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useState } from "react";
-import { StyleSheet, View } from "react-native";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { Pressable, StyleSheet, View } from "react-native";
 import { useRouter } from "expo-router";
 
 import { kampalaToday, formatLongDay } from "@/autoinvest/schedule";
@@ -8,9 +8,9 @@ import { Card, Notice } from "@/components/Blocks";
 import { Button } from "@/components/Button";
 import { LinkCard } from "@/components/LinkCard";
 import { Eyebrow, Txt } from "@/components/Txt";
-import { daysUntil, earnedBars, monthLong } from "@/insights/chart";
+import { barUnit, daysUntil, earnedBars, monthLong } from "@/insights/chart";
 import { useInsights } from "@/insights/InsightsProvider";
-import { Insights as InsightsData, Upcoming } from "@/insights/types";
+import { Currency, Insights as InsightsData, Upcoming } from "@/insights/types";
 import { formatMoney } from "@/payments/format";
 import { Loading } from "@/payments/Parts";
 import { colors, fontSizes, radii } from "@/theme";
@@ -33,35 +33,62 @@ export default function Insights() {
   const router = useRouter();
   const wide = useIsWide();
   const [state, setState] = useState<State>({ status: "loading" });
+  const [currency, setCurrency] = useState<Currency>("UGX");
+  // Shillings until the investments say otherwise. If they cannot be read, the switch
+  // stays hidden and shillings still show: nothing is lost by waiting.
+  const [held, setHeld] = useState<Currency[]>(["UGX"]);
 
-  const fetch = useCallback(
-    () =>
-      client.getInsights(MONTHS_SHOWN).then(
-        (insights) => setState({ status: "ready", insights }),
-        () => setState({ status: "error" }),
-      ),
-    [client],
-  );
+  useEffect(() => {
+    let live = true;
+    client.heldCurrencies().then(
+      (found) => live && setHeld(found),
+      () => undefined,
+    );
+    return () => {
+      live = false;
+    };
+  }, [client]);
+
+  // Only the latest request may change the screen, so a late answer for the currency the
+  // client has just switched away from is dropped.
+  const latest = useRef(0);
+  const fetch = useCallback(() => {
+    latest.current += 1;
+    const request = latest.current;
+    return client.getInsights(MONTHS_SHOWN, currency).then(
+      (insights) => request === latest.current && setState({ status: "ready", insights }),
+      () => request === latest.current && setState({ status: "error" }),
+    );
+  }, [client, currency]);
 
   useEffect(() => {
     void fetch();
   }, [fetch]);
+
+  const choose = (next: Currency) => {
+    if (next === currency) return;
+    setState({ status: "loading" });
+    setCurrency(next);
+  };
 
   const load = () => {
     setState({ status: "loading" });
     void fetch();
   };
 
+  const action =
+    held.length > 1 ? <CurrencySwitch held={held} chosen={currency} onChoose={choose} /> : undefined;
+
   if (state.status === "loading") {
     return (
-      <AppPage title="Insights">
+      <AppPage title="Insights" action={action}>
         <Loading label="Loading your insights" />
       </AppPage>
     );
   }
   if (state.status === "error") {
     return (
-      <AppPage title="Insights">
+      <AppPage title="Insights" action={action}>
         <Notice tone="danger">
           We could not load your insights. Check your connection and try again.
         </Notice>
@@ -75,9 +102,29 @@ export default function Insights() {
     insights.investedNow.minor === 0 &&
     insights.months.every((month) => month.earned.minor === 0 && month.invested.minor === 0);
 
+  // The switch shows dollars only to a client who holds a dollar investment, so an empty
+  // dollar view means it has not started earning yet. It is not a first investment to make.
+  if (empty && insights.currency === "USD") {
+    return (
+      <AppPage title="Insights" subtitle="What your money earns, month by month." action={action}>
+        <Card>
+          <View style={{ gap: 8 }}>
+            <Txt size={fontSizes.lg} weight="extrabold">
+              No dollar earnings yet
+            </Txt>
+            <Txt size={fontSizes.sm} color={colors.muted}>
+              A dollar investment starts earning the day after its payment is confirmed. From then on
+              you will see here what it earns each month, in dollars and after tax.
+            </Txt>
+          </View>
+        </Card>
+      </AppPage>
+    );
+  }
+
   if (empty) {
     return (
-      <AppPage title="Insights" subtitle="What your money earns, month by month.">
+      <AppPage title="Insights" subtitle="What your money earns, month by month." action={action}>
         <Card>
           <View style={{ gap: 8 }}>
             <Txt size={fontSizes.lg} weight="extrabold">
@@ -144,7 +191,7 @@ export default function Insights() {
           ))}
         </View>
         <Txt size={12} color={colors.muted}>
-          {`Thousands of shillings, after tax. ${monthLong(current.month)} is part way through.`}
+          {`${barUnit[insights.currency]}, after tax. ${monthLong(current.month)} is part way through.`}
         </Txt>
       </View>
     </Card>
@@ -204,7 +251,11 @@ export default function Insights() {
   );
 
   return (
-    <AppPage title="Insights" subtitle="What your money earns, month by month. All after tax.">
+    <AppPage
+      title="Insights"
+      subtitle="What your money earns, month by month. All after tax."
+      action={action}
+    >
       {wide ? (
         <View style={styles.columns}>
           <View style={styles.column}>
@@ -229,6 +280,45 @@ export default function Insights() {
         </>
       )}
     </AppPage>
+  );
+}
+
+const CURRENCY_NAMES: Record<Currency, string> = { UGX: "Shillings", USD: "Dollars" };
+
+/**
+ * Shillings or dollars. Each shows its own figures: the two are never added together,
+ * because no rate between them is the client's to rely on.
+ */
+function CurrencySwitch({
+  held,
+  chosen,
+  onChoose,
+}: {
+  held: Currency[];
+  chosen: Currency;
+  onChoose: (currency: Currency) => void;
+}) {
+  return (
+    <View style={styles.switch} accessibilityRole="radiogroup" accessibilityLabel="Currency">
+      {held.map((currency) => {
+        const on = currency === chosen;
+        return (
+          <Pressable
+            key={currency}
+            accessibilityRole="radio"
+            accessibilityState={{ checked: on }}
+            accessibilityLabel={CURRENCY_NAMES[currency]}
+            onPress={() => onChoose(currency)}
+            style={[styles.switchOption, on && styles.switchOn]}
+            testID={`insights-currency-${currency}`}
+          >
+            <Txt size={13} weight="bold" color={on ? colors.white : colors.ink}>
+              {currency}
+            </Txt>
+          </Pressable>
+        );
+      })}
+    </View>
   );
 }
 
@@ -319,6 +409,17 @@ const styles = StyleSheet.create({
     borderBottomRightRadius: 3,
   },
   totals: { flexDirection: "row", gap: 12 },
+  switch: {
+    flexDirection: "row",
+    alignSelf: "flex-start",
+    borderWidth: 1,
+    borderColor: colors.borderStrong,
+    borderRadius: 22,
+    padding: 3,
+    gap: 2,
+  },
+  switchOption: { minHeight: 38, minWidth: 52, paddingHorizontal: 12, borderRadius: 19, justifyContent: "center", alignItems: "center" },
+  switchOn: { backgroundColor: colors.black },
   stat: {
     flex: 1,
     backgroundColor: colors.surface,

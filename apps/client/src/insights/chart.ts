@@ -1,4 +1,6 @@
-import { InsightsMonth } from "./types";
+import { Money } from "@/payments/types";
+
+import { Currency, InsightsMonth } from "./types";
 
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 const FULL_MONTHS = [
@@ -34,6 +36,27 @@ export function thousands(minor: number): string {
   return `${Math.floor(tenths / 10).toLocaleString("en-US")}.${tenths % 10}`;
 }
 
+/**
+ * "12.50": whole dollars and cents, for a bar label. Moved digit by digit from the
+ * integer number of cents, like `thousands`.
+ */
+export function dollars(cents: number): string {
+  const digits = String(Math.abs(cents)).padStart(3, "0");
+  const whole = Number(digits.slice(0, -2)).toLocaleString("en-US");
+  return `${cents < 0 ? "-" : ""}${whole}.${digits.slice(-2)}`;
+}
+
+/** A bar's label in its own currency's unit. */
+export function barValue(money: Money): string {
+  return money.currency === "USD" ? dollars(money.minor) : thousands(money.minor);
+}
+
+/** What the bar labels count, for the line under the chart. */
+export const barUnit: Record<Currency, string> = {
+  UGX: "Thousands of shillings",
+  USD: "Dollars",
+};
+
 export type Bar = {
   month: string;
   label: string;
@@ -48,7 +71,7 @@ export function earnedBars(months: InsightsMonth[], maxHeight: number): Bar[] {
   return months.map((month, index) => ({
     month: month.month,
     label: monthShort(month.month),
-    value: thousands(month.earned.minor),
+    value: barValue(month.earned),
     // A month with nothing earned still shows a sliver, so the axis reads.
     height: top === 0 ? 4 : Math.max(4, Math.round((month.earned.minor / top) * maxHeight)),
     current: index === months.length - 1,
