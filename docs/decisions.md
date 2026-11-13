@@ -24,7 +24,7 @@ A running log. Add a row when a decision is made, and move an open question up w
 | 2026-11-13 | Which console screens each staff role opens: the table in `apps/console/src/auth/stub.ts` is the working default, and the backend permissions module seeds roles from it. In short: Operations opens Money Movement, Reconciliation and Migration. Finance opens the Review Queue but not Complaints. Support opens Clients. Only Admin opens Team and Permissions and Settings. The owner can change it at any time. |
 | 2026-11-13 | Clients can also use an authenticator app as the second step, and can sign in with any second step they have set up: passkey, authenticator app or SMS code. This extends the row above. Staff sign-in is covered by the two rows above. |
 | 2026-11-13 | Working default: signing in with an authenticator app does not carry the 24 hour withdrawal limit. Only a code by SMS or email does, because the limit is there to stop someone who holds only the SIM card. The owner can change it at any time. |
-| 2026-11-13 | Clients add a passkey or set up an authenticator app themselves, from Profile, Sign in and security. An authenticator app is switched on only after a code from the app confirms the key was saved. The key is shown once during set-up and the app never stores it. |
+| 2026-11-13 | Clients add a passkey or set up an authenticator app themselves, from Profile, Sign in and security. An authenticator app is switched on only after a code from the app confirms the key was saved. The key is shown once during set-up and the app never stores it. Adding or removing a second step needs a session opened in the last 10 minutes. An older session is asked to log in again. |
 | 2026-11-13 | Clients save their own payout bank accounts and mobile money numbers, with proof of ownership. |
 | 2026-11-13 | Domains: finvestug.com for the website, app.finvestug.com for the client app, admin.finvestug.com for the back office. |
 | 2026-11-13 | Infrastructure is Terraform on DigitalOcean and Cloudflare. |
@@ -46,7 +46,7 @@ A running log. Add a row when a decision is made, and move an open question up w
 | Identity check provider: Smile ID coverage and pricing for Uganda, or ioTec Verify if it can check identity documents. Until one is chosen every client is reviewed by a person. See [identity-checks.md](identity-checks.md). | Owner |
 | Will passkeys become compulsory for clients? | Owner |
 | Confirm that signing in with an authenticator app carries no 24 hour withdrawal limit. In use as the working default since 2026-11-13 (see Decided). | Owner |
-| A client signed in with an SMS code can add a passkey or an authenticator app. Should that end the 24 hour limit early, and should adding one ask for the password again? Built as: the limit runs its full 24 hours, and the screen says so. Asking for the password again is left to the sign-in API. | Owner |
+| A client signed in with an SMS code can add a passkey or an authenticator app. Should that end the 24 hour limit early? Built as no, in the app and in the sign-in API: the limit runs its full 24 hours, and the screen says so. | Owner |
 | Is api.finvestug.com the backend address? | Owner |
 | Confirm the role to screen table for the console. In use as the working default since 2026-11-13 (see Decided). It decides who can open Money Movement, Reconciliation and the other screens. | Owner |
 | Card payments. Stripe is not available to Ugandan businesses. A local card acquirer, capped, is a possible later addition. | Owner |

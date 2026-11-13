@@ -26,6 +26,7 @@ export type AuthErrorCode =
   | "leaked_password"
   | "expired"
   | "cancelled"
+  | "sign_in_again"
   | "unavailable";
 
 export class AuthError extends Error {
@@ -62,7 +63,6 @@ export type LoginChallenge = {
  * the key. The app shows it once, during set-up, and never stores it.
  */
 export type AuthenticatorSetup = {
-  setupId: string;
   /** The key in base32, for typing by hand when the QR code cannot be scanned. */
   key: string;
   /** The same key as an otpauth:// address, for the QR code and for opening an app. */
@@ -100,18 +100,25 @@ export interface AuthClient {
    */
   listSecondSteps(): Promise<SecondStep[]>;
   /**
+   * Adding a second step needs a session opened in the last few minutes. An
+   * older one fails with `sign_in_again`, and the client logs in again first.
+   *
    * Creates a passkey on this device and saves its public half to the
    * account. Fails with `cancelled` when the client dismisses the device
    * prompt, and nothing is saved.
    */
   addPasskey(): Promise<void>;
-  /** Authenticator app set-up, step 1: a fresh key. Nothing is switched on yet. */
+  /**
+   * Authenticator app set-up, step 1: a fresh key. Nothing is switched on yet.
+   * The server ties the pending set-up to this session, so there is no id to
+   * carry, and it ends when the session does.
+   */
   startAuthenticatorSetup(): Promise<AuthenticatorSetup>;
   /**
    * Authenticator app set-up, step 2: a code from the app proves the key was
    * saved. Only then does the app become a way to log in.
    */
-  confirmAuthenticatorSetup(setupId: string, code: string): Promise<void>;
+  confirmAuthenticatorSetup(code: string): Promise<void>;
 
   signOut(): Promise<void>;
 }
@@ -122,6 +129,8 @@ const messages: Record<AuthErrorCode, string> = {
   phone_taken: "This number already has a Finvest account. Log in instead.",
   leaked_password:
     "This password has appeared in a known leak, so it is not safe to use. Choose a different one.",
+  sign_in_again:
+    "For your safety, log in again before you change how you sign in. It only takes a moment.",
   cancelled: "Nothing was added. You can try again when you are ready.",
   expired: "That took too long, so we stopped for your safety. Please start again.",
   unavailable: "We could not reach Finvest. Check your connection and try again.",

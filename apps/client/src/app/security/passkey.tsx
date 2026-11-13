@@ -10,6 +10,7 @@ import { Button, TextLink } from "@/components/Button";
 import { Done } from "@/components/Done";
 import { Icon } from "@/components/Icon";
 import { Screen } from "@/components/Screen";
+import { needsSignInAgain, SignInAgain } from "@/components/SignInAgain";
 import { Title, Txt } from "@/components/Txt";
 import { colors, fontSizes } from "@/theme";
 
@@ -29,6 +30,7 @@ export default function AddPasskey() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [added, setAdded] = useState(false);
+  const [stale, setStale] = useState(false);
 
   const leave = () => (router.canGoBack() ? router.back() : router.replace("/security"));
 
@@ -39,7 +41,11 @@ export default function AddPasskey() {
       await client.addPasskey();
       setAdded(true);
     } catch (caught) {
-      setError(describeAuthError(caught));
+      if (needsSignInAgain(caught)) {
+        setStale(true);
+      } else {
+        setError(describeAuthError(caught));
+      }
       setBusy(false);
     }
   };
@@ -55,6 +61,16 @@ export default function AddPasskey() {
           onPress={leave}
         />
       </>
+    );
+  }
+
+  if (stale) {
+    return (
+      <Screen>
+        <Stack.Screen options={{ title: "Add a passkey" }} />
+        <BackButton fallback="/security" />
+        <SignInAgain />
+      </Screen>
     );
   }
 
