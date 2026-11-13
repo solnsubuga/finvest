@@ -52,17 +52,18 @@ async def post(
     on: date,
     reference: str = "-Nabc0000000000000Z1",
     direction: str = "credit",
+    currency: Currency = Currency.UGX,
 ) -> str:
     """Move `amount` into (credit) or out of (debit) one of the client's accounts. Returns the
     entry's id."""
-    money = ugx(amount)
+    money = Money(amount, currency)
     async with worker_database.actor_transaction(SYSTEM) as session:
         account = await ledger.open_account(
             session,
             AccountSpec(
                 code,
                 AccountKind.LIABILITY,
-                Currency.UGX,
+                currency,
                 "Test",
                 owner_client_id=client_id,
                 reference=reference,
@@ -70,7 +71,7 @@ async def post(
             NOW,
         )
         other = await ledger.open_account(
-            session, AccountSpec("test.other", AccountKind.ASSET, Currency.UGX, "Other"), NOW
+            session, AccountSpec("test.other", AccountKind.ASSET, currency, "Other"), NOW
         )
         lines = (
             (debit(other.id, money), credit(account.id, money))
@@ -92,9 +93,13 @@ async def reverse(worker_database: Database, entry_id: str, on: date) -> None:
         await ledger.reverse_entry(session, entry_id, NOW, effective_date=on, idempotency_key=key())
 
 
-async def read(database: Database, client: Actor, months: int = 3) -> insights.ClientInsights:
+async def read(
+    database: Database, client: Actor, months: int = 3, currency: Currency = Currency.UGX
+) -> insights.ClientInsights:
     async with database.actor_transaction(client) as session:
-        return await insights.client_insights(session, client, NOW, months=months)
+        return await insights.client_insights(
+            session, client, NOW, months=months, currency=currency
+        )
 
 
 async def test_a_new_client_sees_empty_months(app_database: Database) -> None:
@@ -236,6 +241,40 @@ async def test_a_reversed_entry_nets_out_in_the_month_it_is_reversed(
     assert (november.invested, november.earned, november.paid_out) == (ugx(0), ugx(-500), ugx(0))
 
 
+async def test_each_currency_has_its_own_figures_never_summed(
+    app_database: Database, worker_database: Database
+) -> None:
+    client = new_client()
+    client_id: str = client.id  # type: ignore[assignment]
+    interest = ("client.interest_accrued", "investment.interest_accrued")
+    await post(
+        worker_database,
+        client_id=client_id,
+        code=interest[0],
+        entry_type=interest[1],
+        amount=300,
+        on=TODAY,
+    )
+    # 12.34 dollars, in cents.
+    await post(
+        worker_database,
+        client_id=client_id,
+        code=interest[0],
+        entry_type=interest[1],
+        amount=1_234,
+        on=TODAY,
+        currency=Currency.USD,
+    )
+    shillings = await read(app_database, client)
+    dollars = await read(app_database, client, currency=Currency.USD)
+    assert (shillings.currency, shillings.this_month.earned) == (Currency.UGX, ugx(300))
+    assert (dollars.currency, dollars.this_month.earned) == (
+        Currency.USD,
+        Money(1_234, Currency.USD),
+    )
+    assert dollars.invested_now == Money(0, Currency.USD)
+
+
 async def test_what_is_invested_now_and_what_comes_next(
     app_database: Database, worker_database: Database
 ) -> None:
@@ -324,5 +363,12 @@ async def test_the_route_serves_the_signed_in_clients_own_insights(
             "earned_so_far_minor": 0,
             "upcoming": [],
         }
+        dollars = await http.get(
+            "/client/insights", params={"months": 1, "currency": "USD"}, headers=bearer
+        )
+        assert dollars.status_code == 200
+        assert dollars.json()["currency"] == "USD"
+        unknown = await http.get("/client/insights", params={"currency": "EUR"}, headers=bearer)
+        assert unknown.status_code == 422
         too_many = await http.get("/client/insights", params={"months": 25}, headers=bearer)
         assert too_many.status_code == 422
