@@ -1,0 +1,99 @@
+import { markDemoPaid } from "@/demo/payables";
+import { formatAmount, groupDigits, parseWholeAmount } from "@/investing/format";
+import { createStubInvestingClient } from "@/investing/stubInvestingClient";
+import { InvestingError } from "@/investing/types";
+
+const DAY_MS = 24 * 60 * 60 * 1000;
+const ugx = (minor: number) => ({ currency: "UGX" as const, minor });
+
+function client() {
+  const clock = { ms: Date.parse("2026-11-13T09:00:00Z") };
+  return { clock, api: createStubInvestingClient({ delayMs: 0, now: () => clock.ms, sample: "empty" }) };
+}
+
+describe("demo investing", () => {
+  it("quotes the backend's example figure", async () => {
+    const { api } = client();
+    const quote = await api.quote("TREA-91", ugx(1_000_000));
+    expect(quote).toMatchObject({
+      startsOn: "2026-11-13",
+      maturesOn: "2027-02-12",
+      interest: ugx(26_490),
+      total: ugx(1_026_490),
+    });
+  });
+
+  it("never hands a tax rate to the screens", async () => {
+    const { api } = client();
+    const products = await api.listProducts();
+    expect(JSON.stringify(products)).not.toMatch(/tax|Bps/i);
+  });
+
+  it("refuses an amount below the minimum and a paused product", async () => {
+    const { api } = client();
+    await expect(api.quote("TREA-182", ugx(50_000))).rejects.toEqual(new InvestingError("below_minimum"));
+    await expect(api.quote("USD-BOND", { currency: "USD", minor: 1_000_00 })).rejects.toEqual(
+      new InvestingError("product_not_open"),
+    );
+  });
+
+  it("saves one investment per key", async () => {
+    const { api } = client();
+    const request = { productCode: "TREA-91", amount: ugx(1_000_000), atMaturity: null, idempotencyKey: "k1" };
+    const first = await api.requestInvestment(request);
+    const again = await api.requestInvestment(request);
+    expect(again.id).toBe(first.id);
+    expect(first).toMatchObject({ status: "awaiting_payment", atMaturity: "roll_over", interestSoFar: ugx(0) });
+    expect(await api.listInvestments()).toHaveLength(1);
+  });
+
+  it("starts the term once the demo payment is confirmed and adds interest each night", async () => {
+    const { api, clock } = client();
+    const saved = await api.requestInvestment({
+      productCode: "TREA-91",
+      amount: ugx(1_000_000),
+      atMaturity: "pay_out",
+      idempotencyKey: "k2",
+    });
+    markDemoPaid(saved.id, new Date(clock.ms).toISOString());
+    expect(await api.getInvestment(saved.id)).toMatchObject({ status: "active", startDate: "2026-11-13", daysEarned: 0 });
+    clock.ms += DAY_MS;
+    const nextDay = await api.getInvestment(saved.id);
+    expect(nextDay).toMatchObject({ daysEarned: 1, interestToday: ugx(291), interestSoFar: ugx(291), value: ugx(1_000_291) });
+    clock.ms += 90 * DAY_MS;
+    expect(await api.getInvestment(saved.id)).toMatchObject({ status: "matured", interestSoFar: ugx(26_490) });
+  });
+
+  it("lets an unpaid investment lapse after 72 hours", async () => {
+    const { api, clock } = client();
+    const saved = await api.requestInvestment({
+      productCode: "TREA-91",
+      amount: ugx(1_000_000),
+      atMaturity: null,
+      idempotencyKey: "k3",
+    });
+    clock.ms += 73 * 60 * 60 * 1000;
+    expect((await api.getInvestment(saved.id)).status).toBe("cancelled");
+    expect(await api.listInvestments()).toHaveLength(0);
+  });
+});
+
+describe("amount formats", () => {
+  it("reads whole amounts only", () => {
+    expect(parseWholeAmount("1,000,000", "UGX")).toEqual(ugx(1_000_000));
+    expect(parseWholeAmount("500", "USD")).toEqual({ currency: "USD", minor: 50_000 });
+    expect(parseWholeAmount("1000.50", "UGX")).toBeNull();
+    expect(parseWholeAmount("0", "UGX")).toBeNull();
+    expect(parseWholeAmount("", "UGX")).toBeNull();
+  });
+
+  it("groups digits as they are typed", () => {
+    expect(groupDigits("1000000")).toBe("1,000,000");
+    expect(groupDigits("00120a")).toBe("120");
+  });
+
+  it("writes amounts in both currencies", () => {
+    expect(formatAmount(ugx(26_490))).toBe("UGX 26,490");
+    expect(formatAmount({ currency: "USD", minor: 50_000 })).toBe("USD 500.00");
+  });
+});

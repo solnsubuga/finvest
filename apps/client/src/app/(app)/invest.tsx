@@ -1,26 +1,46 @@
+import { useCallback } from "react";
+import { View } from "react-native";
 import { useRouter } from "expo-router";
 
 import { AppPage } from "@/components/AppPage";
-import { Notice } from "@/components/Blocks";
 import { Button } from "@/components/Button";
 import { Txt } from "@/components/Txt";
+import { useInvesting } from "@/investing/InvestingProvider";
+import { Failed, ProductCard } from "@/investing/Parts";
+import { useLoaded } from "@/investing/useLoaded";
+import { Loading } from "@/payments/Parts";
 import { usePayments } from "@/payments/PaymentsProvider";
 import { colors, fontSizes } from "@/theme";
 
+/** What a client can invest in, with the rate after tax. */
 export default function Invest() {
   const router = useRouter();
+  const client = useInvesting();
   const { demoPayableId } = usePayments();
+  const [products, retry] = useLoaded(useCallback(() => client.listProducts(), [client]));
+
   return (
-    <AppPage title="Invest">
-      <Notice tone="neutral">
-        Nothing here yet. Treasury bills and fixed income products you can invest in will be listed
-        here.
-      </Notice>
-      <Txt size={fontSizes.sm} color={colors.muted}>
-        This page is part of the app shell. Its content arrives in a later phase.
-      </Txt>
+    <AppPage title="Invest" subtitle="Government-backed and fixed income products. Rates shown are after tax.">
+      {products.state === "loading" ? (
+        <Loading label="Loading products" />
+      ) : products.state === "failed" ? (
+        <Failed message={products.message} onRetry={retry} />
+      ) : (
+        <View style={{ gap: 12 }}>
+          {products.value.map((product) => (
+            <ProductCard
+              key={product.code}
+              product={product}
+              onPress={() => router.push(`/invest/${product.code}`)}
+            />
+          ))}
+          <Txt size={fontSizes.xs} color={colors.muted}>
+            Rates can change for new investments. Once you invest, your rate is fixed for the whole term.
+          </Txt>
+        </View>
+      )}
       {demoPayableId ? (
-        // Only in the demo, until the investing screens lead here themselves.
+        // Only in the demo: the payment screens on their own, without making an investment first.
         <Button
           label="Demo: pay for an investment"
           onPress={() => router.push(`/pay/${demoPayableId}`)}

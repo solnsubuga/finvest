@@ -8,6 +8,7 @@ import { AuthProvider } from "@/auth/AuthProvider";
 import { AutoinvestProvider } from "@/autoinvest/AutoinvestProvider";
 import { GoalsProvider } from "@/goals/GoalsProvider";
 import { InsightsProvider } from "@/insights/InsightsProvider";
+import { InvestingProvider } from "@/investing/InvestingProvider";
 import { PaymentsProvider } from "@/payments/PaymentsProvider";
 import { SupportProvider } from "@/support/SupportProvider";
 import { colors, fontAssets } from "@/theme";
@@ -33,18 +34,20 @@ export default function RootLayout() {
       <AuthProvider>
         <PaymentsProvider>
           <SupportProvider>
-            <AutoinvestProvider>
-              <InsightsProvider>
-                <GoalsProvider>
-                  <Stack
-                    screenOptions={{
-                      headerShown: false,
-                      contentStyle: { backgroundColor: colors.paper },
-                    }}
-                  />
-                </GoalsProvider>
-              </InsightsProvider>
-            </AutoinvestProvider>
+            <InvestingProvider>
+              <AutoinvestProvider>
+                <InsightsProvider>
+                  <GoalsProvider>
+                    <Stack
+                      screenOptions={{
+                        headerShown: false,
+                        contentStyle: { backgroundColor: colors.paper },
+                      }}
+                    />
+                  </GoalsProvider>
+                </InsightsProvider>
+              </AutoinvestProvider>
+            </InvestingProvider>
           </SupportProvider>
         </PaymentsProvider>
       </AuthProvider>
