@@ -1,6 +1,6 @@
 # Ledger and audit trail
 
-How the money rules in [rules.md](rules.md) are built. The code is in `backend/app/modules/ledger`, `backend/app/modules/audit`, `backend/app/modules/account_numbers` and `backend/app/shared/money.py`. The database side is migrations 0010 to 0013.
+How the money rules in [rules.md](rules.md) are built. The code is in `backend/app/modules/ledger`, `backend/app/modules/audit`, `backend/app/modules/account_numbers` and `backend/app/shared/money.py`. The database side is migrations 0010 to 0014.
 
 ## Money
 
@@ -42,7 +42,7 @@ These hold even if application code is wrong, because PostgreSQL checks them.
 - **Which accounts a command may touch.** Any client or staff transaction can insert lines against any account. The database keeps every entry balanced, every balance at zero or above and every client's view fenced, but it does not stop a faulty command from debiting the wrong client's account. That is the job of the command, and of its tests.
 - **That a reversal is always possible.** A reversal is refused if it would take a balance below zero. A deposit credited by mistake and then invested cannot simply be reversed. It is put right with an approved correction, described under [Corrections](#corrections).
 
-Migrations 0010 to 0013 refuse to downgrade while their tables hold any row, so `alembic downgrade` cannot delete the books, the issued numbers or the audit trail.
+Migrations 0010 to 0014 refuse to downgrade while their tables hold any row, so `alembic downgrade` cannot delete the books, the issued numbers or the audit trail, or reopen a closed day.
 
 There is no overdraft switch. If an account ever needs to run below zero, that is a change to the shape of the ledger and goes to the owner first.
 
@@ -121,6 +121,46 @@ What the database enforces, for every role including the table owner:
 | Still within the books | The correction is an ordinary entry. It balances, uses one currency and cannot take any account below zero. If the money has moved again since the proposal, approval fails with `InsufficientFunds`, nothing is decided, and the proposal stays open to be rejected. |
 
 What this does not do: it does not stop a staff command from calling `post_entry` directly with some other source type. The two-person rule covers everything recorded as a correction. Keeping manual adjustments on this path is the job of the commands the console exposes, which must offer no other way to post a manual entry.
+
+### Reading an account's history
+
+`app.modules.ledger.statements` is read-only and is what reconciliation uses, since no other module reads the ledger's tables.
+
+- `account_movements(session, account_id, date_from=..., date_to=...)` lists every line on the account dated in the range, both days included. Each has the entry ID and line number, the date, the signed amount (a debit is positive), the entry type and the entry's `source_type` and `source_id`. A statement line is matched to a movement on `source_id`.
+- `balance_as_of(session, account_id, day)` is the balance counting only entries dated on or before that day, in the account's normal direction.
+- `account_owner(session, account_id)` is the client the account belongs to, or nothing for one of Finvest's own accounts.
+
+Row policies apply as everywhere else. A client transaction can read only that client's accounts, and all three raise `UnknownAccount` for an account the transaction cannot see.
+
+### Closing a day
+
+Once a day has been reconciled and signed off, the ledger is closed through it. From then on nothing can be dated on or before that day, so the balance that was agreed cannot change.
+
+```python
+from app.modules.ledger import closing, statements
+
+async with database.actor_transaction(second_signer) as session:
+    await closing.close_through(session, second_signer, day, clock)
+    agreed = await statements.balance_as_of(session, collections_id, day)
+```
+
+Close first and read the balances after, in the same transaction, as above. The close waits for any entry still being posted, so what is read after it is final. If the figures do not match the statement, raise and the transaction rolls back, close included.
+
+What the database enforces, for every role including the table owner:
+
+| Rule | How |
+| --- | --- |
+| A closed day takes no entries | A trigger on journal entries refuses an `effective_date` on or before the closed day. `post_entry` raises `DayClosed`. This covers every entry type, reversals and corrections included. |
+| Closed days only move forward | The list of closed days is insert-only and each new date must be later than the last. A closed day is never reopened. Closing a day that is already closed changes nothing. |
+| Only a day that has ended | Today and future days cannot be closed, by PostgreSQL's own clock in Kampala time, because payments and payouts are still being dated today. `close_through` raises `DayNotEnded`. |
+| People close days | Only a staff transaction can close, under its own ID. The worker can read the closed day and cannot set it. Each close writes an audit event. |
+| Nothing slips in behind a close | Posting and closing take turns on one lock. A close waits for transactions that have already posted an entry, and an entry posted during a close waits and is then checked against the new date. |
+
+A mistake found in a closed day is fixed with a correction dated in an open day. The closed day keeps showing what was agreed, and the fix shows on the day it was made.
+
+How many people must sign a day off is the reconciliation module's rule. The ledger records who made the call and does not count signatures.
+
+Two things to know when using it. A close briefly pauses posting while it waits for entries in flight, so it should be the first thing its transaction does and that transaction should be short. And an entry may still carry any open date, past or future. If back-dating into open days needs a limit, that is a rule for the command that posts.
 
 ## Account numbers
 
