@@ -1,6 +1,6 @@
 name: Reusable Deploy
 
-# Ported from Fidiba's deploy.yml. Builds the backend and console images, pushes them to GHCR and
+# Ported from Fidiba's deploy.yml. Builds the backend, console and website images, pushes them to GHCR and
 # deploys their immutable digests to one environment's host with infra/deployment/deploy.sh.
 # Called by Deploy Staging (main) and Deploy Production (release). Every setting it reads was
 # written into the GitHub environment by the Provision workflow, apart from the app's own
@@ -61,9 +61,22 @@ jobs:
           password: ${{ github.token }}
       - name: Set image names
         id: images
+        env:
+          SITE_DOMAINS: ${{ vars.SITE_DOMAINS }}
+          APP_DOMAIN: ${{ vars.APP_DOMAIN }}
+          API_DOMAIN: ${{ vars.API_DOMAIN }}
         run: |
-          echo "backend=ghcr.io/${REPOSITORY,,}-backend" >> "$GITHUB_OUTPUT"
-          echo "console=ghcr.io/${REPOSITORY,,}-console" >> "$GITHUB_OUTPUT"
+          # The website is built for this environment's addresses. The first site domain is the
+          # canonical one. site.Dockerfile refuses anything that is not a plain https origin.
+          read -r -a domains <<< "${SITE_DOMAINS//,/ }"
+          {
+            echo "backend=ghcr.io/${REPOSITORY,,}-backend"
+            echo "console=ghcr.io/${REPOSITORY,,}-console"
+            echo "site=ghcr.io/${REPOSITORY,,}-site"
+            echo "site_url=https://${domains[0]:-}"
+            echo "app_url=https://$APP_DOMAIN"
+            echo "api_url=https://$API_DOMAIN"
+          } >> "$GITHUB_OUTPUT"
       - uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
         id: backend
         with:
@@ -85,10 +98,27 @@ jobs:
           tags: ${{ steps.images.outputs.console }}:${{ inputs.environment }}-${{ inputs.revision }}
           cache-from: type=gha,scope=console-${{ inputs.environment }}
           cache-to: type=gha,scope=console-${{ inputs.environment }},mode=max
+      - uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        id: site
+        with:
+          context: .
+          file: infra/deployment/site.Dockerfile
+          platforms: linux/amd64
+          push: true
+          build-args: |
+            PUBLIC_SITE_URL=${{ steps.images.outputs.site_url }}
+            PUBLIC_APP_URL=${{ steps.images.outputs.app_url }}
+            PUBLIC_API_URL=${{ steps.images.outputs.api_url }}
+            PUBLIC_INDEXABLE=${{ vars.SITE_INDEXABLE == 'true' && 'true' || 'false' }}
+          tags: ${{ steps.images.outputs.site }}:${{ inputs.environment }}-${{ inputs.revision }}
+          cache-from: type=gha,scope=site-${{ inputs.environment }}
+          cache-to: type=gha,scope=site-${{ inputs.environment }},mode=max
       - name: Prepare private release files
         env:
           BACKEND_IMAGE: ${{ steps.images.outputs.backend }}@${{ steps.backend.outputs.digest }}
           CONSOLE_IMAGE: ${{ steps.images.outputs.console }}@${{ steps.console.outputs.digest }}
+          SITE_IMAGE: ${{ steps.images.outputs.site }}@${{ steps.site.outputs.digest }}
+          SITE_PUBLISHED: ${{ vars.SITE_PUBLISHED }}
           SITE_DOMAINS: ${{ vars.SITE_DOMAINS }}
           APP_DOMAIN: ${{ vars.APP_DOMAIN }}
           ADMIN_DOMAIN: ${{ vars.ADMIN_DOMAIN }}

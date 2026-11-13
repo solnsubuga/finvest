@@ -22,6 +22,7 @@ def settings(**overrides):
         "SITE_DOMAINS": "finvestug.com,www.finvestug.com",
         "BACKEND_IMAGE": f"ghcr.io/solnsubuga/finvest-backend@{DIGEST}",
         "CONSOLE_IMAGE": f"ghcr.io/solnsubuga/finvest-console@{DIGEST}",
+        "SITE_IMAGE": f"ghcr.io/solnsubuga/finvest-site@{DIGEST}",
         "DATABASE_HOST": "private-finvest-production.db.ondigitalocean.com",
         "DATABASE_PORT": "25060",
         "DATABASE_NAME": "finvest",
@@ -86,7 +87,7 @@ class PrepareRelease(unittest.TestCase):
             pr.prepare(self.out, settings(FINVEST_REHEARSAL="true", DATABASE_CA_CERT=None))
 
     def test_rehearsal_with_local_images_turns_database_tls_off(self):
-        local = {name: f"localhost:15000/finvest-x@{DIGEST}" for name in ("BACKEND_IMAGE", "CONSOLE_IMAGE")}
+        local = {name: f"localhost:15000/finvest-x@{DIGEST}" for name in ("BACKEND_IMAGE", "CONSOLE_IMAGE", "SITE_IMAGE")}
         pr.prepare(self.out, settings(FINVEST_REHEARSAL="true", DATABASE_CA_CERT=None, **local))
         self.assertEqual(read_env(self.out / "runtime" / "api.env")["FINVEST_DATABASE_SSL_MODE"], "disable")
 
@@ -144,6 +145,23 @@ class PrepareRelease(unittest.TestCase):
             self.assertIn("FINVEST_IDENTITY_DATA_KEY", read_env(self.out / "runtime" / f"{service}.env"))
         for service in ("scheduler", "migrate"):
             self.assertNotIn("FINVEST_IDENTITY_DATA_KEY", read_env(self.out / "runtime" / f"{service}.env"))
+
+    def test_staging_serves_the_website(self):
+        pr.prepare(self.out, settings(DEPLOY_ENVIRONMENT="staging"))
+        self.assertIn("import site_upstream", (self.out / "edge" / "site.caddy").read_text())
+        self.assertEqual(read_env(self.out / "release.env")["FINVEST_SITE_DOMAIN"], "finvestug.com")
+
+    def test_production_holds_the_website_back_until_published(self):
+        pr.prepare(self.out, settings())
+        site = (self.out / "edge" / "site.caddy").read_text()
+        self.assertNotIn("site_upstream", site)
+        self.assertIn(" 503", site)
+        self.assertNotIn("FINVEST_SITE_DOMAIN", read_env(self.out / "release.env"))
+
+    def test_production_serves_the_website_once_published(self):
+        pr.prepare(self.out, settings(SITE_PUBLISHED="true"))
+        self.assertIn("import site_upstream", (self.out / "edge" / "site.caddy").read_text())
+        self.assertEqual(read_env(self.out / "release.env")["FINVEST_SITE_DOMAIN"], "finvestug.com")
 
     def test_www_redirects_to_the_apex(self):
         pr.prepare(self.out, settings())

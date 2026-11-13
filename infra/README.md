@@ -8,7 +8,7 @@ Infrastructure as code for Finvest, modelled on Fidiba's provisioning. Terraform
 | `terraform/` | One environment: host, network, database, buckets, DNS, back office access, alerts, and the settings it writes into GitHub. |
 | `terraform/environments/*.tfvars` | What differs between `staging` and `production`. Each has its own state, so planning one never touches the other. |
 | `terraform/tests/` | `terraform test` with mock providers: the rules below that must not drift. |
-| `deployment/` | The deployed stack and its scripts, ported from Fidiba: `compose.yaml`, `Caddyfile`, `deploy.sh`, `prepare_release.py`, `ship-release.sh`, the console image, `prepare-host.sh`, `create-roles.sh`, and `rehearse.sh`. |
+| `deployment/` | The deployed stack and its scripts, ported from Fidiba: `compose.yaml`, `Caddyfile`, `deploy.sh`, `prepare_release.py`, `ship-release.sh`, the console and website images, `prepare-host.sh`, `create-roles.sh`, and `rehearse.sh`. |
 
 ## What an environment gets
 
@@ -149,7 +149,7 @@ A workflow does nothing until its environment is listed in the repository variab
 
 Each run:
 
-1. Builds the backend image and the console image, pushes them to GitHub's container registry and deploys their exact digests. The console is built with `VITE_DEPLOY_ENV` set to the environment, so a production console cannot contain the sample sign-in.
+1. Builds the backend, console and website images, pushes them to GitHub's container registry and deploys their exact digests. The console is built with `VITE_DEPLOY_ENV` set to the environment, so a production console cannot contain the sample sign-in.
 2. Writes one release bundle (`prepare_release.py`). Each process gets a runtime file with only its own database role, verified TLS to the database against DigitalOcean's CA, and the sign-in settings for the environment's domains.
 3. Admits its own address to SSH on the firewall, copies the bundle to `/opt/finvest/releases/<id>` and runs `deploy.sh` there, then removes its address again.
 
@@ -159,7 +159,7 @@ On the host, `deploy.sh`:
 2. Checks all three database roles are inside their boundaries, then runs migrations as `finvest_migrator` while the current release keeps serving.
 3. Starts the new colour (blue or green) beside the old one and waits for every health check.
 4. Switches Caddy to the new colour with a reload, which drops no connections.
-5. Checks the API and the console through the public address. If that fails, it switches back and removes the new colour. If it passes, it records the colour and stops the old one.
+5. Checks the API, the console and the website (where it is served) through the public address. If that fails, it switches back and removes the new colour. If it passes, it records the colour and stops the old one.
 
 Migrations must be able to run beside the previous release: add first, remove in a later release. Nothing checks this yet (Fidiba's release preflight is not ported), so it is the author's and the reviewer's job. For one that cannot, set the environment variable `STOP_BEFORE_MIGRATE=true` for that deploy; the old release stops first and visitors see "being updated" until the new one is up.
 
@@ -177,6 +177,9 @@ In each of the `staging` and `production` GitHub environments, beside what Terra
 | `FINVEST_EMAIL_RESEND_API_KEY` | Secret | The Resend key, once email is set up |
 | `FINVEST_EMAIL_BACKEND`, `FINVEST_EMAIL_FROM` | Variables | `resend` and `Finvest <no-reply@finvestug.com>` |
 
+| `SITE_PUBLISHED` | Variable, production only | `true` puts the public website live at the production address. Leave it unset while the pages still carry placeholder facts (`pnpm placeholders` in `apps/site`). |
+| `SITE_INDEXABLE` | Variable | `true` lets search engines index the website. Leave it unset until launch. Never set it on staging. |
+
 `DEPLOY_SSH_KEY` is already there from provisioning, and Provision records `DEPLOY_HOST_KEY` itself.
 
 Every process also gets `FINVEST_ENVIRONMENT` (`staging` or `production`), taken from the environment being deployed, so code that must not run in production can refuse to start there.
@@ -187,7 +190,8 @@ Every process also gets `FINVEST_ENVIRONMENT` (`staging` or `production`), taken
 | --- | --- |
 | API | The backend |
 | Back office | The console, behind Cloudflare Access in production |
-| Client app, public website | A "coming soon" answer until those apps are built |
+| Public website | The website from `apps/site`, built for the environment's own addresses. Staging always serves it. Production answers "on its way" until `SITE_PUBLISHED` is `true`. |
+| Client app | A "coming soon" answer until the web app is built |
 
 ### Rehearsal
 
