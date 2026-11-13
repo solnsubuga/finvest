@@ -2,6 +2,7 @@ import { fireEvent, screen } from "@testing-library/react-native";
 import { renderRouter } from "expo-router/testing-library";
 
 import { DEMO_PASSWORD } from "@/auth/stubAuthClient";
+import { AutoinvestError } from "@/autoinvest/types";
 
 jest.mock("@/auth/stubAuthClient", () => {
   const actual = jest.requireActual("@/auth/stubAuthClient");
@@ -11,13 +12,23 @@ jest.mock("@/auth/stubAuthClient", () => {
   };
 });
 
+const mockCreate = jest.fn();
+
 // expo-router's test renderer installs fake timers, so the demo answers at once.
 jest.mock("@/autoinvest/stubAutoinvestClient", () => {
   const actual = jest.requireActual("@/autoinvest/stubAutoinvestClient");
   return {
     ...actual,
-    createStubAutoinvestClient: (phone: string | null) =>
-      actual.createStubAutoinvestClient(phone, actual.newStubStore(), undefined, 0),
+    createStubAutoinvestClient: (phone: string | null) => {
+      const client = actual.createStubAutoinvestClient(phone, actual.newStubStore(), undefined, 0);
+      return {
+        ...client,
+        createPlan: async (request: unknown) => {
+          mockCreate(request);
+          return client.createPlan(request);
+        },
+      };
+    },
   };
 });
 
@@ -68,6 +79,47 @@ it("starts a plan, shows when it runs and pauses it", async () => {
   await fireEvent.press(screen.getByTestId("plan-pause"));
   expect(await screen.findByTestId("plan-resume")).toBeTruthy();
   expect(screen.getByTestId("plan-next")).toHaveTextContent(/Paused/);
+});
+
+it("after a lost answer, fixes the plan and sends the same one again", async () => {
+  mockCreate.mockClear();
+  await signIn();
+  await fireEvent.press(screen.getByTestId("home-autoinvest"));
+  await screen.findByText("UGX 250,000");
+  await fireEvent.press(screen.getByTestId("plan-new"));
+  await fireEvent.changeText(await screen.findByTestId("plan-amount"), "300,000");
+  mockCreate.mockImplementationOnce(() => {
+    throw new AutoinvestError("unavailable");
+  });
+  await fireEvent.press(screen.getByTestId("plan-start"));
+  await screen.findByText(/Your plan may already have reached us/);
+
+  // Nothing on the form can change now.
+  expect(screen.getByTestId("plan-amount").props.editable).toBe(false);
+  await fireEvent.press(screen.getByTestId("frequency-weekly"));
+  expect(screen.getByTestId("frequency-monthly").props.accessibilityState.checked).toBe(true);
+  expect(screen.getByTestId("day-5").props.accessibilityState.disabled).toBe(true);
+
+  await fireEvent.press(screen.getByTestId("plan-start"));
+  expect(await screen.findByLabelText("Each time: UGX 300,000")).toBeTruthy();
+  expect(mockCreate).toHaveBeenCalledTimes(2);
+  expect(mockCreate.mock.calls[1][0]).toEqual(mockCreate.mock.calls[0][0]);
+});
+
+it("leaves the form open after a refusal, because nothing was saved", async () => {
+  await signIn();
+  await fireEvent.press(screen.getByTestId("home-autoinvest"));
+  await screen.findByText("UGX 250,000");
+  await fireEvent.press(screen.getByTestId("plan-new"));
+  await fireEvent.changeText(await screen.findByTestId("plan-amount"), "300,000");
+  mockCreate.mockImplementationOnce(() => {
+    throw new AutoinvestError("not_verified");
+  });
+  await fireEvent.press(screen.getByTestId("plan-start"));
+  await screen.findByText(/once your identity check is approved/);
+  expect(screen.queryByText(/Your plan may already have reached us/)).toBeNull();
+  await fireEvent.press(screen.getByTestId("frequency-weekly"));
+  expect(screen.getByTestId("frequency-weekly").props.accessibilityState.checked).toBe(true);
 });
 
 it("shows insights after tax for the demo account", async () => {
