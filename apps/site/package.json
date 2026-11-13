@@ -1,0 +1,26 @@
+{
+  "name": "@finvest/site",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "astro dev",
+    "build": "astro build",
+    "preview": "astro preview",
+    "typecheck": "astro check",
+    "test": "vitest run",
+    "test:build": "vitest run --config vitest.build.config.ts",
+    "placeholders": "node scripts/placeholders.ts"
+  },
+  "dependencies": {
+    "@finvest/tokens": "workspace:*",
+    "@fontsource-variable/plus-jakarta-sans": "^5.2.0",
+    "astro": "^7.4.0"
+  },
+  "devDependencies": {
+    "@astrojs/check": "^0.9.12",
+    "@types/node": "^22.10.0",
+    "typescript": "^5.9.0",
+    "vitest": "^3.2.0"
+  }
+}

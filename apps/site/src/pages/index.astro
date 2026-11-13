@@ -1,0 +1,263 @@
+---
+import Calculator from "../components/Calculator.astro";
+import Cta from "../components/Cta.astro";
+import Faq from "../components/Faq.astro";
+import Icon from "../components/Icon.astro";
+import LiveRates from "../components/LiveRates.astro";
+import PhoneMock from "../components/PhoneMock.astro";
+import ProductCard from "../components/ProductCard.astro";
+import { signupUrl } from "../config.ts";
+import { fallback } from "../data/fallback.ts";
+import { minimumLabel } from "../lib/format.ts";
+import Base from "../layouts/Base.astro";
+
+// The product the hero talks about: the shortest bill open to new investments.
+const lead = fallback.products
+  .filter((p) => p.status === "live" && p.termDays !== null)
+  .sort((a, b) => (a.termDays ?? 0) - (b.termDays ?? 0))[0];
+
+const steps = [
+  {
+    title: "Open your account",
+    text: "Scan your National ID and take a selfie. Most people are approved in minutes and get a Finvest account number.",
+  },
+  {
+    title: "Choose and pay",
+    text: "Pick a treasury bill or a goal, review it, then pay by MTN, Airtel or bank transfer. It starts when the payment is confirmed.",
+  },
+  {
+    title: "Watch it grow",
+    text: "See your interest every day. At maturity, roll it over or have it paid straight to your mobile money or bank account.",
+  },
+];
+
+const safety = [
+  {
+    icon: "bank",
+    title: "Your bills, your name",
+    text: "Treasury bills are issued by the Government of Uganda and recorded against your account at [CUSTODIAN BANK].",
+  },
+  {
+    icon: "key",
+    title: "Password and passkey",
+    text: "Signing in on a new device needs your password and a second step. A texted code alone never opens your account.",
+  },
+  {
+    icon: "eye",
+    title: "Everything on record",
+    text: "Every payment has a receipt and a reference, and our books are checked against mobile money and bank statements daily.",
+  },
+] as const;
+
+const questions = [
+  {
+    question: "Is my money safe?",
+    answer:
+      "Your money buys Uganda government treasury bills, which are recorded against your account. Finvest does not lend your money out or hold a spendable balance for you.",
+  },
+  {
+    question: "Can I take my money out early?",
+    answer:
+      "Yes. Ask in the app and we sell your bill at that day's market price. You see the exact amount before you confirm. It can be less than holding to maturity.",
+  },
+  {
+    question: "How do I pay, and how am I paid?",
+    answer:
+      "You pay by MTN or Airtel mobile money, or by bank transfer with your reference. At maturity you roll over, or you are paid straight to a mobile money number or bank account in your own name.",
+  },
+  {
+    question: "What does it cost?",
+    answer: "[CONFIRM FEES]. Any fee is shown before you confirm.",
+  },
+  {
+    question: "I already invest with Finvest. How do I get the new app?",
+    answer:
+      "We send you a personal link by SMS and email. Open it, confirm your number, and check that your investments are shown correctly.",
+  },
+];
+---
+
+<Base
+  title="Finvest"
+  description="Invest in Uganda government treasury bills from your phone. Pay with mobile money, see your interest grow daily, and get paid back to mobile money or your bank."
+>
+  <section class="band--black hero">
+    <div class="wrap hero__grid">
+      <div class="hero__copy">
+        {
+          lead && (
+            <p class="pill">
+              <span>
+                {lead.termDays} day treasury bills at{" "}
+                <span data-rate={lead.code}>{lead.clientRatePercent}%</span> a year, after tax
+              </span>
+            </p>
+          )
+        }
+        <h1>Your money, working <span>every day.</span></h1>
+        <p class="hero__lead">
+          Invest in Uganda government treasury bills from your phone. Pay with mobile money, see
+          your interest grow daily, and get paid straight back to MoMo or your bank.
+        </p>
+        <div class="hero__actions">
+          <a class="button button--lime button--large" href={signupUrl}>Open an account</a>
+          <a class="button button--on-black button--large" href="/products">See today's rates</a>
+        </div>
+        {
+          lead && (
+            <p class="hero__small">
+              From <span data-minimum={lead.code}>{minimumLabel(lead)}</span>. Takes about five
+              minutes with your National ID.
+            </p>
+          )
+        }
+      </div>
+      <div class="hero__phone"><PhoneMock /></div>
+    </div>
+  </section>
+
+  <section class="facts" aria-label="Finvest at a glance">
+    <ul>
+      <li>
+        <span class="tile"><Icon name="shield" /></span>
+        <span><strong>Regulated</strong><small>[REGULATOR AND LICENCE NUMBER]</small></span>
+      </li>
+      <li>
+        <span class="tile"><Icon name="bank" /></span>
+        <span><strong>Held in your name</strong><small>Bills kept at [CUSTODIAN BANK]</small></span>
+      </li>
+      <li>
+        <span class="tile"><Icon name="phone" /></span>
+        <span><strong>MTN and Airtel</strong><small>Pay in and get paid by mobile money</small></span>
+      </li>
+      <li>
+        <span class="tile"><Icon name="sun" /></span>
+        <span><strong>Interest every day</strong><small>Always shown after tax</small></span>
+      </li>
+    </ul>
+  </section>
+
+  <section class="band" id="rates">
+    <div class="wrap">
+      <div class="section-head">
+        <div>
+          <p class="eyebrow">Today's rates</p>
+          <h2 class="h2">Pick how long. We show exactly what you get.</h2>
+          <p class="lead">
+            Every rate is yearly and after tax, so the number you see is the number you keep.
+          </p>
+        </div>
+        <a class="button button--outline" href="/products">
+          Compare all products <Icon name="arrow" size={18} />
+        </a>
+      </div>
+      <div class="grid grid--3">
+        {fallback.products.map((product) => <ProductCard product={product} />)}
+      </div>
+    </div>
+  </section>
+
+  <section class="band band--black" id="calculator">
+    <div class="wrap split">
+      <div>
+        <p class="eyebrow">Work it out</p>
+        <h2 class="h2">See what you could earn before you pay a shilling.</h2>
+        <p class="lead">
+          No forms, no phone calls. Type an amount and see the date and the money you get back.
+        </p>
+        <ul class="ticks">
+          <li><span><Icon name="tick" size={16} /></span>The rate is fixed on the day you start</li>
+          <li><span><Icon name="tick" size={16} /></span>Tax is already taken off</li>
+          <li>
+            <span><Icon name="tick" size={16} /></span>No fee to invest or to be paid at maturity
+            [CONFIRM FEES]
+          </li>
+        </ul>
+      </div>
+      <Calculator />
+    </div>
+  </section>
+
+  <section class="band" id="how">
+    <div class="wrap">
+      <p class="eyebrow">How it works</p>
+      <h2 class="h2">Three steps, all on your phone.</h2>
+      <ol class="grid grid--3" role="list" style="padding: 0; list-style: none">
+        {
+          steps.map((step, index) => (
+            <li class="card step">
+              <span class="step__number" aria-hidden="true">
+                {index + 1}
+              </span>
+              <div>
+                <h3 class="h3">{step.title}</h3>
+                <p>{step.text}</p>
+              </div>
+            </li>
+          ))
+        }
+      </ol>
+    </div>
+  </section>
+
+  <section class="band band--white" id="goals">
+    <div class="wrap split split--left">
+      <!-- A drawing of a goal in the app with sample figures. Decoration only. -->
+      <div class="goal" aria-hidden="true">
+        <div class="goal__top">
+          <span>School fees, Term 1</span>
+          <span class="tag tag--lime">On track</span>
+        </div>
+        <p class="goal__amount">UGX 3,200,000 <span>of 5,000,000</span></p>
+        <div class="goal__bar"><div></div></div>
+        <dl class="goal__stats">
+          <div><dt>Each month</dt><dd>UGX 200,000</dd></div>
+          <div><dt>Interest so far</dt><dd>UGX 84,300</dd></div>
+          <div><dt>Ready by</dt><dd>Jan 2027</dd></div>
+        </dl>
+      </div>
+      <div>
+        <p class="eyebrow">Goals</p>
+        <h2 class="h2">Save for something, and earn while you wait.</h2>
+        <p class="lead">
+          Set a target and a date. Finvest works out the monthly amount, reminds you, and puts
+          every payment into treasury bills. Save alone, or with your family, group or SACCO with
+          two people approving each withdrawal.
+        </p>
+      </div>
+    </div>
+  </section>
+
+  <section class="band band--black" id="safety">
+    <div class="wrap">
+      <p class="eyebrow">Safety</p>
+      <h2 class="h2">Built so your money is never in doubt.</h2>
+      <ul class="points">
+        {
+          safety.map((point) => (
+            <li>
+              <span class="tile">
+                <Icon name={point.icon} />
+              </span>
+              <div>
+                <h3 class="h3">{point.title}</h3>
+                <p>{point.text}</p>
+              </div>
+            </li>
+          ))
+        }
+      </ul>
+    </div>
+  </section>
+
+  <section class="band" id="questions">
+    <div class="wrap">
+      <p class="eyebrow">Questions</p>
+      <h2 class="h2">Things people ask first.</h2>
+      <Faq questions={questions} openFirst />
+    </div>
+  </section>
+
+  <Cta />
+  <LiveRates />
+</Base>

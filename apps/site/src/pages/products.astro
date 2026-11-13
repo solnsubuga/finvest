@@ -1,0 +1,170 @@
+---
+import Calculator from "../components/Calculator.astro";
+import Cta from "../components/Cta.astro";
+import Icon from "../components/Icon.astro";
+import LiveRates from "../components/LiveRates.astro";
+import ProductCard from "../components/ProductCard.astro";
+import { fallback } from "../data/fallback.ts";
+import { formatDay, minimumLabel } from "../lib/format.ts";
+import Base from "../layouts/Base.astro";
+
+const products = fallback.products;
+
+// What the comparison says about each product beyond its figures. A product with no entry
+// here still gets its rate and minimum from the catalogue.
+const notes: Record<string, Record<string, string>> = {
+  "TREA-91": {
+    suits: "Money you will need in about three months",
+    more: "Yes, as a new investment",
+    interest: "Earned daily, paid at maturity",
+    end: "Roll over or pay out",
+    early: "Allowed, the bill is sold at the market price",
+    pay: "MTN, Airtel, bank transfer",
+  },
+  "TREA-182": {
+    suits: "Money you can leave for six months",
+    more: "Yes, as a new investment",
+    interest: "Earned daily, paid at maturity",
+    end: "Roll over or pay out",
+    early: "Allowed, the bill is sold at the market price",
+    pay: "MTN, Airtel, bank transfer",
+  },
+  "USD-BOND": {
+    suits: "Savings you hold in dollars",
+    more: "Yes, any time",
+    interest: "Earned daily, paid monthly",
+    end: "Stays invested until you withdraw",
+    early: "Allowed, [NOTICE PERIOD]",
+    pay: "Dollar bank transfer",
+  },
+};
+
+const rows = [
+  ["suits", "Who it suits"],
+  ["more", "Add more later"],
+  ["interest", "Interest"],
+  ["end", "At the end"],
+  ["early", "Early withdrawal"],
+  ["pay", "Pay with"],
+] as const;
+const note = (code: string, key: string) => notes[code]?.[key] ?? "Ask us";
+---
+
+<Base
+  title="Products and rates"
+  description="Today's rates for Finvest treasury bills and fixed income, shown yearly and after tax, with minimums, terms and a side by side comparison."
+>
+  <section class="band band--black page-title">
+    <div class="wrap">
+      <p class="eyebrow">Products</p>
+      <h1>Simple investments, with the return shown up front.</h1>
+      <p>
+        Rates are yearly and after tax. They are set by Bank of Uganda auctions and updated here
+        whenever they change. Last updated <span data-updated>{formatDay(fallback.updatedOn)}</span
+        >.
+      </p>
+    </div>
+  </section>
+
+  <section class="band band--tight">
+    <div class="wrap">
+      <h2 class="visually-hidden">Today's rates</h2>
+      <div class="grid grid--3" style="margin-top: 0">
+        {products.map((product) => <ProductCard product={product} />)}
+      </div>
+    </div>
+  </section>
+
+  <section class="band band--flush-top">
+    <div class="wrap">
+      <p class="eyebrow">Side by side</p>
+      <h2 class="h2">Which one fits?</h2>
+      <div class="table-box" tabindex="0" role="region" aria-label="Product comparison">
+        <table class="compare">
+          <thead>
+            <tr>
+              <th scope="col">Compare</th>
+              {products.map((p) => <th scope="col">{p.name}</th>)}
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <th scope="row">{rows[0][1]}</th>
+              {products.map((p) => <td>{note(p.code, rows[0][0])}</td>)}
+            </tr>
+            <tr class="compare__rate">
+              <th scope="row">Rate, a year after tax</th>
+              {products.map((p) => <td data-rate={p.code}>{p.clientRatePercent}%</td>)}
+            </tr>
+            <tr>
+              <th scope="row">Minimum</th>
+              {products.map((p) => <td data-minimum={p.code}>{minimumLabel(p)}</td>)}
+            </tr>
+            {
+              rows.slice(1).map(([key, label]) => (
+                <tr>
+                  <th scope="row">{label}</th>
+                  {products.map((p) => (
+                    <td>{note(p.code, key)}</td>
+                  ))}
+                </tr>
+              ))
+            }
+            <tr>
+              <th scope="row">Open to new investments</th>
+              {
+                products.map((p) => (
+                  <td>
+                    <span data-when-live={p.code} hidden={p.status !== "live"}>
+                      Yes
+                    </span>
+                    <span data-when-paused={p.code} hidden={p.status !== "paused"}>
+                      Coming soon
+                    </span>
+                  </td>
+                ))
+              }
+            </tr>
+            <tr>
+              <th scope="row">Fees</th>
+              {products.map(() => <td>[CONFIRM FEES]</td>)}
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <section class="band band--white">
+    <div class="wrap split">
+      <div>
+        <p class="eyebrow">Plain words</p>
+        <h2 class="h2">What is a treasury bill?</h2>
+        <p class="lead">
+          It is a short loan to the Government of Uganda. You pay a little less than the face
+          value today and the government pays the full value on the maturity date. The difference
+          is your interest. Finvest buys the bills for you at Bank of Uganda auctions and shows
+          the return as a simple yearly rate after tax.
+        </p>
+      </div>
+      <Calculator />
+    </div>
+  </section>
+
+  <section class="band band--tight">
+    <div class="wrap notice">
+      <Icon name="shield" size={26} />
+      <div>
+        <h2>Know the risks</h2>
+        <p>
+          Held to maturity, a treasury bill pays the amount shown when you invest. If you withdraw
+          early the bill is sold at the market price that day, and you can get back less than you
+          expected. Dollar investments also move with the exchange rate if you think in shillings.
+        </p>
+      </div>
+    </div>
+  </section>
+
+  <Cta />
+  <LiveRates />
+</Base>

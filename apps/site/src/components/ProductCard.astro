@@ -1,0 +1,46 @@
+---
+import { signupUrl } from "../config.ts";
+import { interestPaidLabel, kindLabel, minimumLabel, termLabel } from "../lib/format.ts";
+import type { Product } from "../lib/products.ts";
+
+interface Props {
+  product: Product;
+}
+
+const { product } = Astro.props;
+const paused = product.status === "paused";
+---
+
+<article class="card product" data-product={product.code}>
+  <div class="product__tags">
+    <span class="tag">{kindLabel(product.kind, product.currency)}</span>
+    <span class="tag tag--soon" data-when-paused={product.code} hidden={!paused}>Coming soon</span>
+  </div>
+  <h3 class="h3">{product.name}</h3>
+  <p class="product__rate">
+    <strong data-rate={product.code}>{product.clientRatePercent}%</strong>
+    <span>a year, after tax</span>
+  </p>
+  <dl class="facts-list">
+    <div>
+      <dt>Minimum</dt>
+      <dd data-minimum={product.code}>{minimumLabel(product)}</dd>
+    </div>
+    <div>
+      <dt>Term</dt>
+      <dd>{termLabel(product.termDays)}</dd>
+    </div>
+    <div>
+      <dt>Interest paid</dt>
+      <dd>{interestPaidLabel(product.interestPaid)}</dd>
+    </div>
+  </dl>
+  <div class="product__action">
+    <a class="button" href={signupUrl} data-when-live={product.code} hidden={paused}
+      >Invest in this<span class="visually-hidden">: {product.name}</span></a
+    >
+    <p class="product__soon" data-when-paused={product.code} hidden={!paused}>
+      Not open to new investments yet.
+    </p>
+  </div>
+</article>
