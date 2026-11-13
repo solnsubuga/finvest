@@ -159,6 +159,7 @@ async def test_locks_lifts_and_team_changes_wait_for_the_right_second_person(
     assert theirs[lift.json()["id"]]["can_decide"] is True
     assert theirs[lock.json()["id"]]["can_decide"] is False
     assert maker.id == theirs[lock.json()["id"]]["proposed_by"]
+    assert theirs[lock.json()["id"]]["proposed_by_name"] == "Grace Auma"
 
     first = await api.staff("admin")
     target = await api.staff("support")
