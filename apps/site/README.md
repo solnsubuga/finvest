@@ -21,7 +21,7 @@ Run `pnpm install` once at the repository root, then from this directory:
 | `pnpm typecheck` | `astro check`, with TypeScript at its strictest |
 | `pnpm test` | Unit tests for rates, money and the estimate |
 | `pnpm test:build` | Checks on the built pages in `dist/`. Run `pnpm build` first. |
-| `pnpm placeholders` | Lists the `[BRACKETED]` facts still missing and the claims nobody has signed off. `--strict` fails if any are left. |
+| `pnpm placeholders` | Lists the claims nobody has signed off, and any `[BRACKETED]` placeholder that has crept back in. `--strict` fails if either list has anything in it. |
 
 ## Settings
 
@@ -32,7 +32,7 @@ All are public and read at build time. None is a secret.
 | `PUBLIC_SITE_URL` | `https://finvestug.com` | The site's own address, for canonical links |
 | `PUBLIC_APP_URL` | `https://app.finvestug.com` | Where "Log in" and "Open an account" go |
 | `PUBLIC_API_URL` | `https://api.finvestug.com` | Where the browser reads rates and quotes |
-| `PUBLIC_INDEXABLE` | `false` | `true` lets search engines in. Leave it off until `pnpm placeholders` finds nothing. |
+| `PUBLIC_INDEXABLE` | `false` | `true` lets search engines in. Leave it off until `pnpm placeholders --strict` passes. |
 
 ## Rates
 
@@ -49,13 +49,18 @@ It answers at once with an estimate worked out from the rate on the page, in who
 
 Without JavaScript the calculator is a worked example for UGX 1,000,000.
 
-## Placeholders
+## No placeholders
 
-Facts Finvest has not supplied yet are written as `[SQUARE BRACKETS]`: the regulator and licence number, the custodian bank, the office address, fees, the terms of early withdrawal. Do not replace one with a guess. `pnpm placeholders` lists what is left.
+The site shows no placeholder of any kind (the owner's rule). `pnpm test:build` fails on a `[BRACKETED]` word, and on inline styles, which the hosting's content security policy refuses.
+
+`src/data/company.ts` holds what the pages say about Finvest in more than one place:
+
+- Service promises chosen for now, such as how long an identity check takes and how many working days a complaint takes. Change them there.
+- Facts only Finvest can supply: phone number, office address, registered company name, regulator, licence number, custodian bank and auditor. Each is `null` until Finvest gives it, and while it is `null` the pages leave that line out. Fill one in and the line appears in the footer, on Safety, Home, Help and About. Never fill one with a guess: a made-up licence or phone number on a public page is worse than a missing one.
 
 ## Claims to sign off before launch
 
-Some statements are written out in full because the page needs them, but the owner and counsel must still confirm they are true: that Finvest is regulated, that bills are held in each client's name, that the books are checked daily, and the rest of `scripts/claims.json`. `pnpm placeholders` lists every claim that has no `confirmedBy`, and `--strict` fails while any is open. When you add a statement of this kind to a page, add it to that file.
+Some statements are written out in full because the page needs them, but the owner and counsel must still confirm they are true: that there is no fee to invest, that bills are held in each client's name, that the books are checked daily, and the rest of `scripts/claims.json`. `pnpm placeholders` lists every claim that has no `confirmedBy`, and `--strict` fails while any is open. When you add a statement of this kind to a page, add it to that file.
 
 ## Help centre, contact form and legal pages
 

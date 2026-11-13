@@ -1,8 +1,8 @@
 /**
  * What the site still needs before launch. Run `pnpm build` first.
  *
- * 1. Every [BRACKETED] placeholder on the built pages: facts the site is waiting for, such as
- *    the licence number.
+ * 1. Any [BRACKETED] placeholder on the built pages. There should be none: a fact Finvest
+ *    has not supplied is left out (src/data/company.ts), and `pnpm test:build` fails on one.
  * 2. Every claim in claims.json that nobody has signed off: statements written out in full
  *    that the owner and counsel must confirm are true. To sign one off, set its `confirmedBy`
  *    to who confirmed it and when.

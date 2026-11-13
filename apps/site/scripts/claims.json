@@ -1,10 +1,5 @@
 [
   {
-    "claim": "Finvest is regulated, and by whom",
-    "where": "Home (\"Regulated\"), Safety (\"Licensed and supervised\"), footer",
-    "confirmedBy": null
-  },
-  {
     "claim": "Treasury bills are recorded against each client's own account at a custodian (\"Held in your name\", \"Your bills, your name\")",
     "where": "Home, Safety",
     "confirmedBy": null
@@ -35,18 +30,38 @@
     "confirmedBy": null
   },
   {
-    "claim": "Accounts are audited each year, and personal data is handled under the Data Protection and Privacy Act, 2019",
+    "claim": "Personal data is handled under the Data Protection and Privacy Act, 2019, is used only to check identity and run the account, and is never sold",
     "where": "Safety",
     "confirmedBy": null
   },
   {
-    "claim": "Support hours, reply within one working day, complaints acknowledged within one working day",
+    "claim": "Support hours, reply within one working day, complaints acknowledged within one working day and resolved within 10 working days",
     "where": "About, Help",
     "confirmedBy": null
   },
   {
     "claim": "Joint, group, SACCO and company accounts, and goals, are offered",
     "where": "Home, How it works, Help",
+    "confirmedBy": null
+  },
+  {
+    "claim": "There is no fee to open an account, to invest or to be paid at maturity, and the rate shown is what the client earns",
+    "where": "Home, Products",
+    "confirmedBy": null
+  },
+  {
+    "claim": "An identity check is usually reviewed within one working day",
+    "where": "How it works",
+    "confirmedBy": null
+  },
+  {
+    "claim": "A client can ask to withdraw early at any time in the app and sees the exact amount before confirming",
+    "where": "Home, Products, Help",
+    "confirmedBy": null
+  },
+  {
+    "claim": "Finvest was built in Kampala, and buying a treasury bill used to mean a bank visit and forms",
+    "where": "About",
     "confirmedBy": null
   }
 ]

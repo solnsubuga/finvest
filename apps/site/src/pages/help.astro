@@ -3,8 +3,14 @@ import Faq from "../components/Faq.astro";
 import Icon from "../components/Icon.astro";
 import IconCard from "../components/IconCard.astro";
 import PageTitle from "../components/PageTitle.astro";
+import { supportEmail } from "../config.ts";
+import { company } from "../data/company.ts";
 import { helpTopics } from "../data/help.ts";
 import Base from "../layouts/Base.astro";
+
+const complaintText =
+  `Tell us what went wrong. We acknowledge within one working day and aim to resolve within ${company.complaintWorkingDays} working days.` +
+  (company.regulator ? ` If you are not satisfied you can go to ${company.regulator}.` : "");
 
 const count = (n: number) => `${n} ${n === 1 ? "question" : "questions"}`;
 ---
@@ -72,22 +78,32 @@ const count = (n: number) => `${n} ${n === 1 ? "question" : "questions"}`;
   <section class="band band--white" id="contact">
     <div class="wrap">
       <h2 class="visually-hidden">Talk to us</h2>
-      <div class="grid grid--3" style="margin-top: 0">
+      <div class="grid grid--3 grid--flush">
         <IconCard
           icon="chat"
           title="Chat with us"
           text="In the app, every day from 8am to 8pm. Fastest for anything about your account."
         />
-        <IconCard
-          icon="phone"
-          title="Call [PHONE NUMBER]"
-          text="Monday to Friday, 8am to 6pm. We will never ask for your password or PIN."
-        />
+        {
+          company.phone ? (
+            <IconCard
+              icon="phone"
+              title={`Call ${company.phone}`}
+              text="Monday to Friday, 8am to 6pm. We will never ask for your password or PIN."
+            />
+          ) : (
+            <IconCard
+              icon="document"
+              title="Email us"
+              text={`Write to ${supportEmail} and we reply within one working day. We will never ask for your password or PIN.`}
+            />
+          )
+        }
         <IconCard
           id="complaints"
           icon="document"
           title="Make a complaint"
-          text="Tell us what went wrong. We acknowledge within one working day and aim to resolve within [NUMBER] days. If you are not satisfied you can go to [REGULATOR]."
+          text={complaintText}
         />
       </div>
     </div>
