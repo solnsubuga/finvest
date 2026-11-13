@@ -106,7 +106,7 @@ The ledger is closed before the figures are read at approval, so no entry can sl
 | Never reopened | A closed or sent back close never changes, and nothing is deleted |
 | Who | Only staff prepare and decide. The worker reads. Clients see nothing |
 
-The pots closed today are the two ioTec wallets and the trust bank account (`domain/pots.py`). The custodian joins when the dealing desk can report holdings.
+The pots closed today are the two ioTec wallets and the trust bank account (`domain/pots.py`). The custodian joins when the dealing desk can report holdings. A bill's purchase and its maturity are posted to `bank.trust` without the bank's reference, which is not known when the entry is posted, so for now those lines are paired by hand. A maturity on a weekend or public holiday is paid on the next working day, so its bank line can come a day or more after the entry.
 
 ## Transfers between pots
 
