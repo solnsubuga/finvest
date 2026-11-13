@@ -21,7 +21,7 @@ from app.modules.dealing import orders
 from app.modules.dealing.domain.liquidity import BufferLevel
 from app.modules.dealing.domain.orders import Action, Fill, InvalidOrder, OrderKind, OrderStatus
 from app.modules.dealing.domain.position import Cover
-from app.modules.identity.api import require_permission
+from app.modules.identity.api import require_confirmed, require_permission
 from app.modules.identity.service import StaffSession
 from app.shared.clock import Clock
 from app.shared.contracts import Contract
@@ -154,6 +154,8 @@ AppClock = Annotated[Clock, Depends(_clock)]
 DeskStaff = Annotated[StaffSession, Depends(require_permission("dealing_desk.view"))]
 # Every order command. One can settle an order into the ledger, so seeing the desk is not enough.
 OrderChanger = Annotated[StaffSession, Depends(require_permission("dealing_orders.change"))]
+# Approving as the second person needs a passkey or app code from the last few minutes.
+OrderApprover = Annotated[StaffSession, Depends(require_confirmed("dealing_orders.change"))]
 
 
 def _may_change(staff: StaffSession) -> bool:
@@ -346,6 +348,29 @@ def _step(
     return route
 
 
+def _approval(
+    operation: str,
+    run: Callable[..., Awaitable[orders.OrderView]],
+) -> Callable[..., Awaitable[DeskOut]]:
+    """`_step` for the second person's approval, which asks them to confirm it is them."""
+
+    async def route(
+        request: Request, staff: OrderApprover, clock: AppClock, key: IdempotencyKey, order_id: str
+    ) -> DeskOut:
+        return await _command(
+            request,
+            staff,
+            clock,
+            operation=operation,
+            key=key,
+            body={"order_id": order_id},
+            currency=await _order_currency(request, staff, order_id),
+            command=lambda session: run(session, staff.actor, order_id, clock),
+        )
+
+    return route
+
+
 def _noted(
     operation: str,
     run: Callable[..., Awaitable[orders.OrderView]],
@@ -375,7 +400,7 @@ def _noted(
 
 
 router.post("/orders/{order_id}/approve", summary="Approve an order as the second person")(
-    _step("dealing.approve_order", orders.approve_order)
+    _approval("dealing.approve_order", orders.approve_order)
 )
 router.post("/orders/{order_id}/withdraw", summary="Withdraw an order you prepared")(
     _step("dealing.withdraw_order", orders.withdraw_order)
@@ -383,7 +408,7 @@ router.post("/orders/{order_id}/withdraw", summary="Withdraw an order you prepar
 router.post(
     "/orders/{order_id}/confirm-result",
     summary="Confirm a recorded result as the second person, which settles the order",
-)(_step("dealing.confirm_result", orders.confirm_result))
+)(_approval("dealing.confirm_result", orders.confirm_result))
 router.post("/orders/{order_id}/send-back", summary="Send an order back with a note")(
     _noted("dealing.send_back_order", orders.send_back_order)
 )
