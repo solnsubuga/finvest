@@ -114,6 +114,6 @@ Client responses carry net figures and the yearly rate after tax as a label. No 
 ## Not built yet
 
 - Saving rules: a monthly saving collected on a set day, with a mobile money prompt sent by the worker.
-- A console view of group goals.
+- Connecting the console's Goals screen, goals and group goals alike, to the staff routes. It shows sample data under `pnpm dev` and says it is not connected in a normal build.
 - Removing a member from the client app: the client routes do not yet name members by an ID the one who set the group up can send back.
 - Withdrawing from a goal before its date, which waits for early withdrawal.
