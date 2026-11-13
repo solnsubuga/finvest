@@ -2077,6 +2077,37 @@
         "title": "ConfirmCode",
         "type": "object"
       },
+      "ConfirmWithPasskey": {
+        "additionalProperties": false,
+        "properties": {
+          "credential": {
+            "additionalProperties": true,
+            "maxProperties": 16,
+            "title": "Credential",
+            "type": "object"
+          }
+        },
+        "required": [
+          "credential"
+        ],
+        "title": "ConfirmWithPasskey",
+        "type": "object"
+      },
+      "Confirmed": {
+        "additionalProperties": false,
+        "properties": {
+          "confirmed_until": {
+            "format": "date-time",
+            "title": "Confirmed Until",
+            "type": "string"
+          }
+        },
+        "required": [
+          "confirmed_until"
+        ],
+        "title": "Confirmed",
+        "type": "object"
+      },
       "ControlTotalsRequest": {
         "additionalProperties": false,
         "properties": {
@@ -3246,6 +3277,7 @@
               "passkey_failed",
               "second_step_missing",
               "sign_in_again",
+              "confirm_it_is_you",
               "expired",
               "phone_taken",
               "leaked_password",
@@ -10069,6 +10101,11 @@
       "StaffSessionView": {
         "additionalProperties": false,
         "properties": {
+          "confirmed_until": {
+            "format": "date-time",
+            "title": "Confirmed Until",
+            "type": "string"
+          },
           "name": {
             "title": "Name",
             "type": "string"
@@ -10131,6 +10168,19 @@
             "title": "Role",
             "type": "string"
           },
+          "second_steps": {
+            "items": {
+              "enum": [
+                "passkey",
+                "authenticator",
+                "code",
+                "signup"
+              ],
+              "type": "string"
+            },
+            "title": "Second Steps",
+            "type": "array"
+          },
           "staff_id": {
             "maxLength": 20,
             "minLength": 20,
@@ -10143,7 +10193,9 @@
           "staff_id",
           "name",
           "role",
-          "permissions"
+          "permissions",
+          "confirmed_until",
+          "second_steps"
         ],
         "title": "StaffSessionView",
         "type": "object"
@@ -28338,6 +28390,272 @@
           }
         },
         "summary": "Staff Session",
+        "tags": [
+          "staff sign-in"
+        ]
+      }
+    },
+    "/staff/session/confirmation/authenticator": {
+      "post": {
+        "description": "Confirm it is you with a code from the authenticator app.",
+        "operationId": "staff_confirmation_authenticator_staff_session_confirmation_authenticator_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ConfirmCode"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Confirmed"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "410": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Gone"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "summary": "Staff Confirmation Authenticator",
+        "tags": [
+          "staff sign-in"
+        ]
+      }
+    },
+    "/staff/session/confirmation/passkey": {
+      "post": {
+        "description": "Confirm it is you with a passkey, so approvals work for the next ten minutes.",
+        "operationId": "staff_confirmation_passkey_staff_session_confirmation_passkey_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ConfirmWithPasskey"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Confirmed"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "410": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Gone"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "summary": "Staff Confirmation Passkey",
+        "tags": [
+          "staff sign-in"
+        ]
+      }
+    },
+    "/staff/session/confirmation/passkey/options": {
+      "post": {
+        "description": "Ask the device to sign again, for this session only.",
+        "operationId": "staff_confirmation_passkey_options_staff_session_confirmation_passkey_options_post",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PasskeyOptions"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "410": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Gone"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "summary": "Staff Confirmation Passkey Options",
         "tags": [
           "staff sign-in"
         ]

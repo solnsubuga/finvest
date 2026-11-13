@@ -60,6 +60,7 @@ from app.modules.identity.service import (
     ClientSession,
     IdentityService,
     IssuedSession,
+    StaffSession,
 )
 from app.shared.actors import Actor
 from app.shared.clock import Clock
@@ -76,7 +77,7 @@ RECENT_SIGN_IN = timedelta(minutes=10)
 OPTIONS_PER_BINDING = 10
 ENROLMENT_LOOKUPS_PER_ADDRESS = 30
 TRANSPORTS = {transport.value for transport in AuthenticatorTransport}
-Purpose = Literal["register", "sign_in"]
+Purpose = Literal["register", "sign_in", "reverify"]
 
 logger = structlog.get_logger()
 
@@ -333,12 +334,18 @@ class PasskeyService:
 
     async def sign_in_options(self, login_id: str, kind: AccountKind) -> dict[str, Any]:
         """What the browser needs to ask this person's device to sign. Step one came first."""
-        site, _ = self._site(kind)
         actor = await self.login_actor(login_id, kind)
+        return await self._assertion_options(actor, "sign_in", login_id)
+
+    async def _assertion_options(
+        self, actor: Actor, purpose: Purpose, bound_to: str
+    ) -> dict[str, Any]:
+        assert actor.kind != "system"
+        site, _ = self._site(actor.kind)
         await reserve_attempts(
             self.database,
             self.clock,
-            [(throttle_key("passkey-options", login_id), OPTIONS_PER_BINDING)],
+            [(throttle_key("passkey-options", bound_to), OPTIONS_PER_BINDING)],
         )
         async with self.database.transaction() as session:
             allowed = await self._credentials(session, actor)
@@ -352,7 +359,7 @@ class PasskeyService:
             allow_credentials=allowed,
             user_verification=UserVerificationRequirement.REQUIRED,
         )
-        await self._store_challenge(challenge, "sign_in", actor, login_id)
+        await self._store_challenge(challenge, purpose, actor, bound_to)
         result: dict[str, Any] = json.loads(options_to_json(options))
         return result
 
@@ -360,14 +367,25 @@ class PasskeyService:
         self, login_id: str, kind: AccountKind, credential: dict[str, Any], transport: Transport
     ) -> IssuedSession:
         """Verify the device's signature and open the session the password step started."""
-        site, origins = self._site(kind)
         actor = await self.login_actor(login_id, kind)
+        await self._check_assertion(actor, credential, "sign_in", login_id)
+        return await self.identity.open_session(
+            login_id, kind, second_step="passkey", transport=transport
+        )
+
+    async def _check_assertion(
+        self, actor: Actor, credential: dict[str, Any], purpose: Purpose, bound_to: str
+    ) -> None:
+        """Verify a signature from one of this person's passkeys over a challenge we issued."""
+        assert actor.kind != "system"
+        kind: AccountKind = actor.kind
+        site, origins = self._site(kind)
         try:
             parsed = parse_authentication_credential_json(credential)
         except (WebAuthnException, ValueError):
             raise _failed() from None
         challenge = await self._take_challenge(
-            parsed.response.client_data_json, "sign_in", actor, login_id
+            parsed.response.client_data_json, purpose, actor, bound_to
         )
         async with self.database.transaction() as session:
             passkey = (
@@ -405,9 +423,16 @@ class PasskeyService:
                 ),
                 {"count": verified.new_sign_count, "now": self.clock.now(), "id": passkey.id},
             )
-        return await self.identity.open_session(
-            login_id, kind, second_step="passkey", transport=transport
-        )
+
+    # A member of staff confirming it is them before an approval
+
+    async def reconfirm_options(self, staff: StaffSession) -> dict[str, Any]:
+        return await self._assertion_options(staff.actor, "reverify", staff.session_id)
+
+    async def reconfirm(self, staff: StaffSession, credential: dict[str, Any]) -> datetime:
+        """Check a fresh passkey signature on this session. Returns when it stops counting."""
+        await self._check_assertion(staff.actor, credential, "reverify", staff.session_id)
+        return await self.identity.confirm_staff(staff, "passkey")
 
     # A signed-in client's passkeys
 
