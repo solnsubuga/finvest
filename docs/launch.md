@@ -4,12 +4,12 @@ How Finvest 2.0 replaces Finvest 1.0. The migration itself (the import sheet, th
 
 ## 1. Before the parallel run
 
-Staging is set up but switched off to save cost (Solo, 2026-11-13), so production is the only running environment. It is released from the release branch. Until the switch the client app host (`app.finvestug.com`) must be closed to the public with Cloudflare Access letting in staff only, as the back office already is. That Access rule on the app host is **not built yet**: it is owed by the infrastructure thread and is a condition below. The API host (`api.finvestug.com`) stays public throughout, because ioTec's payment callbacks, Resend's delivery webhook and the phone apps call it directly and cannot pass Access. A public API also means anyone could create a client account through `/client/signup` before the switch, so sign-up must be closed until switch day. That switch is **not built yet** and is a condition below. The parallel run starts only when all of these are true. Each line is ticked with a link to the pull request, drill record or document that proves it.
+Staging is set up but switched off to save cost (Solo, 2026-11-13), so production is the only running environment. It is released from the release branch. Until the switch the client app host (`app.finvestug.com`) must be closed to the public with Cloudflare Access letting in staff only, as the back office already is. The infrastructure thread added that Access rule in PR #104, with the same staff policy as the back office. The API host (`api.finvestug.com`) stays public throughout, because ioTec's payment callbacks, Resend's delivery webhook and the phone apps call it directly and cannot pass Access. A public API also means anyone could create a client account through `/client/signup` before the switch, so sign-up must be closed until switch day. That switch is **not built yet** and is a condition below. The parallel run starts only when all of these are true. Each line is ticked with a link to the pull request, drill record or document that proves it.
 
 | Check | Owner | Done |
 | --- | --- | --- |
 | Phase 0 to 2 features on the [roadmap](roadmap.md) are released to production | Engineering | |
-| Cloudflare Access on the client app host, as on the back office, until switch day; the API host stays public | Infrastructure | |
+| Cloudflare Access on the client app host, as on the back office, until switch day; the API host stays public (infra PR #104) | Infrastructure | |
 | Client sign-up closed by a setting until switch day, answering as if it were off for maintenance | Engineering (sign-in) | |
 | Every **Open** finding in [security.md](security.md) is closed or accepted in writing | Engineering, Solo | |
 | The external penetration test has been run on staging, switched on for the test weeks only ([security.md](security.md)), and every high or critical finding is fixed and retested | Solo (firm), engineering | |
@@ -57,8 +57,9 @@ The day before the switch, Solo, operations and finance meet and go through this
 | T+30 | Take a manual database backup point: note the time for a point in time restore | Engineering |
 | T+35 | **Run the final import.** Each investment opens in the ledger with its original start date, rate and interest to date. Pending orders take today's rate and a fresh 72 hour payment window. | Operations |
 | T+60 | Check the ledger against the finance check's totals, and run `backend/db/restore-checks.sql` (read only) to confirm the ledger holds together | Finance, engineering |
-| T+75 | Lift Cloudflare Access from the client app host (the console keeps it), open sign-up, and turn on payments and payouts. The phone apps were never behind Access: their store release is held until this step. | Engineering, infrastructure |
-| T+80 | **Send the invitations.** Every client gets an SMS and an email with a personal link valid for 72 hours, with reminders weekly up to 8. Clients with no phone are listed for staff to call. | System, operations |
+| T+70 | Once the ledger check passes, start lifting Cloudflare Access from the client app host: set the repository variable `CLIENT_APP_PUBLIC=true`, then run Provision for production, plan first and then apply after approval. Allow a few minutes for the plan, the approval and the apply. The console keeps Access. | Solo (approval), infrastructure |
+| T+80 | Once the apply has finished, open sign-up and turn on payments and payouts. The phone apps were never behind Access: their store release is held until this step. | Engineering, infrastructure |
+| T+85 | **Send the invitations.** Every client gets an SMS and an email with a personal link valid for 72 hours, with reminders weekly up to 8. Clients with no phone are listed for staff to call. | System, operations |
 | T+90 | Watch: sign ups, claim failures, `/health/operations`, and the first real payments | Everyone |
 
 Details of the import, the claim and the invitations are in [migration.md](migration.md).
