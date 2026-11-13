@@ -53,6 +53,7 @@ from app.modules.identity import service as identity
 from app.modules.ledger import closing
 from app.modules.ledger import statements as ledger
 from app.modules.notifications import contract as notifications
+from app.modules.notifications.email_delivery import is_suppressed
 from app.modules.payments import service as payments
 from app.shared.actors import SYSTEM
 from app.shared.business_day import business_date
@@ -348,7 +349,9 @@ class DocumentJobs:
         """Email a ready document to its client, with the PDF attached.
 
         The address is looked up now, from identity. A client with none, or who has closed
-        their account, is recorded as `skipped`. Nothing is sent while a transaction is open.
+        their account, is recorded as `skipped` with `no_email`, and an address on the
+        notifications suppression list as `skipped` with `suppressed`.
+        Nothing is sent while a transaction is open.
         """
         document_id = job.payload.get("document_id")
         if not isinstance(document_id, str):
@@ -359,11 +362,15 @@ class DocumentJobs:
             file = await service.document_file(session, document_id)
             if status is None or view is None or file is None:
                 raise PermanentJobError(code="document_email_missing")
-            if status != "queued":
-                rendered, address = None, None
-            else:
+            rendered, address, skip = None, None, "no_email"
+            if status == "queued":
                 contact = await identity.client_contact(session, view.client_id)
                 address = contact.email if contact is not None else None
+                if address is not None and await is_suppressed(session, address):
+                    # The address bounced for good or reported our mail as spam. Sending a
+                    # PDF every month would harm the sending domain, and a complaint means
+                    # the person asked us to stop.
+                    address, skip = None, "suppressed"
                 rendered = await _render(session, view, file) if address else None
 
         if status != "queued":
@@ -371,8 +378,8 @@ class DocumentJobs:
             await context.apply(_nothing)
             return
         if address is None or rendered is None:
-            await context.apply(self._finish(document_id, "skipped", failure_code="no_email"))
-            logger.info("document_email_skipped", document_id=document_id, error_code="no_email")
+            await context.apply(self._finish(document_id, "skipped", failure_code=skip))
+            logger.info("document_email_skipped", document_id=document_id, error_code=skip)
             return
         try:
             message = EmailMessage(

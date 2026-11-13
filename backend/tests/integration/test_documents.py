@@ -2,6 +2,7 @@
 client, finished once, and the monthly run."""
 
 import asyncio
+import secrets
 from collections.abc import AsyncIterator, Awaitable, Callable, Iterator
 from datetime import date, timedelta
 from urllib.parse import quote
@@ -29,6 +30,7 @@ from app.modules.documents.domain.statements import (
 from app.modules.documents.events import RECEIPT_KIND
 from app.modules.documents.jobs import DocumentJobs
 from app.modules.documents.service import DocumentKind, DocumentStatus
+from app.modules.identity import service as identity_service
 from app.modules.identity.hashing import PasswordHasher
 from app.modules.identity.service import IdentityService
 from app.modules.investments import service as investments
@@ -37,6 +39,7 @@ from app.modules.kyc import service as kyc
 from app.modules.kyc.providers import ManualProvider
 from app.modules.ledger import service as ledger
 from app.modules.ledger.domain.entries import AccountKind, AccountSpec, EntryDraft, credit, debit
+from app.modules.notifications.domain.email_events import address_hash
 from app.modules.payments import bank_transfers as bank
 from app.shared.actors import SYSTEM, Actor
 from app.shared.errors import ApplicationError
@@ -897,6 +900,48 @@ async def test_a_client_with_no_email_address_is_recorded_as_skipped(
     await run_jobs(worker_database, email=email)
     assert email.sent == []
     assert await emails_of(worker_database, asked.id) == [("skipped", "no_email")]
+
+
+async def suppress(app_database: Database, worker_database: Database, address: str) -> None:
+    """Record the address as bounced for good, as Resend's webhook would, through the real roles."""
+    svix_id = f"msg_{secrets.token_hex(8)}"
+    async with app_database.transaction() as session:
+        await session.execute(
+            text(
+                "INSERT INTO notification_email_events "
+                "(svix_id, delivery, email_id, recipients, permanent, received_at) "
+                "VALUES (:svix_id, 'bounced', 'e-1', ARRAY[:hash], true, now())"
+            ),
+            {"svix_id": svix_id, "hash": address_hash(address)},
+        )
+    async with worker_database.transaction() as session:
+        await session.execute(
+            text(
+                "INSERT INTO notification_email_suppressions "
+                "(address_hash, reason, svix_id, created_at) "
+                "VALUES (:hash, 'bounced', :svix_id, now())"
+            ),
+            {"hash": address_hash(address), "svix_id": svix_id},
+        )
+
+
+async def test_a_suppressed_address_is_not_sent_a_document(
+    http: tuple[httpx.AsyncClient, IdentityService],
+    app_database: Database,
+    worker_database: Database,
+) -> None:
+    _, identity = http
+    client = await client_with_email(identity, app_database)
+    async with worker_database.actor_transaction(SYSTEM) as session:
+        contact = await identity_service.client_contact(session, str(client.id))
+    assert contact is not None and contact.email is not None
+    # Suppression matches the address however it is written.
+    await suppress(app_database, worker_database, contact.email.upper())
+    asked = await ask(app_database, client)
+    email = FakeEmail()
+    await run_jobs(worker_database, email=email)
+    assert email.sent == []
+    assert await emails_of(worker_database, asked.id) == [("skipped", "suppressed")]
 
 
 async def test_a_deferred_email_waits_and_a_refused_one_is_recorded(
