@@ -1,4 +1,6 @@
-"""Reading an account's history, for reconciliation and the day close. Read-only.
+"""Reading an account's history, for reconciliation, the day close and client statements.
+
+Read-only.
 
 Row policies apply as everywhere in the ledger: staff and the worker see every account, and a
 client transaction sees only that client's own accounts.
@@ -89,6 +91,106 @@ async def balance_as_of(session: AsyncSession, account_id: str, on: date) -> Mon
     return Money(debit_minor if kind in _DEBIT_NORMAL else -debit_minor, currency)
 
 
+@dataclass(frozen=True, slots=True)
+class ClientLine:
+    """One line on one of a client's own accounts, with the entry it belongs to."""
+
+    entry_id: str
+    effective_date: date
+    entry_type: str
+    source_type: str | None
+    source_id: str | None
+    account_code: str
+    account_reference: str | None
+    # The change to what Finvest owes the client: positive when the client is owed more.
+    # A credit to a client liability is positive; a debit to a client receivable is negative.
+    owed: Money
+
+
+_SELECT_CLIENT_LINES = text(
+    "SELECT line.entry_id, entry.effective_date, entry.entry_type, entry.source_type, "
+    "entry.source_id, account.code, account.reference, line.amount_minor, line.currency "
+    "FROM ledger_lines AS line "
+    "JOIN ledger_journal_entries AS entry ON entry.id = line.entry_id "
+    "JOIN ledger_accounts AS account ON account.id = line.account_id "
+    "WHERE account.owner_client_id = :client_id "
+    "AND entry.effective_date BETWEEN :date_from AND :date_to "
+    "ORDER BY entry.effective_date, entry.posted_at, line.entry_id, line.line_no"
+)
+_SELECT_CLIENT_OWED_AS_OF = text(
+    "SELECT account.code, account.reference, line.currency, "
+    "coalesce(sum(line.amount_minor), 0) AS debit_minor "
+    "FROM ledger_lines AS line "
+    "JOIN ledger_journal_entries AS entry ON entry.id = line.entry_id "
+    "JOIN ledger_accounts AS account ON account.id = line.account_id "
+    "WHERE account.owner_client_id = :client_id AND entry.effective_date <= :on "
+    "GROUP BY account.code, account.reference, line.currency "
+    "ORDER BY account.code, account.reference, line.currency"
+)
+_SELECT_CLIENTS_WITH_ACCOUNTS = text(
+    "SELECT DISTINCT owner_client_id FROM ledger_accounts "
+    "WHERE owner_client_id IS NOT NULL AND owner_client_id > :after "
+    "ORDER BY owner_client_id LIMIT :limit"
+)
+
+
+@dataclass(frozen=True, slots=True)
+class ClientOwed:
+    """What Finvest owed a client on one account code and reference at the end of a day."""
+
+    account_code: str
+    account_reference: str | None
+    owed: Money
+
+
+async def client_lines(
+    session: AsyncSession, client_id: str, *, date_from: date, date_to: date
+) -> list[ClientLine]:
+    """Every line on the client's own accounts dated from `date_from` to `date_to`, inclusive.
+
+    Lines on Finvest's own accounts are left out, so a client transaction and a staff one see
+    the same thing. Ordered as the entries were posted.
+    """
+    rows = await session.execute(
+        _SELECT_CLIENT_LINES, {"client_id": client_id, "date_from": date_from, "date_to": date_to}
+    )
+    return [
+        ClientLine(
+            entry_id=row.entry_id,
+            effective_date=row.effective_date,
+            entry_type=row.entry_type,
+            source_type=row.source_type,
+            source_id=row.source_id,
+            account_code=row.code,
+            account_reference=row.reference,
+            owed=Money(-int(row.amount_minor), Currency(row.currency)),
+        )
+        for row in rows.all()
+    ]
+
+
+async def client_owed_as_of(session: AsyncSession, client_id: str, on: date) -> list[ClientOwed]:
+    """What Finvest owed the client at the end of `on`, per account code and reference.
+
+    Counts only entries dated on or before `on`, so once the ledger is closed through `on` the
+    figures cannot change. Accounts that net to zero are included, so a caller can tell an
+    investment that was paid out from one that never existed.
+    """
+    rows = await session.execute(_SELECT_CLIENT_OWED_AS_OF, {"client_id": client_id, "on": on})
+    return [
+        ClientOwed(row.code, row.reference, Money(-int(row.debit_minor), Currency(row.currency)))
+        for row in rows.all()
+    ]
+
+
+async def clients_with_accounts(
+    session: AsyncSession, *, after: str = "", limit: int = 500
+) -> list[str]:
+    """Client IDs that own at least one ledger account, in ID order, a page at a time."""
+    rows = await session.execute(_SELECT_CLIENTS_WITH_ACCOUNTS, {"after": after, "limit": limit})
+    return [row.owner_client_id for row in rows.all()]
+
+
 async def account_owner(session: AsyncSession, account_id: str) -> str | None:
     """The client the account belongs to, or None for one of Finvest's own accounts."""
     _, _, owner = await _account(session, account_id)
@@ -172,10 +274,15 @@ async def client_month_totals(
 
 
 __all__ = [
+    "ClientLine",
+    "ClientOwed",
     "MonthTotal",
     "Movement",
     "account_movements",
     "account_owner",
     "balance_as_of",
+    "client_lines",
     "client_month_totals",
+    "client_owed_as_of",
+    "clients_with_accounts",
 ]
