@@ -444,7 +444,14 @@ async def test_staff_session_lists_the_role_and_its_permissions(api: Api) -> Non
         "staff_id": staff_id,
         "name": "Ada Nakato",
         "role": "support",
-        "permissions": ["overview.view", "support.view", "complaints.view", "clients.view"],
+        "permissions": [
+            "overview.view",
+            "support.view",
+            "support.reply",
+            "complaints.view",
+            "complaints.manage",
+            "clients.view",
+        ],
     }
     refused = await api.http.get("/staff/team-test")
     assert (refused.status_code, code(refused)) == (403, "forbidden")

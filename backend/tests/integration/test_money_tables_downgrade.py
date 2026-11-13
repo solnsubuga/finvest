@@ -1,7 +1,7 @@
 """A downgrade must never delete the books, the issued numbers, the audit trail, the job
 history, the receipts that stop a command running twice, the identity records, the payout
-destinations, the withdrawal limits, the payouts, the migration checks or the imported
-statements."""
+destinations, the withdrawal limits, the payouts, the migration checks, the imported
+statements, the help chat or the complaints register."""
 
 import os
 from collections.abc import Iterator
@@ -164,6 +164,11 @@ ROWS = {
         "imported_at) VALUES ('-Nabc0000000000000A1', 'bank', 'trust', DATE '2026-11-10', "
         "'UGX', 100, 100, 0, repeat('0', 64), '-Nabc0000000000000B1', now())",
         "refusing to drop imported statements",
+    ),
+    "0100_support": (
+        "INSERT INTO support_conversations (id, client_id, created_at, last_message_at) "
+        "VALUES ('-Nabc0000000000000A1', '-Nabc0000000000000B1', now(), now())",
+        "refusing to drop help chat or complaints",
     ),
 }
 

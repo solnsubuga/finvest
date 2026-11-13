@@ -15,7 +15,13 @@ Permission = Literal[
     "identity_checks.view",
     "maturities.view",
     "support.view",
+    # Writing to a client in the help chat, solving or filing a chat, and keeping saved replies.
+    "support.reply",
     "complaints.view",
+    # Logging a complaint for a client, assigning it, moving it and adding notes.
+    "complaints.manage",
+    # Recording the outcome and closing a complaint for good.
+    "complaints.close",
     "clients.view",
     "money_movement.view",
     "reconciliation.view",
@@ -47,7 +53,10 @@ ROLE_PERMISSIONS: dict[Role, frozenset[Permission]] = {
             "identity_checks.view",
             "maturities.view",
             "support.view",
+            "support.reply",
             "complaints.view",
+            "complaints.manage",
+            "complaints.close",
             "clients.view",
             "money_movement.view",
             "reconciliation.view",
@@ -78,12 +87,25 @@ ROLE_PERMISSIONS: dict[Role, frozenset[Permission]] = {
             "review_queue.view",
             "identity_checks.view",
             "complaints.view",
+            "complaints.manage",
+            "complaints.close",
             "clients.view",
             "compliance.view",
             "reports.view",
         }
     ),
-    "support": frozenset({"overview.view", "support.view", "complaints.view", "clients.view"}),
+    # Support answers clients and logs and works complaints. Closing one is for operations and
+    # compliance, so the front line does not decide its own complaints.
+    "support": frozenset(
+        {
+            "overview.view",
+            "support.view",
+            "support.reply",
+            "complaints.view",
+            "complaints.manage",
+            "clients.view",
+        }
+    ),
 }
 
 
