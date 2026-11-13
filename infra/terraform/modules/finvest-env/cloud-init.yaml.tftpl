@@ -1,0 +1,34 @@
+#cloud-config
+# First boot only. Later host changes go through the deploy workflow.
+package_update: true
+package_upgrade: true
+packages:
+  - docker.io
+  - docker-compose-v2
+  - unattended-upgrades
+  - fail2ban
+
+users:
+  - name: deploy
+    groups: [docker]
+    shell: /bin/bash
+    sudo: "ALL=(ALL) NOPASSWD:/usr/bin/systemctl, /usr/bin/docker"
+    ssh_authorized_keys:
+%{ for key in ssh_public_keys ~}
+      - ${key}
+%{ endfor ~}
+
+write_files:
+  - path: /etc/ssh/sshd_config.d/90-finvest.conf
+    permissions: "0644"
+    content: |
+      PermitRootLogin no
+      PasswordAuthentication no
+      KbdInteractiveAuthentication no
+
+runcmd:
+  - mkdir -p /opt/finvest /etc/finvest/tls
+  - chown deploy:deploy /opt/finvest
+  - systemctl enable --now docker
+  - systemctl restart ssh
+  - systemctl enable --now unattended-upgrades fail2ban
