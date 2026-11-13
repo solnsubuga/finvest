@@ -53,6 +53,15 @@ SENDING_GRACE = timedelta(minutes=2)
 # A deposit still `created` after this long was never sent, and the payer has stopped waiting.
 UNSENT_EXPIRY = timedelta(minutes=10)
 
+# How long status reads keep trying to settle an uncertain deposit before it is left to
+# reconciliation, and how far apart the reads are as it ages.
+UNCERTAIN_READ_WINDOW = timedelta(hours=24)
+_UNCERTAIN_READ_STEPS = (
+    (timedelta(minutes=15), timedelta(minutes=1)),
+    (timedelta(hours=2), timedelta(minutes=10)),
+    (UNCERTAIN_READ_WINDOW, timedelta(hours=1)),
+)
+
 _MSISDN = re.compile(r"\+256[0-9]{9}")
 _LOCAL = re.compile(r"0[0-9]{9}")
 _NO_PLUS = re.compile(r"256[0-9]{9}")
@@ -254,3 +263,21 @@ def after_status(
             return Move(DepositStatus.UNCERTAIN, code=Code.UNKNOWN_TO_PROVIDER.value)
         case Unavailable():
             return None
+
+
+def next_uncertain_read(since: datetime, now: datetime) -> tuple[int, datetime] | None:
+    """The next status read of a deposit uncertain since `since`: its number and when it is due.
+
+    Reads are frequent at first, when a late answer is most likely, and thin out: every minute
+    for fifteen minutes, every ten minutes for two hours, then hourly. Each read has a number,
+    so it can be queued once however often it is asked for. After `UNCERTAIN_READ_WINDOW` the
+    answer is None: status reads stop and reconciliation settles the deposit from the
+    provider's statement.
+    """
+    number, due = 0, since
+    for limit, step in _UNCERTAIN_READ_STEPS:
+        while due + step <= since + limit:
+            number, due = number + 1, due + step
+            if due > now:
+                return number, due
+    return None

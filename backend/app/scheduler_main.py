@@ -21,6 +21,7 @@ from app.infrastructure.settings import Settings
 from app.modules.kyc.service import SWEEP_UNANSWERED
 from app.modules.payments import service as payments
 from app.modules.payments.settings import PaymentsSettings
+from app.modules.payments.wiring import ensure_allowed
 from app.shared.clock import SystemClock
 
 
@@ -38,7 +39,9 @@ def schedules() -> list[Schedule]:
             max_age=timedelta(minutes=5),
         ),
     ]
-    if PaymentsSettings().provider != "disabled":
+    payments_settings = PaymentsSettings()
+    ensure_allowed(payments_settings)
+    if payments_settings.provider != "disabled":
         # Picks up deposits whose own job was lost. One run covers any it missed.
         runs.append(
             Schedule(

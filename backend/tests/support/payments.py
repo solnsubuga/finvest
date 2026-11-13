@@ -123,8 +123,11 @@ async def start_deposit(
     key: str | None = None,
     purpose_id: str | None = None,
     provider: str = PROVIDER,
+    account_phone: str | None = None,
 ) -> Deposit:
+    """Start a deposit. The payer is the account's own number unless `account_phone` differs."""
     actor = actor or client()
+    msisdn = msisdn or phone()
     async with database.actor_transaction(actor) as session:
         return await service.request_deposit(
             session,
@@ -134,9 +137,10 @@ async def start_deposit(
                 purpose_id=purpose_id or push_id(),
                 network=Network.MTN,
                 amount=ugx(amount),
-                phone=msisdn or phone(),
+                phone=msisdn,
             ),
             idempotency_key=key or f"key-{push_id()}",
+            account_phone=account_phone or msisdn,
             provider=provider,
             clock=clock,
         )

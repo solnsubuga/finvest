@@ -22,8 +22,8 @@ from app.modules.payments.providers.sandbox import (
     SIGNATURE_HEADER,
     SandboxCollections,
 )
-from app.modules.payments.settings import PaymentsSettings
-from app.modules.payments.wiring import collections_provider
+from app.modules.payments.settings import Deployment, PaymentsSettings, SandboxNotAllowed
+from app.modules.payments.wiring import collections_provider, ensure_allowed
 from app.shared.money import Currency, Money
 from app.shared.push_ids import push_id
 from tests.support.clock import FakeClock
@@ -140,3 +140,39 @@ def test_payments_are_disabled_unless_a_provider_is_chosen(
     chosen = collections_provider(PaymentsSettings(), fake_clock)
     assert chosen is not None and chosen.name == "sandbox"
     assert timedelta(0) < PROMPT_TIME
+
+
+@pytest.mark.parametrize("environment", [None, "local", "staging"])
+def test_the_sandbox_may_answer_in_local_development_and_staging(
+    fake_clock: FakeClock, environment: str | None
+) -> None:
+    settings = PaymentsSettings(provider="sandbox")
+    chosen = collections_provider(settings, fake_clock, Deployment(environment=environment))
+    assert chosen is not None and chosen.name == "sandbox"
+
+
+@pytest.mark.parametrize("environment", ["production", "prod", "Production", "live", ""])
+def test_the_sandbox_is_refused_in_production_and_anywhere_we_do_not_know(
+    fake_clock: FakeClock, environment: str
+) -> None:
+    settings = PaymentsSettings(provider="sandbox")
+    with pytest.raises(SandboxNotAllowed):
+        collections_provider(settings, fake_clock, Deployment(environment=environment))
+    with pytest.raises(SandboxNotAllowed):
+        ensure_allowed(settings, Deployment(environment=environment))
+
+
+def test_the_environment_name_is_read_from_the_process(
+    fake_clock: FakeClock, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("FINVEST_PAYMENTS_PROVIDER", "sandbox")
+    monkeypatch.setenv("FINVEST_ENVIRONMENT", "production")
+    with pytest.raises(SandboxNotAllowed):
+        collections_provider(PaymentsSettings(), fake_clock)
+    monkeypatch.setenv("FINVEST_ENVIRONMENT", "staging")
+    assert collections_provider(PaymentsSettings(), fake_clock) is not None
+
+
+def test_production_with_payments_disabled_starts(fake_clock: FakeClock) -> None:
+    settings = PaymentsSettings(provider="disabled")
+    assert collections_provider(settings, fake_clock, Deployment(environment="production")) is None

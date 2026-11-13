@@ -18,3 +18,24 @@ class PaymentsSettings(BaseSettings):
 
     provider: Literal["disabled", "sandbox"] = "disabled"
     sandbox_notice_secret: SecretStr | None = None
+
+
+class Deployment(BaseSettings):
+    """Where this process is deployed, from `FINVEST_ENVIRONMENT`.
+
+    Every deployed process is given `staging` or `production`. It is not set in local
+    development or in tests.
+    """
+
+    model_config = SettingsConfigDict(env_prefix="FINVEST_", extra="ignore")
+
+    environment: str | None = None
+
+
+# The only places the sandbox may answer. Anything else, including a name we do not know,
+# is treated as production.
+SANDBOX_ENVIRONMENTS = frozenset({None, "local", "staging"})
+
+
+class SandboxNotAllowed(RuntimeError):
+    """The sandbox provider was configured where real money is expected."""
