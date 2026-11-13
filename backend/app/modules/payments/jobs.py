@@ -8,8 +8,9 @@ transaction that also completes the job. A request is sent at most once per depo
 * The send handler is registered as having an external effect, so the queue never runs it
   again after a crash or a lost lease. The deposit keeps its `sending` mark, and the sweep
   turns that into `uncertain`.
-* When the answer is unclear the deposit becomes `uncertain`. Status reads may settle it, and
-  reconciliation settles what they cannot. Nothing here ever sends it again.
+* When the answer is unclear the deposit becomes `uncertain`. Status reads keep trying to
+  settle it for a day, further apart as it ages, and reconciliation settles what they cannot.
+  Nothing here ever sends it again.
 """
 
 from collections.abc import Mapping
@@ -36,11 +37,13 @@ from app.modules.payments import service
 from app.modules.payments.domain.deposits import (
     APPROVAL_WINDOW,
     SENDING_GRACE,
+    UNCERTAIN_READ_WINDOW,
     UNSENT_EXPIRY,
     Code,
     DepositStatus,
     Move,
     after_send,
+    next_uncertain_read,
 )
 from app.modules.payments.domain.outcomes import Uncertain, UncertainReason
 from app.modules.payments.domain.provider import CollectionRequest, CollectionsProvider
@@ -55,6 +58,14 @@ _STRAGGLERS = text(
     "OR (status = 'sending' AND updated_at <= :interrupted) "
     "OR (status = 'awaiting_approval' AND updated_at <= :quiet) "
     "ORDER BY updated_at LIMIT :limit FOR UPDATE SKIP LOCKED"
+)
+# Uncertain deposits a status read can still settle. A different confirmed amount is for staff:
+# reading it again changes nothing. Newest first, because a late answer is likeliest for those.
+_UNCERTAIN = text(
+    "SELECT id, updated_at FROM payment_deposits "
+    "WHERE status = 'uncertain' AND code <> 'amount_mismatch' AND provider = :provider "
+    "AND updated_at <= :quiet AND updated_at > :given_up "
+    "ORDER BY updated_at DESC LIMIT :limit"
 )
 logger = structlog.get_logger()
 
@@ -187,6 +198,17 @@ class DepositJobs:
             moved = 0
             for row in rows.all():
                 moved += await self._sweep_one(session, row.id, job.idempotency_key, now)
+            uncertain = await session.execute(
+                _UNCERTAIN,
+                {
+                    "provider": self._provider.name,
+                    "quiet": now - SENDING_GRACE,
+                    "given_up": now - UNCERTAIN_READ_WINDOW,
+                    "limit": SWEEP_BATCH,
+                },
+            )
+            for row in uncertain.all():
+                await self._read_uncertain_again(session, row.id, row.updated_at, now)
             return {"moved": moved}
 
         await context.apply(effect)
@@ -227,6 +249,32 @@ class DepositJobs:
             now=now,
         )
         return 1
+
+    async def _read_uncertain_again(
+        self, session: AsyncSession, deposit_id: str, since: datetime, now: datetime
+    ) -> None:
+        """Queue the next status read of an uncertain deposit, if it is not queued already.
+
+        Each read has its own number in the key and is due at a fixed time, so however often
+        the sweep runs there is one read per interval. The key also carries when the deposit
+        became uncertain: a deposit can be uncertain twice, and the second period's reads must
+        not be mistaken for the first's. A read only asks. It never sends.
+        """
+        upcoming = next_uncertain_read(since, now)
+        if upcoming is None:
+            return
+        number, due = upcoming
+        await enqueue(
+            session,
+            JobRequest(
+                kind=service.VERIFY_KIND,
+                idempotency_key=f"{deposit_id}:uncertain:{int(since.timestamp())}:{number}",
+                payload={"deposit_id": deposit_id},
+                delay=due - now,
+                max_age=(due - now) + APPROVAL_WINDOW,
+            ),
+            now=now,
+        )
 
 
 def _deposit_id(payload: Mapping[str, object]) -> str:

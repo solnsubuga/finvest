@@ -15,6 +15,7 @@ from typing import Any, Literal
 
 import structlog
 from sqlalchemy import CursorResult, Row, text
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.infrastructure.idempotency import Receipt, run_once
@@ -59,6 +60,19 @@ _NOTICE_FIELD = re.compile(r"[A-Za-z0-9._:-]{1,128}")
 
 Cause = Literal["request", "send", "status_read", "sweep", "reconciliation"]
 logger = structlog.get_logger()
+
+
+class DepositExists(ApplicationError):
+    """The investment already has a deposit that has not failed: open, uncertain or confirmed.
+
+    Carries that deposit, when the caller may see it, so the client can be taken to it and not
+    asked to pay again.
+    """
+
+    def __init__(self, deposit_id: str | None, status: DepositStatus | None) -> None:
+        super().__init__("conflict")
+        self.deposit_id = deposit_id
+        self.status = status
 
 
 class UnusableNotice(Exception):
@@ -106,6 +120,16 @@ _INSERT = text(
     ":payer_msisdn, 'created', :now, :now)"
 )
 _SELECT = text(f"SELECT {_COLUMNS} FROM payment_deposits WHERE id = :id")  # noqa: S608
+# Created by migration 0021. An investment has at most one deposit that has not failed.
+LIVE_INVESTMENT_INDEX = "uq_payment_deposits_live_investment"
+_HAS_LIVE = text(
+    "SELECT 1 FROM payment_deposits WHERE purpose_type = :purpose_type "
+    "AND purpose_id = :purpose_id AND status <> 'failed' LIMIT 1"
+)
+_SELECT_LIVE = text(
+    "SELECT id, status FROM payment_deposits WHERE purpose_type = 'investment' "
+    "AND purpose_id = :purpose_id AND status <> 'failed' LIMIT 1"
+)
 _SELECT_LOCKED = text(
     f"SELECT {_COLUMNS} FROM payment_deposits WHERE id = :id FOR UPDATE"  # noqa: S608
 )
@@ -142,6 +166,7 @@ async def request_deposit(
     request: DepositRequest,
     *,
     idempotency_key: str,
+    account_phone: str,
     provider: str,
     clock: Clock,
 ) -> Deposit:
@@ -150,6 +175,14 @@ async def request_deposit(
     `session` is the client's own transaction. Nothing is sent here: the worker asks the
     provider to prompt the payer. Calling again with the same key returns the same deposit and
     creates nothing. The same key with different details is refused.
+
+    `account_phone` is the number on the client's own account, from their session and never
+    from what they sent. The payer must be that number: a payment from a number registered to
+    someone else is refused.
+
+    An investment takes one deposit. While one is open, uncertain or confirmed, a request with
+    a new key raises `DepositExists` and no second prompt is sent. A failed deposit does not
+    count, so the client can try again.
     """
     if actor.kind != "client" or actor.id is None:
         raise ApplicationError("forbidden")
@@ -157,8 +190,10 @@ async def request_deposit(
         check_mobile_money_amount(request.amount)
         msisdn = normalise_msisdn(request.phone)
         validate_push_id(request.purpose_id)
+        if msisdn != normalise_msisdn(account_phone):
+            raise InvalidDeposit("not_account_phone")
     except InvalidDeposit as error:
-        field = "phone" if error.code == "invalid_phone" else "amount"
+        field = "phone" if error.code in ("invalid_phone", "not_account_phone") else "amount"
         raise ApplicationError(
             "validation_failed", fields=[FieldProblem(field_path=[field], code=error.code)]
         ) from None
@@ -170,23 +205,39 @@ async def request_deposit(
     client_id = actor.id
     now = clock.now()
 
+    async def live_deposit() -> DepositExists | None:
+        row = (await session.execute(_SELECT_LIVE, {"purpose_id": request.purpose_id})).first()
+        return DepositExists(row.id, DepositStatus(row.status)) if row else None
+
     async def command() -> Receipt:
         deposit_id = push_id()
-        await session.execute(
-            _INSERT,
-            {
-                "id": deposit_id,
-                "client_id": client_id,
-                "purpose_type": request.purpose.value,
-                "purpose_id": request.purpose_id,
-                "method": request.network.value,
-                "provider": provider,
-                "currency": request.amount.currency.value,
-                "amount_minor": request.amount.minor,
-                "payer_msisdn": msisdn,
-                "now": now,
-            },
-        )
+        if request.purpose is Purpose.INVESTMENT:
+            # An investment is paid for once. Only a failed deposit frees it for another try.
+            existing = await live_deposit()
+            if existing:
+                raise existing
+        try:
+            # The check above loses a race between two requests. The unique index does not.
+            async with session.begin_nested():
+                await session.execute(
+                    _INSERT,
+                    {
+                        "id": deposit_id,
+                        "client_id": client_id,
+                        "purpose_type": request.purpose.value,
+                        "purpose_id": request.purpose_id,
+                        "method": request.network.value,
+                        "provider": provider,
+                        "currency": request.amount.currency.value,
+                        "amount_minor": request.amount.minor,
+                        "payer_msisdn": msisdn,
+                        "now": now,
+                    },
+                )
+        except IntegrityError as error:
+            if LIVE_INVESTMENT_INDEX not in str(error.orig):
+                raise
+            raise (await live_deposit()) or DepositExists(None, None) from None
         await _record_event(session, deposit_id, None, DepositStatus.CREATED, None, "request", now)
         await enqueue(
             session,
@@ -221,6 +272,20 @@ async def request_deposit(
     if not outcome.replayed:
         logger.info("deposit_requested", deposit_id=deposit_id)
     return await get_deposit(session, deposit_id)
+
+
+async def has_live_deposit(session: AsyncSession, *, purpose: Purpose, purpose_id: str) -> bool:
+    """Whether a deposit that has not failed exists for this investment or goal.
+
+    For other modules, called as the system in the worker. True while a deposit is being sent,
+    awaiting approval, uncertain or confirmed: money for this purpose has arrived or still may.
+    An investment must not be cancelled as unpaid while this is true. A client's own
+    transaction sees only that client's deposits, so do not ask from one.
+    """
+    row = await session.execute(
+        _HAS_LIVE, {"purpose_type": purpose.value, "purpose_id": purpose_id}
+    )
+    return row.first() is not None
 
 
 async def get_deposit(session: AsyncSession, deposit_id: str) -> Deposit:
