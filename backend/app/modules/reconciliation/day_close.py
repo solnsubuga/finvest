@@ -12,7 +12,7 @@ then shows up as a movement and is matched.
 
 from collections.abc import Sequence
 from dataclasses import dataclass
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 
 from sqlalchemy import text
 from sqlalchemy.exc import IntegrityError
@@ -429,6 +429,31 @@ async def send_back(
         category="approval",
         reason=reason.strip(),
     )
+
+
+@dataclass(frozen=True, slots=True)
+class PreparedClose:
+    """A day someone prepared to close, waiting for a different person to approve it."""
+
+    id: str
+    business_date: date
+    prepared_by: str
+    prepared_at: datetime
+
+
+_PREPARED = text(
+    "SELECT id, business_date, prepared_by, prepared_at FROM reconciliation_day_closes "
+    "WHERE status = 'prepared' ORDER BY business_date, id"
+)
+
+
+async def prepared_closes(session: AsyncSession) -> list[PreparedClose]:
+    """Closes waiting for a second person, oldest day first."""
+    rows = await session.execute(_PREPARED)
+    return [
+        PreparedClose(row.id, row.business_date, row.prepared_by, row.prepared_at)
+        for row in rows.all()
+    ]
 
 
 async def get_close(session: AsyncSession, day: date) -> DayCloseView | None:
