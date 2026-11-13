@@ -194,6 +194,10 @@ In `backend/app/modules/payouts/staff_api.py`. Seeing the queue and opening an a
 | `POST /staff/payout-destinations/{id}/reject` | `{rejection_reason, reason}`. One person refuses the proof |
 | `POST /staff/payout-destinations/{id}/remove` | `{reason}`. Takes the account out of use for good, as an operator control |
 
+A checked account also waits in the approvals inbox (`GET /staff/approvals`) as `payout_account`, for staff who can see the review queue. Its subject is the kind of account, `mobile_money` or `bank`, never the number or the holder's name. Staff without `payout_accounts.change`, such as finance, see it but cannot decide it.
+
+The database guard runs with its search path pinned to `pg_catalog, pg_temp` and names the functions it calls in full (migration 0036).
+
 ## Sending a payout
 
 A queued mobile money payout gets a send job in the same transaction that queued it: when it is created, or when staff approve a held one. The worker sends it through the disbursements provider and reads its status back. The code is in `backend/app/modules/payouts/jobs.py`, the rules in `domain/sending.py`, and migration 0033 adds `payout_send_attempts`.

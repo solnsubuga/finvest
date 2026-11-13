@@ -65,6 +65,15 @@ def test_a_payout_account_is_decided_only_by_those_who_change_payout_accounts() 
     assert item.can_decide is True
 
 
+def test_finance_see_a_checked_payout_account_but_cannot_approve_it() -> None:
+    [item] = inbox([waiting("payout_account")], "me", permissions_for("finance"))
+    assert (item.yours, item.can_decide) == (False, False)
+    for role in ("operations", "compliance"):
+        [item] = inbox([waiting("payout_account")], "me", permissions_for(role))
+        assert item.can_decide is True
+    assert inbox([waiting("payout_account")], "me", permissions_for("support")) == []
+
+
 def test_items_the_reader_cannot_see_are_left_out() -> None:
     items = [waiting("wording_change"), waiting("dealing_order")]
     assert inbox(items, "me", permissions_for("compliance")) == []
