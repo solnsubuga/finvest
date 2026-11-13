@@ -13,6 +13,8 @@ Permission = Literal[
     "overview.view",
     "review_queue.view",
     "identity_checks.view",
+    # Deciding a check, as opposed to opening the screen.
+    "identity_checks.review",
     "maturities.view",
     "support.view",
     # Writing to a client in the help chat, solving or filing a chat, and keeping saved replies.
@@ -59,6 +61,7 @@ ROLE_PERMISSIONS: dict[Role, frozenset[Permission]] = {
             "overview.view",
             "review_queue.view",
             "identity_checks.view",
+            "identity_checks.review",
             "maturities.view",
             "support.view",
             "support.reply",
@@ -103,6 +106,7 @@ ROLE_PERMISSIONS: dict[Role, frozenset[Permission]] = {
             "overview.view",
             "review_queue.view",
             "identity_checks.view",
+            "identity_checks.review",
             "complaints.view",
             "complaints.manage",
             "complaints.close",
