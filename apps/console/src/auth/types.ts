@@ -62,6 +62,14 @@ export const ACTION_PERMISSIONS = [
   "bank_transfers.change",
   // Proposing a rate change, approving or sending back someone else's, and withdrawing your own.
   "rates.change",
+  // Inviting staff, changing a role, deactivating or reactivating, resetting sign-in. Two admins.
+  "team.change",
+  // Reading the audit trail and exporting it.
+  "audit.view",
+  // Locking or unlocking a client's account, with a second person.
+  "clients.lock",
+  // Lifting an email suppression, with a second person.
+  "email_suppressions.lift",
 ] as const;
 
 export const PERMISSIONS = [...SCREEN_PERMISSIONS, ...ACTION_PERMISSIONS] as const;
