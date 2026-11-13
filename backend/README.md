@@ -37,6 +37,8 @@ One image, four processes. Each connects to PostgreSQL as its own role, given in
 | Scheduler | `python -m app.scheduler_main` | `finvest_worker` | `python -m app.infrastructure.process scheduler` |
 | Migrate | `python -m app.migrate_main` | `finvest_migrator` | Exits 0 when migrations are applied |
 
+For a managed database, set `FINVEST_DATABASE_SSL_MODE=verify-full`, and `FINVEST_DATABASE_SSL_ROOT_CERT` to the provider's CA file if it signs with its own CA.
+
 The worker and scheduler only check their role and keep a heartbeat for now. They get their real work with the job queue.
 
 ## Layout
