@@ -50,9 +50,9 @@ export const ACTION_PERMISSIONS = [
   "migration.sign_off",
   // Writing to a client in the help chat, solving or filing a chat, keeping saved replies.
   "support.reply",
-  // Logging a complaint for a client, assigning it, moving it and adding notes.
+  // Logging a complaint for a client, assigning it, moving it, adding notes, and proposing or withdrawing an outcome.
   "complaints.manage",
-  // Recording the outcome and closing a complaint.
+  // Confirming or rejecting an outcome someone else proposed. Confirming closes the complaint.
   "complaints.close",
   // Proposing or deciding a change to the words of a client message.
   "wordings.change",

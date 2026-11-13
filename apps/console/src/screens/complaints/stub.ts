@@ -8,6 +8,7 @@ import {
   type ComplaintDetail,
   type ComplaintsApi,
   type HistoryItem,
+  type PendingOutcome,
   type Register,
   type Status,
 } from "./api.ts";
@@ -53,6 +54,8 @@ function quarterStart(today: string): string {
 interface Stored {
   complaint: Complaint;
   history: HistoryItem[];
+  pending: PendingOutcome | null;
+  clientKey: string | null;
 }
 
 export function createStubComplaintsApi(
@@ -94,8 +97,9 @@ export function createStubComplaintsApi(
       {
         id: id("sample-event"),
         action: "logged",
-        actor: "staff",
-        actorId: "sample-staff-grace",
+        // A client logs their own in the app. Staff log the rest.
+        actor: fields.receivedVia === "app" ? "client" : "staff",
+        actorId: fields.receivedVia === "app" ? clientId : "sample-staff-grace",
         fromStatus: null,
         toStatus: "new",
         note: null,
@@ -115,7 +119,7 @@ export function createStubComplaintsApi(
       });
       if (toStatus) status = toStatus;
     }
-    return { complaint, history: events };
+    return { complaint, history: events, pending: null, clientKey: null };
   }
 
   const samples: Stored[] = [
@@ -165,7 +169,10 @@ export function createStubComplaintsApi(
         ownerId: "sample-staff-daniel",
       },
       "2026-11-10",
-      [["status", "sample-staff-daniel", "investigating", "Checking the rate on the day she invested.", "2026-11-10T12:30:00Z"]],
+      [
+        ["status", "sample-staff-daniel", "investigating", "Checking the rate on the day she invested.", "2026-11-10T12:30:00Z"],
+        ["proposed", "sample-staff-daniel", null, null, "2026-11-12T09:40:00Z"],
+      ],
     ),
     sample(
       "C-2616",
@@ -212,17 +219,34 @@ export function createStubComplaintsApi(
       "2026-11-06",
       [
         ["note", "sample-staff-daniel", null, "The statement job skipped deposits matched after the month closed.", "2026-11-09T09:00:00Z"],
-        ["closed", "sample-staff-daniel", "closed", null, "2026-11-11T11:00:00Z"],
+        ["proposed", "sample-staff-daniel", null, null, "2026-11-11T10:30:00Z"],
+        ["closed", "sample-staff-grace", "closed", null, "2026-11-11T11:00:00Z"],
       ],
     ),
   ];
 
+  // Daniel proposed an outcome for C-2615, so it waits for someone else to confirm it.
+  const waiting = samples[2] as Stored;
+  waiting.pending = {
+    id: id("sample-proposal"),
+    outcome: "not_upheld",
+    resolution: "The rate you saw was right. Your statement shows the interest after tax, so the figure is lower. Nothing is missing.",
+    clientAccepted: true,
+    proposedBy: "sample-staff-daniel",
+    proposedAt: "2026-11-12T09:40:00Z",
+  };
+
   const stored = seed === "empty" ? [] : samples;
   const isOverdue = (complaint: Complaint) => complaint.status !== "closed" && today() > complaint.dueOn;
-  const copy = ({ complaint, history }: Stored): ComplaintDetail => ({
+  const copy = ({ complaint, history, pending }: Stored): ComplaintDetail => ({
     complaint: { ...complaint, overdue: isOverdue(complaint) },
     history: history.map((item) => ({ ...item })),
+    pendingOutcome: pending ? { ...pending } : null,
   });
+  const loggedBy = (item: Stored) => {
+    const logged = item.history.find((event) => event.action === "logged");
+    return logged?.actor === "staff" ? logged.actorId : null;
+  };
   const find = (complaintId: string): Stored => {
     const found = stored.find((item) => item.complaint.id === complaintId);
     if (!found) throw new ComplaintsError("not_found");
@@ -289,6 +313,10 @@ export function createStubComplaintsApi(
     },
     log(input) {
       try {
+        if (!/^[A-Za-z0-9._:-]{8,64}$/.test(input.clientKey)) throw new ComplaintsError("invalid");
+        // A repeated key answers with the complaint it logged, as the API does.
+        const again = stored.find((item) => item.clientKey === input.clientKey && loggedBy(item) === me.id);
+        if (again) return Promise.resolve(copy(again));
         const receivedAt = new Date(now()).toISOString();
         const item: Stored = {
           complaint: {
@@ -312,6 +340,8 @@ export function createStubComplaintsApi(
             clientAccepted: null,
           },
           history: [],
+          pending: null,
+          clientKey: input.clientKey,
         };
         record(item, { action: "logged", fromStatus: null, toStatus: "new", note: null });
         stored.push(item);
@@ -340,16 +370,40 @@ export function createStubComplaintsApi(
       change(complaintId, (item) => {
         record(item, { action: "note", fromStatus: null, toStatus: null, note: clean(note, MAX_NOTE) });
       }),
-    close: (complaintId, closing) =>
+    proposeOutcome: (complaintId, closing) =>
       change(complaintId, (item) => {
-        const resolution = clean(closing.resolution, MAX_RESOLUTION);
+        if (item.pending) throw new ComplaintsError("conflict");
+        item.pending = {
+          id: id("sample-proposal"),
+          outcome: closing.outcome,
+          resolution: clean(closing.resolution, MAX_RESOLUTION),
+          clientAccepted: closing.clientAccepted,
+          proposedBy: me.id,
+          proposedAt: new Date(now()).toISOString(),
+        };
+        record(item, { action: "proposed", fromStatus: null, toStatus: null, note: null });
+      }),
+    decideOutcome: (complaintId, proposalId, decision, reason) =>
+      change(complaintId, (item) => {
+        const pending = item.pending;
+        if (!pending || pending.id !== proposalId) throw new ComplaintsError("conflict");
+        const mine = pending.proposedBy === me.id;
+        // The same rules PostgreSQL holds: the proposer only withdraws, and whoever logged it never confirms.
+        if ((decision === "withdrawn") !== mine) throw new ComplaintsError("forbidden");
+        if (decision === "confirmed" && loggedBy(item) === me.id) throw new ComplaintsError("forbidden");
+        const note = decision === "rejected" || (reason ?? "").trim() ? clean(reason ?? "", MAX_NOTE) : null;
+        item.pending = null;
+        if (decision !== "confirmed") {
+          record(item, { action: decision, fromStatus: null, toStatus: null, note });
+          return;
+        }
         record(item, { action: "closed", fromStatus: item.complaint.status, toStatus: "closed", note: null });
         Object.assign(item.complaint, {
           status: "closed",
           closedAt: new Date(now()).toISOString(),
-          outcome: closing.outcome,
-          resolution,
-          clientAccepted: closing.clientAccepted,
+          outcome: pending.outcome,
+          resolution: pending.resolution,
+          clientAccepted: pending.clientAccepted,
         });
       }),
   };

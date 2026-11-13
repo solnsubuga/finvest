@@ -34,22 +34,36 @@ type Load<T> = { state: "loading" } | { state: "failed"; message: string } | { s
 interface ComplaintsScreenProps {
   api: ComplaintsApi;
   directory: Directory;
-  /** `complaints.manage`: log, assign, move and add notes. */
+  /** The signed-in member of staff. */
+  me: string;
+  /** `complaints.manage`: log, assign, move, add notes, and propose an outcome. */
   canManage: boolean;
-  /** `complaints.close`: record the outcome. The API checks both again. */
+  /** `complaints.close`: confirm or reject someone else's outcome. The API checks both again. */
   canClose: boolean;
+  /** A key for each new complaint, kept until the API answers, so a retry logs it once. */
+  newKey?: () => string;
   /** The Kampala business day, as a calendar date. */
   today?: () => string;
 }
 
 const kampalaToday = () => new Intl.DateTimeFormat("en-CA", { timeZone: "Africa/Kampala" }).format(new Date());
 
-export function ComplaintsScreen({ api, directory, canManage, canClose, today = kampalaToday }: ComplaintsScreenProps) {
+export function ComplaintsScreen({
+  api,
+  directory,
+  me,
+  canManage,
+  canClose,
+  newKey = () => crypto.randomUUID(),
+  today = kampalaToday,
+}: ComplaintsScreenProps) {
   const [show, setShow] = useState<Show>("open");
   const [register, setRegister] = useState<Load<Register>>({ state: "loading" });
   const [selected, setSelected] = useState<string | null>(null);
   const [detail, setDetail] = useState<Load<ComplaintDetail> | null>(null);
   const [logging, setLogging] = useState(false);
+  // The key for the complaint in the log form. A new one only once the last was logged.
+  const logKey = useRef<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [failed, setFailed] = useState<{ on: string; message: string } | null>(null);
   const [clients, setClients] = useState<Record<string, string | null>>({});
@@ -175,7 +189,9 @@ export function ComplaintsScreen({ api, directory, canManage, canClose, today = 
           ? api.move(complaintId, next.status, next.note)
           : next.action === "note"
             ? api.addNote(complaintId, next.note)
-            : api.close(complaintId, next.closing));
+            : next.action === "propose"
+              ? api.proposeOutcome(complaintId, next.closing)
+              : api.decideOutcome(complaintId, next.proposalId, next.decision, next.reason));
       await afterChange(value);
       return true;
     } catch (error) {
@@ -186,11 +202,13 @@ export function ComplaintsScreen({ api, directory, canManage, canClose, today = 
     }
   }
 
-  async function log(complaint: NewComplaint) {
+  async function log(complaint: Omit<NewComplaint, "clientKey">) {
     setBusy(true);
     setFailed(null);
+    logKey.current ??= newKey();
     try {
-      const value = await api.log(complaint);
+      const value = await api.log({ ...complaint, clientKey: logKey.current });
+      logKey.current = null;
       setLogging(false);
       if (show === "closed") {
         // A new complaint is open, so show the open list with it selected.
@@ -323,6 +341,7 @@ export function ComplaintsScreen({ api, directory, canManage, canClose, today = 
                   clientName={clientName(detail.value.complaint.clientId)}
                   staffName={staffName}
                   team={team}
+                  me={me}
                   canManage={canManage}
                   canClose={canClose}
                   busy={busy}
@@ -355,6 +374,7 @@ export default function ComplaintsPage() {
     <ComplaintsScreen
       api={api}
       directory={directory}
+      me={session?.staffId ?? ""}
       canManage={session ? can(session, "complaints.manage") : false}
       canClose={session ? can(session, "complaints.close") : false}
     />

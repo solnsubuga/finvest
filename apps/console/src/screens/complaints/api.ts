@@ -12,14 +12,16 @@ import type { Amount } from "@/screens/dealing-desk/api.ts";
 export type Category = "payments" | "withdrawals" | "investments" | "identity" | "account" | "fees" | "service" | "other";
 export type Status = "new" | "investigating" | "waiting_for_client" | "escalated" | "closed";
 export type OpenStatus = Exclude<Status, "closed">;
-/** The statuses staff can move a complaint to. It starts as new, and closing has its own command. */
+/** The statuses staff can move a complaint to. It starts as new, and an outcome closes it once a second person confirms it. */
 export type MoveTo = Exclude<OpenStatus, "new">;
 export type ReceivedVia = "app" | "chat" | "phone" | "email" | "in_person" | "letter";
 /** How staff can log a complaint. A client logs their own from the app. */
 export type LoggedVia = Exclude<ReceivedVia, "app">;
 export type Outcome = "upheld" | "partly_upheld" | "not_upheld";
 export type Show = "open" | "closed" | "all";
-export type EventAction = "logged" | "assigned" | "status" | "note" | "escalated" | "closed";
+export type EventAction = "logged" | "assigned" | "status" | "note" | "escalated" | "proposed" | "rejected" | "withdrawn" | "closed";
+/** Confirming closes the complaint. Rejecting says why. Only the proposer withdraws. */
+export type Decision = "confirmed" | "rejected" | "withdrawn";
 
 export interface Complaint {
   id: string;
@@ -57,9 +59,21 @@ export interface HistoryItem {
   occurredAt: string;
 }
 
+/** An outcome one member of staff proposed. A different one confirms or rejects it, and confirming closes the complaint. */
+export interface PendingOutcome {
+  id: string;
+  outcome: Outcome;
+  resolution: string;
+  clientAccepted: boolean;
+  proposedBy: string;
+  proposedAt: string;
+}
+
 export interface ComplaintDetail {
   complaint: Complaint;
   history: readonly HistoryItem[];
+  /** At most one waits at a time. */
+  pendingOutcome: PendingOutcome | null;
 }
 
 export interface Summary {
@@ -79,6 +93,8 @@ export interface Register {
 }
 
 export interface NewComplaint {
+  /** Sent again with a retry after a lost answer, so the complaint is logged once. 8 to 64 of A-Z, a-z, 0-9 and . _ : - */
+  clientKey: string;
   clientId: string;
   category: Category;
   receivedVia: LoggedVia;
@@ -107,7 +123,10 @@ export interface ComplaintsApi {
   assign(complaintId: string, ownerId: string): Promise<ComplaintDetail>;
   move(complaintId: string, status: MoveTo, note: string): Promise<ComplaintDetail>;
   addNote(complaintId: string, note: string): Promise<ComplaintDetail>;
-  close(complaintId: string, closing: Closing): Promise<ComplaintDetail>;
+  /** Proposes the outcome. Someone else confirms it. */
+  proposeOutcome(complaintId: string, closing: Closing): Promise<ComplaintDetail>;
+  /** Names the proposal, so a newer one is never confirmed by mistake. A rejection needs a reason. */
+  decideOutcome(complaintId: string, proposalId: string, decision: Decision, reason: string | null): Promise<ComplaintDetail>;
 }
 
 export type ComplaintsErrorCode = "invalid" | "not_found" | "conflict" | "forbidden" | "not_connected" | "unavailable";
@@ -122,8 +141,8 @@ export class ComplaintsError extends Error {
 const MESSAGES: Record<ComplaintsErrorCode, string> = {
   invalid: "That could not be saved. Check what you wrote and try again.",
   not_found: "This complaint could not be found.",
-  conflict: "This complaint is already closed. A closed complaint does not change.",
-  forbidden: "Your role cannot do that. Ask compliance or an admin.",
+  conflict: "This complaint has moved on. It is closed, or an outcome is already waiting. Open it again to see where it stands.",
+  forbidden: "That needs a different person or a role you do not have. Ask compliance or an admin.",
   not_connected: "Complaints are not connected to the Finvest service yet.",
   unavailable: "We could not reach Finvest. Check your connection and try again.",
 };
@@ -142,5 +161,6 @@ export const notConnectedComplaintsApi: ComplaintsApi = {
   assign: notConnected,
   move: notConnected,
   addNote: notConnected,
-  close: notConnected,
+  proposeOutcome: notConnected,
+  decideOutcome: notConnected,
 };
