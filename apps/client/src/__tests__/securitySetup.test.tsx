@@ -4,6 +4,7 @@ import { renderRouter } from "expo-router/testing-library";
 import { DEMO_CODE } from "@/auth/stubAuthClient";
 import { groupKey } from "@/app/security/authenticator";
 import { qrPath } from "@/components/QrCode";
+import { WARM_ROUTER_MS, warmRouter } from "@/testing/warmRouter";
 
 /** Minutes added to the stub's clock, so a test can let the session grow old. */
 const mockClock = { minutes: 0 };
@@ -59,6 +60,8 @@ async function logOutAndStartLogIn(password: string) {
   await fireEvent.press(screen.getByTestId("login-submit"));
   await screen.findByText("Confirm it is you");
 }
+
+beforeAll(warmRouter, WARM_ROUTER_MS);
 
 describe("Sign in and security", () => {
   it("nudges a client with SMS only from Home, and shows what is on and what can be added", async () => {

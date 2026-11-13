@@ -2,7 +2,7 @@ import { useState, type ReactNode } from "react";
 import { Button } from "@/components/ui/button.tsx";
 import type { StaffCard } from "@/directory/api.ts";
 import { formatExact } from "@/screens/dealing-desk/format.ts";
-import { MAX_NOTE, MAX_RESOLUTION, type Closing, type ComplaintDetail, type MoveTo, type Outcome } from "./api.ts";
+import { MAX_NOTE, MAX_RESOLUTION, type Closing, type ComplaintDetail, type Decision, type MoveTo, type Outcome, type PendingOutcome } from "./api.ts";
 import {
   ACTION_LABELS,
   CATEGORY_LABELS,
@@ -22,14 +22,19 @@ export type Command =
   | { action: "assign"; ownerId: string }
   | { action: "move"; status: MoveTo; note: string }
   | { action: "note"; note: string }
-  | { action: "close"; closing: Closing };
+  | { action: "propose"; closing: Closing }
+  | { action: "decide"; proposalId: string; decision: Decision; reason: string | null };
 
 interface DetailPanelProps {
   detail: ComplaintDetail;
   clientName: string;
   staffName: (staffId: string | null) => string;
   team: readonly StaffCard[];
+  /** The signed-in member of staff, to tell their own proposal and their own complaint apart. */
+  me: string;
+  /** `complaints.manage`: assign, move, add notes, and propose or withdraw an outcome. */
   canManage: boolean;
+  /** `complaints.close`: confirm or reject someone else's outcome. */
   canClose: boolean;
   busy: boolean;
   error: string | null;
@@ -37,13 +42,15 @@ interface DetailPanelProps {
   onCommand: (command: Command) => Promise<boolean>;
 }
 
-type Form = "move" | "note" | "close" | null;
+type Form = "move" | "note" | "propose" | "reject" | null;
 
 const FIELD = "w-full rounded-lg border border-border-strong bg-surface px-3.5 py-3 text-md font-medium text-ink";
 
-export function DetailPanel({ detail, clientName, staffName, team, canManage, canClose, busy, error, onCommand }: DetailPanelProps) {
-  const { complaint, history } = detail;
+export function DetailPanel({ detail, clientName, staffName, team, me, canManage, canClose, busy, error, onCommand }: DetailPanelProps) {
+  const { complaint, history, pendingOutcome: pending } = detail;
   const open = complaint.status !== "closed";
+  const logged = history.find((item) => item.action === "logged");
+  const iLoggedIt = logged?.actor === "staff" && logged.actorId === me;
   const [form, setForm] = useState<Form>(null);
   const [moveTo, setMoveTo] = useState<MoveTo>("investigating");
   const [note, setNote] = useState("");
@@ -140,30 +147,42 @@ export function DetailPanel({ detail, clientName, staffName, team, canManage, ca
         </p>
       ) : null}
 
-      {open && form === null && (canManage || canClose) ? (
+      {open && pending ? (
+        <Waiting
+          pending={pending}
+          staffName={staffName}
+          mine={pending.proposedBy === me}
+          iLoggedIt={iLoggedIt}
+          canManage={canManage}
+          canClose={canClose}
+          busy={busy}
+          showButtons={form === null}
+          onDecide={(decision) =>
+            decision === "rejected" ? show("reject") : void submit({ action: "decide", proposalId: pending.id, decision, reason: null })
+          }
+        />
+      ) : null}
+
+      {open && form === null && canManage ? (
         <div className="flex flex-col gap-2">
-          {canClose ? (
-            <Button size="block" disabled={busy} onClick={() => show("close")}>
-              Record the outcome
+          {pending ? null : (
+            <Button size="block" disabled={busy} onClick={() => show("propose")}>
+              Propose the outcome
             </Button>
-          ) : null}
-          {canManage ? (
-            <>
-              {complaint.status === "escalated" ? null : (
-                <Button size="block" variant="secondary" disabled={busy} onClick={() => show("move", "escalated")}>
-                  Escalate to a manager
-                </Button>
-              )}
-              <div className="flex gap-2">
-                <Button size="block" variant="secondary" className="flex-1" disabled={busy} onClick={() => show("move", "investigating")}>
-                  Change status
-                </Button>
-                <Button size="block" variant="secondary" className="flex-1" disabled={busy} onClick={() => show("note")}>
-                  Add a note
-                </Button>
-              </div>
-            </>
-          ) : null}
+          )}
+          {complaint.status === "escalated" ? null : (
+            <Button size="block" variant="secondary" disabled={busy} onClick={() => show("move", "escalated")}>
+              Escalate to a manager
+            </Button>
+          )}
+          <div className="flex gap-2">
+            <Button size="block" variant="secondary" className="flex-1" disabled={busy} onClick={() => show("move", "investigating")}>
+              Change status
+            </Button>
+            <Button size="block" variant="secondary" className="flex-1" disabled={busy} onClick={() => show("note")}>
+              Add a note
+            </Button>
+          </div>
         </div>
       ) : null}
 
@@ -205,16 +224,30 @@ export function DetailPanel({ detail, clientName, staffName, team, canManage, ca
         </form>
       ) : null}
 
-      {form === "close" ? (
+      {form === "reject" && pending ? (
         <form
-          aria-label="Record the outcome"
+          aria-label="Reject the outcome"
+          className="flex flex-col gap-3 border-t border-divider pt-3"
+          onSubmit={(event) => {
+            event.preventDefault();
+            void submit(noteMissing ? null : { action: "decide", proposalId: pending.id, decision: "rejected", reason: note });
+          }}
+        >
+          <NoteField label="What needs to change?" value={note} onChange={setNote} missing={tried && noteMissing} />
+          <FormButtons busy={busy} label="Reject it" onCancel={() => show(null)} />
+        </form>
+      ) : null}
+
+      {form === "propose" ? (
+        <form
+          aria-label="Propose the outcome"
           className="flex flex-col gap-3 border-t border-divider pt-3"
           onSubmit={(event) => {
             event.preventDefault();
             void submit(
               outcome === null || accepted === null || resolution.trim().length === 0
                 ? null
-                : { action: "close", closing: { outcome, resolution, clientAccepted: accepted } },
+                : { action: "propose", closing: { outcome, resolution, clientAccepted: accepted } },
             );
           }}
         >
@@ -232,7 +265,7 @@ export function DetailPanel({ detail, clientName, staffName, team, canManage, ca
           </fieldset>
           <label className="flex flex-col gap-1.5 text-sm font-bold">
             What was done about it
-            <span className="text-xs font-medium text-muted">The client reads this in the app.</span>
+            <span className="text-xs font-medium text-muted">The client reads this in the app once someone else confirms it.</span>
             <textarea
               value={resolution}
               rows={3}
@@ -255,7 +288,7 @@ export function DetailPanel({ detail, clientName, staffName, team, canManage, ca
           {tried && closeMissing ? (
             <p className="m-0 text-xs font-bold text-danger">Choose an outcome, say what was done, and whether the client accepted it.</p>
           ) : null}
-          <FormButtons busy={busy} label="Close the complaint" onCancel={() => show(null)} />
+          <FormButtons busy={busy} label="Send for confirmation" onCancel={() => show(null)} />
         </form>
       ) : null}
 
@@ -278,10 +311,66 @@ export function DetailPanel({ detail, clientName, staffName, team, canManage, ca
       </div>
       {open ? (
         <p className="m-0 text-xs leading-normal text-muted">
-          Closing needs an outcome, what was done, and whether the client accepted it. Nothing in a complaint is ever deleted.
+          One person proposes the outcome and someone else confirms it, which closes the complaint. Whoever logged it does not
+          confirm it. Nothing in a complaint is ever deleted.
         </p>
       ) : null}
     </section>
+  );
+}
+
+interface WaitingProps {
+  pending: PendingOutcome;
+  staffName: (staffId: string | null) => string;
+  mine: boolean;
+  iLoggedIt: boolean;
+  canManage: boolean;
+  canClose: boolean;
+  busy: boolean;
+  showButtons: boolean;
+  onDecide: (decision: Decision) => void;
+}
+
+/** The outcome waiting for a second person, and what the signed-in member of staff can do about it. */
+function Waiting({ pending, staffName, mine, iLoggedIt, canManage, canClose, busy, showButtons, onDecide }: WaitingProps) {
+  const canDecide = !mine && canClose && !iLoggedIt;
+  const why = mine
+    ? "Someone else confirms it. You can withdraw it to change it."
+    : !canClose
+      ? "Someone who can close complaints confirms it."
+      : iLoggedIt
+        ? "You logged this complaint, so someone else confirms its outcome."
+        : "Confirming closes the complaint and tells the client. Reject it if something should change.";
+  return (
+    <div role="group" aria-label="Outcome waiting" className="flex flex-col gap-2 rounded-md border border-warning bg-warning-surface px-3 py-2.5 text-sm">
+      <strong>Outcome waiting for a second person</strong>
+      <span>
+        <strong>{OUTCOME_LABELS[pending.outcome]}</strong>
+        <span className="text-muted">. {pending.clientAccepted ? "The client accepted this." : "The client did not accept this."}</span>
+      </span>
+      <span className="whitespace-pre-wrap">{pending.resolution}</span>
+      <span className="text-muted">
+        Proposed by {mine ? "you" : staffName(pending.proposedBy)}, {stamp(pending.proposedAt)}
+      </span>
+      <span className="text-muted">{why}</span>
+      {showButtons && canDecide ? (
+        <div className="flex gap-2">
+          <Button disabled={busy} onClick={() => onDecide("confirmed")}>
+            {busy ? "Saving" : "Confirm and close"}
+          </Button>
+          <Button variant="secondary" disabled={busy} onClick={() => onDecide("rejected")}>
+            Reject
+          </Button>
+        </div>
+      ) : null}
+      {showButtons && mine && canManage ? (
+        <div>
+          <Button variant="secondary" disabled={busy} onClick={() => onDecide("withdrawn")}>
+            Withdraw it
+          </Button>
+        </div>
+      ) : null}
+    </div>
   );
 }
 

@@ -201,7 +201,10 @@ function SavingRow({ saving, first, onPay }: { saving: Saving; first: boolean; o
         </Txt>
       </View>
       {waiting ? (
-        <Button label="Pay" onPress={onPay} height={40} variant="primary" testID={`pay-${saving.investmentId}`} />
+        // Its own width, so the label is never squeezed by a long product name.
+        <View style={{ minWidth: 88 }}>
+          <Button label="Pay" onPress={onPay} height={40} variant="primary" testID={`pay-${saving.investmentId}`} />
+        </View>
       ) : (
         <Txt size={14} weight="bold">
           {formatMoney(saving.value).replace("UGX ", "")}

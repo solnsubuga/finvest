@@ -4,6 +4,7 @@ import { renderRouter } from "expo-router/testing-library";
 import { DEMO_PASSWORD } from "@/auth/stubAuthClient";
 import { DEMO_REPLY } from "@/support/stubSupportClient";
 import { SupportError } from "@/support/types";
+import { WARM_ROUTER_MS, warmRouter } from "@/testing/warmRouter";
 
 /** The demo's clock, moved by hand so the reply can be waited for. */
 const mockClock = { ms: Date.parse("2026-11-13T12:40:00Z") };
@@ -73,6 +74,8 @@ beforeEach(() => {
   mockSave.mockClear();
   mockClock.ms = Date.parse("2026-11-13T12:40:00Z");
 });
+
+beforeAll(warmRouter, WARM_ROUTER_MS);
 
 describe("the notification centre", () => {
   it("shows the unread count on Home and the list behind it", async () => {

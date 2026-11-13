@@ -1,0 +1,24 @@
+{
+  "name": "@finvest/api-client",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Zod validators and TypeScript types generated from the Finvest API's OpenAPI description.",
+  "exports": {
+    "./client": "./src/client.gen.ts",
+    "./staff": "./src/staff.gen.ts"
+  },
+  "sideEffects": false,
+  "scripts": {
+    "generate": "node scripts/generate.ts",
+    "check": "node scripts/generate.ts --check",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "zod": "4.6.7"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "typescript": "^5.9.0"
+  }
+}
