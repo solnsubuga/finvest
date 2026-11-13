@@ -14,6 +14,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.app import create_app
 from app.infrastructure.database import Database
+from app.infrastructure.email import EmailDeferred, EmailMessage, EmailRejected, SendResult
 from app.infrastructure.jobs import JobRequest, Worker, WorkerConfig, enqueue
 from app.modules.documents import building, pdf, service
 from app.modules.documents.domain.emails import receipt_email
@@ -25,6 +26,7 @@ from app.modules.documents.domain.statements import (
     month_end,
     previous_month,
 )
+from app.modules.documents.events import RECEIPT_KIND
 from app.modules.documents.jobs import DocumentJobs
 from app.modules.documents.service import DocumentKind, DocumentStatus
 from app.modules.identity.hashing import PasswordHasher
@@ -162,12 +164,34 @@ def closed(day: date | None) -> Callable[[AsyncSession], Awaitable[date | None]]
     return closed_through
 
 
+class FakeEmail:
+    """Resend, as a test sees it: keeps what it was sent, or fails as told."""
+
+    name = "fake"
+
+    def __init__(self, failure: Exception | None = None) -> None:
+        self.sent: list[EmailMessage] = []
+        self.failure = failure
+
+    async def send(self, message: EmailMessage) -> SendResult:
+        if self.failure is not None:
+            raise self.failure
+        self.sent.append(message)
+        return SendResult(provider=self.name, provider_message_id=f"fake-{len(self.sent)}")
+
+
 async def run_jobs(
-    worker_database: Database, clock: FakeClock = LATER, through: date | None = ALL_CLOSED
+    worker_database: Database,
+    clock: FakeClock = LATER,
+    through: date | None = ALL_CLOSED,
+    email: FakeEmail | None = None,
 ) -> int:
+    jobs = DocumentJobs(
+        worker_database, clock, email=email or FakeEmail(), closed_through=closed(through)
+    )
     runner = Worker(
         worker_database,
-        DocumentJobs(worker_database, clock, closed_through=closed(through)).handlers(),
+        jobs.handlers(),
         WorkerConfig(queue=service.QUEUE),
         clock,
     )
@@ -283,7 +307,8 @@ async def test_a_requested_statement_is_built_stored_and_announced(
     client, _ = await invested(app_database, worker_database)
     asked = await ask(app_database, client)
     assert asked.status is DocumentStatus.PENDING
-    assert await run_jobs(worker_database) == 1
+    # The build, then its email: this client has no address to send to.
+    assert await run_jobs(worker_database) == 2
     async with app_database.actor_transaction(client) as session:
         ready = await service.client_document(session, client, asked.id)
         found = await service.client_file(session, client, asked.id)
@@ -686,10 +711,12 @@ async def test_a_requested_statement_over_open_days_says_from_which_day_it_is_no
 # Receipts ----------------------------------------------------------------------------------------
 
 
-async def test_a_bank_transfer_receipt_names_the_method_and_shows_no_payer_number(
-    app_database: Database, worker_database: Database
-) -> None:
-    client = await approved_client(app_database, LATER)
+async def confirmed_bank_transfer(
+    app_database: Database, worker_database: Database, client: Actor
+) -> tuple[str, int]:
+    """A bank transfer the client made, matched, approved by a second person and confirmed.
+
+    Gives the deposit's ID and its amount in shillings."""
     clock = FakeClock(bank_tests.NOW)
     minor = bank_tests.amount()
     transfer = await bank_tests.submit(app_database, clock, minor, actor=client)
@@ -707,10 +734,16 @@ async def test_a_bank_transfer_receipt_names_the_method_and_shows_no_payer_numbe
         while await payments_worker.run_once():
             pass
 
+    return transfer.deposit.id, minor
+
+
+async def test_a_bank_transfer_receipt_names_the_method_and_shows_no_payer_number(
+    app_database: Database, worker_database: Database
+) -> None:
+    client = await approved_client(app_database, LATER)
+    deposit_id, minor = await confirmed_bank_transfer(app_database, worker_database, client)
     async with worker_database.actor_transaction(SYSTEM) as session:
-        receipt, holder = await building.receipt(
-            session, deposit_id=transfer.deposit.id, reference="RC-1"
-        )
+        receipt, holder = await building.receipt(session, deposit_id=deposit_id, reference="RC-1")
     assert (receipt.method, receipt.paid_from, receipt.amount) == (
         "Bank transfer",
         None,
@@ -796,3 +829,153 @@ async def test_a_client_asks_for_and_downloads_a_statement_over_http(
     )
     assert download.content.startswith(b"%PDF-")
     assert len(download.content) == listed[0]["byte_size"]
+
+
+# Emailing ----------------------------------------------------------------------------------------
+
+
+async def client_with_email(identity: IdentityService, app_database: Database) -> Actor:
+    """An approved client who can be reached at an email address."""
+    client_id = await identity.create_client(
+        phone=f"+2567{abs(hash(push_id())) % 10**8:08d}",
+        email=f"amara.{push_id().lower().replace('_', '').replace('-', '')}@example.com",
+        password=PASSWORD,
+    )
+    client = Actor("client", client_id)
+    async with app_database.actor_transaction(client) as session:
+        await ready_draft(session, client, LATER)
+        check = await kyc.submit(session, SEALER, client, ManualProvider(), LATER)
+    staff = new_staff()
+    async with app_database.actor_transaction(staff) as session:
+        await kyc.approve(session, SEALER, staff, check.id, "Documents match", LATER)
+    return client
+
+
+async def emails_of(worker_database: Database, document_id: str) -> list[tuple[str, str | None]]:
+    async with worker_database.actor_transaction(SYSTEM) as session:
+        rows = (
+            await session.execute(
+                text("SELECT status, failure_code FROM document_emails WHERE document_id = :id"),
+                {"id": document_id},
+            )
+        ).all()
+    return [(row.status, row.failure_code) for row in rows]
+
+
+async def test_a_ready_statement_is_emailed_once_with_its_pdf_attached(
+    http: tuple[httpx.AsyncClient, IdentityService],
+    app_database: Database,
+    worker_database: Database,
+) -> None:
+    _, identity = http
+    client = await client_with_email(identity, app_database)
+    asked = await ask(app_database, client)
+    email = FakeEmail()
+    await run_jobs(worker_database, email=email)
+    (message,) = email.sent
+    async with app_database.actor_transaction(client) as session:
+        stored = await service.client_file(session, client, asked.id)
+    assert message.to.startswith("amara.") and message.to.endswith("@example.com")
+    assert message.subject == f"Your Finvest statement, {PERIOD.label}"
+    assert message.idempotency_key == f"document:{asked.id}"
+    (attached,) = message.attachments
+    assert (attached.file_name, attached.content) == (stored.file_name, stored.content)
+    # The email carries no figures: they are in the PDF.
+    assert "UGX" not in message.text and "UGX" not in message.html
+    assert await emails_of(worker_database, asked.id) == [("sent", None)]
+    # Run again: nothing more is sent.
+    assert await run_jobs(worker_database, email=email) == 0
+    assert len(email.sent) == 1
+
+
+async def test_a_client_with_no_email_address_is_recorded_as_skipped(
+    app_database: Database, worker_database: Database
+) -> None:
+    client = await approved_client(app_database, LATER)
+    asked = await ask(app_database, client)
+    email = FakeEmail()
+    await run_jobs(worker_database, email=email)
+    assert email.sent == []
+    assert await emails_of(worker_database, asked.id) == [("skipped", "no_email")]
+
+
+async def test_a_deferred_email_waits_and_a_refused_one_is_recorded(
+    http: tuple[httpx.AsyncClient, IdentityService],
+    app_database: Database,
+    worker_database: Database,
+) -> None:
+    _, identity = http
+    client = await client_with_email(identity, app_database)
+    asked = await ask(app_database, client)
+    await run_jobs(worker_database, email=FakeEmail(EmailDeferred("Resend is unreachable")))
+    assert await emails_of(worker_database, asked.id) == [("queued", None)]
+    # The retry comes later, and Resend refuses it this time.
+    later = FakeClock(LATER.now() + timedelta(minutes=5))
+    await run_jobs(worker_database, later, email=FakeEmail(EmailRejected("Resend rejected it")))
+    assert await emails_of(worker_database, asked.id) == [("failed", "email_rejected")]
+
+
+async def test_only_a_ready_document_is_queued_for_email_and_a_sent_one_never_changes(
+    app_database: Database, worker_database: Database
+) -> None:
+    client = await approved_client(app_database, LATER)
+    pending = await ask(app_database, client)
+    with pytest.raises(DBAPIError, match="only a ready document"):
+        async with worker_database.actor_transaction(SYSTEM) as session:
+            await session.execute(
+                text(
+                    "INSERT INTO document_emails (document_id, client_id, queued_at) "
+                    "VALUES (:id, :client, now())"
+                ),
+                {"id": pending.id, "client": client.id},
+            )
+    await run_jobs(worker_database)
+    assert await emails_of(worker_database, pending.id) == [("skipped", "no_email")]
+    with pytest.raises(DBAPIError, match="never changes"):
+        async with worker_database.actor_transaction(SYSTEM) as session:
+            await session.execute(
+                text("UPDATE document_emails SET status = 'queued' WHERE document_id = :id"),
+                {"id": pending.id},
+            )
+    for database in (app_database, worker_database):
+        with pytest.raises(DBAPIError, match="permission denied"):
+            async with database.actor_transaction(SYSTEM) as session:
+                await session.execute(
+                    text("DELETE FROM document_emails WHERE document_id = :id"),
+                    {"id": pending.id},
+                )
+
+
+async def test_a_confirmed_payment_gets_a_receipt_that_is_built_and_emailed(
+    http: tuple[httpx.AsyncClient, IdentityService],
+    app_database: Database,
+    worker_database: Database,
+) -> None:
+    _, identity = http
+    client = await client_with_email(identity, app_database)
+    deposit_id, _ = await confirmed_bank_transfer(app_database, worker_database, client)
+    async with worker_database.actor_transaction(SYSTEM) as session:
+        # As the outbox delivers `payments.deposit_confirmed` to this consumer. Twice.
+        for _ in range(2):
+            await enqueue(
+                session,
+                JobRequest(
+                    kind=RECEIPT_KIND,
+                    idempotency_key=f"receipt-test:{deposit_id}",
+                    payload={"data": {"deposit_id": deposit_id}},
+                    queue=service.QUEUE,
+                ),
+                now=LATER.now(),
+            )
+    email = FakeEmail()
+    await run_jobs(worker_database, email=email)
+    async with app_database.actor_transaction(client) as session:
+        (receipt,) = await service.client_documents(session, client)
+    assert (receipt.kind, receipt.status, receipt.source_id) == (
+        DocumentKind.RECEIPT,
+        DocumentStatus.READY,
+        deposit_id,
+    )
+    (message,) = email.sent
+    assert message.subject.startswith("Receipt: we received UGX ")
+    assert [file.file_name for file in message.attachments] == [receipt.file_name]

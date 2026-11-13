@@ -1,19 +1,31 @@
-"""The worker's side of documents: build each statement or receipt once, and start the monthly run.
+"""The worker's side of documents: build each statement or receipt once, email it, ask for
+a receipt when a payment is confirmed, and start the monthly run.
 
-No handler here calls a provider. Each reads the ledger, draws the PDF and stores it in the
-single fenced transaction that also completes the job, so a job run twice builds nothing the
-second time. Payloads and logs carry document IDs and codes only, never a name or a figure.
+Building reads the ledger, draws the PDF and stores it in the single fenced transaction that
+also completes the job, so a job run twice builds nothing the second time. That transaction
+also queues the document's email. Only the email job calls a provider, Resend, and it does so
+with no transaction open. Payloads and logs carry document IDs and codes only, never a name,
+an address or a figure.
 """
 
 import hashlib
 from collections.abc import Awaitable, Callable, Mapping
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 
 import structlog
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.infrastructure.database import Database
+from app.infrastructure.email import (
+    Attachment,
+    DisabledTransport,
+    EmailDeferred,
+    EmailMessage,
+    EmailRejected,
+    EmailTransport,
+    InvalidEmail,
+)
 from app.infrastructure.jobs import (
     ClaimedJob,
     Handler,
@@ -23,8 +35,10 @@ from app.infrastructure.jobs import (
     PermanentJobError,
     RetryableJobError,
     enqueue,
+    external_effect,
 )
 from app.modules.documents import building, pdf, service
+from app.modules.documents.domain.emails import Rendered, receipt_email, statement_email
 from app.modules.documents.domain.statements import (
     Period,
     StatementDoesNotAddUp,
@@ -33,10 +47,14 @@ from app.modules.documents.domain.statements import (
     not_final_from,
     previous_month,
 )
-from app.modules.documents.service import DocumentKind, DocumentStatus, DocumentView
+from app.modules.documents.events import RECEIPT_KIND
+from app.modules.documents.service import DocumentFile, DocumentKind, DocumentStatus, DocumentView
+from app.modules.identity import service as identity
 from app.modules.ledger import closing
 from app.modules.ledger import statements as ledger
 from app.modules.notifications import contract as notifications
+from app.modules.payments import service as payments
+from app.shared.actors import SYSTEM
 from app.shared.business_day import business_date
 from app.shared.clock import Clock
 from app.shared.errors import ApplicationError
@@ -50,6 +68,20 @@ _FINISH = text(
     "byte_size = :byte_size, not_final_from = :not_final_from "
     "WHERE id = :id AND status = 'pending'"
 )
+
+
+_QUEUE_EMAIL = text(
+    "INSERT INTO document_emails (document_id, client_id, queued_at) "
+    "VALUES (:id, :client_id, :now) ON CONFLICT (document_id) DO NOTHING"
+)
+_EMAIL_STATUS = text("SELECT status FROM document_emails WHERE document_id = :id")
+_EMAIL_DONE = text(
+    "UPDATE document_emails SET status = :status, failure_code = :failure_code, "
+    "provider = :provider, provider_message_id = :message_id, finished_at = :now "
+    "WHERE document_id = :id AND status = 'queued'"
+)
+# Resend drops a repeat of a key for 24 hours, so a send is retried only within that time.
+EMAIL_MAX_AGE = timedelta(hours=20)
 
 
 def statement_reference(document_id: str) -> str:
@@ -76,16 +108,29 @@ ClosedThrough = Callable[[AsyncSession], Awaitable[date | None]]
 
 class DocumentJobs:
     def __init__(
-        self, database: Database, clock: Clock, *, closed_through: ClosedThrough | None = None
+        self,
+        database: Database,
+        clock: Clock,
+        *,
+        email: EmailTransport | None = None,
+        closed_through: ClosedThrough | None = None,
     ) -> None:
         self._database = database
         self._clock = clock
+        self._email = email or DisabledTransport()
         # The last day the ledger is closed through. Tests pass their own, because closing a
         # day is one fact for the whole shared test database and is never undone.
         self._closed_through = closed_through or closing.closed_through
 
     def handlers(self) -> dict[str, JobHandler | Handler]:
-        return {service.BUILD_KIND: self.build, service.MONTHLY_KIND: self.monthly_run}
+        return {
+            service.BUILD_KIND: self.build,
+            service.MONTHLY_KIND: self.monthly_run,
+            RECEIPT_KIND: self.receipt_from_deposit,
+            # Sending reaches Resend. Its idempotency key makes a lost answer safe to repeat,
+            # and a crash mid-send stops the job instead of sending blind.
+            service.EMAIL_KIND: external_effect(self.send_email),
+        }
 
     async def build(self, job: ClaimedJob, context: JobContext) -> None:
         document_id = job.payload.get("document_id")
@@ -123,6 +168,8 @@ class DocumentJobs:
                     link=notifications.Link("statement", view.id),
                     now=self._clock.now(),
                 )
+            if status is DocumentStatus.READY:
+                await _queue_email(session, view, self._clock.now())
             return {"status": status.value}
 
         result = await context.apply(effect)
@@ -273,3 +320,150 @@ class DocumentJobs:
 
         result = await context.apply(effect)
         logger.info("monthly_statements_asked", month=label, count=result.get("asked"))
+
+    async def receipt_from_deposit(self, job: ClaimedJob, context: JobContext) -> None:
+        """A payment was confirmed: ask for its receipt, which is built and emailed next."""
+        data = job.payload.get("data")
+        data = data if isinstance(data, Mapping) else {}
+        deposit_id = data.get("deposit_id")
+        if not isinstance(deposit_id, str):
+            raise PermanentJobError(code="deposit_id_missing")
+
+        async def effect(session: AsyncSession) -> Mapping[str, object]:
+            deposit = await payments.get_deposit(session, deposit_id)
+            view = await service.ask(
+                session,
+                client_id=deposit.client_id,
+                kind=DocumentKind.RECEIPT,
+                key=deposit_id,
+                source_id=deposit_id,
+                now=self._clock.now(),
+            )
+            return {"document_id": view.id}
+
+        result = await context.apply(effect)
+        logger.info("receipt_asked", document_id=result.get("document_id"))
+
+    async def send_email(self, job: ClaimedJob, context: JobContext) -> None:
+        """Email a ready document to its client, with the PDF attached.
+
+        The address is looked up now, from identity. A client with none, or who has closed
+        their account, is recorded as `skipped`. Nothing is sent while a transaction is open.
+        """
+        document_id = job.payload.get("document_id")
+        if not isinstance(document_id, str):
+            raise PermanentJobError(code="document_id_missing")
+        async with self._database.actor_transaction(SYSTEM) as session:
+            status = (await session.execute(_EMAIL_STATUS, {"id": document_id})).scalar()
+            view = await service.get_document(session, document_id)
+            file = await service.document_file(session, document_id)
+            if status is None or view is None or file is None:
+                raise PermanentJobError(code="document_email_missing")
+            if status != "queued":
+                rendered, address = None, None
+            else:
+                contact = await identity.client_contact(session, view.client_id)
+                address = contact.email if contact is not None else None
+                rendered = await _render(session, view, file) if address else None
+
+        if status != "queued":
+            # Finished by an earlier attempt whose result was saved.
+            await context.apply(_nothing)
+            return
+        if address is None or rendered is None:
+            await context.apply(self._finish(document_id, "skipped", failure_code="no_email"))
+            logger.info("document_email_skipped", document_id=document_id, error_code="no_email")
+            return
+        try:
+            message = EmailMessage(
+                to=address,
+                subject=rendered.subject,
+                html=rendered.html,
+                text=rendered.text,
+                idempotency_key=f"document:{document_id}",
+                tags={"template": view.kind.value},
+                attachments=(Attachment(file.file_name, file.content),),
+            )
+            sent = await self._email.send(message)
+        except EmailDeferred as error:
+            raise RetryableJobError(error.safe_message, code=error.code) from None
+        except (InvalidEmail, EmailRejected) as error:
+            code = getattr(error, "code", "email_invalid")
+            await context.apply(self._finish(document_id, "failed", failure_code=code))
+            logger.warning("document_email_refused", document_id=document_id, error_code=code)
+            return
+        await context.apply(
+            self._finish(
+                document_id,
+                "sent",
+                provider=sent.provider,
+                message_id=sent.provider_message_id,
+            )
+        )
+        logger.info("document_emailed", document_id=document_id, kind=view.kind.value)
+
+    def _finish(
+        self,
+        document_id: str,
+        status: str,
+        *,
+        failure_code: str | None = None,
+        provider: str | None = None,
+        message_id: str | None = None,
+    ) -> Callable[[AsyncSession], Awaitable[Mapping[str, object]]]:
+        async def effect(session: AsyncSession) -> Mapping[str, object]:
+            await session.execute(
+                _EMAIL_DONE,
+                {
+                    "id": document_id,
+                    "status": status,
+                    "failure_code": failure_code,
+                    "provider": provider,
+                    "message_id": message_id,
+                    "now": self._clock.now(),
+                },
+            )
+            return {"status": status}
+
+        return effect
+
+
+async def _queue_email(session: AsyncSession, view: DocumentView, now: datetime) -> None:
+    await session.execute(_QUEUE_EMAIL, {"id": view.id, "client_id": view.client_id, "now": now})
+    await enqueue(
+        session,
+        JobRequest(
+            kind=service.EMAIL_KIND,
+            idempotency_key=f"document-email:{view.id}",
+            payload={"document_id": view.id},
+            queue=service.QUEUE,
+            max_age=EMAIL_MAX_AGE,
+        ),
+        now=now,
+    )
+
+
+async def _render(session: AsyncSession, view: DocumentView, file: DocumentFile) -> Rendered:
+    holder = await building.holder(session, view.client_id)
+    if view.kind is DocumentKind.RECEIPT:
+        assert view.source_id is not None
+        receipt, _ = await building.receipt(
+            session, deposit_id=view.source_id, reference=receipt_reference(view.id)
+        )
+        return receipt_email(
+            first_name=holder.first_name, receipt=receipt, file_name=file.file_name
+        )
+    assert view.period is not None
+    monthly = view.kind is DocumentKind.MONTHLY_STATEMENT
+    return statement_email(
+        kind=StatementKind.MONTHLY if monthly else StatementKind.REQUESTED,
+        first_name=holder.first_name,
+        period=view.period,
+        account_number=holder.account_number,
+        file_name=file.file_name,
+        requested_at=None if monthly else view.requested_at,
+    )
+
+
+async def _nothing(session: AsyncSession) -> Mapping[str, object]:
+    return {}

@@ -12,6 +12,7 @@ repeat with the same key. That is why there is no uncertain outcome here.
 Error messages are safe to store: they never contain addresses, content or credentials.
 """
 
+import base64
 import re
 from collections.abc import Mapping
 from dataclasses import dataclass
@@ -108,6 +109,15 @@ class ResendTransport:
             raise InvalidEmail("A message has too many tags")
         if tags:
             body["tags"] = [{"name": k, "value": v} for k, v in tags.items()]
+        if message.attachments:
+            body["attachments"] = [
+                {
+                    "filename": file.file_name,
+                    "content": base64.b64encode(file.content).decode("ascii"),
+                    "content_type": file.content_type,
+                }
+                for file in message.attachments
+            ]
         return body
 
     async def send(self, message: EmailMessage) -> SendResult:

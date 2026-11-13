@@ -23,6 +23,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.infrastructure.idempotency import Receipt, run_once
 from app.infrastructure.jobs import JobRequest, enqueue, publish
+from app.modules.documents.events import RECEIPT_ON_DEPOSIT
 from app.modules.investments.events import START_ON_DEPOSIT
 from app.modules.ledger import service as ledger
 from app.modules.ledger.domain.entries import AccountKind, AccountSpec, EntryDraft, credit, debit
@@ -483,7 +484,8 @@ async def apply_move(
     )
     await record_event(session, deposit.id, deposit.status, move.status, move.code, cause, now)
     if move.status is DepositStatus.CONFIRMED:
-        # Investments and goals start from this event. It is published once per deposit.
+        # Investments and goals start from this event, and the client's receipt is asked for.
+        # It is published once per deposit.
         await publish(
             session,
             topic=CONFIRMED_TOPIC,
@@ -495,7 +497,7 @@ async def apply_move(
                 # The business day of the ledger entry. An investment earns from this day.
                 "confirmed_on": business_date(now).isoformat(),
             },
-            consumers=[START_ON_DEPOSIT],
+            consumers=[START_ON_DEPOSIT, RECEIPT_ON_DEPOSIT],
             now=now,
         )
     logger.info(

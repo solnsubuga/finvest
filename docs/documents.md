@@ -4,7 +4,7 @@ What Finvest sends a client in writing about their money: a statement after ever
 
 The code is `backend/app/modules/documents`. Tax certificates and transaction notes will join this module later.
 
-**Status:** statements are asked for, built from the ledger, stored and downloadable, and the monthly run asks for every client's. **Nothing is emailed yet**: sending with the PDF attached, receipts for confirmed payments and the app screen arrive in their own pull requests. The table is migration `0140_documents`.
+**Status:** statements are asked for, built from the ledger, stored, downloadable and emailed with the PDF attached, and the monthly run asks for every client's. Every confirmed payment gets a receipt, built and emailed the same way. The app's Documents screen arrives in its own pull request. The tables are migrations `0140_documents` and `0141_document_emails`.
 
 The designs are in `/mnt/project-files/screenshots/statements/` in the project folder: the statement PDF, the receipt PDF, the three emails at phone and wide sizes, and the app's Documents screen in every state.
 
@@ -59,13 +59,14 @@ A document is asked for first and built later, so no request waits on the ledger
 | --- | --- | --- |
 | The client, in the app | `requested_statement` | The client's `Idempotency-Key` |
 | The monthly run, for every client with a ledger account | `monthly_statement` | The month, `2026-10` |
-| A confirmed payment (next pull request) | `receipt` | The deposit ID, also unique on its own |
+| A confirmed payment, through the `documents.receipt_from_deposit` consumer of `payments.deposit_confirmed` | `receipt` | The deposit ID, also unique on its own |
 
 1. **Ask.** `service.ask` writes a `pending` row and queues `documents.build` naming only the document's ID, in the same transaction. Asking again with the same key writes nothing and returns the first row, so two taps or a retried run ask once.
 2. **Build.** The worker reads the ledger and the names it needs, checks the figures add up, draws the PDF and stores it in the row as `ready`, all in the one fenced transaction that completes the job. A monthly statement with nothing in it becomes `empty` and is never shown or sent. A statement that does not add up becomes `failed` with `does_not_add_up` and is logged as an error for staff. A client with no approved account fails with `not_approved`.
 
    **Only closed days are final.** A statement is a record the client keeps, so its figures must not change after it is issued. The ledger is closed through a day once that day is reconciled and signed off ([ledger.md](ledger.md)), and nothing can be dated on or before it after that. A monthly statement is built only over closed days: if its month is not closed, the build comes back later and the row stays `pending`. A requested statement may reach days that are not closed yet, because a client asking today wants today. It is built anyway, its row records `not_final_from` (the first day that is not closed), and the PDF says in one line under the heading that figures from that day on may still change.
 3. **Tell.** A ready statement raises `statement_ready` in the notification centre, keyed by the document ID and linked to it.
+4. **Email.** The same transaction writes a `queued` row in `document_emails` and queues `documents.email`, naming only the document's ID. The worker looks up the client's address from identity (`client_contact`) when it sends, so the address is never stored with the document, and a client who changed it gets the email at the new one. It reads the PDF and renders the email in a read-only transaction, then sends through Resend with no transaction open, with the idempotency key `document:<id>` and the PDF attached. The result is recorded once: `sent` with Resend's message ID, `skipped` with `no_email` for a client with no address or whose account is closed, or `failed` with the code Resend's refusal gave. A send Resend deferred is retried, for up to 20 hours, inside the 24 hours Resend drops a repeated key. A crash in the middle of a send stops the job instead of sending again.
 
 **The monthly run** is the schedule `documents.monthly_statements`, at 06:00 in Kampala every day. It looks at the calendar month before, and the one before that in case the ledger closed both at once. It asks for a month only once the ledger is closed through the month's last day, and only once: a late interest posting, a deposit confirmed by reconciliation or a correction dated in the month is in the statement, because none can arrive after the close. Until the month is closed the morning's run asks for nothing, and from the 6th it logs `monthly_statements_waiting` with `ledger_not_closed` as an error each day, so staff see that statements are held up. Once a month is closed the run asks for each client with a ledger account, 200 at a time, and each page queues the next, so a run of any size finishes and a client is asked once.
 
@@ -95,6 +96,7 @@ The other modules only give names: the product of an investment, how a payment w
 | Shape | A statement has a period of at most 366 days and no deposit. A receipt has a deposit and no period, and a deposit has one receipt. Only a monthly statement can be `empty`. Only a ready requested statement can have a `not_final_from`, and it falls inside its period. |
 | Clients are fenced | A client reads only their own rows and may only ask for a `requested_statement` of their own. Staff read any. |
 | Nothing is deleted | No role holds DELETE, and a trigger refuses TRUNCATE. A downgrade refuses while any row exists. |
+| Emailed once | Only the worker writes `document_emails`, only for a ready document and its own client. A finished email never changes. Clients read only their own rows. |
 
 The PDF is kept in the row. A statement is a few tens of kilobytes, and keeping it beside its record means it is backed up, fenced and kept exactly like the record.
 

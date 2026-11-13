@@ -43,7 +43,7 @@ def handlers(
         SWEEP_UNANSWERED: sweep_unanswered(clock),
         **InvestmentJobs(database, clock).handlers(),
         **AutoinvestJobs(database, clock).handlers(),
-        **DocumentJobs(database, clock).handlers(),
+        **DocumentJobs(database, clock, email=EmailSettings().transport()).handlers(),
     }
     identity = KycSettings()
     if identity.identity_provider != "manual":
