@@ -1,3 +1,4 @@
+import { createApiSupportClient } from "./apiSupportClient";
 import { SupportClient, SupportError } from "./types";
 
 type StubModule = typeof import("./stubSupportClient");
@@ -5,15 +6,15 @@ type StubModule = typeof import("./stubSupportClient");
 /**
  * The in-memory demo shows notifications and replies that nobody sent, so it
  * must never be what a real client reaches. It follows the demo sign-in:
- * loaded in development, and in a production build only when
- * EXPO_PUBLIC_DEMO_AUTH=1 was set on purpose at build time.
+ * loaded in tests, and in a build only when EXPO_PUBLIC_DEMO_AUTH=1 was set on
+ * purpose at build time.
  *
  * The condition is written inline, and the stub is required inside it, so the
  * bundler can see it is false in a normal production build and leave the stub
  * out of the bundle altogether. CI checks that it did.
  */
 function loadStub(): StubModule | null {
-  if (__DEV__ || process.env.EXPO_PUBLIC_DEMO_AUTH === "1") {
+  if (process.env.EXPO_PUBLIC_DEMO_AUTH === "1" || process.env.NODE_ENV === "test") {
     // eslint-disable-next-line @typescript-eslint/no-require-imports
     return require("./stubSupportClient") as StubModule;
   }
@@ -21,8 +22,9 @@ function loadStub(): StubModule | null {
 }
 
 /**
- * Chooses what the screens talk to for one signed-in account. Without the
- * stub, every call says Finvest cannot be reached.
+ * Chooses what the screens talk to for one signed-in account: the demo when it
+ * is switched on, otherwise the API. Signed out, every call says Finvest cannot
+ * be reached.
  *
  * In the demo each account gets its own memory, so signing in as someone else
  * never shows the last person's chat. The two demo accounts start with the
@@ -32,8 +34,11 @@ export function resolveSupportClient(
   account: string | null,
   stub: StubModule | null = loadStub(),
 ): SupportClient {
-  if (!stub || !account) {
+  if (!account) {
     return unavailableSupportClient;
+  }
+  if (!stub) {
+    return createApiSupportClient();
   }
   return stub.createStubSupportClient({ empty: !stub.SEEDED_ACCOUNTS.includes(account) });
 }
