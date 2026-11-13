@@ -29,10 +29,28 @@ The name on the proof is compared with the name on the client's ID. Case, accent
 | Result | Meaning | Can staff approve? |
 | --- | --- | --- |
 | Exact | The same names | Yes |
-| Partial | One has a name the other lacks, and at least two names agree | Yes, if they judge it is the same person |
+| Partial | One has a name the other lacks and at least two names agree, or one name is spelt slightly differently (Mohammed and Muhammad) and every other name agrees | Yes, if they judge it is the same person |
 | Different | Anything else | Never |
 
-The comparison is a hint for the staff member. It never approves a destination by itself.
+The comparison is made on the server from the ID name and the name the staff member read on the proof. It is never taken from the request, and it never approves a destination by itself. A different name is refused outright, for a bank account and for a mobile money number alike. No member of staff and no pair of staff can override it.
+
+### What the database enforces
+
+Migration 0030 adds `payout_destinations`. These hold even if application code is wrong.
+
+| Rule | How |
+| --- | --- |
+| Who may take which step | A trigger allows a client transaction only the client's steps, a staff transaction only approve, reject and remove, and the worker only the note of the first payout |
+| A client cannot approve their own destination | The same trigger, and an insert policy that admits only a new row at the first step |
+| A different name is never approved | An approved row must carry an exact or partial match, the staff member who checked it, and the approval time |
+| A check is signed by who made it | `checked_by` must be the staff member of the transaction |
+| The account never changes | Owner, kind, number and holder name are fixed at creation |
+| Nothing is deleted, and removed is final | Triggers refuse DELETE and TRUNCATE for every role, and any change to a removed row |
+| Clients are fenced | Row policies show a client only their own destinations |
+
+Every step writes an audit event in the same transaction. Account numbers never enter the audit trail.
+
+Two things belong to other modules and are passed in by the caller: the SMS code is checked by the identity module before the code step, and the ID name comes from the clients module.
 
 ### When a destination can be paid
 

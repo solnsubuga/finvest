@@ -31,6 +31,7 @@ A running log. Add a row when a decision is made, and move an open question up w
 | 2026-11-13 | APScheduler keeps time for the scheduler process and nothing else. It only says when a schedule is due. PostgreSQL owns the leadership lease and each scheduled run, unique by name and fire time, and APScheduler's own job stores are not used. This adds no Celery or Redis. |
 | 2026-11-13 | Brand is black and lime with Plus Jakarta Sans. See [design.md](design.md). |
 | 2026-11-13 | All work reaches `main` through pull requests. UI work includes screenshots. Commits on `main` carry no AI attribution. |
+| 2026-11-13 | A payout account whose name differs from the client's ID is never approved, not even by two staff. The same holds for a mobile money number: a different registered name is refused outright. |
 
 ## Open
 
@@ -49,6 +50,6 @@ A running log. Add a row when a decision is made, and move an open question up w
 | Payouts: is the UGX 5,000,000 mobile money limit per payout (built so far) or per day? Are there daily limits, bank limits, or an amount above which staff must approve a withdrawal? | Owner |
 | Payouts: does the 24 hour wait on a new destination run from the staff approval (built so far) or from when the client added it? | Owner |
 | Payouts: is a mobile money number proved by the name the network holds for it (built so far), and can ioTec return that name? | Owner, ioTec |
-| Payouts: may staff approve a destination when the proof lacks a middle name that is on the ID (built so far: yes, if two names agree)? | Owner |
+| Payouts: staff may approve a partial name match, meaning a missing middle name when two names agree, or one name spelt slightly differently when the rest agree (built so far). Confirm. | Owner |
 | Payouts: mobile money prefixes accepted are MTN 76, 77, 78, 39 and Airtel 70, 74, 75, 20. Confirm the list. | Owner, ioTec |
 | Payouts: a client can cancel a withdrawal only while it is held for review (built so far). Should they be able to cancel before it is sent? | Owner |
