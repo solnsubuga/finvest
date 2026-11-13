@@ -1,7 +1,8 @@
 import { addDemoPayable } from "@/payments/stubPaymentsClient";
 import { Money } from "@/payments/types";
 
-import { addMonths, bestPlan, daysBetween, DEMO_PRODUCTS, DemoProduct, netInterest } from "./plan";
+import { addMonths, daysBetween } from "./dates";
+import { bestPlan, DEMO_PRODUCTS, DemoProduct, netInterest } from "./plan";
 import {
   Goal,
   GoalDetails,
@@ -263,7 +264,7 @@ export function createStubGoalsClient(options: StubOptions = {}): GoalsClient {
       const known = byKey.get(idempotencyKey);
       if (known) {
         if (known.body !== body) {
-          throw new GoalError("invalid");
+          throw new GoalError("key_reused");
         }
         return view(own(known.id));
       }
@@ -314,7 +315,7 @@ export function createStubGoalsClient(options: StubOptions = {}): GoalsClient {
       const known = byKey.get(idempotencyKey);
       if (known) {
         if (known.body !== body) {
-          throw new GoalError("invalid");
+          throw new GoalError("key_reused");
         }
         const found = goal.savings.find((s) => s.investmentId === known.id);
         if (found) {

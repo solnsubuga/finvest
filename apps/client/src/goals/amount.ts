@@ -19,7 +19,7 @@ export function groupDigits(text: string): string {
   return digits.replace(/\B(?=(\d{3})+(?!\d))/g, ",");
 }
 
-/** "2026-11-13" in Kampala, for a date `months` from today on the same day, the 28th at most. */
+/** Today's date in Kampala, three hours ahead of UTC, as "2026-11-13". */
 export function kampalaToday(now: number = Date.now()): string {
   return new Date(now + 3 * 60 * 60 * 1000).toISOString().slice(0, 10);
 }

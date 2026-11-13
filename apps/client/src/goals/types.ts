@@ -96,6 +96,7 @@ export type GoalErrorCode =
   | "sooner_than_every_term"
   | "below_minimum"
   | "invalid"
+  | "key_reused"
   | "unavailable";
 
 export class GoalError extends Error {
@@ -127,8 +128,14 @@ const errorCopy: Record<GoalErrorCode, string> = {
     "That date is too soon. Your money is invested in Treasury bills, and the shortest one takes 91 days.",
   below_minimum: "Each saving must be at least the product's minimum.",
   invalid: "Something in this goal is not right. Check it and try again.",
+  key_reused: "This was already sent with other details. Go back and start again.",
   unavailable: "Goals are not available right now. Try again in a moment.",
 };
+
+/** A refusal means nothing was made. Anything else may have reached us before the answer was lost. */
+export function outcomeUnknown(error: unknown): boolean {
+  return !(error instanceof GoalError) || error.code === "unavailable";
+}
 
 export function describeGoalError(error: unknown): string {
   return error instanceof GoalError ? errorCopy[error.code] : errorCopy.unavailable;

@@ -11,7 +11,7 @@ import { Title, Txt } from "@/components/Txt";
 import { groupDigits, kampalaToday, monthYear, parseShillings } from "@/goals/amount";
 import { useGoals } from "@/goals/GoalsProvider";
 import { PlanCard, PlanProductNote } from "@/goals/Parts";
-import { addMonths } from "@/goals/plan";
+import { addMonths } from "@/goals/dates";
 import { describeGoalError, Plan } from "@/goals/types";
 import { Loading } from "@/payments/Parts";
 import { colors } from "@/theme";

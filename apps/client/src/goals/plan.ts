@@ -9,6 +9,7 @@
 
 import { Money } from "@/payments/types";
 
+import { addMonths, daysBetween } from "./dates";
 import { Plan } from "./types";
 
 /** A demo product with its rate before tax, which only this arithmetic ever sees. */
@@ -45,28 +46,6 @@ export const DEMO_PRODUCTS: DemoProduct[] = [
 
 const STEP = 1_000;
 const MAX_SAVINGS = 120;
-const DAY_MS = 86_400_000;
-
-function toUtc(day: string): number {
-  const [y, m, d] = day.split("-").map(Number);
-  return Date.UTC(y ?? 1970, (m ?? 1) - 1, d ?? 1);
-}
-
-function iso(ms: number): string {
-  return new Date(ms).toISOString().slice(0, 10);
-}
-
-export function daysBetween(from: string, to: string): number {
-  return Math.round((toUtc(to) - toUtc(from)) / DAY_MS);
-}
-
-/** The same day of the month `months` later, on the 28th at the latest. */
-export function addMonths(day: string, months: number): string {
-  const [y, m, d] = day.split("-").map(Number);
-  const index = (m ?? 1) - 1 + months;
-  return iso(Date.UTC((y ?? 1970) + Math.floor(index / 12), index % 12, Math.min(d ?? 1, 28)));
-}
-
 /** Interest after tax on `principal` for `days` days. Rounded down twice, as the backend does. */
 export function netInterest(principal: number, product: DemoProduct, days: number): number {
   const gross =

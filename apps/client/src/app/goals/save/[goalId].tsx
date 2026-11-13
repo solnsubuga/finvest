@@ -10,7 +10,7 @@ import { Screen } from "@/components/Screen";
 import { Title, Txt } from "@/components/Txt";
 import { groupDigits, parseShillings } from "@/goals/amount";
 import { useGoals } from "@/goals/GoalsProvider";
-import { describeGoalError, Goal, GoalError } from "@/goals/types";
+import { describeGoalError, Goal, GoalError, outcomeUnknown } from "@/goals/types";
 import { formatMoney } from "@/payments/format";
 import { newIdempotencyKey } from "@/payments/idempotency";
 import { Loading } from "@/payments/Parts";
@@ -30,6 +30,9 @@ export default function SaveToGoal() {
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [idempotencyKey] = useState(newIdempotencyKey);
+  // After a try whose answer was lost the saving may already exist. A retry must be the same
+  // saving under the same key, so the amount can no longer change.
+  const [locked, setLocked] = useState(false);
 
   useEffect(() => {
     let live = true;
@@ -65,6 +68,9 @@ export default function SaveToGoal() {
         setFieldError(describeGoalError(caught));
       } else {
         setError(describeGoalError(caught));
+      }
+      if (outcomeUnknown(caught)) {
+        setLocked(true);
       }
       setBusy(false);
     }
@@ -109,6 +115,7 @@ export default function SaveToGoal() {
             keyboardType="number-pad"
             inputMode="numeric"
             error={fieldError}
+            editable={!locked}
             testID="save-amount"
           />
           <Notice tone="neutral">
@@ -116,6 +123,12 @@ export default function SaveToGoal() {
             and rolls over when it matures.
           </Notice>
           {error ? <Notice tone="danger">{error}</Notice> : null}
+          {locked ? (
+            <Notice tone="warning">
+              Your saving may already have reached us, so its amount is fixed. Pressing Continue to pay
+              again sends the same saving. It never makes two.
+            </Notice>
+          ) : null}
         </View>
       )}
     </Screen>

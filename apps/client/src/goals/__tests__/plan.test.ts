@@ -1,4 +1,5 @@
-import { addMonths, bestPlan, daysBetween, DEMO_PRODUCTS, netInterest } from "@/goals/plan";
+import { addMonths, daysBetween } from "@/goals/dates";
+import { bestPlan, DEMO_PRODUCTS, netInterest } from "@/goals/plan";
 
 const BILL_91 = DEMO_PRODUCTS[0]!;
 

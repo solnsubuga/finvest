@@ -10,7 +10,7 @@ import { Screen } from "@/components/Screen";
 import { Title, Txt } from "@/components/Txt";
 import { groupDigits, parseShillings } from "@/goals/amount";
 import { useGoals } from "@/goals/GoalsProvider";
-import { categoryCopy, describeGoalError, GoalCategory, GoalError } from "@/goals/types";
+import { categoryCopy, describeGoalError, GoalCategory, GoalError, outcomeUnknown } from "@/goals/types";
 import { formatDay, formatMoney } from "@/payments/format";
 import { DetailList } from "@/payments/Parts";
 import { newIdempotencyKey } from "@/payments/idempotency";
@@ -35,7 +35,8 @@ export default function StartGoal() {
     targetDate: string;
     saving: string;
   }>();
-  const target = Number(params.target);
+  // The target comes from the address, which can be edited by hand.
+  const target = /^\d{1,13}$/.test(params.target ?? "") ? Number(params.target) : 0;
   const targetDate = params.targetDate ? params.targetDate : null;
   const suggested = Math.max(Number(params.saving) || MINIMUM, MINIMUM);
   const [amount, setAmount] = useState(groupDigits(String(suggested)));
@@ -44,17 +45,25 @@ export default function StartGoal() {
   const [fieldError, setFieldError] = useState<string | null>(null);
   const [goalKey] = useState(newIdempotencyKey);
   const [savingKey] = useState(newIdempotencyKey);
+  // After a saving whose answer was lost it may already exist. A retry must be the same saving
+  // under the same key, so the amount can no longer change.
+  const [locked, setLocked] = useState(false);
   const category = (params.category ?? "other") as GoalCategory;
 
   const create = async (saveNow: boolean) => {
     setError(null);
     setFieldError(null);
+    if (target <= 0) {
+      setError(describeGoalError(new GoalError("invalid")));
+      return;
+    }
     const first = parseShillings(amount);
     if (saveNow && (!first || first < MINIMUM)) {
       setFieldError(`Each saving is at least ${formatMoney({ currency: "UGX", minor: MINIMUM })}.`);
       return;
     }
     setBusy(saveNow ? "now" : "later");
+    let savingSent = false;
     try {
       const goal = await client.createGoal(
         {
@@ -66,6 +75,7 @@ export default function StartGoal() {
         goalKey,
       );
       if (saveNow && first) {
+        savingSent = true;
         const saving = await client.saveToGoal(goal.id, { currency: "UGX", minor: first }, savingKey);
         // Replace, so Back from paying lands on the goal and not on this form.
         router.replace(`/goals/${goal.id}`);
@@ -78,6 +88,9 @@ export default function StartGoal() {
         setFieldError(describeGoalError(caught));
       } else {
         setError(describeGoalError(caught));
+      }
+      if (savingSent && outcomeUnknown(caught)) {
+        setLocked(true);
       }
       setBusy(null);
     }
@@ -127,6 +140,7 @@ export default function StartGoal() {
           keyboardType="number-pad"
           inputMode="numeric"
           error={fieldError}
+          editable={!locked}
           testID="first-saving"
         />
         <Notice tone="neutral">
@@ -134,6 +148,12 @@ export default function StartGoal() {
           nothing is taken and you can try again.
         </Notice>
         {error ? <Notice tone="danger">{error}</Notice> : null}
+        {locked ? (
+          <Notice tone="warning">
+            Your goal is set up and its first saving may already have reached us, so the amount is
+            fixed. Pressing Create goal and pay again sends the same saving. It never makes two.
+          </Notice>
+        ) : null}
       </View>
     </Screen>
   );

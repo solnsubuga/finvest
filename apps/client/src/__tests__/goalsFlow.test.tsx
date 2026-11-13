@@ -13,16 +13,31 @@ jest.mock("@/payments/stubPaymentsClient", () => {
   return { ...actual, createStubPaymentsClient: () => actual.createStubPaymentsClient({ delayMs: 0 }) };
 });
 
+// When set, the next saving is made but its answer is lost on the way back.
+let mockLoseNextSavingAnswer = false;
+
 jest.mock("@/goals/stubGoalsClient", () => {
   const actual = jest.requireActual("@/goals/stubGoalsClient");
   return {
     ...actual,
-    createStubGoalsClient: (options: object) =>
-      actual.createStubGoalsClient({
+    createStubGoalsClient: (options: object) => {
+      const client = actual.createStubGoalsClient({
         ...options,
         delayMs: 0,
         now: () => Date.parse("2026-11-13T09:00:00Z"),
-      }),
+      });
+      return {
+        ...client,
+        async saveToGoal(...args: unknown[]) {
+          const saving = await client.saveToGoal(...args);
+          if (mockLoseNextSavingAnswer) {
+            mockLoseNextSavingAnswer = false;
+            throw new TypeError("Network request failed");
+          }
+          return saving;
+        },
+      };
+    },
   };
 });
 
@@ -94,5 +109,43 @@ describe("goals", () => {
     await fireEvent.changeText(await screen.findByTestId("first-saving"), "50000");
     await fireEvent.press(screen.getByTestId("create-and-save"));
     expect(await screen.findByText("Each saving is at least UGX 100,000.")).toBeTruthy();
+  });
+
+  it("fixes the first saving after a lost answer and sends the same one again", async () => {
+    await signIn("772123456");
+    await screen.findByText("Welcome, Amara");
+    await fireEvent.press(screen.getByLabelText("Goals"));
+    await fireEvent.press(await screen.findByTestId("new-goal"));
+    await fireEvent.press(await screen.findByTestId("category-land_or_home"));
+    await fireEvent.changeText(screen.getByTestId("goal-name"), "Plot in Wakiso");
+    await fireEvent.press(screen.getByTestId("goal-continue"));
+    await fireEvent.changeText(await screen.findByTestId("goal-target"), "2000000");
+    await screen.findByText("UGX 189,000");
+    await fireEvent.press(screen.getByTestId("plan-next"));
+
+    mockLoseNextSavingAnswer = true;
+    await fireEvent.press(await screen.findByTestId("create-and-save"));
+    expect(await screen.findByText(/so the amount is\s+fixed/)).toBeTruthy();
+    expect(screen.getByTestId("first-saving").props.editable).toBe(false);
+
+    await fireEvent.press(screen.getByTestId("create-and-save"));
+    expect(await screen.findByText("Pay UGX 189,000")).toBeTruthy();
+  });
+
+  it("fixes a saving to a goal after a lost answer and sends the same one again", async () => {
+    await signIn("772123456");
+    await screen.findByText("Welcome, Amara");
+    await fireEvent.press(screen.getByLabelText("Goals"));
+    await fireEvent.press(await screen.findByText("Emergency fund"));
+    await fireEvent.press(await screen.findByTestId("save-now"));
+    await fireEvent.changeText(await screen.findByTestId("save-amount"), "250000");
+
+    mockLoseNextSavingAnswer = true;
+    await fireEvent.press(screen.getByTestId("save-continue"));
+    expect(await screen.findByText(/so its amount is fixed/)).toBeTruthy();
+    expect(screen.getByTestId("save-amount").props.editable).toBe(false);
+
+    await fireEvent.press(screen.getByTestId("save-continue"));
+    expect(await screen.findByText("Pay UGX 250,000")).toBeTruthy();
   });
 });

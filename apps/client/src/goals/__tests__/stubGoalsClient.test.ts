@@ -30,7 +30,7 @@ describe("the demo goals", () => {
     expect(again.id).toBe(first.id);
     expect(first.plan?.saving).toEqual(ugx(189_000));
     await expect(goals.createGoal({ ...school, name: "Other" }, "key-0000000001")).rejects.toEqual(
-      new GoalError("invalid"),
+      new GoalError("key_reused"),
     );
     expect(await goals.listGoals()).toHaveLength(1);
   });
@@ -47,6 +47,9 @@ describe("the demo goals", () => {
     const saving = await goals.saveToGoal(goal.id, ugx(200_000), "key-0000000004");
     const again = await goals.saveToGoal(goal.id, ugx(200_000), "key-0000000004");
     expect(again.investmentId).toBe(saving.investmentId);
+    await expect(goals.saveToGoal(goal.id, ugx(300_000), "key-0000000004")).rejects.toEqual(
+      new GoalError("key_reused"),
+    );
     expect(saving.status).toBe("awaiting_payment");
     const payable = await createStubPaymentsClient({ delayMs: 0 }).getPayable(saving.investmentId);
     expect(payable).toEqual({
