@@ -85,6 +85,8 @@ class SignOffView(Contract):
     proposed_at: datetime
     state: service.SignOffState
     decided_by: PushId | None
+    # Why it was rejected, shown to the person who proposed it.
+    decision_reason: str | None
 
 
 class TotalLineView(Contract):
@@ -118,7 +120,11 @@ class TotalsView(Contract):
 
 
 class DifferenceView(Contract):
-    """Something that differs now. `figures` is exactly what a sign-off for it accepts."""
+    """Something that differs now. `figures` is exactly what a sign-off for it accepts.
+
+    `sign_off` is the latest one for these figures. A rejected one stays until it is proposed
+    again, so its proposer can read why.
+    """
 
     key: str
     figures: list[int]
@@ -205,6 +211,7 @@ def _sign_off(view: service.SignOffView) -> SignOffView:
         proposed_at=view.proposed_at,
         state=view.state,
         decided_by=view.decided_by,
+        decision_reason=view.decision_reason,
     )
 
 
