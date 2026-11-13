@@ -1,8 +1,7 @@
 """Payouts: limits, the safety wait, and the ledger entry that goes with every step."""
 
 import asyncio
-import secrets
-from datetime import UTC, date, datetime, timedelta
+from datetime import UTC, date, datetime
 
 import pytest
 from sqlalchemy import text
@@ -10,14 +9,9 @@ from sqlalchemy.exc import DBAPIError
 
 from app.infrastructure.database import Database
 from app.modules.ledger import service as ledger
-from app.modules.ledger.domain.entries import EntryDraft, credit, debit
 from app.modules.payouts import destinations, payouts
-from app.modules.payouts.domain import posting
 from app.modules.payouts.domain.destinations import (
     BankAccount,
-    DestinationKind,
-    MobileMoneyNumber,
-    ProofKind,
 )
 from app.modules.payouts.domain.payouts import IllegalTransition, PayoutEvent, PayoutStatus
 from app.modules.payouts.payouts import PayoutRefused, PayoutView
@@ -28,6 +22,7 @@ from app.shared.money import Currency, Money
 from app.shared.push_ids import push_id
 from tests.support.clock import FakeClock
 from tests.support.ledger import key, staff, ugx
+from tests.support.payouts import World
 
 pytestmark = pytest.mark.integration
 
@@ -38,141 +33,6 @@ def fake_clock() -> FakeClock:
 
 
 E, S = PayoutEvent, PayoutStatus
-
-
-class World:
-    """One client with money handed over for paying out, an approved destination past its
-    wait, and a funded pot for the provider to pay from."""
-
-    def __init__(self, app: Database, worker: Database, clock: FakeClock) -> None:
-        self.app, self.worker, self.clock = app, worker, clock
-        self.client = Actor("client", push_id())
-        self.holding = ""
-        self.handover = f"investment-{push_id()}"
-        self.pot = ""
-        self.destination_id = ""
-        self.pot_before = 0
-
-    @property
-    def client_id(self) -> str:
-        assert self.client.id is not None
-        return self.client.id
-
-    async def build(self, funds: int, *, mobile: bool = True) -> "World":
-        account: MobileMoneyNumber | BankAccount = (
-            MobileMoneyNumber(f"25677{secrets.randbelow(10**7):07d}")
-            if mobile
-            else BankAccount("stanbic", str(secrets.randbelow(10**12) + 10**12))
-        )
-        proof = ProofKind.NETWORK_REGISTERED_NAME if mobile else ProofKind.BANK_LETTER
-        async with self.worker.actor_transaction(SYSTEM) as session:
-            pot = await ledger.open_account(
-                session,
-                posting.paid_from_account(
-                    account_kind(mobile), "mtn" if mobile else None, Currency.UGX
-                ),
-                self.clock,
-            )
-            holding = await ledger.open_account(
-                session,
-                posting.funding_account(self.client_id, self.handover, Currency.UGX),
-                self.clock,
-            )
-            self.pot, self.holding = pot.id, holding.id
-            self.pot_before = (await ledger.get_balance(session, pot.id)).minor
-            if funds:
-                await ledger.post_entry(
-                    session,
-                    EntryDraft(
-                        entry_type="test.deposit",
-                        effective_date=business_date(self.clock.now()),
-                        lines=(debit(pot.id, ugx(funds)), credit(holding.id, ugx(funds))),
-                        idempotency_key=key(),
-                    ),
-                    self.clock,
-                )
-        async with self.app.actor_transaction(self.client) as session:
-            view = await destinations.add_destination(
-                session, self.client, account, "Sarah Nakato", self.clock
-            )
-            await destinations.confirm_code(session, self.client, view.id, self.clock)
-            await destinations.submit_proof(
-                session, self.client, view.id, proof, "doc-1", self.clock
-            )
-        # An approval is stamped against the database clock, whatever time the test is at.
-        approved_at = FakeClock(datetime.now(UTC))
-        checker = staff()
-        async with self.app.actor_transaction(checker) as session:
-            await destinations.approve(
-                session,
-                checker,
-                view.id,
-                id_name="Sarah Nakato",
-                proof_name="Nakato Sarah",
-                statement_date=None,
-                reason="Checked",
-                clock=approved_at,
-            )
-        self.destination_id = view.id
-        self.clock.current = approved_at.now() + timedelta(hours=24)
-        return self
-
-    async def request(self, amount: int, **options: object) -> PayoutView:
-        async with self.app.actor_transaction(self.client) as session:
-            return await payouts.create_payout(
-                session,
-                self.client,
-                destination_id=self.destination_id,
-                amount=ugx(amount),
-                client_id=self.client_id,
-                source_reference=self.handover,
-                request_key=key(),
-                clock=self.clock,
-                **options,  # type: ignore[arg-type]
-            )
-
-    async def refused(self, amount: int, **options: object) -> str:
-        with pytest.raises(PayoutRefused) as refusal:
-            await self.request(amount, **options)
-        return refusal.value.code
-
-    async def worker_event(self, payout_id: str, event: PayoutEvent, **options: str) -> PayoutView:
-        async with self.worker.actor_transaction(SYSTEM) as session:
-            return await payouts.apply_event(
-                session, SYSTEM, payout_id, event, self.clock, **options
-            )
-
-    async def balance(self, account_id: str) -> int:
-        async with self.worker.actor_transaction(SYSTEM) as session:
-            return (await ledger.get_balance(session, account_id)).minor
-
-    async def pot_change(self) -> int:
-        """How far the pot has moved since this world was built, its own deposit included.
-        The pot is shared by every test, as the real wallet is shared by every client."""
-        return await self.balance(self.pot) - self.pot_before
-
-    async def pending(self) -> int:
-        async with self.worker.actor_transaction(SYSTEM) as session:
-            account = await ledger.open_account(
-                session, posting.pending_account(self.client_id, Currency.UGX), self.clock
-            )
-            return (await ledger.get_balance(session, account.id)).minor
-
-    async def owed(self, payout: PayoutView) -> int:
-        """Everything Finvest owes this client across the three places it can sit."""
-        return (
-            await self.balance(self.holding)
-            + await self.balance(payout.in_flight_account_id)
-            + await self.pending()
-        )
-
-    async def no_drift(self) -> None:
-        async with self.worker.actor_transaction(SYSTEM) as session:
-            assert await ledger.find_balance_drift(session) == []
-
-
-def account_kind(mobile: bool) -> DestinationKind:
-    return DestinationKind.MOBILE_MONEY if mobile else DestinationKind.BANK
 
 
 @pytest.fixture

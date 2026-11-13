@@ -151,4 +151,42 @@ Settle is refused by the ledger if the pot does not hold the money, because an a
 | A limits version takes two people | CHECK that proposer and approver differ, and a policy that the approver is the staff member inserting it |
 | Clients are fenced | Row policies show a client only their own payouts |
 
-Not built yet: sending a queued payout to the provider, and the two-person settlement of a stranded payout. Both follow.
+## Sending a payout
+
+A queued mobile money payout gets a send job in the same transaction that queued it: when it is created, or when staff approve a held one. The worker sends it through the disbursements provider and reads its status back. The code is in `backend/app/modules/payouts/jobs.py`, the rules in `domain/sending.py`, and migration 0033 adds `payout_send_attempts`.
+
+A payout is sent at most once:
+
+1. The worker saves a send attempt and commits it before it calls the provider.
+2. It calls the provider with no transaction open, giving the payout ID as the reference.
+3. It saves how the attempt ended and moves the payout in one transaction, with the ledger entry that goes with the step.
+
+| The provider said | Attempt | Payout | Then |
+| --- | --- | --- | --- |
+| Accepted | `accepted` | Sent | Status reads |
+| Refused | `rejected` | Failed, money parked | The client is told |
+| Took nothing | `deferred` | Still queued | The job tries again, up to 5 times; after that the sweep queues a fresh send |
+| No clear answer, or the adapter raised | `uncertain` | Uncertain | Status reads, never a second send |
+| Nothing saved (the worker stopped) | `interrupted`, set by the sweep after 2 minutes | Uncertain | Status reads, never a second send |
+
+Status reads come 10 seconds after the send, then further apart, then hourly, for 3 days. Pending, no record or a failed read keeps reading. Confirmed for the payout's amount pays it and settles the money from the pot. Refused fails it and parks the money. Confirmed for another amount moves nothing, stops the reads and is logged for staff. After 3 days with no answer, two staff members settle it from the statement, which is not built yet.
+
+A sweep runs every minute. It marks attempts that never got their answer saved as `interrupted`, queues a fresh send for a queued payout left alone for 10 minutes with no attempt that may have gone, and queues a read for a sent or uncertain payout nothing has read for an hour.
+
+The client is told `payout_processing` when the payout is sent or uncertain, `payout_sent` when it is paid and `payout_failed` when it fails. A message names the network, such as "MTN Mobile Money", never the number.
+
+Bank payouts are not sent by the worker. They wait for staff to pay them from the trust account.
+
+What the database enforces:
+
+| Rule | How |
+| --- | --- |
+| One send that may have gone | A unique index allows one attempt per payout that is open or ended other than `deferred` |
+| An attempt only for a queued payout | The attempt guard checks the payout, and numbers attempts one after another |
+| How an attempt ended is written once | The guard refuses any other change, and every delete |
+| Leaving the queue takes an attempt | A trigger on `payouts` refuses queued to sent, paid, failed or uncertain without such an attempt |
+| Only the worker sends | Only `finvest_worker`, acting as the system, inserts or finishes attempts; staff can read them |
+
+The sandbox provider (`FINVEST_PAYMENTS_PROVIDER=sandbox`, local and staging only) pays nobody. The last two digits of the number choose what happens: 01 refused, 02 fails after accepting, 04 uncertain with no record, 05 deferred, 06 confirmed for another amount, anything else paid after 5 seconds.
+
+Not built yet: the two-person settlement of a stranded payout, and paying a bank payout from the trust account. Both follow.
