@@ -26,6 +26,10 @@ PRODUCTS = {product.code: product for product in SEED_PRODUCTS}
 TAX = {code: tax for code, (_, tax) in SEED_RATES.items()}
 
 
+def sign(key: str, figures: tuple[int, ...], reason: str = "Explained") -> SignOff:
+    return SignOff(key, figures, reason, proposed_by="staff-1", approved_by="staff-2")
+
+
 def ugx(amount: int) -> Money:
     return Money(amount, Currency.UGX)
 
@@ -165,8 +169,8 @@ def test_an_interest_figure_that_differs_from_the_formula_is_listed_and_blocks()
         (Blocker.DIFFERENCE_NOT_SIGNED_OFF, "investment:B"),
     ]
     signed = [
-        SignOff("total:interest_before_tax:UGX", "Explained by investment B", "staff-1"),
-        SignOff("investment:B", "1.0 counted the start date as a day earned", "staff-1"),
+        sign("total:interest_before_tax:UGX", (40_843, 40_752), "Explained by investment B"),
+        sign("investment:B", (29_200, 29_109, 4_366, 4_366), "1.0 counted the start date"),
     ]
     assert switch_blockers(report, check, signed) == []
     assert switch_blockers(report, check, signed[:1]) == [
@@ -209,14 +213,14 @@ def test_an_import_with_errors_blocks_the_switch_whatever_is_signed() -> None:
 def test_a_sign_off_for_something_that_no_longer_differs_is_refused() -> None:
     report = trial()
     check = check_finances(report, OLD, PRODUCTS, TAX)
-    stale = [SignOff("investment:B", "Explained last week", "staff-1")]
+    stale = [sign("investment:B", (29_200, 29_109, 4_366, 4_366), "Explained last week")]
     assert switch_blockers(report, check, stale) == [(Blocker.SIGN_OFF_FOR_NOTHING, "investment:B")]
 
 
 @pytest.mark.parametrize("reason", ["", "   ", "x" * 501])
 def test_a_sign_off_needs_a_reason(reason: str) -> None:
     with pytest.raises(InvalidFinanceCheck):
-        SignOff("total:clients", reason, "staff-1")
+        sign("total:clients", (3, 2), reason)
 
 
 def test_control_totals_refuse_nonsense() -> None:
@@ -257,3 +261,46 @@ def test_a_tax_rate_that_is_not_the_products_needs_a_sign_off() -> None:
     )
     assert check.needs_sign_off == ("tax_rate:B",)
     assert switch_blockers(report, check, []) == [(Blocker.DIFFERENCE_NOT_SIGNED_OFF, "tax_rate:B")]
+
+
+def test_a_sign_off_counts_only_for_the_figures_it_was_written_for() -> None:
+    small = trial(interest_before_tax="29,119", tax_withheld="")
+    old = replace(OLD, interest_before_tax=(ugx(40_762), OLD.interest_before_tax[1]))
+    check = check_finances(small, old, PRODUCTS, TAX)
+    assert check.differing == {
+        "total:interest_before_tax:UGX": (40_762, 40_752),
+        "investment:B": (29_119, 29_109, -1, 4_366),
+    }
+    signed = [
+        sign("total:interest_before_tax:UGX", (40_762, 40_752)),
+        sign("investment:B", (29_119, 29_109, -1, 4_366), "Ten shillings of rounding"),
+    ]
+    assert switch_blockers(small, check, signed) == []
+
+    # The file is exported again and the same investment is now out by ten million.
+    large = trial(interest_before_tax="10,029,109", tax_withheld="")
+    old = replace(OLD, interest_before_tax=(ugx(40_762), OLD.interest_before_tax[1]))
+    check = check_finances(large, old, PRODUCTS, TAX)
+    assert switch_blockers(large, check, signed) == [
+        (Blocker.DIFFERENCE_NOT_SIGNED_OFF, "investment:B"),
+        (Blocker.SIGN_OFF_OUT_OF_DATE, "investment:B"),
+    ]
+
+
+def test_a_sign_off_is_out_of_date_when_the_new_side_changes_too() -> None:
+    report = trial(tax_percent="10", tax_withheld="")
+    check = check_finances(report, OLD, PRODUCTS, {**TAX, "TREA-91": 2000})
+    signed = [sign(key, figures) for key, figures in check.differing.items()]
+    assert switch_blockers(report, check, signed) == []
+
+    again = check_finances(report, OLD, PRODUCTS, TAX)
+    assert (Blocker.SIGN_OFF_OUT_OF_DATE, "tax_rate:B") in switch_blockers(report, again, signed)
+
+
+def test_a_sign_off_needs_a_second_member_of_staff_and_its_figures() -> None:
+    with pytest.raises(InvalidFinanceCheck, match="second member"):
+        SignOff("total:clients", (3, 2), "Explained", proposed_by="staff-1", approved_by="staff-1")
+    with pytest.raises(InvalidFinanceCheck):
+        SignOff("total:clients", (), "Explained", proposed_by="staff-1", approved_by="staff-2")
+    with pytest.raises(InvalidFinanceCheck):
+        SignOff("total:clients", (3, 2), "Explained", proposed_by="staff-1", approved_by="")

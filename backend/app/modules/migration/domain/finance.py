@@ -116,6 +116,12 @@ class InterestDifference:
     def key(self) -> str:
         return f"investment:{self.legacy_investment_ref}"
 
+    @property
+    def figures(self) -> tuple[int, ...]:
+        """Exactly what a sign-off accepts: both interest figures and both tax figures."""
+        old_tax = -1 if self.old_tax is None else self.old_tax.minor
+        return (self.old_interest.minor, self.new_interest.minor, old_tax, self.new_tax.minor)
+
 
 @dataclass(frozen=True, slots=True)
 class TaxRateDifference:
@@ -129,6 +135,10 @@ class TaxRateDifference:
     @property
     def key(self) -> str:
         return f"tax_rate:{self.legacy_investment_ref}"
+
+    @property
+    def figures(self) -> tuple[int, ...]:
+        return (self.stated_tax_bps, self.product_tax_bps)
 
 
 @dataclass(frozen=True, slots=True)
@@ -153,20 +163,39 @@ class TotalLine:
         suffix = "" if self.currency is None else f":{self.currency.value}"
         return f"total:{self.figure.value}{suffix}"
 
+    @property
+    def figures(self) -> tuple[int, ...]:
+        return (self.old, self.new)
+
 
 @dataclass(frozen=True, slots=True)
 class SignOff:
-    """Finance accepting one difference, with the reason. `key` names the line or investment."""
+    """Finance accepting one difference, with the reason. `key` names the line or investment.
+
+    A sign-off accepts particular figures, not a name. It records the figures it was written
+    for, and stops counting the moment either side changes: a reason given for a difference of
+    ten shillings must never clear a difference of ten million on the same investment after
+    the file is exported again.
+
+    It takes two people. One member of staff proposes the sign-off with the reason, and a
+    different one approves it.
+    """
 
     key: str
+    figures: tuple[int, ...]
     reason: str
-    signed_by: str
+    proposed_by: str
+    approved_by: str
 
     def __post_init__(self) -> None:
         if not self.reason.strip() or len(self.reason) > MAX_REASON_LENGTH:
             raise InvalidFinanceCheck(f"A reason is 1 to {MAX_REASON_LENGTH} characters")
-        if not self.key or not self.signed_by:
+        if not self.key or not self.proposed_by or not self.approved_by:
             raise InvalidFinanceCheck("A sign-off names what it covers and who signed")
+        if self.proposed_by == self.approved_by:
+            raise InvalidFinanceCheck("A sign-off is approved by a second member of staff")
+        if not self.figures or any(type(figure) is not int for figure in self.figures):
+            raise InvalidFinanceCheck("A sign-off records the figures it accepts")
 
 
 @dataclass(frozen=True, slots=True)
@@ -179,11 +208,17 @@ class FinanceCheck:
     @property
     def needs_sign_off(self) -> tuple[str, ...]:
         """The key of every total that differs, then of every investment that differs."""
-        return tuple(
-            [line.key for line in self.lines if not line.agrees]
-            + [difference.key for difference in self.interest_differences]
-            + [difference.key for difference in self.tax_rate_differences]
-        )
+        return tuple(self.differing)
+
+    @property
+    def differing(self) -> dict[str, tuple[int, ...]]:
+        """Everything that differs, by key, with the figures a sign-off for it must carry."""
+        items: list[TotalLine | InterestDifference | TaxRateDifference] = [
+            *(line for line in self.lines if not line.agrees),
+            *self.interest_differences,
+            *self.tax_rate_differences,
+        ]
+        return {item.key: item.figures for item in items}
 
 
 def opening_for(investment: InvestmentRow, product: Product, *, opened_on: date) -> Opening:
@@ -291,6 +326,7 @@ class Blocker(StrEnum):
     IMPORT_HAS_ERRORS = "import_has_errors"
     DIFFERENCE_NOT_SIGNED_OFF = "difference_not_signed_off"
     SIGN_OFF_FOR_NOTHING = "sign_off_for_nothing"
+    SIGN_OFF_OUT_OF_DATE = "sign_off_out_of_date"
 
 
 def switch_blockers(
@@ -298,15 +334,20 @@ def switch_blockers(
 ) -> list[tuple[Blocker, str | None]]:
     """Why the switch cannot be scheduled yet. An empty list means it can.
 
-    Every error in the import is fixed, and every difference agrees or carries a sign-off. A
-    sign-off for something that no longer differs is refused too: it was written for an
-    earlier file, and its reason may explain a difference that has since changed.
+    Every error in the import is fixed, and every difference agrees or carries a sign-off
+    for exactly the figures it has now. A sign-off written for other figures does not count:
+    the difference is reported as not signed off and the sign-off as out of date. A sign-off
+    for something that no longer differs is refused too, for the same reason.
     """
     blockers: list[tuple[Blocker, str | None]] = []
     if not report.clean:
         blockers.append((Blocker.IMPORT_HAS_ERRORS, None))
-    needed = check.needs_sign_off
-    signed = {sign_off.key for sign_off in sign_offs}
-    blockers += [(Blocker.DIFFERENCE_NOT_SIGNED_OFF, key) for key in needed if key not in signed]
-    blockers += [(Blocker.SIGN_OFF_FOR_NOTHING, key) for key in sorted(signed - set(needed))]
+    needed = check.differing
+    offered = list(sign_offs)
+    accepted = {s.key for s in offered if needed.get(s.key) == s.figures}
+    blockers += [(Blocker.DIFFERENCE_NOT_SIGNED_OFF, key) for key in needed if key not in accepted]
+    stale = sorted({s.key for s in offered if s.key in needed and needed[s.key] != s.figures})
+    blockers += [(Blocker.SIGN_OFF_OUT_OF_DATE, key) for key in stale]
+    unneeded = sorted({s.key for s in offered if s.key not in needed})
+    blockers += [(Blocker.SIGN_OFF_FOR_NOTHING, key) for key in unneeded]
     return blockers
