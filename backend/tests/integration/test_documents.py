@@ -4,6 +4,7 @@ client, finished once, and the monthly run."""
 import asyncio
 import secrets
 from collections.abc import AsyncIterator, Awaitable, Callable, Iterator
+from dataclasses import replace
 from datetime import date, timedelta
 from urllib.parse import quote
 
@@ -32,7 +33,7 @@ from app.modules.documents.jobs import DocumentJobs
 from app.modules.documents.service import DocumentKind, DocumentStatus
 from app.modules.identity import service as identity_service
 from app.modules.identity.hashing import PasswordHasher
-from app.modules.identity.service import IdentityService
+from app.modules.identity.service import ClientContact, IdentityService
 from app.modules.investments import service as investments
 from app.modules.investments.holdings import AWAITING_START
 from app.modules.kyc import service as kyc
@@ -895,6 +896,30 @@ async def test_a_client_with_no_email_address_is_recorded_as_skipped(
     app_database: Database, worker_database: Database
 ) -> None:
     client = await approved_client(app_database, LATER)
+    asked = await ask(app_database, client)
+    email = FakeEmail()
+    await run_jobs(worker_database, email=email)
+    assert email.sent == []
+    assert await emails_of(worker_database, asked.id) == [("skipped", "no_email")]
+
+
+async def test_an_unclaimed_account_is_not_sent_a_document(
+    http: tuple[httpx.AsyncClient, IdentityService],
+    app_database: Database,
+    worker_database: Database,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # Identity answers for an account carried over from Finvest 1.0 so it can be reminded to
+    # claim it, and says it is unclaimed. Identity's own tests cover when that is so.
+    _, identity = http
+    client = await client_with_email(identity, app_database)
+    real = identity_service.client_contact
+
+    async def unclaimed(session: AsyncSession, client_id: str) -> ClientContact | None:
+        found = await real(session, client_id)
+        return replace(found, claimed=False) if found is not None else None
+
+    monkeypatch.setattr(identity_service, "client_contact", unclaimed)
     asked = await ask(app_database, client)
     email = FakeEmail()
     await run_jobs(worker_database, email=email)
