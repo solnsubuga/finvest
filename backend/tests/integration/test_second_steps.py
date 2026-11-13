@@ -450,7 +450,10 @@ async def test_the_app_secret_is_stored_encrypted(api: Api) -> None:
             )
         )
     assert secret not in sealed
-    assert len(sealed) == 12 + 20 + 16
+    assert base64.b64encode(secret) not in sealed
+    # The shared sealer's format: version, key id, nonce, the secret as base64 and a tag.
+    assert sealed[:1] == b"\x02"
+    assert len(sealed) == 1 + 1 + 12 + 28 + 16
 
 
 async def test_a_code_works_once_even_when_sent_twice_at_the_same_moment(api: Api) -> None:
@@ -642,7 +645,7 @@ async def test_adding_or_removing_a_passkey_needs_a_recent_sign_in(api: Api) -> 
         await api.http.post("/client/passkeys/options", headers=bearer),
         await api.http.delete(f"/client/passkeys/{passkey_id}", headers=bearer),
     ):
-        assert (response.status_code, code(response)) == (403, "forbidden")
+        assert (response.status_code, code(response)) == (403, "sign_in_again")
     assert len((await api.http.get("/client/passkeys", headers=bearer)).json()) == 1
 
 
@@ -707,3 +710,102 @@ async def test_the_bootstrap_command_gives_a_working_link(api: Api) -> None:
     assert second != link
     gone = await api.http.post("/staff/enrolment", json={"token": token}, headers=STAFF)
     assert gone.status_code == 410
+
+
+async def add_app(api: Api, token: str) -> bytes:
+    bearer = {"Authorization": f"Bearer {token}"}
+    setup = await api.http.post("/client/authenticator/options", headers=bearer)
+    assert setup.status_code == 200, setup.text
+    shown = setup.json()["secret"]
+    secret = base64.b32decode(shown + "=" * (-len(shown) % 8))
+    confirmed = await api.http.post(
+        "/client/authenticator", json={"code": app_code(api, secret)}, headers=bearer
+    )
+    assert confirmed.status_code == 204, confirmed.text
+    return secret
+
+
+async def test_a_client_adds_an_authenticator_app_and_signs_in_with_it(api: Api) -> None:
+    phone, client_id, token = await a_signed_in_client(api)
+    bearer = {"Authorization": f"Bearer {token}"}
+    assert (await api.http.get("/client/authenticator", headers=bearer)).json() == {
+        "enabled": False
+    }
+    secret = await add_app(api, token)
+    assert (await api.http.get("/client/authenticator", headers=bearer)).json() == {"enabled": True}
+    await add_passkey(api, token, Device(CLIENT_SITE, CLIENT_ORIGIN))
+
+    api.clock.advance(minutes=2)
+    started = await api.http.post(
+        "/client/login/start", json={"phone": phone, "password": PASSWORD}
+    )
+    # Every method the client has set up, to finish with any one of them.
+    assert started.json()["methods"] == ["passkey", "authenticator", "code"]
+    verified = await api.http.post(
+        "/client/login/authenticator/verify",
+        json={"login_id": started.json()["login_id"], "code": app_code(api, secret)},
+    )
+    assert verified.status_code == 200, verified.text
+    assert verified.json()["session"]["client_id"] == client_id
+    # An authenticator app is not a texted code, so the account is not restricted.
+    assert verified.json()["session"]["restricted_until"] is None
+    assert verified.json()["token"]
+
+
+async def test_a_client_app_is_not_on_until_a_code_confirms_it(api: Api) -> None:
+    phone, _, token = await a_signed_in_client(api)
+    bearer = {"Authorization": f"Bearer {token}"}
+    await api.http.post("/client/authenticator/options", headers=bearer)
+    wrong = await api.http.post("/client/authenticator", json={"code": "000000"}, headers=bearer)
+    assert (wrong.status_code, code(wrong)) == (401, "invalid_code")
+    started = await api.http.post(
+        "/client/login/start", json={"phone": phone, "password": PASSWORD}
+    )
+    assert started.json()["methods"] == ["code"]
+
+
+async def test_a_client_removes_their_authenticator_app(api: Api) -> None:
+    phone, _, token = await a_signed_in_client(api)
+    bearer = {"Authorization": f"Bearer {token}"}
+    secret = await add_app(api, token)
+    assert (await api.http.delete("/client/authenticator", headers=bearer)).status_code == 204
+    assert (await api.http.delete("/client/authenticator", headers=bearer)).status_code == 404
+    api.clock.advance(minutes=2)
+    started = await api.http.post(
+        "/client/login/start", json={"phone": phone, "password": PASSWORD}
+    )
+    assert started.json()["methods"] == ["code"]
+    refused = await api.http.post(
+        "/client/login/authenticator/verify",
+        json={"login_id": started.json()["login_id"], "code": app_code(api, secret)},
+    )
+    assert (refused.status_code, code(refused)) == (401, "invalid_code")
+
+
+async def test_changing_a_client_app_needs_a_recent_sign_in(api: Api) -> None:
+    _, _, token = await a_signed_in_client(api)
+    bearer = {"Authorization": f"Bearer {token}"}
+    await add_app(api, token)
+    api.clock.advance(minutes=10, seconds=1)
+    for response in (
+        await api.http.post("/client/authenticator/options", headers=bearer),
+        await api.http.delete("/client/authenticator", headers=bearer),
+    ):
+        assert (response.status_code, code(response)) == (403, "sign_in_again")
+
+
+async def test_a_client_sees_the_second_steps_they_have_strongest_first(api: Api) -> None:
+    _, _, token = await a_signed_in_client(api)
+    bearer = {"Authorization": f"Bearer {token}"}
+
+    async def methods() -> object:
+        response = await api.http.get("/client/second-steps", headers=bearer)
+        assert response.status_code == 200
+        return response.json()["methods"]
+
+    assert await methods() == ["code"]
+    await add_app(api, token)
+    assert await methods() == ["authenticator", "code"]
+    await add_passkey(api, token, Device(CLIENT_SITE, CLIENT_ORIGIN))
+    assert await methods() == ["passkey", "authenticator", "code"]
+    assert (await api.http.get("/client/second-steps")).status_code == 401

@@ -9,15 +9,18 @@ from datetime import timedelta
 
 from app.infrastructure.database import Database
 from app.infrastructure.database.roles import WORKER, check_role
+from app.infrastructure.email import EmailSettings
 from app.infrastructure.jobs import Handler, JobHandler, Worker, WorkerConfig
 from app.infrastructure.jobs.settings import JobProcessSettings
 from app.infrastructure.logging import configure_logging
 from app.infrastructure.process import keep_heartbeat, stop_on_signals
 from app.infrastructure.settings import Settings
+from app.infrastructure.sms import SmsSettings
 from app.modules.investments.jobs import InvestmentJobs
 from app.modules.kyc.jobs import ProviderJobs, sweep_unanswered
 from app.modules.kyc.service import SWEEP_UNANSWERED
 from app.modules.kyc.settings import KycSettings
+from app.modules.notifications import jobs as notification_jobs
 from app.modules.payments.jobs import DepositJobs
 from app.modules.payments.settings import PaymentsSettings
 from app.modules.payments.wiring import collections_provider
@@ -49,6 +52,11 @@ def handlers(database: Database, clock: Clock) -> dict[str, JobHandler | Handler
     collections = collections_provider(PaymentsSettings(), clock)
     if collections is not None:
         kinds.update(DepositJobs(database, collections, clock).handlers())
+    kinds.update(
+        notification_jobs.handlers(
+            database, clock, EmailSettings().transport(), SmsSettings().transport()
+        )
+    )
     return kinds
 
 
