@@ -30,6 +30,7 @@ from app.modules.notifications import jobs as notification_jobs
 from app.modules.notifications.announcements import AnnouncementJobs
 from app.modules.notifications.delivery import DeliveryJobs
 from app.modules.notifications.email_delivery import DeliveryEventJobs
+from app.modules.notifications.settings import EmailHashSettings
 from app.modules.payments.bank_transfers import BankTransferJobs
 from app.modules.payments.jobs import DepositJobs
 from app.modules.payments.settings import PaymentsSettings
@@ -86,7 +87,8 @@ def handlers(
             link_origins=[*settings.staff_allowed_origins, *settings.client_allowed_origins],
         )
     )
-    kinds.update(DeliveryEventJobs(database, clock).handlers())
+    # Read at start-up, so production refuses to start without the key.
+    kinds.update(DeliveryEventJobs(database, clock, EmailHashSettings().key()).handlers())
     kinds.update(
         DeliveryJobs(database, clock, PushSettings().transport(), client_contact).handlers()
     )

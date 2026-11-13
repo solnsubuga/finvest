@@ -12,7 +12,7 @@ from sqlalchemy.exc import DBAPIError
 from app.infrastructure.database import Database
 from app.modules.identity import team
 from app.modules.notifications import suppression_lifts as lifts
-from app.modules.notifications.domain.email_events import address_hash
+from app.modules.notifications.domain.email_events import address_hash, keyed_hash
 from app.modules.notifications.email_delivery import is_suppressed
 from app.shared.actors import Actor
 from app.shared.errors import ApplicationError
@@ -175,7 +175,7 @@ async def test_a_complaint_after_a_lifted_bounce_blocks_any_further_lift(
     staff = await api.staff("support")
     with pytest.raises(ApplicationError) as refused:
         async with api.database.actor_transaction(staff) as session:
-            await lifts.propose(session, staff, address_hash(address), "Again", api.clock)
+            await lifts.propose(session, staff, address_hash(address), "Again", api.clock, None)
     assert refused.value.code == "conflict"
 
 
@@ -196,6 +196,24 @@ async def test_the_database_refuses_to_lift_a_complaint(
             )
 
 
+async def test_a_lift_keeps_the_keyed_hash_beside_the_plain_one(
+    api: Api, migrator_database: Database
+) -> None:
+    address, key = an_address(), secrets.token_bytes(32)
+    await bounce(migrator_database, address, api.clock.now())
+    staff = await api.staff("support")
+    async with api.database.actor_transaction(staff) as session:
+        proposal = await lifts.propose(
+            session, staff, address_hash(address), "Fixed", api.clock, key
+        )
+    async with migrator_database.transaction() as session:
+        stored = await session.scalar(
+            text("SELECT address_key FROM notification_email_suppression_lifts WHERE id = :id"),
+            {"id": proposal.id},
+        )
+    assert stored == keyed_hash(address_hash(address), key)
+
+
 async def test_a_member_of_staff_no_longer_active_cannot_decide(
     api: Api, migrator_database: Database
 ) -> None:
@@ -203,7 +221,9 @@ async def test_a_member_of_staff_no_longer_active_cannot_decide(
     await bounce(migrator_database, address, api.clock.now())
     maker, checker = await api.staff("support"), await api.staff("operations")
     async with api.database.actor_transaction(maker) as session:
-        proposal = await lifts.propose(session, maker, address_hash(address), "Fixed", api.clock)
+        proposal = await lifts.propose(
+            session, maker, address_hash(address), "Fixed", api.clock, None
+        )
     # Deactivated the only way there is: two admins (migration 0150).
     first, second = await api.staff("admin"), await api.staff("admin")
     async with api.database.actor_transaction(first) as session:
@@ -290,7 +310,9 @@ async def test_two_approvals_at_once_decide_once(api: Api, migrator_database: Da
     await bounce(migrator_database, address, api.clock.now())
     maker = await api.staff("support")
     async with api.database.actor_transaction(maker) as session:
-        proposal = await lifts.propose(session, maker, address_hash(address), "Fixed", api.clock)
+        proposal = await lifts.propose(
+            session, maker, address_hash(address), "Fixed", api.clock, None
+        )
     checkers = [await api.staff("operations"), await api.staff("admin")]
 
     async def approve(checker: Actor) -> str:
@@ -312,7 +334,9 @@ async def test_the_database_refuses_a_one_person_lift(
     await bounce(migrator_database, address, api.clock.now())
     staff = await api.staff("support")
     async with api.database.actor_transaction(staff) as session:
-        proposal = await lifts.propose(session, staff, address_hash(address), "Fixed", api.clock)
+        proposal = await lifts.propose(
+            session, staff, address_hash(address), "Fixed", api.clock, None
+        )
     with pytest.raises(DBAPIError, match="two_people"):
         async with api.database.actor_transaction(staff) as session:
             await session.execute(

@@ -49,6 +49,14 @@ Db = Annotated[Database, Depends(_database)]
 Time = Annotated[Clock, Depends(_clock)]
 
 
+def _hash_key(request: Request) -> bytes | None:
+    key: bytes | None = request.app.state.email_hash_key
+    return key
+
+
+HashKey = Annotated[bytes | None, Depends(_hash_key)]
+
+
 class LiftView(Contract):
     id: PushId
     address_hash: str
@@ -126,11 +134,16 @@ async def lookup(body: Lookup, staff: Viewer, database: Db) -> LookupResult:
 
 @router.post("/{address_hash}/lifts", status_code=201)
 async def propose_lift(
-    address_hash: Hash, body: ProposeLift, staff: Lifter, database: Db, clock: Time
+    address_hash: Hash,
+    body: ProposeLift,
+    staff: Lifter,
+    database: Db,
+    clock: Time,
+    hash_key: HashKey,
 ) -> LiftView:
     """Ask to email the address again. A different member of staff decides."""
     async with database.actor_transaction(staff.actor) as session:
-        lift = await lifts.propose(session, staff.actor, address_hash, body.reason, clock)
+        lift = await lifts.propose(session, staff.actor, address_hash, body.reason, clock, hash_key)
         names = await staff_names(session, _staff_ids([lift]))
     return _lift(lift, staff, names)
 

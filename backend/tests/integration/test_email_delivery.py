@@ -18,8 +18,9 @@ from app.infrastructure.email.webhooks import WebhookVerifier
 from app.infrastructure.jobs import RetryPolicy, Worker, WorkerConfig
 from app.infrastructure.sms import DisabledSms
 from app.modules.notifications import email_delivery, jobs, service
-from app.modules.notifications.domain.email_events import address_hash
+from app.modules.notifications.domain.email_events import address_hash, keyed_hash
 from app.modules.notifications.service import queue_message
+from app.modules.notifications.settings import EmailHashSettings
 from app.shared.push_ids import push_id
 from tests.support.clock import FakeClock
 from tests.support.database import TestDatabase
@@ -29,6 +30,11 @@ pytestmark = pytest.mark.integration
 
 URL = "/webhooks/resend"
 VERIFIER = WebhookVerifier(SecretStr("whsec_" + base64.b64encode(secrets.token_bytes(32)).decode()))
+# Made for this run. The real key comes only from the environment.
+HASH_KEY = secrets.token_bytes(32)
+HASH_SETTINGS = EmailHashSettings(
+    email_hash_key=SecretStr(base64.urlsafe_b64encode(HASH_KEY).decode())
+)
 
 
 @pytest.fixture(autouse=True)
@@ -51,10 +57,15 @@ class ResendRecording(RecordingTransport):
         return type(result)(provider="resend", provider_message_id=self.ids[-1])
 
 
-def a_worker(database: Database, clock: FakeClock, transport: RecordingTransport) -> Worker:
+def a_worker(
+    database: Database,
+    clock: FakeClock,
+    transport: RecordingTransport,
+    key: bytes | None = HASH_KEY,
+) -> Worker:
     handlers = {
         **jobs.handlers(database, clock, transport, DisabledSms()),
-        **email_delivery.DeliveryEventJobs(database, clock).handlers(),
+        **email_delivery.DeliveryEventJobs(database, clock, key).handlers(),
     }
     config = WorkerConfig(
         queue=service.MESSAGE_QUEUE,
@@ -111,8 +122,19 @@ def headers(content: bytes, clock: FakeClock, svix_id: str | None = None) -> dic
     }
 
 
-def api(test_database: TestDatabase, database: Database, clock: FakeClock) -> httpx.AsyncClient:
-    app = create_app(test_database.settings("finvest_app"), database, clock, email_hooks=VERIFIER)
+def api(
+    test_database: TestDatabase,
+    database: Database,
+    clock: FakeClock,
+    email_hash: EmailHashSettings = HASH_SETTINGS,
+) -> httpx.AsyncClient:
+    app = create_app(
+        test_database.settings("finvest_app"),
+        database,
+        clock,
+        email_hooks=VERIFIER,
+        email_hash=email_hash,
+    )
     transport = httpx.ASGITransport(app=app, raise_app_exceptions=False)
     return httpx.AsyncClient(transport=transport, base_url="https://api.finvestug.com")
 
@@ -276,6 +298,22 @@ async def test_a_lasting_bounce_suppresses_the_address(
         hash=address_hash(address),
     )
     assert reason == "bounced"
+    # The keyed hash is written beside the plain one, worked out from it under the key.
+    keyed = keyed_hash(address_hash(address), HASH_KEY)
+    assert keyed != address_hash(address)
+    assert (
+        await scalar(
+            worker_database,
+            "SELECT address_key FROM notification_email_suppressions WHERE address_hash = :hash",
+            hash=address_hash(address),
+        )
+        == keyed
+    )
+    assert await scalar(
+        worker_database,
+        "SELECT recipients_keyed FROM notification_email_events WHERE email_id = :id",
+        id=transport.ids[0],
+    ) == [keyed]
 
     # The next email to that address is not sent, and says why.
     second = await send_one(app_database, worker, clock, address)
@@ -290,6 +328,39 @@ async def test_a_lasting_bounce_suppresses_the_address(
     other = an_address()
     await send_one(app_database, worker, clock, other)
     assert len(transport.to(other)) == 1
+
+
+async def test_without_a_key_only_the_plain_hash_is_kept(
+    test_database: TestDatabase, app_database: Database, worker_database: Database
+) -> None:
+    # A developer's machine may run without FINVEST_EMAIL_HASH_KEY. Production may not.
+    clock, transport, address = FakeClock(), ResendRecording(), an_address()
+    worker = a_worker(worker_database, clock, transport, key=None)
+    await send_one(app_database, worker, clock, address)
+    content = body("email.complained", transport.ids[0], address)
+    async with api(test_database, app_database, clock, EmailHashSettings()) as http:
+        assert (
+            await http.post(URL, content=content, headers=headers(content, clock))
+        ).status_code == 204
+    await drain(worker)
+    # Suppressed all the same, on the plain hash.
+    assert (
+        await scalar(
+            worker_database,
+            "SELECT address_key IS NULL FROM notification_email_suppressions "
+            "WHERE address_hash = :hash",
+            hash=address_hash(address),
+        )
+        is True
+    )
+    assert (
+        await scalar(
+            worker_database,
+            "SELECT recipients_keyed FROM notification_email_events WHERE email_id = :id",
+            id=transport.ids[0],
+        )
+        is None
+    )
 
 
 async def test_a_complaint_suppresses_and_a_passing_bounce_does_not(

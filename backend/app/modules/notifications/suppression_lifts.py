@@ -23,7 +23,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.infrastructure.email import InvalidEmail, check_address
 from app.modules.audit import service as audit
 from app.modules.audit.domain.events import AuditActor, AuditEvent
-from app.modules.notifications.domain.email_events import address_hash
+from app.modules.notifications.domain.email_events import address_hash, keyed_hash
 from app.shared.actors import Actor
 from app.shared.clock import Clock
 from app.shared.errors import ApplicationError, FieldProblem
@@ -151,9 +151,15 @@ async def suppression(session: AsyncSession, hashed: str) -> Suppression | None:
 
 
 async def propose(
-    session: AsyncSession, staff: Actor, hashed: str, reason: str, clock: Clock
+    session: AsyncSession,
+    staff: Actor,
+    hashed: str,
+    reason: str,
+    clock: Clock,
+    key: bytes | None,
 ) -> Lift:
-    """Ask to send email to the address again. A different member of staff decides."""
+    """Ask to send email to the address again. A different member of staff decides. `key` is
+    the email hash key (`EmailHashSettings`); without one only the plain hash is kept."""
     acting = _staff_id(staff)
     reason = _reason(reason)
     current = await suppression(session, hashed)
@@ -168,12 +174,14 @@ async def propose(
         async with session.begin_nested():
             await session.execute(
                 text(
-                    "INSERT INTO notification_email_suppression_lifts (id, address_hash, reason, "
-                    "proposed_by, proposed_at) VALUES (:id, :hash, :reason, :staff, :now)"
+                    "INSERT INTO notification_email_suppression_lifts (id, address_hash, "
+                    "address_key, reason, proposed_by, proposed_at) VALUES (:id, :hash, :key, "
+                    ":reason, :staff, :now)"
                 ),
                 {
                     "id": lift_id,
                     "hash": hashed,
+                    "key": keyed_hash(hashed, key) if key else None,
                     "reason": reason,
                     "staff": acting,
                     "now": clock.now(),

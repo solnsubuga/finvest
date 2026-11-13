@@ -10,6 +10,7 @@ person did last.
 """
 
 import hashlib
+import hmac
 import json
 import re
 from dataclasses import dataclass
@@ -61,7 +62,18 @@ class EmailEvent:
 
 
 def address_hash(address: str) -> str:
+    """The plain hash, as stored until the keyed one replaces it."""
     return hashlib.sha256(address.strip().lower().encode()).hexdigest()
+
+
+def keyed_hash(plain: str, key: bytes) -> str:
+    """HMAC-SHA256 under the server's key, over the plain hash. Taken over the plain hash, not
+    the address, so every hash already stored can be keyed without the address it came from."""
+    return hmac.new(key, plain.encode(), hashlib.sha256).hexdigest()
+
+
+def keyed_hashes(plain: tuple[str, ...] | list[str], key: bytes | None) -> list[str] | None:
+    return None if key is None else [keyed_hash(value, key) for value in plain]
 
 
 def moves_forward(current: str | None, new: Delivery) -> bool:
