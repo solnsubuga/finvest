@@ -251,3 +251,12 @@ async def test_a_checked_account_waits_in_the_approvals_inbox(api: Api) -> None:
     assert approved.status_code == 200, approved.text
     after = (await api.http.get("/staff/approvals")).json()["items"]
     assert destination_id not in [item["id"] for item in after]
+
+
+async def test_held_up_payouts_are_shown_to_staff_who_see_money_movement(api: Api) -> None:
+    await api.staff("finance")
+    seen = await api.http.get("/staff/payouts/held-up")
+    assert seen.status_code == 200, seen.text
+    assert isinstance(seen.json(), list)
+    await api.staff("support")
+    assert (await api.http.get("/staff/payouts/held-up")).status_code == 403
