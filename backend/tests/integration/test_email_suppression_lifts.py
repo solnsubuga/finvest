@@ -100,8 +100,27 @@ async def test_a_lift_two_people_approve_lets_email_through_until_the_next_bounc
     address = an_address()
     await bounce(migrator_database, address, api.clock.now() - timedelta(days=1))
     assert await suppressed(worker_database, address)
-    maker, checker = await api.staff("support"), await api.staff("operations")
-    await lift(api, address, maker, checker)
+    maker = await api.staff("support", name="Ruth Namata")
+    checker = await api.staff("operations", name="Daniel Kato")
+    await api.as_staff(maker)
+    proposed = await api.http.post(
+        f"/staff/email-suppressions/{address_hash(address)}/lifts", json={"reason": "Fixed inbox"}
+    )
+    assert proposed.json()["proposed_by_name"] == "Ruth Namata"
+    await api.as_staff(checker)
+    # The second person sees who asked, on the lookup and on the list.
+    waiting = (
+        await api.http.post("/staff/email-suppressions/lookup", json={"email": address})
+    ).json()["suppression"]["open_lift"]
+    assert (waiting["proposed_by_name"], waiting["decided_by_name"]) == ("Ruth Namata", None)
+    listed = (await api.http.get("/staff/email-suppressions")).json()["suppressions"]
+    mine = [item for item in listed if item["address_hash"] == address_hash(address)]
+    assert mine[0]["open_lift"]["proposed_by_name"] == "Ruth Namata"
+    decided = await api.http.post(
+        f"/staff/email-suppressions/lifts/{proposed.json()['id']}/decision",
+        json={"decision": "approved", "reason": "Confirmed on a call"},
+    )
+    assert decided.json()["decided_by_name"] == "Daniel Kato"
     assert not await suppressed(worker_database, address)
 
     api.clock.advance(hours=1)
