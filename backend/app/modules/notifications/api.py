@@ -43,6 +43,8 @@ routers = [client_router, staff_router]
 # be one of the two people a change needs.
 SettingsStaff = Annotated[StaffSession, Depends(require_permission("settings.view"))]
 WordingStaff = Annotated[StaffSession, Depends(require_permission("wordings.change"))]
+# Telling every client at once is a permission of its own, apart from changing a wording.
+AnnouncementStaff = Annotated[StaffSession, Depends(require_permission("announcements.send"))]
 Reason = Annotated[str, Field(min_length=1, max_length=500)]
 # The wire names. Contracts are strict, so a name arrives as text and is checked against these.
 CategoryName = Literal["money", "investments", "earnings", "account", "security", "support", "news"]
@@ -332,7 +334,7 @@ async def decide_wording(
     return _proposal(proposal, staff)
 
 
-# Announcements go to every client, so they sit with the wordings and need the same two people.
+# Announcements go to every client, so they sit with the wordings and need two people.
 
 
 class AnnouncementView(Contract):
@@ -348,7 +350,7 @@ class AnnouncementView(Contract):
     decision_reason: str | None
     # Clients told so far. It grows while the worker sends an approved one.
     told: int
-    # The proposer can withdraw it. Anyone else who may change wordings can approve or reject.
+    # The proposer can withdraw it. Anyone else who may send announcements can decide it.
     yours: bool
 
 
@@ -396,7 +398,7 @@ async def list_announcements(staff: SettingsStaff, database: Db) -> Announcement
 
 @staff_router.post("/announcements", status_code=201)
 async def propose_announcement(
-    body: ProposeAnnouncement, staff: WordingStaff, database: Db, clock: Time
+    body: ProposeAnnouncement, staff: AnnouncementStaff, database: Db, clock: Time
 ) -> AnnouncementView:
     """Put an announcement to every client forward. A different member of staff approves it."""
     async with database.actor_transaction(staff.actor) as session:
@@ -410,7 +412,7 @@ async def propose_announcement(
 async def decide_announcement(
     announcement_id: PushId,
     body: DecideAnnouncement,
-    staff: WordingStaff,
+    staff: AnnouncementStaff,
     database: Db,
     clock: Time,
 ) -> AnnouncementView:

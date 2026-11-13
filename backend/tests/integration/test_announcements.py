@@ -15,6 +15,7 @@ from app.infrastructure.database import Database
 from app.infrastructure.jobs import Worker, WorkerConfig
 from app.modules.audit.service import events_for_resource
 from app.modules.identity.api import COOKIES
+from app.modules.identity.domain.permissions import ROLE_PERMISSIONS
 from app.modules.identity.hashing import PasswordHasher
 from app.modules.identity.service import IdentityService
 from app.modules.notifications import announcements
@@ -397,3 +398,22 @@ async def test_staff_propose_and_approve_over_http(api: Api) -> None:
     invalid = {"title": TITLE, "message": "See www.example.org", "reason": "Why"}
     response = await api.http.post("/staff/announcements", json=invalid)
     assert response.status_code == 422
+
+
+async def test_changing_wordings_is_not_enough_to_send_an_announcement(
+    api: Api, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # Give operations the wordings, as the owner might, and it still cannot tell every client.
+    monkeypatch.setitem(
+        ROLE_PERMISSIONS,
+        "operations",
+        ROLE_PERMISSIONS["operations"] | {"settings.view", "wordings.change"},
+    )
+    body = {"title": TITLE, "message": MESSAGE, "reason": "Holiday"}
+    await api.staff()
+    created = (await api.http.post("/staff/announcements", json=body)).json()
+    await api.staff("operations")
+    assert (await api.http.get("/staff/announcements")).status_code == 200
+    assert (await api.http.post("/staff/announcements", json=body)).status_code == 403
+    decision = f"/staff/announcements/{created['id']}/decision"
+    assert (await api.http.post(decision, json={"decision": "approved"})).status_code == 403
