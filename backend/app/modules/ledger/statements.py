@@ -102,4 +102,80 @@ async def _account(session: AsyncSession, account_id: str) -> tuple[str, Currenc
     return row.kind, Currency(row.currency), row.owner_client_id
 
 
-__all__ = ["Movement", "account_movements", "account_owner", "balance_as_of"]
+@dataclass(frozen=True, slots=True)
+class MonthTotal:
+    """What moved through one kind of a client's accounts in one calendar month.
+
+    Both figures are zero or more: `debits` is the sum of debit lines and `credits` the sum of
+    credit lines, so a caller reads the direction it needs."""
+
+    month: date  # the first day of the month
+    debits: Money
+    credits: Money
+
+
+_SELECT_MONTH_TOTALS = text(
+    "SELECT date_trunc('month', entry.effective_date)::date AS month, "
+    "coalesce(sum(line.amount_minor) FILTER (WHERE line.amount_minor > 0), 0) AS debit_minor, "
+    "coalesce(-sum(line.amount_minor) FILTER (WHERE line.amount_minor < 0), 0) AS credit_minor "
+    "FROM ledger_lines AS line "
+    "JOIN ledger_accounts AS account ON account.id = line.account_id "
+    "JOIN ledger_journal_entries AS entry ON entry.id = line.entry_id "
+    "WHERE account.owner_client_id = :client_id AND account.code = :code "
+    "AND account.currency = :currency "
+    "AND (CAST(:entry_type AS text) IS NULL OR entry.entry_type = :entry_type "
+    # A reversal of an entry of this type counts against it, in the reversal's own month.
+    "OR EXISTS (SELECT 1 FROM ledger_journal_entries AS original "
+    "WHERE original.id = entry.reverses_entry_id AND original.entry_type = :entry_type)) "
+    "AND entry.effective_date BETWEEN :date_from AND :date_to "
+    "GROUP BY 1 ORDER BY 1"
+)
+
+
+async def client_month_totals(
+    session: AsyncSession,
+    *,
+    client_id: str,
+    code: str,
+    currency: Currency,
+    date_from: date,
+    date_to: date,
+    entry_type: str | None = None,
+) -> list[MonthTotal]:
+    """Monthly totals across every account of one client with this code, such as all their
+    holdings, by the entries' effective dates from `date_from` to `date_to`, both included.
+
+    Only months with a movement are returned. `entry_type` narrows it to one kind of entry and the
+    reversals of entries of that kind, so a reversed entry nets to nothing, as on a statement. A
+    reversal falls in the month of its own effective date. A client transaction sees only its own
+    accounts, so asking for another client returns none.
+    """
+    rows = await session.execute(
+        _SELECT_MONTH_TOTALS,
+        {
+            "client_id": client_id,
+            "code": code,
+            "currency": currency.value,
+            "entry_type": entry_type,
+            "date_from": date_from,
+            "date_to": date_to,
+        },
+    )
+    return [
+        MonthTotal(
+            month=row.month,
+            debits=Money(int(row.debit_minor), currency),
+            credits=Money(int(row.credit_minor), currency),
+        )
+        for row in rows
+    ]
+
+
+__all__ = [
+    "MonthTotal",
+    "Movement",
+    "account_movements",
+    "account_owner",
+    "balance_as_of",
+    "client_month_totals",
+]
