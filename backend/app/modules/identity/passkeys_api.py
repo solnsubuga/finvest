@@ -19,7 +19,7 @@ from app.modules.identity.api import (
 )
 from app.modules.identity.authenticators import AuthenticatorService
 from app.modules.identity.domain.permissions import Role
-from app.modules.identity.domain.sessions import SecondStep
+from app.modules.identity.domain.sessions import SecondStep, Transport
 from app.modules.identity.passkeys import PasskeyService
 from app.modules.identity.service import IdentityService, IssuedSession
 from app.shared.contracts import Contract, PushId
@@ -128,11 +128,17 @@ async def client_login_passkey_verify(
     body: LoginPasskey, request: Request, response: Response, passkeys: Passkeys, identity: Identity
 ) -> ClientSignedIn:
     """Finish sign-in. A browser is given a cookie, never the token itself."""
-    check_origin(request, "client", required=False)
-    browser = request.headers.get("origin") is not None
     issued = await passkeys.sign_in(
-        body.login_id, "client", body.credential, "cookie" if browser else "token"
+        body.login_id, "client", body.credential, client_transport(request)
     )
+    return await client_signed_in(request, response, identity, issued)
+
+
+async def client_signed_in(
+    request: Request, response: Response, identity: IdentityService, issued: IssuedSession
+) -> ClientSignedIn:
+    """Hand a new client session to a browser as a cookie, or to the phone app as a token."""
+    browser = issued.transport == "cookie"
     session = await identity.client_session(issued.token)
     if session is None:
         raise ApplicationError("unauthorized")
@@ -148,6 +154,12 @@ async def client_login_passkey_verify(
             restricted_until=session.restricted_until,
         ),
     )
+
+
+def client_transport(request: Request) -> Transport:
+    """A browser always sends Origin on these requests and gets a cookie. The app gets a token."""
+    check_origin(request, "client", required=False)
+    return "cookie" if request.headers.get("origin") is not None else "token"
 
 
 @client_router.get("/passkeys")
@@ -177,6 +189,90 @@ async def client_passkey_remove(
     passkey_id: PushId, client: CurrentClient, passkeys: Passkeys
 ) -> None:
     await passkeys.remove(client, passkey_id)
+
+
+class LoginCode(Contract):
+    login_id: PushId
+    code: Code
+
+
+class AuthenticatorSetupView(Contract):
+    """Show `uri` as a QR code, and `secret` for typing in by hand. Neither is shown again."""
+
+    secret: str
+    uri: str
+
+
+class AuthenticatorState(Contract):
+    enabled: bool
+
+
+class ConfirmCode(Contract):
+    code: Code
+
+
+@client_router.post("/login/authenticator/verify")
+async def client_login_authenticator_verify(
+    body: LoginCode,
+    request: Request,
+    response: Response,
+    authenticators: Authenticators,
+    identity: Identity,
+) -> ClientSignedIn:
+    """Finish sign-in with a code from the authenticator app. The session is not restricted."""
+    issued = await authenticators.sign_in(
+        body.login_id, body.code, "client", client_transport(request)
+    )
+    return await client_signed_in(request, response, identity, issued)
+
+
+@client_router.get("/authenticator")
+async def client_authenticator(
+    client: CurrentClient, authenticators: Authenticators
+) -> AuthenticatorState:
+    return AuthenticatorState(enabled=await authenticators.client_has(client))
+
+
+class SecondSteps(Contract):
+    """What the client can finish a sign-in with, strongest first."""
+
+    methods: list[SecondStep]
+
+
+@client_router.get("/second-steps")
+async def client_second_steps(
+    client: CurrentClient, passkeys: Passkeys, authenticators: Authenticators
+) -> SecondSteps:
+    methods: list[SecondStep] = ["passkey"] if await passkeys.list(client) else []
+    if await authenticators.client_has(client):
+        methods.append("authenticator")
+    # A texted or emailed code is always there as the backup.
+    methods.append("code")
+    return SecondSteps(methods=methods)
+
+
+@client_router.post("/authenticator/options")
+async def client_authenticator_options(
+    client: CurrentClient, authenticators: Authenticators
+) -> AuthenticatorSetupView:
+    """Start adding an authenticator app. Needs a sign-in in the last 10 minutes."""
+    setup = await authenticators.client_setup(client)
+    return AuthenticatorSetupView(secret=setup.secret, uri=setup.uri)
+
+
+@client_router.post("/authenticator", status_code=204)
+async def client_authenticator_confirm(
+    body: ConfirmCode, client: CurrentClient, authenticators: Authenticators
+) -> None:
+    """Turn the app on with a first code from it."""
+    await authenticators.client_confirm(client, body.code)
+
+
+@client_router.delete("/authenticator", status_code=204)
+async def client_authenticator_remove(
+    client: CurrentClient, authenticators: Authenticators
+) -> None:
+    await authenticators.client_remove(client)
 
 
 # Staff
@@ -253,18 +349,6 @@ async def staff_enrolment_passkey_verify(
         address=caller_address(request),
     )
     return await _staff_signed_in(request, response, identity, issued)
-
-
-class LoginCode(Contract):
-    login_id: PushId
-    code: Code
-
-
-class AuthenticatorSetupView(Contract):
-    """Show `uri` as a QR code, and `secret` for typing in by hand. Neither is shown again."""
-
-    secret: str
-    uri: str
 
 
 class EnrolWithApp(Contract):

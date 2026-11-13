@@ -117,6 +117,10 @@ code() { "${curl_local[@]}" --resolve "$1:$port:127.0.0.1" --output /dev/null --
   grep -q "script-src 'self'.*connect-src 'self' https://$host "
 [[ $(code app-staging.finvestug.com /) == 503 ]]
 [[ $(code "$host" /.env) == 404 ]]
+# A body far over the API's own limit stops at the edge.
+head -c 2000000 /dev/zero > "$work/large-body"
+[[ $("${curl_local[@]}" --output /dev/null --write-out '%{http_code}' --data-binary "@$work/large-body" \
+  -H 'Content-Type: application/json' "https://$host:$port/client/sign-in") == 413 ]]
 [[ $(code unknown.example /) == 000 ]]
 # Staging asks search engines to leave every address out.
 for name in staging.finvestug.com admin-staging.finvestug.com "$host"; do

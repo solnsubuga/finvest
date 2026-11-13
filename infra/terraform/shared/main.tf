@@ -72,6 +72,45 @@ resource "cloudflare_zone_setting" "this" {
   value      = each.value
 }
 
+# A flood guard on the API's own paths, for both environments. The zone is on the Free plan, which
+# allows one rate limiting rule per zone, matching on the path only, counted per visitor address
+# over 10 seconds. It is a zone entrypoint, so it lives here rather than in each environment.
+# Sign-in steps have their own tighter limits in PostgreSQL; this only stops a flood before it
+# reaches the server. Many people in Uganda share one carrier address (CGNAT), so the limit is
+# far above what any one person sends. Payment provider callbacks are never limited.
+variable "api_flood_requests_per_10s" {
+  description = "Requests one address may send to the API's client, staff and public paths in 10 seconds before Cloudflare blocks it for 10 seconds."
+  type        = number
+  default     = 400
+
+  validation {
+    condition     = var.api_flood_requests_per_10s >= 100
+    error_message = "Keep the flood guard at 100 or more: carrier addresses are shared by many people."
+  }
+}
+
+resource "cloudflare_ruleset" "rate_limit" {
+  zone_id     = data.cloudflare_zone.this.id
+  name        = "Finvest rate limits"
+  description = "Managed by Terraform (shared)"
+  kind        = "zone"
+  phase       = "http_ratelimit"
+
+  rules = [{
+    ref         = "api_flood_guard"
+    description = "API flood guard: client, staff and public paths"
+    enabled     = true
+    action      = "block"
+    expression  = "(http.request.uri.path wildcard \"/client/*\") or (http.request.uri.path wildcard \"/staff/*\") or (http.request.uri.path wildcard \"/public/*\")"
+    ratelimit = {
+      characteristics     = ["ip.src", "cf.colo.id"]
+      period              = 10
+      requests_per_period = var.api_flood_requests_per_10s
+      mitigation_timeout  = 10
+    }
+  }]
+}
+
 output "project_id" {
   value = digitalocean_project.finvest.id
 }

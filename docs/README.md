@@ -18,6 +18,7 @@
 | [account-numbers.md](account-numbers.md) | Format, generation and lifetime of client account numbers |
 | [roadmap.md](roadmap.md) | Build phases and the feature checklist for the client app and back office |
 | [migration.md](migration.md) | Moving Finvest 1.0 clients onto the new system |
+| [security.md](security.md) | The security review before launch: findings, the ASVS checklist and the penetration test scope |
 | [decisions.md](decisions.md) | Decisions made so far and questions still open |
 | [design.md](design.md) | The design canvas, brand and tokens |
 

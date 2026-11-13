@@ -1,6 +1,6 @@
 # Ledger and audit trail
 
-How the money rules in [rules.md](rules.md) are built. The code is in `backend/app/modules/ledger`, `backend/app/modules/audit`, `backend/app/modules/account_numbers` and `backend/app/shared/money.py`. The database side is migrations 0010 to 0014.
+How the money rules in [rules.md](rules.md) are built. The code is in `backend/app/modules/ledger`, `backend/app/modules/audit`, `backend/app/modules/account_numbers` and `backend/app/shared/money.py`. The database side is migrations 0010 to 0015.
 
 ## Money
 
@@ -154,7 +154,7 @@ What the database enforces, for every role including the table owner:
 | Closed days only move forward | The list of closed days is insert-only and each new date must be later than the last. A closed day is never reopened. Closing a day that is already closed changes nothing. |
 | Only a day that has ended | Today and future days cannot be closed, by PostgreSQL's own clock in Kampala time, because payments and payouts are still being dated today. `close_through` raises `DayNotEnded`. |
 | People close days | Only a staff transaction can close, under its own ID. The worker can read the closed day and cannot set it. Each close writes an audit event. |
-| Nothing slips in behind a close | Posting and closing take turns on one lock. A close waits for transactions that have already posted an entry, and an entry posted during a close waits and is then checked against the new date. |
+| Nothing slips in behind a close | Posting and closing take turns on one lock. A close waits for transactions that have already posted an entry, and an entry posted during a close waits and is then checked against the new date. This relies on the READ COMMITTED isolation level, which the application always uses, so the database refuses to post or close in any other. |
 
 A mistake found in a closed day is fixed with a correction dated in an open day. The closed day keeps showing what was agreed, and the fix shows on the day it was made.
 
