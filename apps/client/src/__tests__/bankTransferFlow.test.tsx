@@ -3,6 +3,7 @@ import { renderRouter } from "expo-router/testing-library";
 
 import { DEMO_PASSWORD } from "@/auth/stubAuthClient";
 import { PaymentError } from "@/payments/types";
+import { WARM_ROUTER_MS, warmRouter } from "@/testing/warmRouter";
 
 const PDF = { uri: "file:///receipt.pdf", name: "transfer-receipt.pdf", mimeType: "application/pdf", size: 219_136 };
 
@@ -109,9 +110,7 @@ async function fill(number = "TXN123456") {
   await fireEvent.changeText(screen.getByTestId("receipt-number"), number);
 }
 
-// The first test in a file renders the whole router from cold, which takes several seconds on
-// a busy CI runner. The assertions are unchanged; only the time allowed to reach them is.
-jest.setTimeout(30_000);
+beforeAll(warmRouter, WARM_ROUTER_MS);
 
 describe("paying for an investment by bank transfer", () => {
   beforeAll(() => {

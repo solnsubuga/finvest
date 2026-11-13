@@ -3,6 +3,7 @@ import { renderRouter } from "expo-router/testing-library";
 
 import { DEMO_PASSWORD } from "@/auth/stubAuthClient";
 import { PaymentError } from "@/payments/types";
+import { WARM_ROUTER_MS, warmRouter } from "@/testing/warmRouter";
 
 /** The demo's clock, moved by hand so each state can be looked at. */
 const mockClock = { ms: Date.parse("2026-11-13T12:31:00Z") };
@@ -75,9 +76,7 @@ beforeEach(() => {
   mockScenario.code = "00";
 });
 
-// The first test in a file renders the whole router from cold, which takes several seconds on
-// a busy CI runner. The assertions are unchanged; only the time allowed to reach them is.
-jest.setTimeout(30_000);
+beforeAll(warmRouter, WARM_ROUTER_MS);
 
 describe("paying for an investment by mobile money", () => {
   it("shows the amount and the account's own number, which cannot be changed", async () => {
