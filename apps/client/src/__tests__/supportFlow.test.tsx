@@ -311,4 +311,18 @@ describe("complaints", () => {
     await screen.findByText("C-1001");
     expect(mockComplain.mock.calls[1]![0].key).not.toBe(mockComplain.mock.calls[0]![0].key);
   });
+
+  it("unlocks the form when a retry after a lost answer is refused", async () => {
+    await fillComplaint();
+    mockComplain.mockReturnValueOnce("made then lost").mockReturnValueOnce("refused");
+    await fireEvent.press(screen.getByTestId("send-complaint"));
+    await screen.findByText(/may already have reached us/);
+
+    await fireEvent.press(screen.getByTestId("send-complaint"));
+    await screen.findByText(/could not be accepted/);
+    expect(screen.queryByText(/may already have reached us/)).toBeNull();
+    expect(screen.getByTestId("complaint-summary").props.editable).not.toBe(false);
+    expect(screen.getByTestId("complaint-details").props.editable).not.toBe(false);
+    expect(mockComplain.mock.calls[1]![0].key).toBe(mockComplain.mock.calls[0]![0].key);
+  });
 });
