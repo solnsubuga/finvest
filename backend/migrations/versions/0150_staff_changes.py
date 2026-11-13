@@ -1,7 +1,7 @@
 """Change the team with two people: invite, change a role, deactivate, reactivate, reset sign-in.
 
 Revision ID: 0150_staff_changes
-Revises: 0042_pot_transfers
+Revises: 0111_goal_rollovers
 
 * `identity_staff_changes` holds every proposed change to who works here and what they may
   do. One admin proposes and a different admin approves, and PostgreSQL enforces that: the
@@ -18,7 +18,7 @@ the command line (`app.modules.identity.bootstrap`). That path stays open, as it
 from alembic import op
 
 revision = "0150_staff_changes"
-down_revision = "0042_pot_transfers"
+down_revision = "0111_goal_rollovers"
 branch_labels = None
 depends_on = None
 
