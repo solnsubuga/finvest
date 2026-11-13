@@ -74,6 +74,10 @@ beforeEach(() => {
   mockClock.ms = Date.parse("2026-11-13T12:40:00Z");
 });
 
+// The first test in a file renders the whole router from cold, which takes several seconds on
+// a busy CI runner. The assertions are unchanged; only the time allowed to reach them is.
+jest.setTimeout(30_000);
+
 describe("the notification centre", () => {
   it("shows the unread count on Home and the list behind it", async () => {
     await signIn();

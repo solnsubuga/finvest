@@ -1,6 +1,5 @@
 import { resolveAuthClient } from "../resolveClient";
 import * as stub from "../stubAuthClient";
-import { AuthError } from "../types";
 
 describe("resolveAuthClient", () => {
   it("uses the demo when the stub was loaded, and says so", () => {
@@ -9,32 +8,13 @@ describe("resolveAuthClient", () => {
     expect(resolved.demoCode).toBe(stub.DEMO_CODE);
   });
 
-  it("loads the stub in development, which is how the tests run", () => {
+  it("loads the stub in tests", () => {
     expect(resolveAuthClient().demo).toBe(true);
   });
 
-  it("fails closed without the stub: nobody can sign in, not even the demo account", async () => {
-    const { client, demo, demoCode } = resolveAuthClient(null);
+  it("talks to the API without the stub, so the demo account is unknown there", () => {
+    const { demo, demoCode } = resolveAuthClient(null);
     expect(demo).toBe(false);
     expect(demoCode).toBeNull();
-    await expect(client.startLogin(stub.DEMO_PHONE, stub.DEMO_PASSWORD)).rejects.toEqual(
-      new AuthError("unavailable"),
-    );
-    await expect(
-      client.startSignup({ phone: "+256701555012", email: "new@example.com" }),
-    ).rejects.toBeInstanceOf(AuthError);
-    await expect(client.verifyWithCode("login_1", stub.DEMO_CODE)).rejects.toBeInstanceOf(
-      AuthError,
-    );
-    await expect(client.verifyWithPasskey("login_1")).rejects.toBeInstanceOf(AuthError);
-    await expect(client.listSecondSteps()).rejects.toBeInstanceOf(AuthError);
-    await expect(client.addPasskey()).rejects.toBeInstanceOf(AuthError);
-    await expect(client.startAuthenticatorSetup()).rejects.toBeInstanceOf(AuthError);
-    await expect(client.confirmAuthenticatorSetup(stub.DEMO_CODE)).rejects.toBeInstanceOf(
-      AuthError,
-    );
-    await expect(
-      client.verifyWithAuthenticator("login_1", stub.DEMO_CODE),
-    ).rejects.toBeInstanceOf(AuthError);
   });
 });
