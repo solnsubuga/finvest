@@ -1,6 +1,7 @@
 """Identity check fixtures: a provider that answers as told, and a client's finished draft."""
 
 import os
+import uuid
 from dataclasses import dataclass, field
 from datetime import date
 
@@ -21,7 +22,6 @@ from app.modules.kyc.domain.provider import (
 )
 from app.shared.actors import Actor
 from app.shared.clock import Clock
-from app.shared.push_ids import push_id
 
 SHA256 = "ab" * 32
 # A fresh key for every test run. No key is ever written into the repository.
@@ -36,8 +36,10 @@ def details(document_number: str | None = None) -> IdentityDetails:
     return IdentityDetails(
         surname="NAKATO",
         given_names="Amara",
-        # Unique by default: one approved client per identity document.
-        document_number=document_number or push_id().replace("-", "A").replace("_", "B").upper(),
+        # Unique by default: one approved client per identity document. 122 random bits in 32
+        # upper-case hex characters, so no two tests share a number. Folding a push id to upper
+        # case did not: ids made in the same millisecond could become the same number.
+        document_number=document_number or uuid.uuid4().hex.upper(),
         date_of_birth=date(1994, 6, 22),
         document_expires_on=date(2030, 9, 18),
     )
