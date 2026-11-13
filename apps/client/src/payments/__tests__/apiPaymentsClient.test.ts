@@ -2,7 +2,7 @@ import { API_URL } from "@/api/config";
 import { setFetch } from "@/api/http";
 
 import { createApiPaymentsClient } from "../apiPaymentsClient";
-import { PaymentError } from "../types";
+import { openPaymentHref, PaymentError } from "../types";
 
 jest.mock("expo-secure-store", () => ({
   WHEN_UNLOCKED_THIS_DEVICE_ONLY: "x",
@@ -138,7 +138,13 @@ describe("the payments client for the real API", () => {
     const live = `GET /client/investments/${INVESTMENT}/payment`;
     const client = createApiPaymentsClient();
     serve({ [path]: refused("conflict", 409), [live]: json(payment({ status: "awaiting_approval" })) });
-    await expect(client.payWithMobileMoney(request)).rejects.toEqual(new PaymentError("already_paying"));
+    const underWay = await client.payWithMobileMoney(request).catch((error: unknown) => error);
+    expect(underWay).toEqual(new PaymentError("already_paying"));
+    expect((underWay as PaymentError).openPayment).toEqual({ id: PAYMENT, method: "mobile_money" });
+    expect(openPaymentHref(underWay)).toBe(`/pay/deposit/${PAYMENT}`);
+    serve({ [path]: refused("conflict", 409), [live]: json(payment({ method: "bank_transfer", status: "in_review", payer: null })) });
+    const checking = await client.payWithMobileMoney(request).catch((error: unknown) => error);
+    expect(openPaymentHref(checking)).toBe(`/pay/bank/transfer/${PAYMENT}`);
     serve({ [path]: refused("conflict", 409), [live]: json(payment({ status: "confirmed" })) });
     await expect(client.payWithMobileMoney(request)).rejects.toEqual(new PaymentError("not_payable"));
     serve({ [path]: refused("conflict", 409), [live]: refused("not_found", 404) });
@@ -154,6 +160,9 @@ describe("the payments client for the real API", () => {
     await expect(client.payWithMobileMoney(request)).rejects.toEqual(new PaymentError("amount_not_allowed"));
     serve({ [path]: refused("not_found", 404) });
     await expect(client.payWithMobileMoney(request)).rejects.toEqual(new PaymentError("not_payable"));
+    // Any other field problem is a definite refusal, never "could not reach Finvest".
+    serve({ [path]: refused("validation_failed", 422, [{ field_path: ["network"], code: "invalid" }]) });
+    await expect(client.payWithMobileMoney(request)).rejects.toEqual(new PaymentError("not_accepted"));
   });
 
   it("fails as unavailable when offline or when the answer does not match the contract", async () => {
@@ -195,6 +204,24 @@ describe("the payments client for the real API", () => {
     expect(form.get("transaction_number")).toBe("TX123");
     expect(transfer).toMatchObject({ id: PAYMENT, status: "checking", reason: null });
     await expect(client.getBankTransfer(PAYMENT)).resolves.toMatchObject({ status: "not_matched", reason: "not_on_statement" });
+  });
+
+  it("refuses a receipt for another amount than the investment's, or with a refused detail", async () => {
+    const receipt = {
+      payableId: INVESTMENT,
+      file: { uri: "file:///r.png", name: "r.png", mimeType: "image/png" as const, sizeBytes: 1 },
+      amountSent: { minor: 900_000, currency: "UGX" as const },
+      sentOn: "2026-11-13",
+      bankName: "Stanbic",
+      transactionNumber: "TX1",
+      idempotencyKey: "key-4",
+    };
+    const path = `POST /client/investments/${INVESTMENT}/payments/bank-transfer`;
+    const client = createApiPaymentsClient();
+    serve({ [path]: refused("validation_failed", 422, [{ field_path: ["body", "amount_minor"], code: "amount_differs_from_investment" }]) });
+    await expect(client.submitBankReceipt(receipt)).rejects.toEqual(new PaymentError("amount_differs"));
+    serve({ [path]: refused("validation_failed", 422, [{ field_path: ["body", "sent_on"], code: "date_parsing" }]) });
+    await expect(client.submitBankReceipt(receipt)).rejects.toEqual(new PaymentError("not_accepted"));
   });
 
   it("refuses a receipt the API would not take", async () => {

@@ -122,9 +122,12 @@ export function toPaymentError(error: unknown, call: Call = "read"): PaymentErro
     case "validation_failed": {
       const fields = error.fields.map((problem) => problem.field);
       if (fields.some((field) => field.endsWith("receipt"))) return new PaymentError("receipt_not_accepted");
+      // A bank receipt for another amount than the investment's would be refused by staff later.
+      if (fields.some((field) => field.endsWith("amount_minor"))) return new PaymentError("amount_differs");
       // Mobile money takes whole shillings only, so a dollar investment is paid by bank.
       if (fields.some((field) => field.endsWith("amount"))) return new PaymentError("amount_not_allowed");
-      return new PaymentError("unavailable");
+      // A definite refusal: nothing was saved, so it must not read as a lost answer.
+      return new PaymentError("not_accepted");
     }
     default:
       return new PaymentError("unavailable");
@@ -164,7 +167,11 @@ export function createApiPaymentsClient(): PaymentsClient {
     if (!(error instanceof ApiError) || error.code !== "conflict") return toPaymentError(error, "pay");
     try {
       const live = await api("GET /client/investments/{investment_id}/payment", { params: { investment_id: investmentId } });
-      return new PaymentError(live.status === "confirmed" ? "not_payable" : "already_paying");
+      if (live.status === "confirmed") return new PaymentError("not_payable");
+      return new PaymentError("already_paying", {
+        id: live.id,
+        method: live.method === "bank_transfer" ? "bank_transfer" : "mobile_money",
+      });
     } catch {
       return new PaymentError("not_payable");
     }
