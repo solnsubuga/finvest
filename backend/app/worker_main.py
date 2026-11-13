@@ -9,14 +9,19 @@ from datetime import timedelta
 
 from app.infrastructure.database import Database
 from app.infrastructure.database.roles import WORKER, check_role
+from app.infrastructure.email import EmailSettings
 from app.infrastructure.jobs import Handler, JobHandler, Worker, WorkerConfig
 from app.infrastructure.jobs.settings import JobProcessSettings
 from app.infrastructure.logging import configure_logging
 from app.infrastructure.process import keep_heartbeat, stop_on_signals
 from app.infrastructure.settings import Settings
+from app.infrastructure.sms import SmsSettings
+from app.modules.investments.jobs import InvestmentJobs
 from app.modules.kyc.jobs import ProviderJobs, sweep_unanswered
 from app.modules.kyc.service import SWEEP_UNANSWERED
 from app.modules.kyc.settings import KycSettings
+from app.modules.notifications import jobs as notification_jobs
+from app.modules.payments.bank_transfers import BankTransferJobs
 from app.modules.payments.jobs import DepositJobs
 from app.modules.payments.settings import PaymentsSettings
 from app.modules.payments.wiring import collections_provider
@@ -29,7 +34,10 @@ def handlers(database: Database, clock: Clock) -> dict[str, JobHandler | Handler
     A handler that calls a provider is registered with `external_effect(handler)`, so a crash
     or an unsorted exception stops the job for reconciliation and it is never run twice.
     """
-    kinds: dict[str, JobHandler | Handler] = {SWEEP_UNANSWERED: sweep_unanswered(clock)}
+    kinds: dict[str, JobHandler | Handler] = {
+        SWEEP_UNANSWERED: sweep_unanswered(clock),
+        **InvestmentJobs(database, clock).handlers(),
+    }
     identity = KycSettings()
     if identity.identity_provider != "manual":
         # The manual provider sends every client to a person and queues no provider jobs.
@@ -42,9 +50,17 @@ def handlers(database: Database, clock: Clock) -> dict[str, JobHandler | Handler
                 automatic_approval=identity.identity_automatic_approval,
             ).handlers()
         )
+    # Bank transfers are settled from a staff review and call no provider, so they run even
+    # where mobile money is turned off.
+    kinds.update(BankTransferJobs(database, clock).handlers())
     collections = collections_provider(PaymentsSettings(), clock)
     if collections is not None:
         kinds.update(DepositJobs(database, collections, clock).handlers())
+    kinds.update(
+        notification_jobs.handlers(
+            database, clock, EmailSettings().transport(), SmsSettings().transport()
+        )
+    )
     return kinds
 
 

@@ -6,8 +6,9 @@ and each fire time becomes exactly one job.
 """
 
 import asyncio
-from datetime import timedelta
+from datetime import UTC, timedelta
 
+from apscheduler.triggers.cron import CronTrigger  # type: ignore[import-untyped]
 from apscheduler.triggers.interval import IntervalTrigger  # type: ignore[import-untyped]
 
 from app.infrastructure.database import Database
@@ -18,10 +19,13 @@ from app.infrastructure.jobs.worker import default_worker_id
 from app.infrastructure.logging import configure_logging
 from app.infrastructure.process import keep_heartbeat, stop_on_signals
 from app.infrastructure.settings import Settings
+from app.modules.investments.jobs import ACCRUE_KIND, CANCEL_UNPAID_KIND
 from app.modules.kyc.service import SWEEP_UNANSWERED
+from app.modules.notifications.service import PURGE_MESSAGES
 from app.modules.payments import service as payments
 from app.modules.payments.settings import PaymentsSettings
 from app.modules.payments.wiring import ensure_allowed
+from app.shared.business_day import KAMPALA
 from app.shared.clock import SystemClock
 
 
@@ -38,6 +42,23 @@ def schedules() -> list[Schedule]:
             kind=SWEEP_UNANSWERED,
             max_age=timedelta(minutes=5),
         ),
+        # Cancels investments nobody paid for within the payment window.
+        Schedule(
+            name="investments.cancel_unpaid",
+            trigger=IntervalTrigger(minutes=15),
+            kind=CANCEL_UNPAID_KIND,
+            max_age=timedelta(minutes=30),
+        ),
+        # Pays each running investment its interest for the day, shortly after the day begins
+        # in Kampala. Every missed day gets its own run, and a run still counts days later.
+        Schedule(
+            name="investments.accrue_interest",
+            trigger=CronTrigger(hour=0, minute=30, timezone=KAMPALA),
+            kind=ACCRUE_KIND,
+            catch_up="all",
+            max_catch_up=31,
+            max_age=timedelta(days=7),
+        ),
     ]
     payments_settings = PaymentsSettings()
     ensure_allowed(payments_settings)
@@ -51,6 +72,14 @@ def schedules() -> list[Schedule]:
                 max_age=timedelta(minutes=5),
             )
         )
+    # Clears the content of messages that were never sent, and old addresses and numbers.
+    runs.append(
+        Schedule(
+            name="notifications.purge",
+            trigger=CronTrigger(minute=17, timezone=UTC),
+            kind=PURGE_MESSAGES,
+        )
+    )
     return runs
 
 

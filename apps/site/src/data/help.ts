@@ -17,7 +17,7 @@ export interface HelpTopic {
 
 /**
  * The help centre. Answers say only what docs/ and the design canvas establish. Where Finvest
- * has not supplied a fact, the answer keeps a [BRACKETED] placeholder.
+ * has not supplied a fact, the answer leaves it out. No placeholders: a test fails on any.
  */
 export const helpTopics: HelpTopic[] = [
   {
@@ -34,7 +34,7 @@ export const helpTopics: HelpTopic[] = [
       {
         question: "How long does the identity check take?",
         answer:
-          "A member of staff reviews each check. It usually takes [REVIEW TIME], and the app tells you as soon as it is done.",
+          "A member of staff reviews each check, and the app tells you as soon as it is done.",
       },
       {
         question: "What is my Finvest account number?",
@@ -108,7 +108,7 @@ export const helpTopics: HelpTopic[] = [
       {
         question: "Can I take my money out before maturity?",
         answer:
-          "[CONFIRM EARLY WITHDRAWAL TERMS]. You see the exact amount before you confirm, and it can be less than holding to maturity.",
+          "Yes, ask in the app. You see the exact amount before you confirm, and it can be less than holding to maturity.",
       },
       {
         question: "Where can I be paid?",

@@ -1,4 +1,5 @@
 ---
+import { company } from "../data/company.ts";
 import Logo from "./Logo.astro";
 
 const groups = [
@@ -38,6 +39,16 @@ const groups = [
   },
 ];
 const year = new Date().getUTCFullYear();
+
+// Shown only once Finvest has supplied the facts (src/data/company.ts).
+const legalLine = [
+  company.registeredName && `Finvest is a trading name of ${company.registeredName}.`,
+  company.regulator &&
+    `Regulated by ${company.regulator}${company.licenceNumber ? ` under licence ${company.licenceNumber}` : ""}.`,
+  company.officeAddress && `${company.officeAddress}, ${company.city}.`,
+]
+  .filter(Boolean)
+  .join(" ");
 ---
 
 <footer class="footer">
@@ -65,10 +76,7 @@ const year = new Date().getUTCFullYear();
       </div>
     </div>
     <div class="footer__small">
-      <p>
-        Finvest is a trading name of [REGISTERED COMPANY NAME], regulated by [REGULATOR] under
-        licence [LICENCE NUMBER]. [OFFICE ADDRESS], Kampala, Uganda.
-      </p>
+      {legalLine && <p>{legalLine}</p>}
       <p>
         Rates shown are yearly and after tax, and they change with each auction. The value of
         investments can go down as well as up. Withdrawing before maturity can return less than

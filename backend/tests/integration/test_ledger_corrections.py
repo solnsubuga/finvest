@@ -33,6 +33,7 @@ from app.shared.actors import SYSTEM, Actor
 from app.shared.money import Currency
 from app.shared.push_ids import push_id
 from tests.support.clock import AsyncBarrier, FakeClock
+from tests.support.database import TEST_SOURCE
 from tests.support.ledger import DAY, Books, client, deposit, key, open_books, payout, staff, ugx
 
 pytestmark = pytest.mark.integration
@@ -68,6 +69,8 @@ async def make_mistake(database: Database, clock: FakeClock) -> Mistake:
                 effective_date=DAY,
                 lines=(debit(books.cash, ugx(5_000)), credit(other.holding, ugx(5_000))),
                 idempotency_key=key(),
+                source_type=TEST_SOURCE,
+                source_id=push_id(),
             ),
             clock,
         )
@@ -119,14 +122,14 @@ AFTER = (4_600, 0, 400)
 
 
 async def test_a_mistaken_credit_that_has_moved_on_is_corrected_by_two_people(
-    app_database: Database, fake_clock: FakeClock
+    app_database: Database, worker_database: Database, fake_clock: FakeClock
 ) -> None:
     mistake = await make_mistake(app_database, fake_clock)
     maker, checker = staff(), staff()
     assert await state(app_database, mistake) == BEFORE
 
-    # The plain reversal is refused: 400 of the money has gone.
-    async with app_database.actor_transaction(maker) as session:
+    # The plain reversal, which only the worker may post, is refused: 400 of the money has gone.
+    async with worker_database.actor_transaction(SYSTEM) as session:
         with pytest.raises(InsufficientFunds):
             await ledger.reverse_entry(
                 session,
@@ -288,7 +291,7 @@ async def test_an_approval_that_no_longer_fits_the_books_changes_nothing(
 
 
 async def test_a_reversal_can_also_be_made_to_need_two_people(
-    app_database: Database, fake_clock: FakeClock
+    app_database: Database, worker_database: Database, fake_clock: FakeClock
 ) -> None:
     async with app_database.actor_transaction(staff()) as session:
         books = await open_books(session, fake_clock)
@@ -329,10 +332,13 @@ async def test_a_reversal_can_also_be_made_to_need_two_people(
         assert undo.reverses_entry_id == wrong.id
         assert (await ledger.get_balance(session, books.holding)).is_zero
         assert (await ledger.get_balance(session, books.cash)).is_zero
+    # Not even the worker can reverse it a second time.
+    async with worker_database.actor_transaction(SYSTEM) as session:
         with pytest.raises(AlreadyReversed):
             await ledger.reverse_entry(
                 session, wrong.id, fake_clock, effective_date=DAY, idempotency_key=key()
             )
+    async with app_database.actor_transaction(checker) as session:
         with pytest.raises(AlreadyReversed):
             await corrections.propose_correction(
                 session,

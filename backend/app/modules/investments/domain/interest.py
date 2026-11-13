@@ -29,6 +29,11 @@ from app.shared.money import Money, Rounding
 
 DAYS_IN_YEAR = 365
 BASIS_POINTS = 10_000
+# The rounding of interest and of tax is decided here and nowhere else. Both round down:
+# interest that has not been earned is never credited, and the fraction of tax stays with the
+# client. Changing either is a decision for docs/decisions.md.
+INTEREST_ROUNDING = Rounding.DOWN
+TAX_ROUNDING = Rounding.DOWN
 # A yearly rate above this is a typing mistake, not a product.
 MAX_ANNUAL_RATE_BPS = 5_000
 
@@ -88,9 +93,9 @@ def accrued(terms: Terms, days: int) -> Accrual:
     if type(days) is not int or days < 0:
         raise InvalidTerms("Days is a whole number, zero or more")
     gross = terms.principal.mul_ratio(
-        terms.annual_rate_bps * days, BASIS_POINTS * DAYS_IN_YEAR, Rounding.DOWN
+        terms.annual_rate_bps * days, BASIS_POINTS * DAYS_IN_YEAR, INTEREST_ROUNDING
     )
-    tax = gross.mul_ratio(terms.tax_bps, BASIS_POINTS, Rounding.DOWN)
+    tax = gross.mul_ratio(terms.tax_bps, BASIS_POINTS, TAX_ROUNDING)
     return Accrual(gross=gross, tax=tax)
 
 
@@ -129,3 +134,42 @@ def days_earned(start: date, on: date, term_days: int | None) -> int:
         raise InvalidTerms("A term is at least one day")
     elapsed = max((on - start).days, 0)
     return elapsed if term_days is None else min(elapsed, term_days)
+
+
+@dataclass(frozen=True, slots=True)
+class Posting:
+    """What one daily run posts for one investment."""
+
+    # The last day this posting pays interest for. Never after maturity.
+    through: date
+    # Days of interest earned by the end of that day.
+    days: int
+    amount: Accrual
+    total: Accrual
+
+
+def posting_due(
+    terms: Terms,
+    *,
+    start: date,
+    term_days: int | None,
+    posted: Accrual,
+    posted_through: date | None,
+    run_date: date,
+) -> Posting | None:
+    """What the run for `run_date` must post, given what earlier runs posted. None if nothing.
+
+    The amount is everything earned by `run_date` minus everything already posted. So a run
+    that follows a missed day pays for both days at once, a run repeated for a day already
+    paid posts nothing, and the postings always sum to what the formula gives.
+    """
+    days = days_earned(start, run_date, term_days)
+    through = start + timedelta(days=days)
+    if days == 0 or (posted_through is not None and posted_through >= through):
+        return None
+    total = accrued(terms, days)
+    amount = Accrual(gross=total.gross - posted.gross, tax=total.tax - posted.tax)
+    if amount.gross.is_negative or amount.tax.is_negative or amount.net.is_negative:
+        # The books hold more interest than the terms can have earned. Never post a reduction.
+        raise InvalidTerms("More interest is posted than these terms have earned")
+    return Posting(through=through, days=days, amount=amount, total=total)

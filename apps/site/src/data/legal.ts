@@ -17,7 +17,7 @@ export const legalDocuments: LegalDocument[] = [
       {
         heading: "Who we are",
         covers:
-          "Finvest is a trading name of [REGISTERED COMPANY NAME], regulated by [REGULATOR] under licence [LICENCE NUMBER].",
+          "The company behind Finvest, who regulates it, and its licence.",
       },
       {
         heading: "Opening an account",
@@ -37,7 +37,7 @@ export const legalDocuments: LegalDocument[] = [
       {
         heading: "Early withdrawal",
         covers:
-          "[CONFIRM EARLY WITHDRAWAL TERMS] and why the amount can differ from the amount at maturity.",
+          "How an investment is ended before maturity, and why the amount can differ from the amount at maturity.",
       },
       { heading: "Fees", covers: "The fees that apply, shown before you confirm any action." },
       {
@@ -61,7 +61,7 @@ export const legalDocuments: LegalDocument[] = [
       {
         heading: "Who is responsible for your data",
         covers:
-          "[REGISTERED COMPANY NAME] as data controller, its registration under the Data Protection and Privacy Act, 2019, and how to reach its data protection officer.",
+          "The company responsible for your data as its controller, its registration under the Data Protection and Privacy Act, 2019, and how to reach its data protection officer.",
       },
       {
         heading: "What we collect",
@@ -124,9 +124,9 @@ export const legalDocuments: LegalDocument[] = [
     slug: "fees",
     title: "Fees and charges",
     sections: [
-      { heading: "Fees to invest", covers: "[CONFIRM FEES]" },
-      { heading: "Fees to be paid out", covers: "[CONFIRM FEES]" },
-      { heading: "Early withdrawal", covers: "[CONFIRM FEES]" },
+      { heading: "Fees to invest", covers: "The fee, if any, to make an investment." },
+      { heading: "Fees to be paid out", covers: "The fee, if any, to be paid at maturity." },
+      { heading: "Early withdrawal", covers: "The fee, if any, to withdraw before maturity." },
       {
         heading: "Charges from your mobile money provider or bank",
         covers: "Charges that others make and Finvest does not control.",
@@ -149,11 +149,11 @@ export const legalDocuments: LegalDocument[] = [
       {
         heading: "Our timelines",
         covers:
-          "We acknowledge within one working day and aim to resolve within [NUMBER] days.",
+          "When we acknowledge a complaint and how long we take to resolve it.",
       },
       {
         heading: "If you are not satisfied",
-        covers: "How to take the complaint to [REGULATOR].",
+        covers: "Where to take the complaint next.",
       },
     ],
   },

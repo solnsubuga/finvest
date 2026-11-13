@@ -1,7 +1,7 @@
 """Add dealing desk orders.
 
 Revision ID: 0080_dealing_orders
-Revises: 0021_one_live_deposit
+Revises: 0022_bank_transfer_deposits
 
 An order to buy or sell bills is prepared by one member of staff and approved by another. What
 the dealer did is then recorded from the custodian's note. The database enforces who may take
@@ -15,7 +15,7 @@ from collections.abc import Sequence
 from alembic import op
 
 revision: str = "0080_dealing_orders"
-down_revision: str | None = "0021_one_live_deposit"
+down_revision: str | None = "0022_bank_transfer_deposits"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 

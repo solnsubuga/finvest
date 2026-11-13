@@ -90,6 +90,12 @@ Interest is also checked investment by investment. The new system opens every ru
 
 The switch cannot be scheduled while the import has an error, or while any total or investment that differs has no sign-off. A sign-off names the line or the investment, records the exact figures it accepts, gives a reason, and takes two people: one member of staff proposes it and a different one approves it. It counts only while those figures stand. If the file is exported again and either figure changes, the difference needs a new sign-off and the old one is reported as out of date. A sign-off left over for something that no longer differs also blocks the switch, so a reason written for an earlier file is never carried forward by accident.
 
+### What is kept
+
+Every trial run is kept in `migration_trials`: the "as of" date, a fingerprint of each file, the counts, the totals, the investments that differ and the list of problems. The files themselves and their cell values are not kept, so the record holds no personal data. The newest run is the one the checks read. The old system's totals are kept in `migration_control_totals` each time finance enters them, and the newest entry counts.
+
+A sign-off is two rows. `migration_sign_offs` holds the proposal with the figures read from the newest trial, never figures sent by the browser. `migration_sign_off_decisions` holds the approval or rejection. The database refuses a decision by the person who proposed it, a second decision, and any change or deletion of these rows. The code is in `backend/app/modules/migration/service.py`.
+
 At the switch each investment is opened with one ledger entry: the principal to the client's holding, interest after tax to the client's accrued interest, the tax to the tax payable account, and the three together against a migration opening balances account, which finance clears against the custodian and bank position.
 
 ## What Finvest 1.0 was

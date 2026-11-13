@@ -4,7 +4,7 @@ Infrastructure as code for Finvest, modelled on Fidiba's provisioning. Terraform
 
 | Path | Contents |
 | --- | --- |
-| `terraform/shared/` | The `finvest` project and the Cloudflare zone settings that every environment shares. Provision it first. |
+| `terraform/shared/` | The `finvest` project, the Cloudflare zone settings and the zone's one rate limiting rule, which every environment shares. Provision it first. |
 | `terraform/` | One environment: host, network, database, buckets, DNS, back office access, alerts, and the settings it writes into GitHub. |
 | `terraform/environments/*.tfvars` | What differs between `staging` and `production`. Each has its own state, so planning one never touches the other. |
 | `terraform/tests/` | `terraform test` with mock providers: the rules below that must not drift. |
@@ -102,7 +102,7 @@ Everything else is created by Terraform. These are made by hand, once:
 | --- | --- | --- |
 | `DIGITALOCEAN_TOKEN` | API → Tokens, custom scopes, read on droplet, vpc, firewall, reserved_ip, database, project, ssh_key, monitoring, uptime, tag | Full access, or the same scopes with write |
 | `SPACES_ACCESS_KEY_ID`, `SPACES_SECRET_ACCESS_KEY` | A Spaces key with read on the state bucket and the documents buckets | A Spaces key with full access. Terraform uses it to create buckets and keys and to keep state. |
-| `CLOUDFLARE_API_TOKEN` | Zone DNS Read, Zone Settings Read, SSL and Certificates Read, Account Access: Apps and Policies Read | The same with Edit |
+| `CLOUDFLARE_API_TOKEN` | Zone DNS Read, Zone Settings Read, Zone WAF Read, SSL and Certificates Read, Account Access: Apps and Policies Read | The same with Edit |
 | `TERRAFORM_GITHUB_TOKEN` | A fine-grained GitHub token for this repository, read on Environments, Secrets and Variables | The same with read and write |
 
 3. **Cloudflare zone.** `finvestug.com` must already be a zone on the account.
@@ -131,7 +131,7 @@ Repository variables under **Settings → Secrets and variables → Actions → 
 
 ## Provision
 
-1. Provision `shared` with `plan`, then `apply`. It creates the `finvest` project and the zone settings.
+1. Provision `shared` with `plan`, then `apply`. It creates the `finvest` project, the zone settings and the API rate limit.
 2. Provision `staging` with `plan`, read it, then `apply`. Then do the same for `production`.
 3. Database roles are created only once `backend/db/init-roles.sql` is on `main`. If it is not there yet, the run says so; run apply again later. It never changes an existing role's password.
 4. Turn on deploys for the environment (see Deploy below).
@@ -177,7 +177,7 @@ In each of the `staging` and `production` GitHub environments, beside what Terra
 | `FINVEST_EMAIL_RESEND_API_KEY` | Secret | The Resend key, once email is set up |
 | `FINVEST_EMAIL_BACKEND`, `FINVEST_EMAIL_FROM` | Variables | `resend` and `Finvest <no-reply@finvestug.com>` |
 
-| `SITE_PUBLISHED` | Variable, production only | The owner's decision, nobody else's: `true` puts the public website live at the production address. Leave it unset while the pages still carry placeholder facts (`pnpm placeholders` in `apps/site`). |
+| `SITE_PUBLISHED` | Variable, production only | The owner's decision, nobody else's: `true` puts the public website live at the production address. Set it when the owner launches the website. |
 | `SITE_INDEXABLE` | Variable, production only | `true` lets search engines index the website. Leave it unset until launch. Staging, the API, the back office and the client app address always send `X-Robots-Tag: noindex`, whatever this says. |
 
 `DEPLOY_SSH_KEY` is already there from provisioning, and Provision records `DEPLOY_HOST_KEY` itself.

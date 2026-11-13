@@ -18,7 +18,7 @@ const notes: Record<string, Record<string, string>> = {
     more: "Yes, as a new investment",
     interest: "Earned daily, paid at maturity",
     end: "Roll over or pay out",
-    early: "[CONFIRM EARLY WITHDRAWAL TERMS]",
+    early: "Ask in the app, and see the exact amount before you confirm",
     pay: "MTN, Airtel, bank transfer",
   },
   "TREA-182": {
@@ -26,7 +26,7 @@ const notes: Record<string, Record<string, string>> = {
     more: "Yes, as a new investment",
     interest: "Earned daily, paid at maturity",
     end: "Roll over or pay out",
-    early: "[CONFIRM EARLY WITHDRAWAL TERMS]",
+    early: "Ask in the app, and see the exact amount before you confirm",
     pay: "MTN, Airtel, bank transfer",
   },
   "USD-BOND": {
@@ -34,7 +34,7 @@ const notes: Record<string, Record<string, string>> = {
     more: "Yes, any time",
     interest: "Earned daily, paid monthly",
     end: "Stays invested until you withdraw",
-    early: "[CONFIRM EARLY WITHDRAWAL TERMS]",
+    early: "Ask in the app, and see the exact amount before you confirm",
     pay: "Dollar bank transfer",
   },
 };
@@ -69,7 +69,7 @@ const note = (code: string, key: string) => notes[code]?.[key] ?? "Ask us";
   <section class="band band--tight">
     <div class="wrap">
       <h2 class="visually-hidden">Today's rates</h2>
-      <div class="grid grid--3" style="margin-top: 0">
+      <div class="grid grid--3 grid--flush">
         {products.map((product) => <ProductCard product={product} />)}
       </div>
     </div>
@@ -127,7 +127,7 @@ const note = (code: string, key: string) => notes[code]?.[key] ?? "Ask us";
             </tr>
             <tr>
               <th scope="row">Fees</th>
-              {products.map(() => <td>[CONFIRM FEES]</td>)}
+              {products.map(() => <td>None to invest. The rate shown is what you earn</td>)}
             </tr>
           </tbody>
         </table>
@@ -158,7 +158,8 @@ const note = (code: string, key: string) => notes[code]?.[key] ?? "Ask us";
         <h2>Know the risks</h2>
         <p>
           Held to maturity, a treasury bill pays the amount shown when you invest. If you withdraw
-          early you can get back less than you expected. [CONFIRM EARLY WITHDRAWAL TERMS] Dollar investments also move with the exchange rate if you think in shillings.
+          early you can get back less than you expected, and you see the exact amount before you
+          confirm. Dollar investments also move with the exchange rate if you think in shillings.
           Read the <a href="/legal/risk">risk disclosure</a>.
         </p>
       </div>

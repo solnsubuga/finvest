@@ -12,6 +12,7 @@ from app.modules.ledger.domain.errors import UnknownAccount
 from app.shared.actors import SYSTEM
 from app.shared.push_ids import push_id
 from tests.support.clock import FakeClock
+from tests.support.database import TEST_SOURCE
 from tests.support.ledger import DAY, client, deposit, open_books, operator, payout, staff, ugx
 
 pytestmark = pytest.mark.integration
@@ -29,7 +30,7 @@ async def test_movements_list_each_line_in_the_range_with_its_source(
         books = await open_books(session, fake_clock)
         first = await ledger.post_entry(
             session,
-            replace(deposit(books, 1_000), source_type="payment", source_id=payment),
+            replace(deposit(books, 1_000), source_id=payment),
             fake_clock,
         )
         second = await ledger.post_entry(
@@ -37,7 +38,7 @@ async def test_movements_list_each_line_in_the_range_with_its_source(
             replace(
                 payout(books, 300),
                 effective_date=NEXT_DAY,
-                source_type="payout",
+                source_type="payout",  # one of the types staff may post
                 source_id=payout_id,
             ),
             fake_clock,
@@ -59,7 +60,7 @@ async def test_movements_list_each_line_in_the_range_with_its_source(
         (m.entry_id, m.effective_date, m.amount, m.entry_type, m.source_type, m.source_id)
         for m in cash
     ] == [
-        (first.id, DAY, ugx(1_000), "test.deposit", "payment", payment),
+        (first.id, DAY, ugx(1_000), "test.deposit", TEST_SOURCE, payment),
         (second.id, NEXT_DAY, ugx(-300), "test.payout", "payout", payout_id),
     ]
     assert all(m.posted_at == fake_clock.now() and m.line_no in (1, 2) for m in cash)

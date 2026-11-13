@@ -404,7 +404,7 @@ class PasskeyService:
 
     def _recent(self, client: ClientSession) -> None:
         if self.clock.now() - client.signed_in_at > RECENT_SIGN_IN:
-            raise ApplicationError("forbidden")
+            raise ApplicationError("sign_in_again")
 
     async def list(self, client: ClientSession) -> list[PasskeyView]:
         async with self.database.transaction() as session:

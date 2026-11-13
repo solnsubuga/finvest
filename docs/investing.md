@@ -1,6 +1,6 @@
 # Investing
 
-Products, rates, interest and tax, and the rules in [rules.md](rules.md) that govern them. The pure rules are in `backend/app/modules/investments/domain`, the catalogue and rate commands in `backend/app/modules/investments/service.py`, and the database side is migration 0060. Investments, the daily interest run, maturity and the screens arrive in later pull requests, and this document grows with them.
+Products, rates, interest and tax, and the rules in [rules.md](rules.md) that govern them. The pure rules are in `backend/app/modules/investments/domain`, the catalogue and rate commands in `backend/app/modules/investments/catalogue.py`, and the database side is migrations 0060 and 0061. Other modules import only from `investments/service.py`. The daily interest run, maturity and the screens arrive in later pull requests, and this document grows with them.
 
 ## Products
 
@@ -46,6 +46,8 @@ One change waits for approval per product at a time. Proposing, approving, sendi
 | A rate is never changed or removed | A trigger refuses UPDATE, DELETE and TRUNCATE on `investment_rates` for every role, the table owner included. |
 | A rate exists only for an approved proposal | The application can insert a rate only with the ID of a proposal whose status is approved and whose product, date, rate and tax are the same. The seeded rates have no proposal, and only a migration can add such a row. |
 | A second person decides | A check constraint refuses an approval or a send back by the proposer, and a withdrawal by anyone else. |
+| An approval comes before the effective date | A check constraint compares the effective date with the Kampala day of the decision. |
+| An approved proposal has its rate | A constraint checked at commit refuses an approval that wrote no rate. |
 | Nobody acts in another's name | A trigger requires the proposer, and later the decider, to be the member of staff the transaction acts for. |
 | A decision is final | A decided proposal never changes, and a proposal's product, rate, date and reason never change at all. |
 | Products are read-only | The application roles hold only SELECT on `investment_products`. Editing a product arrives with its own approval flow. |
@@ -71,15 +73,91 @@ Interest is posted to the ledger once a day. To keep the postings equal to the f
 | Tax, to date | The tax rate applied to that figure, rounded down. The fraction stays with the client. |
 | What the client earns | The first minus the second, so the three always add up. |
 
+Both directions are set in one place, `INTEREST_ROUNDING` and `TAX_ROUNDING` in `domain/interest.py`.
+
 Worked example: UGX 1,000,000 in the 91 day bill earns 31,164 before tax over the term, 4,674 is tax, and the client earns 26,490 and gets back 1,026,490.
+
+## The daily interest run
+
+The scheduler fires `investments.accrue_interest` at 00:30 Kampala time, and the worker runs it. Each run is for one business day: the day it was scheduled in, whenever it actually executes.
+
+For every running investment that has not been paid up to that day, the run works out everything earned by then from the formula, subtracts what earlier runs posted, and posts the difference as one ledger entry of type `investment.interest_accrued`:
+
+| Debit | Credit |
+| --- | --- |
+| `interest.expense`, interest before tax | `client.interest_accrued`, the client's, reference the investment: what the client earns |
+| | `tax.withholding_payable`: the tax held back |
+
+The same transaction moves the investment's own totals (`accrued_through`, and interest and tax to date), so the ledger and the investment always agree.
+
+Because the amount is "earned so far minus posted so far", the awkward cases need no special handling:
+
+| Case | What happens |
+| --- | --- |
+| The run is retried or queued twice | The second pass finds every investment already paid for that day and posts nothing. |
+| The scheduler was down for some days | Each missed day gets its own run, up to 31. Whichever executes first pays every missed day in one entry, and the others find nothing to do. |
+| A payment is confirmed late at night and processed after the run | The start date is still the day it was confirmed, so the next run pays two days. The client loses nothing. |
+| The worker dies part way | Investments are paid in batches of 200, each in its own transaction that only the current holder of the job can commit. The retry carries on with the rest. |
+| Two workers hold the same run | Each skips rows the other has locked, and no investment is paid twice. |
+| One investment cannot be paid | It is left exactly as it was and logged with its ID. Everyone else is paid. It stays due, so the next run tries again. |
+| A fixed term has matured | It is paid up to its maturity date and no further, however late the run. |
+| The run is late and the day is closed in the ledger | Entries are dated the day they are posted, not the day they are for, so a late run never writes into a closed day. |
+
+A run is refused for a day that has not come.
+
+Each run leaves a row per currency in `investment_interest_runs`: how many investments it paid, interest before tax, tax, and how many investments were still behind when it ended. Behind should always be zero. Anything else is logged as an error and needs a person to look. `investments.service.interest_runs` reads it for the console, staff only. Only the worker writes the table, its totals only grow, and nobody can delete from it. `investments.service.accrue_investment` pays one investment up to a day, for putting right one that a run left behind.
+
+Not decided yet: nothing here pays interest out. Accrued interest sits in `client.interest_accrued` until maturity, and the monthly payment for the open term dollar product is not built.
 
 ## What clients see
 
 Clients see the yearly rate after tax and the interest they earn after tax. They never see the tax rate, the tax amount or the rate before tax. In the code, `ClientReturns` and `RateVersion.client_rate_percent` are the only figures a client-facing response is built from, and the service functions `client_products` and `client_quote` are the only ones a client-facing route may call. `client_quote` is the returns calculator and the review screen: what an amount earns after tax if it starts today, and when it matures. The rate shown is a label, rounded to two decimal places. No amount is ever worked out from it.
 
+## An investment
+
+One payment by one client into one product. The code is in `backend/app/modules/investments/holdings.py` and `jobs.py`, and the table is migration 0061.
+
+| Status | Meaning |
+| --- | --- |
+| `awaiting_payment` | The client reviewed and confirmed. The terms are fixed. Nothing has been paid. |
+| `active` | The payment was confirmed and the money is in the client's holding. It earns interest from the next day. |
+| `cancelled` | It was not paid for in time. Final. No money ever moved. |
+
+1. **Review and confirm.** `request_investment` saves the investment under the client's idempotency key, so two taps invest once. The client must have passed the identity check. The terms are the product's rate and tax that day, and the investment keeps them for good.
+2. **Pay.** The investment's ID is the purpose of the deposit. Payments asks `payable_investment` who pays and exactly how much. A review stays payable for 72 hours.
+3. **Start.** When the deposit is confirmed, payments publishes `payments.deposit_confirmed` and the job `investments.start_from_deposit` runs `start_investment`. The whole amount must be waiting in `client.awaiting_start` for this investment, no less and no more. One entry moves it to `client.holding`, and `investments.started` is published.
+4. **Or not.** If the money waiting is not exactly the amount, nothing moves, the job fails for good and staff see it among the failed jobs. An investment nobody paid for is cancelled an hour after its window closes, by a sweep every 15 minutes. One with any money waiting is never cancelled, and neither is one with a deposit that has not failed (`payments.service.has_live_deposit`), because a mobile money payment still pending or uncertain can confirm after the window. The sweep locks the investment before it asks, and `payable_investment` takes a shared lock on the same row before payments lets a deposit in, so a deposit and a cancel can never both get through.
+
+A client can have five investments waiting for payment at a time.
+
+### The start date
+
+The start date is the business day, in Kampala, on which the payment was confirmed. It is not the day of the review, and not the day the start was processed. If the worker is slow or down overnight, the client still earns from the day their money arrived. Payments sends that day in the event as `confirmed_on`.
+
+The ledger entry for the start is dated the day it is posted, like every entry, so that it never lands in a day the books have closed. When the worker was down overnight that date is later than the start date. The start date on the investment is the one interest is counted from.
+
+### What the database enforces
+
+| Rule | How |
+| --- | --- |
+| The terms are the product's | A trigger checks a new investment against the catalogue itself: the product is live, the currency and term are the product's, the amount meets the minimum, and the rate and tax are the ones in force that day. |
+| The terms are today's | A second trigger (migration 0062) refuses an investment whose creation time is more than five minutes from PostgreSQL's own clock, or whose payment window is not 72 hours. The rate is picked by the creation time, so a server with a wrong clock cannot quote an old rate. |
+| The terms never change | The same trigger refuses any change to the client, product, amount, rate, tax, term or dates of the review. |
+| Only the worker starts or cancels | Status changes need the system actor on the worker's database role. The API roles hold UPDATE on the maturity choice only. |
+| A start is written once | The start date, time and ledger entry never change. A cancelled investment never changes at all. |
+| Interest only goes up | Accrued interest and its date move forwards only, and only the worker moves them. |
+| Clients are fenced | A row policy shows a client only their own investments, and lets them create only their own. |
+| Nothing is deleted | No role holds DELETE. |
+
+Ledger entry for the start (`investment.started`, key `investment-start:<investment ID>`):
+
+| Debit | Credit |
+| --- | --- |
+| `client.awaiting_start`, the client's, reference the investment | `client.holding`, the client's, reference the investment |
+
 ## Ledger accounts
 
-The investments module opens these. The entries are added with the commands that post them.
+The investments module opens these. The entries are described with the commands that post them.
 
 | Account | Kind | Holds |
 | --- | --- | --- |
@@ -90,7 +168,7 @@ The investments module opens these. The entries are added with the commands that
 
 ## How it joins the other modules
 
-Agreed with the payments and payouts threads on 13 November 2026. None of it is built yet.
+Agreed with the payments and payouts threads on 13 November 2026. Starting and daily interest are built. Maturity and unwinding are not.
 
 - **Starting.** The client reviews and confirms, which saves an investment that is awaiting payment. Its ID is the purpose of the deposit. Payments asks `investments.service.payable_investment` for the exact amount before taking a deposit. When the deposit is confirmed, payments publishes `payments.deposit_confirmed`, and the `investments.start_from_deposit` job moves the money from `client.awaiting_start` to `client.holding` and starts the investment.
 - **Maturity.** The client chooses in advance to roll over or be paid out. For a payout, the maturity run moves principal and interest to `client.payout_pending` (reference the investment) and calls `payouts.payouts.create_payout` with that account, in one transaction. If the payout is refused the money stays there and appears in the payouts staff queue.
@@ -98,4 +176,4 @@ Agreed with the payments and payouts threads on 13 November 2026. None of it is 
 
 ## Not built yet
 
-HTTP routes for the catalogue and rates (they need sign-in sessions and permissions), editing a product, investments and their life cycle, the daily interest run, maturity and rollover, early withdrawal, the monthly coupon for open terms, statements, and every screen. The dealing desk is its own module: see [dealing-desk.md](dealing-desk.md).
+HTTP routes (they need sign-in sessions and permissions), editing a product, maturity and rollover, early withdrawal, the monthly coupon for open terms, statements, and every screen. The dealing desk is its own module: see [dealing-desk.md](dealing-desk.md).

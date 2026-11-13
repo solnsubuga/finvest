@@ -2,9 +2,10 @@
 //
 //   node site-csp.mjs DIST_DIR API_ORIGIN > csp.caddy
 //
-// Scripts may come only from the site itself. Astro writes small scripts into the page, so each
-// inline script found in the built pages is allowed by its SHA-256 hash and nothing else inline
-// can run. The browser reads rates and quotes from the API, the only other host it may call.
+// Scripts and styles may come only from the site itself. Astro writes small scripts into the page,
+// so each inline script found in the built pages is allowed by its SHA-256 hash and nothing else
+// inline can run. Inline styles are not allowed at all: a page with a style attribute or a style
+// block fails here, as it already fails the site's own build test (apps/site/tests). The browser reads rates and quotes from the API, the only other host it may call.
 // Cloudflare Web Analytics, which Cloudflare may add to pages it serves, is allowed as on the
 // console.
 import { createHash } from "node:crypto";
@@ -26,18 +27,25 @@ if (pages.length === 0) {
 }
 
 const hashes = new Set();
+const inlineStyles = [];
 for (const page of pages) {
   const html = readFileSync(page, "utf8");
+  if (/<style\b/i.test(html) || /<[a-z][^>]*\sstyle\s*=/i.test(html)) inlineStyles.push(page);
   for (const [, attributes, body] of html.matchAll(/<script\b([^>]*)>([\s\S]*?)<\/script>/gi)) {
     if (/\ssrc\s*=/i.test(attributes) || body === "") continue;
     hashes.add(`'sha256-${createHash("sha256").update(body, "utf8").digest("base64")}'`);
   }
 }
 
+if (inlineStyles.length > 0) {
+  console.error(`Inline styles are blocked by the policy; move them to site.css: ${inlineStyles.join(", ")}`);
+  process.exit(1);
+}
+
 const policy = [
   "default-src 'self'",
   ["script-src 'self'", ...[...hashes].sort(), "https://static.cloudflareinsights.com"].join(" "),
-  "style-src 'self' 'unsafe-inline'",
+  "style-src 'self'",
   "img-src 'self' data:",
   "font-src 'self' data:",
   `connect-src 'self' ${api} https://cloudflareinsights.com`,

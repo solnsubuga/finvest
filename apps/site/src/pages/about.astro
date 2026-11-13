@@ -4,13 +4,22 @@ import Icon from "../components/Icon.astro";
 import IconCard from "../components/IconCard.astro";
 import PageTitle from "../components/PageTitle.astro";
 import { supportEmail } from "../config.ts";
+import { company } from "../data/company.ts";
+import { fallback } from "../data/fallback.ts";
+import { minimumLabel } from "../lib/format.ts";
 import Base from "../layouts/Base.astro";
 
+// Figures that are true of the product today. Company figures (clients, money invested)
+// belong here once Finvest publishes them.
+const live = fallback.products.filter((product) => product.status === "live");
+const shortest = live.reduce((a, b) => ((a.termDays ?? Infinity) <= (b.termDays ?? Infinity) ? a : b));
+const smallest = live.reduce((a, b) => (a.minimumMinor <= b.minimumMinor ? a : b));
+
 const figures = [
-  { figure: "[YEAR]", label: "Founded in Kampala" },
-  { figure: "[NUMBER]", label: "Clients investing" },
-  { figure: "[UGX]", label: "Invested for clients" },
-  { figure: "[NUMBER]", label: "Auctions taken part in" },
+  { figure: `${shortest.termDays} days`, label: "Shortest term" },
+  { figure: minimumLabel(smallest), label: "Smallest investment" },
+  { figure: "Daily", label: "Interest shown in the app" },
+  { figure: "8am to 8pm", label: "Chat support, every day" },
 ];
 
 const beliefs = [
@@ -27,11 +36,10 @@ const beliefs = [
   {
     icon: "shield",
     title: "Boring where it matters",
-    text: "Government bills, a licensed custodian, and books that are checked every single day.",
+    text: "Government bills, a custodian bank, and books that are checked every single day.",
   },
 ] as const;
 
-const team = ["Chief Executive", "Head of Investments", "Head of Operations", "Head of Compliance"];
 ---
 
 <Base
@@ -50,8 +58,18 @@ const team = ["Chief Executive", "Head of Investments", "Head of Operations", "H
         <p class="eyebrow">Our story</p>
         <h2 class="h2 h2--small">Why we built Finvest</h2>
         <p class="lead">
-          [STORY: two or three short paragraphs in the founders' own words. When Finvest started,
-          what problem you saw, and what has changed for clients since.]
+          Treasury bills are how the Government of Uganda borrows, and they have long been one of
+          the steadiest places to keep money. But buying one meant a bank visit, forms and
+          waiting, so most people never did.
+        </p>
+        <p class="lead">
+          Finvest was built in Kampala to change that. You open an account on your phone, pay by
+          mobile money or bank transfer, and see the exact amount you will get back before you
+          pay.
+        </p>
+        <p class="lead">
+          We keep it plain on purpose: real government bills, returns shown after tax, and money
+          paid straight to an account in your own name.
         </p>
       </div>
       <dl class="figures">
@@ -77,26 +95,6 @@ const team = ["Chief Executive", "Head of Investments", "Head of Operations", "H
     </div>
   </section>
 
-  <section class="band" id="team">
-    <div class="wrap">
-      <p class="eyebrow">Team</p>
-      <h2 class="h2 h2--small">The people responsible for your money.</h2>
-      <ul class="team">
-        {
-          team.map((role) => (
-            <li>
-              <span class="team__photo" aria-hidden="true">
-                Photo
-              </span>
-              <strong>[NAME]</strong>
-              <span>{role}</span>
-            </li>
-          ))
-        }
-      </ul>
-    </div>
-  </section>
-
   <section class="band band--black" id="contact">
     <div class="wrap split split--form">
       <div>
@@ -111,12 +109,19 @@ const team = ["Chief Executive", "Head of Investments", "Head of Operations", "H
             <Icon name="chat" />
             <span><strong>Chat in the app</strong><small>Every day, 8am to 8pm</small></span>
           </li>
+          {
+            company.phone && (
+              <li>
+                <Icon name="phone" />
+                <span>
+                  <strong>{company.phone}</strong>
+                  <small>Monday to Friday, 8am to 6pm</small>
+                </span>
+              </li>
+            )
+          }
           <li>
-            <Icon name="phone" />
-            <span><strong>[PHONE NUMBER]</strong><small>Monday to Friday, 8am to 6pm</small></span>
-          </li>
-          <li>
-            <Icon name="document" />
+            <Icon name="mail" />
             <span>
               <strong><a href={`mailto:${supportEmail}`}>{supportEmail}</a></strong>
               <small>We reply within one working day</small>
@@ -124,7 +129,12 @@ const team = ["Chief Executive", "Head of Investments", "Head of Operations", "H
           </li>
           <li>
             <Icon name="pin" />
-            <span><strong>[OFFICE ADDRESS], Kampala</strong><small>Visits by appointment</small></span>
+            <span>
+              <strong>
+                {company.officeAddress ? `${company.officeAddress}, ${company.city}` : company.city}
+              </strong>
+              <small>Visits by appointment</small>
+            </span>
           </li>
         </ul>
       </div>

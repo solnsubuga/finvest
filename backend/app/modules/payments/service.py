@@ -5,6 +5,9 @@ transaction. The job handlers in `jobs.py` call the provider with no transaction
 come back here to record what it said. `settle_deposit` is the only place a deposit becomes
 `confirmed`, and it posts the ledger entry in the same transaction.
 
+Bank transfers share the deposits table and the posting here; their own steps are in
+`bank_transfers.py`.
+
 Every function takes the caller's open session and commits nothing itself.
 """
 
@@ -20,6 +23,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.infrastructure.idempotency import Receipt, run_once
 from app.infrastructure.jobs import JobRequest, enqueue, publish
+from app.modules.investments.events import START_ON_DEPOSIT
 from app.modules.ledger import service as ledger
 from app.modules.ledger.domain.entries import AccountKind, AccountSpec, EntryDraft, credit, debit
 from app.modules.payments.domain.deposits import (
@@ -27,6 +31,7 @@ from app.modules.payments.domain.deposits import (
     UNSENT_EXPIRY,
     DepositStatus,
     InvalidDeposit,
+    Method,
     Move,
     Network,
     Purpose,
@@ -58,7 +63,7 @@ POLL_DELAYS = (3, 3, 5, 5, 10, 10, 15, 30)
 
 _NOTICE_FIELD = re.compile(r"[A-Za-z0-9._:-]{1,128}")
 
-Cause = Literal["request", "send", "status_read", "sweep", "reconciliation"]
+Cause = Literal["request", "send", "status_read", "sweep", "reconciliation", "staff_review"]
 logger = structlog.get_logger()
 
 
@@ -94,10 +99,12 @@ class Deposit:
     client_id: str
     purpose: Purpose
     purpose_id: str
-    network: Network
+    method: Method
+    # None for a bank transfer, which has no network and no payer number.
+    network: Network | None
     provider: str
     amount: Money
-    payer_msisdn: str
+    payer_msisdn: str | None
     status: DepositStatus
     code: str | None
     provider_reference: str | None
@@ -117,7 +124,7 @@ _INSERT = text(
     "INSERT INTO payment_deposits (id, client_id, purpose_type, purpose_id, method, provider, "
     "currency, amount_minor, payer_msisdn, status, created_at, updated_at) VALUES (:id, "
     ":client_id, :purpose_type, :purpose_id, :method, :provider, :currency, :amount_minor, "
-    ":payer_msisdn, 'created', :now, :now)"
+    ":payer_msisdn, :status, :now, :now)"
 )
 _SELECT = text(f"SELECT {_COLUMNS} FROM payment_deposits WHERE id = :id")  # noqa: S608
 # Created by migration 0021. An investment has at most one deposit that has not failed.
@@ -205,40 +212,25 @@ async def request_deposit(
     client_id = actor.id
     now = clock.now()
 
-    async def live_deposit() -> DepositExists | None:
-        row = (await session.execute(_SELECT_LIVE, {"purpose_id": request.purpose_id})).first()
-        return DepositExists(row.id, DepositStatus(row.status)) if row else None
-
     async def command() -> Receipt:
         deposit_id = push_id()
-        if request.purpose is Purpose.INVESTMENT:
-            # An investment is paid for once. Only a failed deposit frees it for another try.
-            existing = await live_deposit()
-            if existing:
-                raise existing
-        try:
-            # The check above loses a race between two requests. The unique index does not.
-            async with session.begin_nested():
-                await session.execute(
-                    _INSERT,
-                    {
-                        "id": deposit_id,
-                        "client_id": client_id,
-                        "purpose_type": request.purpose.value,
-                        "purpose_id": request.purpose_id,
-                        "method": request.network.value,
-                        "provider": provider,
-                        "currency": request.amount.currency.value,
-                        "amount_minor": request.amount.minor,
-                        "payer_msisdn": msisdn,
-                        "now": now,
-                    },
-                )
-        except IntegrityError as error:
-            if LIVE_INVESTMENT_INDEX not in str(error.orig):
-                raise
-            raise (await live_deposit()) or DepositExists(None, None) from None
-        await _record_event(session, deposit_id, None, DepositStatus.CREATED, None, "request", now)
+        await insert_deposit(
+            session,
+            {
+                "id": deposit_id,
+                "client_id": client_id,
+                "purpose_type": request.purpose.value,
+                "purpose_id": request.purpose_id,
+                "method": request.network.value,
+                "provider": provider,
+                "currency": request.amount.currency.value,
+                "amount_minor": request.amount.minor,
+                "payer_msisdn": msisdn,
+                "status": DepositStatus.CREATED.value,
+                "now": now,
+            },
+        )
+        await record_event(session, deposit_id, None, DepositStatus.CREATED, None, "request", now)
         await enqueue(
             session,
             JobRequest(
@@ -272,6 +264,31 @@ async def request_deposit(
     if not outcome.replayed:
         logger.info("deposit_requested", deposit_id=deposit_id)
     return await get_deposit(session, deposit_id)
+
+
+async def insert_deposit(session: AsyncSession, values: dict[str, object]) -> None:
+    """Save a new deposit, or raise `DepositExists` if its investment already has a live one.
+
+    An investment is paid for once, whichever way. Only a failed deposit frees it for another
+    try. For the payments module's own commands, inside their idempotent command.
+    """
+
+    async def live_deposit() -> DepositExists | None:
+        row = (await session.execute(_SELECT_LIVE, {"purpose_id": values["purpose_id"]})).first()
+        return DepositExists(row.id, DepositStatus(row.status)) if row else None
+
+    if values["purpose_type"] == Purpose.INVESTMENT.value:
+        existing = await live_deposit()
+        if existing:
+            raise existing
+    try:
+        # The check above loses a race between two requests. The unique index does not.
+        async with session.begin_nested():
+            await session.execute(_INSERT, values)
+    except IntegrityError as error:
+        if LIVE_INVESTMENT_INDEX not in str(error.orig):
+            raise
+        raise (await live_deposit()) or DepositExists(None, None) from None
 
 
 async def has_live_deposit(session: AsyncSession, *, purpose: Purpose, purpose_id: str) -> bool:
@@ -411,15 +428,27 @@ async def settle_deposit(
 
 
 async def apply_move(
-    session: AsyncSession, deposit: Deposit, move: Move, clock: Clock, *, cause: Cause
+    session: AsyncSession,
+    deposit: Deposit,
+    move: Move,
+    clock: Clock,
+    *,
+    cause: Cause,
+    paid_into: AccountSpec | None = None,
 ) -> Deposit:
-    """Record `move` on a deposit the caller has locked. Posts to the ledger if it confirms."""
+    """Record `move` on a deposit the caller has locked. Posts to the ledger if it confirms.
+
+    `paid_into` is the asset account the money reached. A mobile money deposit leaves it out and
+    the provider's wallet is used. A bank transfer must name the bank account it was found in.
+    """
     if not can_move(deposit.status, move.status):
         raise RuntimeError(f"A deposit cannot move from {deposit.status} to {move.status}")
     now = clock.now()
     entry_id: str | None = None
     if move.post is not None:
-        entry_id = await _post_confirmed(session, deposit, move.post, clock)
+        if paid_into is None:
+            paid_into = _wallet(deposit, move.post.currency)
+        entry_id = await _post_confirmed(session, deposit, move.post, paid_into, clock)
     await session.execute(
         _UPDATE,
         {
@@ -433,7 +462,7 @@ async def apply_move(
             "settled_at": now if move.status.is_final else None,
         },
     )
-    await _record_event(session, deposit.id, deposit.status, move.status, move.code, cause, now)
+    await record_event(session, deposit.id, deposit.status, move.status, move.code, cause, now)
     if move.status is DepositStatus.CONFIRMED:
         # Investments and goals start from this event. It is published once per deposit.
         await publish(
@@ -444,8 +473,10 @@ async def apply_move(
                 "deposit_id": deposit.id,
                 "purpose_type": deposit.purpose.value,
                 "purpose_id": deposit.purpose_id,
+                # The business day of the ledger entry. An investment earns from this day.
+                "confirmed_on": business_date(now).isoformat(),
             },
-            consumers=[],
+            consumers=[START_ON_DEPOSIT],
             now=now,
         )
     logger.info(
@@ -474,21 +505,23 @@ async def schedule_status_read(
     )
 
 
-async def _post_confirmed(
-    session: AsyncSession, deposit: Deposit, amount: Money, clock: Clock
-) -> str:
-    """Money arrived in the provider's wallet for this client's investment or goal."""
-    wallet = await ledger.open_account(
-        session,
-        AccountSpec(
-            f"{deposit.provider}.wallet",
-            AccountKind.ASSET,
-            amount.currency,
-            f"Mobile money wallet ({deposit.network.value})",
-            reference=deposit.network.value,
-        ),
-        clock,
+def _wallet(deposit: Deposit, currency: Currency) -> AccountSpec:
+    if deposit.network is None:
+        raise RuntimeError("A bank transfer is posted to the bank account it was found in")
+    return AccountSpec(
+        f"{deposit.provider}.wallet",
+        AccountKind.ASSET,
+        currency,
+        f"Mobile money wallet ({deposit.network.value})",
+        reference=deposit.network.value,
     )
+
+
+async def _post_confirmed(
+    session: AsyncSession, deposit: Deposit, amount: Money, paid_into: AccountSpec, clock: Clock
+) -> str:
+    """Money arrived in our wallet or bank account for this client's investment or goal."""
+    wallet = await ledger.open_account(session, paid_into, clock)
     awaiting_start = await ledger.open_account(
         session,
         AccountSpec(
@@ -516,7 +549,7 @@ async def _post_confirmed(
     return entry.id
 
 
-async def _record_event(
+async def record_event(
     session: AsyncSession,
     deposit_id: str,
     from_status: DepositStatus | None,
@@ -549,7 +582,8 @@ def _deposit(row: Row[Any]) -> Deposit:
         client_id=row.client_id,
         purpose=Purpose(row.purpose_type),
         purpose_id=row.purpose_id,
-        network=Network(row.method),
+        method=Method(row.method),
+        network=Method(row.method).network,
         provider=row.provider,
         amount=Money(int(row.amount_minor), Currency(row.currency)),
         payer_msisdn=row.payer_msisdn,

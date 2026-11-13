@@ -9,6 +9,7 @@ import ProductCard from "../components/ProductCard.astro";
 import { signupUrl } from "../config.ts";
 import { fallback } from "../data/fallback.ts";
 import { minimumLabel } from "../lib/format.ts";
+import { company } from "../data/company.ts";
 import Base from "../layouts/Base.astro";
 
 // The product the hero talks about: the shortest bill open to new investments.
@@ -35,7 +36,7 @@ const safety = [
   {
     icon: "bank",
     title: "Your bills, your name",
-    text: "Treasury bills are issued by the Government of Uganda and recorded against your account at [CUSTODIAN BANK].",
+    text: `Treasury bills are issued by the Government of Uganda and recorded against your own account${company.custodian ? ` at ${company.custodian}` : ""}.`,
   },
   {
     icon: "key",
@@ -58,7 +59,7 @@ const questions = [
   {
     question: "Can I take my money out early?",
     answer:
-      "[CONFIRM EARLY WITHDRAWAL TERMS]. You see the exact amount before you confirm, and it can be less than holding to maturity.",
+      "Yes, ask in the app at any time. You see the exact amount before you confirm, and it can be less than holding to maturity.",
   },
   {
     question: "How do I pay, and how am I paid?",
@@ -67,7 +68,8 @@ const questions = [
   },
   {
     question: "What does it cost?",
-    answer: "[CONFIRM FEES]. Any fee is shown before you confirm.",
+    answer:
+      "There is no fee to open an account or to invest. The rate you see is what you earn, after tax. If a charge ever applies, you see it before you confirm.",
   },
   {
     question: "I already invest with Finvest. How do I get the new app?",
@@ -120,11 +122,28 @@ const questions = [
     <ul>
       <li>
         <span class="tile"><Icon name="shield" /></span>
-        <span><strong>Regulated</strong><small>[REGULATOR AND LICENCE NUMBER]</small></span>
+        {
+          company.regulator ? (
+            <span>
+              <strong>Regulated</strong>
+              <small>
+                {company.regulator}
+                {company.licenceNumber ? `, licence ${company.licenceNumber}` : ""}
+              </small>
+            </span>
+          ) : (
+            <span>
+              <strong>Government bills</strong>
+              <small>Issued by the Government of Uganda</small>
+            </span>
+          )
+        }
       </li>
       <li>
         <span class="tile"><Icon name="bank" /></span>
-        <span><strong>Held in your name</strong><small>Bills kept at [CUSTODIAN BANK]</small></span>
+        <span><strong>Held in your name</strong><small>
+            {company.custodian ? `Bills kept at ${company.custodian}` : "Recorded against your own account"}
+          </small></span>
       </li>
       <li>
         <span class="tile"><Icon name="phone" /></span>
@@ -170,7 +189,6 @@ const questions = [
           <li><span><Icon name="tick" size={16} /></span>Tax is already taken off</li>
           <li>
             <span><Icon name="tick" size={16} /></span>No fee to invest or to be paid at maturity
-            [CONFIRM FEES]
           </li>
         </ul>
       </div>
@@ -182,7 +200,7 @@ const questions = [
     <div class="wrap">
       <p class="eyebrow">How it works</p>
       <h2 class="h2">Three steps, all on your phone.</h2>
-      <ol class="grid grid--3" role="list" style="padding: 0; list-style: none">
+      <ol class="grid grid--3 grid--list" role="list">
         {
           steps.map((step, index) => (
             <li class="card step">

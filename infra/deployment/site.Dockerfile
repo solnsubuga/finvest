@@ -9,7 +9,7 @@ FROM node:22-alpine@sha256:1314fb30ec37592d5845e5a160d522c0e680972aa534549940b8d
 ARG PUBLIC_SITE_URL
 ARG PUBLIC_APP_URL
 ARG PUBLIC_API_URL
-# true lets search engines in. Off until the site's placeholder facts are filled in.
+# true lets search engines in. Off until launch (docs/decisions.md).
 ARG PUBLIC_INDEXABLE=false
 RUN for url in "$PUBLIC_SITE_URL" "$PUBLIC_APP_URL" "$PUBLIC_API_URL"; do \
       echo "$url" | grep -Eq '^https://[a-z0-9]([a-z0-9.-]*[a-z0-9])?$' || { echo "Not an https origin: '$url'" >&2; exit 1; }; \

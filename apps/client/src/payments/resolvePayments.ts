@@ -42,4 +42,7 @@ const unavailablePaymentsClient: PaymentsClient = {
   getPayable: refuse,
   payWithMobileMoney: refuse,
   getDeposit: refuse,
+  getBankInstructions: refuse,
+  submitBankReceipt: refuse,
+  getBankTransfer: refuse,
 };

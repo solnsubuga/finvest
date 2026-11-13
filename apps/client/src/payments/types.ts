@@ -80,6 +80,69 @@ export type MobileMoneyRequest = {
   idempotencyKey: string;
 };
 
+/** Where to send a bank transfer. Comes from the server, so the app holds no bank details. */
+export type BankInstructions = {
+  payable: Payable;
+  bankName: string;
+  accountName: string;
+  accountNumber: string;
+  branch: string | null;
+  /** The client's Finvest account number. Put on the transfer, it lets staff match the money. */
+  reference: string;
+};
+
+export type ReceiptMimeType = "image/jpeg" | "image/png" | "application/pdf";
+
+/** A receipt chosen on the device: a bank slip photo, a screenshot or the bank's PDF. */
+export type ReceiptFile = {
+  uri: string;
+  name: string;
+  mimeType: ReceiptMimeType;
+  sizeBytes: number;
+};
+
+/** What the client says they sent. Staff check it against the receipt and the bank statement. */
+export type BankReceiptSubmission = {
+  payableId: string;
+  file: ReceiptFile;
+  amountSent: Money;
+  /** The day the transfer was made, YYYY-MM-DD, Kampala time. */
+  sentOn: string;
+  bankName: string;
+  transactionNumber: string;
+  /** One per visit to the upload screen, like a mobile money payment. */
+  idempotencyKey: string;
+};
+
+/**
+ * - `checking`: we have the receipt and staff are matching it to the bank statement.
+ * - `confirmed`: the money was found on the statement. Final.
+ * - `not_matched`: staff could not match it. The client can upload another receipt.
+ */
+export type BankTransferStatus = "checking" | "confirmed" | "not_matched";
+
+/** Why a receipt could not be matched, in words staff choose from. */
+export type MismatchReason =
+  | "amount_differs"
+  | "not_on_statement"
+  | "unreadable"
+  | "name_differs"
+  | "other";
+
+export type BankTransfer = {
+  id: string;
+  payable: Payable;
+  /** What the client said they sent. */
+  amountSent: Money;
+  status: BankTransferStatus;
+  reason: MismatchReason | null;
+  /** ISO 8601, UTC. */
+  submittedAt: string;
+  confirmedAt: string | null;
+  /** The reference the client was asked to put on the transfer. */
+  reference: string;
+};
+
 export type PaymentErrorCode =
   /** The thing to pay for does not exist, is not this client's, or is already paid. */
   | "not_payable"
@@ -87,6 +150,8 @@ export type PaymentErrorCode =
   | "already_paying"
   /** The network does not allow this amount in one payment. */
   | "amount_not_allowed"
+  /** The receipt is not a JPG, PNG or PDF, or is too large. */
+  | "receipt_not_accepted"
   /** The same key was sent with different details. The screens prevent it, so it means a bug. */
   | "key_reused"
   | "not_found"
@@ -111,6 +176,11 @@ export interface PaymentsClient {
    */
   payWithMobileMoney(request: MobileMoneyRequest): Promise<Deposit>;
   getDeposit(depositId: string): Promise<Deposit>;
+
+  getBankInstructions(payableId: string): Promise<BankInstructions>;
+  /** Uploads the receipt and what the client says they sent. Staff do the matching. */
+  submitBankReceipt(submission: BankReceiptSubmission): Promise<BankTransfer>;
+  getBankTransfer(transferId: string): Promise<BankTransfer>;
 }
 
 export function isFinal(status: DepositStatus): boolean {
@@ -124,6 +194,7 @@ const messages: Record<PaymentErrorCode, string> = {
   amount_not_allowed:
     "This amount is more than mobile money allows in one payment. Pay by bank transfer instead.",
   key_reused: "Something changed since your last try. Go back and start the payment again.",
+  receipt_not_accepted: "We could not accept that file. Use a JPG, PNG or PDF of up to 10 MB.",
   not_found: "We could not find this payment.",
   unavailable: "We could not reach Finvest. Check your connection and try again.",
 };

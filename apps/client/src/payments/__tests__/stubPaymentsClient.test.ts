@@ -1,5 +1,5 @@
 import { createStubPaymentsClient, DEMO_PAYABLE_ID } from "../stubPaymentsClient";
-import { MobileMoneyRequest, PaymentError } from "../types";
+import { BankReceiptSubmission, MobileMoneyRequest, PaymentError } from "../types";
 
 function setup() {
   const clock = { ms: Date.parse("2026-11-13T12:31:00Z") };
@@ -103,5 +103,88 @@ describe("the demo payments client", () => {
   it("does not know a payment it never took", async () => {
     const { client } = setup();
     await expect(client.getDeposit("d99")).rejects.toEqual(new PaymentError("not_found"));
+  });
+});
+
+describe("the demo payments client, bank transfer", () => {
+  const receipt = (transactionNumber: string, idempotencyKey = "bank-1"): BankReceiptSubmission => ({
+    payableId: DEMO_PAYABLE_ID,
+    file: { uri: "file:///r.pdf", name: "r.pdf", mimeType: "application/pdf", sizeBytes: 2048 },
+    amountSent: { currency: "UGX", minor: 1_000_000 },
+    sentOn: "2026-11-13",
+    bankName: "Demo Bank",
+    transactionNumber,
+    idempotencyKey,
+  });
+
+  it("gives bank details that are plainly not real, and the reference to use", async () => {
+    const { client } = setup();
+    const instructions = await client.getBankInstructions(DEMO_PAYABLE_ID);
+    expect(instructions.bankName).toBe("Demo Bank");
+    expect(instructions.reference).toMatch(/^\d{10}$/);
+    await expect(client.getBankInstructions("other")).rejects.toEqual(
+      new PaymentError("not_payable"),
+    );
+  });
+
+  it("checks a receipt and then confirms it", async () => {
+    const { clock, client } = setup();
+    const started = await client.submitBankReceipt(receipt("TXN777"));
+    expect(started.status).toBe("checking");
+    expect((await client.submitBankReceipt(receipt("TXN777"))).id).toBe(started.id);
+    clock.ms += 10_000;
+    const confirmed = await client.getBankTransfer(started.id);
+    expect(confirmed.status).toBe("confirmed");
+    expect(confirmed.confirmedAt).not.toBeNull();
+  });
+
+  it.each([
+    ["TXN01", "amount_differs"],
+    ["TXN02", "not_on_statement"],
+  ])("does not match receipt %s, says why, and takes another", async (number, reason) => {
+    const { clock, client } = setup();
+    const started = await client.submitBankReceipt(receipt(number));
+    clock.ms += 10_000;
+    const unmatched = await client.getBankTransfer(started.id);
+    expect(unmatched.status).toBe("not_matched");
+    expect(unmatched.reason).toBe(reason);
+    const again = await client.submitBankReceipt(receipt("TXN777", "bank-2"));
+    expect(again.status).toBe("checking");
+  });
+
+  it.each<[string, (r: BankReceiptSubmission) => BankReceiptSubmission]>([
+    ["thing to pay for", (r) => ({ ...r, payableId: "other" })],
+    ["file name", (r) => ({ ...r, file: { ...r.file, name: "other.pdf" } })],
+    ["file size", (r) => ({ ...r, file: { ...r.file, sizeBytes: 4096 } })],
+    ["amount", (r) => ({ ...r, amountSent: { currency: "UGX", minor: 2_000_000 } })],
+    ["day sent", (r) => ({ ...r, sentOn: "2026-11-12" })],
+    ["bank", (r) => ({ ...r, bankName: "Other Bank" })],
+    ["transaction number", (r) => ({ ...r, transactionNumber: "TXN778" })],
+  ])("refuses a known key sent with a different %s", async (_field, change) => {
+    const { client } = setup();
+    await client.submitBankReceipt(receipt("TXN777"));
+    await expect(client.submitBankReceipt(change(receipt("TXN777")))).rejects.toEqual(
+      new PaymentError("key_reused"),
+    );
+  });
+
+  it("takes one payment for a thing, whichever way it is paid", async () => {
+    const { client, request } = setup();
+    await client.submitBankReceipt(receipt("TXN777"));
+    await expect(client.submitBankReceipt(receipt("TXN888", "bank-2"))).rejects.toEqual(
+      new PaymentError("already_paying"),
+    );
+    await expect(client.payWithMobileMoney(request("+256772123456"))).rejects.toEqual(
+      new PaymentError("already_paying"),
+    );
+  });
+
+  it("refuses a receipt over the size limit", async () => {
+    const { client } = setup();
+    const large = receipt("TXN777");
+    large.file = { ...large.file, sizeBytes: 11 * 1024 * 1024 };
+    await expect(client.submitBankReceipt(large)).rejects.toEqual(
+      new PaymentError("receipt_not_accepted"),
+    );
   });
 });

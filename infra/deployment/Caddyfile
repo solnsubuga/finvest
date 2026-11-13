@@ -54,6 +54,12 @@ import /etc/caddy/upstreams.caddy
 	import common_headers
 	import unlisted
 	encode zstd gzip
+	# The API refuses bodies over 256 KiB itself. Caddy stops anything far larger before it
+	# reaches a container, with 413. A path given a larger limit in BODY_LIMITS
+	# (backend/app/api/hardening.py) needs its own raise here.
+	request_body {
+		max_size 1MB
+	}
 	# The API answers JSON only, so nothing it returns may run script or be framed.
 	header ?Content-Security-Policy "default-src 'none'; frame-ancestors 'none'"
 	route {

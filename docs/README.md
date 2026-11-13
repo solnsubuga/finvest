@@ -13,9 +13,12 @@
 | [reconciliation.md](reconciliation.md) | Statements, matching against the ledger, exceptions and the two-person day close |
 | [identity-checks.md](identity-checks.md) | What a client hands in, the lifecycle of a check, automatic checks, and what the database enforces |
 | [payments.md](payments.md) | How a deposit by mobile money is sent, confirmed and posted, what happens when the provider's answer is unclear, and how a mistaken credit is corrected |
+| [notifications.md](notifications.md) | How a module tells a client something, the event catalogue, channels, and how staff change the words |
+| [documents.md](documents.md) | Statements and receipts: what they show, how the figures are checked, and the emails that carry them |
 | [account-numbers.md](account-numbers.md) | Format, generation and lifetime of client account numbers |
 | [roadmap.md](roadmap.md) | Build phases and the feature checklist for the client app and back office |
 | [migration.md](migration.md) | Moving Finvest 1.0 clients onto the new system |
+| [security.md](security.md) | The security review before launch: findings, the ASVS checklist and the penetration test scope |
 | [decisions.md](decisions.md) | Decisions made so far and questions still open |
 | [design.md](design.md) | The design canvas, brand and tokens |
 

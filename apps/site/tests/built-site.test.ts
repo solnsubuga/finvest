@@ -40,6 +40,23 @@ describe("the built site", () => {
     }
   });
 
+  it("shows no placeholder", () => {
+    // A fact Finvest has not supplied is left out (src/data/company.ts), never bracketed.
+    for (const path of pages) {
+      const text = read(path).replace(/<script[\s\S]*?<\/script>/g, "");
+      expect(text, name(path)).not.toMatch(/\[[A-Z][A-Z :,'.a-z]*[A-Z.]\]/);
+      expect(text, name(path)).not.toMatch(/lorem ipsum|\bTBC\b|\bTBD\b|\bTODO\b/i);
+    }
+  });
+
+  it("has no inline styles, so the content security policy can refuse them", () => {
+    for (const path of pages) {
+      const text = read(path);
+      expect(text, name(path)).not.toMatch(/<[^>]+\sstyle=/);
+      expect(text, name(path)).not.toMatch(/<style\b/);
+    }
+  });
+
   it("carries no rate before tax and no tax rate", () => {
     for (const path of all.filter((p) => /\.(html|js)$/.test(p))) {
       const text = read(path);

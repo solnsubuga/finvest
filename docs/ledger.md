@@ -1,6 +1,6 @@
 # Ledger and audit trail
 
-How the money rules in [rules.md](rules.md) are built. The code is in `backend/app/modules/ledger`, `backend/app/modules/audit`, `backend/app/modules/account_numbers` and `backend/app/shared/money.py`. The database side is migrations 0010 to 0014.
+How the money rules in [rules.md](rules.md) are built. The code is in `backend/app/modules/ledger`, `backend/app/modules/audit`, `backend/app/modules/account_numbers` and `backend/app/shared/money.py`. The database side is migrations 0010 to 0016.
 
 ## Money
 
@@ -120,7 +120,21 @@ What the database enforces, for every role including the table owner:
 | Nothing is edited | Proposals and decisions are insert-only, like the rest of the ledger. A rejected proposal stays on record. To try again, make a new proposal. |
 | Still within the books | The correction is an ordinary entry. It balances, uses one currency and cannot take any account below zero. If the money has moved again since the proposal, approval fails with `InsufficientFunds`, nothing is decided, and the proposal stays open to be rejected. |
 
-What this does not do: it does not stop a staff command from calling `post_entry` directly with some other source type. The two-person rule covers everything recorded as a correction. Keeping manual adjustments on this path is the job of the commands the console exposes, which must offer no other way to post a manual entry.
+A staff command cannot get around this by calling `post_entry` with some other source type, because staff may post only the source types listed below.
+
+### What staff may post
+
+A staff transaction can post an entry only if its `source_type` is in `ledger_staff_source_types`. Anything else, including an entry with no source type and a plain reversal (`ledger.entry`), is refused by a trigger and `post_entry` raises `StaffSourceNotAllowed`. Staff undo an entry with a correction.
+
+| Source type | Owner | What it is |
+| --- | --- | --- |
+| `ledger.correction` | ledger | A correction a second staff member approved |
+| `payout` | payouts | Releasing a held payout after a staff review |
+| `dealing.order` | dealing | An order result a second staff member confirmed |
+
+The worker and client transactions are not limited by this list. Their entries come from jobs and from a client's own requests, each with its own checks.
+
+The list changes only by migration: the module that needs a new way for staff to move money adds its row with an `INSERT` in its own migration, so the change is reviewed. No application role can read or change the list. The test database also lists `test.fixture`, which the test helpers use to set up books as staff.
 
 ### Reading an account's history
 
@@ -154,7 +168,7 @@ What the database enforces, for every role including the table owner:
 | Closed days only move forward | The list of closed days is insert-only and each new date must be later than the last. A closed day is never reopened. Closing a day that is already closed changes nothing. |
 | Only a day that has ended | Today and future days cannot be closed, by PostgreSQL's own clock in Kampala time, because payments and payouts are still being dated today. `close_through` raises `DayNotEnded`. |
 | People close days | Only a staff transaction can close, under its own ID. The worker can read the closed day and cannot set it. Each close writes an audit event. |
-| Nothing slips in behind a close | Posting and closing take turns on one lock. A close waits for transactions that have already posted an entry, and an entry posted during a close waits and is then checked against the new date. |
+| Nothing slips in behind a close | Posting and closing take turns on one lock. A close waits for transactions that have already posted an entry, and an entry posted during a close waits and is then checked against the new date. This relies on the READ COMMITTED isolation level, which the application always uses, so the database refuses to post or close in any other. |
 
 A mistake found in a closed day is fixed with a correction dated in an open day. The closed day keeps showing what was agreed, and the fix shows on the day it was made.
 

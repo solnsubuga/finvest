@@ -60,12 +60,14 @@ _STRAGGLERS = text(
     "ORDER BY updated_at LIMIT :limit FOR UPDATE SKIP LOCKED"
 )
 # Uncertain deposits a status read can still settle. A different confirmed amount is for staff:
-# reading it again changes nothing. Newest first, because a late answer is likeliest for those.
+# reading it again changes nothing. Read a page at a time, oldest first, after the last row of
+# the page before, so every one is reached however many there are.
 _UNCERTAIN = text(
     "SELECT id, updated_at FROM payment_deposits "
     "WHERE status = 'uncertain' AND code <> 'amount_mismatch' AND provider = :provider "
     "AND updated_at <= :quiet AND updated_at > :given_up "
-    "ORDER BY updated_at DESC LIMIT :limit"
+    "AND (updated_at, id) > (:after_at, :after_id) "
+    "ORDER BY updated_at, id LIMIT :limit"
 )
 logger = structlog.get_logger()
 
@@ -93,6 +95,9 @@ class DepositJobs:
                 raise PermanentJobError(code="deposit_not_found")
             if deposit.provider != self._provider.name:
                 raise PermanentJobError(code="provider_mismatch")
+            if deposit.network is None or deposit.payer_msisdn is None:
+                raise PermanentJobError(code="not_mobile_money")
+            network, msisdn = deposit.network, deposit.payer_msisdn
             if deposit.status is not DepositStatus.CREATED:
                 # Already marked or moved on. A marked deposit may have been sent, so it is
                 # left for the sweep and a status read. It is not sent from here.
@@ -105,8 +110,8 @@ class DepositJobs:
             result = await self._provider.request_collection(
                 CollectionRequest(
                     request_id=deposit.id,
-                    network=deposit.network,
-                    msisdn=deposit.payer_msisdn,
+                    network=network,
+                    msisdn=msisdn,
                     amount=deposit.amount,
                 )
             )
@@ -198,17 +203,29 @@ class DepositJobs:
             moved = 0
             for row in rows.all():
                 moved += await self._sweep_one(session, row.id, job.idempotency_key, now)
-            uncertain = await session.execute(
-                _UNCERTAIN,
-                {
-                    "provider": self._provider.name,
-                    "quiet": now - SENDING_GRACE,
-                    "given_up": now - UNCERTAIN_READ_WINDOW,
-                    "limit": SWEEP_BATCH,
-                },
-            )
-            for row in uncertain.all():
-                await self._read_uncertain_again(session, row.id, row.updated_at, now)
+            # Queuing a read is cheap and keyed, so every uncertain deposit in the window gets
+            # its next read on every sweep. Only the reads themselves call the provider.
+            given_up = now - UNCERTAIN_READ_WINDOW
+            after_at, after_id = given_up, ""
+            while True:
+                page = (
+                    await session.execute(
+                        _UNCERTAIN,
+                        {
+                            "provider": self._provider.name,
+                            "quiet": now - SENDING_GRACE,
+                            "given_up": given_up,
+                            "after_at": after_at,
+                            "after_id": after_id,
+                            "limit": SWEEP_BATCH,
+                        },
+                    )
+                ).all()
+                for row in page:
+                    await self._read_uncertain_again(session, row.id, row.updated_at, now)
+                if len(page) < SWEEP_BATCH:
+                    break
+                after_at, after_id = page[-1].updated_at, page[-1].id
             return {"moved": moved}
 
         await context.apply(effect)
