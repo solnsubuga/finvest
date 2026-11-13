@@ -22,10 +22,11 @@ is the only type from this module that a client-facing contract may be built fro
 
 from __future__ import annotations
 
+from collections.abc import Iterable
 from dataclasses import dataclass
 from datetime import date, timedelta
 
-from app.shared.money import Money, Rounding
+from app.shared.money import Currency, Money, Rounding
 
 DAYS_IN_YEAR = 365
 BASIS_POINTS = 10_000
@@ -134,6 +135,41 @@ def days_earned(start: date, on: date, term_days: int | None) -> int:
         raise InvalidTerms("A term is at least one day")
     elapsed = max((on - start).days, 0)
     return elapsed if term_days is None else min(elapsed, term_days)
+
+
+def earned_on(terms: Terms, start: date, on: date, term_days: int | None) -> Money:
+    """What an investment earned after tax on the single day `on`, as the app shows it.
+
+    Zero on the start date, before it, and after a fixed term's last day.
+    """
+    day = days_earned(start, on, term_days)
+    if day == days_earned(start, on - timedelta(days=1), term_days):
+        return Money.zero(terms.principal.currency)
+    return day_accrual(terms, day).net
+
+
+@dataclass(frozen=True, slots=True)
+class DayEarnings:
+    """What one client earned on one day in one currency, after tax, across their investments."""
+
+    count: int
+    net: Money
+
+
+def day_earnings(
+    holdings: Iterable[tuple[Terms, date, int | None]], on: date, currency: Currency
+) -> DayEarnings:
+    """Sum `earned_on` over one client's investments in `currency`.
+
+    Each holding is its terms, start date and term in days (`None` for an open term). Only
+    investments that earned something that day are counted.
+    """
+    count, net = 0, Money.zero(currency)
+    for terms, start, term_days in holdings:
+        earned = earned_on(terms, start, on, term_days)
+        if earned.minor > 0:
+            count, net = count + 1, net + earned
+    return DayEarnings(count=count, net=net)
 
 
 @dataclass(frozen=True, slots=True)

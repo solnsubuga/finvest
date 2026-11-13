@@ -25,7 +25,7 @@ from app.shared.errors import ApplicationError
 from app.shared.money import Currency
 from app.shared.push_ids import push_id
 from tests.support.clock import AsyncBarrier, FakeClock
-from tests.support.investments import PRESENT, approved_client, at, request, started, today
+from tests.support.investments import PRESENT, approved_client, at, pay, request, started, today
 from tests.support.ledger import staff as new_staff
 from tests.support.ledger import ugx
 
@@ -425,3 +425,54 @@ async def test_the_record_of_a_run_only_grows(worker_database: Database) -> None
     with pytest.raises(DBAPIError, match="permission denied"):
         async with worker_database.actor_transaction(SYSTEM) as session:
             await session.execute(text("DELETE FROM investment_interest_runs"))
+
+
+# Telling clients --------------------------------------------------------------------------------
+
+
+async def earnings_told(app_database: Database, client: Actor) -> list[tuple[str, str]]:
+    async with app_database.actor_transaction(client) as session:
+        rows = await session.execute(
+            text(
+                "SELECT title, body FROM notifications "
+                "WHERE client_id = :client AND event = 'interest_earned'"
+            ),
+            {"client": client.id},
+        )
+        return [(row.title, row.body) for row in rows.all()]
+
+
+async def test_the_run_tells_each_client_once_what_the_day_earned_after_tax(
+    app_database: Database, worker_database: Database
+) -> None:
+    client = await approved_client(app_database, NOW)
+    assert client.id is not None
+    # Just this client: every test shares the database.
+    just_them = client.id[:-1]
+    for _ in range(2):
+        investment = await request(app_database, client, NOW)
+        await pay(worker_database, investment, investment.amount, NOW)
+        async with worker_database.actor_transaction(SYSTEM) as session:
+            await investments.start_investment(session, investment.id, confirmed_on=DAY, clock=NOW)
+    # Nothing is earned on the start date, so nobody is told then.
+    async with worker_database.actor_transaction(SYSTEM) as session:
+        await accrual.tell_earnings(session, DAY, at(DAY, 12), after=just_them, limit=1)
+    assert await earnings_told(app_database, client) == []
+
+    outcome = await run_job(worker_database, f"{DAY.isoformat()}T21:30:00+00:00", at(day(1), 12))
+
+    assert outcome == "succeeded:None"
+    # One message for both investments, with no amount in it: the app shows the figure.
+    assert await earnings_told(app_database, client) == [
+        (
+            "Interest earned today",
+            "You earned interest today, after tax. See the amount in the app.",
+        ),
+    ]
+    # Asked again for the same day, nobody is told twice.
+    async with worker_database.actor_transaction(SYSTEM) as session:
+        again = await accrual.tell_earnings(
+            session, day(1), at(day(1), 12), after=just_them, limit=1
+        )
+    assert again.told == 0
+    assert len(await earnings_told(app_database, client)) == 1
