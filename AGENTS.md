@@ -84,6 +84,7 @@ Backend commands, run from the repository root. [backend/README.md](backend/READ
 | `make dev` | Start PostgreSQL, migrations, API, worker and scheduler |
 | `make check-backend` | Ruff, mypy, import-linter and unit tests. Run before every push. |
 | `make test-integration` | Integration tests against real PostgreSQL. Run before every push. |
+| `make test-journeys` | End-to-end client journeys through the API, worker and scheduler, in their own database |
 | `make test-stack` | Build the image and wait for all four processes to be healthy |
 | `make audit` | pip-audit |
 | `make api-contract` | Rewrite `packages/api-client` from the routes. Run after changing a route or a model, and commit the result. |

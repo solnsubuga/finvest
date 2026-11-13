@@ -21,6 +21,7 @@ Run these from the repository root. They need [uv](https://docs.astral.sh/uv/), 
 | `make dev-stop`, `make dev-down`, `make dev-logs`, `make dev-status` | Control the local stack. Data is kept. |
 | `make check-backend` | Ruff format and lint, mypy, import-linter, and the tests that need no database |
 | `make test-integration` | The integration tests against real PostgreSQL. Starts the Compose database, or uses `FINVEST_TEST_ADMIN_URL` if it is set. |
+| `make test-journeys` | The end-to-end journeys (below), in a database of their own. Same database rules as `test-integration`. |
 | `make test-stack` | Builds the image, starts all four processes and waits for every health check |
 | `make audit` | pip-audit over the locked dependencies |
 
@@ -58,10 +59,19 @@ migrations/versions/ Alembic revisions, hand-written SQL, named NNNN_description
 tests/
   unit/              No database
   integration/       Real PostgreSQL. Every test here carries the `integration` marker.
+  journeys/          End-to-end client journeys. Every test here carries the `journey` marker.
   support/           Shared fixtures: fake clock, barrier, database harness
 ```
 
 import-linter enforces the purity of `app/shared` and of every `app/modules/*/domain`, and keeps `app/infrastructure` free of modules and HTTP. A module never writes to another module's tables.
+
+## End-to-end journeys
+
+`tests/journeys/` follows clients through the whole product: signing up, an authenticator app, KYC, paying by mobile money and by bank transfer, daily interest, maturity with a rollover or a payout, goals, an automatic investing plan, dealing, and the day close. Each journey runs the real API application over HTTP, the real worker with every handler `worker_main.handlers` registers, and the scheduler's own schedules, on one fake clock that starts at the real time. Only the outside world is replaced: ioTec by the sandbox collections provider, Resend and the SMS provider by transports that record what they were given, and file storage by memory. Steps that have no route yet call their module's service as the client or member of staff the route will act for.
+
+After every journey the whole ledger must balance (each entry, and each currency overall), no account may be below zero, every kept balance must equal its lines, and every entry of a kind staff can post must have an audit event. Each journey checks its own audit trail too.
+
+The journeys use a database of their own, migrated as production is and without the integration suite's test-only ledger source, because the day close signs off real days on the real cash pots and that can never be undone. The journeys that close a day carry `closes_a_day` and run after all the others. Steps not built yet, and gaps the journeys found, are listed in `tests/journeys/gaps.py`.
 
 ## Building on the scaffold
 

@@ -71,7 +71,11 @@ asyncio_default_fixture_loop_scope = "function"
 testpaths = ["tests"]
 pythonpath = ["."]
 addopts = "-q --strict-markers --strict-config"
-markers = ["integration: requires a real PostgreSQL with the Finvest roles"]
+markers = [
+    "integration: requires a real PostgreSQL with the Finvest roles",
+    "journey: an end-to-end journey through the API, worker and scheduler, in its own database",
+    "closes_a_day: a journey that closes a business day, run after every other journey",
+]
 filterwarnings = ["error::DeprecationWarning:app.*"]
 
 [tool.importlinter]
