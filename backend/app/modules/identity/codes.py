@@ -544,9 +544,12 @@ class CodeService:
         return code_id
 
     async def claim_complete(
-        self, challenge_id: str, code: str, password: str, transport: Transport
+        self, challenge_id: str, code: str, password: str, transport: Transport, *, client_id: str
     ) -> Claimed:
         """Check the code, set the password and open the first session, all at once.
+
+        `client_id` is the account the caller expects, from the claim link. A challenge for any
+        other account is refused with `not_found` before anything changes.
 
         The account becomes active. A code proves only the number, so, as with a code sign-in,
         withdrawals are limited to known accounts for 24 hours.
@@ -564,6 +567,9 @@ class CodeService:
             ).one_or_none()
         if account is None:
             raise ApplicationError("expired")
+        if account.id != client_id:
+            # A code for another account, sent with this account's link. Nothing changes.
+            raise ApplicationError("not_found")
         # Hashing is slow on purpose. Limit how often one claim can make us do it.
         await reserve_attempts(
             self.database,

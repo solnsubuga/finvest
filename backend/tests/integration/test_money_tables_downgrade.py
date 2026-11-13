@@ -396,6 +396,19 @@ ROWS = {
         "'Phone stolen', '-Nabc0000000000000S1', now()); COMMIT",
         "refusing to drop identity_client_locks",
     ),
+    "0160_identity_phone_changes": (
+        "BEGIN; INSERT INTO identity_staff (id, email, name, role, created_at) VALUES "
+        "('-Nabc0000000000000S1', 'ada@finvestug.com', 'Ada', 'operations', now()); "
+        "INSERT INTO identity_clients (id, phone, status, created_at) VALUES "
+        "('-Nabc0000000000000B1', '+256772123456', 'unclaimed', now()); "
+        "SELECT set_config('finvest.actor_kind', 'staff', true); "
+        "SELECT set_config('finvest.actor_id', '-Nabc0000000000000S1', true); "
+        "INSERT INTO identity_phone_changes (id, client_id, new_phone, reason, proposed_by, "
+        "proposed_at, expires_at) VALUES ('-Nabc0000000000000A1', '-Nabc0000000000000B1', "
+        "'+256772123457', 'Lost SIM', '-Nabc0000000000000S1', now(), now() + interval '1 day'); "
+        "COMMIT",
+        "refusing to drop the record of number changes",
+    ),
 }
 
 
