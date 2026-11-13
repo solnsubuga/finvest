@@ -283,6 +283,10 @@ describe("complaints", () => {
     mockComplain.mockReturnValueOnce("made then lost");
     await fireEvent.press(screen.getByTestId("send-complaint"));
     await screen.findByText(/could not reach Finvest/);
+    // The words are fixed now: a retry can only be the same complaint.
+    expect(screen.getByText(/may already have reached us/)).toBeTruthy();
+    expect(screen.getByTestId("complaint-summary").props.editable).toBe(false);
+    expect(screen.getByTestId("complaint-details").props.editable).toBe(false);
 
     await fireEvent.press(screen.getByTestId("send-complaint"));
     await screen.findByText("C-1001");
@@ -299,6 +303,9 @@ describe("complaints", () => {
     mockComplain.mockReturnValueOnce("refused");
     await fireEvent.press(screen.getByTestId("send-complaint"));
     await screen.findByText(/could not be accepted/);
+    // Nothing was logged, so the client may still put it right.
+    expect(screen.queryByText(/may already have reached us/)).toBeNull();
+    expect(screen.getByTestId("complaint-summary").props.editable).not.toBe(false);
 
     await fireEvent.press(screen.getByTestId("send-complaint"));
     await screen.findByText("C-1001");
