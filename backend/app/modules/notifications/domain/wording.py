@@ -76,36 +76,36 @@ _NEVER_SHARE = "Finvest staff will never ask for your password, PIN or codes."
 DEFAULTS: dict[str, Wording] = {
     "payment_confirmed": Wording(
         "Payment received",
-        "We received {amount} from {method}.",
-        "Finvest: we received {amount} from {method}.",
+        "We received your payment from {method}.",
+        "Finvest: we received your payment from {method}.",
     ),
     "payment_failed": Wording(
         "Payment did not go through",
-        "Your payment of {amount} from {method} did not go through. No money was taken. "
-        "You can try again in the app.",
-        "Finvest: your payment of {amount} from {method} did not go through. No money was taken.",
+        "Your payment from {method} did not go through. No money was taken. You can try again in "
+        "the app.",
+        "Finvest: your payment from {method} did not go through. No money was taken.",
     ),
     "payout_processing": Wording(
         "Withdrawal is being processed",
-        "{amount} to {destination}. We will confirm when it is sent.",
-        "Finvest: your withdrawal of {amount} to {destination} is being processed.",
+        "Your withdrawal to {destination} is being processed. We will confirm when it is sent.",
+        "Finvest: your withdrawal to {destination} is being processed.",
     ),
     "payout_sent": Wording(
         "Withdrawal sent",
-        "{amount} has been sent to {destination}.",
-        "Finvest: {amount} has been sent to {destination}.",
+        "Your withdrawal has been sent to {destination}.",
+        "Finvest: your withdrawal has been sent to {destination}.",
     ),
     "payout_failed": Wording(
         "Withdrawal could not be sent",
-        "We could not send {amount} to {destination}. Your money is safe and our team is "
+        "We could not send your withdrawal to {destination}. Your money is safe and our team is "
         "on it. You do not need to do anything.",
-        "Finvest: we could not send {amount} to {destination}. Your money is safe and our "
+        "Finvest: we could not send your withdrawal to {destination}. Your money is safe and our "
         "team is on it.",
     ),
     "investment_started": Wording(
         "Investment started",
-        "{amount} is now in a {product}.",
-        "Finvest: {amount} is now invested in a {product}.",
+        "Your money is now in a {product}.",
+        "Finvest: your money is now invested in a {product}.",
     ),
     "investment_maturing": Wording(
         "Your investment matures soon",
@@ -114,13 +114,13 @@ DEFAULTS: dict[str, Wording] = {
     ),
     "investment_matured": Wording(
         "Investment matured",
-        "Your {product} has matured at {amount}.",
-        "Finvest: your {product} has matured at {amount}.",
+        "Your {product} has matured. See what it paid in the app.",
+        "Finvest: your {product} has matured. See what it paid in the app.",
     ),
     "interest_earned": Wording(
-        "You earned {amount} today",
-        "Interest across {count} investments, after tax.",
-        "Finvest: you earned {amount} today across {count} investments, after tax.",
+        "Interest earned today",
+        "You earned interest today, after tax. See the amount in the app.",
+        "Finvest: you earned interest today, after tax. See the amount in the app.",
     ),
     "kyc_approved": Wording(
         "Identity check approved",

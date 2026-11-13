@@ -79,7 +79,7 @@ async def test_a_client_is_told_in_the_words_of_the_event(
     assert item.id == notification_id
     assert (item.event, item.category) == ("payment_confirmed", Category.MONEY)
     assert item.title == "Payment received"
-    assert item.body == "We received UGX 1,000,000 from MTN Mobile Money."
+    assert item.body == "We received your payment from MTN Mobile Money."
     assert item.link is not None and item.link.kind == "deposit"
     assert item.created_at == fake_clock.now() and item.read_at is None
 
@@ -743,7 +743,7 @@ async def test_a_client_reads_and_clears_their_notifications_over_http(api: Api)
         "event": "payment_confirmed",
         "category": "money",
         "title": "Payment received",
-        "body": "We received UGX 1,000,000 from MTN Mobile Money.",
+        "body": "We received your payment from MTN Mobile Money.",
         "link": body["items"][0]["link"],
         "created_at": body["items"][0]["created_at"],
         "read": False,
@@ -797,7 +797,7 @@ async def test_wordings_are_changed_by_two_admins_over_http(
     listed = (await api.http.get("/staff/notification-wordings")).json()["wordings"]
     first = next(item for item in listed if item["event"] == "payment_confirmed")
     assert first["variables"] == ["amount", "method"] and first["category"] == "money"
-    assert first["preview"]["body"] == "We received UGX 1,000,000 from MTN Mobile Money."
+    assert first["preview"]["body"] == "We received your payment from MTN Mobile Money."
     assert not first["edited"] and first["proposal"] is None
     change = {
         "wording": {
