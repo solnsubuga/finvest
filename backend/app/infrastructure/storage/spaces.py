@@ -7,13 +7,13 @@ import httpx
 
 from app.infrastructure.storage import sigv4
 from app.infrastructure.storage.files import (
-    CONTENT_TYPE,
     FileNotFound,
     NewFile,
     ReadLink,
     StorageRefused,
     StorageUnavailable,
     StoredFile,
+    check_content_type,
     check_digest,
     check_key,
     check_lifetime,
@@ -156,8 +156,7 @@ class SpacesStorage:
     def read_link(
         self, key: str, *, content_type: str, lifetime: timedelta, now: datetime
     ) -> ReadLink:
-        if not CONTENT_TYPE.fullmatch(content_type):
-            raise ValueError("A content type is not valid")
+        check_content_type(content_type)
         seconds = check_lifetime(lifetime)
         path = self._path(key)
         # Served inline with the recorded type, so an image opens in the console and nothing
