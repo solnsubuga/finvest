@@ -27,6 +27,7 @@ export const SCREEN_PERMISSIONS = [
   "reconciliation.view",
   "investments.view",
   "automatic_investing.view",
+  "goals.view",
   "dealing_desk.view",
   "finance.view",
   "products.view",
