@@ -1,4 +1,4 @@
-import type { StaffSession } from "./types.ts";
+import type { Role, StaffSession } from "./types.ts";
 
 /**
  * The console's view of staff sign-in.
@@ -26,6 +26,33 @@ export interface AuthApi {
    */
   finishSignIn(challenge: SignInChallenge, answer: SecondStepAnswer): Promise<StaffSession>;
   signOut(): Promise<void>;
+
+  /**
+   * First-time set-up from a one-time link. The token comes from the link and
+   * is only ever sent in a request body.
+   */
+  getEnrolment(token: string): Promise<Enrolment>;
+  /** Sets the password, creates a passkey in the browser and signs the person in. */
+  enrolWithPasskey(token: string, password: string): Promise<StaffSession>;
+  /** Returns the secret to add to an authenticator app. Nothing is saved until it is confirmed. */
+  startAuthenticatorEnrolment(token: string): Promise<AuthenticatorSetup>;
+  /** Sets the password, confirms the first code and signs the person in. */
+  enrolWithAuthenticator(token: string, password: string, code: string): Promise<StaffSession>;
+}
+
+export interface Enrolment {
+  name: string;
+  email: string;
+  role: Role;
+  /** The second steps this person may choose from. */
+  methods: readonly SecondStepMethod[];
+}
+
+export interface AuthenticatorSetup {
+  /** The key to type in by hand when the QR code cannot be scanned. */
+  secret: string;
+  /** The otpauth address the QR code holds. */
+  uri: string;
 }
 
 export const SECOND_STEP_METHODS = ["passkey", "authenticator"] as const;
@@ -45,8 +72,13 @@ export type SecondStepAnswer = { method: "passkey" } | { method: "authenticator"
 export type AuthErrorCode =
   | "invalid_credentials"
   | "passkey_failed"
-  | "code_invalid"
+  | "invalid_code"
   | "second_step_missing"
+  | "link_expired"
+  | "password_too_short"
+  | "password_too_long"
+  | "password_leaked"
+  | "rate_limited"
   | "not_connected"
   | "unavailable";
 
@@ -60,13 +92,21 @@ export class AuthError extends Error {
   }
 }
 
+/** From docs/rules.md. The backend checks it again and also checks leaked password lists. */
+export const PASSWORD_MIN_LENGTH = 10;
+
 /** Wording for each error. Never says whether the email or the password was wrong. */
 export const AUTH_ERROR_MESSAGES: Record<AuthErrorCode, string> = {
   invalid_credentials: "That email and password do not match a staff account.",
   passkey_failed: "We could not confirm your passkey. Try again.",
-  code_invalid: "That code is not right. Check your authenticator app and try again.",
+  invalid_code: "That code is not right. Check your authenticator app and try again.",
   second_step_missing:
     "Your account has no passkey or authenticator app yet, so you cannot sign in. Use your set-up link, or ask an admin for a new one.",
+  link_expired: "This set-up link has expired or has already been used. Ask an admin for a new one.",
+  password_too_short: `Use at least ${PASSWORD_MIN_LENGTH} characters for your password.`,
+  password_too_long: "That password is too long. Use a shorter one.",
+  password_leaked: "That password has appeared in a known leak. Choose a different one.",
+  rate_limited: "Too many attempts. Wait a few minutes and try again.",
   not_connected: "Sign-in is not connected to the Finvest service yet.",
   unavailable: "We could not reach Finvest. Check your connection and try again.",
 };
@@ -82,4 +122,8 @@ export const notConnectedAuthApi: AuthApi = {
   startSignIn: () => Promise.reject(new AuthError("not_connected")),
   finishSignIn: () => Promise.reject(new AuthError("not_connected")),
   signOut: () => Promise.resolve(),
+  getEnrolment: () => Promise.reject(new AuthError("not_connected")),
+  enrolWithPasskey: () => Promise.reject(new AuthError("not_connected")),
+  startAuthenticatorEnrolment: () => Promise.reject(new AuthError("not_connected")),
+  enrolWithAuthenticator: () => Promise.reject(new AuthError("not_connected")),
 };

@@ -33,6 +33,8 @@ The backend's sign-in is not built yet, so `pnpm dev` uses sample staff from `sr
 | support@finvest.test | Support | Passkey and authenticator app |
 | invited@finvest.test | Support | Neither, so sign-in is refused |
 
+To try first-time set-up, open http://localhost:5174/enrol#sample-invite. It sets up `invited@finvest.test`. The link works once per browser tab session, as a real one works once. Any password of 10 characters or more works except `password1234`, which the stub treats as leaked so that error can be seen.
+
 The stub is not security. It runs only under `pnpm dev`, or in a build made with `VITE_STUB_API=true`. A normal production build has no working sign-in until the real API client is wired in.
 
 Whenever the stub is active, a banner reading "Sample sign-in. Not connected to Finvest." stays on screen. A build fails if `VITE_STUB_API=true` is combined with `VITE_DEPLOY_ENV=production`, so the deploy must set `VITE_DEPLOY_ENV` for the production console.
@@ -52,7 +54,7 @@ Whenever the stub is active, a banner reading "Sample sign-in. Not connected to 
 | `src/routes.tsx` | Routes. Each screen is guarded by its permission, so typing an address does not get around the menu. |
 | `src/components/` | The shell, sidebar and logo |
 | `src/screens/` | One folder per built screen, picked up automatically |
-| `src/pages/` | Sign-in, placeholder, no access and not found |
+| `src/pages/` | Sign-in, first-time set-up, placeholder, no access and not found |
 
 ### Roles and permissions
 
@@ -70,6 +72,7 @@ That replaces the placeholder. The route, the menu entry and the permission chec
 
 ## Notes
 
+- New staff set themselves up from a one-time link, `/enrol#<token>`: a password, then a passkey or an authenticator app. The token is after the `#` so it is never sent in an address, and the page removes it from the address bar once read.
 - Every staff account must have a second step. Staff sign in with a password and then a passkey or an authenticator app code, whichever they have set up. An account with neither cannot sign in. There is no SMS option.
 - Permissions are by role. Sensitive actions are maker and checker: one person proposes, another approves.
 - Every staff action is written to the audit trail with a reason.

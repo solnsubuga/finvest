@@ -49,9 +49,50 @@ export function AuthProvider({ api, children }: AuthProviderProps) {
     }
   }, [api]);
 
+  const getEnrolment = useCallback((token: string) => api.getEnrolment(token), [api]);
+
+  const enrolWithPasskey = useCallback(
+    async (token: string, password: string) => {
+      setSession(await api.enrolWithPasskey(token, password));
+    },
+    [api],
+  );
+
+  const startAuthenticatorEnrolment = useCallback(
+    (token: string) => api.startAuthenticatorEnrolment(token),
+    [api],
+  );
+
+  const enrolWithAuthenticator = useCallback(
+    async (token: string, password: string, code: string) => {
+      setSession(await api.enrolWithAuthenticator(token, password, code));
+    },
+    [api],
+  );
+
   const value = useMemo<AuthState>(
-    () => ({ session, loading, startSignIn, finishSignIn, signOut }),
-    [session, loading, startSignIn, finishSignIn, signOut],
+    () => ({
+      session,
+      loading,
+      startSignIn,
+      finishSignIn,
+      signOut,
+      getEnrolment,
+      enrolWithPasskey,
+      startAuthenticatorEnrolment,
+      enrolWithAuthenticator,
+    }),
+    [
+      session,
+      loading,
+      startSignIn,
+      finishSignIn,
+      signOut,
+      getEnrolment,
+      enrolWithPasskey,
+      startAuthenticatorEnrolment,
+      enrolWithAuthenticator,
+    ],
   );
 
   return <AuthContext value={value}>{children}</AuthContext>;
