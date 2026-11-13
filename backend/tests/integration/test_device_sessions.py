@@ -34,17 +34,21 @@ class Api:
     identity: IdentityService
     clock: FakeClock
     worker: Database
+    owner: Database
 
 
 @pytest.fixture
 async def api(
-    test_database: TestDatabase, app_database: Database, worker_database: Database
+    test_database: TestDatabase,
+    app_database: Database,
+    worker_database: Database,
+    migrator_database: Database,
 ) -> AsyncIterator[Api]:
     clock = FakeClock()
     app = create_app(test_database.settings("finvest_app"), app_database, clock, HASHER)
     transport = httpx.ASGITransport(app=app, raise_app_exceptions=False)
     async with httpx.AsyncClient(transport=transport, base_url="https://api") as http:
-        yield Api(http, app.state.identity, clock, worker_database)
+        yield Api(http, app.state.identity, clock, worker_database, migrator_database)
 
 
 async def sign_in(api: Api, phone: str, agent: str) -> dict[str, str]:
@@ -152,3 +156,24 @@ async def test_a_crafted_user_agent_never_reaches_the_notice(api: Api) -> None:
     [notice] = await notices(api, phone)
     assert notice["device"] == "Chrome"
     assert "evil" not in str(notice)
+
+
+async def test_email_hears_of_a_new_device_only_at_a_proved_address(api: Api) -> None:
+    phone = f"+256{next(_numbers)}"
+    email = f"client{next(_numbers)}@example.com"
+    client_id = await api.identity.create_client(phone=phone, email=email, password=PASSWORD)
+    await sign_in(api, phone, PHONE_APP)
+    # Not proved: a stranger could own a mistyped address, so only the phone hears.
+    await sign_in(api, phone, LAPTOP)
+    assert len(await notices(api, phone)) == 1
+    assert await notices(api, email) == []
+    async with api.owner.transaction() as session:
+        await session.execute(
+            text("UPDATE identity_clients SET email_verified_at = now() WHERE id = :id"),
+            {"id": client_id},
+        )
+    await sign_in(api, phone, "Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) Safari")
+    by_sms = await notices(api, phone)
+    assert len(by_sms) == 2
+    [by_email] = await notices(api, email)
+    assert by_email == by_sms[-1]
