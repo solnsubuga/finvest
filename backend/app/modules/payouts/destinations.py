@@ -384,6 +384,30 @@ _SEND_TO = text(
 )
 
 
+async def account_number(session: AsyncSession, destination_id: str) -> str:
+    """The whole account number, for staff to compare with the proof. Staff transactions only:
+    the client routes show the masked number. Opening it is recorded with `record_opened`."""
+    number = await session.scalar(
+        text("SELECT account_number FROM payout_destinations WHERE id = :id"),
+        {"id": destination_id},
+    )
+    if number is None:
+        raise ApplicationError("not_found")
+    return str(number)
+
+
+async def record_opened(
+    session: AsyncSession, staff: Actor, destination_id: str, clock: Clock
+) -> None:
+    """Write to the audit trail that a member of staff opened an account to check it. Its proof
+    and number name the client, so each look is recorded."""
+    if staff.kind != "staff":
+        raise ApplicationError("forbidden")
+    await _audit(
+        session, staff, "payouts.destination_opened", destination_id, clock, category="access"
+    )
+
+
 async def mobile_money_number(session: AsyncSession, destination_id: str) -> tuple[str, str]:
     """The network and full number of a mobile money destination: for the worker sending a
     payout, and for texting the code that proves the client holds it.

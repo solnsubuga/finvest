@@ -55,6 +55,11 @@ export const AnnouncementList = z.object({
 });
 export type AnnouncementList = z.infer<typeof AnnouncementList>;
 
+export const Approval = z.object({
+  reason: z.string(),
+});
+export type Approval = z.infer<typeof Approval>;
+
 export const ApprovalItemOut = z.object({
   can_decide: z.boolean(),
   id: z.string(),
@@ -189,6 +194,15 @@ export const ChangeView = z.object({
   yours: z.boolean(),
 });
 export type ChangeView = z.infer<typeof ChangeView>;
+
+export const CheckOut = z.object({
+  checked_at: z.string(),
+  checked_by: z.string(),
+  name_match: z.enum(["exact", "partial"]),
+  proof_name: z.string(),
+  statement_date: z.string().nullable(),
+});
+export type CheckOut = z.infer<typeof CheckOut>;
 
 export const CheckStatus = z.enum(["draft", "submitted", "needs_review", "with_compliance", "awaiting_client", "approved", "rejected"]);
 export type CheckStatus = z.infer<typeof CheckStatus>;
@@ -645,6 +659,13 @@ export const MoveComplaint = z.object({
 });
 export type MoveComplaint = z.infer<typeof MoveComplaint>;
 
+export const NewCheck = z.object({
+  proof_name: z.string(),
+  reason: z.string(),
+  statement_date: z.string().nullable().optional(),
+});
+export type NewCheck = z.infer<typeof NewCheck>;
+
 export const NewSavedReply = z.object({
   body: z.string(),
   title: z.string(),
@@ -773,6 +794,12 @@ export const ProgressView = z.object({
 });
 export type ProgressView = z.infer<typeof ProgressView>;
 
+export const ProofLinkOut = z.object({
+  expires_at: z.string(),
+  url: z.string(),
+});
+export type ProofLinkOut = z.infer<typeof ProofLinkOut>;
+
 export const ProposalIn = z.object({
   annual_rate_bps: z.number().int(),
   effective_from: z.string(),
@@ -897,6 +924,12 @@ export const ReasonBody = z.object({
 });
 export type ReasonBody = z.infer<typeof ReasonBody>;
 
+export const Refusal = z.object({
+  reason: z.string(),
+  rejection_reason: z.enum(["name_different", "proof_unreadable", "proof_too_old", "proof_wrong_account", "proof_wrong_document", "suspected_fraud"]),
+});
+export type Refusal = z.infer<typeof Refusal>;
+
 export const SupportApiComplaintSummary = z.object({
   average_days_to_close_tenths: z.number().int().nullable(),
   closed_this_quarter: z.number().int(),
@@ -925,8 +958,13 @@ export const Rejection = z.object({
 });
 export type Rejection = z.infer<typeof Rejection>;
 
+export const Removal = z.object({
+  reason: z.string(),
+});
+export type Removal = z.infer<typeof Removal>;
+
 export const RoleView = z.object({
-  permissions: z.array(z.enum(["overview.view", "review_queue.view", "identity_checks.view", "identity_checks.review", "maturities.view", "support.view", "support.reply", "complaints.view", "complaints.manage", "complaints.close", "clients.view", "clients.lock", "money_movement.view", "reconciliation.view", "investments.view", "automatic_investing.view", "goals.view", "dealing_desk.view", "finance.view", "products.view", "rates.view", "rates.change", "compliance.view", "team.view", "team.change", "reports.view", "audit.view", "settings.view", "wordings.change", "email_suppressions.lift", "announcements.send", "migration.view", "bank_transfers.change", "migration.import", "migration.sign_off", "client_phones.change"])),
+  permissions: z.array(z.enum(["overview.view", "review_queue.view", "identity_checks.view", "identity_checks.review", "maturities.view", "support.view", "support.reply", "complaints.view", "complaints.manage", "complaints.close", "clients.view", "clients.lock", "money_movement.view", "reconciliation.view", "investments.view", "automatic_investing.view", "goals.view", "dealing_desk.view", "finance.view", "products.view", "rates.view", "rates.change", "compliance.view", "team.view", "team.change", "reports.view", "audit.view", "settings.view", "wordings.change", "email_suppressions.lift", "announcements.send", "migration.view", "bank_transfers.change", "payout_accounts.change", "migration.import", "migration.sign_off", "client_phones.change"])),
   role: z.enum(["admin", "operations", "finance", "compliance", "support"]),
 });
 export type RoleView = z.infer<typeof RoleView>;
@@ -1000,6 +1038,47 @@ export const StaffCheck = z.object({
   surname: z.string().nullable(),
 });
 export type StaffCheck = z.infer<typeof StaffCheck>;
+
+export const StaffDestinationDetail = z.object({
+  account: z.string(),
+  account_number: z.string(),
+  approved_at: z.string().nullable(),
+  approved_by: z.string().nullable(),
+  bank_code: z.string().nullable(),
+  check: CheckOut.nullable(),
+  client_id: z.string(),
+  created_at: z.string(),
+  holder_name: z.string(),
+  id: z.string(),
+  id_name: z.string().nullable(),
+  kind: z.enum(["mobile_money", "bank"]),
+  network: z.enum(["mtn", "airtel"]).nullable(),
+  payable_from: z.string().nullable(),
+  proof_kind: z.enum(["bank_statement", "bank_letter", "bank_card", "network_registered_name"]).nullable(),
+  proof_link: ProofLinkOut.nullable(),
+  rejection_reason: z.enum(["name_different", "proof_unreadable", "proof_too_old", "proof_wrong_account", "proof_wrong_document", "suspected_fraud"]).nullable(),
+  status: z.enum(["awaiting_code", "awaiting_proof", "in_review", "approved", "rejected", "removed"]),
+});
+export type StaffDestinationDetail = z.infer<typeof StaffDestinationDetail>;
+
+export const StaffDestinationOut = z.object({
+  account: z.string(),
+  approved_at: z.string().nullable(),
+  approved_by: z.string().nullable(),
+  bank_code: z.string().nullable(),
+  check: CheckOut.nullable(),
+  client_id: z.string(),
+  created_at: z.string(),
+  holder_name: z.string(),
+  id: z.string(),
+  kind: z.enum(["mobile_money", "bank"]),
+  network: z.enum(["mtn", "airtel"]).nullable(),
+  payable_from: z.string().nullable(),
+  proof_kind: z.enum(["bank_statement", "bank_letter", "bank_card", "network_registered_name"]).nullable(),
+  rejection_reason: z.enum(["name_different", "proof_unreadable", "proof_too_old", "proof_wrong_account", "proof_wrong_document", "suspected_fraud"]).nullable(),
+  status: z.enum(["awaiting_code", "awaiting_proof", "in_review", "approved", "rejected", "removed"]),
+});
+export type StaffDestinationOut = z.infer<typeof StaffDestinationOut>;
 
 export const StaffGoalView = z.object({
   category: GoalCategory,
@@ -1132,7 +1211,7 @@ export type StaffSendMessage = z.infer<typeof StaffSendMessage>;
 
 export const StaffSessionView = z.object({
   name: z.string(),
-  permissions: z.array(z.enum(["overview.view", "review_queue.view", "identity_checks.view", "identity_checks.review", "maturities.view", "support.view", "support.reply", "complaints.view", "complaints.manage", "complaints.close", "clients.view", "clients.lock", "money_movement.view", "reconciliation.view", "investments.view", "automatic_investing.view", "goals.view", "dealing_desk.view", "finance.view", "products.view", "rates.view", "rates.change", "compliance.view", "team.view", "team.change", "reports.view", "audit.view", "settings.view", "wordings.change", "email_suppressions.lift", "announcements.send", "migration.view", "bank_transfers.change", "migration.import", "migration.sign_off", "client_phones.change"])),
+  permissions: z.array(z.enum(["overview.view", "review_queue.view", "identity_checks.view", "identity_checks.review", "maturities.view", "support.view", "support.reply", "complaints.view", "complaints.manage", "complaints.close", "clients.view", "clients.lock", "money_movement.view", "reconciliation.view", "investments.view", "automatic_investing.view", "goals.view", "dealing_desk.view", "finance.view", "products.view", "rates.view", "rates.change", "compliance.view", "team.view", "team.change", "reports.view", "audit.view", "settings.view", "wordings.change", "email_suppressions.lift", "announcements.send", "migration.view", "bank_transfers.change", "payout_accounts.change", "migration.import", "migration.sign_off", "client_phones.change"])),
   role: z.enum(["admin", "operations", "finance", "compliance", "support"]),
   staff_id: z.string(),
 });
@@ -1996,6 +2075,82 @@ export const operations = {
     idempotent: true,
     status: 200,
     response: BankTransferOut,
+  },
+  "GET /staff/payout-destinations": {
+    method: "GET",
+    path: "/staff/payout-destinations",
+    params: z.object({}),
+    query: z.object({}),
+    body: null,
+    bodyKind: null,
+    idempotent: false,
+    status: 200,
+    response: z.array(StaffDestinationOut),
+  },
+  "GET /staff/payout-destinations/{destination_id}": {
+    method: "GET",
+    path: "/staff/payout-destinations/{destination_id}",
+    params: z.object({
+    destination_id: z.string(),
+  }),
+    query: z.object({}),
+    body: null,
+    bodyKind: null,
+    idempotent: false,
+    status: 200,
+    response: StaffDestinationDetail,
+  },
+  "POST /staff/payout-destinations/{destination_id}/approve": {
+    method: "POST",
+    path: "/staff/payout-destinations/{destination_id}/approve",
+    params: z.object({
+    destination_id: z.string(),
+  }),
+    query: z.object({}),
+    body: Approval,
+    bodyKind: "json",
+    idempotent: false,
+    status: 200,
+    response: StaffDestinationOut,
+  },
+  "POST /staff/payout-destinations/{destination_id}/check": {
+    method: "POST",
+    path: "/staff/payout-destinations/{destination_id}/check",
+    params: z.object({
+    destination_id: z.string(),
+  }),
+    query: z.object({}),
+    body: NewCheck,
+    bodyKind: "json",
+    idempotent: false,
+    status: 200,
+    response: StaffDestinationOut,
+  },
+  "POST /staff/payout-destinations/{destination_id}/reject": {
+    method: "POST",
+    path: "/staff/payout-destinations/{destination_id}/reject",
+    params: z.object({
+    destination_id: z.string(),
+  }),
+    query: z.object({}),
+    body: Refusal,
+    bodyKind: "json",
+    idempotent: false,
+    status: 200,
+    response: StaffDestinationOut,
+  },
+  "POST /staff/payout-destinations/{destination_id}/remove": {
+    method: "POST",
+    path: "/staff/payout-destinations/{destination_id}/remove",
+    params: z.object({
+    destination_id: z.string(),
+  }),
+    query: z.object({}),
+    body: Removal,
+    bodyKind: "json",
+    idempotent: false,
+    status: 200,
+    response: StaffDestinationOut,
   },
   "GET /staff/phone-changes": {
     method: "GET",

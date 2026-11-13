@@ -66,6 +66,10 @@ Permission = Literal[
     # else's match: this confirms money. Seeing the transfers is `reconciliation.view`. Not a
     # screen: the console's own list gains it with the bank transfers screen.
     "bank_transfers.change",
+    # Checking a client's proof that a payout account is theirs, approving someone else's
+    # check, refusing the proof, or removing an account. Seeing the queue is
+    # `review_queue.view`. Not a screen.
+    "payout_accounts.change",
     "migration.import",
     "migration.sign_off",
     # Proposing a new mobile number for a client, or approving someone else's proposal. The
@@ -102,6 +106,7 @@ ROLE_PERMISSIONS: dict[Role, frozenset[Permission]] = {
             "reports.view",
             "migration.view",
             "bank_transfers.change",
+            "payout_accounts.change",
             "migration.import",
             "client_phones.change",
         }
@@ -142,6 +147,7 @@ ROLE_PERMISSIONS: dict[Role, frozenset[Permission]] = {
             "compliance.view",
             "reports.view",
             "audit.view",
+            "payout_accounts.change",
         }
     ),
     # Support answers clients and logs and works complaints. Closing one is for operations and
