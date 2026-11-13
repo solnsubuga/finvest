@@ -18,6 +18,7 @@ from app.infrastructure.jobs.worker import default_worker_id
 from app.infrastructure.logging import configure_logging
 from app.infrastructure.process import keep_heartbeat, stop_on_signals
 from app.infrastructure.settings import Settings
+from app.modules.investments.jobs import CANCEL_UNPAID_KIND
 from app.modules.kyc.service import SWEEP_UNANSWERED
 from app.modules.payments import service as payments
 from app.modules.payments.settings import PaymentsSettings
@@ -37,6 +38,13 @@ def schedules() -> list[Schedule]:
             trigger=IntervalTrigger(minutes=5),
             kind=SWEEP_UNANSWERED,
             max_age=timedelta(minutes=5),
+        ),
+        # Cancels investments nobody paid for within the payment window.
+        Schedule(
+            name="investments.cancel_unpaid",
+            trigger=IntervalTrigger(minutes=15),
+            kind=CANCEL_UNPAID_KIND,
+            max_age=timedelta(minutes=30),
         ),
     ]
     payments_settings = PaymentsSettings()

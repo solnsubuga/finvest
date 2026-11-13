@@ -14,6 +14,7 @@ from app.infrastructure.jobs.settings import JobProcessSettings
 from app.infrastructure.logging import configure_logging
 from app.infrastructure.process import keep_heartbeat, stop_on_signals
 from app.infrastructure.settings import Settings
+from app.modules.investments.jobs import InvestmentJobs
 from app.modules.kyc.jobs import ProviderJobs, sweep_unanswered
 from app.modules.kyc.service import SWEEP_UNANSWERED
 from app.modules.kyc.settings import KycSettings
@@ -29,7 +30,10 @@ def handlers(database: Database, clock: Clock) -> dict[str, JobHandler | Handler
     A handler that calls a provider is registered with `external_effect(handler)`, so a crash
     or an unsorted exception stops the job for reconciliation and it is never run twice.
     """
-    kinds: dict[str, JobHandler | Handler] = {SWEEP_UNANSWERED: sweep_unanswered(clock)}
+    kinds: dict[str, JobHandler | Handler] = {
+        SWEEP_UNANSWERED: sweep_unanswered(clock),
+        **InvestmentJobs(database, clock).handlers(),
+    }
     identity = KycSettings()
     if identity.identity_provider != "manual":
         # The manual provider sends every client to a person and queues no provider jobs.
