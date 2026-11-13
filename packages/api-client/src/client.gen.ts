@@ -191,7 +191,7 @@ export type ClientComplaints = z.infer<typeof ClientComplaints>;
 export const Currency = z.enum(["UGX", "USD"]);
 export type Currency = z.infer<typeof Currency>;
 
-export const InvestmentStatus = z.enum(["awaiting_payment", "active", "cancelled", "matured", "withdrawn"]);
+export const InvestmentStatus = z.enum(["awaiting_payment", "active", "cancelled", "matured", "withdrawn", "unwound"]);
 export type InvestmentStatus = z.infer<typeof InvestmentStatus>;
 
 export const ClientInvestmentOut = z.object({

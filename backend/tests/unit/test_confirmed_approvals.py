@@ -30,6 +30,7 @@ DECISIONS = {
     "POST /staff/migration/control-totals/{totals_id}/confirmation",
     "POST /staff/migration/sign-offs/{sign_off_id}/decision",
     "POST /staff/rate-proposals/{proposal_id}/approve",
+    "POST /staff/investment-corrections/{correction_id}/approve",
     "POST /staff/clients/locks/{lock_id}/decision",
     "POST /staff/dealing/orders/{order_id}/approve",
     "POST /staff/dealing/orders/{order_id}/confirm-result",

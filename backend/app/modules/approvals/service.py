@@ -57,6 +57,8 @@ async def waiting_for(session: AsyncSession, staff: StaffSession, now: datetime)
         found += await _announcements(session)
     if "payout_account" in kinds:
         found += await _payout_accounts(session)
+    if "investment_correction" in kinds:
+        found += await _investment_corrections(session, staff)
     return inbox(found, staff.staff_id, staff.permissions)
 
 
@@ -131,6 +133,16 @@ async def _rates(session: AsyncSession, staff: StaffSession) -> list[Waiting]:
         Waiting("rate_change", p.id, p.product_code, p.proposed_by, p.proposed_at)
         for p in await investments.list_proposals(
             session, staff.actor, status=ProposalStatus.PROPOSED
+        )
+    ]
+
+
+async def _investment_corrections(session: AsyncSession, staff: StaffSession) -> list[Waiting]:
+    # The subject is the kind, "unwind" or "refund". Never the client or the amount.
+    return [
+        Waiting("investment_correction", c.id, c.kind.value, c.proposed_by, c.proposed_at)
+        for c in await investments.list_corrections(
+            session, staff.actor, status=investments.CorrectionStatus.PROPOSED, limit=200
         )
     ]
 

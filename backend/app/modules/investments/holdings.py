@@ -187,7 +187,8 @@ _BY_ID_SHARED = text(f"SELECT {_COLUMNS} {_FROM} WHERE i.id = :id FOR SHARE OF i
 _BY_ID_LOCKED = text(f"SELECT {_COLUMNS} {_FROM} WHERE i.id = :id FOR UPDATE OF i")
 _FOR_CLIENT = text(
     f"SELECT {_COLUMNS} {_FROM} WHERE i.client_id = :client_id "
-    "AND i.status <> 'cancelled' ORDER BY i.created_at DESC, i.id DESC LIMIT :limit"
+    "AND i.status NOT IN ('cancelled', 'unwound') "
+    "ORDER BY i.created_at DESC, i.id DESC LIMIT :limit"
 )
 _FOR_STAFF = text(
     f"SELECT {_COLUMNS} {_FROM} "
@@ -545,7 +546,7 @@ async def list_investments(
 async def client_investments(
     session: AsyncSession, client: Actor, clock: Clock, *, limit: int = MAX_PAGE_SIZE
 ) -> list[ClientInvestment]:
-    """The client's portfolio, newest first, without cancelled ones. Figures after tax."""
+    """The client's portfolio, newest first, without cancelled or undone ones. After tax."""
     if client.kind != "client":
         raise ApplicationError("forbidden")
     today = business_date(clock.now())
@@ -561,7 +562,8 @@ async def client_investment(
     if client.kind != "client":
         raise ApplicationError("forbidden")
     row = (await session.execute(_BY_ID, {"id": investment_id})).one_or_none()
-    if row is None or row.client_id != client.id:
+    # An investment undone for a mistaken deposit was never really the client's.
+    if row is None or row.client_id != client.id or row.status == InvestmentStatus.UNWOUND:
         raise ApplicationError("not_found")
     return _client_view(investment_from_row(row), business_date(clock.now()))
 
@@ -577,7 +579,7 @@ async def client_investments_by_id(
     return [
         _client_view(investment, today)
         for investment in await get_investments(session, investment_ids)
-        if investment.client_id == client.id
+        if investment.client_id == client.id and investment.status is not InvestmentStatus.UNWOUND
     ]
 
 

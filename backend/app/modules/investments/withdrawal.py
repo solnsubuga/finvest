@@ -112,7 +112,7 @@ async def request_withdrawal(
         ):
             raise ApplicationError("conflict")
         now = clock.now()
-        await _usable(
+        await check_payable_destination(
             session,
             investment.client_id,
             destination_id,
@@ -301,7 +301,7 @@ async def _own_locked(session: AsyncSession, client: Actor, investment_id: str) 
     return investment
 
 
-async def _usable(
+async def check_payable_destination(
     session: AsyncSession, client_id: str, destination_id: str, amount: Money, now: datetime
 ) -> None:
     try:
