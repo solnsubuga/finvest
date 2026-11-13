@@ -1,0 +1,124 @@
+---
+import Cta from "../components/Cta.astro";
+import Icon from "../components/Icon.astro";
+import IconCard from "../components/IconCard.astro";
+import PageTitle from "../components/PageTitle.astro";
+import Base from "../layouts/Base.astro";
+
+const steps = [
+  {
+    title: "Create your account",
+    text: "Enter your mobile number, create a password and a PIN, and add a passkey if your phone supports one.",
+    time: "About 5 minutes",
+  },
+  {
+    title: "Prove who you are",
+    text: "Scan your National ID and take a selfie. When you pass, you get a 10 digit Finvest account number.",
+    time: "[REVIEW TIME]",
+  },
+  {
+    title: "Choose an investment or a goal",
+    text: "Pick a product, type an amount, and review the exact maturity date and the money you get back.",
+    time: "As long as you like",
+  },
+  {
+    title: "Pay for it",
+    text: "Approve the prompt on your MTN or Airtel line, or send a bank transfer with your reference. The investment starts when the payment is confirmed.",
+    time: "Seconds by mobile money",
+  },
+  {
+    title: "Follow it daily",
+    text: "Interest appears each day, after tax. Statements, receipts and tax certificates are always in the app.",
+    time: "Every day",
+  },
+  {
+    title: "Roll over or get paid",
+    text: "Before maturity, choose to reinvest or be paid. Payouts go straight to your saved mobile money number or bank account.",
+    time: "Same day by mobile money",
+  },
+];
+
+const routes = [
+  {
+    icon: "phone",
+    title: "MTN and Airtel mobile money",
+    text: "Approve a prompt on your phone and your investment starts in seconds. Payouts arrive on the same number.",
+  },
+  {
+    icon: "bank",
+    title: "Bank transfer",
+    text: "Send from any bank using your personal reference and upload the receipt. We match it to the bank statement.",
+  },
+  {
+    icon: "shield",
+    title: "Only to accounts in your name",
+    text: "Payout accounts must be yours. A new bank account needs proof of ownership and a 24 hour wait before first use.",
+  },
+] as const;
+
+const accounts = [
+  { icon: "people", title: "Personal", text: "One person, one account." },
+  { icon: "people", title: "Joint", text: "Two people who both own the money." },
+  { icon: "people", title: "Group or SACCO", text: "Signatories approve each withdrawal together." },
+  { icon: "bank", title: "Company", text: "Directors and signatories set at sign up." },
+] as const;
+---
+
+<Base
+  title="How it works"
+  description="How Finvest works, step by step: open an account, prove who you are, choose an investment, pay by mobile money or bank, and get paid at maturity."
+>
+  <PageTitle
+    eyebrow="How it works"
+    title="From sign up to payout, without visiting an office."
+    lead="Everything happens in the app or at app.finvestug.com. Here is each step and how long it takes."
+  />
+
+  <section class="band" id="steps">
+    <div class="wrap">
+      <p class="eyebrow">Step by step</p>
+      <h2 class="h2">Six steps, start to finish.</h2>
+      <ol class="timeline">
+        {
+          steps.map((step, index) => (
+            <li class="card">
+              <span class="step__number" aria-hidden="true">
+                {index + 1}
+              </span>
+              <div class="timeline__text">
+                <h3 class="h3">{step.title}</h3>
+                <p>{step.text}</p>
+              </div>
+              <span class="time">
+                <Icon name="clock" size={16} />
+                {step.time}
+              </span>
+            </li>
+          ))
+        }
+      </ol>
+    </div>
+  </section>
+
+  <section class="band band--white" id="paying">
+    <div class="wrap">
+      <p class="eyebrow">Paying in and getting paid</p>
+      <h2 class="h2">Use the money routes you already have.</h2>
+      <div class="grid grid--3">
+        {routes.map((route) => <IconCard {...route} />)}
+      </div>
+    </div>
+  </section>
+
+  <section class="band" id="accounts">
+    <div class="wrap">
+      <p class="eyebrow">More than one person</p>
+      <h2 class="h2">Accounts for families, groups and companies.</h2>
+      <div class="grid grid--4">
+        {accounts.map((account) => <IconCard {...account} />)}
+      </div>
+    </div>
+  </section>
+
+  <Cta />
+</Base>

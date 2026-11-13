@@ -19,7 +19,7 @@ const lead = fallback.products
 const steps = [
   {
     title: "Open your account",
-    text: "Scan your National ID and take a selfie. Most people are approved in minutes and get a Finvest account number.",
+    text: "Scan your National ID and take a selfie. When your identity check passes, you get a Finvest account number.",
   },
   {
     title: "Choose and pay",
@@ -58,7 +58,7 @@ const questions = [
   {
     question: "Can I take my money out early?",
     answer:
-      "Yes. Ask in the app and we sell your bill at that day's market price. You see the exact amount before you confirm. It can be less than holding to maturity.",
+      "[CONFIRM EARLY WITHDRAWAL TERMS]. You see the exact amount before you confirm, and it can be less than holding to maturity.",
   },
   {
     question: "How do I pay, and how am I paid?",
@@ -197,6 +197,11 @@ const questions = [
           ))
         }
       </ol>
+      <p class="after-grid">
+        <a class="button button--outline" href="/how-it-works">
+          More about how it works <Icon name="arrow" size={18} />
+        </a>
+      </p>
     </div>
   </section>
 
@@ -247,6 +252,11 @@ const questions = [
           ))
         }
       </ul>
+      <p class="after-grid">
+        <a class="button button--on-black" href="/safety">
+          How we keep money safe <Icon name="arrow" size={18} />
+        </a>
+      </p>
     </div>
   </section>
 
@@ -255,6 +265,11 @@ const questions = [
       <p class="eyebrow">Questions</p>
       <h2 class="h2">Things people ask first.</h2>
       <Faq questions={questions} openFirst />
+      <p class="after-grid">
+        <a class="button button--outline" href="/help">
+          Visit the help centre <Icon name="arrow" size={18} />
+        </a>
+      </p>
     </div>
   </section>
 

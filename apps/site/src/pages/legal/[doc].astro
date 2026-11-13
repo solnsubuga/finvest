@@ -1,0 +1,73 @@
+---
+import { legalDocuments, type LegalDocument } from "../../data/legal.ts";
+import Base from "../../layouts/Base.astro";
+
+export function getStaticPaths() {
+  return legalDocuments.map((document) => ({
+    params: { doc: document.slug },
+    props: { document },
+  }));
+}
+
+interface Props {
+  document: LegalDocument;
+}
+
+const { document } = Astro.props;
+---
+
+<Base
+  title={document.title}
+  description={`${document.title} for Finvest clients. This page shows the structure only, and the wording will be supplied by Finvest's lawyers before launch.`}
+  headerTone="light"
+>
+  <section class="band legal">
+    <div class="wrap">
+      <p class="eyebrow">Legal</p>
+      <h1>{document.title}</h1>
+      <div class="legal__grid">
+        <div class="legal__side">
+          <nav class="legal__nav" aria-label="Legal documents">
+            {
+              legalDocuments.map((item) => (
+                <a
+                  href={`/legal/${item.slug}`}
+                  aria-current={item.slug === document.slug ? "page" : undefined}
+                >
+                  {item.title}
+                </a>
+              ))
+            }
+          </nav>
+          <button class="button button--outline" type="button" data-print hidden>
+            Print or save as PDF
+          </button>
+        </div>
+        <article>
+          <p class="legal__draft">
+            <strong>Layout only.</strong> The headings below show the structure. The wording must come
+            from Finvest's lawyers before launch.
+          </p>
+          <p class="legal__version">Version [NUMBER]. In force from [DATE].</p>
+          {
+            document.sections.map((section, index) => (
+              <>
+                <h2>
+                  {index + 1}. {section.heading}
+                </h2>
+                <p>{section.covers}</p>
+              </>
+            ))
+          }
+        </article>
+      </div>
+    </div>
+  </section>
+</Base>
+
+<script>
+  document.querySelectorAll<HTMLButtonElement>("[data-print]").forEach((button) => {
+    button.hidden = false;
+    button.addEventListener("click", () => window.print());
+  });
+</script>

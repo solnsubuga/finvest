@@ -1,7 +1,14 @@
 /**
- * Lists every [BRACKETED] placeholder still on the built pages: facts the site is waiting for,
- * such as the licence number. Run `pnpm build` first. With --strict it fails if any are left,
- * which is the check to run before the site is opened to search engines.
+ * What the site still needs before launch. Run `pnpm build` first.
+ *
+ * 1. Every [BRACKETED] placeholder on the built pages: facts the site is waiting for, such as
+ *    the licence number.
+ * 2. Every claim in claims.json that nobody has signed off: statements written out in full
+ *    that the owner and counsel must confirm are true. To sign one off, set its `confirmedBy`
+ *    to who confirmed it and when.
+ *
+ * With --strict it fails if anything is left in either list. Run that before the site is
+ * opened to search engines.
  */
 
 import { readdirSync, readFileSync, statSync } from "node:fs";
@@ -31,4 +38,20 @@ for (const [placeholder, where] of [...found].sort()) {
   console.log(`${placeholder}\n    ${[...where].sort().join("  ")}`);
 }
 console.log(`\n${found.size} placeholder(s) left.`);
-if (process.argv.includes("--strict") && found.size > 0) process.exit(1);
+
+interface Claim {
+  claim: string;
+  where: string;
+  confirmedBy: string | null;
+}
+
+const claims = JSON.parse(
+  readFileSync(new URL("./claims.json", import.meta.url), "utf-8"),
+) as Claim[];
+const open = claims.filter((item) => item.confirmedBy === null || item.confirmedBy.trim() === "");
+
+console.log("\nClaims waiting for sign-off by the owner and counsel:\n");
+for (const item of open) console.log(`- ${item.claim}\n    ${item.where}`);
+console.log(`\n${open.length} of ${claims.length} claim(s) not signed off.`);
+
+if (process.argv.includes("--strict") && (found.size > 0 || open.length > 0)) process.exit(1);
