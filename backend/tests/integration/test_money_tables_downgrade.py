@@ -203,6 +203,25 @@ ROWS = {
         "COMMIT",
         "refusing to drop allocations",
     ),
+    # The owner turns the guards off: a real funding from a sale needs a settled sale.
+    "0086_dealing_sale_funding": (
+        "BEGIN; "
+        "ALTER TABLE dealing_orders DISABLE TRIGGER dealing_orders_guard; "
+        "ALTER TABLE dealing_withdrawal_fundings "
+        "DISABLE TRIGGER dealing_withdrawal_fundings_guard; "
+        "INSERT INTO dealing_orders (id, kind, product_code, currency, face_minor, prepared_by, "
+        "prepared_at) VALUES ('-Nabc0000000000000A1', 'secondary_sale', 'TREA-91', 'UGX', "
+        "100000, '-Nabc0000000000000B1', now()); "
+        "INSERT INTO dealing_withdrawal_fundings (id, investment_id, currency, amount_minor, "
+        "source, status, asked_at, funded_at, sale_order_id) VALUES ('-Nabc0000000000000F1', "
+        "'-Nabc0000000000000I1', 'UGX', 100000, 'sale', 'funded', now(), now(), "
+        "'-Nabc0000000000000A1'); "
+        "ALTER TABLE dealing_orders ENABLE TRIGGER dealing_orders_guard; "
+        "ALTER TABLE dealing_withdrawal_fundings "
+        "ENABLE TRIGGER dealing_withdrawal_fundings_guard; "
+        "COMMIT",
+        "refusing to restore staff funding over withdrawals the worker funded",
+    ),
     "0050_kyc": (
         "INSERT INTO kyc_checks (id, client_id, document_type, document_country, created_at, "
         "updated_at) VALUES ('-Nabc0000000000000A1', '-Nabc0000000000000B1', 'passport', 'UG', "

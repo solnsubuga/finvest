@@ -143,7 +143,8 @@ async def test_an_early_withdrawal_is_funded_by_a_sale_and_paid_out(
     assert waiting is not None
     assert (waiting.source, waiting.status) == (Source.SALE, FundingStatus.WAITING)
 
-    # The desk sells the bill, by four eyes, and funds the withdrawal from what it raised.
+    # The desk sells the bill, by four eyes. Once it settles, the worker funds the withdrawal
+    # from what it raised, and investing pays the client on the desk's announcement.
     sale = await deal(
         world,
         preparer,
@@ -151,10 +152,6 @@ async def test_an_early_withdrawal_is_funded_by_a_sale_and_paid_out(
         OrderKind.SECONDARY_SALE,
         Fill(ugx(FACE), ugx(SOLD_FOR), today(world), matures_on, f"CSD-{push_id()[-8:]}"),
     )
-    async with world.api_database.actor_transaction(preparer.actor) as session:
-        funded = await funding.fund_from_sale(session, preparer.actor, sale.id, world.clock)
-    assert [f.investment_id for f in funded] == [started.id]
-    # Investing pays the client on the desk's announcement.
     await world.drain()
 
     paid = await investment(world, started.id)
@@ -163,6 +160,7 @@ async def test_an_early_withdrawal_is_funded_by_a_sale_and_paid_out(
         payout = await payouts.get_payout(session, paid.withdrawal_payout_id)
         done = await funding.funding_for(session, started.id)
     assert done is not None and done.status is FundingStatus.FUNDED
+    assert (done.sale_order_id, done.funded_by) == (sale.id, None)
     assert payout.amount == done.amount == waiting.amount
     assert payout.destination_id == own
     assert await world.failed_jobs(world.clock.now() - timedelta(days=3)) == []

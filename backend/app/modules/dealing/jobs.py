@@ -12,7 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.infrastructure.jobs import ClaimedJob, Handler, JobContext, JobHandler, PermanentJobError
 from app.modules.dealing import allocations, maturities, withdrawals
-from app.modules.dealing.events import FUND_WITHDRAWAL_KIND
+from app.modules.dealing.events import FUND_FROM_SALE_KIND, FUND_WITHDRAWAL_KIND
 from app.shared.clock import Clock
 from app.shared.errors import ApplicationError
 from app.shared.money import Currency, Money, MoneyError
@@ -32,6 +32,7 @@ class DealingJobs:
             MATURITIES_KIND: self.record_maturities,
             FUND_WITHDRAWAL_KIND: self.fund_early_withdrawal,
             RELEASE_KIND: self.release_queue,
+            FUND_FROM_SALE_KIND: self.fund_from_sale,
             ALLOCATE_KIND: self.allocate,
         }
 
@@ -80,6 +81,22 @@ class DealingJobs:
 
         result = await context.apply(effect)
         logger.info("dealing_withdrawal_queue_released", count=result.get("released"))
+
+    async def fund_from_sale(self, job: ClaimedJob, context: JobContext) -> None:
+        """Fund the withdrawals waiting for a sale from what the sale just settled raised."""
+        sale = job.payload.get("sale")
+        if not isinstance(sale, str) or not sale:
+            raise PermanentJobError(code="sale_missing")
+
+        async def effect(session: AsyncSession) -> Mapping[str, object]:
+            try:
+                funded = await withdrawals.fund_from_sale(session, sale, self._clock)
+            except ApplicationError as error:
+                raise PermanentJobError(code=f"dealing_sale_funding_{error.code}") from error
+            return {"funded": len(funded)}
+
+        result = await context.apply(effect)
+        logger.info("dealing_withdrawals_funded_from_sale", count=result.get("funded"))
 
     async def allocate(self, job: ClaimedJob, context: JobContext) -> None:
         """Bring the allocations of bills to investments up to date."""

@@ -36,7 +36,7 @@ from app.modules.dealing.domain.withdrawals import (
 from app.modules.investments import service as investments
 from app.modules.investments.events import PAY_EARLY_WITHDRAWAL
 from app.modules.ledger import statements as ledger
-from app.shared.actors import Actor
+from app.shared.actors import SYSTEM
 from app.shared.business_day import business_date
 from app.shared.clock import Clock
 from app.shared.errors import ApplicationError
@@ -76,7 +76,7 @@ _FUND = text(
 )
 _FUND_FROM_SALE = text(
     "UPDATE dealing_withdrawal_fundings SET status = 'funded', funded_at = :now, "
-    "sale_order_id = :order_id, funded_by = :by WHERE id = :id AND status = 'waiting'"
+    "sale_order_id = :order_id WHERE id = :id AND status = 'waiting'"
 )
 _SALE = text(
     "SELECT kind, status, currency, result_amount_minor FROM dealing_orders WHERE id = :id"
@@ -238,13 +238,15 @@ async def release_queue(session: AsyncSession, clock: Clock) -> int:
     return released
 
 
-async def fund_from_sale(
-    session: AsyncSession, staff: Actor, order_id: str, clock: Clock
-) -> list[FundingView]:
-    """Fund the withdrawals waiting for a sale, in the order asked, from a settled sale's
-    proceeds that no withdrawal has used yet. Returns those funded, which may be none."""
-    if staff.kind != "staff" or staff.id is None:
-        raise ApplicationError("forbidden")
+async def fund_from_sale(session: AsyncSession, order_id: str, clock: Clock) -> list[FundingView]:
+    """Fund the withdrawals waiting for a sale, in the order asked, from what a settled sale
+    raised that no withdrawal has used yet. Returns those funded, which may be none.
+
+    Run by the worker as soon as the sale settles, so no person releases client payouts: the
+    sale was prepared, approved, recorded and confirmed by two people, and the order of the
+    queue and the amounts are fixed. Only the sale just settled is used. What it raised beyond
+    the withdrawals waiting is cash like any other, counted in the buffer, so a withdrawal
+    asked later waits for the next sale rather than for proceeds that may already be spent."""
     await session.execute(_LOCK_SALE, {"id": order_id})
     sale = (await session.execute(_SALE, {"id": order_id})).one_or_none()
     if sale is None:
@@ -260,9 +262,7 @@ async def fund_from_sale(
     now = clock.now()
     funded = []
     for funding in queue[:count]:
-        await session.execute(
-            _FUND_FROM_SALE, {"id": funding.id, "now": now, "order_id": order_id, "by": staff.id}
-        )
+        await session.execute(_FUND_FROM_SALE, {"id": funding.id, "now": now, "order_id": order_id})
         view = await _by_id(session, funding.investment_id)
         await _announce(session, view, now)
         await audit.record(
@@ -272,7 +272,7 @@ async def fund_from_sale(
                 action="dealing.withdrawal.funded_from_sale",
                 resource_type=FUNDING_RESOURCE,
                 resource_id=view.id,
-                actor=AuditActor(staff.kind, staff.id),
+                actor=AuditActor(SYSTEM.kind, SYSTEM.id),
                 reason=f"Sale {order_id}",
             ),
             clock,
