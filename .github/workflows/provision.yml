@@ -208,7 +208,9 @@ jobs:
           fi
           ssh "${ssh_opts[@]}" "$target" 'rm -rf ~/provision'
       - name: Close SSH to this run
-        if: always() && env.TARGET != 'shared'
+        # Only when this run was admitted, which happens only after the reviewed plan was applied.
+        # A failed or refused apply never reaches here, so this targeted apply never creates anything.
+        if: always() && env.TARGET != 'shared' && env.PROVISIONER_ADDRESS != ''
         run: |
           terraform apply -no-color -auto-approve -target=digitalocean_firewall.app \
             -var-file="environments/$TARGET.tfvars" -var-file="$RUNNER_TEMP/settings.tfvars.json"

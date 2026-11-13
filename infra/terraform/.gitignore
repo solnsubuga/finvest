@@ -14,3 +14,4 @@ terraform.rc
 # Never commit real variable files with secrets. Example files end in .example.
 *.auto.tfvars
 secrets.tfvars
+!environments/*.tfvars

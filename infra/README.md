@@ -83,6 +83,16 @@ On the first staging run, check that Apply's plan matches Plan's. If Apply stops
 
 ## One time setup
 
+Everything else is created by Terraform. These are made by hand, once:
+
+| Made by hand | Why |
+| --- | --- |
+| The Spaces bucket for Terraform state | Terraform needs it before it can run |
+| The DigitalOcean, Spaces, Cloudflare and GitHub tokens | Terraform runs with them |
+| The `finvestug.com` zone on Cloudflare | It belongs to the domain registration |
+| The four GitHub environments, their main-only limits, required reviewers and secrets | They protect the tokens Terraform runs with |
+| The deploy SSH key pair and the repository variables below | Inputs to Terraform |
+
 ### 1. In DigitalOcean, Cloudflare and GitHub tokens
 
 1. **State bucket.** Create a private Spaces bucket in `lon1` with versioning on, for example `finvest-terraform-state`. It is the only thing made by hand, because Terraform needs it before it can run. It holds secrets, so keep it private.
@@ -131,6 +141,7 @@ Repository variables under **Settings → Secrets and variables → Actions → 
 - The deploy user has passwordless sudo, which `prepare-host.sh` needs, and is in the `docker` group. Both are root equivalent. Treat `DEPLOY_SSH_KEY` like a root key.
 - SSH keys are written once at first boot. To change who can log in, edit `/home/deploy/.ssh/authorized_keys` on the host and update `DEPLOY_SSH_PUBLIC_KEY` so a rebuilt host matches.
 - The firewall reads Cloudflare's ranges at apply time. A range Cloudflare adds later stays blocked until the next apply, so run Provision apply now and then even with no changes.
+- The Provision run trusts the host key it sees on first contact with the reserved IP (`accept-new`). DigitalOcean does not publish droplet host keys through its API, so there is nothing to check it against before that. Each run starts with an empty known hosts file.
 - There is no state lock yet. Runs for one environment queue behind each other, so do not apply from a laptop. Terraform's lock file (`use_lockfile = true`) has not been tested on Spaces.
 
 ## Open before production
