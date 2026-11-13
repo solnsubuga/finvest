@@ -11,7 +11,7 @@ Status is **Met** (checked in the code or configuration named), **Fixed** (a gap
 | 1 | The API read a request body of any size into memory. Only the provider callback had a limit, so a large body could tie up memory before any check ran. | Medium | Fixed: `BodyLimitMiddleware` in `backend/app/api/hardening.py` refuses a body over 256 KiB with `payload_too_large`, by its declared length before reading and by counting a body sent without one. A route that takes a file names its path prefix and limit in `BODY_LIMITS`. |
 | 2 | API responses carried no `Cache-Control`. A session or balance response could be kept by a browser cache or by a proxy that a future edge change put in front. | Medium | Fixed: every API response carries `Cache-Control: no-store` unless the route sets its own. |
 | 3 | Security headers were set only at the edge (Caddy). Staging without the edge, local runs and any later edge change would serve the API without them. | Low | Fixed: `SecurityHeadersMiddleware` adds `nosniff`, a `default-src 'none'` content security policy, `frame-ancestors 'none'`, `X-Frame-Options`, `no-referrer` and `Cross-Origin-Resource-Policy` to every response. The edge keeps its own copy. |
-| 4 | The API writes no line per request, so there is no record of status codes and timings to alert on or to give the penetration testers' findings a time line. | Medium | Open: observability pull request (this thread). |
+| 4 | The API writes no line per request, so there is no record of status codes and timings to alert on or to give the penetration testers' findings a time line. | Medium | Fixed: `RequestLogMiddleware` writes one `request_served` line per request with its request ID, method, route template, status and duration, never the path as sent or the query string. See [observability.md](observability.md). |
 | 5 | There is no edge rate limit. Sign-in, codes and passkeys have attempt limits in PostgreSQL, but any other anonymous route can be called as fast as the connection allows. | Medium | Fixed: one Cloudflare rate limiting rule for the zone (`infra/terraform/shared/main.tf`). An address that sends more than 400 requests in 10 seconds to `/client/*`, `/staff/*` or `/public/*` is blocked for 10 seconds. The Free plan matches on the path only and allows one rule, so it is a flood guard, set high because many people share one carrier address. Provider callbacks are not limited. Takes effect when `shared` is provisioned. |
 | 6 | Caddy sets no request body limit, so an oversize body still reaches the API process before it is refused. | Low | Fixed: `request_body { max_size 1MB }` on the API host (`infra/deployment/Caddyfile`), answered with 413 at the edge. `BODY_LIMITS` is empty today; a path added there with a larger limit needs a matching raise in the Caddyfile. The rehearsal checks the 413. |
 | 7 | `pnpm audit --prod` reports 1 low and 4 moderate advisories (`deepmerge`, `glob`, `minimatch`), all reached through Expo and Jest build and test tooling. None is in code sent to a browser or phone. | Low | Open: clear them when Expo and Jest release fixed versions. Check again before the test. |
@@ -60,7 +60,7 @@ Status is **Met** (checked in the code or configuration named), **Fixed** (a gap
 | Errors never echo what the caller sent | Met | `app/api/errors.py` |
 | Logs carry request IDs and error codes, never personal data or amounts | Met | `app/infrastructure/logging.py`, [rules](rules.md) |
 | A request body has a size limit | Fixed | Finding 1 |
-| One log line per request with status and duration | Open | Finding 4 |
+| One log line per request with status and duration | Fixed | Finding 4 |
 
 ### V8 Data protection and V9 Communications
 
@@ -89,7 +89,7 @@ Status is **Met** (checked in the code or configuration named), **Fixed** (a gap
 | CORS for the exact allowed origins only, with credentials | Met | `create_app` |
 | An unsafe cookie request must come from an allowed origin | Met | `check_origin` |
 | Provider callbacks are signed, size-limited, and only a hint | Met | `app/modules/payments/api.py` |
-| An edge rate limit for anonymous routes | Open | Finding 5 |
+| An edge rate limit for anonymous routes | Fixed | Finding 5 |
 
 ## Penetration test
 

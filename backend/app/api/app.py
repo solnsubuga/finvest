@@ -11,6 +11,7 @@ from app.api import health
 from app.api.errors import UnexpectedErrorMiddleware, install_error_handlers
 from app.api.hardening import BodyLimitMiddleware, SecurityHeadersMiddleware
 from app.api.request_id import RequestIdMiddleware
+from app.api.request_log import RequestLogMiddleware
 from app.infrastructure.database import Database
 from app.infrastructure.settings import Settings
 from app.modules.identity import api as identity_api
@@ -85,6 +86,7 @@ def create_app(
         )
     app.add_middleware(BodyLimitMiddleware)
     app.add_middleware(UnexpectedErrorMiddleware)
+    app.add_middleware(RequestLogMiddleware)
     app.add_middleware(SecurityHeadersMiddleware)
     app.add_middleware(RequestIdMiddleware)
     # Attempt limits count by caller address. X-Forwarded-For is believed only from our own
