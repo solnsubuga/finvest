@@ -277,7 +277,8 @@
               "dealing_result",
               "rate_change",
               "migration_totals",
-              "migration_sign_off"
+              "migration_sign_off",
+              "phone_change"
             ],
             "title": "Kind",
             "type": "string"
@@ -6907,6 +6908,7 @@
                 "settings.view",
                 "wordings.change",
                 "email_suppressions.lift",
+                "announcements.send",
                 "migration.view",
                 "bank_transfers.change",
                 "migration.import",
@@ -8759,6 +8761,7 @@
                 "settings.view",
                 "wordings.change",
                 "email_suppressions.lift",
+                "announcements.send",
                 "migration.view",
                 "bank_transfers.change",
                 "migration.import",

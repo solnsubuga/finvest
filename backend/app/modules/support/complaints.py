@@ -475,6 +475,34 @@ async def summary(session: AsyncSession, clock: Clock) -> Summary:
     )
 
 
+def _same_complaint(saved: Row[Any], client_id: str, new: NewComplaint) -> None:
+    """A repeated key answers with the complaint it logged, but only for the same complaint.
+
+    Different words under a key already used are a different complaint, or a client bug,
+    and are refused rather than quietly dropped.
+    """
+    asked = (
+        client_id,
+        new.category,
+        new.received_via,
+        new.summary,
+        new.details,
+        new.amount.minor if new.amount else None,
+        new.amount.currency.value if new.amount else None,
+    )
+    logged = (
+        saved.client_id,
+        saved.category,
+        saved.received_via,
+        saved.summary,
+        saved.details,
+        saved.amount_minor,
+        saved.amount_currency,
+    )
+    if asked != logged:
+        raise ApplicationError("idempotency_key_reused")
+
+
 async def _log(
     session: AsyncSession,
     actor: Actor,
@@ -490,6 +518,7 @@ async def _log(
         raise _invalid("client_key", "invalid")
     repeat = (await session.execute(_BY_KEY, {"actor": actor.id, "key": key})).one_or_none()
     if repeat is not None:
+        _same_complaint(repeat, client_id, new)
         return _view(repeat, business_date(now))
     complaint_id = push_id()
     due_on = reply_due(business_date(now))
@@ -518,6 +547,7 @@ async def _log(
         repeat = (await session.execute(_BY_KEY, {"actor": actor.id, "key": key})).one_or_none()
         if repeat is None:
             raise
+        _same_complaint(repeat, client_id, new)
         return _view(repeat, business_date(now))
     row = (await session.execute(_BY_ID, {"id": complaint_id})).one()
     await _event(session, actor, complaint_id, "logged", now, None, "new")

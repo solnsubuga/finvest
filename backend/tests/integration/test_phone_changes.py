@@ -308,3 +308,59 @@ async def test_only_staff_with_the_permission_may_propose_or_decide(api: Api) ->
     denied = await api.http.post(f"/staff/phone-changes/{change_id}/approval", headers=support)
     assert denied.status_code == 403
     assert (await api.http.get("/staff/phone-changes", headers=support)).status_code == 403
+
+
+async def test_only_staff_transactions_can_see_a_proposal(api: Api) -> None:
+    maker = await a_staff_member(api)
+    _, _, client_id = await a_client(api)
+    assert (await propose(api, maker, client_id, a_phone())).status_code == 201
+    async with api.database.transaction() as session:
+        assert await session.scalar(text("SELECT count(*) FROM identity_phone_changes")) == 0
+    async with api.database.actor_transaction(Actor("client", client_id)) as session:
+        assert await session.scalar(text("SELECT count(*) FROM identity_phone_changes")) == 0
+    async with api.database.actor_transaction(Actor("staff", maker["X-Staff-Id"])) as session:
+        assert await session.scalar(text("SELECT count(*) FROM identity_phone_changes")) >= 1
+
+
+async def test_a_disabled_member_of_staff_cannot_decide(api: Api) -> None:
+    maker, checker = await a_staff_member(api), await a_staff_member(api)
+    _, _, client_id = await a_client(api)
+    change_id = (await propose(api, maker, client_id, a_phone())).json()["id"]
+    async with api.owner.transaction() as session:
+        # Set-up only: staff are deactivated by an approved change, which the guard enforces.
+        await session.execute(
+            text("ALTER TABLE identity_staff DISABLE TRIGGER identity_staff_guard")
+        )
+        await session.execute(
+            text("UPDATE identity_staff SET status = 'disabled' WHERE id = :id"),
+            {"id": checker["X-Staff-Id"]},
+        )
+        await session.execute(
+            text("ALTER TABLE identity_staff ENABLE TRIGGER identity_staff_guard")
+        )
+    actor = Actor("staff", checker["X-Staff-Id"])
+    with pytest.raises(DBAPIError, match="only active staff"):
+        async with api.database.actor_transaction(actor) as session:
+            await session.execute(
+                text(
+                    "UPDATE identity_phone_changes SET status = 'rejected', decided_by = :me, "
+                    "decided_at = now(), decision_note = 'no' WHERE id = :id"
+                ),
+                {"me": actor.id, "id": change_id},
+            )
+
+
+async def test_a_proposal_waits_in_the_approvals_inbox(api: Api) -> None:
+    maker, checker = await a_staff_member(api), await a_staff_member(api)
+    _, _, client_id = await a_client(api)
+    change_id = (await propose(api, maker, client_id, a_phone())).json()["id"]
+    inbox = await api.http.get("/staff/approvals", headers=checker)
+    assert inbox.status_code == 200, inbox.text
+    [item] = [i for i in inbox.json()["items"] if i["id"] == change_id]
+    assert item["kind"] == "phone_change"
+    # The subject is the client's ID, never the number.
+    assert item["subject"] == client_id
+    assert item["can_decide"] is True
+    own = await api.http.get("/staff/approvals", headers=maker)
+    [mine] = [i for i in own.json()["items"] if i["id"] == change_id]
+    assert (mine["yours"], mine["can_decide"]) == (True, False)

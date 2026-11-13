@@ -79,7 +79,7 @@ async def list_phone_changes(staff: Changer, changes: Changes) -> PhoneChangeLis
                 proposed_at=change.proposed_at,
                 expires_at=change.expires_at,
             )
-            for change in await changes.pending()
+            for change in await changes.pending(staff.actor)
         ]
     )
 
