@@ -74,9 +74,14 @@ class PrepareRelease(unittest.TestCase):
         with self.assertRaises(pr.SettingError):
             pr.prepare(self.out, settings(DATABASE_CA_CERT=None))
 
-    def test_rehearsal_is_refused_in_github_actions(self):
+    def test_rehearsal_is_refused_with_real_images(self):
         with self.assertRaises(pr.SettingError):
-            pr.prepare(self.out, settings(FINVEST_REHEARSAL="true", GITHUB_ACTIONS="true"))
+            pr.prepare(self.out, settings(FINVEST_REHEARSAL="true", DATABASE_CA_CERT=None))
+
+    def test_rehearsal_with_local_images_turns_database_tls_off(self):
+        local = {name: f"localhost:15000/finvest-x@{DIGEST}" for name in ("BACKEND_IMAGE", "CONSOLE_IMAGE")}
+        pr.prepare(self.out, settings(FINVEST_REHEARSAL="true", DATABASE_CA_CERT=None, **local))
+        self.assertEqual(read_env(self.out / "runtime" / "api.env")["FINVEST_DATABASE_SSL_MODE"], "disable")
 
     def test_secrets_are_private(self):
         pr.prepare(self.out, settings())
