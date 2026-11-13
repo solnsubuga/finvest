@@ -2,6 +2,7 @@ import { fireEvent, screen } from "@testing-library/react-native";
 import { renderRouter } from "expo-router/testing-library";
 
 import { DEMO_PASSWORD } from "@/auth/stubAuthClient";
+import { WARM_ROUTER_MS, warmRouter } from "@/testing/warmRouter";
 
 jest.mock("@/auth/stubAuthClient", () => {
   const actual = jest.requireActual("@/auth/stubAuthClient");
@@ -64,9 +65,7 @@ async function signIn(phone: string) {
   await fireEvent.press(await screen.findByTestId(phone === "772123456" ? "use-passkey" : "use-authenticator"));
 }
 
-// The first test in a file renders the whole router from cold, which takes several seconds on
-// a busy CI runner. The assertions are unchanged; only the time allowed to reach them is.
-jest.setTimeout(30_000);
+beforeAll(warmRouter, WARM_ROUTER_MS);
 
 describe("goals", () => {
   it("lists the demo account's goals with their progress", async () => {

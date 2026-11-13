@@ -4,6 +4,7 @@ import { renderRouter } from "expo-router/testing-library";
 import { DEMO_CODE } from "@/auth/stubAuthClient";
 import { groupKey } from "@/app/security/authenticator";
 import { qrPath } from "@/components/QrCode";
+import { WARM_ROUTER_MS, warmRouter } from "@/testing/warmRouter";
 
 /** Minutes added to the stub's clock, so a test can let the session grow old. */
 const mockClock = { minutes: 0 };
@@ -60,9 +61,7 @@ async function logOutAndStartLogIn(password: string) {
   await screen.findByText("Confirm it is you");
 }
 
-// The first test in a file renders the whole router from cold, which takes several seconds on
-// a busy CI runner. The assertions are unchanged; only the time allowed to reach them is.
-jest.setTimeout(30_000);
+beforeAll(warmRouter, WARM_ROUTER_MS);
 
 describe("Sign in and security", () => {
   it("nudges a client with SMS only from Home, and shows what is on and what can be added", async () => {
