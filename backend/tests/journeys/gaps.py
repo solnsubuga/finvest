@@ -7,14 +7,11 @@ unnoticed.
 Steps of the client journey with no code to test yet, and so no journey yet:
 
 - Early withdrawal of a running investment (investing thread; dealing's withdrawal funding).
-- Sending a payout to ioTec: payouts are created at maturity but no worker job disburses them
-  (payouts and reconciliation thread).
 - Money notifications: payments, investing and payouts never call `notifications.notify`, so
   no payment, interest, maturity or payout message is sent (notifications thread, and each
   module).
 - The monthly statement and receipt emails: documents builds and renders them, and no job
   sends them yet (statements thread).
-- A Finvest 1.0 client claiming their account (sign-in thread, PR #97).
 - Automatic investing asking for each run's investment and payment (automatic investing
   thread; documented as the next step in docs/automatic-investing.md).
 """
