@@ -19,7 +19,7 @@ from app.infrastructure.jobs.worker import default_worker_id
 from app.infrastructure.logging import configure_logging
 from app.infrastructure.process import keep_heartbeat, stop_on_signals
 from app.infrastructure.settings import Settings
-from app.modules.dealing.jobs import MATURITIES_KIND
+from app.modules.dealing.jobs import MATURITIES_KIND, RELEASE_KIND
 from app.modules.documents.service import MONTHLY_KIND
 from app.modules.goals.jobs import REFRESH_GROUPS_KIND
 from app.modules.investments.jobs import ACCRUE_KIND, CANCEL_UNPAID_KIND, MATURE_KIND
@@ -51,6 +51,13 @@ def schedules() -> list[Schedule]:
             name="investments.cancel_unpaid",
             trigger=IntervalTrigger(minutes=15),
             kind=CANCEL_UNPAID_KIND,
+            max_age=timedelta(minutes=30),
+        ),
+        # Funds the early withdrawals queued for the buffer once it can pay them.
+        Schedule(
+            name="dealing.release_withdrawal_queue",
+            trigger=IntervalTrigger(minutes=15),
+            kind=RELEASE_KIND,
             max_age=timedelta(minutes=30),
         ),
         # Pays each running investment its interest for the day, shortly after the day begins
