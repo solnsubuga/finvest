@@ -25,7 +25,13 @@ from app.infrastructure.jobs import (
     enqueue,
 )
 from app.modules.notifications import service
-from app.modules.notifications.domain.email_events import EmailEvent, address_hash, moves_forward
+from app.modules.notifications.domain.email_events import (
+    EmailEvent,
+    address_hash,
+    keyed_hash,
+    keyed_hashes,
+    moves_forward,
+)
 from app.modules.notifications.suppression_lifts import suppressed_now
 from app.shared.clock import Clock
 
@@ -41,16 +47,18 @@ logger = structlog.get_logger()
 
 _INSERT_EVENT = text(
     "INSERT INTO notification_email_events (svix_id, delivery, email_id, recipients, "
-    "permanent, occurred_at, received_at) VALUES (:svix_id, :delivery, :email_id, "
-    "CAST(:recipients AS text[]), :permanent, :occurred_at, :now) "
+    "recipients_keyed, permanent, occurred_at, received_at) VALUES (:svix_id, :delivery, "
+    ":email_id, CAST(:recipients AS text[]), CAST(:keyed AS text[]), :permanent, :occurred_at, "
+    ":now) "
     "ON CONFLICT DO NOTHING"
 )
 
 
 async def record_event(
-    session: AsyncSession, svix_id: str, event: EmailEvent, now: datetime
+    session: AsyncSession, svix_id: str, event: EmailEvent, now: datetime, key: bytes | None
 ) -> bool:
-    """Save a verified event and queue the job that applies it. False for one already seen."""
+    """Save a verified event and queue the job that applies it. False for one already seen.
+    `key` is the email hash key (`EmailHashSettings`); without one only the plain hash is kept."""
     saved: CursorResult[tuple[()]] = await session.execute(  # type: ignore[assignment]
         _INSERT_EVENT,
         {
@@ -58,6 +66,7 @@ async def record_event(
             "delivery": event.delivery,
             "email_id": event.email_id,
             "recipients": list(event.recipients),
+            "keyed": keyed_hashes(event.recipients, key),
             "permanent": event.permanent,
             "occurred_at": event.occurred_at,
             "now": now,
@@ -94,9 +103,11 @@ async def is_suppressed(session: AsyncSession, address: str) -> bool:
 
 
 class DeliveryEventJobs:
-    def __init__(self, database: Database, clock: Clock) -> None:
+    def __init__(self, database: Database, clock: Clock, key: bytes | None) -> None:
         self.database = database
         self.clock = clock
+        # The email hash key (`EmailHashSettings`). Without one only the plain hash is kept.
+        self.key = key
 
     def handlers(self) -> dict[str, JobHandler | Handler]:
         return {APPLY_EVENT: self.apply_event}
@@ -163,12 +174,13 @@ class DeliveryEventJobs:
                 for recipient in event.recipients:
                     await session.execute(
                         text(
-                            "INSERT INTO notification_email_suppressions (address_hash, reason, "
-                            "svix_id, created_at) VALUES (:hash, :reason, :svix_id, :now) "
-                            "ON CONFLICT (address_hash) DO NOTHING"
+                            "INSERT INTO notification_email_suppressions (address_hash, "
+                            "address_key, reason, svix_id, created_at) VALUES (:hash, :key, "
+                            ":reason, :svix_id, :now) ON CONFLICT (address_hash) DO NOTHING"
                         ),
                         {
                             "hash": recipient,
+                            "key": keyed_hash(recipient, self.key) if self.key else None,
                             "reason": event.delivery,
                             "svix_id": svix_id,
                             "now": now,

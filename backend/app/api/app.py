@@ -51,6 +51,7 @@ from app.modules.migration import api as migration_api
 from app.modules.notifications import api as notifications_api
 from app.modules.notifications import hooks as notification_hooks
 from app.modules.notifications import suppressions_api
+from app.modules.notifications.settings import EmailHashSettings
 from app.modules.payments import api as payments_api
 from app.modules.payments import routes as payment_routes
 from app.modules.payments.domain.provider import CollectionsProvider
@@ -80,6 +81,7 @@ def create_app(
     email_hooks: WebhookVerifier | None = None,
     identity_sealer: Sealer | None = None,
     identity_provider: IdentityProvider | None = None,
+    email_hash: EmailHashSettings | None = None,
 ) -> FastAPI:
     owned = database is None
     database = database or Database(settings)
@@ -89,6 +91,8 @@ def create_app(
     if bank_accounts is None:
         bank_accounts = BankTransferSettings().accounts
     email_hooks = email_hooks or ResendHookSettings().verifier()
+    # Read at start-up, so production refuses to start without the key.
+    email_hash_key = (email_hash or EmailHashSettings()).key()
     identity_checks = KycSettings()
     if identity_sealer is None and identity_checks.identity_data_key is not None:
         identity_sealer = identity_checks.sealer()
@@ -112,6 +116,7 @@ def create_app(
     app.state.settings = settings
     app.state.database = database
     app.state.clock = clock
+    app.state.email_hash_key = email_hash_key
     app.state.storage = storage
     hasher = hasher or PasswordHasher(
         memory_kib=settings.password_memory_kib, time_cost=settings.password_time_cost
