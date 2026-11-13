@@ -54,6 +54,11 @@ ROWS = {
         "now(), now())",
         "refusing to drop identity checks",
     ),
+    "0014_ledger_closed_days": (
+        "INSERT INTO ledger_closed_days (closed_through, closed_by, closed_at) "
+        "VALUES (DATE '2001-01-01', '-Nabc0000000000000S1', now())",
+        "refusing to drop closed days",
+    ),
     "0013_ledger_corrections": (
         "BEGIN; "
         "INSERT INTO ledger_accounts (id, code, kind, currency, name, created_at) VALUES "

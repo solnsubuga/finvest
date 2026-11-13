@@ -27,6 +27,7 @@ from app.modules.ledger.domain.entries import (
 from app.modules.ledger.domain.errors import (
     AccountMismatch,
     AlreadyReversed,
+    DayClosed,
     IdempotencyKeyReused,
     InsufficientFunds,
     UnknownAccount,
@@ -189,7 +190,8 @@ async def post_entry(
 
     Posting the same draft again with the same idempotency key returns the first entry with
     `replayed=True` and posts nothing. The same key with a different draft raises
-    `IdempotencyKeyReused`. An entry that would overdraw an account raises `InsufficientFunds`.
+    `IdempotencyKeyReused`. An entry that would overdraw an account raises `InsufficientFunds`,
+    and one dated in a closed day raises `DayClosed`.
     After any of these errors the caller's transaction is still usable and holds no part of
     the entry.
 
@@ -378,6 +380,8 @@ def _constraint(error: IntegrityError) -> str | None:
 
 def _translate(constraint: str | None, error: IntegrityError) -> Exception:
     """Map a constraint the database refused onto a ledger error."""
+    if constraint == "ledger_closed_day":
+        return DayClosed("The entry is dated in a day that is closed")
     if constraint == "ck_ledger_balances_non_negative":
         return InsufficientFunds("The entry would take a balance below zero")
     if constraint == "fk_ledger_lines_account":
