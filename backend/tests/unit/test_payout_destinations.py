@@ -353,7 +353,7 @@ def test_the_wait_is_24_hours_from_approval_to_the_second() -> None:
 
 
 def test_the_wait_does_not_depend_on_the_time_zone_of_the_clock() -> None:
-    from app.modules.payouts.domain.limits import KAMPALA
+    from app.shared.business_day import KAMPALA
 
     destination = approved(NOW)
     assert why_not_payable(destination, (NOW + SAFETY_WAIT).astimezone(KAMPALA)) is None

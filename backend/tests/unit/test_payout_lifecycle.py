@@ -5,6 +5,7 @@ import pytest
 from app.modules.payouts.domain.payouts import (
     COUNTS_TOWARDS_LIMIT,
     FINAL,
+    NEEDS_TWO_PEOPLE,
     IllegalTransition,
     LedgerEffect,
     PayoutEvent,
@@ -13,6 +14,7 @@ from app.modules.payouts.domain.payouts import (
     initial_status,
     may_send,
     needs_status_read,
+    staff_may_resolve,
 )
 
 S, E, L = PayoutStatus, PayoutEvent, LedgerEffect
@@ -36,6 +38,10 @@ EXPECTED: dict[tuple[PayoutStatus, PayoutEvent], tuple[PayoutStatus, LedgerEffec
     (S.UNCERTAIN, E.STATUS_FAILED): (S.FAILED, L.PARK),
     (S.UNCERTAIN, E.STATUS_PENDING): (S.SENT, L.NONE),
     (S.UNCERTAIN, E.STATUS_UNKNOWN): (S.UNCERTAIN, L.NONE),
+    (S.SENT, E.STAFF_RESOLVED_PAID): (S.PAID, L.SETTLE),
+    (S.SENT, E.STAFF_RESOLVED_FAILED): (S.FAILED, L.PARK),
+    (S.UNCERTAIN, E.STAFF_RESOLVED_PAID): (S.PAID, L.SETTLE),
+    (S.UNCERTAIN, E.STAFF_RESOLVED_FAILED): (S.FAILED, L.PARK),
 }
 EVERY_PAIR = list(itertools.product(PayoutStatus, PayoutEvent))
 SEND_RESULTS = [event for event in PayoutEvent if event.value.startswith("send_")]
@@ -71,6 +77,18 @@ def test_a_payout_that_may_have_left_is_never_sent_again(
         apply(status, event)
 
 
+@pytest.mark.parametrize("status", PayoutStatus)
+def test_staff_resolve_only_what_may_have_left_and_the_provider_cannot_answer(
+    status: PayoutStatus,
+) -> None:
+    assert not staff_may_resolve(status, provider_has_answer=True)
+    assert staff_may_resolve(status, provider_has_answer=False) is (status in (S.SENT, S.UNCERTAIN))
+    for event in NEEDS_TWO_PEOPLE:
+        if status not in (S.SENT, S.UNCERTAIN):
+            with pytest.raises(IllegalTransition):
+                apply(status, event)
+
+
 def test_only_a_queued_payout_may_be_sent() -> None:
     assert [status for status in PayoutStatus if may_send(status)] == [S.QUEUED]
 
@@ -79,9 +97,17 @@ def test_a_deferred_send_stays_queued_and_may_be_sent_again() -> None:
     assert may_send(apply(S.QUEUED, E.SEND_DEFERRED).status)
 
 
-def test_an_uncertain_payout_is_settled_only_by_reading_the_provider() -> None:
+def test_an_uncertain_payout_is_settled_by_the_provider_or_by_two_people() -> None:
     leaving = {event for (status, event) in EXPECTED if status is S.UNCERTAIN}
-    assert leaving == {E.STATUS_PAID, E.STATUS_FAILED, E.STATUS_PENDING, E.STATUS_UNKNOWN}
+    assert leaving == {
+        E.STATUS_PAID,
+        E.STATUS_FAILED,
+        E.STATUS_PENDING,
+        E.STATUS_UNKNOWN,
+        E.STAFF_RESOLVED_PAID,
+        E.STAFF_RESOLVED_FAILED,
+    }
+    assert {E.STAFF_RESOLVED_PAID, E.STAFF_RESOLVED_FAILED} == NEEDS_TWO_PEOPLE
     assert needs_status_read(S.UNCERTAIN)
     assert needs_status_read(S.SENT)
     assert [s for s in PayoutStatus if needs_status_read(s)] == [S.SENT, S.UNCERTAIN]

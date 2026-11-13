@@ -42,3 +42,9 @@ A running log. Add a row when a decision is made, and move an open question up w
 | Will passkeys become compulsory for clients? | Owner |
 | Is api.finvestug.com the backend address? | Owner |
 | Card payments. Stripe is not available to Ugandan businesses. A local card acquirer, capped, is a possible later addition. | Owner |
+| Payouts: is the UGX 5,000,000 mobile money limit per payout (built so far) or per day? Are there daily limits, bank limits, or an amount above which staff must approve a withdrawal? | Owner |
+| Payouts: does the 24 hour wait on a new destination run from the staff approval (built so far) or from when the client added it? | Owner |
+| Payouts: is a mobile money number proved by the name the network holds for it (built so far), and can ioTec return that name? | Owner, ioTec |
+| Payouts: may staff approve a destination when the proof lacks a middle name that is on the ID (built so far: yes, if two names agree)? | Owner |
+| Payouts: mobile money prefixes accepted are MTN 76, 77, 78, 39 and Airtel 70, 74, 75, 20. Confirm the list. | Owner, ioTec |
+| Payouts: a client can cancel a withdrawal only while it is held for review (built so far). Should they be able to cancel before it is sent? | Owner |
