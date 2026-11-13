@@ -29,6 +29,10 @@ A running log. Add a row when a decision is made, and move an open question up w
 | 2026-11-13 | Provisioning and deployment follow Fidiba. Terraform creates every DigitalOcean resource inside one project named `finvest`, generates the database role passwords and bucket key, and writes the deployment settings into the GitHub environments. See [infra/README.md](../infra/README.md). |
 | 2026-11-13 | Terraform state may hold the credentials Terraform generates (database admin connection, role passwords, bucket key, origin certificate key). It is the one exception to keeping secrets out of Terraform state. The state bucket is private and only the Provision workflow on `main` can read it. |
 | 2026-11-13 | APScheduler keeps time for the scheduler process and nothing else. It only says when a schedule is due. PostgreSQL owns the leadership lease and each scheduled run, unique by name and fire time, and APScheduler's own job stores are not used. This adds no Celery or Redis. |
+| 2026-11-13 | Decided for now, by the investing thread. The catalogue is seeded with 91 Day Treasury Bill (12.50% a year, minimum UGX 100,000), 182 Day Treasury Bill (13.75%, minimum UGX 200,000) and USD Fixed Income (7.25%, open term, minimum $500). Tax on interest is 15% for the Treasury bills and 5% for the dollar product, as on the design canvas. See [investing.md](investing.md). |
+| 2026-11-13 | Decided for now. Interest to date is rounded down to the smallest unit, tax on it is rounded down, and the client earns the difference. Each day's posting is the total to date minus the total the day before, so the postings always sum to the formula. A year is 365 days in every year. |
+| 2026-11-13 | Decided for now. A rate change takes effect on a day after its approval and applies only to investments that start on or after that day. A running investment keeps the rate and the tax it started with. |
+| 2026-11-13 | Decided for now. The dollar product is seeded paused. It opens when paying in and out in dollars is built. |
 | 2026-11-13 | Brand is black and lime with Plus Jakarta Sans. See [design.md](design.md). |
 | 2026-11-13 | All work reaches `main` through pull requests. UI work includes screenshots. Commits on `main` carry no AI attribution. |
 
@@ -52,3 +56,7 @@ A running log. Add a row when a decision is made, and move an open question up w
 | Payouts: may staff approve a destination when the proof lacks a middle name that is on the ID (built so far: yes, if two names agree)? | Owner |
 | Payouts: mobile money prefixes accepted are MTN 76, 77, 78, 39 and Airtel 70, 74, 75, 20. Confirm the list. | Owner, ioTec |
 | Payouts: a client can cancel a withdrawal only while it is held for review (built so far). Should they be able to cancel before it is sent? | Owner |
+| Investing: confirm the tax on interest (built: 15% on Treasury bills, 5% on the dollar product, from the design canvas) against what URA requires Finvest to withhold. | Owner, counsel |
+| Investing: confirm the minimums. The canvas shows $500 for the dollar product in one place and $100 in another. Built: $500. | Owner |
+| Investing: if the tax rate changes by law during a term, should running investments change with it? Built: no, terms are fixed at the start. | Owner, counsel |
+| Investing: is the tax fraction rounded down in the client's favour acceptable to URA, or must tax round up? | Owner, counsel |
