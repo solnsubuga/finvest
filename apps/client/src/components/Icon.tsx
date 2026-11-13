@@ -20,6 +20,7 @@ const paths = {
   phone: ["M8 3h8a1 1 0 011 1v16a1 1 0 01-1 1H8a1 1 0 01-1-1V4a1 1 0 011-1zM11 18h2"],
   message: ["M4 5h16v11H9l-5 4z"],
   bell: ["M6 16V11a6 6 0 0112 0v5l2 2H4zM10 21h4"],
+  plus: ["M12 5v14M5 12h14"],
 } as const;
 
 export type IconName = keyof typeof paths;
