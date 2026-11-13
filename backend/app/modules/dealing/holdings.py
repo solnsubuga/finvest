@@ -40,7 +40,8 @@ class Holding:
 
 @dataclass(frozen=True, slots=True)
 class BankMovement:
-    """Cash the trust bank account should show for a settled order. In is positive."""
+    """Cash the trust bank account should show for a settled order, a maturity or a movement of
+    Finvest's own money. In is positive."""
 
     ledger_entry_id: str
     currency: Currency
@@ -85,7 +86,12 @@ _MOVEMENTS = text(
     "SELECT matured.ledger_entry_id, lot.currency, matured.matured_on, matured.face_minor, "
     "lot.custodian_reference, matured.recorded_at FROM dealing_lot_maturities AS matured "
     "JOIN dealing_lots AS lot ON lot.id = matured.lot_id "
-    "WHERE matured.matured_on BETWEEN :date_from AND :date_to"
+    "WHERE matured.matured_on BETWEEN :date_from AND :date_to "
+    "UNION ALL "
+    "SELECT ledger_entry_id, currency, value_date, "
+    "CASE WHEN direction = 'in' THEN amount_minor ELSE -amount_minor END, "
+    "coalesce(bank_reference, id), decided_at FROM dealing_buffer_capital "
+    "WHERE status = 'approved' AND value_date BETWEEN :date_from AND :date_to"
     ") AS movement ORDER BY value_date, at, entry_id"
 )
 # Lots that have reached their maturity date, still hold bills, and are not recorded as paid.
@@ -193,7 +199,8 @@ async def holdings_on(session: AsyncSession, on: date) -> list[Holding]:
 async def expected_bank_movements(
     session: AsyncSession, *, date_from: date, date_to: date
 ) -> list[BankMovement]:
-    """What settled purchases and sales did to the trust bank account between two value dates."""
+    """What settled purchases, sales and maturities, and Finvest's own money paid into or taken
+    out of the buffer, did to the trust bank account between two value dates."""
     rows = await session.execute(_MOVEMENTS, {"date_from": date_from, "date_to": date_to})
     return [
         BankMovement(

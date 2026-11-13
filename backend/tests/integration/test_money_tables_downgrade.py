@@ -4,7 +4,7 @@ destinations and their two-person checks, the withdrawal limits, the payouts and
 attempts, the migration checks, the imported statements, the day closes and their recorded
 matches, the pot transfers, the help chat, the complaints register, the goals, the email
 delivery records, the unclaimed accounts, the complaint outcomes, the suppression lifts, the
-client locks, the announcements or the team changes."""
+client locks, the announcements, the team changes or Finvest's own money in the buffer."""
 
 import os
 from collections.abc import Iterator
@@ -202,6 +202,15 @@ ROWS = {
         "ALTER TABLE dealing_allocations ENABLE TRIGGER dealing_allocations_guard; "
         "COMMIT",
         "refusing to drop allocations",
+    ),
+    "0087_dealing_buffer_capital": (
+        "BEGIN; SELECT set_config('finvest.actor_kind', 'staff', true); "
+        "SELECT set_config('finvest.actor_id', '-Nabc0000000000000B1', true); "
+        "INSERT INTO dealing_buffer_capital (id, direction, currency, amount_minor, "
+        "bank_reference, value_date, reason, status, proposed_by, proposed_at) VALUES "
+        "('-Nabc0000000000000A1', 'in', 'UGX', 100000, 'FT1', DATE '2026-11-13', 'Test', "
+        "'proposed', '-Nabc0000000000000B1', now()); COMMIT",
+        "refusing to drop buffer capital movements",
     ),
     # The owner turns the guards off: a real funding from a sale needs a settled sale.
     "0086_dealing_sale_funding": (
