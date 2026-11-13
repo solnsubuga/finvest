@@ -1,10 +1,8 @@
 /**
  * The contract between the pay screens and whatever takes a payment.
  *
- * Today the only implementation is the in-memory stub in
- * `stubPaymentsClient.ts`. When the backend publishes its client routes, an
- * implementation backed by the generated `packages/api-client` types replaces
- * it, and the screens do not change.
+ * `apiPaymentsClient.ts` answers it from the real API. The in-memory demo in
+ * `stubPaymentsClient.ts` answers it in tests and in a demo build.
  *
  * There is no wallet. A payment always pays for one thing, an investment or a
  * goal, and that thing is the `Payable`.
@@ -50,7 +48,10 @@ export type Deposit = {
   payable: Payable;
   amount: Money;
   network: Network;
-  /** The paying number in E.164 form: the number on the client's own Finvest account. */
+  /**
+   * The paying number as the client may see it again, masked: "+256 77• ••• •56".
+   * It is always the number on the client's own Finvest account.
+   */
   payer: string;
   status: DepositStatus;
   failure: FailureReason | null;
@@ -148,8 +149,10 @@ export type PaymentErrorCode =
   | "not_payable"
   /** A payment for this is already under way. */
   | "already_paying"
-  /** The network does not allow this amount in one payment. */
+  /** Mobile money cannot take this amount: too large for one payment, or not in shillings. */
   | "amount_not_allowed"
+  /** The app cannot show where to send a bank transfer yet. */
+  | "bank_details_missing"
   /** The receipt is not a JPG, PNG or PDF, or is too large. */
   | "receipt_not_accepted"
   /** The same key was sent with different details. The screens prevent it, so it means a bug. */
@@ -191,8 +194,9 @@ const messages: Record<PaymentErrorCode, string> = {
   not_payable: "This can no longer be paid for. Go back and check your investment.",
   already_paying:
     "A payment for this is already under way. Wait for it to finish before you try again.",
-  amount_not_allowed:
-    "This amount is more than mobile money allows in one payment. Pay by bank transfer instead.",
+  amount_not_allowed: "Mobile money cannot take this payment. Pay by bank transfer instead.",
+  bank_details_missing:
+    "Our bank details are not in the app yet. Pay by mobile money, or ask us for them in Help.",
   key_reused: "Something changed since your last try. Go back and start the payment again.",
   receipt_not_accepted: "We could not accept that file. Use a JPG, PNG or PDF of up to 10 MB.",
   not_found: "We could not find this payment.",
