@@ -73,6 +73,16 @@ ROWS = {
         "now(), now())",
         "refusing to drop goals",
     ),
+    "0120_autoinvest_plans": (
+        "BEGIN; SELECT set_config('finvest.actor_kind', 'client', true); "
+        "SELECT set_config('finvest.actor_id', '-Nabc0000000000000B1', true); "
+        "INSERT INTO autoinvest_plans (id, client_id, product_code, currency, amount_minor, "
+        "frequency, run_day, network, payer_msisdn, status, next_run_on, created_at, "
+        "updated_at) VALUES ('-Nabc0000000000000A1', '-Nabc0000000000000B1', 'TREA-91', 'UGX', "
+        "100000, 'monthly', 28, 'mtn', '+256772000000', 'active', DATE '2030-01-28', now(), "
+        "now()); COMMIT",
+        "refusing to drop automatic investing plans",
+    ),
     "0060_investment_products": (
         "BEGIN; SELECT set_config('finvest.actor_kind', 'staff', true); "
         "SELECT set_config('finvest.actor_id', '-Nabc0000000000000B1', true); "
