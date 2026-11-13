@@ -4,11 +4,14 @@ Only the sources the reader's permissions show are read, so a role never pays fo
 another team's queue.
 """
 
+from datetime import datetime
+
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.modules.approvals.domain.inbox import InboxItem, Kind, Waiting, inbox, visible_kinds
 from app.modules.dealing import orders as dealing
 from app.modules.dealing.domain.orders import OrderStatus
+from app.modules.identity import phone_changes
 from app.modules.identity.service import StaffSession
 from app.modules.investments import service as investments
 from app.modules.investments.domain.rates import ProposalStatus
@@ -19,7 +22,7 @@ from app.modules.payments import bank_transfers
 from app.modules.reconciliation import day_close, transfers
 
 
-async def waiting_for(session: AsyncSession, staff: StaffSession) -> list[InboxItem]:
+async def waiting_for(session: AsyncSession, staff: StaffSession, now: datetime) -> list[InboxItem]:
     kinds = visible_kinds(staff.permissions)
     found: list[Waiting] = []
     if "wording_change" in kinds:
@@ -38,6 +41,8 @@ async def waiting_for(session: AsyncSession, staff: StaffSession) -> list[InboxI
         found += await _rates(session, staff)
     if kinds & {"migration_totals", "migration_sign_off"}:
         found += await _migration(session)
+    if "phone_change" in kinds:
+        found += await _phone_changes(session, now)
     return inbox(found, staff.staff_id, staff.permissions)
 
 
@@ -133,3 +138,11 @@ async def _migration(session: AsyncSession) -> list[Waiting]:
                 Waiting(kind, sign_off.id, sign_off.key, sign_off.proposed_by, sign_off.proposed_at)
             )
     return found
+
+
+async def _phone_changes(session: AsyncSession, now: datetime) -> list[Waiting]:
+    # The subject is the client's ID, never the number.
+    return [
+        Waiting("phone_change", c.id, c.client_id, c.proposed_by, c.proposed_at)
+        for c in await phone_changes.waiting(session, now)
+    ]

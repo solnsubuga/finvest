@@ -49,7 +49,7 @@ async def approvals(request: Request, staff: Reader) -> ApprovalsOut:
     """Everything waiting for a second person that this member of staff may see, oldest first."""
     database: Database = request.app.state.database
     async with database.actor_transaction(staff.actor) as session:
-        items = await service.waiting_for(session, staff)
+        items = await service.waiting_for(session, staff, request.app.state.clock.now())
     return ApprovalsOut(
         items=[
             ApprovalItemOut(

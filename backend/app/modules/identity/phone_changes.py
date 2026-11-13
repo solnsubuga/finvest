@@ -13,6 +13,7 @@ from datetime import datetime, timedelta
 import structlog
 from sqlalchemy import text
 from sqlalchemy.exc import IntegrityError
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.infrastructure.database import Database
 from app.modules.identity import trail
@@ -39,6 +40,19 @@ class PhoneChange:
     proposed_by: str
     proposed_at: datetime
     expires_at: datetime
+
+
+async def waiting(session: AsyncSession, now: datetime) -> list[PhoneChange]:
+    """Proposals waiting for a decision, newest first, in the caller's staff transaction."""
+    rows = await session.execute(
+        text(
+            "SELECT id, client_id, new_phone, reason, proposed_by, proposed_at, expires_at "
+            "FROM identity_phone_changes WHERE status = 'proposed' AND expires_at > :now "
+            "ORDER BY proposed_at DESC LIMIT 200"
+        ),
+        {"now": now},
+    )
+    return [PhoneChange(*row) for row in rows]
 
 
 def _staff(actor: Actor) -> str:
@@ -120,18 +134,11 @@ class PhoneChangeService:
         logger.info("phone_change_proposed", change_id=change_id)
         return change_id
 
-    async def pending(self) -> list[PhoneChange]:
+    async def pending(self, actor: Actor) -> list[PhoneChange]:
         """Proposals waiting for a decision, newest first."""
-        async with self.database.transaction() as session:
-            rows = await session.execute(
-                text(
-                    "SELECT id, client_id, new_phone, reason, proposed_by, proposed_at, "
-                    "expires_at FROM identity_phone_changes WHERE status = 'proposed' "
-                    "AND expires_at > :now ORDER BY proposed_at DESC LIMIT 200"
-                ),
-                {"now": self.clock.now()},
-            )
-            return [PhoneChange(*row) for row in rows]
+        _staff(actor)
+        async with self.database.actor_transaction(actor) as session:
+            return await waiting(session, self.clock.now())
 
     async def approve(self, actor: Actor, change_id: str) -> None:
         """Approve someone else's proposal. The number changes in the same transaction."""

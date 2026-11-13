@@ -21,6 +21,7 @@ Kind = Literal[
     "rate_change",
     "migration_totals",
     "migration_sign_off",
+    "phone_change",
 ]
 
 
@@ -45,6 +46,7 @@ SOURCES: dict[Kind, Source] = {
     "rate_change": Source("rates.view", "rates.view"),
     "migration_totals": Source("migration.view", "migration.sign_off"),
     "migration_sign_off": Source("migration.view", "migration.sign_off"),
+    "phone_change": Source("client_phones.change", "client_phones.change"),
 }
 
 
