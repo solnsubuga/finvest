@@ -5,6 +5,7 @@ import { describe, expect, it, vi } from "vitest";
 import { emptyDirectory } from "@/directory/api.ts";
 import { createStubDirectory } from "@/directory/stub.ts";
 import { notConnectedSupportApi, SupportError, type SupportApi } from "./api.ts";
+import { AboutClient } from "./Chat.tsx";
 import { SupportScreen } from "./index.tsx";
 import { waited } from "./labels.ts";
 import { createStubSupportApi } from "./stub.ts";
@@ -173,6 +174,28 @@ describe("support screen", () => {
     expect(alert).toHaveTextContent("Support is not connected to the Finvest service yet.");
     await user.click(within(alert).getByRole("button", { name: "Try again" }));
     expect(await screen.findByRole("alert")).toHaveTextContent("not connected");
+  });
+});
+
+describe("about this client", () => {
+  const card = { clientId: "c1", name: "Ivan Ssemanda", accountNumber: "1001002291", verified: true, clientSince: "2026-03-30" };
+
+  it("warns that a locked client cannot read a reply", () => {
+    render(
+      <MemoryRouter>
+        <AboutClient card={{ ...card, status: "locked" }} />
+      </MemoryRouter>,
+    );
+    expect(screen.getByText(/Their account is locked. They cannot sign in to read a reply/)).toBeInTheDocument();
+  });
+
+  it("says nothing extra for an active client", () => {
+    render(
+      <MemoryRouter>
+        <AboutClient card={{ ...card, status: "active" }} />
+      </MemoryRouter>,
+    );
+    expect(screen.queryByText(/Their account is/)).not.toBeInTheDocument();
   });
 });
 
