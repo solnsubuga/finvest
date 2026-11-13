@@ -1,6 +1,6 @@
 """The identity check: what a client hands in, its states and who may move it between them.
 
-Pure rules. Nothing here reads a clock, a database or a provider. Migration 0020 repeats the
+Pure rules. Nothing here reads a clock, a database or a provider. Migration 0050 repeats the
 transition table in a trigger, so a bug in a service cannot approve a client either.
 """
 

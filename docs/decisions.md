@@ -56,6 +56,7 @@ A running log. Add a row when a decision is made, and move an open question up w
 | 2026-11-13 | All work reaches `main` through pull requests. UI work includes screenshots. Commits on `main` carry no AI attribution. |
 | 2026-11-13 | A payout account whose name differs from the client's ID is never approved, not even by two staff. The same holds for a mobile money number: a different registered name is refused outright. |
 | 2026-11-13 | Decided for now: once a day is reconciled and signed off, the ledger is closed through it and the database refuses any entry dated on or before it. A closed day is never reopened. A mistake found later is corrected by an entry dated in an open day. Today and future days cannot be closed. See [ledger.md](ledger.md#closing-a-day). Asked for in review and built without waiting for the owner, who can revisit it. |
+| 2026-11-13 | Decided for now, by the identity checks thread. A client's document number, date of birth and TIN are encrypted field by field before they reach the database, with a key the database never holds (`FINVEST_IDENTITY_DATA_KEY`). Names and the document expiry date stay readable so staff can search and expiry can be checked. And a person approves every client: a clean result from automatic checks is flagged as passed and still waits for staff, until the owner allows approval with no person involved. See [identity-checks.md](identity-checks.md). |
 
 ## Open
 
@@ -66,6 +67,7 @@ A running log. Add a row when a decision is made, and move an open question up w
 | Do group goals with two approvals count as a collective scheme? | Counsel |
 | ioTec: fees, sandbox, settlement speed from the ioTec wallet to our bank, payout limits, and whether Verify sends its own code. | ioTec |
 | Identity check provider: Smile ID coverage and pricing for Uganda, or ioTec Verify if it can check identity documents. Until one is chosen every client is reviewed by a person. See [identity-checks.md](identity-checks.md). | Owner |
+| Identity checks: may a client be approved with no person involved when every automatic check passed? Built as no since 2026-11-13 (see Decided); one switch turns it on. And confirm field-level encryption of the document number, date of birth and TIN, in use as the working default. | Owner |
 | Will passkeys become compulsory for clients? | Owner |
 | Confirm that signing in with an authenticator app carries no 24 hour withdrawal limit. In use as the working default since 2026-11-13 (see Decided). | Owner |
 | A client signed in with an SMS code can add a passkey or an authenticator app. Should that end the 24 hour limit early? Built as no, in the app and in the sign-in API: the limit runs its full 24 hours, and the screen says so. | Owner |
