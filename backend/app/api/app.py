@@ -19,6 +19,7 @@ from app.infrastructure.settings import Settings
 from app.infrastructure.storage import FileStorage, StorageSettings
 from app.modules.audit import api as audit_api
 from app.modules.autoinvest import api as autoinvest_api
+from app.modules.console import api as console_api
 from app.modules.documents import api as documents_api
 from app.modules.goals import api as goals_api
 from app.modules.identity import api as identity_api
@@ -131,6 +132,7 @@ def create_app(
         *notifications_api.routers,
         *suppressions_api.routers,
         *support_api.routers,
+        *console_api.routers,
         *documents_api.routers,
         *audit_api.routers,
         *payouts_api.routers,

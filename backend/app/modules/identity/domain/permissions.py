@@ -25,6 +25,9 @@ Permission = Literal[
     # Recording the outcome and closing a complaint for good.
     "complaints.close",
     "clients.view",
+    # Proposing or deciding to lock or unlock a client's account. Seeing clients is
+    # `clients.view`. Not a screen.
+    "clients.lock",
     "money_movement.view",
     "reconciliation.view",
     "investments.view",
@@ -80,6 +83,7 @@ ROLE_PERMISSIONS: dict[Role, frozenset[Permission]] = {
             "complaints.close",
             "clients.view",
             "email_suppressions.lift",
+            "clients.lock",
             "money_movement.view",
             "reconciliation.view",
             "investments.view",
@@ -123,6 +127,7 @@ ROLE_PERMISSIONS: dict[Role, frozenset[Permission]] = {
             "complaints.manage",
             "complaints.close",
             "clients.view",
+            "clients.lock",
             "compliance.view",
             "reports.view",
             "audit.view",

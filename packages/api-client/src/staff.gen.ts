@@ -6,6 +6,19 @@ import { z } from "zod";
 export type Upload = Blob | { uri: string; name: string; type: string };
 export const Upload = z.custom<Upload>((value) => value !== null && typeof value === "object");
 
+export const AccountView = z.object({
+  created_at: z.string(),
+  email: z.string().nullable(),
+  has_authenticator: z.boolean(),
+  has_passkey: z.boolean(),
+  id: z.string(),
+  last_signed_in_at: z.string().nullable(),
+  phone: z.string(),
+  restricted_until: z.string().nullable(),
+  status: z.enum(["active", "locked", "closed"]),
+});
+export type AccountView = z.infer<typeof AccountView>;
+
 export const AmountOutput = z.object({
   currency: z.enum(["UGX", "USD"]),
   minor: z.number().int(),
@@ -131,6 +144,86 @@ export const ClaimProgressView = z.object({
 });
 export type ClaimProgressView = z.infer<typeof ClaimProgressView>;
 
+export const ConversationSummary = z.object({
+  id: z.string(),
+  last_message_at: z.string(),
+  status: z.string(),
+  topic: z.string(),
+  waiting_since: z.string().nullable(),
+});
+export type ConversationSummary = z.infer<typeof ConversationSummary>;
+
+export const DestinationView = z.object({
+  bank_code: z.string().nullable(),
+  created_at: z.string(),
+  holder_name: z.string(),
+  id: z.string(),
+  kind: z.string(),
+  masked_account: z.string(),
+  network: z.string().nullable(),
+  status: z.string(),
+});
+export type DestinationView = z.infer<typeof DestinationView>;
+
+export const IdentityCheckView = z.object({
+  account_number: z.string().nullable(),
+  decided_at: z.string().nullable(),
+  id: z.string(),
+  status: z.string(),
+  submitted_at: z.string().nullable(),
+});
+export type IdentityCheckView = z.infer<typeof IdentityCheckView>;
+
+export const LockView = z.object({
+  client_id: z.string(),
+  decided_at: z.string().nullable(),
+  decided_by: z.string().nullable(),
+  decided_by_name: z.string().nullable(),
+  decision_reason: z.string().nullable(),
+  id: z.string(),
+  kind: z.enum(["lock", "unlock"]),
+  proposed_at: z.string(),
+  proposed_by: z.string(),
+  proposed_by_name: z.string(),
+  reason: z.string(),
+  status: z.enum(["proposed", "approved", "rejected", "withdrawn"]),
+  yours: z.boolean(),
+});
+export type LockView = z.infer<typeof LockView>;
+
+export const OwedView = z.object({
+  account_code: z.string(),
+  account_reference: z.string().nullable(),
+  amount_minor: z.number().int(),
+  currency: z.string(),
+});
+export type OwedView = z.infer<typeof OwedView>;
+
+export const ConsoleApiComplaintSummary = z.object({
+  category: z.string(),
+  due_on: z.string(),
+  id: z.string(),
+  overdue: z.boolean(),
+  received_at: z.string(),
+  reference: z.string(),
+  status: z.string(),
+  summary: z.string(),
+});
+export type ConsoleApiComplaintSummary = z.infer<typeof ConsoleApiComplaintSummary>;
+
+export const ClientPageView = z.object({
+  account: AccountView,
+  can_lock: z.boolean(),
+  complaints: z.array(ConsoleApiComplaintSummary).nullable(),
+  conversation: ConversationSummary.nullable(),
+  destinations: z.array(DestinationView),
+  identity_check: IdentityCheckView.nullable(),
+  locks: z.array(LockView),
+  owed: z.array(OwedView),
+  verified_name: z.string().nullable(),
+});
+export type ClientPageView = z.infer<typeof ClientPageView>;
+
 export const ComplaintHistoryItem = z.object({
   action: z.enum(["logged", "assigned", "status", "note", "escalated", "proposed", "rejected", "withdrawn", "closed"]),
   actor: z.enum(["client", "staff"]),
@@ -187,17 +280,6 @@ export const ComplaintNote = z.object({
 });
 export type ComplaintNote = z.infer<typeof ComplaintNote>;
 
-export const ComplaintSummary = z.object({
-  average_days_to_close_tenths: z.number().int().nullable(),
-  closed_this_quarter: z.number().int(),
-  open: z.number().int(),
-  overdue: z.number().int(),
-  received_this_quarter: z.number().int(),
-  target_working_days: z.number().int(),
-  upheld_this_quarter: z.number().int(),
-});
-export type ComplaintSummary = z.infer<typeof ComplaintSummary>;
-
 export const MigrationApiAmount = z.object({
   currency: Currency,
   minor: z.number().int(),
@@ -230,6 +312,12 @@ export const DecideLift = z.object({
   reason: z.string(),
 });
 export type DecideLift = z.infer<typeof DecideLift>;
+
+export const DecideLock = z.object({
+  decision: z.enum(["approved", "rejected", "withdrawn"]),
+  reason: z.string(),
+});
+export type DecideLock = z.infer<typeof DecideLock>;
 
 export const DecideOutcome = z.object({
   decision: z.enum(["confirmed", "rejected", "withdrawn"]),
@@ -656,6 +744,12 @@ export const ProposeLift = z.object({
 });
 export type ProposeLift = z.infer<typeof ProposeLift>;
 
+export const ProposeLock = z.object({
+  kind: z.enum(["lock", "unlock"]),
+  reason: z.string(),
+});
+export type ProposeLock = z.infer<typeof ProposeLock>;
+
 export const ProposeOutcome = z.object({
   client_accepted: z.boolean(),
   outcome: z.enum(["upheld", "partly_upheld", "not_upheld"]),
@@ -689,9 +783,20 @@ export const ReasonBody = z.object({
 });
 export type ReasonBody = z.infer<typeof ReasonBody>;
 
+export const SupportApiComplaintSummary = z.object({
+  average_days_to_close_tenths: z.number().int().nullable(),
+  closed_this_quarter: z.number().int(),
+  open: z.number().int(),
+  overdue: z.number().int(),
+  received_this_quarter: z.number().int(),
+  target_working_days: z.number().int(),
+  upheld_this_quarter: z.number().int(),
+});
+export type SupportApiComplaintSummary = z.infer<typeof SupportApiComplaintSummary>;
+
 export const Register = z.object({
   complaints: z.array(StaffComplaint),
-  summary: ComplaintSummary,
+  summary: SupportApiComplaintSummary,
 });
 export type Register = z.infer<typeof Register>;
 
@@ -712,6 +817,11 @@ export const SavedReplies = z.object({
   replies: z.array(SavedReplyItem),
 });
 export type SavedReplies = z.infer<typeof SavedReplies>;
+
+export const SearchResult = z.object({
+  clients: z.array(AccountView),
+});
+export type SearchResult = z.infer<typeof SearchResult>;
 
 export const SendBack = z.object({
   note: z.string(),
@@ -897,7 +1007,7 @@ export type StaffSendMessage = z.infer<typeof StaffSendMessage>;
 
 export const StaffSessionView = z.object({
   name: z.string(),
-  permissions: z.array(z.enum(["overview.view", "review_queue.view", "identity_checks.view", "identity_checks.review", "maturities.view", "support.view", "support.reply", "complaints.view", "complaints.manage", "complaints.close", "clients.view", "money_movement.view", "reconciliation.view", "investments.view", "automatic_investing.view", "goals.view", "dealing_desk.view", "finance.view", "products.view", "rates.view", "rates.change", "compliance.view", "team.view", "reports.view", "audit.view", "settings.view", "wordings.change", "email_suppressions.lift", "migration.view", "bank_transfers.change", "migration.import", "migration.sign_off"])),
+  permissions: z.array(z.enum(["overview.view", "review_queue.view", "identity_checks.view", "identity_checks.review", "maturities.view", "support.view", "support.reply", "complaints.view", "complaints.manage", "complaints.close", "clients.view", "clients.lock", "money_movement.view", "reconciliation.view", "investments.view", "automatic_investing.view", "goals.view", "dealing_desk.view", "finance.view", "products.view", "rates.view", "rates.change", "compliance.view", "team.view", "reports.view", "audit.view", "settings.view", "wordings.change", "email_suppressions.lift", "migration.view", "bank_transfers.change", "migration.import", "migration.sign_off"])),
   role: z.enum(["admin", "operations", "finance", "compliance", "support"]),
   staff_id: z.string(),
 });
@@ -1011,6 +1121,58 @@ export const operations = {
     idempotent: false,
     status: 200,
     response: Facets,
+  },
+  "POST /staff/clients/locks/{lock_id}/decision": {
+    method: "POST",
+    path: "/staff/clients/locks/{lock_id}/decision",
+    params: z.object({
+    lock_id: z.string(),
+  }),
+    query: z.object({}),
+    body: DecideLock,
+    bodyKind: "json",
+    idempotent: false,
+    status: 200,
+    response: LockView,
+  },
+  "GET /staff/clients/search": {
+    method: "GET",
+    path: "/staff/clients/search",
+    params: z.object({}),
+    query: z.object({
+    q: z.string(),
+  }),
+    body: null,
+    bodyKind: null,
+    idempotent: false,
+    status: 200,
+    response: SearchResult,
+  },
+  "GET /staff/clients/{client_id}": {
+    method: "GET",
+    path: "/staff/clients/{client_id}",
+    params: z.object({
+    client_id: z.string(),
+  }),
+    query: z.object({}),
+    body: null,
+    bodyKind: null,
+    idempotent: false,
+    status: 200,
+    response: ClientPageView,
+  },
+  "POST /staff/clients/{client_id}/locks": {
+    method: "POST",
+    path: "/staff/clients/{client_id}/locks",
+    params: z.object({
+    client_id: z.string(),
+  }),
+    query: z.object({}),
+    body: ProposeLock,
+    bodyKind: "json",
+    idempotent: false,
+    status: 201,
+    response: LockView,
   },
   "GET /staff/complaints": {
     method: "GET",

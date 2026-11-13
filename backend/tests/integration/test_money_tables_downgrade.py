@@ -3,7 +3,7 @@ history, the receipts that stop a command running twice, the identity records, t
 destinations, the withdrawal limits, the payouts and their send attempts, the migration
 checks, the imported statements, the day closes, the pot transfers, the help chat, the
 complaints register, the goals, the email delivery records, the unclaimed accounts, the
-complaint outcomes or the suppression lifts."""
+complaint outcomes, the suppression lifts or the client locks."""
 
 import os
 from collections.abc import Iterator
@@ -348,6 +348,20 @@ ROWS = {
         "created_at, updated_at) VALUES ('-Nabc0000000000000A1', 'CL-1', false, 'not_invited', "
         "now(), now())",
         "refusing to drop migration claims",
+    ),
+    "0152_client_locks": (
+        "BEGIN; SELECT set_config('finvest.actor_kind', 'staff', true); "
+        "SELECT set_config('finvest.actor_id', '-Nabc0000000000000S1', true); "
+        "INSERT INTO identity_staff (id, email, name, role, password_hash, status, created_at) "
+        "VALUES ('-Nabc0000000000000S1', 'ops@finvestug.com', 'Ops', 'operations', 'x', "
+        "'active', now()); "
+        "INSERT INTO identity_clients (id, phone, password_hash, password_changed_at, status, "
+        "created_at) VALUES ('-Nabc0000000000000B1', '+256772123456', 'x', now(), 'active', "
+        "now()); "
+        "INSERT INTO identity_client_locks (id, kind, client_id, reason, proposed_by, "
+        "proposed_at) VALUES ('-Nabc0000000000000A1', 'lock', '-Nabc0000000000000B1', "
+        "'Phone stolen', '-Nabc0000000000000S1', now()); COMMIT",
+        "refusing to drop identity_client_locks",
     ),
 }
 
