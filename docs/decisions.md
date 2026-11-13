@@ -38,6 +38,10 @@ A running log. Add a row when a decision is made, and move an open question up w
 | 2026-11-13 | Decided for now. The dollar product is seeded paused. It opens when paying in and out in dollars is built. |
 | 2026-11-13 | Brand is black and lime with Plus Jakarta Sans. See [design.md](design.md). |
 | 2026-11-13 | Decided for now: money credited by mistake that has already moved on is not clawed back out of the client's investment. It is corrected by a new ledger entry that records a receivable against the client who got it, and the receivable is then recovered or written off (the owner chose "receivable, then recover" on a decision card in the payments thread). Every manual ledger correction, including a plain reversal, needs two different members of staff: one proposes with a reason and another approves. The database enforces this. See [ledger.md](ledger.md#corrections). The owner can revisit it once counsel or the regulator has a view. |
+| 2026-11-13 | Decided for now, by the migration thread. The import spreadsheet is two CSV sheets with fixed columns, one for clients and one for investments, for Finvest 1.0 exports and hand-kept records alike. Dates are `YYYY-MM-DD` only. See [migration.md](migration.md). |
+| 2026-11-13 | Decided for now. Only running investments and orders awaiting payment are imported. Redeemed investments and past transactions stay in Finvest 1.0, kept read-only. Payout bank accounts are not imported: a client adds them in the new app, with proof of ownership, like everyone else. |
+| 2026-11-13 | Decided for now. A migrated client with no phone number, an unverified identity or an expired document does not block the switch. Their money comes across and keeps earning, and staff follow up. Two clients sharing a phone number or an identity document do block it. |
+| 2026-11-13 | Decided for now (the owner was asked on a decision card and had said not to wait). An identity that Finvest 1.0 verified is carried over as approved at the switch, with a new account number, and the client proves who they are with a selfie matched to the ID on file when they claim. A client who was not verified, or whose document has expired, redoes the ID check. |
 | 2026-11-13 | All work reaches `main` through pull requests. UI work includes screenshots. Commits on `main` carry no AI attribution. |
 | 2026-11-13 | A payout account whose name differs from the client's ID is never approved, not even by two staff. The same holds for a mobile money number: a different registered name is refused outright. |
 
@@ -62,6 +66,9 @@ A running log. Add a row when a decision is made, and move an open question up w
 | Payouts: staff may approve a partial name match, meaning a missing middle name when two names agree, or one name spelt slightly differently when the rest agree (built so far). Confirm. | Owner |
 | Payouts: mobile money prefixes accepted are MTN 76, 77, 78, 39 and Airtel 70, 74, 75, 20. Confirm the list. | Owner, ioTec |
 | Payouts: a client can cancel a withdrawal only while it is held for review (built so far). Should they be able to cancel before it is sent? | Owner |
+| Migration: a sample Finvest 1.0 export, or the old database tables, to check the import columns against. | Owner |
+| Migration: Finvest 1.0 identity documents with no expiry date on file are treated as still valid (built so far). Should those clients redo the ID check instead? | Owner, counsel |
+| Migration: should payout accounts and past transactions from Finvest 1.0 be brought across? Built: no. | Owner |
 | Investing: confirm the tax on interest (built: 15% on Treasury bills, 5% on the dollar product, from the design canvas) against what URA requires Finvest to withhold. | Owner, counsel |
 | Investing: confirm the minimums. The canvas shows $500 for the dollar product in one place and $100 in another. Built: $500. | Owner |
 | Investing: if the tax rate changes by law during a term, should running investments change with it? Built: no, terms are fixed at the start. | Owner, counsel |

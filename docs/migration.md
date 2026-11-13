@@ -14,6 +14,71 @@ Clients do nothing until they are invited. Staff move the records, and each clie
 
 Clients whose identity documents are missing or out of date are asked to redo the ID check during step 6. A single client can also be added by hand in the console, with a second person approving the opening balance.
 
+## The import spreadsheet
+
+One format covers Finvest 1.0 exports and records kept by hand. It is two sheets, each saved as CSV (in Excel, "CSV UTF-8"): one row per client and one row per investment. The rules are in `backend/app/modules/migration/domain/sheet.py`.
+
+- The columns are fixed and can come in any order. A missing, unknown or repeated column refuses the whole sheet.
+- Dates are `YYYY-MM-DD` only. A date like 03/04/2026 is refused, because it reads as March in one country and April in another.
+- Amounts are plain numbers in the product's currency, with or without thousands commas: `1,000,000` for shillings, `1,500.50` for dollars. Nothing is rounded, and a fraction of a shilling is refused.
+- Rates are percentages with at most two decimal places: `12.5` or `12.5%`.
+- Every import states one "as of" date, the day the old system's figures were taken. Interest figures in the sheet are up to that day.
+
+### Clients sheet
+
+| Column | Needed | What it holds |
+| --- | --- | --- |
+| `legacy_client_ref` | Yes | The client's ID in Finvest 1.0, or a reference staff choose for a hand-kept record, such as `PAPER-0012`. Used once. |
+| `source` | Yes | `finvest1` or `manual`. |
+| `surname`, `given_names` | Yes | As printed on the identity document. |
+| `phone` | No | Any usual way of writing it. Stored as `+256772123456`. Without it the client cannot be invited until staff add one. |
+| `email` | No | |
+| `date_of_birth` | If verified | |
+| `id_type` | If verified | `national_id`, `passport`, `driving_permit` or `refugee_id`. |
+| `id_number` | If verified | |
+| `id_expires_on` | No | An expired document means the client redoes the ID check when they claim. |
+| `id_verified` | Yes | `yes` if Finvest 1.0 checked this person's identity document, otherwise `no`. |
+| `legacy_account_number` | No | The old account number, kept as a bank reference. |
+| `next_of_kin_name`, `next_of_kin_phone` | No | |
+
+### Investments sheet
+
+| Column | Needed | What it holds |
+| --- | --- | --- |
+| `legacy_investment_ref` | Yes | The investment or order ID in Finvest 1.0, or a chosen reference. Used once. |
+| `legacy_client_ref` | Yes | Must match a row in the clients sheet. |
+| `product_code` | Yes | `TREA-91`, `TREA-182` or `USD-BOND`. |
+| `status` | Yes | `running` for an investment that is paid for and earning. `pending_payment` for an order whose payment was not yet confirmed. |
+| `principal` | Yes | |
+| `annual_rate_percent` | Running | The yearly rate before tax this investment started with. |
+| `tax_percent` | Running | The tax on interest this investment started with. |
+| `start_date` | Running | |
+| `maturity_date` | Fixed terms | Must be the start date plus the product's term. Blank for the dollar product. |
+| `interest_before_tax` | Running | What the old system says was earned up to the "as of" date. |
+| `tax_withheld` | No | The tax held on that interest, if the old records say. |
+
+For a `pending_payment` row every column after `principal` stays blank.
+
+Only running investments and pending orders are imported. Investments that were already redeemed stay in Finvest 1.0, which is kept read-only.
+
+## The trial import
+
+A trial saves nothing. It reads both sheets, checks every row and checks the rows against each other, and lists every problem at once with the sheet, the spreadsheet row, the column and a code. The list never contains the cell's value, so it holds no personal data. The rules are in `backend/app/modules/migration/domain/trial.py`.
+
+An **error** must be fixed in the spreadsheet, and the final import is refused while one remains. A **warning** does not block the import: the row comes across, and staff follow it up or the client is asked during the claim.
+
+| Errors | Warnings |
+| --- | --- |
+| A needed cell is empty, or a date, amount, rate, phone number or email cannot be read | No phone number |
+| A reference used twice | Identity not verified in 1.0, document expired, or no expiry date on file |
+| Two clients with the same phone number, the same identity document or the same old account number | Two clients sharing an email address, or a name and date of birth |
+| An investment whose client is not in the clients sheet | A client with no investments |
+| An unknown product, an amount of zero, a rate outside 0 to 50% | An amount below today's minimum for the product |
+| A start date after the "as of" date, a maturity date that is not the start date plus the term, tax greater than interest | An investment past its maturity date that was not yet paid out |
+| A verified identity with no document type, number or date of birth | A client under 18 |
+
+A row with an error is left out of the trial's totals, together with the investments of a client whose row has one. The totals are the number of clients, verified identities, clients who will redo the ID check, clients with no phone, running investments, pending orders, money invested and interest before tax, per currency. The finance check compares them with the old system.
+
 ## What Finvest 1.0 was
 
-For reference when writing the import: a Django and Django REST Framework backend with Celery, and a React, Vite and shadcn frontend. The flow was KYC, pick a product, create an order with a bank slip upload or mobile money, an admin verifies the deposit, the order becomes an investment, interest accrues daily, and redemption and transfer need admin approval. Its code is no longer in this repository.
+For reference when writing the import: a Django and Django REST Framework backend with Celery, and a React, Vite and shadcn frontend. The flow was KYC, pick a product, create an order with a bank slip upload or mobile money, an admin verifies the deposit, the order becomes an investment, interest accrues daily, and redemption and transfer need admin approval. Its code is no longer in this repository or its history, so the column names above come from this description and not from the old database. They must be checked against a real export before the first trial.
