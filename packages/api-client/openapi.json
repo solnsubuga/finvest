@@ -45,6 +45,30 @@
         "title": "AmountView",
         "type": "object"
       },
+      "AskForPhotosBody": {
+        "additionalProperties": false,
+        "properties": {
+          "client_message": {
+            "maxLength": 300,
+            "title": "Client Message",
+            "type": "string"
+          },
+          "photos": {
+            "items": {
+              "$ref": "#/components/schemas/PhotoKind"
+            },
+            "maxItems": 3,
+            "title": "Photos",
+            "type": "array"
+          }
+        },
+        "required": [
+          "photos",
+          "client_message"
+        ],
+        "title": "AskForPhotosBody",
+        "type": "object"
+      },
       "AssignComplaint": {
         "additionalProperties": false,
         "properties": {
@@ -104,6 +128,15 @@
         ],
         "title": "AuthenticatorState",
         "type": "object"
+      },
+      "AutomaticCheck": {
+        "enum": [
+          "document_genuine",
+          "selfie_match",
+          "screening"
+        ],
+        "title": "AutomaticCheck",
+        "type": "string"
       },
       "BankTransferOut": {
         "additionalProperties": false,
@@ -197,6 +230,21 @@
           "next_before"
         ],
         "title": "BankTransferPage",
+        "type": "object"
+      },
+      "Body_add_photo_client_identity_check_photos__kind__put": {
+        "properties": {
+          "photo": {
+            "contentMediaType": "application/octet-stream",
+            "description": "JPEG, PNG or WebP, at most 10 MiB",
+            "title": "Photo",
+            "type": "string"
+          }
+        },
+        "required": [
+          "photo"
+        ],
+        "title": "Body_add_photo_client_identity_check_photos__kind__put",
         "type": "object"
       },
       "Body_pay_by_bank_transfer_client_investments__investment_id__payments_bank_transfer_post": {
@@ -305,6 +353,19 @@
         "title": "CategoryChannels",
         "type": "object"
       },
+      "CheckStatus": {
+        "enum": [
+          "draft",
+          "submitted",
+          "needs_review",
+          "with_compliance",
+          "awaiting_client",
+          "approved",
+          "rejected"
+        ],
+        "title": "CheckStatus",
+        "type": "string"
+      },
       "ClaimProgressView": {
         "additionalProperties": false,
         "properties": {
@@ -370,6 +431,134 @@
           "unread"
         ],
         "title": "ClientChat",
+        "type": "object"
+      },
+      "ClientCheck": {
+        "additionalProperties": false,
+        "description": "A client's own check. Nothing about providers, flags or who decided.",
+        "properties": {
+          "account_number": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Account Number"
+          },
+          "client_message": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Client Message"
+          },
+          "details": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/DetailsBody"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "details_confirmed": {
+            "title": "Details Confirmed",
+            "type": "boolean"
+          },
+          "document_country": {
+            "title": "Document Country",
+            "type": "string"
+          },
+          "document_type": {
+            "$ref": "#/components/schemas/DocumentType"
+          },
+          "id": {
+            "maxLength": 20,
+            "minLength": 20,
+            "pattern": "^[-0-9A-Z_a-z]{20}$",
+            "title": "Id",
+            "type": "string"
+          },
+          "missing": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Missing",
+            "type": "array"
+          },
+          "photos": {
+            "items": {
+              "$ref": "#/components/schemas/ClientPhoto"
+            },
+            "title": "Photos",
+            "type": "array"
+          },
+          "retake_photos": {
+            "items": {
+              "$ref": "#/components/schemas/PhotoKind"
+            },
+            "title": "Retake Photos",
+            "type": "array"
+          },
+          "status": {
+            "$ref": "#/components/schemas/CheckStatus"
+          },
+          "submitted_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Submitted At"
+          }
+        },
+        "required": [
+          "id",
+          "status",
+          "document_type",
+          "document_country",
+          "details",
+          "details_confirmed",
+          "photos",
+          "missing",
+          "retake_photos",
+          "client_message",
+          "submitted_at",
+          "account_number"
+        ],
+        "title": "ClientCheck",
+        "type": "object"
+      },
+      "ClientCheckEnvelope": {
+        "additionalProperties": false,
+        "properties": {
+          "check": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ClientCheck"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "check"
+        ],
+        "title": "ClientCheckEnvelope",
         "type": "object"
       },
       "ClientComplaint": {
@@ -723,6 +912,29 @@
           "password"
         ],
         "title": "ClientLoginStart",
+        "type": "object"
+      },
+      "ClientPhoto": {
+        "additionalProperties": false,
+        "properties": {
+          "byte_size": {
+            "title": "Byte Size",
+            "type": "integer"
+          },
+          "content_type": {
+            "title": "Content Type",
+            "type": "string"
+          },
+          "kind": {
+            "$ref": "#/components/schemas/PhotoKind"
+          }
+        },
+        "required": [
+          "kind",
+          "content_type",
+          "byte_size"
+        ],
+        "title": "ClientPhoto",
         "type": "object"
       },
       "ClientSessionView": {
@@ -1416,6 +1628,57 @@
         "title": "DestinationOut",
         "type": "object"
       },
+      "DetailsBody": {
+        "additionalProperties": false,
+        "properties": {
+          "date_of_birth": {
+            "format": "date",
+            "title": "Date Of Birth",
+            "type": "string"
+          },
+          "document_expires_on": {
+            "format": "date",
+            "title": "Document Expires On",
+            "type": "string"
+          },
+          "document_number": {
+            "maxLength": 40,
+            "title": "Document Number",
+            "type": "string"
+          },
+          "given_names": {
+            "maxLength": 100,
+            "title": "Given Names",
+            "type": "string"
+          },
+          "surname": {
+            "maxLength": 100,
+            "title": "Surname",
+            "type": "string"
+          },
+          "tin": {
+            "anyOf": [
+              {
+                "maxLength": 20,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tin"
+          }
+        },
+        "required": [
+          "surname",
+          "given_names",
+          "document_number",
+          "date_of_birth",
+          "document_expires_on"
+        ],
+        "title": "DetailsBody",
+        "type": "object"
+      },
       "DifferenceView": {
         "additionalProperties": false,
         "description": "Something that differs now. `figures` is exactly what a sign-off for it accepts.\n\n`sign_off` is the latest one for these figures. A rejected one stays until it is proposed\nagain, so its proposer can read why.",
@@ -1448,6 +1711,26 @@
           "sign_off"
         ],
         "title": "DifferenceView",
+        "type": "object"
+      },
+      "DocumentBody": {
+        "additionalProperties": false,
+        "properties": {
+          "document_country": {
+            "maxLength": 2,
+            "minLength": 2,
+            "title": "Document Country",
+            "type": "string"
+          },
+          "document_type": {
+            "$ref": "#/components/schemas/DocumentType"
+          }
+        },
+        "required": [
+          "document_type",
+          "document_country"
+        ],
+        "title": "DocumentBody",
         "type": "object"
       },
       "DocumentItem": {
@@ -1585,6 +1868,30 @@
         ],
         "title": "DocumentList",
         "type": "object"
+      },
+      "DocumentNumber": {
+        "additionalProperties": false,
+        "properties": {
+          "document_number": {
+            "title": "Document Number",
+            "type": "string"
+          }
+        },
+        "required": [
+          "document_number"
+        ],
+        "title": "DocumentNumber",
+        "type": "object"
+      },
+      "DocumentType": {
+        "enum": [
+          "national_id",
+          "passport",
+          "driving_permit",
+          "refugee_id"
+        ],
+        "title": "DocumentType",
+        "type": "string"
       },
       "Enrol": {
         "additionalProperties": false,
@@ -3763,6 +4070,35 @@
         "title": "NotificationPage",
         "type": "object"
       },
+      "Outcome": {
+        "additionalProperties": false,
+        "properties": {
+          "check": {
+            "$ref": "#/components/schemas/AutomaticCheck"
+          },
+          "score": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Score"
+          },
+          "verdict": {
+            "$ref": "#/components/schemas/Verdict"
+          }
+        },
+        "required": [
+          "check",
+          "verdict",
+          "score"
+        ],
+        "title": "Outcome",
+        "type": "object"
+      },
       "OverviewView": {
         "additionalProperties": false,
         "properties": {
@@ -4148,6 +4484,64 @@
           "proposed_at"
         ],
         "title": "PendingOutcome",
+        "type": "object"
+      },
+      "PhotoKind": {
+        "enum": [
+          "front",
+          "back",
+          "selfie"
+        ],
+        "title": "PhotoKind",
+        "type": "string"
+      },
+      "PhotoLink": {
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "maxLength": 20,
+            "minLength": 20,
+            "pattern": "^[-0-9A-Z_a-z]{20}$",
+            "title": "Id",
+            "type": "string"
+          },
+          "kind": {
+            "$ref": "#/components/schemas/PhotoKind"
+          },
+          "url": {
+            "title": "Url",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "kind",
+          "url"
+        ],
+        "title": "PhotoLink",
+        "type": "object"
+      },
+      "PhotoLinks": {
+        "additionalProperties": false,
+        "properties": {
+          "expires_at": {
+            "format": "date-time",
+            "title": "Expires At",
+            "type": "string"
+          },
+          "photos": {
+            "items": {
+              "$ref": "#/components/schemas/PhotoLink"
+            },
+            "title": "Photos",
+            "type": "array"
+          }
+        },
+        "required": [
+          "photos",
+          "expires_at"
+        ],
+        "title": "PhotoLinks",
         "type": "object"
       },
       "PlanDetails": {
@@ -4769,6 +5163,81 @@
         "title": "PushDeviceToken",
         "type": "object"
       },
+      "Queue": {
+        "additionalProperties": false,
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/QueueEntry"
+            },
+            "title": "Items",
+            "type": "array"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "title": "Queue",
+        "type": "object"
+      },
+      "QueueEntry": {
+        "additionalProperties": false,
+        "properties": {
+          "document_type": {
+            "$ref": "#/components/schemas/DocumentType"
+          },
+          "id": {
+            "maxLength": 20,
+            "minLength": 20,
+            "pattern": "^[-0-9A-Z_a-z]{20}$",
+            "title": "Id",
+            "type": "string"
+          },
+          "name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name"
+          },
+          "review_flags": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Review Flags",
+            "type": "array"
+          },
+          "status": {
+            "$ref": "#/components/schemas/CheckStatus"
+          },
+          "submitted_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Submitted At"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "document_type",
+          "status",
+          "submitted_at",
+          "review_flags"
+        ],
+        "title": "QueueEntry",
+        "type": "object"
+      },
       "QuoteOut": {
         "additionalProperties": false,
         "properties": {
@@ -4865,6 +5334,21 @@
         "title": "RateOut",
         "type": "object"
       },
+      "ReasonBody": {
+        "additionalProperties": false,
+        "properties": {
+          "reason": {
+            "maxLength": 500,
+            "title": "Reason",
+            "type": "string"
+          }
+        },
+        "required": [
+          "reason"
+        ],
+        "title": "ReasonBody",
+        "type": "object"
+      },
       "ReceiptLinkOut": {
         "additionalProperties": false,
         "properties": {
@@ -4939,6 +5423,33 @@
           "complaints"
         ],
         "title": "Register",
+        "type": "object"
+      },
+      "RejectBody": {
+        "additionalProperties": false,
+        "properties": {
+          "client_message": {
+            "anyOf": [
+              {
+                "maxLength": 300,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Client Message"
+          },
+          "reason": {
+            "maxLength": 500,
+            "title": "Reason",
+            "type": "string"
+          }
+        },
+        "required": [
+          "reason"
+        ],
+        "title": "RejectBody",
         "type": "object"
       },
       "Rename": {
@@ -5744,6 +6255,214 @@
         "title": "StaffChat",
         "type": "object"
       },
+      "StaffCheck": {
+        "additionalProperties": false,
+        "properties": {
+          "account_number": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Account Number"
+          },
+          "allowed": {
+            "items": {
+              "enum": [
+                "approve",
+                "reject",
+                "ask_for_photos",
+                "escalate"
+              ],
+              "type": "string"
+            },
+            "title": "Allowed",
+            "type": "array"
+          },
+          "automatic_checks": {
+            "items": {
+              "$ref": "#/components/schemas/Outcome"
+            },
+            "title": "Automatic Checks",
+            "type": "array"
+          },
+          "client_id": {
+            "maxLength": 20,
+            "minLength": 20,
+            "pattern": "^[-0-9A-Z_a-z]{20}$",
+            "title": "Client Id",
+            "type": "string"
+          },
+          "client_message": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Client Message"
+          },
+          "date_of_birth": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Date Of Birth"
+          },
+          "decided_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Decided At"
+          },
+          "document_country": {
+            "title": "Document Country",
+            "type": "string"
+          },
+          "document_expires_on": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Document Expires On"
+          },
+          "document_number_masked": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Document Number Masked"
+          },
+          "document_type": {
+            "$ref": "#/components/schemas/DocumentType"
+          },
+          "given_names": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Given Names"
+          },
+          "id": {
+            "maxLength": 20,
+            "minLength": 20,
+            "pattern": "^[-0-9A-Z_a-z]{20}$",
+            "title": "Id",
+            "type": "string"
+          },
+          "name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name"
+          },
+          "photos": {
+            "items": {
+              "$ref": "#/components/schemas/StaffPhoto"
+            },
+            "title": "Photos",
+            "type": "array"
+          },
+          "retake_photos": {
+            "items": {
+              "$ref": "#/components/schemas/PhotoKind"
+            },
+            "title": "Retake Photos",
+            "type": "array"
+          },
+          "review_flags": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Review Flags",
+            "type": "array"
+          },
+          "status": {
+            "$ref": "#/components/schemas/CheckStatus"
+          },
+          "submitted_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Submitted At"
+          },
+          "surname": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Surname"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "document_type",
+          "status",
+          "submitted_at",
+          "review_flags",
+          "client_id",
+          "document_country",
+          "surname",
+          "given_names",
+          "document_number_masked",
+          "date_of_birth",
+          "document_expires_on",
+          "photos",
+          "automatic_checks",
+          "retake_photos",
+          "client_message",
+          "account_number",
+          "decided_at",
+          "allowed"
+        ],
+        "title": "StaffCheck",
+        "type": "object"
+      },
       "StaffComplaint": {
         "additionalProperties": false,
         "properties": {
@@ -6477,6 +7196,27 @@
         "title": "StaffMemberView",
         "type": "object"
       },
+      "StaffPhoto": {
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "maxLength": 20,
+            "minLength": 20,
+            "pattern": "^[-0-9A-Z_a-z]{20}$",
+            "title": "Id",
+            "type": "string"
+          },
+          "kind": {
+            "$ref": "#/components/schemas/PhotoKind"
+          }
+        },
+        "required": [
+          "id",
+          "kind"
+        ],
+        "title": "StaffPhoto",
+        "type": "object"
+      },
       "StaffProductOut": {
         "additionalProperties": false,
         "properties": {
@@ -6657,6 +7397,7 @@
                 "overview.view",
                 "review_queue.view",
                 "identity_checks.view",
+                "identity_checks.review",
                 "maturities.view",
                 "support.view",
                 "support.reply",
@@ -7259,6 +8000,15 @@
         ],
         "title": "UpcomingView",
         "type": "object"
+      },
+      "Verdict": {
+        "enum": [
+          "pass",
+          "fail",
+          "unsure"
+        ],
+        "title": "Verdict",
+        "type": "string"
       },
       "WordingList": {
         "additionalProperties": false,
@@ -10744,6 +11494,456 @@
         "summary": "Save To Goal",
         "tags": [
           "goals"
+        ]
+      }
+    },
+    "/client/identity-check": {
+      "get": {
+        "description": "The signed-in client's check, or `null` before they have chosen a document.",
+        "operationId": "my_check_client_identity_check_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ClientCheckEnvelope"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "summary": "My Check",
+        "tags": [
+          "identity checks"
+        ]
+      }
+    },
+    "/client/identity-check/details": {
+      "put": {
+        "description": "Save the details the client read from their document and confirmed.",
+        "operationId": "confirm_details_client_identity_check_details_put",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DetailsBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ClientCheck"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "summary": "Confirm Details",
+        "tags": [
+          "identity checks"
+        ]
+      }
+    },
+    "/client/identity-check/document": {
+      "put": {
+        "description": "Start the check, or change the document while it is still a draft.",
+        "operationId": "choose_document_client_identity_check_document_put",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DocumentBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ClientCheck"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "summary": "Choose Document",
+        "tags": [
+          "identity checks"
+        ]
+      }
+    },
+    "/client/identity-check/photos/{kind}": {
+      "put": {
+        "description": "Send one photo as `multipart/form-data`. It replaces the one of the same kind.",
+        "operationId": "add_photo_client_identity_check_photos__kind__put",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "kind",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/PhotoKind"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_add_photo_client_identity_check_photos__kind__put"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ClientCheck"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "summary": "Add Photo",
+        "tags": [
+          "identity checks"
+        ]
+      }
+    },
+    "/client/identity-check/submit": {
+      "post": {
+        "description": "Hand the check in. Answers which photos or details are missing if it is not ready.",
+        "operationId": "submit_client_identity_check_submit_post",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ClientCheck"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "summary": "Submit",
+        "tags": [
+          "identity checks"
         ]
       }
     },
@@ -17548,6 +18748,799 @@
         "summary": "Staff Get Goal",
         "tags": [
           "goals"
+        ]
+      }
+    },
+    "/staff/identity-checks": {
+      "get": {
+        "description": "Checks that are not decided, the ones needing a person first.",
+        "operationId": "queue_staff_identity_checks_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Queue"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "summary": "Queue",
+        "tags": [
+          "identity checks"
+        ]
+      }
+    },
+    "/staff/identity-checks/{check_id}": {
+      "get": {
+        "operationId": "one_check_staff_identity_checks__check_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "check_id",
+            "required": true,
+            "schema": {
+              "maxLength": 20,
+              "minLength": 20,
+              "pattern": "^[-0-9A-Z_a-z]{20}$",
+              "title": "Check Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StaffCheck"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "summary": "One Check",
+        "tags": [
+          "identity checks"
+        ]
+      }
+    },
+    "/staff/identity-checks/{check_id}/approve": {
+      "post": {
+        "description": "Approve the client and issue their account number. It cannot be undone.",
+        "operationId": "approve_staff_identity_checks__check_id__approve_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "check_id",
+            "required": true,
+            "schema": {
+              "maxLength": 20,
+              "minLength": 20,
+              "pattern": "^[-0-9A-Z_a-z]{20}$",
+              "title": "Check Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReasonBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StaffCheck"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "summary": "Approve",
+        "tags": [
+          "identity checks"
+        ]
+      }
+    },
+    "/staff/identity-checks/{check_id}/ask-for-photos": {
+      "post": {
+        "description": "Ask the client to take the named photos again, with a message.",
+        "operationId": "ask_for_photos_staff_identity_checks__check_id__ask_for_photos_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "check_id",
+            "required": true,
+            "schema": {
+              "maxLength": 20,
+              "minLength": 20,
+              "pattern": "^[-0-9A-Z_a-z]{20}$",
+              "title": "Check Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AskForPhotosBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StaffCheck"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "summary": "Ask For Photos",
+        "tags": [
+          "identity checks"
+        ]
+      }
+    },
+    "/staff/identity-checks/{check_id}/document-number": {
+      "post": {
+        "description": "The whole document number. Each call is written to the audit trail.",
+        "operationId": "show_document_number_staff_identity_checks__check_id__document_number_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "check_id",
+            "required": true,
+            "schema": {
+              "maxLength": 20,
+              "minLength": 20,
+              "pattern": "^[-0-9A-Z_a-z]{20}$",
+              "title": "Check Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DocumentNumber"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "summary": "Show Document Number",
+        "tags": [
+          "identity checks"
+        ]
+      }
+    },
+    "/staff/identity-checks/{check_id}/escalate": {
+      "post": {
+        "description": "Pass the check to compliance.",
+        "operationId": "escalate_staff_identity_checks__check_id__escalate_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "check_id",
+            "required": true,
+            "schema": {
+              "maxLength": 20,
+              "minLength": 20,
+              "pattern": "^[-0-9A-Z_a-z]{20}$",
+              "title": "Check Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReasonBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StaffCheck"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "summary": "Escalate",
+        "tags": [
+          "identity checks"
+        ]
+      }
+    },
+    "/staff/identity-checks/{check_id}/photo-links": {
+      "post": {
+        "description": "Short-lived links to the check's photos. Each call is written to the audit trail.",
+        "operationId": "photo_links_staff_identity_checks__check_id__photo_links_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "check_id",
+            "required": true,
+            "schema": {
+              "maxLength": 20,
+              "minLength": 20,
+              "pattern": "^[-0-9A-Z_a-z]{20}$",
+              "title": "Check Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PhotoLinks"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "summary": "Photo Links",
+        "tags": [
+          "identity checks"
+        ]
+      }
+    },
+    "/staff/identity-checks/{check_id}/reject": {
+      "post": {
+        "description": "Reject the client. It cannot be undone.",
+        "operationId": "reject_staff_identity_checks__check_id__reject_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "check_id",
+            "required": true,
+            "schema": {
+              "maxLength": 20,
+              "minLength": 20,
+              "pattern": "^[-0-9A-Z_a-z]{20}$",
+              "title": "Check Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RejectBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StaffCheck"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "summary": "Reject",
+        "tags": [
+          "identity checks"
         ]
       }
     },
