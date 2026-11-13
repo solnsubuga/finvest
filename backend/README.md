@@ -72,6 +72,7 @@ import-linter enforces the purity of `app/shared` and of every `app/modules/*/do
 - **Investments.** `app.modules.investments.domain` holds the product catalogue, rate versions and their approval rules, and the interest and tax arithmetic. See [docs/investing.md](../docs/investing.md).
 - **Goals.** `app.modules.goals` keeps targets and links them to investments. It moves no money: a saving is an investment. See [docs/goals.md](../docs/goals.md).
 - **Providers.** A provider call happens only in a job handler, with no transaction open, and its result is sorted into rejected, deferred or uncertain. `app.modules.payments` shows the pattern; see [docs/payments.md](../docs/payments.md). `FINVEST_PAYMENTS_PROVIDER` is `disabled` unless set, and the local stack sets `sandbox`.
+- **Telling a client.** Call `notify` from `app.modules.notifications.contract` in the transaction of the change, with an event from the catalogue. See [docs/notifications.md](../docs/notifications.md).
 - **Audit.** Record who did what and why with `app.modules.audit.service.record`, in the same transaction as the change.
 - **Time.** Take a `Clock` from `app.shared.clock`. Never call `datetime.now()` in a rule. Tests use `FakeClock`.
 - **Transactions.** `Database.actor_transaction(actor)` opens a transaction acting for a client, a staff member or the system. Row policies read the actor with `finvest_actor_kind()` and `finvest_actor_id()`. `Database.transaction()` has no actor, so a policy shows it nothing. The actor is a fence against bugs, not a credential, because a connection sets it for itself. A policy that admits the `system` actor must be `TO finvest_worker` only, never `finvest_app`.
@@ -95,5 +96,14 @@ The identity module (`app/modules/identity`) owns client and staff accounts, ses
 - **Attempt limits.** Wrong guesses are counted in PostgreSQL per account, per account and address, and per address, over 15 minutes. The caller's address is read from `X-Forwarded-For` only when the request comes from a proxy listed in `FINVEST_TRUSTED_PROXIES`.
 - **Passwords.** Argon2id, at least 10 characters, refused when common or built from the account's own number or address. Every sign-in failure is the same `invalid_credentials` after the same work.
 - **Roles.** `domain/permissions.py` is the one catalogue of roles and permissions. The mapping is a default that the owner has not confirmed yet.
+
+## Email
+
+All email goes through Resend, and only the worker sends it.
+
+- **Queueing.** Call `queue_email(session, recipient=..., template=..., variables=..., idempotency_key=..., now=...)` from `app.modules.notifications.service` inside the transaction that decided to send. The same key queues nothing a second time. The API role can add an email and can never read one back.
+- **Sending.** The worker renders the template, calls Resend with the key as its `Idempotency-Key`, and records the result with the job's completion. A failure that is safe to repeat is retried. A refusal fails the job. No transaction is open during the call.
+- **Content.** Templates live in `app/modules/notifications/domain/templates.py`. The variables, which can hold a one-time code, are emptied when the message is sent or given up on. Addresses are removed after 30 days by an hourly scheduled job. Job payloads carry the key only.
+- **Settings, worker only.** `FINVEST_EMAIL_BACKEND=resend`, `FINVEST_EMAIL_FROM="Finvest <no-reply@finvestug.com>"` and `FINVEST_EMAIL_RESEND_API_KEY`. With the backend unset, nothing is sent and queued email waits and then expires.
 
 See [docs/architecture.md](../docs/architecture.md), [docs/engineering-patterns.md](../docs/engineering-patterns.md) and [docs/rules.md](../docs/rules.md).

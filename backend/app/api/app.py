@@ -9,6 +9,7 @@ from uvicorn.middleware.proxy_headers import ProxyHeadersMiddleware
 
 from app.api import health
 from app.api.errors import UnexpectedErrorMiddleware, install_error_handlers
+from app.api.hardening import BodyLimitMiddleware, SecurityHeadersMiddleware
 from app.api.request_id import RequestIdMiddleware
 from app.infrastructure.database import Database
 from app.infrastructure.settings import Settings
@@ -19,6 +20,7 @@ from app.modules.identity.authenticators import AuthenticatorService
 from app.modules.identity.hashing import PasswordHasher
 from app.modules.identity.passkeys import PasskeyService
 from app.modules.identity.service import IdentityService
+from app.modules.notifications import api as notifications_api
 from app.modules.payments import api as payments_api
 from app.modules.payments.domain.provider import CollectionsProvider
 from app.modules.payments.settings import PaymentsSettings
@@ -80,7 +82,9 @@ def create_app(
             expose_headers=["X-Request-ID", "Retry-After"],
             max_age=600,
         )
+    app.add_middleware(BodyLimitMiddleware)
     app.add_middleware(UnexpectedErrorMiddleware)
+    app.add_middleware(SecurityHeadersMiddleware)
     app.add_middleware(RequestIdMiddleware)
     # Attempt limits count by caller address. X-Forwarded-For is believed only from our own
     # proxy; with none configured, only from this machine.
@@ -88,7 +92,7 @@ def create_app(
         ProxyHeadersMiddleware, trusted_hosts=settings.trusted_proxies or ["127.0.0.1"]
     )
     app.include_router(health.router)
-    for router in (*identity_api.routers, *passkeys_api.routers):
+    for router in (*identity_api.routers, *passkeys_api.routers, *notifications_api.routers):
         app.include_router(router)
     app.include_router(payments_api.create_router(collections))
     for router in goals_api.routers:

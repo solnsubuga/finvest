@@ -53,7 +53,7 @@ A sweep runs every minute and picks up deposits whose own job was lost:
 | `created` for ten minutes | Fails with `provider_unavailable`. It was never marked `sending`, so it was never sent. |
 | `sending` for two minutes | Becomes `uncertain`, and a status read is queued. |
 | `awaiting_approval` and quiet for two minutes | A status read is queued. After fifteen minutes with no result it becomes `uncertain` with `approval_overdue`. |
-| `uncertain`, for up to 24 hours | The next status read is queued: every minute for the first fifteen minutes, every ten minutes for two hours, then hourly. Each read is numbered and due at a fixed time, so repeated sweeps queue it once. A read only asks the provider. It never sends. After 24 hours the reads stop and the deposit waits for reconciliation. A deposit held for `amount_mismatch` is not read again, because it needs staff. |
+| `uncertain`, for up to 24 hours | The next status read is queued: every minute for the first fifteen minutes, every ten minutes for two hours, then hourly. Each read is numbered and due at a fixed time, so repeated sweeps queue it once. The sweep pages through every uncertain deposit in the window, oldest first, so none waits behind newer ones. A read only asks the provider. It never sends. After 24 hours the reads stop and the deposit waits for reconciliation. A deposit held for `amount_mismatch` is not read again, because it needs staff. |
 
 ## Ledger entries
 
