@@ -109,6 +109,11 @@ _QUEUE = text(
     f"SELECT {_COLUMNS} FROM payout_destinations "  # noqa: S608 - constant column list
     "WHERE status = 'in_review' ORDER BY updated_at, id LIMIT :limit"
 )
+_CHECKED = text(
+    f"SELECT {_COLUMNS} FROM payout_destinations "  # noqa: S608 - constant column list
+    "WHERE status = 'in_review' AND checked_by IS NOT NULL AND approved_by IS NULL "
+    "ORDER BY checked_at, id LIMIT :limit"
+)
 _UPDATE = text(
     "UPDATE payout_destinations SET status = :status, proof_kind = :proof_kind, "
     "proof_document_id = :proof_document_id, proof_name = :proof_name, name_match = :name_match, "
@@ -419,6 +424,15 @@ async def destinations_for_client(session: AsyncSession, client_id: str) -> list
 async def review_queue(session: AsyncSession, *, limit: int = 50) -> list[DestinationView]:
     """Destinations waiting for a staff check, oldest first. Empty outside a staff transaction."""
     rows = await session.execute(_QUEUE, {"limit": max(1, min(limit, MAX_QUEUE_PAGE))})
+    return [_view(row) for row in rows.all()]
+
+
+async def checks_awaiting_approval(
+    session: AsyncSession, *, limit: int = 50
+) -> list[DestinationView]:
+    """Checks one member of staff recorded, waiting for a different one to approve, oldest
+    first. Empty outside a staff transaction."""
+    rows = await session.execute(_CHECKED, {"limit": max(1, min(limit, MAX_QUEUE_PAGE))})
     return [_view(row) for row in rows.all()]
 
 
