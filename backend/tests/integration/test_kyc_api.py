@@ -66,7 +66,16 @@ class Api:
             role=role,  # type: ignore[arg-type]
             created_by=None,
         )
-        await self.identity.set_staff_password(staff_id, PASSWORD)
+        # Test set-up only, as in test_identity: an active account. Enrolment, the only way the
+        # application activates staff, is covered in test_second_steps.
+        async with self.database.transaction() as session:
+            await session.execute(
+                text(
+                    "UPDATE identity_staff SET password_hash = :hash, status = 'active', "
+                    "password_changed_at = created_at WHERE id = :id"
+                ),
+                {"hash": await HASHER.hash(PASSWORD), "id": staff_id},
+            )
         issued = await self.identity.issue_session(
             Actor("staff", staff_id), second_step="passkey", transport="cookie"
         )
