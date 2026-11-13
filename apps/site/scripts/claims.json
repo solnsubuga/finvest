@@ -16,7 +16,7 @@
   },
   {
     "claim": "Interest is earned every day and shown daily, after tax",
-    "where": "Home, How it works, Help",
+    "where": "Home, How it works, Help, About (\"Daily, interest shown in the app\")",
     "confirmedBy": null
   },
   {
@@ -35,8 +35,8 @@
     "confirmedBy": null
   },
   {
-    "claim": "Support hours, reply within one working day, complaints acknowledged within one working day and resolved within 10 working days",
-    "where": "About, Help",
+    "claim": "Support hours (chat in the app every day, 8am to 8pm; phone Monday to Friday, 8am to 6pm), reply within one working day, complaints acknowledged within one working day and resolved within 10 working days",
+    "where": "About, Help, About figures (\"8am to 8pm\")",
     "confirmedBy": null
   },
   {

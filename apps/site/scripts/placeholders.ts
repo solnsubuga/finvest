@@ -7,12 +7,18 @@
  *    that the owner and counsel must confirm are true. To sign one off, set its `confirmedBy`
  *    to who confirmed it and when.
  *
- * With --strict it fails if anything is left in either list. Run that before the site is
+ * 3. Every fact in src/data/company.ts that must be on the site before launch (registered
+ *    company name, regulator, licence number) and is still empty. The pages leave a missing
+ *    fact out, so only this list shows it.
+ *
+ * With --strict it fails if anything is left in any of the three lists. Run that before the site is
  * opened to search engines.
  */
 
 import { readdirSync, readFileSync, statSync } from "node:fs";
 import { join, relative } from "node:path";
+import { company } from "../src/data/company.ts";
+import { missingFacts } from "../src/lib/launch.ts";
 
 const dist = new URL("../dist/", import.meta.url).pathname;
 
@@ -54,4 +60,11 @@ console.log("\nClaims waiting for sign-off by the owner and counsel:\n");
 for (const item of open) console.log(`- ${item.claim}\n    ${item.where}`);
 console.log(`\n${open.length} of ${claims.length} claim(s) not signed off.`);
 
-if (process.argv.includes("--strict") && (found.size > 0 || open.length > 0)) process.exit(1);
+const missing = missingFacts(company);
+console.log("\nFacts needed before launch, to be entered in src/data/company.ts:\n");
+for (const key of missing) console.log(`- ${key}`);
+console.log(`\n${missing.length} required fact(s) missing.`);
+
+if (process.argv.includes("--strict") && (found.size > 0 || open.length > 0 || missing.length > 0)) {
+  process.exit(1);
+}

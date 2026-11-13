@@ -11,6 +11,7 @@ import {
   parseWhole,
   todayInKampala,
 } from "./format.ts";
+import { missingFacts } from "./launch.ts";
 import { parseCatalogue, parseQuote } from "./products.ts";
 import { matches } from "./search.ts";
 
@@ -242,5 +243,23 @@ describe("figures", () => {
     expect(addDays("2027-12-31", 182)).toBe("2028-06-30");
     expect(formatDay("2027-02-12")).toBe("12 February 2027");
     expect(todayInKampala(new Date("2026-11-13T21:30:00Z"))).toBe("2026-11-14");
+  });
+});
+
+describe("the launch gate", () => {
+  const filled = { registeredName: "Example Ltd", regulator: "A regulator", licenceNumber: "1" };
+
+  it("passes only when the company, regulator and licence are all named", () => {
+    expect(missingFacts(filled)).toEqual([]);
+  });
+
+  it("lists each missing or blank fact", () => {
+    expect(missingFacts({ ...filled, regulator: null })).toEqual(["regulator"]);
+    expect(missingFacts({ ...filled, licenceNumber: "  " })).toEqual(["licenceNumber"]);
+    expect(missingFacts({ registeredName: null, regulator: null, licenceNumber: null })).toEqual([
+      "registeredName",
+      "regulator",
+      "licenceNumber",
+    ]);
   });
 });
