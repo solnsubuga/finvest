@@ -82,7 +82,7 @@ A running log. Add a row when a decision is made, and move an open question up w
 | Payouts: is a bank payout sent by ioTec taken from the ioTec wallet or from the trust bank account? Built so far: the books show it leaving `bank.trust`. | ioTec |
 | Payouts: does the 24 hour wait on a new destination run from the staff approval (built so far) or from when the client added it? | Owner |
 | Payouts: is a mobile money number proved by the name the network holds for it (built so far), and can ioTec return that name? | Owner, ioTec |
-| Payouts: staff may approve a partial name match, meaning a missing middle name when two names agree, or one name spelt slightly differently when the rest agree (built so far). Confirm. | Owner |
+| Payouts: staff may approve a name with a name left out, such as a middle name, when at least two names agree (built so far). A name spelt differently is refused. Confirm the left-out name allowance. | Owner |
 | Payouts: mobile money prefixes accepted are MTN 76, 77, 78, 39 and Airtel 70, 74, 75, 20. Confirm the list. | Owner, ioTec |
 | Payouts: a client can cancel a withdrawal only while it is held for review (built so far). Should they be able to cancel before it is sent? | Owner |
 | Migration: a sample Finvest 1.0 export, or the old database tables, to check the import columns against. | Owner |
