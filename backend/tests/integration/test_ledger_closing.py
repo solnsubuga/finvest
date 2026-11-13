@@ -12,8 +12,10 @@ from datetime import date, timedelta
 import pytest
 from sqlalchemy import text
 from sqlalchemy.exc import DBAPIError
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.infrastructure.database import Database
+from app.infrastructure.database.engine import apply_actor
 from app.modules.audit import service as audit
 from app.modules.ledger import closing, corrections, statements
 from app.modules.ledger import service as ledger
@@ -300,3 +302,29 @@ async def test_two_staff_closing_at_once_close_once(
     assert latest is not None
     assert (latest.closed_through, latest.closed_by) == (day, first)
     assert len(events) == 1  # the one who lost the race closed nothing and left no trace
+
+
+@pytest.mark.parametrize("level", ["REPEATABLE READ", "SERIALIZABLE"])
+async def test_the_ledger_refuses_a_transaction_that_reads_an_old_snapshot(
+    app_database: Database, fake_clock: FakeClock, level: str
+) -> None:
+    """In these isolation levels the closed-day check would not see a close that committed
+    while it waited, so the database refuses to post or close in them at all."""
+    day = await first_open_day(app_database)
+    books = await funded_books(app_database, fake_clock, 0)
+    actor = staff()
+    for attempt in ("post", "close"):
+        with pytest.raises(DBAPIError, match="read committed"):
+            async with app_database.engine.connect() as plain:
+                connection = await plain.execution_options(isolation_level=level)
+                async with AsyncSession(bind=connection) as session, session.begin():
+                    await apply_actor(session, actor)
+                    if attempt == "post":
+                        await ledger.post_entry(session, on(day, deposit(books, 10)), fake_clock)
+                    else:
+                        await session.execute(RAW_CLOSE, {"day": day, "me": actor.id})
+    assert await first_open_day(app_database) == day
+    async with app_database.actor_transaction(staff()) as session:
+        assert await statements.balance_as_of(session, books.cash, day) == ugx(0)
+    # The ordinary transaction still posts.
+    assert await _post(app_database, books, day, fake_clock) == "posted"
