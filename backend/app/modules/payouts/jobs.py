@@ -51,6 +51,7 @@ from app.modules.payouts.domain.payouts import (
 from app.modules.payouts.domain.provider import DisbursementRequest, DisbursementsProvider
 from app.modules.payouts.domain.sending import (
     AMOUNT_MISMATCH,
+    HELD_UP_AFTER,
     READ_WINDOW,
     RESEND_AFTER,
     SEND_GRACE,
@@ -94,7 +95,9 @@ _INTERRUPTED = text(
 # Queued payouts whose send job was lost, or whose provider took nothing every time.
 _UNSENT = text(
     "SELECT p.id, (SELECT count(*) FROM payout_send_attempts a WHERE a.payout_id = p.id) "
-    "AS attempts FROM payouts p WHERE p.status = 'queued' AND p.kind = 'mobile_money' "
+    "AS attempts, (SELECT min(a.started_at) FROM payout_send_attempts a "
+    "WHERE a.payout_id = p.id) AS first_tried_at FROM payouts p "
+    "WHERE p.status = 'queued' AND p.kind = 'mobile_money' "
     "AND p.updated_at <= :quiet AND NOT EXISTS (SELECT FROM payout_send_attempts a "
     "WHERE a.payout_id = p.id AND (a.outcome IS NULL OR a.outcome <> 'deferred')) "
     "ORDER BY p.updated_at LIMIT :limit"
@@ -276,8 +279,20 @@ class PayoutJobs:
                 await session.execute(_UNSENT, {"quiet": now - RESEND_AFTER, "limit": SWEEP_BATCH})
             ).all()
             hour = now.strftime("%Y%m%d%H")
+            held_up = 0
             for row in unsent:
-                # One fresh send per payout per hour, whatever happened to the last one.
+                if row.first_tried_at is not None and now - row.first_tried_at >= HELD_UP_AFTER:
+                    # The provider has taken nothing for a long time. Staff see it on
+                    # GET /staff/payouts/held-up; this warning is for whoever watches the logs.
+                    held_up += 1
+                    logger.warning(
+                        "payout_held_up",
+                        payout_id=row.id,
+                        attempts=row.attempts,
+                        error_code="provider_deferred",
+                    )
+                # A fresh send each time the payout has been left alone for RESEND_AFTER,
+                # whatever happened to the last one.
                 await payouts.queue_send(
                     session,
                     row.id,
@@ -310,6 +325,7 @@ class PayoutJobs:
             return {
                 "interrupted": len(interrupted),
                 "resent": len(unsent),
+                "held_up": held_up,
                 "read": len(unread),
             }
 

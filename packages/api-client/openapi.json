@@ -3967,6 +3967,65 @@
         "title": "Health",
         "type": "object"
       },
+      "HeldUpPayoutOut": {
+        "additionalProperties": false,
+        "description": "A queued payout first tried two hours or more ago, and taken by nothing since.",
+        "properties": {
+          "amount": {
+            "$ref": "#/components/schemas/MoneyView"
+          },
+          "client_id": {
+            "maxLength": 20,
+            "minLength": 20,
+            "pattern": "^[-0-9A-Z_a-z]{20}$",
+            "title": "Client Id",
+            "type": "string"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "first_tried_at": {
+            "format": "date-time",
+            "title": "First Tried At",
+            "type": "string"
+          },
+          "id": {
+            "maxLength": 20,
+            "minLength": 20,
+            "pattern": "^[-0-9A-Z_a-z]{20}$",
+            "title": "Id",
+            "type": "string"
+          },
+          "kind": {
+            "const": "mobile_money",
+            "title": "Kind",
+            "type": "string"
+          },
+          "last_tried_at": {
+            "format": "date-time",
+            "title": "Last Tried At",
+            "type": "string"
+          },
+          "tries": {
+            "title": "Tries",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "client_id",
+          "kind",
+          "amount",
+          "created_at",
+          "first_tried_at",
+          "last_tried_at",
+          "tries"
+        ],
+        "title": "HeldUpPayoutOut",
+        "type": "object"
+      },
       "IdentityCheckView": {
         "additionalProperties": false,
         "properties": {
@@ -27342,6 +27401,62 @@
         "summary": "Remove Destination",
         "tags": [
           "staff payout accounts"
+        ]
+      }
+    },
+    "/staff/payouts/held-up": {
+      "get": {
+        "description": "Payouts held up at the provider, longest first, at most 100.",
+        "operationId": "held_up_staff_payouts_held_up_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/HeldUpPayoutOut"
+                  },
+                  "title": "Response Held Up Staff Payouts Held Up Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          }
+        },
+        "summary": "Held Up",
+        "tags": [
+          "staff payouts"
         ]
       }
     },
