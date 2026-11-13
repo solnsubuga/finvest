@@ -515,6 +515,16 @@ ROWS = {
         "decode(repeat('00', 32), 'hex'), now(), now() + interval '1 day')",
         "refusing to unfence email links that exist",
     ),
+    "0164_identity_session_devices": (
+        "INSERT INTO identity_clients (id, phone, status, created_at) VALUES "
+        "('-Nabc0000000000000B1', '+256772123456', 'unclaimed', now()); "
+        "INSERT INTO identity_sessions (id, actor_kind, actor_id, token_hash, second_step, "
+        "transport, created_at, last_seen_at, idle_expires_at, absolute_expires_at, device) "
+        "VALUES ('-Nabc0000000000000A1', 'client', '-Nabc0000000000000B1', "
+        "decode(repeat('00', 32), 'hex'), 'passkey', 'token', now(), now(), now(), now(), "
+        "'Chrome on Android')",
+        "refusing to drop the devices sessions were opened on",
+    ),
 }
 
 

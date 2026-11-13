@@ -19,7 +19,10 @@ from app.infrastructure.database import Database
 from app.infrastructure.settings import Settings
 from app.infrastructure.throttling import clear_attempts, reserve_attempts, throttle_key
 from app.modules.identity import trail
+from app.modules.identity.devices import current_device
 from app.modules.identity.domain.accounts import InvalidIdentifier, normalize_email, normalize_phone
+from app.modules.identity.domain.devices import UNKNOWN as UNKNOWN_DEVICE
+from app.modules.identity.domain.devices import kampala_time
 from app.modules.identity.domain.passwords import password_problem
 from app.modules.identity.domain.permissions import Permission, Role, permissions_for
 from app.modules.identity.domain.sessions import (
@@ -32,6 +35,7 @@ from app.modules.identity.domain.sessions import (
     token_digest,
 )
 from app.modules.identity.hashing import PasswordHasher
+from app.modules.notifications.service import Channel, queue_message
 from app.shared.actors import Actor
 from app.shared.clock import Clock
 from app.shared.errors import ApplicationError, ErrorCode, FieldProblem
@@ -82,6 +86,18 @@ class StaffSession:
     @property
     def actor(self) -> Actor:
         return Actor("staff", self.staff_id)
+
+
+@dataclass(frozen=True, slots=True)
+class DeviceSession:
+    """One signed-in device, as the person sees it in their list."""
+
+    id: str
+    device: str
+    transport: Transport
+    second_step: SecondStep
+    signed_in_at: datetime
+    last_seen_at: datetime
 
 
 @dataclass(frozen=True, slots=True)
@@ -325,14 +341,17 @@ class IdentityService:
         idle, absolute = policy.expiry(now, now)
         token = new_token()
         session_id = push_id(self.clock)
+        device = current_device.get() or UNKNOWN_DEVICE
+        await self._tell_of_a_new_device(session, actor, device, session_id, now)
         await session.execute(
             text(
                 "INSERT INTO identity_sessions (id, actor_kind, actor_id, token_hash, "
                 "second_step, transport, created_at, last_seen_at, idle_expires_at, "
-                "absolute_expires_at) VALUES (:id, :kind, :actor, :hash, :step, :transport, "
-                ":now, :now, :idle, :absolute)"
+                "absolute_expires_at, device) VALUES (:id, :kind, :actor, :hash, :step, "
+                ":transport, :now, :now, :idle, :absolute, :device)"
             ),
             {
+                "device": device,
                 "id": session_id,
                 "kind": actor.kind,
                 "actor": actor.id,
@@ -355,6 +374,48 @@ class IdentityService:
         )
         logger.info("session_opened", kind=actor.kind, second_step=second_step)
         return IssuedSession(token, transport, idle, absolute)
+
+    async def _tell_of_a_new_device(
+        self, session: AsyncSession, actor: Actor, device: str, session_id: str, now: datetime
+    ) -> None:
+        """Message the person when they sign in on a kind of device they have not used before.
+
+        Nothing is sent for their very first session, which is the signup, claim or set-up.
+        """
+        seen = (
+            await session.execute(
+                text(
+                    "SELECT count(*) AS sessions, count(*) FILTER (WHERE device = :device) "
+                    "AS here FROM identity_sessions WHERE actor_kind = :kind AND actor_id = :id"
+                ),
+                {"device": device, "kind": actor.kind, "id": actor.id},
+            )
+        ).one()
+        if seen.sessions == 0 or seen.here > 0:
+            return
+        table = "identity_clients" if actor.kind == "client" else "identity_staff"
+        phone_column = "phone" if actor.kind == "client" else "NULL"
+        contact = (
+            await session.execute(
+                text(f"SELECT email, {phone_column} AS phone FROM {table} WHERE id = :id"),  # noqa: S608
+                {"id": actor.id},
+            )
+        ).one_or_none()
+        if contact is None:
+            return
+        channel: Channel = "email" if contact.email else "sms"
+        recipient = contact.email or contact.phone
+        if not recipient:
+            return
+        await queue_message(
+            session,
+            channel=channel,
+            recipient=recipient,
+            template="new_sign_in",
+            variables={"device": device, "when": kampala_time(now)},
+            idempotency_key=f"new-sign-in:{session_id}",
+            now=now,
+        )
 
     async def _touch(self, token: str, kind: AccountKind):  # type: ignore[no-untyped-def]
         """Find a live session by token and push its idle expiry forward."""
@@ -426,6 +487,82 @@ class IdentityService:
                 ),
                 {"now": self.clock.now(), "hash": token_digest(token), "kind": kind},
             )
+
+    async def live_sessions(self, actor: Actor) -> list[DeviceSession]:
+        """The person's sessions that still work, most recently used first."""
+        now = self.clock.now()
+        async with self.database.transaction() as session:
+            rows = await session.execute(
+                text(
+                    "SELECT id, device, transport, second_step, created_at, last_seen_at "
+                    "FROM identity_sessions WHERE actor_kind = :kind AND actor_id = :id "
+                    "AND revoked_at IS NULL AND idle_expires_at > :now "
+                    "AND absolute_expires_at > :now ORDER BY last_seen_at DESC LIMIT 100"
+                ),
+                {"kind": actor.kind, "id": actor.id, "now": now},
+            )
+            return [
+                DeviceSession(
+                    row.id,
+                    row.device or UNKNOWN_DEVICE,
+                    row.transport,
+                    row.second_step,
+                    row.created_at,
+                    row.last_seen_at,
+                )
+                for row in rows
+            ]
+
+    async def sign_out_device(self, actor: Actor, session_id: str) -> None:
+        """End one of the person's own sessions. Another person's is `not_found`."""
+        async with self.database.transaction() as session:
+            ended = await session.scalar(
+                text(
+                    "UPDATE identity_sessions SET revoked_at = :now, "
+                    "revoked_reason = 'signed_out_elsewhere' WHERE id = :sid "
+                    "AND actor_kind = :kind AND actor_id = :id AND revoked_at IS NULL "
+                    "RETURNING true"
+                ),
+                {"now": self.clock.now(), "sid": session_id, "kind": actor.kind, "id": actor.id},
+            )
+            if not ended:
+                raise ApplicationError("not_found")
+            await trail.note(
+                session,
+                self.clock,
+                actor,
+                "identity.session.signed_out_elsewhere",
+                resource_type="session",
+                resource_id=session_id,
+            )
+
+    async def sign_out_other_devices(self, actor: Actor, keep_session_id: str) -> int:
+        """End every session of the person except the one making the request."""
+        async with self.database.transaction() as session:
+            rows = await session.execute(
+                text(
+                    "UPDATE identity_sessions SET revoked_at = :now, "
+                    "revoked_reason = 'signed_out_elsewhere' WHERE actor_kind = :kind "
+                    "AND actor_id = :id AND id <> :keep AND revoked_at IS NULL RETURNING id"
+                ),
+                {
+                    "now": self.clock.now(),
+                    "kind": actor.kind,
+                    "id": actor.id,
+                    "keep": keep_session_id,
+                },
+            )
+            ended = len(rows.all())
+            await trail.note(
+                session,
+                self.clock,
+                actor,
+                "identity.session.signed_out_other_devices",
+                resource_type="session",
+                resource_id=keep_session_id,
+                details={"ended": ended},
+            )
+            return ended
 
     async def revoke_sessions(self, actor: Actor, reason: str) -> int:
         """End every session of one person, for a password change or a disabled account."""
