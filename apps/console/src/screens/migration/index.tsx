@@ -2,16 +2,30 @@ import { useCallback, useEffect, useState } from "react";
 import { isStubAuth } from "@/auth/index.ts";
 import { Button } from "@/components/ui/button.tsx";
 import { PageHeader } from "@/pages/PageHeader.tsx";
-import { migrationErrorMessage, notConnectedMigrationApi, type MigrationApi, type Overview, type TrialInput } from "./api.ts";
-import { Cards, ChecksTable, Differences, Panel, PanelRow } from "./Checks.tsx";
+import {
+  MigrationError,
+  migrationErrorMessage,
+  notConnectedMigrationApi,
+  type MigrationApi,
+  type Overview,
+  type TotalsInput,
+  type TrialInput,
+} from "./api.ts";
+import { Cards, ChecksTable, Panel, PanelRow } from "./Checks.tsx";
+import { SignOffs, TotalsForm, TotalsPanel, type FinanceActions } from "./Finance.tsx";
 import { BLOCKER_LABELS, formatAmount } from "./labels.ts";
 import { createStubMigrationApi } from "./stub.ts";
 import { Problems, TrialForm } from "./Trial.tsx";
 
+function sampleStart(sample: string | null): "empty" | "imported" | "unconfirmed" {
+  return sample === "empty" || sample === "unconfirmed" ? sample : "imported";
+}
+
 /** Sample figures under `pnpm dev` or a preview build, like sign-in. Otherwise nothing until the API client exists. */
 const defaultApi: MigrationApi = isStubAuth()
-  ? // Under the stub, `?sample=empty` shows the screen before any trial has been run.
-    createStubMigrationApi(150, new URLSearchParams(window.location.search).get("sample") === "empty" ? "empty" : "imported")
+  ? // Under the stub, `?sample=empty` shows the screen before any trial has been run, and
+    // `?sample=unconfirmed` shows Finvest 1.0 totals waiting for a second person.
+    createStubMigrationApi(150, sampleStart(new URLSearchParams(window.location.search).get("sample")))
   : notConnectedMigrationApi;
 
 type Load = { state: "loading" } | { state: "failed"; message: string } | { state: "ready"; value: Overview };
@@ -25,9 +39,10 @@ function today(now: Date): string {
 
 export function MigrationScreen({ api = defaultApi, now = () => new Date() }: { api?: MigrationApi; now?: () => Date }) {
   const [load, setLoad] = useState<Load>({ state: "loading" });
-  const [formOpen, setFormOpen] = useState(false);
+  const [formOpen, setFormOpen] = useState<"trial" | "totals" | null>(null);
   const [busy, setBusy] = useState(false);
-  const [trialError, setTrialError] = useState<string | null>(null);
+  const [formError, setFormError] = useState<string | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
 
   const fetchOverview = useCallback(
     (): Promise<Load> =>
@@ -46,40 +61,62 @@ export function MigrationScreen({ api = defaultApi, now = () => new Date() }: { 
     };
   }, [fetchOverview]);
 
-  async function runTrial(input: TrialInput) {
+  /** Run one change. A form keeps its own error; anything else is shown above the checks. */
+  async function act(change: () => Promise<Overview>, inForm: boolean) {
     setBusy(true);
-    setTrialError(null);
+    setFormError(null);
+    setActionError(null);
     try {
-      const value = await api.runTrial(input);
+      const value = await change();
       setLoad({ state: "ready", value });
-      setFormOpen(false);
+      if (inForm) setFormOpen(null);
     } catch (error) {
-      setTrialError(migrationErrorMessage(error));
+      (inForm ? setFormError : setActionError)(migrationErrorMessage(error));
+      // Someone else changed it first: show what stands now.
+      if (error instanceof MigrationError && error.code === "conflict") {
+        const latest = await fetchOverview();
+        if (latest.state === "ready") setLoad(latest);
+      }
     } finally {
       setBusy(false);
     }
   }
 
+  const closeForm = () => {
+    setFormOpen(null);
+    setFormError(null);
+  };
   const overview = load.state === "ready" ? load.value : null;
   const mayRun = overview?.allowed.includes("run_trial") ?? false;
-  const form = formOpen ? (
-    <TrialForm
-      busy={busy}
-      error={trialError}
-      today={today(now())}
-      onRun={(input) => void runTrial(input)}
-      onCancel={() => {
-        setFormOpen(false);
-        setTrialError(null);
-      }}
-    />
-  ) : null;
+  const form =
+    formOpen === "trial" ? (
+      <TrialForm
+        busy={busy}
+        error={formError}
+        today={today(now())}
+        onRun={(input: TrialInput) => void act(() => api.runTrial(input), true)}
+        onCancel={closeForm}
+      />
+    ) : formOpen === "totals" && overview?.trial ? (
+      <TotalsForm
+        busy={busy}
+        error={formError}
+        asOf={overview.trial.asOf}
+        onEnter={(input: TotalsInput) => void act(() => api.enterTotals(input), true)}
+        onCancel={closeForm}
+      />
+    ) : null;
+  const actions: FinanceActions = {
+    busy,
+    onPropose: (key, reason) => void act(() => api.proposeSignOff(key, reason), false),
+    onDecide: (signOffId, approve, reason) => void act(() => api.decideSignOff(signOffId, approve, reason), false),
+  };
 
   return (
     <>
       <div className="flex flex-wrap items-center justify-between gap-3">
         <PageHeader title="Migration" summary={SUMMARY} />
-        {mayRun && !formOpen ? <Button onClick={() => setFormOpen(true)}>Run a trial import</Button> : null}
+        {mayRun && !formOpen ? <Button onClick={() => setFormOpen("trial")}>Run a trial import</Button> : null}
       </div>
       {load.state === "loading" ? (
         <p role="status" className="m-0 text-md text-muted">
@@ -112,18 +149,39 @@ export function MigrationScreen({ api = defaultApi, now = () => new Date() }: { 
           </section>
         </>
       ) : (
-        <Ready overview={load.value} form={form} />
+        <Ready
+          overview={load.value}
+          form={form}
+          actionError={actionError}
+          actions={actions}
+          onOpenTotals={() => setFormOpen("totals")}
+          onConfirmTotals={(totalsId) => void act(() => api.confirmTotals(totalsId), false)}
+        />
       )}
     </>
   );
 }
 
-function Ready({ overview, form }: { overview: Overview; form: React.ReactNode }) {
+interface ReadyProps {
+  overview: Overview;
+  form: React.ReactNode;
+  actionError: string | null;
+  actions: FinanceActions;
+  onOpenTotals: () => void;
+  onConfirmTotals: (totalsId: string) => void;
+}
+
+function Ready({ overview, form, actionError, actions, onOpenTotals, onConfirmTotals }: ReadyProps) {
   const claims = overview.claims;
   const count = (value: number) => formatAmount(String(value), null);
   return (
     <>
       {form}
+      {actionError ? (
+        <p role="alert" className="m-0 rounded-md bg-danger-surface p-3 text-md font-semibold text-danger">
+          {actionError}
+        </p>
+      ) : null}
       <Cards overview={overview} />
       <div className="flex flex-wrap items-start gap-5">
         <div className="flex min-w-0 flex-[3_1_480px] flex-col gap-5">
@@ -131,7 +189,14 @@ function Ready({ overview, form }: { overview: Overview; form: React.ReactNode }
           {overview.trial ? <Problems trial={overview.trial} /> : null}
         </div>
         <aside className="flex min-w-0 flex-[2_1_300px] flex-col gap-4">
-          <Differences overview={overview} />
+          <TotalsPanel
+            totals={overview.totals}
+            mayEnter={overview.allowed.includes("enter_totals")}
+            busy={actions.busy}
+            onOpenForm={onOpenTotals}
+            onConfirm={onConfirmTotals}
+          />
+          <SignOffs overview={overview} actions={actions} />
           <Panel title="Before the switch">
             <PanelRow name="Trial imports run" value={count(overview.trialsRun)} />
             {overview.blockers.length === 0 ? (
