@@ -12,7 +12,7 @@ There is no wallet. Every deposit names the investment or goal it pays for, and 
 2. The worker marks the deposit `sending` and commits that. Only then does it ask the provider to prompt the payer, with no transaction open.
 3. The provider accepts, and the deposit is `awaiting_approval`. The payer approves on their phone.
 4. The worker reads the status back from the provider. When the provider's own record says the money arrived, for exactly the amount asked, the deposit becomes `confirmed` and the ledger entry is posted in the same transaction.
-5. A `payments.deposit_confirmed` event is published once, carrying the business day of the confirmation. The `investments.start_from_deposit` job starts the investment from it ([investing.md](investing.md)). Goals will start from it too.
+5. A `payments.deposit_confirmed` event is published once, carrying the business day of the confirmation. The `investments.start_from_deposit` job starts the investment from it ([investing.md](investing.md)). A saving towards a goal is an investment of its own, so it is paid for and started the same way ([goals.md](goals.md)).
 
 Two things are refused before anything is saved:
 

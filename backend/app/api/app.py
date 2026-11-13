@@ -12,6 +12,7 @@ from app.api.errors import UnexpectedErrorMiddleware, install_error_handlers
 from app.api.request_id import RequestIdMiddleware
 from app.infrastructure.database import Database
 from app.infrastructure.settings import Settings
+from app.modules.goals import api as goals_api
 from app.modules.identity import api as identity_api
 from app.modules.identity import passkeys_api
 from app.modules.identity.authenticators import AuthenticatorService
@@ -90,4 +91,6 @@ def create_app(
     for router in (*identity_api.routers, *passkeys_api.routers):
         app.include_router(router)
     app.include_router(payments_api.create_router(collections))
+    for router in goals_api.routers:
+        app.include_router(router)
     return app

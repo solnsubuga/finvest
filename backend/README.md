@@ -70,6 +70,7 @@ import-linter enforces the purity of `app/shared` and of every `app/modules/*/do
 - **Identity checks.** `app.modules.kyc` holds the check lifecycle and the identity provider port. See [docs/identity-checks.md](../docs/identity-checks.md).
 - **Sealed fields.** `app.infrastructure.sealing.Sealer` encrypts one personal value at a time and makes keyed fingerprints for uniqueness rules. Give it a key and a purpose, and pass `associated_data(table, column, row_id)` so a value opens only where it was saved. Identity checks use it with `FINVEST_IDENTITY_DATA_KEY`.
 - **Investments.** `app.modules.investments.domain` holds the product catalogue, rate versions and their approval rules, and the interest and tax arithmetic. See [docs/investing.md](../docs/investing.md).
+- **Goals.** `app.modules.goals` keeps targets and links them to investments. It moves no money: a saving is an investment. See [docs/goals.md](../docs/goals.md).
 - **Providers.** A provider call happens only in a job handler, with no transaction open, and its result is sorted into rejected, deferred or uncertain. `app.modules.payments` shows the pattern; see [docs/payments.md](../docs/payments.md). `FINVEST_PAYMENTS_PROVIDER` is `disabled` unless set, and the local stack sets `sandbox`.
 - **Audit.** Record who did what and why with `app.modules.audit.service.record`, in the same transaction as the change.
 - **Time.** Take a `Clock` from `app.shared.clock`. Never call `datetime.now()` in a rule. Tests use `FakeClock`.
