@@ -60,6 +60,10 @@ async function logOutAndStartLogIn(password: string) {
   await screen.findByText("Confirm it is you");
 }
 
+// The first test in a file renders the whole router from cold, which takes several seconds on
+// a busy CI runner. The assertions are unchanged; only the time allowed to reach them is.
+jest.setTimeout(30_000);
+
 describe("Sign in and security", () => {
   it("nudges a client with SMS only from Home, and shows what is on and what can be added", async () => {
     await signUp();

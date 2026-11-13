@@ -12,12 +12,23 @@ investments module's business.
 
 The entry is dated on the settlement date, has a fixed idempotency key made from the order's
 ID, and points back at the order (source type `dealing.order`).
+
+When a lot matures the issuer pays its face value into the trust bank account:
+
+| Maturity | Debit                                   | Credit                                   |
+| -------- | --------------------------------------- | ---------------------------------------- |
+|          | `bank.trust`, the face value left       | `dealing.bills`, the cost left           |
+|          | `dealing.maturity_losses`, any shortfall | `dealing.bill_income`, face above cost  |
+
+It is dated on the maturity date and points back at the lot (source type `dealing.lot`).
 """
 
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import date
 
+from app.modules.dealing.domain.holdings import Lot, income_at_maturity
 from app.modules.dealing.domain.orders import Fill, OrderKind
 from app.modules.ledger.domain.entries import (
     AccountKind,
@@ -33,9 +44,13 @@ BANK_TRUST = "bank.trust"
 BILLS = "dealing.bills"
 SALE_GAINS = "dealing.sale_gains"
 SALE_LOSSES = "dealing.sale_losses"
+BILL_INCOME = "dealing.bill_income"
+MATURITY_LOSSES = "dealing.maturity_losses"
 SOURCE_TYPE = "dealing.order"
 PURCHASE_ENTRY = "dealing.purchase"
 SALE_ENTRY = "dealing.sale"
+LOT_SOURCE_TYPE = "dealing.lot"
+MATURITY_ENTRY = "dealing.maturity"
 
 
 class InvalidSettlement(ValueError):
@@ -50,6 +65,12 @@ def accounts(currency: Currency) -> dict[str, AccountSpec]:
         SALE_GAINS: AccountSpec(SALE_GAINS, AccountKind.INCOME, currency, "Gains on bills sold"),
         SALE_LOSSES: AccountSpec(
             SALE_LOSSES, AccountKind.EXPENSE, currency, "Losses on bills sold"
+        ),
+        BILL_INCOME: AccountSpec(
+            BILL_INCOME, AccountKind.INCOME, currency, "Income on bills held to maturity"
+        ),
+        MATURITY_LOSSES: AccountSpec(
+            MATURITY_LOSSES, AccountKind.EXPENSE, currency, "Losses on bonds held to maturity"
         ),
     }
 
@@ -107,4 +128,25 @@ def settlement_entry(settlement: Settlement, account_ids: dict[str, str]) -> Ent
         idempotency_key=settlement.idempotency_key,
         source_type=SOURCE_TYPE,
         source_id=settlement.order_id,
+    )
+
+
+def maturity_entry(lot_id: str, lot: Lot, on: date, account_ids: dict[str, str]) -> EntryDraft:
+    """The journal entry for what is left of a lot when the issuer pays it on `on`.
+
+    `lot` is the face value and cost still held. Refused before the maturity date.
+    """
+    income = income_at_maturity(lot, on)
+    lines = [debit(account_ids[BANK_TRUST], lot.face), credit(account_ids[BILLS], lot.cost)]
+    if income.is_positive:
+        lines.append(credit(account_ids[BILL_INCOME], income))
+    elif income.is_negative:
+        lines.append(debit(account_ids[MATURITY_LOSSES], -income))
+    return EntryDraft(
+        entry_type=MATURITY_ENTRY,
+        effective_date=lot.matures_on,
+        lines=tuple(lines),
+        idempotency_key=f"dealing-lot:{lot_id}:mature",
+        source_type=LOT_SOURCE_TYPE,
+        source_id=lot_id,
     )

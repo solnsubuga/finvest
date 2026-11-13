@@ -60,6 +60,7 @@ from app.shared.money import Currency
 from app.shared.push_ids import push_id
 from tests.support.clock import AsyncBarrier, FakeClock
 from tests.support.database import TestDatabase
+from tests.support.ledger import staff as new_staff
 from tests.support.payments import (
     LEASE,
     PROVIDER,
@@ -242,6 +243,16 @@ async def test_a_deposit_is_sent_approved_confirmed_and_posted_once(
         assert await ledger.find_balance_drift(session) == []
     assert entry.entry_type == "payment.deposit_confirmed"
     assert sorted(line.amount.minor for line in entry.lines) == [-50_000, 50_000]
+    # The client's request and the confirmation are on the audit trail, with no amount or number.
+    assert await audit_trail(app_database, deposit) == [
+        ("payments.deposit_requested", "client", "succeeded", {"method": "mtn"}),
+        (
+            "payments.deposit_confirmed",
+            "system",
+            "succeeded",
+            {"method": "mtn", "cause": "status_read"},
+        ),
+    ]
 
 
 async def test_a_refused_request_fails_and_posts_nothing(
@@ -259,6 +270,35 @@ async def test_a_refused_request_fails_and_posts_nothing(
     assert (failed.status, failed.code) == (S.FAILED, "account_not_found")
     assert await entries(worker_database, deposit) == 0
     assert await awaiting_start(worker_database, deposit) == 0
+    assert (await audit_trail(app_database, deposit))[-1] == (
+        "payments.deposit_failed",
+        "system",
+        "failed",
+        {"method": "mtn", "cause": "send", "failure": "account_not_found"},
+    )
+
+
+async def audit_trail(
+    app_database: Database, deposit: Deposit
+) -> list[tuple[str, str, str, dict[str, object]]]:
+    async with app_database.actor_transaction(new_staff()) as session:
+        rows = await session.execute(
+            text(
+                "SELECT action, actor_kind, outcome, details FROM audit_events "
+                "WHERE resource_type = 'payment_deposit' AND resource_id = :id "
+                "ORDER BY occurred_at, id"
+            ),
+            {"id": deposit.id},
+        )
+        return [
+            (
+                row.action,
+                row.actor_kind,
+                row.outcome,
+                row.details if isinstance(row.details, dict) else json.loads(row.details),
+            )
+            for row in rows
+        ]
 
 
 async def test_a_payer_who_declines_fails_the_deposit(

@@ -1,7 +1,8 @@
 """The bills the dealing desk holds, and what reconciliation expects to see. Queries only.
 
 Every function works inside the caller's transaction. Staff transactions in the API and the
-worker can both read these. Lots and sale lines are written only by `orders.confirm_result`.
+worker can both read these. Lots and sale lines are written only by `orders.confirm_result`,
+and maturities only by `maturities.record_maturities` in the worker.
 """
 
 from dataclasses import dataclass
@@ -55,6 +56,9 @@ SELECT lot.id, lot.product_code, lot.currency, lot.settled_on, lot.matures_on,
     (lot.face_minor - coalesce(sum(sale.face_minor), 0))::bigint AS face_left,
     (lot.cost_minor - coalesce(sum(sale.cost_minor), 0))::bigint AS cost_left
 FROM dealing_lots AS lot
+-- A lot counts once its purchase is settled. It is written in the same transaction, so this
+-- only matters for a lot written by hand.
+JOIN dealing_orders AS bought ON bought.id = lot.order_id AND bought.status = 'settled'
 LEFT JOIN (
     SELECT part.lot_id, part.face_minor, part.cost_minor
     FROM dealing_lot_sales AS part
@@ -72,10 +76,38 @@ _INSTRUMENT_LEFT = text(
 )
 _PRODUCT_LEFT = text(_LEFT.format(where="AND lot.product_code = :product_code"))
 _MOVEMENTS = text(
-    "SELECT settlement_entry_id, kind, currency, result_amount_minor, result_settled_on, "
-    "custodian_reference FROM dealing_orders "
+    "SELECT entry_id, currency, amount_minor, value_date, reference FROM ("
+    "SELECT settlement_entry_id AS entry_id, currency, result_settled_on AS value_date, "
+    "CASE WHEN kind = 'secondary_sale' THEN result_amount_minor ELSE -result_amount_minor END "
+    "AS amount_minor, custodian_reference AS reference, settled_at AS at FROM dealing_orders "
     "WHERE status = 'settled' AND result_settled_on BETWEEN :date_from AND :date_to "
-    "ORDER BY result_settled_on, settled_at, id"
+    "UNION ALL "
+    "SELECT matured.ledger_entry_id, lot.currency, matured.matured_on, matured.face_minor, "
+    "lot.custodian_reference, matured.recorded_at FROM dealing_lot_maturities AS matured "
+    "JOIN dealing_lots AS lot ON lot.id = matured.lot_id "
+    "WHERE matured.matured_on BETWEEN :date_from AND :date_to"
+    ") AS movement ORDER BY value_date, at, entry_id"
+)
+# Lots that have reached their maturity date, still hold bills, and are not recorded as paid.
+_DUE = text(
+    "SELECT lot.id FROM dealing_lots AS lot "
+    "JOIN dealing_orders AS bought ON bought.id = lot.order_id AND bought.status = 'settled' "
+    "WHERE lot.matures_on <= :on AND NOT EXISTS "
+    "(SELECT FROM dealing_lot_maturities AS matured WHERE matured.lot_id = lot.id) "
+    "AND lot.face_minor > (SELECT coalesce(sum(sale.face_minor), 0) FROM dealing_lot_sales "
+    "AS sale WHERE sale.lot_id = lot.id) "
+    "ORDER BY lot.matures_on, lot.id LIMIT :limit"
+)
+# What is left of one lot after every sale, and whether it has matured.
+_LEFT_OF_LOT = text(
+    "SELECT lot.id, lot.product_code, lot.currency, lot.settled_on, lot.matures_on, "
+    "lot.custodian_reference, "
+    "(lot.face_minor - coalesce(sum(sale.face_minor), 0))::bigint AS face_left, "
+    "(lot.cost_minor - coalesce(sum(sale.cost_minor), 0))::bigint AS cost_left, "
+    "EXISTS (SELECT FROM dealing_lot_maturities AS matured WHERE matured.lot_id = lot.id) "
+    "AS matured FROM dealing_lots AS lot "
+    "LEFT JOIN dealing_lot_sales AS sale ON sale.lot_id = lot.id "
+    "WHERE lot.id = :id GROUP BY lot.id"
 )
 
 
@@ -140,18 +172,27 @@ async def expected_bank_movements(
     rows = await session.execute(_MOVEMENTS, {"date_from": date_from, "date_to": date_to})
     return [
         BankMovement(
-            ledger_entry_id=row.settlement_entry_id,
+            ledger_entry_id=row.entry_id,
             currency=Currency(row.currency),
-            amount_minor=(
-                row.result_amount_minor
-                if row.kind == "secondary_sale"
-                else -row.result_amount_minor
-            ),
-            value_date=row.result_settled_on,
-            bank_reference=row.custodian_reference,
+            amount_minor=row.amount_minor,
+            value_date=row.value_date,
+            bank_reference=row.reference,
         )
         for row in rows.all()
     ]
+
+
+async def due_for_maturity(session: AsyncSession, on: date, *, limit: int) -> list[str]:
+    """IDs of lots that mature on or before `on` and are not yet recorded as paid, oldest first."""
+    rows = await session.execute(_DUE, {"on": on, "limit": limit})
+    return [row.id for row in rows.all()]
+
+
+async def left_of_lot(session: AsyncSession, lot_id: str) -> tuple[HeldLot | None, bool]:
+    """What one lot still holds after every sale, or `None` when nothing is left, and whether
+    it has been recorded as matured."""
+    row = (await session.execute(_LEFT_OF_LOT, {"id": lot_id})).one()
+    return (_held(row) if row.face_left > 0 else None), bool(row.matured)
 
 
 def _held(row: Row[Any]) -> HeldLot:

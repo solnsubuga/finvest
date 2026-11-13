@@ -80,6 +80,8 @@ Client routes, signed in as the client. Each `POST` needs an `Idempotency-Key`.
 | `GET /client/investments/{id}/payment` | The investment's payment that has not failed. A `409` from either `POST` means one exists: show this one instead of asking the client to pay again. |
 | `GET /client/payments/{id}` | One payment, the client's own only. |
 
+Every payment leaves a trail in the audit log. A client asking to pay, by mobile money or by bank receipt, writes `payments.deposit_requested` as the client, with the method. When the deposit settles, the system writes `payments.deposit_confirmed` or `payments.deposit_failed`, with the method, what settled it (such as `status_read` or `staff_review`) and, for a failure, the failure code. Amounts and phone numbers are not put in these events: the deposit holds them.
+
 
 Seeing transfers needs `reconciliation.view`. Matching, refusing and approving need `bank_transfers.change`, because they confirm money. Admin, operations and finance hold both for now. Opening a transfer writes a `payments.bank_transfer_opened` access event to the audit trail, because the receipt and the bank's narrative can name the client and the sender.
 
@@ -95,7 +97,7 @@ Seeing transfers needs `reconciliation.view`. Matching, refusing and approving n
 | Event | Debit | Credit |
 | --- | --- | --- |
 | Deposit confirmed (`payment.deposit_confirmed`) | Asset `<provider>.wallet`, reference `mtn` or `airtel`. With ioTec this is `iotec.wallet`. | Liability `client.awaiting_start`, owned by the client, reference the investment or goal ID |
-| Bank transfer confirmed (`payment.deposit_confirmed`) | Asset `bank.trust`, reference the account reference of the bank statement the line came from | Liability `client.awaiting_start`, as above |
+| Bank transfer confirmed (`payment.deposit_confirmed`) | Asset `bank.trust`. For the trust account (statement account reference `trust`) it is the reconciled pot's own account, with no reference, the one the day close checks and dealing pays from. A statement for any other bank account gets `bank.trust` with that account reference. | Liability `client.awaiting_start`, as above |
 
 The entry's idempotency key is `deposit:<deposit ID>` and its source is the deposit, so a deposit can only ever be posted once. Payouts leave from the same wallet account, which lets reconciliation tie one ledger account to one provider statement.
 

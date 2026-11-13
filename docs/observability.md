@@ -14,7 +14,7 @@ Every process writes one JSON object per line to standard output (`app/infrastru
 | `job_succeeded`, `job_retry_scheduled`, `job_failed`, `job_lease_lost` | Worker | `job_id`, `kind`, `attempt`, `worker`, `queue`, and `error_code` on failure |
 | `operations_signal` | API, when the operations check finds stopped work | `signal`, `total` |
 
-`request_served` is not written for `/health/live` and `/health/ready` unless they fail, because the uptime checker and the container health checks call them all day. The path as sent and the query string are never logged, so an identifier or phone number in a URL cannot reach the logs.
+`request_served` is not written for `/health/live`, `/health/ready` and `/health/operations` unless they fail, because the uptime checker and the container health checks call them all day. The path as sent and the query string are never logged, so an identifier or phone number in a URL cannot reach the logs.
 
 To find everything about one failed request, search the logs for its request ID. Every error envelope carries it as `request_id`. The client app and console do not show it to people yet; they should, as a short reference on error screens, so support can ask for it.
 
@@ -46,9 +46,9 @@ A failed job keeps the check red for 24 hours. That is on purpose: a failed mone
 | API down | `/health/ready` fails from the uptime checker | `ALERT_EMAILS` |
 | Background work stopped | `/health/operations` fails from the uptime checker | `ALERT_EMAILS` |
 | Host CPU, host disk | Over the thresholds in `infra/terraform/main.tf` | `ALERT_EMAILS` |
-| Database CPU, memory and disk | Not set up yet: asked of the infrastructure thread | `ALERT_EMAILS` |
+| Database CPU, memory and disk | CPU over 85%, memory over 90% or disk over 80% for 10 minutes | `ALERT_EMAILS` |
 
-The uptime and host alerts are made by Terraform (owned by the infrastructure thread). `ALERT_EMAILS` must hold at least two people before launch, so an alert never depends on one person's inbox.
+The uptime, host and database alerts are made by Terraform (owned by the infrastructure thread). `ALERT_EMAILS` must hold at least two people before launch, so an alert never depends on one person's inbox.
 
 ## First steps when an alert fires
 

@@ -85,6 +85,7 @@ Backend commands, run from the repository root. [backend/README.md](backend/READ
 | `make test-integration` | Integration tests against real PostgreSQL. Run before every push. |
 | `make test-stack` | Build the image and wait for all four processes to be healthy |
 | `make audit` | pip-audit |
+| `make api-contract` | Rewrite `packages/api-client` from the routes. Run after changing a route or a model, and commit the result. |
 
 JavaScript packages share one pnpm workspace (`pnpm-workspace.yaml`). Run `pnpm install` once at the repository root. Commands for the console are in [apps/console/README.md](apps/console/README.md) and for the tokens in [packages/tokens/README.md](packages/tokens/README.md).
 

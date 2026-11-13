@@ -32,6 +32,7 @@ const paths = {
   plus: ["M12 5v14M5 12h14"],
   download: ["M12 4v11M7 10.5l5 5 5-5M5 20h14"],
   calendar: ["M4 6h16v14H4zM4 10h16M8 3v4M16 3v4"],
+  send: ["M5 12h14M13 6l6 6-6 6"],
 } as const;
 
 export type IconName = keyof typeof paths;

@@ -134,6 +134,12 @@ variable "admin_access_emails" {
   }
 }
 
+variable "client_app_public" {
+  description = "Production only. false keeps the client app host behind Cloudflare Access for staff (admin_access_emails) until switch day (docs/launch.md). The API host is never behind Access."
+  type        = bool
+  default     = false
+}
+
 variable "alert_emails" {
   description = "Addresses that receive uptime and resource alerts."
   type        = list(string)
