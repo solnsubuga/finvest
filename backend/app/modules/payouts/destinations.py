@@ -191,16 +191,22 @@ async def approve(
     check = ProofCheck(view.proof_kind, match, statement_date)
     now = clock.now()
     after = rules.approve(view.state, check, now)
-    await _save(
-        session,
-        view,
-        after,
-        clock,
-        proof_name=proof_name.strip()[:120],
-        name_match=match,
-        statement_date=statement_date,
-        checked_by=staff.id,
-    )
+    try:
+        async with session.begin_nested():
+            await _save(
+                session,
+                view,
+                after,
+                clock,
+                proof_name=proof_name.strip()[:120],
+                name_match=match,
+                statement_date=statement_date,
+                checked_by=staff.id,
+            )
+    except IntegrityError:
+        # The same account is already approved for another client. One of them is not its
+        # owner, so this one is not approved and a person must look at both.
+        raise rules.DestinationError("account_in_use") from None
     await _audit(
         session,
         staff,
@@ -237,11 +243,33 @@ async def reject(
     return await get_destination(session, destination_id)
 
 
-async def remove(session: AsyncSession, actor: Actor, destination_id: str, clock: Clock) -> None:
-    """Take a destination out of use for good. The client or a staff member may do it."""
+async def remove(
+    session: AsyncSession,
+    actor: Actor,
+    destination_id: str,
+    clock: Clock,
+    *,
+    reason: str | None = None,
+) -> None:
+    """Take a destination out of use for good.
+
+    The client may remove their own. A staff member may remove any, and must say why: it is
+    recorded as an operator control in the audit trail.
+    """
+    is_staff = actor.kind == "staff"
+    if is_staff and not (reason or "").strip():
+        raise ApplicationError("validation_failed")
     view = await _locked(session, destination_id)
     await _save(session, view, rules.remove(view.state), clock)
-    await _audit(session, actor, "payouts.destination_removed", destination_id, clock)
+    await _audit(
+        session,
+        actor,
+        "payouts.destination_removed",
+        destination_id,
+        clock,
+        category="operator_control" if is_staff else "change",
+        reason=reason if is_staff else None,
+    )
 
 
 async def record_first_payout(
@@ -342,7 +370,10 @@ def _view(row: Row[Any]) -> DestinationView:
         if kind is DestinationKind.MOBILE_MONEY
         else BankAccount(row.bank_code, row.account_number).masked
     )
-    state = Destination(kind, DestinationStatus(row.status), row.approved_at, row.first_paid_at)
+    rejection = RejectionReason(row.rejection_reason) if row.rejection_reason else None
+    state = Destination(
+        kind, DestinationStatus(row.status), row.approved_at, row.first_paid_at, rejection
+    )
     return DestinationView(
         id=row.id,
         client_id=row.client_id,
@@ -355,7 +386,7 @@ def _view(row: Row[Any]) -> DestinationView:
         proof_kind=ProofKind(row.proof_kind) if row.proof_kind else None,
         proof_document_id=row.proof_document_id,
         name_match=NameMatch(row.name_match) if row.name_match else None,
-        rejection_reason=RejectionReason(row.rejection_reason) if row.rejection_reason else None,
+        rejection_reason=rejection,
         approved_at=row.approved_at,
         payable_from=rules.payable_from(state),
         first_paid_at=row.first_paid_at,

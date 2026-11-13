@@ -1,7 +1,8 @@
 """Payouts: limits, the safety wait, and the ledger entry that goes with every step."""
 
 import asyncio
-from datetime import date
+import secrets
+from datetime import UTC, date, datetime, timedelta
 
 import pytest
 from sqlalchemy import text
@@ -30,6 +31,12 @@ from tests.support.ledger import key, staff, ugx
 
 pytestmark = pytest.mark.integration
 
+
+@pytest.fixture
+def fake_clock() -> FakeClock:
+    return FakeClock(datetime.now(UTC))
+
+
 E, S = PayoutEvent, PayoutStatus
 
 
@@ -53,7 +60,9 @@ class World:
 
     async def build(self, funds: int, *, mobile: bool = True) -> "World":
         account: MobileMoneyNumber | BankAccount = (
-            MobileMoneyNumber.parse("0772123456") if mobile else BankAccount("stanbic", "90300123")
+            MobileMoneyNumber(f"25677{secrets.randbelow(10**7):07d}")
+            if mobile
+            else BankAccount("stanbic", str(secrets.randbelow(10**12) + 10**12))
         )
         proof = ProofKind.NETWORK_REGISTERED_NAME if mobile else ProofKind.BANK_LETTER
         async with self.worker.actor_transaction(SYSTEM) as session:
@@ -90,6 +99,8 @@ class World:
             await destinations.submit_proof(
                 session, self.client, view.id, proof, "doc-1", self.clock
             )
+        # An approval is stamped against the database clock, whatever time the test is at.
+        approved_at = FakeClock(datetime.now(UTC))
         checker = staff()
         async with self.app.actor_transaction(checker) as session:
             await destinations.approve(
@@ -100,10 +111,10 @@ class World:
                 proof_name="Nakato Sarah",
                 statement_date=None,
                 reason="Checked",
-                clock=self.clock,
+                clock=approved_at,
             )
         self.destination_id = view.id
-        self.clock.advance(hours=24)
+        self.clock.current = approved_at.now() + timedelta(hours=24)
         return self
 
     async def request(self, amount: int, **options: object) -> PayoutView:

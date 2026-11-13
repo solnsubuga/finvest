@@ -13,7 +13,7 @@ A client is paid only to their own mobile money number or bank account. A new de
 | Check the proof against the name on the ID | Staff | Approved, or rejected with a reason |
 | Wait 24 hours from the approval | Nobody | Payable |
 
-A rejected destination can be proved again with a better document. A removed one is never used again.
+A rejected destination can be proved again with a better document, unless it was rejected for suspected fraud, which is final. A removed one is never used again. Staff who remove a destination must give a reason, which is recorded as an operator control.
 
 ### Proof
 
@@ -46,6 +46,9 @@ Migration 0030 adds `payout_destinations`. These hold even if application code i
 | A check is signed by who made it | `checked_by` must be the staff member of the transaction |
 | The account never changes | Owner, kind, number and holder name are fixed at creation |
 | Nothing is deleted, and removed is final | Triggers refuse DELETE and TRUNCATE for every role, and any change to a removed row |
+| One account, one client | An account approved for one client cannot be approved for another (migration 0032). The check is made at approval, so a client learns nothing about anyone else's accounts. Staff see `account_in_use` and look at both. |
+| The approval time is real | An approval must be stamped within five minutes of the database clock, so the 24 hour wait cannot be shortened by a wrong time |
+| Suspected fraud is final | A destination rejected for suspected fraud cannot be proved again, only removed |
 | Clients are fenced | Row policies show a client only their own destinations |
 
 Every step writes an audit event in the same transaction. Account numbers never enter the audit trail.
