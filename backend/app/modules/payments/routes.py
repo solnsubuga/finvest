@@ -11,6 +11,7 @@ transaction, then the transfer is saved pointing at it, so a saved transfer alwa
 from datetime import date, datetime, timedelta
 from typing import Annotated, Literal
 
+import structlog
 from fastapi import APIRouter, Depends, File, Form, Query, Request, UploadFile
 from pydantic import Field
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -42,7 +43,8 @@ from app.modules.reconciliation.statements import StatementLineView
 from app.shared.clock import Clock
 from app.shared.contracts import Contract, PushId
 from app.shared.errors import ApplicationError, ErrorEnvelope, FieldProblem
-from app.shared.money import Money
+
+logger = structlog.get_logger()
 
 _REFUSALS: dict[int | str, dict[str, object]] = {
     401: {"model": ErrorEnvelope},
@@ -130,6 +132,15 @@ async def _payable_for_transfer(
             ],
         )
     return payable
+
+
+async def _discard_receipt(storage: FileStorage, key: str, deposit_id: str) -> None:
+    """Delete a stored receipt that no transfer records. Best effort: if the store cannot be
+    reached, the file stays under a key nothing points to, and the log says which deposit."""
+    try:
+        await storage.delete(key)
+    except StorageError:
+        logger.warning("receipt_orphaned", deposit_id=deposit_id)
 
 
 def _receipt_problem(code: str) -> ApplicationError:
@@ -231,43 +242,60 @@ def create_client_router(collections: CollectionsProvider | None) -> APIRouter:
         """
         data = await receipt.read(MAX_RECEIPT_BYTES + 1)
         content_type = receipt.content_type or ""
-        file = ReceiptFile(content_type, len(data), sha256_hex(data))
 
-        def details(owed: Money) -> ReceiptDetails:
-            return ReceiptDetails(owed, sent_on, bank_name, transaction_number)
+        def request(
+            payable: holdings.PayableInvestment, file: ReceiptFile
+        ) -> bank.BankTransferRequest:
+            return bank.BankTransferRequest(
+                purpose=Purpose.INVESTMENT,
+                purpose_id=payable.investment_id,
+                file=file,
+                details=ReceiptDetails(payable.amount, sent_on, bank_name, transaction_number),
+            )
 
+        # Everything that can refuse the transfer runs before the file is stored, so a refused
+        # one, an investment already being paid or a replayed key never leaves a file behind.
+        sent = ReceiptFile(content_type, len(data), sha256_hex(data))
         async with database.actor_transaction(client.actor) as session:
-            # Everything that can be refused is checked before the file is stored.
             payable = await _payable_for_transfer(
                 session, client, investment_id, amount_minor, clock
             )
-            bank.check_submission(file, details(payable.amount), clock)
+            earlier = await bank.preflight_bank_receipt(
+                session, client.actor, request(payable, sent), idempotency_key=key, clock=clock
+            )
+            if earlier is not None:
+                return _view(earlier.deposit, earlier.receipt)
         deposit_id = bank.new_deposit_id()
+        stored_key = bank.receipt_key(deposit_id)
         try:
-            stored = await storage.put(NewFile(bank.receipt_key(deposit_id), data, content_type))
+            stored = await storage.put(NewFile(stored_key, data, content_type))
         except InvalidFile:
             raise _receipt_problem("unsupported_content_type") from None
         except StorageError:
             # Nothing was saved, so the client can send the same request again.
             raise ApplicationError("unavailable") from None
-        async with database.actor_transaction(client.actor) as session:
-            payable = await _payable_for_transfer(
-                session, client, investment_id, amount_minor, clock
-            )
-            transfer = await bank.submit_bank_receipt(
-                session,
-                client.actor,
-                bank.BankTransferRequest(
-                    purpose=Purpose.INVESTMENT,
-                    purpose_id=payable.investment_id,
-                    file=ReceiptFile(stored.content_type, stored.byte_size, stored.sha256),
-                    details=details(payable.amount),
-                ),
-                idempotency_key=key,
-                clock=clock,
-                deposit_id=deposit_id,
-            )
-            return _view(transfer.deposit, transfer.receipt)
+        try:
+            async with database.actor_transaction(client.actor) as session:
+                payable = await _payable_for_transfer(
+                    session, client, investment_id, amount_minor, clock
+                )
+                transfer = await bank.submit_bank_receipt(
+                    session,
+                    client.actor,
+                    request(
+                        payable, ReceiptFile(stored.content_type, stored.byte_size, stored.sha256)
+                    ),
+                    idempotency_key=key,
+                    clock=clock,
+                    deposit_id=deposit_id,
+                )
+        except Exception:
+            await _discard_receipt(storage, stored_key, deposit_id)
+            raise
+        if transfer.deposit.id != deposit_id:
+            # The same request, sent twice at once, was saved by the other one.
+            await _discard_receipt(storage, stored_key, deposit_id)
+        return _view(transfer.deposit, transfer.receipt)
 
     @router.get("/investments/{investment_id}/payment")
     async def current_payment(
