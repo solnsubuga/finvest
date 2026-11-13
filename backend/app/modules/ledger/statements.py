@@ -294,11 +294,82 @@ async def client_month_totals(
     ]
 
 
+@dataclass(frozen=True, slots=True)
+class SystemTotal:
+    """What moved through one of Finvest's own accounts in one calendar month, from entries of one
+    source type, and from one source when asked for by source."""
+
+    month: date  # the first day of the month
+    account_code: str
+    source_id: str | None
+    amount: Money  # signed: debits less credits
+
+
+_SELECT_SYSTEM_TOTALS = text(
+    "SELECT date_trunc('month', entry.effective_date)::date AS month, account.code, "
+    "CASE WHEN CAST(:by_source AS boolean) THEN entry.source_id END AS source_id, "
+    "sum(line.amount_minor)::bigint AS debit_minor "
+    "FROM ledger_lines AS line "
+    "JOIN ledger_accounts AS account ON account.id = line.account_id "
+    "JOIN ledger_journal_entries AS entry ON entry.id = line.entry_id "
+    "WHERE account.owner_client_id IS NULL AND account.reference IS NULL "
+    "AND account.code = ANY(CAST(:codes AS text[])) AND account.currency = :currency "
+    "AND entry.source_type = :source_type "
+    "AND (CAST(:source_ids AS text[]) IS NULL "
+    "OR entry.source_id = ANY(CAST(:source_ids AS text[]))) "
+    "AND entry.effective_date BETWEEN :date_from AND :date_to "
+    "GROUP BY 1, 2, 3 ORDER BY 1, 2, 3"
+)
+
+
+async def system_totals(
+    session: AsyncSession,
+    *,
+    codes: list[str],
+    currency: Currency,
+    source_type: str,
+    date_from: date,
+    date_to: date,
+    by_source: bool,
+    source_ids: list[str] | None = None,
+) -> list[SystemTotal]:
+    """Monthly totals on Finvest's own accounts with these codes, from entries of `source_type`
+    dated from `date_from` to `date_to`, both included, by the entries' effective dates.
+
+    With `by_source`, one total per source as well, such as per investment. `source_ids` narrows
+    it to those sources. Reversals and corrections of the same source net out, since the sums are
+    signed. Only combinations with a line are returned. For staff and the worker: a client
+    transaction sees none of Finvest's own accounts.
+    """
+    rows = await session.execute(
+        _SELECT_SYSTEM_TOTALS,
+        {
+            "codes": list(codes),
+            "currency": currency.value,
+            "source_type": source_type,
+            "source_ids": None if source_ids is None else list(source_ids),
+            "date_from": date_from,
+            "date_to": date_to,
+            "by_source": by_source,
+        },
+    )
+    return [
+        SystemTotal(
+            month=row.month,
+            account_code=row.code,
+            source_id=row.source_id,
+            amount=Money(int(row.debit_minor), currency),
+        )
+        for row in rows
+    ]
+
+
 __all__ = [
     "ClientLine",
     "ClientOwed",
     "MonthTotal",
     "Movement",
+    "SystemTotal",
     "account_movements",
     "account_owner",
     "balance_as_of",
@@ -306,5 +377,6 @@ __all__ = [
     "client_month_totals",
     "client_owed_as_of",
     "clients_with_accounts",
+    "system_totals",
     "total_balance",
 ]

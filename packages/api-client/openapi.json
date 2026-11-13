@@ -362,7 +362,8 @@
               "announcement",
               "payout_account",
               "investment_correction",
-              "payout_resolution"
+              "payout_resolution",
+              "tax_remittance"
             ],
             "title": "Kind",
             "type": "string"
@@ -6217,6 +6218,90 @@
         "title": "MoneyView",
         "type": "object"
       },
+      "MonthOut": {
+        "additionalProperties": false,
+        "properties": {
+          "due_on": {
+            "format": "date",
+            "title": "Due On",
+            "type": "string"
+          },
+          "month": {
+            "title": "Month",
+            "type": "string"
+          },
+          "outstanding": {
+            "$ref": "#/components/schemas/AmountOut"
+          },
+          "overdue": {
+            "title": "Overdue",
+            "type": "boolean"
+          },
+          "remitted": {
+            "$ref": "#/components/schemas/AmountOut"
+          },
+          "waiting": {
+            "$ref": "#/components/schemas/AmountOut"
+          },
+          "withheld": {
+            "$ref": "#/components/schemas/AmountOut"
+          }
+        },
+        "required": [
+          "month",
+          "withheld",
+          "remitted",
+          "waiting",
+          "outstanding",
+          "due_on",
+          "overdue"
+        ],
+        "title": "MonthOut",
+        "type": "object"
+      },
+      "MonthReportOut": {
+        "additionalProperties": false,
+        "properties": {
+          "currency": {
+            "$ref": "#/components/schemas/Currency"
+          },
+          "gross": {
+            "$ref": "#/components/schemas/AmountOut"
+          },
+          "month": {
+            "title": "Month",
+            "type": "string"
+          },
+          "payees": {
+            "items": {
+              "$ref": "#/components/schemas/PayeeOut"
+            },
+            "title": "Payees",
+            "type": "array"
+          },
+          "summary": {
+            "$ref": "#/components/schemas/MonthOut"
+          },
+          "tins_shown": {
+            "title": "Tins Shown",
+            "type": "boolean"
+          },
+          "withheld": {
+            "$ref": "#/components/schemas/AmountOut"
+          }
+        },
+        "required": [
+          "month",
+          "currency",
+          "gross",
+          "withheld",
+          "summary",
+          "payees",
+          "tins_shown"
+        ],
+        "title": "MonthReportOut",
+        "type": "object"
+      },
       "MonthView": {
         "additionalProperties": false,
         "properties": {
@@ -7083,6 +7168,64 @@
           "destination_id"
         ],
         "title": "PayOutRequest",
+        "type": "object"
+      },
+      "PayeeOut": {
+        "additionalProperties": false,
+        "properties": {
+          "account_number": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Account Number"
+          },
+          "client_id": {
+            "title": "Client Id",
+            "type": "string"
+          },
+          "gross": {
+            "$ref": "#/components/schemas/AmountOut"
+          },
+          "name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name"
+          },
+          "tax": {
+            "$ref": "#/components/schemas/AmountOut"
+          },
+          "tin": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tin"
+          }
+        },
+        "required": [
+          "client_id",
+          "name",
+          "account_number",
+          "tin",
+          "gross",
+          "tax"
+        ],
+        "title": "PayeeOut",
         "type": "object"
       },
       "PaymentView": {
@@ -8832,6 +8975,196 @@
         "title": "Rejection",
         "type": "object"
       },
+      "RemittanceIn": {
+        "additionalProperties": false,
+        "properties": {
+          "amount_minor": {
+            "maximum": 1000000000000000.0,
+            "minimum": 1.0,
+            "title": "Amount Minor",
+            "type": "integer"
+          },
+          "bank_reference": {
+            "maxLength": 100,
+            "minLength": 1,
+            "title": "Bank Reference",
+            "type": "string"
+          },
+          "currency": {
+            "$ref": "#/components/schemas/Currency"
+          },
+          "month": {
+            "pattern": "^[0-9]{4}-[0-9]{2}$",
+            "title": "Month",
+            "type": "string"
+          },
+          "note": {
+            "maxLength": 500,
+            "minLength": 1,
+            "title": "Note",
+            "type": "string"
+          },
+          "paid_on": {
+            "format": "date",
+            "title": "Paid On",
+            "type": "string"
+          },
+          "ura_reference": {
+            "maxLength": 100,
+            "minLength": 1,
+            "title": "Ura Reference",
+            "type": "string"
+          }
+        },
+        "required": [
+          "currency",
+          "month",
+          "amount_minor",
+          "ura_reference",
+          "bank_reference",
+          "paid_on",
+          "note"
+        ],
+        "title": "RemittanceIn",
+        "type": "object"
+      },
+      "RemittanceOut": {
+        "additionalProperties": false,
+        "properties": {
+          "allowed": {
+            "items": {
+              "$ref": "#/components/schemas/app__modules__tax__api__Step"
+            },
+            "title": "Allowed",
+            "type": "array"
+          },
+          "amount": {
+            "$ref": "#/components/schemas/AmountOut"
+          },
+          "bank_reference": {
+            "title": "Bank Reference",
+            "type": "string"
+          },
+          "decided_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Decided At"
+          },
+          "decided_by": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Decided By"
+          },
+          "decided_by_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Decided By Name"
+          },
+          "decision_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Decision Reason"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "month": {
+            "title": "Month",
+            "type": "string"
+          },
+          "note": {
+            "title": "Note",
+            "type": "string"
+          },
+          "paid_on": {
+            "format": "date",
+            "title": "Paid On",
+            "type": "string"
+          },
+          "proposed_at": {
+            "format": "date-time",
+            "title": "Proposed At",
+            "type": "string"
+          },
+          "proposed_by": {
+            "title": "Proposed By",
+            "type": "string"
+          },
+          "proposed_by_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Proposed By Name"
+          },
+          "status": {
+            "$ref": "#/components/schemas/RemittanceStatus"
+          },
+          "ura_reference": {
+            "title": "Ura Reference",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "month",
+          "amount",
+          "ura_reference",
+          "bank_reference",
+          "paid_on",
+          "note",
+          "status",
+          "proposed_by",
+          "proposed_by_name",
+          "proposed_at",
+          "decided_by",
+          "decided_by_name",
+          "decided_at",
+          "decision_reason",
+          "allowed"
+        ],
+        "title": "RemittanceOut",
+        "type": "object"
+      },
+      "RemittanceStatus": {
+        "enum": [
+          "proposed",
+          "approved",
+          "declined"
+        ],
+        "title": "RemittanceStatus",
+        "type": "string"
+      },
       "Removal": {
         "additionalProperties": false,
         "properties": {
@@ -9251,6 +9584,7 @@
                 "dealing_desk.view",
                 "dealing_orders.change",
                 "finance.view",
+                "tax_remittances.change",
                 "products.view",
                 "rates.view",
                 "rates.change",
@@ -9386,7 +9720,7 @@
         "properties": {
           "allowed": {
             "items": {
-              "$ref": "#/components/schemas/Step"
+              "$ref": "#/components/schemas/app__modules__dealing__buffer_api__Step"
             },
             "title": "Allowed",
             "type": "array"
@@ -11713,6 +12047,7 @@
                 "dealing_desk.view",
                 "dealing_orders.change",
                 "finance.view",
+                "tax_remittances.change",
                 "products.view",
                 "rates.view",
                 "rates.change",
@@ -11905,16 +12240,6 @@
         "title": "StatementRequest",
         "type": "object"
       },
-      "Step": {
-        "enum": [
-          "approve",
-          "send_back",
-          "decline",
-          "withdraw"
-        ],
-        "title": "Step",
-        "type": "string"
-      },
       "StrandedPayoutOut": {
         "additionalProperties": false,
         "description": "A payout the provider was read for until the window closed, with no answer.",
@@ -12067,6 +12392,39 @@
           "open_lift"
         ],
         "title": "SuppressionView",
+        "type": "object"
+      },
+      "TaxScreenOut": {
+        "additionalProperties": false,
+        "properties": {
+          "currency": {
+            "$ref": "#/components/schemas/Currency"
+          },
+          "held_for_ura": {
+            "$ref": "#/components/schemas/AmountOut"
+          },
+          "months": {
+            "items": {
+              "$ref": "#/components/schemas/MonthOut"
+            },
+            "title": "Months",
+            "type": "array"
+          },
+          "remittances": {
+            "items": {
+              "$ref": "#/components/schemas/RemittanceOut"
+            },
+            "title": "Remittances",
+            "type": "array"
+          }
+        },
+        "required": [
+          "currency",
+          "held_for_ura",
+          "months",
+          "remittances"
+        ],
+        "title": "TaxScreenOut",
         "type": "object"
       },
       "TeamMemberView": {
@@ -12951,7 +13309,7 @@
         "properties": {
           "allowed": {
             "items": {
-              "$ref": "#/components/schemas/Step"
+              "$ref": "#/components/schemas/app__modules__dealing__buffer_api__Step"
             },
             "title": "Allowed",
             "type": "array"
@@ -13057,6 +13415,16 @@
         ],
         "title": "MovementOut",
         "type": "object"
+      },
+      "app__modules__dealing__buffer_api__Step": {
+        "enum": [
+          "approve",
+          "send_back",
+          "decline",
+          "withdraw"
+        ],
+        "title": "Step",
+        "type": "string"
       },
       "app__modules__goals__api__PlanView": {
         "additionalProperties": false,
@@ -13419,6 +13787,14 @@
         ],
         "title": "ComplaintSummary",
         "type": "object"
+      },
+      "app__modules__tax__api__Step": {
+        "enum": [
+          "approve",
+          "decline"
+        ],
+        "title": "Step",
+        "type": "string"
       }
     }
   },
@@ -35120,6 +35496,579 @@
         "summary": "Retire Saved Reply",
         "tags": [
           "staff support"
+        ]
+      }
+    },
+    "/staff/tax": {
+      "get": {
+        "operationId": "get_tax_staff_tax_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "currency",
+            "required": false,
+            "schema": {
+              "$ref": "#/components/schemas/Currency",
+              "default": "UGX"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TaxScreenOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          }
+        },
+        "summary": "Get Tax",
+        "tags": [
+          "tax"
+        ]
+      }
+    },
+    "/staff/tax/months/{month}": {
+      "get": {
+        "operationId": "get_month_staff_tax_months__month__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "month",
+            "required": true,
+            "schema": {
+              "pattern": "^[0-9]{4}-[0-9]{2}$",
+              "title": "Month",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "currency",
+            "required": false,
+            "schema": {
+              "$ref": "#/components/schemas/Currency",
+              "default": "UGX"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MonthReportOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          }
+        },
+        "summary": "One month's withholding, client by client",
+        "tags": [
+          "tax"
+        ]
+      }
+    },
+    "/staff/tax/months/{month}/payees.csv": {
+      "get": {
+        "operationId": "export_month_staff_tax_months__month__payees_csv_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "month",
+            "required": true,
+            "schema": {
+              "pattern": "^[0-9]{4}-[0-9]{2}$",
+              "title": "Month",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "currency",
+            "required": false,
+            "schema": {
+              "$ref": "#/components/schemas/Currency",
+              "default": "UGX"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "text/csv": {}
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          }
+        },
+        "summary": "One month's withholding as a CSV file for URA's return",
+        "tags": [
+          "tax"
+        ]
+      }
+    },
+    "/staff/tax/remittances": {
+      "post": {
+        "operationId": "propose_remittance_staff_tax_remittances_post",
+        "parameters": [
+          {
+            "description": "A value the caller chooses once per intended action and sends again on every retry of it. Pattern: `[A-Za-z0-9._:-]{8,128}`.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "A value the caller chooses once per intended action and sends again on every retry of it. Pattern: `[A-Za-z0-9._:-]{8,128}`.",
+              "title": "Idempotency-Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RemittanceIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TaxScreenOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          }
+        },
+        "summary": "Record a payment to URA for a second person to approve",
+        "tags": [
+          "tax"
+        ]
+      }
+    },
+    "/staff/tax/remittances/{remittance_id}/approve": {
+      "post": {
+        "operationId": "approve_remittance_staff_tax_remittances__remittance_id__approve_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "remittance_id",
+            "required": true,
+            "schema": {
+              "title": "Remittance Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "A value the caller chooses once per intended action and sends again on every retry of it. Pattern: `[A-Za-z0-9._:-]{8,128}`.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "A value the caller chooses once per intended action and sends again on every retry of it. Pattern: `[A-Za-z0-9._:-]{8,128}`.",
+              "title": "Idempotency-Key"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TaxScreenOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          }
+        },
+        "summary": "Approve a payment to URA as the second person, which posts it",
+        "tags": [
+          "tax"
+        ]
+      }
+    },
+    "/staff/tax/remittances/{remittance_id}/decline": {
+      "post": {
+        "operationId": "decline_remittance_staff_tax_remittances__remittance_id__decline_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "remittance_id",
+            "required": true,
+            "schema": {
+              "title": "Remittance Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "A value the caller chooses once per intended action and sends again on every retry of it. Pattern: `[A-Za-z0-9._:-]{8,128}`.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "A value the caller chooses once per intended action and sends again on every retry of it. Pattern: `[A-Za-z0-9._:-]{8,128}`.",
+              "title": "Idempotency-Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DeclineIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TaxScreenOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          }
+        },
+        "summary": "Decline a payment to URA",
+        "tags": [
+          "tax"
         ]
       }
     },

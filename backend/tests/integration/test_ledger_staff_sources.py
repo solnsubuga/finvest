@@ -35,6 +35,7 @@ PRODUCTION_LIST = [
     "ledger.correction",
     "payout",
     "pot_transfer",
+    "tax.remittance",
 ]
 
 RAW_ENTRY = text(
