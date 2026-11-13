@@ -15,6 +15,7 @@ from app.api.request_log import RequestLogMiddleware
 from app.infrastructure.database import Database
 from app.infrastructure.settings import Settings
 from app.infrastructure.storage import FileStorage, StorageSettings
+from app.modules.goals import api as goals_api
 from app.modules.identity import api as identity_api
 from app.modules.identity import passkeys_api
 from app.modules.identity.authenticators import AuthenticatorService
@@ -108,6 +109,8 @@ def create_app(
     ):
         app.include_router(router)
     app.include_router(payments_api.create_router(collections))
+    for router in goals_api.routers:
+        app.include_router(router)
     app.include_router(payment_routes.create_client_router(collections))
     app.include_router(payment_routes.staff_router)
     app.include_router(migration_api.router)
