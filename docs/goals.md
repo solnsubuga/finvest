@@ -115,5 +115,4 @@ Client responses carry net figures and the yearly rate after tax as a label. No 
 
 - Saving rules: a monthly saving collected on a set day, with a mobile money prompt sent by the worker.
 - A console view of group goals.
-- Removing a member from the client app. The API gives the one who set the group up a `member_id` for it.
 - Withdrawing from a goal before its date, which waits for early withdrawal.

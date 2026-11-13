@@ -1,5 +1,5 @@
 import { useCallback, useState } from "react";
-import { Share, StyleSheet, View } from "react-native";
+import { Pressable, Share, StyleSheet, View } from "react-native";
 import * as Clipboard from "expo-clipboard";
 import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
 
@@ -35,9 +35,11 @@ export default function GroupDetail() {
   // A link just made. Its code is shown this once: only its hash is kept.
   const [invite, setInvite] = useState<NewInvite | null>(null);
   const [copied, setCopied] = useState(false);
-  const [busy, setBusy] = useState<"invite" | "stop" | "end" | null>(null);
+  const [busy, setBusy] = useState<"invite" | "stop" | "end" | "remove" | null>(null);
   const [failure, setFailure] = useState<string | null>(null);
   const [confirmEnd, setConfirmEnd] = useState(false);
+  // The member the owner asked to remove, waiting for them to confirm.
+  const [removing, setRemoving] = useState<GroupMember | null>(null);
 
   const load = useCallback(() => {
     let live = true;
@@ -52,7 +54,7 @@ export default function GroupDetail() {
 
   useFocusEffect(load);
 
-  const run = async (which: "invite" | "stop" | "end", work: () => Promise<void>) => {
+  const run = async (which: "invite" | "stop" | "end" | "remove", work: () => Promise<void>) => {
     setBusy(which);
     setFailure(null);
     try {
@@ -79,6 +81,15 @@ export default function GroupDetail() {
     run("stop", async () => {
       setInvite(null);
       setState({ status: "ready", group: await client.stopInvite(groupId) });
+    });
+
+  const remove = () =>
+    run("remove", async () => {
+      if (!removing?.memberId) return;
+      setState({ status: "ready", group: await client.removeMember(groupId, removing.memberId) });
+      // Removing someone stops the open link, so a link shown here no longer works.
+      setInvite(null);
+      setRemoving(null);
     });
 
   const end = () =>
@@ -182,9 +193,31 @@ export default function GroupDetail() {
           <Card padded={false}>
             {group.members.map((member, index) => (
               // Names and times can repeat, and members never change places in the list.
-              <MemberRow key={index} member={member} first={index === 0} />
+              <MemberRow
+                key={index}
+                member={member}
+                first={index === 0}
+                onRemove={open && member.memberId ? () => setRemoving(member) : undefined}
+                testID={`group-member-${index}`}
+              />
             ))}
           </Card>
+          {open && removing ? (
+            <View style={styles.box} testID="group-remove-confirm">
+              <Txt weight="bold">{`Remove ${removing.displayName} from the group goal?`}</Txt>
+              <Txt size={13} color={colors.muted}>
+                {`${removing.displayName}'s own goal stays open and keeps its savings. Nobody's money moves. They stop seeing the group, and the open link stops working, so make a new one for anyone still to join.`}
+              </Txt>
+              <Button
+                label={`Remove ${removing.displayName}`}
+                onPress={remove}
+                loading={busy === "remove"}
+                height={48}
+                testID="group-remove-yes"
+              />
+              <TextLink label="Keep them in" onPress={() => setRemoving(null)} underline={false} />
+            </View>
+          ) : null}
           <Notice tone="neutral">
             {group.members.length === 2
               ? "Members see each other's names and the combined total, never what anyone saves. With two of you, each can work out the other's total from it."
@@ -273,10 +306,20 @@ function facts(group: Group) {
   return rows;
 }
 
-function MemberRow({ member, first }: { member: GroupMember; first: boolean }) {
+function MemberRow({
+  member,
+  first,
+  onRemove,
+  testID,
+}: {
+  member: GroupMember;
+  first: boolean;
+  onRemove?: () => void;
+  testID: string;
+}) {
   const role = [member.isYou ? "You" : null, member.isOwner ? "set it up" : null].filter(Boolean).join(", ");
   return (
-    <View style={[styles.row, !first && styles.divider]}>
+    <View style={[styles.row, !first && styles.divider]} testID={testID}>
       <View style={styles.initial}>
         <Txt size={13} weight="extrabold">
           {member.displayName.slice(0, 1).toUpperCase()}
@@ -290,6 +333,20 @@ function MemberRow({ member, first }: { member: GroupMember; first: boolean }) {
           {`${role ? `${role.charAt(0).toUpperCase()}${role.slice(1)}. ` : ""}Joined ${formatDay(member.joinedAt.slice(0, 10))}`}
         </Txt>
       </View>
+      {onRemove ? (
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={`Remove ${member.displayName}`}
+          onPress={onRemove}
+          hitSlop={8}
+          style={({ pressed }) => [styles.remove, pressed && { opacity: 0.6 }]}
+          testID={`${testID}-remove`}
+        >
+          <Txt size={13} weight="semibold" color={colors.danger}>
+            Remove
+          </Txt>
+        </Pressable>
+      ) : null}
     </View>
   );
 }
@@ -318,4 +375,5 @@ const styles = StyleSheet.create({
     gap: 10,
   },
   link: { backgroundColor: colors.paper, borderRadius: 12, padding: 12 },
+  remove: { minHeight: 44, paddingHorizontal: 8, justifyContent: "center" },
 });
