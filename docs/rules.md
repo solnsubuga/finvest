@@ -28,7 +28,7 @@ These rules are not preferences. A change that breaks one is wrong even if it wo
 - A new payout destination must be in the client's name, is confirmed by SMS code, needs proof of ownership checked by staff, and waits 24 hours before its first payout.
 - Staff sign in with a password and a passkey. There is no SMS option for staff. Permissions are by role, and sensitive actions need two people.
 - Personal data and documents are encrypted at rest. Documents are served only through short-lived signed links.
-- Secrets live in a secrets manager, never in the repository.
+- Secrets live in a secrets manager, never in the repository. Terraform state, kept in a private bucket, is the one recorded exception.
 - The audit trail records who did what and why, and cannot be edited.
 - Logs carry request IDs and error codes, never personal data or account details.
 - An independent penetration test happens before launch.

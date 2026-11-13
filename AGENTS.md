@@ -58,7 +58,7 @@ These come from [docs/rules.md](docs/rules.md). A PR that breaks one is wrong ev
 - A module never writes to another module's tables.
 - Domain code does not import FastAPI, SQLAlchemy or anything that touches the network. The clock is injected.
 - Logs carry request IDs and error codes, never personal data, account details or amounts tied to a person.
-- Secrets never enter the repository. Not in code, not in tests, not in examples, not in Terraform state.
+- Secrets never enter the repository. Not in code, not in tests, not in examples. The one exception is Terraform state, which holds the credentials Terraform generates and lives only in a private bucket that only the Provision workflow on `main` can read (see [docs/decisions.md](docs/decisions.md)).
 
 ## Things we deliberately do not use
 
