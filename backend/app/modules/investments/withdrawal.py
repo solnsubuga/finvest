@@ -35,6 +35,7 @@ from app.modules.investments.holdings import (
 from app.modules.investments.maturity import out_of_holding
 from app.modules.ledger import service as ledger
 from app.modules.ledger.domain.entries import EntryDraft, credit
+from app.modules.notifications import contract as notifications
 from app.modules.payouts import destinations, payouts
 from app.modules.payouts.domain import posting as payout_posting
 from app.shared.actors import SYSTEM, Actor
@@ -133,6 +134,17 @@ async def request_withdrawal(
                 details={"destination_id": destination_id},
             ),
             clock,
+        )
+        # Interest stopped with the request, so this is the amount the client gets. The notice
+        # itself never names it.
+        await notifications.notify(
+            session,
+            event_name="investment_withdrawal_requested",
+            client_id=investment.client_id,
+            idempotency_key=investment.id,
+            variables={"amount": proceeds(investment), "product": investment.product_name},
+            link=notifications.Link("investment", investment.id),
+            now=now,
         )
         logger.info("investment_withdrawal_requested", investment_id=investment.id)
         return Receipt(200, {"investment_id": investment.id})

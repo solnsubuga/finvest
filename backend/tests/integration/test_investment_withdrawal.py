@@ -108,6 +108,21 @@ async def interest_owed(worker_database: Database, investment: investments.Inves
         return (await ledger.get_balance(session, account.id)).minor
 
 
+async def withdrawal_notices(
+    app_database: Database, investment: investments.Investment
+) -> list[tuple[str, str, str | None, str | None]]:
+    client = Actor("client", investment.client_id)
+    async with app_database.actor_transaction(client) as session:
+        rows = await session.execute(
+            text(
+                "SELECT title, body, link_kind, link_id FROM notifications "
+                "WHERE client_id = :client AND event = 'investment_withdrawal_requested'"
+            ),
+            {"client": investment.client_id},
+        )
+        return [(row.title, row.body, row.link_kind, row.link_id) for row in rows.all()]
+
+
 async def running_with_interest(
     app_database: Database, worker_database: Database
 ) -> tuple[investments.Investment, str, int]:
@@ -131,6 +146,16 @@ async def test_an_early_withdrawal_pays_principal_and_interest_so_far_once_funde
     asked = await ask(app_database, investment, destination_id)
     assert asked.status is InvestmentStatus.ACTIVE
     assert asked.withdrawal_requested_at is not None
+    # The client is told once, linked to the investment, and the notice names no amount.
+    assert await withdrawal_notices(app_database, investment) == [
+        (
+            "Early withdrawal requested",
+            f"We have your request to cash out your {investment.product_name} early. "
+            "We will tell you when the money is sent.",
+            "investment",
+            investment.id,
+        )
+    ]
     client = Actor("client", investment.client_id)
     async with app_database.actor_transaction(client) as session:
         seen = await investments.client_investment(session, client, investment.id, LATER)
@@ -248,6 +273,7 @@ async def test_two_requests_at_once_withdraw_once(
             return "asked"
 
     assert sorted(await asyncio.gather(one(), one())) == ["asked", "conflict"]
+    assert len(await withdrawal_notices(app_database, investment)) == 1
 
 
 async def test_the_payout_waits_for_exactly_the_amount_withdrawn(
