@@ -30,6 +30,8 @@ const paths = {
     "M17 3l3 3-3 3M4 12V9a3 3 0 013-3h13M7 21l-3-3 3-3M20 12v3a3 3 0 01-3 3H4",
   ],
   plus: ["M12 5v14M5 12h14"],
+  download: ["M12 4v11M7 10.5l5 5 5-5M5 20h14"],
+  calendar: ["M4 6h16v14H4zM4 10h16M8 3v4M16 3v4"],
 } as const;
 
 export type IconName = keyof typeof paths;
