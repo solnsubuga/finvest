@@ -746,6 +746,17 @@ export type GroupProgressView = z.infer<typeof GroupProgressView>;
 export const GroupStatus = z.enum(["active", "closed"]);
 export type GroupStatus = z.infer<typeof GroupStatus>;
 
+export const HeldPayoutOut = z.object({
+  amount: MoneyView,
+  business_date: z.string(),
+  client_id: z.string(),
+  created_at: z.string(),
+  destination_id: z.string(),
+  id: z.string(),
+  kind: z.enum(["mobile_money", "bank"]),
+});
+export type HeldPayoutOut = z.infer<typeof HeldPayoutOut>;
+
 export const HeldUpPayoutOut = z.object({
   amount: MoneyView,
   client_id: z.string(),
@@ -1226,6 +1237,18 @@ export const ResultIn = z.object({
   fill: FillIn.nullable(),
 });
 export type ResultIn = z.infer<typeof ResultIn>;
+
+export const ReviewIn = z.object({
+  reason: z.string(),
+});
+export type ReviewIn = z.infer<typeof ReviewIn>;
+
+export const ReviewedPayoutOut = z.object({
+  decision: z.enum(["approved", "declined"]),
+  id: z.string(),
+  status: z.enum(["queued", "sent", "uncertain", "paid", "failed", "cancelled"]),
+});
+export type ReviewedPayoutOut = z.infer<typeof ReviewedPayoutOut>;
 
 export const RoleView = z.object({
   permissions: z.array(z.enum(["overview.view", "review_queue.view", "identity_checks.view", "identity_checks.review", "maturities.view", "support.view", "support.reply", "complaints.view", "complaints.manage", "complaints.close", "clients.view", "clients.lock", "money_movement.view", "reconciliation.view", "investments.view", "automatic_investing.view", "goals.view", "dealing_desk.view", "dealing_orders.change", "finance.view", "products.view", "rates.view", "rates.change", "compliance.view", "team.view", "team.change", "reports.view", "audit.view", "settings.view", "wordings.change", "email_suppressions.lift", "announcements.send", "migration.view", "bank_transfers.change", "payout_accounts.change", "migration.import", "migration.sign_off", "client_phones.change"])),
@@ -2649,6 +2672,17 @@ export const operations = {
     status: 200,
     response: StaffDestinationOut,
   },
+  "GET /staff/payouts/held": {
+    method: "GET",
+    path: "/staff/payouts/held",
+    params: z.object({}),
+    query: z.object({}),
+    body: null,
+    bodyKind: null,
+    idempotent: false,
+    status: 200,
+    response: z.array(HeldPayoutOut),
+  },
   "GET /staff/payouts/held-up": {
     method: "GET",
     path: "/staff/payouts/held-up",
@@ -2659,6 +2693,32 @@ export const operations = {
     idempotent: false,
     status: 200,
     response: z.array(HeldUpPayoutOut),
+  },
+  "POST /staff/payouts/{payout_id}/approve": {
+    method: "POST",
+    path: "/staff/payouts/{payout_id}/approve",
+    params: z.object({
+    payout_id: z.string(),
+  }),
+    query: z.object({}),
+    body: ReviewIn,
+    bodyKind: "json",
+    idempotent: true,
+    status: 200,
+    response: ReviewedPayoutOut,
+  },
+  "POST /staff/payouts/{payout_id}/decline": {
+    method: "POST",
+    path: "/staff/payouts/{payout_id}/decline",
+    params: z.object({
+    payout_id: z.string(),
+  }),
+    query: z.object({}),
+    body: ReviewIn,
+    bodyKind: "json",
+    idempotent: true,
+    status: 200,
+    response: ReviewedPayoutOut,
   },
   "GET /staff/people": {
     method: "GET",
