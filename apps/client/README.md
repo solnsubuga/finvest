@@ -33,6 +33,8 @@ Add Expo packages with `npx expo install <package>` so the version matches the S
 | `src/theme/` | Re-exports `@finvest/tokens`, loads Plus Jakarta Sans, and holds the wide breakpoint |
 | `src/auth/` | The sign-in contract, the demo stub, and the phone and password rules |
 | `src/payments/` | The payments contract, the demo stub, money and time formatting, and the status polling |
+| `src/autoinvest/` | The automatic investing contract, the demo stub, and the schedule rules shown on screen |
+| `src/insights/` | The insights contract, the demo stub, and the chart helpers |
 | `docs/screenshots/` | Screenshots of every screen and state in this app |
 
 ## Navigation
@@ -86,6 +88,24 @@ Amounts are integers in the smallest unit (`Money` in `types.ts`) and are format
 Until the backend publishes its client routes, the only implementation is the in-memory stub in `src/payments/stubPaymentsClient.ts`, loaded under the same rule as the demo sign-in and checked out of production builds by CI. In the demo, the Invest page has a "Demo: pay for an investment" button, and the last two digits of the account's number choose the outcome (sign up in the demo with a number that ends that way): `01` declined, `02` not enough money, `03` never approved, `04` unclear then confirmed, anything else approved. A demo bank transfer is matched after nine seconds, where staff take hours, and the last two digits of the transaction number choose: `01` the amount differs, `02` not on the statement, anything else matched.
 
 Not built yet: reading the receipt for the client (the canvas shows fields filled in from it), "I will upload later" and "Share these details" on the bank screen, finding an open payment again after closing the app (it needs the Activity page), the fee row (fees are not decided), "send the prompt again" (the backend has no such command), the signed transaction note, sharing a receipt, and the notification when a payment is confirmed.
+
+## Automatic investing
+
+A plan collects the same amount every week or every month from the client's own mobile money number and invests it in one product. There is no pot: each payment becomes its own investment the same day, so each one must meet the product's minimum. The screens live in `src/app/autoinvest/` and talk to the `AutoinvestClient` interface in `src/autoinvest/types.ts`.
+
+- `/autoinvest` lists the client's plans, each with its amount, schedule and next day. It is reached from Home and from Insights.
+- `/autoinvest/new` starts a plan: product, amount, every week (a weekday) or every month (a day, where the 31st means the month's last day), what happens at maturity, and the network. The number is the one on the account. One idempotency key per visit. Nothing is collected the day a plan starts: the first prompt comes on the first due day after today.
+- `/autoinvest/[planId]` shows the next prompt, the terms and past payments with the reason for any missed or failed one, and lets the client pause, resume or stop the plan. Stopping asks first.
+
+The schedule rules in `src/autoinvest/schedule.ts` mirror the backend's (`docs/automatic-investing.md`) so the screen can say the first day before the plan is sent. The server is still the judge.
+
+## Insights
+
+`/insights` shows what the client's money earned each month for the last six months, what is invested now, what has been earned so far, this month's money in, earned and paid out, and the next maturities. Every figure is after tax, and no tax rate is shown. On a wide screen it has two columns.
+
+Until the backend publishes these client routes, the only implementations are the in-memory stubs in `src/autoinvest/stubAutoinvestClient.ts` and `src/insights/stubInsightsClient.ts`, loaded under the same rule as the other demos and checked out of production builds by CI. The two demo accounts have one monthly plan and six months of figures. A new demo account starts empty, and one whose number ends in `99` cannot reach Finvest, to show the error states.
+
+Not built yet: sending an investment to another client, changing a plan's amount or day (the backend allows it, the screen does not yet), and the notifications before each prompt.
 
 ## Notes
 
