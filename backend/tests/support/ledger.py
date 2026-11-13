@@ -16,6 +16,7 @@ from app.shared.actors import SYSTEM, Actor
 from app.shared.clock import Clock
 from app.shared.money import Currency, Money
 from app.shared.push_ids import push_id
+from tests.support.database import TEST_SOURCE
 
 DAY = date(2026, 11, 13)
 
@@ -88,6 +89,8 @@ def deposit(books: Books, amount: int, *, idempotency_key: str | None = None) ->
         effective_date=DAY,
         lines=(debit(books.cash, ugx(amount)), credit(books.holding, ugx(amount))),
         idempotency_key=idempotency_key or key(),
+        source_type=TEST_SOURCE,
+        source_id=push_id(),
     )
 
 
@@ -98,6 +101,8 @@ def payout(books: Books, amount: int, *, idempotency_key: str | None = None) -> 
         effective_date=DAY,
         lines=(debit(books.holding, ugx(amount)), credit(books.cash, ugx(amount))),
         idempotency_key=idempotency_key or key(),
+        source_type=TEST_SOURCE,
+        source_id=push_id(),
     )
 
 

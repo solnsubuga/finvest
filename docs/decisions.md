@@ -72,6 +72,7 @@ A running log. Add a row when a decision is made, and move an open question up w
 | 2026-11-13 | Statements and receipts (owner's request): a statement goes by email to every client after each month in which they held an investment or anything happened, a client can make one for any dates up to one year in the app, and every payment received gets an emailed receipt. Each email carries the PDF. See [documents.md](documents.md). |
 | 2026-11-13 | Working default: a statement shows figures after tax only, with no tax rate and no tax amount, as [rules.md](rules.md) requires. Tax withheld appears only on the yearly tax certificate. The owner can change it at any time. |
 | 2026-11-13 | Working default: a statement email carries no figures, only the attached PDF, and no email carries an image. A receipt email shows the amount received. The PDFs have no password. The owner can change any of these at any time. |
+| 2026-11-13 | Decided for now: a staff transaction posts to the ledger only with a source type on a list kept in the database (`ledger_staff_source_types`); anything else is refused. The list changes only by migration, so each new way for staff to move money is reviewed. Staff undo an entry only through a correction a second person approves, never by a direct reversal. See [ledger.md](ledger.md#what-staff-may-post). Asked for in review and built without waiting for the owner, who can revisit it. |
 
 ## Open
 

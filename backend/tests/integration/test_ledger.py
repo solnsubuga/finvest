@@ -20,6 +20,7 @@ from app.modules.ledger.domain.errors import (
     AlreadyReversed,
     IdempotencyKeyReused,
     InsufficientFunds,
+    StaffSourceNotAllowed,
     UnknownAccount,
     UnknownEntry,
 )
@@ -27,6 +28,7 @@ from app.shared.actors import SYSTEM
 from app.shared.money import Currency, Money
 from app.shared.push_ids import push_id
 from tests.support.clock import AsyncBarrier, FakeClock
+from tests.support.database import TEST_SOURCE
 from tests.support.ledger import (
     DAY,
     Books,
@@ -46,8 +48,9 @@ pytestmark = pytest.mark.integration
 
 INSERT_ENTRY = text(
     "INSERT INTO ledger_journal_entries (id, entry_type, currency, effective_date, posted_at, "
-    "idempotency_key, request_digest, reverses_entry_id) VALUES (:id, 'test.raw', 'UGX', "
-    "DATE '2026-11-13', now(), :key, repeat('0', 64), :reverses)"
+    "idempotency_key, request_digest, reverses_entry_id, source_type, source_id) VALUES (:id, "
+    "'test.raw', 'UGX', DATE '2026-11-13', now(), :key, repeat('0', 64), :reverses, "
+    "'test.fixture', :source)"
 )
 INSERT_LINE = text(
     "INSERT INTO ledger_lines (entry_id, line_no, account_id, currency, amount_minor) "
@@ -64,7 +67,10 @@ async def raw_entry(
     """Insert an entry with plain SQL, as a buggy or hostile caller with the role's grants could."""
     entry = push_id()
     async with database.actor_transaction(operator(database)) as session:
-        await session.execute(INSERT_ENTRY, {"id": entry, "key": key(), "reverses": reverses})
+        await session.execute(
+            INSERT_ENTRY,
+            {"id": entry, "key": key(), "reverses": reverses, "source": push_id()},
+        )
         for line_no, (account, amount) in enumerate(lines, start=1):
             await session.execute(
                 INSERT_LINE,
@@ -140,7 +146,7 @@ async def test_a_many_line_entry_keeps_its_line_order(
                 credit(first.holding, ugx(700)),
             ),
             idempotency_key=key(),
-            source_type="test.payment",
+            source_type=TEST_SOURCE,
             source_id=push_id(),
         )
         posted = await ledger.post_entry(session, draft, fake_clock)
@@ -165,6 +171,8 @@ async def test_dollars_and_shillings_never_share_an_entry(
             effective_date=DAY,
             lines=(debit(shillings.cash, ugx(100)), credit(dollars.holding, ugx(100))),
             idempotency_key=key(),
+            source_type=TEST_SOURCE,
+            source_id=push_id(),
         )
         with pytest.raises(UnknownAccount):
             await ledger.post_entry(session, mislabelled, fake_clock)
@@ -176,6 +184,8 @@ async def test_dollars_and_shillings_never_share_an_entry(
                 effective_date=DAY,
                 lines=(debit(dollars.cash, usd), credit(dollars.holding, usd)),
                 idempotency_key=key(),
+                source_type=TEST_SOURCE,
+                source_id=push_id(),
             ),
             fake_clock,
         )
@@ -192,6 +202,8 @@ async def test_a_line_for_a_missing_account_is_refused(
         effective_date=DAY,
         lines=(debit(books.cash, ugx(100)), credit(push_id(), ugx(100))),
         idempotency_key=key(),
+        source_type=TEST_SOURCE,
+        source_id=push_id(),
     )
     async with app_database.actor_transaction(operator(app_database)) as session:
         with pytest.raises(UnknownAccount):
@@ -290,6 +302,8 @@ async def test_entries_over_the_same_accounts_in_opposite_order_do_not_deadlock(
             effective_date=DAY,
             lines=lines[::-1] if lines_reversed else lines,
             idempotency_key=key(),
+            source_type=TEST_SOURCE,
+            source_id=push_id(),
         )
 
     async def post(index: int) -> None:
@@ -396,7 +410,9 @@ async def test_an_early_check_does_not_let_a_later_line_through(
         async with application_database.actor_transaction(
             operator(application_database)
         ) as session:
-            await session.execute(INSERT_ENTRY, {"id": entry, "key": key(), "reverses": None})
+            await session.execute(
+                INSERT_ENTRY, {"id": entry, "key": key(), "reverses": None, "source": push_id()}
+            )
             for line_no, (account, amount) in enumerate(
                 [(books.cash, 100), (books.holding, -100)], start=1
             ):
@@ -424,7 +440,9 @@ async def test_an_early_check_does_not_let_a_reversal_stop_mirroring(
         async with application_database.actor_transaction(
             operator(application_database)
         ) as session:
-            await session.execute(INSERT_ENTRY, {"id": entry, "key": key(), "reverses": original})
+            await session.execute(
+                INSERT_ENTRY, {"id": entry, "key": key(), "reverses": original, "source": push_id()}
+            )
             lines = [(books.cash, -300), (books.holding, 300)]
             for line_no, (account, amount) in enumerate(lines, start=1):
                 await session.execute(
@@ -484,10 +502,11 @@ async def test_the_creating_transaction_cannot_be_forged(
         await session.execute(
             text(
                 "INSERT INTO ledger_journal_entries (id, entry_type, currency, effective_date, "
-                "posted_at, idempotency_key, request_digest, created_xact) VALUES (:id, "
-                "'test.raw', 'UGX', DATE '2026-11-13', now(), :key, repeat('0', 64), '3'::xid8)"
+                "posted_at, idempotency_key, request_digest, created_xact, source_type, "
+                "source_id) VALUES (:id, 'test.raw', 'UGX', DATE '2026-11-13', now(), :key, "
+                "repeat('0', 64), '3'::xid8, 'test.fixture', :source)"
             ),
-            {"id": entry, "key": key()},
+            {"id": entry, "key": key(), "source": push_id()},
         )
         stamped, current = (
             await session.execute(
@@ -605,14 +624,14 @@ async def test_application_roles_hold_only_the_documented_privileges(
 
 
 async def test_a_reversal_undoes_an_entry_and_leaves_it_in_place(
-    application_database: Database, fake_clock: FakeClock
+    worker_database: Database, fake_clock: FakeClock
 ) -> None:
-    books = await funded_books(application_database, fake_clock, 1_000)
-    async with application_database.actor_transaction(operator(application_database)) as session:
+    books = await funded_books(worker_database, fake_clock, 1_000)
+    async with worker_database.actor_transaction(operator(worker_database)) as session:
         mistake = await ledger.post_entry(session, deposit(books, 250), fake_clock)
-    assert await balances(application_database, books) == (1_250, 1_250)
+    assert await balances(worker_database, books) == (1_250, 1_250)
 
-    async with application_database.actor_transaction(operator(application_database)) as session:
+    async with worker_database.actor_transaction(operator(worker_database)) as session:
         undo = await ledger.reverse_entry(
             session, mistake.id, fake_clock, effective_date=DAY, idempotency_key=key()
         )
@@ -620,21 +639,21 @@ async def test_a_reversal_undoes_an_entry_and_leaves_it_in_place(
     assert undo.reverses_entry_id == mistake.id
     assert [line.amount.minor for line in undo.lines] == [-250, 250]
     assert original.lines == mistake.lines
-    assert await balances(application_database, books) == (1_000, 1_000)
+    assert await balances(worker_database, books) == (1_000, 1_000)
 
 
 async def test_an_entry_is_reversed_at_most_once(
-    app_database: Database, fake_clock: FakeClock
+    worker_database: Database, fake_clock: FakeClock
 ) -> None:
-    books = await funded_books(app_database, fake_clock, 0)
-    async with app_database.actor_transaction(operator(app_database)) as session:
+    books = await funded_books(worker_database, fake_clock, 0)
+    async with worker_database.actor_transaction(operator(worker_database)) as session:
         mistake = await ledger.post_entry(session, deposit(books, 250), fake_clock)
     undo_key = key()
-    async with app_database.actor_transaction(operator(app_database)) as session:
+    async with worker_database.actor_transaction(operator(worker_database)) as session:
         undo = await ledger.reverse_entry(
             session, mistake.id, fake_clock, effective_date=DAY, idempotency_key=undo_key
         )
-    async with app_database.actor_transaction(operator(app_database)) as session:
+    async with worker_database.actor_transaction(operator(worker_database)) as session:
         # The same request again is a replay, not a second reversal.
         again = await ledger.reverse_entry(
             session, mistake.id, fake_clock, effective_date=DAY, idempotency_key=undo_key
@@ -652,22 +671,39 @@ async def test_an_entry_is_reversed_at_most_once(
             await ledger.reverse_entry(
                 session, push_id(), fake_clock, effective_date=DAY, idempotency_key=key()
             )
-    assert await balances(app_database, books) == (0, 0)
+    assert await balances(worker_database, books) == (0, 0)
 
 
 async def test_a_reversal_that_would_overdraw_is_refused(
-    app_database: Database, fake_clock: FakeClock
+    worker_database: Database, fake_clock: FakeClock
 ) -> None:
-    books = await funded_books(app_database, fake_clock, 0)
-    async with app_database.actor_transaction(operator(app_database)) as session:
+    books = await funded_books(worker_database, fake_clock, 0)
+    async with worker_database.actor_transaction(operator(worker_database)) as session:
         paid_in = await ledger.post_entry(session, deposit(books, 500), fake_clock)
         await ledger.post_entry(session, payout(books, 400), fake_clock)
-    async with app_database.actor_transaction(operator(app_database)) as session:
+    async with worker_database.actor_transaction(operator(worker_database)) as session:
         with pytest.raises(InsufficientFunds):
             await ledger.reverse_entry(
                 session, paid_in.id, fake_clock, effective_date=DAY, idempotency_key=key()
             )
-    assert await balances(app_database, books) == (100, 100)
+    assert await balances(worker_database, books) == (100, 100)
+
+
+async def test_staff_reverse_an_entry_only_through_a_correction(
+    app_database: Database, fake_clock: FakeClock
+) -> None:
+    """A direct reversal is the worker's. Staff undo an entry by proposing a correction that a
+    second person approves, so `reverse_entry` in a staff transaction is refused."""
+    books = await funded_books(app_database, fake_clock, 0)
+    async with app_database.actor_transaction(staff()) as session:
+        paid_in = await ledger.post_entry(session, deposit(books, 500), fake_clock)
+        with pytest.raises(StaffSourceNotAllowed):
+            await ledger.reverse_entry(
+                session, paid_in.id, fake_clock, effective_date=DAY, idempotency_key=key()
+            )
+        # The refusal left the transaction usable.
+        await ledger.post_entry(session, deposit(books, 1), fake_clock)
+    assert await balances(app_database, books) == (501, 501)
 
 
 async def test_the_database_refuses_a_reversal_that_does_not_mirror(
@@ -803,7 +839,9 @@ async def test_a_transaction_with_no_actor_sees_and_posts_nothing(
             assert count == 0, table
     with pytest.raises(DBAPIError, match="row-level security"):
         async with app_database.transaction() as session:
-            await session.execute(INSERT_ENTRY, {"id": push_id(), "key": key(), "reverses": None})
+            await session.execute(
+                INSERT_ENTRY, {"id": push_id(), "key": key(), "reverses": None, "source": push_id()}
+            )
     with pytest.raises(DBAPIError, match="row-level security"):
         async with app_database.transaction() as session:
             await ledger.open_account(
@@ -927,6 +965,8 @@ async def test_a_client_command_can_post_against_a_system_account_it_cannot_read
                 effective_date=DAY,
                 lines=(debit(books.holding, ugx(4_000)), credit(found, ugx(4_000))),
                 idempotency_key=key(),
+                source_type=TEST_SOURCE,
+                source_id=push_id(),
             ),
             fake_clock,
         )

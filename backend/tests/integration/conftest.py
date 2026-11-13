@@ -17,6 +17,7 @@ def test_database() -> Iterator[TestDatabase]:
         result = harness.migrate(database)
         if result.returncode != 0:
             pytest.fail(f"migrations failed:\n{result.stdout}\n{result.stderr}")
+        harness.allow_test_entries_for_staff(database)
         yield database
     finally:
         harness.drop(database)
