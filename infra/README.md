@@ -23,7 +23,7 @@ Infrastructure as code for Finvest, modelled on Fidiba's provisioning. Terraform
 | Spaces bucket and key | `finvest-staging-documents` | `finvest-production-documents` | Private, versioned, read by the console through short-lived links (no browser uploads), and a key limited to the bucket |
 | Cloudflare | Proxied records, Origin CA certificate | Same, plus Access on the back office | Full (strict) TLS from the edge to the host |
 | GitHub settings | Written into the `staging` environment | Written into `production` | See below |
-| Alerts | When `ALERT_EMAILS` is set | Same | Uptime on `https://<api>/health/ready`, host CPU and disk. What each alert means: [docs/observability.md](../docs/observability.md) |
+| Alerts | When `ALERT_EMAILS` is set | Same | Uptime on `https://<api>/health/ready` and `/health/operations`, host CPU and disk, database CPU, memory and disk. What each alert means: [docs/observability.md](../docs/observability.md) |
 | Tag | `finvest-staging` | `finvest-production` | Tells the environments apart inside the one project |
 
 The droplet, database cluster, bucket and project have `prevent_destroy`: Terraform refuses any plan that would delete them. Changing the droplet's SSH key or image later does not rebuild it, because cloud-init runs only on first boot.
@@ -190,7 +190,6 @@ In each of the `staging` and `production` GitHub environments, beside what Terra
 | `FINVEST_IDENTITY_DATA_KEY` | Secret | `python3 -c "import secrets; print(secrets.token_urlsafe(32))"`, one per environment. It encrypts clients' document numbers, dates of birth and TINs, and reaches the API and worker only. Never change it once clients have been checked: saved checks become unreadable. Keep an offline copy. |
 | `FINVEST_EMAIL_RESEND_API_KEY` | Secret | The Resend key, once email is set up |
 | `FINVEST_EMAIL_BACKEND`, `FINVEST_EMAIL_FROM` | Variables | `resend` and `Finvest <no-reply@finvestug.com>` |
-
 | `SITE_PUBLISHED` | Variable, production only | The owner's decision, nobody else's: `true` puts the public website live at the production address. Set it when the owner launches the website. |
 | `SITE_INDEXABLE` | Variable, production only | `true` lets search engines index the website. Leave it unset until launch. Staging, the API, the back office and the client app address always send `X-Robots-Tag: noindex`, whatever this says. |
 
