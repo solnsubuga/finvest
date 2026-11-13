@@ -19,7 +19,7 @@ from app.infrastructure.storage import FileStorage, StorageSettings
 from app.modules.documents import api as documents_api
 from app.modules.goals import api as goals_api
 from app.modules.identity import api as identity_api
-from app.modules.identity import codes_api, passkeys_api
+from app.modules.identity import codes_api, passkeys_api, team_api
 from app.modules.identity.authenticators import AuthenticatorService
 from app.modules.identity.codes import CodeService
 from app.modules.identity.hashing import PasswordHasher
@@ -113,6 +113,7 @@ def create_app(
         *identity_api.routers,
         *passkeys_api.routers,
         *codes_api.routers,
+        *team_api.routers,
         *notifications_api.routers,
         *support_api.routers,
         *documents_api.routers,

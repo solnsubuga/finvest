@@ -33,6 +33,9 @@ Permission = Literal[
     "rates.view",
     "compliance.view",
     "team.view",
+    # Proposing or deciding a change to the team: an invite, a new role, deactivating or
+    # reactivating someone, or a new set-up link. Seeing the team is `team.view`. Admin only.
+    "team.change",
     "reports.view",
     "settings.view",
     # Proposing or deciding a change to the words of a client message. Seeing them is

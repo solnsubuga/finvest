@@ -50,6 +50,7 @@ Status is **Met** (checked in the code or configuration named), **Fixed** (a gap
 | --- | --- | --- |
 | Deny by default, permissions checked on the server for every staff route | Met | `identity/domain/permissions.py` |
 | Two people for money decisions (large payouts, corrections, sign-offs, dealing) | Met | Each module's two-person steps |
+| Two admins for every change to staff access: invite, role, deactivation, new set-up link | Met | `identity_staff_changes` and the guard on `identity_staff` (migration 0150), [console-admin.md](console-admin.md#the-team) |
 | A client can reach only their own records | To test | Included in the penetration test scope below |
 
 ### V5 Validation and V7 Errors and logging
