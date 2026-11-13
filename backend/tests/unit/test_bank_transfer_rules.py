@@ -13,6 +13,7 @@ from app.modules.payments.domain.bank_transfers import (
     LineFacts,
     ReceiptDetails,
     ReceiptFile,
+    check_receipt_bytes,
     check_receipt_details,
     check_receipt_file,
     match_problem,
@@ -136,3 +137,30 @@ def test_only_mobile_money_has_a_network() -> None:
     assert Method.MTN.network is Network.MTN
     assert Method.AIRTEL.network is Network.AIRTEL
     assert Method.BANK_TRANSFER.network is None
+
+
+@pytest.mark.parametrize(
+    ("content_type", "data"),
+    [
+        ("application/pdf", b"%PDF-1.7\n..."),
+        ("image/jpeg", b"\xff\xd8\xff\xe0\x00\x10JFIF"),
+        ("image/png", b"\x89PNG\r\n\x1a\n\x00\x00"),
+    ],
+)
+def test_a_receipt_that_begins_like_its_type_passes(content_type: str, data: bytes) -> None:
+    check_receipt_bytes(content_type, data)
+
+
+@pytest.mark.parametrize(
+    ("content_type", "data"),
+    [
+        ("image/png", b"%PDF-1.7\n..."),
+        ("application/pdf", b"<html><script>"),
+        ("image/jpeg", b""),
+        ("text/html", b"%PDF-1.7"),
+    ],
+)
+def test_a_receipt_whose_bytes_are_not_its_type_is_refused(content_type: str, data: bytes) -> None:
+    with pytest.raises(InvalidReceipt) as refused:
+        check_receipt_bytes(content_type, data)
+    assert (refused.value.field, refused.value.code) == ("file", "content_does_not_match_type")

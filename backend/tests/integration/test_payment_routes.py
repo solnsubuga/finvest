@@ -414,6 +414,11 @@ async def test_a_receipt_is_checked_before_it_is_stored(api: Api) -> None:
                 "unsupported_content_type",
             ),
             (
+                await send_transfer(client_http, investment.id, owed, content_type="image/png"),
+                "receipt",
+                "content_does_not_match_type",
+            ),
+            (
                 await send_transfer(client_http, investment.id, owed, receipt=b""),
                 "file",
                 "invalid_size",
