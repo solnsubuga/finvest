@@ -151,6 +151,29 @@ Settle is refused by the ledger if the pot does not hold the money, because an a
 | A limits version takes two people | CHECK that proposer and approver differ, and a policy that the approver is the staff member inserting it |
 | Clients are fenced | Row policies show a client only their own payouts |
 
+## Client routes
+
+In `backend/app/modules/payouts/api.py`. Every route needs a signed-in client and shows only that client's own records.
+
+| Route | What it does |
+| --- | --- |
+| `GET /client/payout-destinations` | The client's payout accounts that are not removed, newest first |
+| `POST /client/payout-destinations` | Add one: `{kind: "mobile_money", phone, holder_name}` or `{kind: "bank", bank_code, account_number, holder_name}`. 201, awaiting the SMS code. 409 if it is already saved |
+| `GET /client/payout-destinations/{id}` | One account |
+| `DELETE /client/payout-destinations/{id}` | Remove it for good. 204 |
+| `POST /client/payout-destinations/{id}/proof` | Bank accounts only. A form with `proof_kind` (`bank_statement`, `bank_letter` or `bank_card`) and `file` (PDF, JPEG or PNG, at most 10 MiB). Sends it to staff |
+| `GET /client/payouts` | The client's payouts, newest first, at most 50 |
+| `GET /client/payouts/{id}` | One payout |
+| `GET /client/withdrawal-limits` | The limits in force today, without the review threshold |
+
+An account shows only its last digits. A payout's status is `in_review` (held for staff), `processing` (queued, sent or uncertain), `paid`, `failed` or `cancelled`. The client is never shown whether we are still finding out what the provider did.
+
+A proof file is checked by its first bytes, stored under `payouts/<destination id>/<document id>` before the account is saved pointing at it, and deleted again if the account refuses it.
+
+No route creates a payout. The module whose money is paid out creates it: an investment that matures, or an early withdrawal.
+
+Not built yet: the SMS code step that moves an account from `awaiting_code` to `awaiting_proof`, which needs a code purpose in the identity module, and reading the name a network holds for a mobile money number. A mobile money account waits at `awaiting_proof` until that lookup exists.
+
 ## Sending a payout
 
 A queued mobile money payout gets a send job in the same transaction that queued it: when it is created, or when staff approve a held one. The worker sends it through the disbursements provider and reads its status back. The code is in `backend/app/modules/payouts/jobs.py`, the rules in `domain/sending.py`, and migration 0033 adds `payout_send_attempts`.

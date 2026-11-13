@@ -37,6 +37,7 @@ from app.modules.payments import routes as payment_routes
 from app.modules.payments.domain.provider import CollectionsProvider
 from app.modules.payments.settings import PaymentsSettings
 from app.modules.payments.wiring import collections_provider
+from app.modules.payouts import api as payouts_api
 from app.modules.support import api as support_api
 from app.shared.clock import Clock, SystemClock
 from app.shared.errors import ErrorEnvelope
@@ -120,6 +121,7 @@ def create_app(
         *support_api.routers,
         *documents_api.routers,
         *audit_api.routers,
+        *payouts_api.routers,
     ):
         app.include_router(router)
     app.include_router(payments_api.create_router(collections))
