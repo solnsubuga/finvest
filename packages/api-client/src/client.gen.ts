@@ -112,6 +112,25 @@ export type ConfirmCode = z.infer<typeof ConfirmCode>;
 export const Currency = z.enum(["UGX", "USD"]);
 export type Currency = z.infer<typeof Currency>;
 
+export const DocumentItem = z.object({
+  byte_size: z.number().int().nullable(),
+  date_from: z.string().nullable(),
+  date_to: z.string().nullable(),
+  file_name: z.string().nullable(),
+  finished_at: z.string().nullable(),
+  id: z.string(),
+  kind: z.enum(["monthly_statement", "requested_statement", "receipt"]),
+  not_final_from: z.string().nullable(),
+  requested_at: z.string(),
+  status: z.enum(["pending", "ready", "failed"]),
+});
+export type DocumentItem = z.infer<typeof DocumentItem>;
+
+export const DocumentList = z.object({
+  items: z.array(DocumentItem),
+});
+export type DocumentList = z.infer<typeof DocumentList>;
+
 export const GoalCategory = z.enum(["school_fees", "emergency", "land_or_home", "business", "wedding", "retirement", "other"]);
 export type GoalCategory = z.infer<typeof GoalCategory>;
 
@@ -427,6 +446,12 @@ export const SignupTicketView = z.object({
 });
 export type SignupTicketView = z.infer<typeof SignupTicketView>;
 
+export const StatementRequest = z.object({
+  date_from: z.string(),
+  date_to: z.string(),
+});
+export type StatementRequest = z.infer<typeof StatementRequest>;
+
 export const Unread = z.object({
   unread: z.number().int(),
 });
@@ -512,6 +537,45 @@ export const operations = {
     idempotent: false,
     status: 200,
     response: ClientComplaint,
+  },
+  "GET /client/documents": {
+    method: "GET",
+    path: "/client/documents",
+    params: z.object({}),
+    query: z.object({
+    limit: z.number().int().optional(),
+  }),
+    body: null,
+    bodyKind: null,
+    idempotent: false,
+    status: 200,
+    response: DocumentList,
+  },
+  "GET /client/documents/{document_id}": {
+    method: "GET",
+    path: "/client/documents/{document_id}",
+    params: z.object({
+    document_id: z.string(),
+  }),
+    query: z.object({}),
+    body: null,
+    bodyKind: null,
+    idempotent: false,
+    status: 200,
+    response: DocumentItem,
+  },
+  "GET /client/documents/{document_id}/file": {
+    method: "GET",
+    path: "/client/documents/{document_id}/file",
+    params: z.object({
+    document_id: z.string(),
+  }),
+    query: z.object({}),
+    body: null,
+    bodyKind: null,
+    idempotent: false,
+    status: 200,
+    response: null,
   },
   "GET /client/goals": {
     method: "GET",
@@ -913,6 +977,17 @@ export const operations = {
     idempotent: false,
     status: 200,
     response: SignupStarted,
+  },
+  "POST /client/statements": {
+    method: "POST",
+    path: "/client/statements",
+    params: z.object({}),
+    query: z.object({}),
+    body: StatementRequest,
+    bodyKind: "json",
+    idempotent: true,
+    status: 202,
+    response: DocumentItem,
   },
   "GET /client/support/chat": {
     method: "GET",
