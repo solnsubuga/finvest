@@ -93,12 +93,7 @@ def test_a_downgrade_refuses_to_drop_a_table_that_holds_rows(
     current = harness.alembic(scratch_database, "current")
     assert revision in current.stdout
     # The row is still there.
-    table = {
-        "0010_ledger": "ledger_accounts",
-        "0011_account_numbers": "account_numbers",
-        "0012_audit_events": "audit_events",
-        "0013_ledger_corrections": "ledger_correction_proposals",
-    }[revision]
+    table = statement.rsplit("INSERT INTO ", 1)[1].split()[0]
     harness.psql(
         migrator,
         "-c",

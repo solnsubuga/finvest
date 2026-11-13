@@ -110,6 +110,8 @@ CREATE FUNCTION finvest_ledger_second_person() RETURNS trigger
     # Deferred, and queued by the entry, by each of its lines and by the decision, so that
     # whatever order they are written in, and whatever is added later in the transaction, the
     # entry that commits is the entry that was approved.
+    # The comparison is a multiset one (EXCEPT ALL). An entry holds an account once, so a
+    # proposal that repeats a line, or carries a malformed one, matches no entry at all.
     """
 CREATE FUNCTION finvest_ledger_check_correction() RETURNS trigger
     LANGUAGE plpgsql SECURITY DEFINER SET search_path = pg_catalog, pg_temp
@@ -152,13 +154,13 @@ CREATE FUNCTION finvest_ledger_check_correction() RETURNS trigger
             OR EXISTS (
                 (SELECT account_id::text, amount_minor FROM public.ledger_lines
                  WHERE entry_id = checked_id
-                 EXCEPT
+                 EXCEPT ALL
                  SELECT account_id, amount_minor
                  FROM jsonb_to_recordset(proposal.lines) AS line(account_id text, amount_minor bigint))
                 UNION ALL
                 (SELECT account_id, amount_minor
                  FROM jsonb_to_recordset(proposal.lines) AS line(account_id text, amount_minor bigint)
-                 EXCEPT
+                 EXCEPT ALL
                  SELECT account_id::text, amount_minor FROM public.ledger_lines
                  WHERE entry_id = checked_id)
             )

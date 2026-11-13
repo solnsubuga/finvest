@@ -2,6 +2,7 @@
 
 import asyncio
 import json
+from dataclasses import replace
 
 import pytest
 from sqlalchemy import text
@@ -492,6 +493,49 @@ async def test_the_database_only_commits_the_correction_that_was_approved(
     # Exactly as proposed is accepted, even by hand.
     await raw_correction(app_database, checker, proposal, proposed)
     assert await state(app_database, mistake) == AFTER
+
+
+async def test_a_proposal_that_repeats_a_line_matches_no_entry(
+    app_database: Database, fake_clock: FakeClock
+) -> None:
+    """Written with plain SQL, a proposal can say [A +100, B -100, B -100]. An entry of
+    {A +100, B -100} is not that proposal, and no entry can be."""
+    mistake = await make_mistake(app_database, fake_clock)
+    books = mistake.books
+    maker, checker = staff(), staff()
+    forged = replace(
+        await propose(app_database, fake_clock, mistake, maker),
+        id=push_id(),
+        lines=(debit(books.holding, ugx(100)), credit(books.cash, ugx(100))),
+    )
+    async with app_database.actor_transaction(maker) as session:
+        await session.execute(
+            text(
+                "INSERT INTO ledger_correction_proposals (id, corrects_entry_id, reverses, "
+                "entry_type, currency, effective_date, lines, reason, proposed_by, proposed_at) "
+                "VALUES (:id, :corrects, false, :entry_type, 'UGX', :day, "
+                "CAST(:lines AS jsonb), 'Looks smaller than it is', :me, now())"
+            ),
+            {
+                "id": forged.id,
+                "corrects": forged.corrects_entry_id,
+                "entry_type": forged.entry_type,
+                "day": forged.effective_date,
+                "lines": json.dumps(
+                    [
+                        {"account_id": books.holding, "amount_minor": 100},
+                        {"account_id": books.cash, "amount_minor": -100},
+                        {"account_id": books.cash, "amount_minor": -100},
+                    ]
+                ),
+                "me": maker.id,
+            },
+        )
+    with pytest.raises(DBAPIError, match="exactly what was proposed"):
+        await raw_correction(
+            app_database, checker, forged, [(books.holding, 100), (books.cash, -100)]
+        )
+    assert await state(app_database, mistake) == BEFORE
 
 
 async def test_the_service_cannot_post_a_correction_entry_without_an_approval(
