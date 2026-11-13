@@ -14,16 +14,19 @@ from app.infrastructure.jobs import Handler, JobHandler, Worker, WorkerConfig
 from app.infrastructure.jobs.settings import JobProcessSettings
 from app.infrastructure.logging import configure_logging
 from app.infrastructure.process import keep_heartbeat, stop_on_signals
+from app.infrastructure.push import PushSettings
 from app.infrastructure.settings import Settings
 from app.infrastructure.sms import SmsSettings
 from app.modules.autoinvest.jobs import AutoinvestJobs
 from app.modules.documents.jobs import DocumentJobs
 from app.modules.goals.jobs import GoalJobs
+from app.modules.identity.service import client_contact
 from app.modules.investments.jobs import InvestmentJobs
 from app.modules.kyc.jobs import ProviderJobs, sweep_unanswered
 from app.modules.kyc.service import SWEEP_UNANSWERED
 from app.modules.kyc.settings import KycSettings
 from app.modules.notifications import jobs as notification_jobs
+from app.modules.notifications.delivery import DeliveryJobs
 from app.modules.notifications.email_delivery import DeliveryEventJobs
 from app.modules.payments.bank_transfers import BankTransferJobs
 from app.modules.payments.jobs import DepositJobs
@@ -76,6 +79,9 @@ def handlers(
         )
     )
     kinds.update(DeliveryEventJobs(database, clock).handlers())
+    kinds.update(
+        DeliveryJobs(database, clock, PushSettings().transport(), client_contact).handlers()
+    )
     return kinds
 
 
