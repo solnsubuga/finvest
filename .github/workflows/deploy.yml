@@ -121,8 +121,7 @@ jobs:
         run: |
           set -euo pipefail
           [[ $FIREWALL_ID =~ ^[a-f0-9-]{36}$ ]] || { echo 'DEPLOY_FIREWALL_ID is not set; run Provision apply' >&2; exit 1; }
-          address=$(curl -fsS --retry 3 https://api.ipify.org)
-          [[ $address =~ ^[0-9]+(\.[0-9]+){3}$ ]]
+          address=$(bash infra/deployment/runner-address.sh)
           rule=$(jq -nc --arg a "$address" '{inbound_rules: [{protocol: "tcp", ports: "22", sources: {addresses: [$a]}}]}')
           echo "SSH_RULE=$rule" >> "$GITHUB_ENV"
           curl -fsS -X POST -H "Authorization: Bearer $DIGITALOCEAN_TOKEN" -H 'Content-Type: application/json' \
@@ -132,6 +131,7 @@ jobs:
       - name: Transfer release and deploy
         env:
           DEPLOY_HOST: ${{ vars.DEPLOY_HOST }}
+          DEPLOY_HOST_KEY: ${{ vars.DEPLOY_HOST_KEY }}
           DEPLOY_USER: ${{ vars.DEPLOY_USER }}
           DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
           REGISTRY_USER: ${{ github.actor }}
@@ -150,8 +150,19 @@ jobs:
           DIGITALOCEAN_TOKEN: ${{ secrets.DEPLOY_FIREWALL_TOKEN }}
           FIREWALL_ID: ${{ vars.DEPLOY_FIREWALL_ID }}
         run: |
-          curl -fsS -X DELETE -H "Authorization: Bearer $DIGITALOCEAN_TOKEN" -H 'Content-Type: application/json' \
-            -d "$SSH_RULE" "https://api.digitalocean.com/v2/firewalls/$FIREWALL_ID/rules"
+          set -euo pipefail
+          api="https://api.digitalocean.com/v2/firewalls/$FIREWALL_ID"
+          curl -fsS --retry 5 --retry-all-errors -X DELETE -H "Authorization: Bearer $DIGITALOCEAN_TOKEN" \
+            -H 'Content-Type: application/json' -d "$SSH_RULE" "$api/rules" || true
+          # Fail loudly if the rule is still there. Provision apply resets the firewall to the
+          # permanent addresses, which removes anything a failed run left behind.
+          address=$(jq -r '.inbound_rules[0].sources.addresses[0]' <<< "$SSH_RULE")
+          left=$(curl -fsS --retry 5 --retry-all-errors -H "Authorization: Bearer $DIGITALOCEAN_TOKEN" "$api" |
+            jq --arg a "$address" '[.firewall.inbound_rules[] | select(.ports == "22") | .sources.addresses[]? | select(. == $a)] | length')
+          if [[ $left != 0 ]]; then
+            echo "::error::SSH is still open to this run's address ($address). Run Provision apply for $DEPLOY_ENVIRONMENT to close it."
+            exit 1
+          fi
       - name: Remove private release files
         if: always()
         run: rm -rf -- "$RUNNER_TEMP/finvest-release"

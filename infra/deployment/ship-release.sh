@@ -7,13 +7,15 @@
 #
 #   ship-release.sh BUNDLE_DIR
 #
-# Reads DEPLOY_HOST, DEPLOY_USER, DEPLOY_SSH_KEY, REVISION, GITHUB_RUN_ID, GITHUB_RUN_ATTEMPT,
+# Reads DEPLOY_HOST, DEPLOY_HOST_KEY, DEPLOY_USER, DEPLOY_SSH_KEY, REVISION, GITHUB_RUN_ID, GITHUB_RUN_ATTEMPT,
 # REGISTRY_USER, REGISTRY_TOKEN and FORCE_RECREATE from the environment.
 set -euo pipefail
 umask 077
 bundle=${1:?Usage: ship-release.sh BUNDLE_DIR}
 [[ -f $bundle/deploy.sh ]] || { echo 'Not a release bundle' >&2; exit 1; }
 [[ $DEPLOY_HOST =~ ^[0-9]+(\.[0-9]+){3}$ ]] || { echo 'DEPLOY_HOST is not valid' >&2; exit 1; }
+# The host's public SSH key, recorded by the Provision run that first reached the host.
+[[ ${DEPLOY_HOST_KEY:-} =~ ^ssh-ed25519\ [A-Za-z0-9+/]+=*$ ]] || { echo 'DEPLOY_HOST_KEY is not set; run Provision apply' >&2; exit 1; }
 [[ $DEPLOY_USER =~ ^[a-z_][a-z0-9_-]*$ ]] || { echo 'DEPLOY_USER is not valid' >&2; exit 1; }
 [[ $REVISION =~ ^[a-f0-9]{40}$ ]] || { echo 'REVISION is not valid' >&2; exit 1; }
 [[ $GITHUB_RUN_ID =~ ^[0-9]+$ && $GITHUB_RUN_ATTEMPT =~ ^[0-9]+$ ]] || exit 1
@@ -24,10 +26,11 @@ force=${FORCE_RECREATE:-false}
 work=$(mktemp -d)
 trap 'rm -rf -- "$work"' EXIT
 printf '%s\n' "$DEPLOY_SSH_KEY" > "$work/key"
-# Each run starts with no known hosts and trusts the key it first sees at the reserved IP;
-# DigitalOcean publishes no host key to check it against.
+# Only the recorded host key is accepted, so a deploy never talks to a host it has not seen before.
+printf '%s %s\n' "$DEPLOY_HOST" "$DEPLOY_HOST_KEY" > "$work/known_hosts"
 ssh_opts=(-i "$work/key" -o IdentitiesOnly=yes -o BatchMode=yes -o ConnectTimeout=15
-  -o StrictHostKeyChecking=accept-new -o UserKnownHostsFile="$work/known_hosts")
+  -o HostKeyAlgorithms=ssh-ed25519 -o StrictHostKeyChecking=yes
+  -o UserKnownHostsFile="$work/known_hosts" -o GlobalKnownHostsFile=/dev/null)
 target="$DEPLOY_USER@$DEPLOY_HOST"
 root=/opt/finvest
 release="$root/releases/$REVISION-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
