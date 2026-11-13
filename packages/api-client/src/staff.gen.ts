@@ -548,7 +548,7 @@ export const InterestRunOut = z.object({
 });
 export type InterestRunOut = z.infer<typeof InterestRunOut>;
 
-export const InvestmentStatus = z.enum(["awaiting_payment", "active", "cancelled", "matured"]);
+export const InvestmentStatus = z.enum(["awaiting_payment", "active", "cancelled", "matured", "withdrawn"]);
 export type InvestmentStatus = z.infer<typeof InvestmentStatus>;
 
 export const LiftView = z.object({

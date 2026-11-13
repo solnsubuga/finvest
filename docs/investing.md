@@ -228,6 +228,20 @@ Agreed with the payments and payouts threads on 13 November 2026. Starting and d
 - **Saving sources.** An investment the client did not make themselves, from an automatic investing run or a goal's saving rule, carries `source_type` (`autoinvest_run` or `goal_saving`) and `source_id`. The columns and their checks are on main (migration 0063): only the worker creates such an investment, at most one per source. The function that creates one, `request_system_investment`, is planned and arrives with the automatic investing work.
 - **Unwinding.** For a deposit credited by mistake, `investments.service.unwind_investment` will move the principal back to `client.awaiting_start` and reverse interest not yet paid out. It refuses if anything was already paid out.
 
+## Early withdrawal
+
+A client may withdraw a running investment early, once, up to the day before a fixed term matures. An open term can be withdrawn at any time. They name one of their approved payout destinations that is past its first day's safety wait, and send an idempotency key (`POST /client/investments/{id}/withdraw`).
+
+It pays the principal plus the interest earned after tax so far, with no fee: exactly the `value_minor` the client was shown. Interest stops at the request, so the figure cannot move while the money is found. This is decided for now (see [decisions.md](decisions.md)).
+
+1. **The request.** The client's transaction stamps `withdrawal_requested_at` with PostgreSQL's clock, keeps the destination, queues `investments.withdraw_early` and records `investments.withdrawal_requested`. Nothing moves yet. The daily run and the maturity run skip the investment from then on.
+2. **The move to payouts.** The worker posts `investment.withdrawn_early`: the holding and the interest go to the client's payout pending account for the investment, in one entry. The investment becomes `withdrawn`, the worker records `investments.withdrawn_early`, and it publishes `investments.withdrawn_early` with `{investment_id, client_id, product_code, principal_minor, currency, amount_minor}` for the dealing desk.
+3. **The payout.** The dealing desk funds the withdrawal from the liquidity buffer or a sale and publishes `dealing.withdrawal_funded`. The consumer `investments.pay_early_withdrawal` checks the amount is exactly what was withdrawn, then creates the payout with the key `early:<funding id>`. A refusal fails the job for staff, and the money stays in the payout pending account.
+
+Whichever merges second wires the two consumers: `dealing.events.FUND_EARLY_WITHDRAWAL` into the `investments.withdrawn_early` publish, and `investments.events.PAY_EARLY_WITHDRAWAL` into `dealing.withdrawals.FUNDED_CONSUMERS`.
+
+The database fences each step (migration 0064). Only the client asks, once, while the investment runs, before the maturity date and by the database clock. Only the worker withdraws an investment someone asked for. A withdrawn investment changes only to record its payout, once. Accrual and the choice for maturity stop at the request.
+
 ## Not built yet
 
-Editing a product, a staff refund of money that did not start an investment, early withdrawal, the monthly coupon for open terms, statements, and every screen. The dealing desk is its own module: see [dealing-desk.md](dealing-desk.md).
+Editing a product, a staff refund of money that did not start an investment, the monthly coupon for open terms, and the early withdrawal screen in the client app. The dealing desk is its own module: see [dealing-desk.md](dealing-desk.md).
