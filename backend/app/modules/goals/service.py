@@ -19,6 +19,7 @@ from typing import Any
 
 import structlog
 from sqlalchemy import Row, text
+from sqlalchemy.exc import DBAPIError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.infrastructure.idempotency import Receipt, run_once
@@ -150,6 +151,8 @@ _SAVINGS = text(
     "SELECT investment_id FROM goal_savings WHERE goal_id = :goal_id "
     "ORDER BY created_at DESC, investment_id DESC"
 )
+# What the database guards raise when they refuse a change.
+_REFUSED = "42501"
 _SAVED_FROM = text(
     "SELECT s.goal_id, s.client_id, g.status FROM goal_savings s "
     "JOIN goals g ON g.id = s.goal_id WHERE s.investment_id = :investment_id"
@@ -472,16 +475,24 @@ async def follow_rollover(
     row = (await session.execute(_SAVED_FROM, {"investment_id": investment_id})).one_or_none()
     if row is None or row.status != GoalStatus.ACTIVE.value:
         return False
-    await session.execute(
-        _INSERT_ROLLOVER,
-        {
-            "investment_id": new_investment_id,
-            "goal_id": row.goal_id,
-            "client_id": row.client_id,
-            "now": clock.now(),
-            "rolled_from": investment_id,
-        },
-    )
+    try:
+        # A savepoint, so a goal closed since the read above leaves the job's transaction usable.
+        async with session.begin_nested():
+            await session.execute(
+                _INSERT_ROLLOVER,
+                {
+                    "investment_id": new_investment_id,
+                    "goal_id": row.goal_id,
+                    "client_id": row.client_id,
+                    "now": clock.now(),
+                    "rolled_from": investment_id,
+                },
+            )
+    except DBAPIError as error:
+        if getattr(error.orig, "sqlstate", None) != _REFUSED:
+            raise
+        # The guard refused it: the goal was closed in between. Closed goals are not followed.
+        return False
     return True
 
 

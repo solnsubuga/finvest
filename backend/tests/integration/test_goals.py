@@ -753,3 +753,31 @@ async def test_only_the_worker_records_a_rollover_and_only_from_the_same_goal(
     with pytest.raises(DBAPIError):
         async with worker_database.actor_transaction(SYSTEM) as session:
             await session.execute(insert, {**values, "id": push_id()})
+
+
+async def test_a_goal_closed_after_the_rollover_is_read_is_not_followed(
+    app_database: Database, worker_database: Database, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    client = await approved_client(app_database, NOW)
+    goal = await new_goal(app_database, client)
+    first = await started_saving(app_database, worker_database, client, goal.id, ugx(1_000_000))
+    old = await mature(worker_database, first)
+    assert old.rolled_into_id is not None
+    async with app_database.actor_transaction(client) as session:
+        await goals.close_goal(session, client, goal.id, NOW)
+    # As if the goal was read while still open, and closed before the link was written.
+    monkeypatch.setattr(
+        goals,
+        "_SAVED_FROM",
+        text(
+            "SELECT goal_id, client_id, 'active' AS status FROM goal_savings "
+            "WHERE investment_id = :investment_id"
+        ),
+    )
+    async with worker_database.actor_transaction(SYSTEM) as session:
+        assert not await goals.follow_rollover(
+            session, investment_id=first, new_investment_id=old.rolled_into_id, clock=NOW
+        )
+        # The job's transaction is still usable, so it completes cleanly.
+        assert await session.scalar(text("SELECT 1")) == 1
+    assert await linked(worker_database, goal.id) == [(first, None)]
