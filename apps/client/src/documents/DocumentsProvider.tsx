@@ -2,7 +2,8 @@ import { createContext, ReactNode, useContext, useMemo } from "react";
 
 import { useAuth } from "@/auth/AuthProvider";
 
-import { DocumentsClient, DocumentsError } from "./types";
+import { createApiDocumentsClient } from "./apiDocumentsClient";
+import { DocumentsClient } from "./types";
 
 type StubModule = typeof import("./stubDocumentsClient");
 
@@ -15,27 +16,12 @@ function loadStub(): StubModule | null {
   return null;
 }
 
-/**
- * Until the client for the real routes is written (once the typed API layer is
- * on main), a production build says the documents are unavailable rather than
- * showing anything made up.
- */
+/** The demo stub in development or a demo build; the real API otherwise. */
 export function resolveDocumentsClient(
   phone: string | null,
   stub: StubModule | null = loadStub(),
 ): DocumentsClient {
-  if (stub) {
-    return stub.createStubDocumentsClient(phone);
-  }
-  const unavailable = async (): Promise<never> => {
-    throw new DocumentsError("unavailable");
-  };
-  return {
-    listDocuments: unavailable,
-    getDocument: unavailable,
-    requestStatement: unavailable,
-    download: unavailable,
-  };
+  return stub ? stub.createStubDocumentsClient(phone) : createApiDocumentsClient();
 }
 
 const DocumentsContext = createContext<DocumentsClient | null>(null);
