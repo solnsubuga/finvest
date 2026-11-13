@@ -10,6 +10,7 @@ import { WARM_ROUTER_MS, warmRouter } from "@/testing/warmRouter";
 const mockClock = { ms: Date.parse("2026-11-13T12:40:00Z") };
 const mockSend = jest.fn();
 const mockSave = jest.fn();
+const mockComplain = jest.fn((_complaint: { key: string }): "made" | "made then lost" | "refused" => "made");
 
 jest.mock("@/auth/stubAuthClient", () => {
   const actual = jest.requireActual("@/auth/stubAuthClient");
@@ -21,6 +22,7 @@ jest.mock("@/auth/stubAuthClient", () => {
 
 jest.mock("@/support/stubSupportClient", () => {
   const actual = jest.requireActual("@/support/stubSupportClient");
+  const actualTypes = jest.requireActual("@/support/types");
   return {
     ...actual,
     createStubSupportClient: () => {
@@ -30,6 +32,14 @@ jest.mock("@/support/stubSupportClient", () => {
         sendMessage: async (message: unknown) => {
           mockSend(message);
           return client.sendMessage(message);
+        },
+        makeComplaint: async (complaint: { key: string }) => {
+          // "made then lost": the complaint is logged and its answer never arrives.
+          const outcome = mockComplain(complaint);
+          if (outcome === "refused") throw new actualTypes.SupportError("invalid");
+          const made = await client.makeComplaint(complaint);
+          if (outcome === "made then lost") throw new actualTypes.SupportError("unavailable");
+          return made;
         },
         savePreferences: async (category: unknown, channels: unknown) => {
           mockSave(category, channels);
@@ -72,6 +82,7 @@ async function openHelp() {
 beforeEach(() => {
   mockSend.mockClear();
   mockSave.mockClear();
+  mockComplain.mockClear();
   mockClock.ms = Date.parse("2026-11-13T12:40:00Z");
 });
 
@@ -257,5 +268,40 @@ describe("complaints", () => {
     await fireEvent.press(screen.getByLabelText("Back"));
     await screen.findByTestId("complaint-C-1001");
     expect(screen.getByText("Received. Answer by Fri 20 Nov")).toBeTruthy();
+  });
+
+  async function fillComplaint() {
+    await openComplaints();
+    await fireEvent.press(screen.getByTestId("new-complaint"));
+    await fireEvent.press(await screen.findByTestId("category-fees"));
+    await fireEvent.changeText(screen.getByTestId("complaint-summary"), "Charged twice");
+    await fireEvent.changeText(screen.getByTestId("complaint-details"), "Two fees on one payment.");
+  }
+
+  it("logs a complaint once when its answer is lost, by sending the same key again", async () => {
+    await fillComplaint();
+    mockComplain.mockReturnValueOnce("made then lost");
+    await fireEvent.press(screen.getByTestId("send-complaint"));
+    await screen.findByText(/could not reach Finvest/);
+
+    await fireEvent.press(screen.getByTestId("send-complaint"));
+    await screen.findByText("C-1001");
+    expect(mockComplain).toHaveBeenCalledTimes(2);
+    expect(mockComplain.mock.calls[1]![0].key).toBe(mockComplain.mock.calls[0]![0].key);
+
+    await fireEvent.press(screen.getByLabelText("Back"));
+    await screen.findByTestId("complaint-C-1001");
+    expect(screen.queryByTestId("complaint-C-1002")).toBeNull();
+  });
+
+  it("uses a fresh key after a definite refusal, since nothing was logged", async () => {
+    await fillComplaint();
+    mockComplain.mockReturnValueOnce("refused");
+    await fireEvent.press(screen.getByTestId("send-complaint"));
+    await screen.findByText(/could not be accepted/);
+
+    await fireEvent.press(screen.getByTestId("send-complaint"));
+    await screen.findByText("C-1001");
+    expect(mockComplain.mock.calls[1]![0].key).not.toBe(mockComplain.mock.calls[0]![0].key);
   });
 });

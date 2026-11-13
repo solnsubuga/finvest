@@ -159,8 +159,20 @@ describe("the support client for the real API", () => {
   it("makes a complaint and reads one by its id", async () => {
     const seen = serve([201, complaint], [200, complaint]);
     const client = createApiSupportClient();
-    const made = await client.makeComplaint({ category: "payments", summary: "Late payment", details: "x" });
+    const made = await client.makeComplaint({
+      category: "payments",
+      summary: "Late payment",
+      details: "x",
+      key: "complaint-key-1",
+    });
     expect(made).toMatchObject({ reference: "CMP-000001", dueOn: "2026-11-27", outcome: null });
+    // The form's key goes with it, so a retry after a lost answer is logged once.
+    expect(seen[0]!.body).toEqual({
+      category: "payments",
+      summary: "Late payment",
+      details: "x",
+      client_key: "complaint-key-1",
+    });
     await client.getComplaint(complaint.id);
     expect(seen[1]).toMatchObject({ method: "GET", path: `/client/complaints/${complaint.id}` });
   });
@@ -170,7 +182,7 @@ describe("the support client for the real API", () => {
     serve([404, refusal(404, "not_found")]);
     await expect(client.getComplaint("X".repeat(20))).rejects.toEqual(new SupportError("not_found"));
     serve([422, refusal(422, "validation_failed")]);
-    await expect(client.makeComplaint({ category: "other", summary: "", details: "" })).rejects.toEqual(
+    await expect(client.makeComplaint({ category: "other", summary: "", details: "", key: "complaint-key-2" })).rejects.toEqual(
       new SupportError("invalid"),
     );
     serve([500, refusal(500, "internal_error")]);
