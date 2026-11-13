@@ -1,10 +1,10 @@
 """A downgrade must never delete the books, the issued numbers, the audit trail, the job
 history, the receipts that stop a command running twice, the identity records, the payout
 destinations and their two-person checks, the withdrawal limits, the payouts and their send
-attempts, the migration checks, the imported statements, the day closes, the pot transfers,
-the help chat, the complaints register, the goals, the email delivery records, the unclaimed
-accounts, the complaint outcomes, the suppression lifts, the client locks, the announcements
-or the team changes."""
+attempts, the migration checks, the imported statements, the day closes and their recorded
+matches, the pot transfers, the help chat, the complaints register, the goals, the email
+delivery records, the unclaimed accounts, the complaint outcomes, the suppression lifts, the
+client locks, the announcements or the team changes."""
 
 import os
 from collections.abc import Iterator
@@ -375,6 +375,24 @@ ROWS = {
         "'mtn', 'bank', 'trust', 'UGX', 5, 5, DATE '2026-11-10', 'IOT-1', 'proposed', "
         "'-Nabc0000000000000B1', now(), 'Sweep')",
         "refusing to drop pot transfers",
+    ),
+    "0043_reconciliation_recorded": (
+        "INSERT INTO reconciliation_statements (id, source, account_reference, business_date, "
+        "currency, opening_minor, closing_minor, line_count, file_sha256, imported_by, "
+        "imported_at) VALUES ('-Nabc0000000000000A1', 'bank', 'trust', DATE '2026-11-10', "
+        "'UGX', 0, 5, 1, repeat('0', 64), '-Nabc0000000000000B1', now()); "
+        "INSERT INTO reconciliation_statement_lines (id, statement_id, line_no, value_date, "
+        "direction, amount_minor, reference, narrative, fingerprint) VALUES "
+        "('-Nabc0000000000000L1', '-Nabc0000000000000A1', 1, DATE '2026-11-10', 'in', 5, "
+        "'FT1', 'Transfer', repeat('1', 64)); "
+        "INSERT INTO reconciliation_movements (entry_id, line_no, source, account_reference, "
+        "effective_date, currency, amount_minor, reference, entry_type, recorded_at) VALUES "
+        "('-Nabc0000000000000E1', 1, 'bank', 'trust', DATE '2026-11-11', 'UGX', 5, 'deposit-1', "
+        "'payment.deposit_confirmed', now()); "
+        "INSERT INTO reconciliation_matches (statement_line_id, entry_id, line_no, how, "
+        "matched_by, reason, matched_at) VALUES ('-Nabc0000000000000L1', "
+        "'-Nabc0000000000000E1', 1, 'recorded', '-Nabc0000000000000S1', 'Review', now())",
+        "refusing to drop recorded matches",
     ),
     "0153_email_suppression_lifts": (
         "BEGIN; SELECT set_config('finvest.actor_kind', 'staff', true); "

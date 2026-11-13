@@ -9,6 +9,7 @@ from app.modules.reconciliation.domain.matching import (
     LedgerMovement,
     MatchResult,
     match,
+    pair_recorded,
     suggestions,
 )
 from app.modules.reconciliation.domain.statements import Direction, StatementLine
@@ -168,3 +169,65 @@ def test_suggestions_are_same_way_same_amount_and_close_in_time() -> None:
     dollars = LedgerMovement("lnUSD", DAY, IN, Money(100, Currency.USD), "DEP6")
     offered = suggestions(target, [too_far, edge, wrong_way, near, wrong_amount, same_day, dollars])
     assert offered == (same_day, near, edge)
+
+
+# --- What other modules recorded --------------------------------------------------------------
+
+
+def pairs(
+    lines: list[StatementLine], moves: list[LedgerMovement], **links: dict[str, str]
+) -> list[tuple[str, str]]:
+    found = pair_recorded(
+        lines,
+        moves,
+        line_for_movement=links.get("line_for", {}),
+        reference_for_movement=links.get("reference_for", {}),
+    )
+    return [(pair.statement_line.fingerprint, pair.movement.line_id) for pair in found]
+
+
+def test_a_bank_transfer_pairs_with_the_line_its_review_names() -> None:
+    # The bank shows its own reference; the ledger carries the deposit's ID.
+    arrived, other = line("FT123", 500), line("FT999", 500)
+    confirmed = move("deposit-1", 500, day=DAY + timedelta(days=1))
+    links = {confirmed.line_id: arrived.fingerprint}
+    assert pairs([other, arrived], [confirmed], line_for=links) == [
+        (arrived.fingerprint, confirmed.line_id)
+    ]
+
+
+def test_a_dealing_settlement_pairs_with_the_one_line_under_its_bank_reference() -> None:
+    shown, settled = line("CUST-7", 900, OUT), move("order-7", 900, OUT)
+    assert pairs([shown], [settled], reference_for={settled.line_id: "CUST-7"}) == [
+        (shown.fingerprint, settled.line_id)
+    ]
+    # Two lines under the same reference: a person decides.
+    twice = line("CUST-7", 900, OUT)
+    assert pairs([shown, twice], [settled], reference_for={settled.line_id: "CUST-7"}) == []
+
+
+@pytest.mark.parametrize(
+    ("statement", "ledger"),
+    [((500, IN), (499, IN)), ((500, IN), (500, OUT)), ((500, OUT), (500, IN))],
+)
+def test_a_recorded_link_never_pairs_different_money(
+    statement: tuple[int, Direction], ledger: tuple[int, Direction]
+) -> None:
+    arrived, confirmed = line("FT1", *statement), move("deposit-1", *ledger)
+    assert pairs([arrived], [confirmed], line_for={confirmed.line_id: arrived.fingerprint}) == []
+    assert pairs([arrived], [confirmed], reference_for={confirmed.line_id: "FT1"}) == []
+
+
+def test_a_line_already_paired_or_not_open_is_not_used_again() -> None:
+    arrived = line("FT1", 500)
+    first, second = move("deposit-1", 500), move("deposit-2", 500)
+    both = {first.line_id: arrived.fingerprint, second.line_id: arrived.fingerprint}
+    assert pairs([arrived], [first, second], line_for=both) == [
+        (arrived.fingerprint, first.line_id)
+    ]
+    # The named line is no longer open (already matched): nothing to pair.
+    assert pairs([], [first], line_for={first.line_id: arrived.fingerprint}) == []
+
+
+def test_with_nothing_recorded_nothing_is_paired() -> None:
+    assert pairs([line("R", 1)], [move("R", 1)]) == []

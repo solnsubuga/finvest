@@ -25,14 +25,10 @@ Steps of the client journey with no code to test yet, and so no journey yet:
 UNAUDITED: set[str] = set()
 
 # Movements on the trust bank account that the day close cannot pair with the statement by
-# reference, so staff pair them by hand with a reason:
-# - a confirmed bank transfer: the ledger movement carries the deposit's ID and is dated the
-#   day staff approved it, the statement line carries the bank's reference and the day the
-#   money arrived, although the payment review already recorded which line it is;
-# - a dealing settlement: the movement carries the order's ID, the bank shows the custodian's
-#   reference, which `dealing.holdings.expected_bank_movements` gives but the day close does
-#   not read.
-HAND_MATCHED = ("bank transfer", "dealing settlement")
+# itself, so staff pair them by hand with a reason. None now: a confirmed bank transfer pairs
+# with the line its approved review names, and a dealing settlement with the bank reference
+# `dealing.holdings.expected_bank_movements` gives.
+HAND_MATCHED: tuple[str, ...] = ()
 
 
 def expected_missing(*actions: str) -> list[str]:

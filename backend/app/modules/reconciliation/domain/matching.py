@@ -11,7 +11,7 @@ exception. Nothing is dropped.
 from __future__ import annotations
 
 from collections import defaultdict
-from collections.abc import Iterable, Sequence
+from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from datetime import date
 from enum import StrEnum
@@ -30,6 +30,8 @@ class LedgerMovement:
     amount: Money  # always positive
     # The reference the provider was given for this movement: the deposit or payout ID.
     reference: str
+    # The kind of ledger entry, such as "payment.deposit_confirmed". Empty when not known.
+    entry_type: str = ""
 
     @property
     def signed_amount(self) -> Money:
@@ -154,3 +156,42 @@ def suggestions(
             key=lambda item: (abs((item.effective_date - line.value_date).days), item.line_id),
         )
     )
+
+
+def pair_recorded(
+    statement_lines: Sequence[StatementLine],
+    movements: Sequence[LedgerMovement],
+    *,
+    line_for_movement: Mapping[str, str],
+    reference_for_movement: Mapping[str, str],
+) -> tuple[Match, ...]:
+    """Pair what another module already recorded, before matching by reference.
+
+    `line_for_movement` maps a movement's `line_id` to the statement line another module
+    recorded it against: a bank transfer that staff matched to a line and a second person
+    approved. `reference_for_movement` maps a movement's `line_id` to the reference the bank
+    shows for it: a dealing settlement, which the bank shows under the custodian's reference.
+
+    A pair is made only when the line is still open, there is exactly one open line with that
+    reference, and both go the same way for the same amount. Anything else is left for the
+    reference matching and, failing that, for a person.
+    """
+    lines_by_id = {line.fingerprint: line for line in statement_lines}
+    lines_by_reference: dict[str, list[StatementLine]] = defaultdict(list)
+    for each in statement_lines:
+        if each.reference:
+            lines_by_reference[each.reference].append(each)
+    used: set[str] = set()
+    pairs: list[Match] = []
+    for movement in sorted(movements, key=lambda item: item.line_id):
+        chosen: StatementLine | None = None
+        if movement.line_id in line_for_movement:
+            chosen = lines_by_id.get(line_for_movement[movement.line_id])
+        elif movement.line_id in reference_for_movement:
+            found = lines_by_reference.get(reference_for_movement[movement.line_id], [])
+            chosen = found[0] if len(found) == 1 else None
+        if chosen is None or chosen.fingerprint in used or _compare(chosen, movement) is not None:
+            continue
+        used.add(chosen.fingerprint)
+        pairs.append(Match(chosen, movement))
+    return tuple(pairs)
