@@ -26,9 +26,12 @@ from app.modules.payments import bank_transfers as bank
 from app.modules.payments import service
 from app.modules.payments.domain.bank_transfers import (
     MAX_RECEIPT_BYTES,
+    RECEIPT_CONTENT_TYPES,
+    InvalidReceipt,
     NotMatchedReason,
     ReceiptDetails,
     ReceiptFile,
+    check_receipt_bytes,
 )
 from app.modules.payments.domain.deposits import (
     DepositStatus,
@@ -256,6 +259,12 @@ def create_client_router(collections: CollectionsProvider | None) -> APIRouter:
         # Everything that can refuse the transfer runs before the file is stored, so a refused
         # one, an investment already being paid or a replayed key never leaves a file behind.
         sent = ReceiptFile(content_type, len(data), sha256_hex(data))
+        if content_type in RECEIPT_CONTENT_TYPES and 0 < len(data) <= MAX_RECEIPT_BYTES:
+            # The type is the client's claim; the other refusals come from the preflight.
+            try:
+                check_receipt_bytes(content_type, data)
+            except InvalidReceipt as error:
+                raise _receipt_problem(error.code) from None
         async with database.actor_transaction(client.actor) as session:
             payable = await _payable_for_transfer(
                 session, client, investment_id, amount_minor, clock
