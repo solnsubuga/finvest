@@ -47,6 +47,8 @@ That is roughly $27 for staging, $59 for production and $5 for Spaces, about $91
    - **Plan** runs in the `<env>-plan` environment with read-only tokens and shows the full plan in the run summary.
    - **Apply** runs in the `<env>` environment, which holds the write tokens and waits for your approval. Read the plan, then approve. Apply plans again and stops if that plan differs from the one you read.
 
+On the first staging run, check that Apply's plan matches Plan's (the read-only and write tokens must see the same state). If Apply stops with "The plan changed" while nothing changed, the plan tokens are missing a read scope.
+
 Nothing applies on merge. Nothing that costs money is created until someone runs step 3 and approves it.
 
 ## One time setup
