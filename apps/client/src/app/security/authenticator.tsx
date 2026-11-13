@@ -11,6 +11,7 @@ import { CODE_LENGTH, CodeInput } from "@/components/CodeInput";
 import { Done } from "@/components/Done";
 import { QrCode } from "@/components/QrCode";
 import { Screen } from "@/components/Screen";
+import { needsSignInAgain, SignInAgain } from "@/components/SignInAgain";
 import { Eyebrow, Title, Txt } from "@/components/Txt";
 import { colors, fontSizes } from "@/theme";
 import { useIsWide } from "@/theme/useIsWide";
@@ -42,6 +43,7 @@ export default function SetUpAuthenticator() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [openFailed, setOpenFailed] = useState(false);
+  const [stale, setStale] = useState(false);
 
   useEffect(() => {
     let current = true;
@@ -52,7 +54,12 @@ export default function SetUpAuthenticator() {
         }
       },
       (caught: unknown) => {
-        if (current) {
+        if (!current) {
+          return;
+        }
+        if (needsSignInAgain(caught)) {
+          setStale(true);
+        } else {
           setLoadError(describeAuthError(caught));
         }
       },
@@ -78,6 +85,16 @@ export default function SetUpAuthenticator() {
           onPress={leave}
         />
       </>
+    );
+  }
+
+  if (stale) {
+    return (
+      <Screen>
+        <Stack.Screen options={{ title: "Set up an authenticator app" }} />
+        <BackButton fallback="/security" />
+        <SignInAgain />
+      </Screen>
     );
   }
 
@@ -112,10 +129,14 @@ export default function SetUpAuthenticator() {
       setBusy(true);
       setError(null);
       try {
-        await client.confirmAuthenticatorSetup(setup.setupId, code);
+        await client.confirmAuthenticatorSetup(code);
         setStep("done");
       } catch (caught) {
-        setError(describeAuthError(caught));
+        if (needsSignInAgain(caught)) {
+          setStale(true);
+        } else {
+          setError(describeAuthError(caught));
+        }
         setCode("");
       } finally {
         setBusy(false);

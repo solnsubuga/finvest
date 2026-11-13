@@ -65,13 +65,19 @@ function demoKey(): string {
   return key;
 }
 
+/** Adding a second step needs a session this fresh, as the sign-in API does. */
+export const RECENT_SIGN_IN_MS = 10 * 60 * 1000;
+
 export type StubOptions = {
+  /** The clock, so tests can let a session grow old. */
+  now?: () => number;
   /** Artificial delay so loading states are visible. Tests pass 0. */
   delayMs?: number;
 };
 
 export function createStubAuthClient(options: StubOptions = {}): AuthClient {
   const delayMs = options.delayMs ?? 450;
+  const now = options.now ?? Date.now;
   const accounts = new Map<string, Account>([
     [
       DEMO_PHONE,
@@ -95,7 +101,9 @@ export function createStubAuthClient(options: StubOptions = {}): AuthClient {
   const signups = new Map<string, SignupStart>();
   const tickets = new Map<string, SignupStart>();
   const logins = new Map<string, string>();
-  const authenticatorSetups = new Map<string, string>();
+  /** A set-up that was started and not yet confirmed, for this session only. */
+  let pendingAuthenticator = false;
+  let signedInAt = 0;
   /** The number of whoever is signed in, as the server would know from the session. */
   let signedIn: string | null = null;
   let counter = 0;
@@ -106,6 +114,8 @@ export function createStubAuthClient(options: StubOptions = {}): AuthClient {
 
   const sessionFor = (phone: string, restricted: boolean): Session => {
     signedIn = phone;
+    signedInAt = now();
+    pendingAuthenticator = false;
     return { phone, displayName: accounts.get(phone)?.displayName ?? null, restricted };
   };
 
@@ -113,6 +123,14 @@ export function createStubAuthClient(options: StubOptions = {}): AuthClient {
     const account = signedIn ? accounts.get(signedIn) : undefined;
     if (!account) {
       throw new AuthError("expired");
+    }
+    return account;
+  };
+
+  const recentAccount = (): Account => {
+    const account = currentAccount();
+    if (now() - signedInAt > RECENT_SIGN_IN_MS) {
+      throw new AuthError("sign_in_again");
     }
     return account;
   };
@@ -225,37 +243,35 @@ export function createStubAuthClient(options: StubOptions = {}): AuthClient {
 
     async addPasskey(): Promise<void> {
       await wait();
-      currentAccount().hasPasskey = true;
+      recentAccount().hasPasskey = true;
     },
 
     async startAuthenticatorSetup(): Promise<AuthenticatorSetup> {
       await wait();
-      currentAccount();
-      const phone = signedIn ?? "";
-      const setupId = nextId("authenticator");
-      authenticatorSetups.set(setupId, phone);
+      recentAccount();
+      pendingAuthenticator = true;
       const key = demoKey();
-      const label = encodeURIComponent(`Finvest:${phone}`);
-      return { setupId, key, uri: `otpauth://totp/${label}?secret=${key}&issuer=Finvest` };
+      const label = encodeURIComponent(`Finvest:${signedIn ?? ""}`);
+      return { key, uri: `otpauth://totp/${label}?secret=${key}&issuer=Finvest` };
     },
 
-    async confirmAuthenticatorSetup(setupId, code): Promise<void> {
+    async confirmAuthenticatorSetup(code): Promise<void> {
       await wait();
-      const account = currentAccount();
-      if (authenticatorSetups.get(setupId) !== signedIn) {
+      const account = recentAccount();
+      if (!pendingAuthenticator) {
         throw new AuthError("expired");
       }
       if (code !== DEMO_CODE) {
         throw new AuthError("invalid_code");
       }
-      authenticatorSetups.delete(setupId);
+      pendingAuthenticator = false;
       account.hasAuthenticator = true;
     },
 
     async signOut(): Promise<void> {
       await wait();
       signedIn = null;
-      authenticatorSetups.clear();
+      pendingAuthenticator = false;
     },
   };
 }

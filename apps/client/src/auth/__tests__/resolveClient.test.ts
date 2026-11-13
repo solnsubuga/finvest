@@ -30,9 +30,9 @@ describe("resolveAuthClient", () => {
     await expect(client.listSecondSteps()).rejects.toBeInstanceOf(AuthError);
     await expect(client.addPasskey()).rejects.toBeInstanceOf(AuthError);
     await expect(client.startAuthenticatorSetup()).rejects.toBeInstanceOf(AuthError);
-    await expect(
-      client.confirmAuthenticatorSetup("authenticator_1", stub.DEMO_CODE),
-    ).rejects.toBeInstanceOf(AuthError);
+    await expect(client.confirmAuthenticatorSetup(stub.DEMO_CODE)).rejects.toBeInstanceOf(
+      AuthError,
+    );
     await expect(
       client.verifyWithAuthenticator("login_1", stub.DEMO_CODE),
     ).rejects.toBeInstanceOf(AuthError);

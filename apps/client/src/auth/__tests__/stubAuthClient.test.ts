@@ -4,6 +4,7 @@ import {
   DEMO_PASSWORD,
   DEMO_PHONE,
   DEMO_PHONE_AUTHENTICATOR,
+  RECENT_SIGN_IN_MS,
 } from "../stubAuthClient";
 import { AuthError, describeAuthError } from "../types";
 
@@ -214,26 +215,39 @@ describe("setting up a second step", () => {
   it("does not switch the authenticator on until a right code confirms it", async () => {
     const auth = client();
     await signUp(auth);
-    const setup = await auth.startAuthenticatorSetup();
+    await auth.startAuthenticatorSetup();
     expect(await auth.listSecondSteps()).toEqual(["code"]);
-    expect(await codeOf(auth.confirmAuthenticatorSetup(setup.setupId, "000000"))).toBe(
+    expect(await codeOf(auth.confirmAuthenticatorSetup("000000"))).toBe(
       "invalid_code",
     );
     expect(await auth.listSecondSteps()).toEqual(["code"]);
-    await auth.confirmAuthenticatorSetup(setup.setupId, DEMO_CODE);
+    await auth.confirmAuthenticatorSetup(DEMO_CODE);
     expect(await auth.listSecondSteps()).toEqual(["authenticator", "code"]);
     // A set-up is used once.
-    expect(await codeOf(auth.confirmAuthenticatorSetup(setup.setupId, DEMO_CODE))).toBe("expired");
+    expect(await codeOf(auth.confirmAuthenticatorSetup(DEMO_CODE))).toBe("expired");
   });
 
   it("forgets a half-finished set-up at sign out, so the next person cannot finish it", async () => {
     const auth = client();
     await signUp(auth);
-    const setup = await auth.startAuthenticatorSetup();
+    await auth.startAuthenticatorSetup();
     await auth.signOut();
     const login = await auth.startLogin(DEMO_PHONE_AUTHENTICATOR, DEMO_PASSWORD);
     await auth.verifyWithCode(login.loginId, DEMO_CODE);
-    expect(await codeOf(auth.confirmAuthenticatorSetup(setup.setupId, DEMO_CODE))).toBe("expired");
+    expect(await codeOf(auth.confirmAuthenticatorSetup(DEMO_CODE))).toBe("expired");
+  });
+
+  it("asks for a fresh log in before adding anything to a session older than 10 minutes", async () => {
+    let time = 0;
+    const auth = createStubAuthClient({ delayMs: 0, now: () => time });
+    await signUp(auth);
+    await auth.startAuthenticatorSetup();
+    time = RECENT_SIGN_IN_MS + 1;
+    expect(await codeOf(auth.addPasskey())).toBe("sign_in_again");
+    expect(await codeOf(auth.startAuthenticatorSetup())).toBe("sign_in_again");
+    expect(await codeOf(auth.confirmAuthenticatorSetup(DEMO_CODE))).toBe("sign_in_again");
+    // Looking at what is set up is still allowed, and nothing was added.
+    expect(await auth.listSecondSteps()).toEqual(["code"]);
   });
 
   it("says in plain words that nothing was added when the device prompt is dismissed", () => {

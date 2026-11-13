@@ -5,12 +5,23 @@ import { DEMO_CODE } from "@/auth/stubAuthClient";
 import { groupKey } from "@/app/security/authenticator";
 import { qrPath } from "@/components/QrCode";
 
+/** Minutes added to the stub's clock, so a test can let the session grow old. */
+const mockClock = { minutes: 0 };
+
 jest.mock("@/auth/stubAuthClient", () => {
   const actual = jest.requireActual("@/auth/stubAuthClient");
   return {
     ...actual,
-    createStubAuthClient: () => actual.createStubAuthClient({ delayMs: 0 }),
+    createStubAuthClient: () =>
+      actual.createStubAuthClient({
+        delayMs: 0,
+        now: () => Date.now() + mockClock.minutes * 60_000,
+      }),
   };
+});
+
+beforeEach(() => {
+  mockClock.minutes = 0;
 });
 
 jest.mock("expo-font", () => ({
@@ -116,6 +127,34 @@ describe("Sign in and security", () => {
     await fireEvent.changeText(await screen.findByTestId("code-input"), DEMO_CODE);
     await fireEvent.press(screen.getByTestId("code-submit"));
     await screen.findByText("Welcome to Finvest");
+  });
+
+  it("asks for a fresh log in when the session is too old, and adds nothing", async () => {
+    await signUp();
+    await fireEvent.press(screen.getByLabelText("Profile"));
+    await fireEvent.press(await screen.findByTestId("open-security"));
+    await fireEvent.press(await screen.findByTestId("setup-passkey"));
+    await screen.findByTestId("add-passkey");
+
+    mockClock.minutes = 11;
+    await fireEvent.press(screen.getByTestId("add-passkey"));
+    await screen.findByText(/log in again before you change how you sign in/);
+    expect(screen.queryByText("Passkey added")).toBeNull();
+
+    await fireEvent.press(screen.getByTestId("sign-in-again"));
+    await screen.findByText("Your money, working every day.");
+  });
+
+  it("asks for a fresh log in before showing an authenticator key to an old session", async () => {
+    await signUp();
+    await fireEvent.press(screen.getByLabelText("Profile"));
+    await fireEvent.press(await screen.findByTestId("open-security"));
+    await screen.findByTestId("setup-authenticator");
+
+    mockClock.minutes = 11;
+    await fireEvent.press(screen.getByTestId("setup-authenticator"));
+    await screen.findByTestId("sign-in-again");
+    expect(screen.queryByTestId("qr-code")).toBeNull();
   });
 
   it("sends a signed-out visitor away from the set-up screens", async () => {

@@ -57,6 +57,7 @@ Profile opens `/security`, which lists the three second steps and which are on. 
 - **Add a passkey** follows the canvas screen. `addPasskey` is where the real client will run WebAuthn on the device. If the client dismisses the device prompt it fails with `cancelled` and nothing is saved.
 - **Set up an authenticator app** is not on the canvas, so it is drawn in the same style. Step 1 shows the key as a QR code (drawn on the device with `qrcode-generator`, never sent anywhere to be made into an image), as text to type, and on a phone as a link that opens the authenticator app. Step 2 asks for a code from the app. Only a right code switches it on.
 - The key is held in the set-up screen's memory only. It is never put in a route, the session or storage. The demo key is random letters made on the spot, so no key sits in the source.
+- Adding either one needs a session opened in the last 10 minutes, which is the sign-in API's rule. An older session gets `sign_in_again`, and the screen offers "Log in again" in place of the set-up.
 - A client who signed in with an SMS code can still add either one, and the screen says the 24 hour limit keeps running. See the open question in [docs/decisions.md](../../docs/decisions.md).
 
 Not built: removing a passkey or an authenticator app, adding a second passkey from this screen, naming devices, and recovery codes. Offering the passkey during sign up, as on the canvas, waits for the app PIN step that comes before it.
