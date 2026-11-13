@@ -98,4 +98,4 @@ Agreed with the payments and payouts threads on 13 November 2026. None of it is 
 
 ## Not built yet
 
-HTTP routes for the catalogue and rates (they need sign-in sessions and permissions), editing a product, investments and their life cycle, the daily interest run, maturity and rollover, early withdrawal, the monthly coupon for open terms, the dealing desk, statements, and every screen.
+HTTP routes for the catalogue and rates (they need sign-in sessions and permissions), editing a product, investments and their life cycle, the daily interest run, maturity and rollover, early withdrawal, the monthly coupon for open terms, statements, and every screen. The dealing desk is its own module: see [dealing-desk.md](dealing-desk.md).
