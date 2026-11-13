@@ -57,54 +57,55 @@ CREATE INDEX ix_dealing_withdrawal_fundings_sale
 
 GUARD = """
 CREATE FUNCTION finvest_dealing_withdrawal_fundings_guard() RETURNS trigger
-    LANGUAGE plpgsql SET search_path = pg_catalog, public, pg_temp
+    LANGUAGE plpgsql SET search_path = pg_catalog, pg_temp
     AS $$
     DECLARE
-        sale dealing_orders%ROWTYPE;
+        sale public.dealing_orders%ROWTYPE;
         used bigint;
     BEGIN
         IF TG_OP NOT IN ('INSERT', 'UPDATE') THEN
             RAISE EXCEPTION 'a withdrawal funding is never removed' USING ERRCODE = '42501';
         END IF;
         IF TG_OP = 'INSERT' THEN
-            IF finvest_actor_kind() IS DISTINCT FROM 'system' THEN
+            IF public.finvest_actor_kind() IS DISTINCT FROM 'system' THEN
                 RAISE EXCEPTION 'only the worker records a withdrawal funding'
                     USING ERRCODE = '42501';
             END IF;
-            IF NEW.status = 'funded' AND NEW.source <> 'buffer' THEN
+            IF NEW.status = 'funded' AND NEW.source IS DISTINCT FROM 'buffer' THEN
                 RAISE EXCEPTION 'a withdrawal waiting for a sale starts as waiting'
                     USING ERRCODE = '42501';
             END IF;
             RETURN NEW;
         END IF;
-        IF OLD.status <> 'waiting' OR NEW.status <> 'funded'
+        IF OLD.status IS DISTINCT FROM 'waiting' OR NEW.status IS DISTINCT FROM 'funded'
             OR (to_jsonb(NEW) - '{status,funded_at,sale_order_id,funded_by}'::text[])
-                <> (to_jsonb(OLD) - '{status,funded_at,sale_order_id,funded_by}'::text[]) THEN
+                IS DISTINCT FROM (to_jsonb(OLD) - '{status,funded_at,sale_order_id,funded_by}'::text[]) THEN
             RAISE EXCEPTION 'a waiting withdrawal is only funded, once' USING ERRCODE = '42501';
         END IF;
         IF NEW.source = 'buffer' THEN
-            IF finvest_actor_kind() IS DISTINCT FROM 'system' THEN
+            IF public.finvest_actor_kind() IS DISTINCT FROM 'system' THEN
                 RAISE EXCEPTION 'only the worker funds a withdrawal from the buffer'
                     USING ERRCODE = '42501';
             END IF;
             RETURN NEW;
         END IF;
-        IF finvest_actor_kind() IS DISTINCT FROM 'staff'
-            OR NEW.funded_by IS DISTINCT FROM finvest_actor_id() THEN
+        IF public.finvest_actor_kind() IS DISTINCT FROM 'staff'
+            OR NEW.funded_by IS DISTINCT FROM public.finvest_actor_id() THEN
             RAISE EXCEPTION 'a withdrawal is funded from a sale by the person signed in'
                 USING ERRCODE = '42501';
         END IF;
         -- Fundings from one sale are added up one at a time, against committed rows.
         PERFORM pg_advisory_xact_lock(hashtext('dealing_withdrawal_sales'),
             hashtext(NEW.sale_order_id));
-        SELECT * INTO sale FROM dealing_orders WHERE id = NEW.sale_order_id;
-        IF NOT FOUND OR sale.kind <> 'secondary_sale' OR sale.status <> 'settled'
-            OR sale.currency <> NEW.currency THEN
+        SELECT * INTO sale FROM public.dealing_orders WHERE id = NEW.sale_order_id;
+        IF NOT FOUND OR sale.kind IS DISTINCT FROM 'secondary_sale'
+            OR sale.status IS DISTINCT FROM 'settled'
+            OR sale.currency IS DISTINCT FROM NEW.currency THEN
             RAISE EXCEPTION 'a withdrawal is funded from a settled sale in its currency'
                 USING ERRCODE = '42501';
         END IF;
         SELECT coalesce(sum(amount_minor), 0)::bigint INTO used
-            FROM dealing_withdrawal_fundings
+            FROM public.dealing_withdrawal_fundings
             WHERE sale_order_id = NEW.sale_order_id AND id <> NEW.id;
         IF used + NEW.amount_minor > sale.result_amount_minor THEN
             RAISE EXCEPTION 'withdrawals funded from a sale cannot exceed what it raised'

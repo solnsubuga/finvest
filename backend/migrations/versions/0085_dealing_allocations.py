@@ -60,7 +60,7 @@ CREATE FUNCTION finvest_dealing_allocations_guard() RETURNS trigger
         IF TG_OP = 'UPDATE' THEN
             IF OLD.released_at IS NOT NULL OR NEW.released_at IS NULL
                 OR (to_jsonb(NEW) - '{released_at,release_reason}'::text[])
-                    <> (to_jsonb(OLD) - '{released_at,release_reason}'::text[]) THEN
+                    IS DISTINCT FROM (to_jsonb(OLD) - '{released_at,release_reason}'::text[]) THEN
                 RAISE EXCEPTION 'an allocation is only released, once' USING ERRCODE = '42501';
             END IF;
             RETURN NEW;

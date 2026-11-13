@@ -147,6 +147,7 @@ function amountText(amounts: Amounts): string {
 
 interface TotalsPanelProps {
   totals: EnteredTotals | null;
+  /** Enter or confirm: the backend guards both with the same permission. */
   mayEnter: boolean;
   busy: boolean;
   onOpenForm: () => void;
@@ -155,6 +156,9 @@ interface TotalsPanelProps {
 
 /** Who entered the Finvest 1.0 totals, and whether a second person has checked them. */
 export function TotalsPanel({ totals, mayEnter, busy, onOpenForm, onConfirm }: TotalsPanelProps) {
+  // Entering confirmed totals again sets the check aside, so say so before the form opens.
+  const [warning, setWarning] = useState(false);
+  const confirmed = totals?.confirmedBy != null;
   return (
     <Panel title="Finvest 1.0 totals">
       {totals === null ? (
@@ -184,8 +188,30 @@ export function TotalsPanel({ totals, mayEnter, busy, onOpenForm, onConfirm }: T
           ) : null}
         </>
       )}
-      {mayEnter ? (
-        <Button variant="secondary" onClick={onOpenForm} disabled={busy} className="self-start">
+      {mayEnter && warning ? (
+        <div role="group" aria-label="Enter the totals again" className="flex flex-col gap-2 rounded-md bg-surface-sunken p-3 text-sm leading-snug">
+          <p className="m-0">
+            These totals are confirmed. Entering them again sets that check aside: nothing is compared until someone else confirms the
+            new figures, and a sign-off on a total line counts again only if that line&apos;s figure stays the same.
+          </p>
+          <div className="flex flex-wrap gap-2">
+            <Button
+              onClick={() => {
+                setWarning(false);
+                onOpenForm();
+              }}
+              disabled={busy}
+              className="h-9 px-3"
+            >
+              Enter new totals
+            </Button>
+            <Button variant="secondary" onClick={() => setWarning(false)} disabled={busy} className="h-9 px-3">
+              Keep these
+            </Button>
+          </div>
+        </div>
+      ) : mayEnter ? (
+        <Button variant="secondary" onClick={confirmed ? () => setWarning(true) : onOpenForm} disabled={busy} className="self-start">
           {totals === null ? "Enter the totals" : "Enter them again"}
         </Button>
       ) : null}
@@ -281,7 +307,31 @@ function SignOffRow({ item, maySignOff, actions }: { item: Item; maySignOff: boo
         </span>
         <span className="text-sm text-muted">{item.summary}</span>
       </div>
-      {signOff ? (
+      {signOff?.state === "rejected" ? (
+        <div className="flex flex-col gap-2 rounded-md bg-surface-sunken p-3 text-sm leading-snug">
+          <span>
+            <span className="font-bold">Proposed by {signOff.mine ? "you" : signOff.proposedBy}:</span> {signOff.reason}
+          </span>
+          <span>
+            <span className="font-bold text-danger">Rejected by {signOff.decidedBy}:</span> {signOff.decisionReason}
+          </span>
+          {maySignOff ? (
+            open === "propose" ? (
+              <ReasonForm
+                label={`Why the difference on ${item.title} is right`}
+                submit="Propose the sign-off"
+                busy={actions.busy}
+                onSubmit={(reason) => actions.onPropose(item.key, reason)}
+                onCancel={() => setOpen(null)}
+              />
+            ) : (
+              <Button variant="secondary" onClick={() => setOpen("propose")} disabled={actions.busy} className="h-9 self-start px-3">
+                Propose again
+              </Button>
+            )
+          ) : null}
+        </div>
+      ) : signOff ? (
         <div className="flex flex-col gap-2 rounded-md bg-surface-sunken p-3 text-sm leading-snug">
           <span>
             <span className="font-bold">Proposed by {signOff.mine ? "you" : signOff.proposedBy}:</span> {signOff.reason}
@@ -326,7 +376,7 @@ function SignOffRow({ item, maySignOff, actions }: { item: Item; maySignOff: boo
   );
 }
 
-/** What differs and still needs a sign-off. An approved one leaves the list. */
+/** What differs and still needs a sign-off. An approved one leaves the list; a rejected one stays with its reason. */
 export function SignOffs({ overview, actions }: { overview: Overview; actions: FinanceActions }) {
   const all = items(overview);
   const open = all.filter((item) => item.signedOff?.state !== "approved");

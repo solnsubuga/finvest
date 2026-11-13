@@ -100,6 +100,8 @@ class ClientProduct:
     interest_paid: InterestPaid
     # "10.63": the yearly rate after tax, two decimal places.
     rate_percent: str
+    # Live, or paused for the public website's "Coming soon". Clients see live ones only.
+    status: ProductStatus = ProductStatus.LIVE
 
 
 @dataclass(frozen=True, slots=True)
@@ -355,6 +357,15 @@ async def client_products(session: AsyncSession, clock: Clock) -> list[ClientPro
     ]
 
 
+async def public_products(session: AsyncSession, clock: Clock) -> list[ClientProduct]:
+    """What the public website lists: live and paused products, after tax. Never drafts."""
+    return [
+        client_product_view(view.product, view.rate)
+        for view in await list_products(session, clock)
+        if view.product.status is not ProductStatus.DRAFT and view.rate is not None
+    ]
+
+
 async def client_quote(
     session: AsyncSession, product_code: str, amount: Money, clock: Clock
 ) -> ClientQuote:
@@ -490,6 +501,7 @@ def client_product_view(product: Product, rate: RateVersion) -> ClientProduct:
         minimum=product.minimum,
         interest_paid=product.interest_paid,
         rate_percent=rate.client_rate_percent,
+        status=product.status,
     )
 
 

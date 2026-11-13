@@ -1,4 +1,5 @@
-import { AuthClient, AuthError } from "./types";
+import { createApiAuthClient } from "./apiAuthClient";
+import { AuthClient } from "./types";
 
 type StubModule = typeof import("./stubAuthClient");
 
@@ -12,46 +13,27 @@ export type ResolvedClient = {
 
 /**
  * The in-memory demo accepts a fixed code, so it must never be what a real
- * client reaches. It is loaded in development, and in a production build only
- * when EXPO_PUBLIC_DEMO_AUTH=1 was set on purpose at build time (for previews
- * and screenshots).
+ * client reaches. It answers in tests, and in a build only when
+ * EXPO_PUBLIC_DEMO_AUTH=1 was set on purpose at build time (for previews).
+ * Development builds talk to the API at EXPO_PUBLIC_API_URL, normally a local
+ * backend.
  *
  * The condition is written inline, and the stub is required inside it, so the
  * bundler can see it is false in a normal production build and leave the stub
  * out of the bundle altogether. CI checks that it did.
  */
 function loadStub(): StubModule | null {
-  if (__DEV__ || process.env.EXPO_PUBLIC_DEMO_AUTH === "1") {
+  if (process.env.EXPO_PUBLIC_DEMO_AUTH === "1" || process.env.NODE_ENV === "test") {
     // eslint-disable-next-line @typescript-eslint/no-require-imports
     return require("./stubAuthClient") as StubModule;
   }
   return null;
 }
 
-/** Chooses what the screens talk to. Without the stub, every sign-in is refused. */
+/** Chooses what the screens talk to: the demo when it is switched on, otherwise the API. */
 export function resolveAuthClient(stub: StubModule | null = loadStub()): ResolvedClient {
   if (stub) {
     return { client: stub.createStubAuthClient(), demo: true, demoCode: stub.DEMO_CODE };
   }
-  return { client: unavailableAuthClient, demo: false, demoCode: null };
+  return { client: createApiAuthClient(), demo: false, demoCode: null };
 }
-
-const refuse = async (): Promise<never> => {
-  throw new AuthError("unavailable");
-};
-
-const unavailableAuthClient: AuthClient = {
-  startSignup: refuse,
-  confirmSignupCode: refuse,
-  completeSignup: refuse,
-  startLogin: refuse,
-  verifyWithPasskey: refuse,
-  verifyWithAuthenticator: refuse,
-  sendLoginCode: refuse,
-  verifyWithCode: refuse,
-  listSecondSteps: refuse,
-  addPasskey: refuse,
-  startAuthenticatorSetup: refuse,
-  confirmAuthenticatorSetup: refuse,
-  signOut: async () => {},
-};

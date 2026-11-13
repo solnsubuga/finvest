@@ -242,6 +242,30 @@ async def test_a_sign_off_stops_counting_when_the_figures_change(app_database: D
     assert state.blockers == ("difference_not_signed_off",)
 
 
+async def test_a_rejected_sign_off_stays_with_its_reason_until_proposed_again(
+    app_database: Database,
+) -> None:
+    case, proposer = Case(), new_staff()
+    await case.trial(app_database, proposer)
+    proposed = await propose(app_database, proposer, case.key)
+    rejected = await decide(app_database, new_staff(), proposed.id, approve=False)
+    assert (rejected.state, rejected.decision_reason) == ("rejected", "No")
+
+    # The proposer can read why, and it still blocks the switch.
+    state = await look(app_database)
+    shown = state.sign_offs[case.key]
+    assert (shown.id, shown.state, shown.decision_reason) == (proposed.id, "rejected", "No")
+    assert "difference_not_signed_off" in state.blockers
+
+    # Proposing again replaces it, and the new one has no decision yet.
+    again = await propose(app_database, proposer, case.key)
+    shown = (await look(app_database)).sign_offs[case.key]
+    assert (shown.id, shown.state, shown.decision_reason) == (again.id, "proposed", None)
+    with pytest.raises(ApplicationError) as error:
+        await propose(app_database, proposer, case.key)
+    assert error.value.code == "conflict"
+
+
 def replace_ref(new: Case, old: Case) -> Case:
     new.ref, new.key = old.ref, old.key
     return new

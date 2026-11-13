@@ -1,7 +1,7 @@
 """Add the liquidity buffer rules and their two-person changes.
 
 Revision ID: 0083_dealing_buffer_rules
-Revises: 0082_dealing_maturities
+Revises: 0072_migration_claims
 
 A version of the rules is proposed by one member of staff and approved by another, and takes
 effect on a later day. A version is added only for an approved proposal, with exactly its
@@ -14,7 +14,7 @@ from collections.abc import Sequence
 from alembic import op
 
 revision: str = "0083_dealing_buffer_rules"
-down_revision: str | None = "0082_dealing_maturities"
+down_revision: str | None = "0072_migration_claims"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 
@@ -85,17 +85,18 @@ CREATE TABLE dealing_buffer_rules (
 
 PROPOSALS_GUARD = """
 CREATE FUNCTION finvest_dealing_buffer_rule_proposals_guard() RETURNS trigger
-    LANGUAGE plpgsql SET search_path = pg_catalog, public, pg_temp
+    LANGUAGE plpgsql SET search_path = pg_catalog, pg_temp
     AS $$
     BEGIN
         IF TG_OP NOT IN ('INSERT', 'UPDATE') THEN
             RAISE EXCEPTION 'a buffer rules proposal is never removed' USING ERRCODE = '42501';
         END IF;
-        IF finvest_actor_kind() IS DISTINCT FROM 'staff' THEN
+        IF public.finvest_actor_kind() IS DISTINCT FROM 'staff' THEN
             RAISE EXCEPTION 'only staff propose and decide buffer rules' USING ERRCODE = '42501';
         END IF;
         IF TG_OP = 'INSERT' THEN
-            IF NEW.status <> 'proposed' OR NEW.proposed_by <> finvest_actor_id() THEN
+            IF NEW.status <> 'proposed'
+                OR NEW.proposed_by IS DISTINCT FROM public.finvest_actor_id() THEN
                 RAISE EXCEPTION 'a buffer rules proposal starts as proposed, by the person signed in'
                     USING ERRCODE = '42501';
             END IF;
@@ -104,7 +105,7 @@ CREATE FUNCTION finvest_dealing_buffer_rule_proposals_guard() RETURNS trigger
         IF OLD.status <> 'proposed' THEN
             RAISE EXCEPTION 'a decided buffer rules proposal never changes' USING ERRCODE = '42501';
         END IF;
-        IF NEW.status = 'proposed' OR NEW.decided_by IS DISTINCT FROM finvest_actor_id()
+        IF NEW.status = 'proposed' OR NEW.decided_by IS DISTINCT FROM public.finvest_actor_id()
             OR (to_jsonb(NEW) - '{status,decided_by,decided_at,decision_note}'::text[])
                 <> (to_jsonb(OLD) - '{status,decided_by,decided_at,decision_note}'::text[]) THEN
             RAISE EXCEPTION 'a buffer rules proposal is only decided, by the person signed in'
@@ -117,10 +118,10 @@ CREATE FUNCTION finvest_dealing_buffer_rule_proposals_guard() RETURNS trigger
 
 RULES_GUARD = f"""
 CREATE FUNCTION finvest_dealing_buffer_rules_guard() RETURNS trigger
-    LANGUAGE plpgsql SET search_path = pg_catalog, public, pg_temp
+    LANGUAGE plpgsql SET search_path = pg_catalog, pg_temp
     AS $$
     DECLARE
-        proposal dealing_buffer_rule_proposals%ROWTYPE;
+        proposal public.dealing_buffer_rule_proposals%ROWTYPE;
     BEGIN
         IF TG_OP <> 'INSERT' THEN
             RAISE EXCEPTION 'buffer rules are never changed or removed' USING ERRCODE = '42501';
@@ -131,9 +132,9 @@ CREATE FUNCTION finvest_dealing_buffer_rules_guard() RETURNS trigger
             END IF;
             RETURN NEW;
         END IF;
-        SELECT * INTO proposal FROM dealing_buffer_rule_proposals WHERE id = NEW.proposal_id;
+        SELECT * INTO proposal FROM public.dealing_buffer_rule_proposals WHERE id = NEW.proposal_id;
         IF NOT FOUND OR proposal.status <> 'approved'
-            OR proposal.decided_by IS DISTINCT FROM finvest_actor_id()
+            OR proposal.decided_by IS DISTINCT FROM public.finvest_actor_id()
             OR (proposal.currency, proposal.effective_from, proposal.target_minor,
                 proposal.floor_minor, proposal.from_buffer_up_to_minor,
                 proposal.pay_within_working_days)

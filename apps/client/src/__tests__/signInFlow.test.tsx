@@ -2,6 +2,7 @@ import { fireEvent, screen, waitFor } from "@testing-library/react-native";
 import { renderRouter } from "expo-router/testing-library";
 
 import { DEMO_CODE, DEMO_PASSWORD } from "@/auth/stubAuthClient";
+import { WARM_ROUTER_MS, warmRouter } from "@/testing/warmRouter";
 
 jest.mock("@/auth/stubAuthClient", () => {
   const actual = jest.requireActual("@/auth/stubAuthClient");
@@ -24,6 +25,8 @@ async function openApp() {
 async function press(label: string) {
   await fireEvent.press(screen.getByText(label));
 }
+
+beforeAll(warmRouter, WARM_ROUTER_MS);
 
 describe("the shell, from the first screen", () => {
   it("sends a signed-out visitor to the welcome screen", async () => {

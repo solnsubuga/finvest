@@ -1,0 +1,58 @@
+name: Browser tests
+
+# Path filtered, so do not make this a required check as it stands: a PR that
+# touches none of these paths would wait on it forever.
+
+on:
+  pull_request:
+    paths:
+      - "apps/client/**"
+      - "apps/console/**"
+      - "apps/web-e2e/**"
+      - "packages/tokens/**"
+      - "package.json"
+      - "pnpm-lock.yaml"
+      - "pnpm-workspace.yaml"
+      - ".github/workflows/web-e2e.yml"
+  push:
+    branches: [main]
+    paths:
+      - "apps/client/**"
+      - "apps/console/**"
+      - "apps/web-e2e/**"
+      - "packages/tokens/**"
+      - "package.json"
+      - "pnpm-lock.yaml"
+      - "pnpm-workspace.yaml"
+      - ".github/workflows/web-e2e.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: web-e2e-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  playwright:
+    name: Client app and console in Chromium
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+      - uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6.1.1
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6.5.0
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Build the client app and the console for the web, on their sample APIs
+        working-directory: apps/web-e2e
+        run: pnpm build
+      - name: Install Chromium
+        working-directory: apps/web-e2e
+        run: pnpm exec playwright install --with-deps chromium
+      - working-directory: apps/web-e2e
+        run: |
+          pnpm typecheck
+          pnpm test

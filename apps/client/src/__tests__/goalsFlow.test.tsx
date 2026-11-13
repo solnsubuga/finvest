@@ -2,6 +2,7 @@ import { fireEvent, screen } from "@testing-library/react-native";
 import { renderRouter } from "expo-router/testing-library";
 
 import { DEMO_PASSWORD } from "@/auth/stubAuthClient";
+import { WARM_ROUTER_MS, warmRouter } from "@/testing/warmRouter";
 
 jest.mock("@/auth/stubAuthClient", () => {
   const actual = jest.requireActual("@/auth/stubAuthClient");
@@ -63,6 +64,8 @@ async function signIn(phone: string) {
   await fireEvent.press(screen.getByTestId("login-submit"));
   await fireEvent.press(await screen.findByTestId(phone === "772123456" ? "use-passkey" : "use-authenticator"));
 }
+
+beforeAll(warmRouter, WARM_ROUTER_MS);
 
 describe("goals", () => {
   it("lists the demo account's goals with their progress", async () => {
