@@ -208,10 +208,27 @@ The database holds these rules whatever the code does. Nobody approves or sends 
 Agreed with the investing, and the payouts and reconciliation, threads on 13 November 2026. The reconciliation part is built. The rest is not yet.
 
 - **Investments.** The desk reads `investments.service.owed_by_product`, `running_investments` and `maturing`. It keeps allocations in its own tables, keyed by investment ID, and follows `investments.started`, `investments.matured`, `investments.rolled_over` and `investments.withdrawn_early`.
-- **Early withdrawal.** Investments owns the request, the pricing and the client's ledger entries. It names `dealing.events.FUND_EARLY_WITHDRAWAL` as a consumer of `investments.withdrawn_early`, and creates the payout when the desk reports `dealing.withdrawal_funded`, which for a withdrawal the buffer pays at once follows within the same job.
+- **Early withdrawal.** Investments owns the request, the pricing and the client's ledger entries. It names `dealing.events.FUND_EARLY_WITHDRAWAL` as a consumer of `investments.withdrawn_early`, and creates the payout when the desk reports `dealing.withdrawal_funded`, which for a withdrawal the buffer pays at once follows within the same job. Both consumers are wired, and `tests/journeys/test_06_early_withdrawal.py` follows one withdrawal from the request through a sale to the payout.
 - **Payouts.** Payouts knows nothing about the buffer. The desk's cash is in the same trust bank account that payouts leave from.
 - **Reconciliation.** Every purchase, sale and maturity is a ledger entry on `bank.trust`, effective on its value date. The desk exposes `dealing.holdings.holdings_on(session, on)`, with face value, cost and custodian references for each instrument in minor units, and `dealing.holdings.expected_bank_movements(session, date_from=, date_to=)` so the day close can match the bank statement and the custodian statement.
 
+## Over HTTP
+
+`app/modules/dealing/api.py`. Seeing the desk needs `dealing_desk.view`, and every command needs `dealing_orders.change` as well, since a command can settle an order into the ledger. A reader without it sees no actions on any order. Every command takes an `Idempotency-Key`: a repeat of the same request is answered from its saved outcome, so a retry never prepares, approves or settles twice, and the same key for a different request is refused. Every command answers with the desk as it now stands.
+
+| Route | What it does |
+| --- | --- |
+| `GET /staff/dealing/desk?currency=UGX` | The position of each product, the buffer, the early withdrawals waiting, and the open orders with the steps the reader may take on each (`allowed`) |
+| `POST /staff/dealing/orders` | Prepare an order |
+| `POST /staff/dealing/orders/{id}/approve` | Approve, as the second person |
+| `POST /staff/dealing/orders/{id}/send-back` | Send back with a note |
+| `POST /staff/dealing/orders/{id}/withdraw` | Withdraw, by whoever prepared it |
+| `POST /staff/dealing/orders/{id}/result` | Record the custodian's note, or a fill of null for nothing dealt |
+| `POST /staff/dealing/orders/{id}/confirm-result` | Confirm, as a person other than the recorder, which settles the order |
+| `POST /staff/dealing/orders/{id}/reject-result` | Reject a recorded result with a note |
+
+The audit event for a recorded result carries its figures, so a result later rejected can still be read.
+
 ## Not built yet
 
-HTTP routes for the order commands, allocations, the buffer rules changes, funding withdrawals from a sale, the custodian statement comparison and the allocation report. The console screen runs on sample data until the routes exist.
+HTTP routes for allocations, the buffer rules changes, funding withdrawals from a sale, the custodian statement comparison and the allocation report. The console screen runs on sample data until the routes exist.

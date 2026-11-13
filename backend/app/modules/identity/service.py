@@ -560,6 +560,14 @@ async def staff_names(session: AsyncSession, staff_ids: Collection[str]) -> dict
     return {row.id: row.name for row in rows.all()}
 
 
+async def active_staff_names(session: AsyncSession) -> dict[str, str]:
+    """Every active member of staff by name, for a console screen that picks one."""
+    rows = await session.execute(
+        text("SELECT id, name FROM identity_staff WHERE status = 'active' ORDER BY lower(name), id")
+    )
+    return {row.id: row.name for row in rows.all()}
+
+
 def _invalid(field: str, code: str) -> ApplicationError:
     error_code: ErrorCode = "leaked_password" if code == "leaked_password" else "validation_failed"
     return ApplicationError(

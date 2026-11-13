@@ -34,6 +34,7 @@ from app.modules.documents.service import DocumentKind, DocumentStatus
 from app.modules.identity import service as identity_service
 from app.modules.identity.hashing import PasswordHasher
 from app.modules.identity.service import ClientContact, IdentityService
+from app.modules.investments import accrual
 from app.modules.investments import service as investments
 from app.modules.investments.holdings import AWAITING_START
 from app.modules.kyc import service as kyc
@@ -49,7 +50,15 @@ from app.shared.push_ids import push_id
 from tests.integration import test_bank_transfers as bank_tests
 from tests.support.clock import FakeClock
 from tests.support.database import TestDatabase
-from tests.support.investments import PRESENT, approved_client, at, request, today
+from tests.support.investments import (
+    PRESENT,
+    approved_client,
+    approved_destination,
+    at,
+    request,
+    started,
+    today,
+)
 from tests.support.kyc import SEALER, ready_draft
 from tests.support.ledger import client as new_client
 from tests.support.ledger import key, ugx
@@ -265,6 +274,61 @@ async def test_a_statement_is_read_from_the_clients_own_ledger_accounts(
         ugx(200),
     )
     assert len(drawn.account_number) == 10
+
+
+async def test_a_period_holding_an_early_withdrawal_adds_up_and_says_where_the_money_is(
+    app_database: Database, worker_database: Database
+) -> None:
+    # The withdrawal moves principal and interest from the holding to the client's payout
+    # account, which is still theirs and still under the investment, so nothing is paid out
+    # until the payout is sent, and the statement still adds up (or it would not be drawn).
+    day = today()
+    investment = await started(app_database, worker_database, PRESENT)
+    async with worker_database.actor_transaction(SYSTEM) as session:
+        await accrual.accrue_investment(
+            session, investment.id, day + timedelta(days=1), at(day + timedelta(days=1))
+        )
+    client = Actor("client", investment.client_id)
+    destination_id = await approved_destination(app_database, client, PRESENT)
+    withdrawn_at = at(day + timedelta(days=2))
+    async with app_database.actor_transaction(client) as session:
+        await investments.request_withdrawal(
+            session,
+            client,
+            investment.id,
+            destination_id=destination_id,
+            idempotency_key=key(),
+            clock=withdrawn_at,
+        )
+    async with worker_database.actor_transaction(SYSTEM) as session:
+        withdrawn = await investments.withdraw(session, investment.id, withdrawn_at)
+    owed = withdrawn.amount + withdrawn.accrued_net
+
+    async def drawn(period: Period) -> Statement:
+        async with worker_database.actor_transaction(SYSTEM) as session:
+            return await building.statement(
+                session,
+                client_id=investment.client_id,
+                kind=StatementKind.REQUESTED,
+                period=period,
+                reference="ST-1",
+                issued_on=day + timedelta(days=10),
+            )
+
+    after = await drawn(Period(day - timedelta(days=1), day + timedelta(days=5)))
+    (summary,) = after.summaries
+    assert summary.paid_out == ugx(0)
+    assert summary.earned > ugx(0)
+    assert summary.closing == owed
+    (holding,) = after.holdings
+    assert (holding.status, holding.value_at_end) == (
+        "Withdrawn early, waiting to be paid out",
+        owed,
+    )
+    # A period that ended before the withdrawal shows the investment still running.
+    before = await drawn(Period(day - timedelta(days=1), day + timedelta(days=1)))
+    (holding,) = before.holdings
+    assert holding.status == "Running"
 
 
 async def test_a_later_period_opens_with_what_the_last_one_closed_on(

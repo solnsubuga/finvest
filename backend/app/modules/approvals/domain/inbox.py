@@ -22,6 +22,12 @@ Kind = Literal[
     "migration_totals",
     "migration_sign_off",
     "phone_change",
+    "team_change",
+    "client_lock",
+    "suppression_lift",
+    "complaint_outcome",
+    "announcement",
+    "payout_account",
 ]
 
 
@@ -41,12 +47,19 @@ SOURCES: dict[Kind, Source] = {
     "pot_transfer": Source("reconciliation.view", "reconciliation.view"),
     "bank_transfer_match": Source("reconciliation.view", "bank_transfers.change"),
     "day_close": Source("reconciliation.view", "reconciliation.view"),
-    "dealing_order": Source("dealing_desk.view", "dealing_desk.view"),
-    "dealing_result": Source("dealing_desk.view", "dealing_desk.view"),
+    "dealing_order": Source("dealing_desk.view", "dealing_orders.change"),
+    "dealing_result": Source("dealing_desk.view", "dealing_orders.change"),
     "rate_change": Source("rates.view", "rates.view"),
     "migration_totals": Source("migration.view", "migration.sign_off"),
     "migration_sign_off": Source("migration.view", "migration.sign_off"),
     "phone_change": Source("client_phones.change", "client_phones.change"),
+    "team_change": Source("team.view", "team.change"),
+    "client_lock": Source("clients.view", "clients.lock"),
+    "suppression_lift": Source("clients.view", "email_suppressions.lift"),
+    "complaint_outcome": Source("complaints.view", "complaints.close"),
+    "announcement": Source("settings.view", "announcements.send"),
+    # Checking a payout account is part of the review queue, so approving the check is too.
+    "payout_account": Source("review_queue.view", "payout_accounts.change"),
 }
 
 
@@ -60,6 +73,8 @@ class Waiting:
     subject: str
     proposed_by: str
     proposed_at: datetime
+    # The member of staff the item changes, when it changes one. They never decide it.
+    about_staff: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -93,7 +108,9 @@ def inbox(
             proposed_by=item.proposed_by,
             proposed_at=item.proposed_at,
             yours=item.proposed_by == staff_id,
-            can_decide=item.proposed_by != staff_id and SOURCES[item.kind].decide in held,
+            can_decide=item.proposed_by != staff_id
+            and item.about_staff != staff_id
+            and SOURCES[item.kind].decide in held,
         )
         for item in items
         if SOURCES[item.kind].view in held

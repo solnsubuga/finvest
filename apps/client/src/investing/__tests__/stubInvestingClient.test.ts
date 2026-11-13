@@ -1,5 +1,5 @@
 import { markDemoPaid } from "@/demo/payables";
-import { formatAmount, groupDigits, parseWholeAmount } from "@/investing/format";
+import { formatAmount, groupDigits, investmentLabel, parseWholeAmount } from "@/investing/format";
 import { createStubInvestingClient } from "@/investing/stubInvestingClient";
 import { InvestingError } from "@/investing/types";
 
@@ -89,6 +89,82 @@ describe("demo investing", () => {
     clock.ms += 73 * 60 * 60 * 1000;
     expect((await api.getInvestment(saved.id)).status).toBe("cancelled");
     expect(await api.listInvestments()).toHaveLength(0);
+  });
+});
+
+describe("demo early withdrawal", () => {
+  async function running() {
+    const { api, clock } = client();
+    const saved = await api.requestInvestment({
+      productCode: "TREA-91",
+      amount: ugx(1_000_000),
+      atMaturity: null,
+      idempotencyKey: "kw",
+    });
+    markDemoPaid(saved.id, new Date(clock.ms).toISOString());
+    clock.ms += 2 * DAY_MS;
+    return { api, clock, id: saved.id };
+  }
+
+  it("pays what was shown and stops interest at the request", async () => {
+    const { api, clock, id } = await running();
+    expect(await api.getInvestment(id)).toMatchObject({ canWithdraw: true, value: ugx(1_000_582) });
+    const after = await api.withdrawEarly({ investmentId: id, destinationId: "demo-account-mtn", idempotencyKey: "w1" });
+    // As the API answers: still active, with the request recorded, until the money has moved.
+    expect(after).toMatchObject({ status: "active", canWithdraw: false, value: ugx(1_000_582) });
+    expect(after.withdrawalRequestedAt).toBe(new Date(clock.ms).toISOString());
+    expect(investmentLabel(after)).toBe("Withdrawn early");
+    clock.ms += 5 * DAY_MS;
+    expect((await api.getInvestment(id)).value).toEqual(ugx(1_000_582));
+  });
+
+  it("asks once per key and refuses the same key for another account", async () => {
+    const { api, id } = await running();
+    const request = { investmentId: id, destinationId: "demo-account-mtn", idempotencyKey: "w2" };
+    await api.withdrawEarly(request);
+    await expect(api.withdrawEarly(request)).resolves.toMatchObject({ canWithdraw: false });
+    await expect(api.withdrawEarly({ ...request, destinationId: "demo-account-bank" })).rejects.toMatchObject({
+      code: "key_reused",
+    });
+    await expect(api.withdrawEarly({ ...request, idempotencyKey: "w3" })).rejects.toMatchObject({
+      code: "cannot_withdraw",
+    });
+  });
+
+  it("refuses an account still in its safety wait", async () => {
+    const { api, id } = await running();
+    const accounts = await api.listPayoutAccounts();
+    expect(accounts.map((account) => account.id)).toEqual(["demo-account-mtn", "demo-account-bank"]);
+    await expect(
+      api.withdrawEarly({ investmentId: id, destinationId: "demo-account-bank", idempotencyKey: "w4" }),
+    ).rejects.toMatchObject({ code: "account_not_ready" });
+    expect((await api.getInvestment(id)).status).toBe("active");
+  });
+});
+
+describe("the demo's withdrawal states", () => {
+  it("can have no approved accounts", async () => {
+    const api = createStubInvestingClient({ delayMs: 0, sample: "empty", accounts: "none" });
+    expect(await api.listPayoutAccounts()).toEqual([]);
+  });
+
+  it("can lose the first answer, which a retry under the same key then gets", async () => {
+    const clock = { ms: Date.parse("2026-11-13T09:00:00Z") };
+    const api = createStubInvestingClient({ delayMs: 0, now: () => clock.ms, sample: "empty", loseFirstWithdrawal: true });
+    const saved = await api.requestInvestment({ productCode: "TREA-91", amount: ugx(1_000_000), atMaturity: null, idempotencyKey: "kl" });
+    markDemoPaid(saved.id, new Date(clock.ms).toISOString());
+    clock.ms += DAY_MS;
+    const request = { investmentId: saved.id, destinationId: "demo-account-mtn", idempotencyKey: "wl" };
+    await expect(api.withdrawEarly(request)).rejects.toMatchObject({ code: "unavailable" });
+    await expect(api.withdrawEarly(request)).resolves.toMatchObject({ withdrawalRequestedAt: expect.any(String) });
+  });
+});
+
+describe("investment labels", () => {
+  it("reads as withdrawn early from the request, whatever the status says", () => {
+    expect(investmentLabel({ status: "active", withdrawalRequestedAt: null })).toBe("Running");
+    expect(investmentLabel({ status: "active", withdrawalRequestedAt: "2026-11-14T10:00:00Z" })).toBe("Withdrawn early");
+    expect(investmentLabel({ status: "withdrawn", withdrawalRequestedAt: "2026-11-14T10:00:00Z" })).toBe("Withdrawn early");
   });
 });
 

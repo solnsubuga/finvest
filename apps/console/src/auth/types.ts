@@ -72,6 +72,8 @@ export const ACTION_PERMISSIONS = [
   "clients.lock",
   // Lifting an email suppression, with a second person.
   "email_suppressions.lift",
+  // Preparing, approving, sending back or withdrawing a dealing order, and recording, confirming or rejecting its result.
+  "dealing_orders.change",
 ] as const;
 
 export const PERMISSIONS = [...SCREEN_PERMISSIONS, ...ACTION_PERMISSIONS] as const;

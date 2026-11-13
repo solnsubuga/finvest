@@ -75,3 +75,11 @@ export const statusLabel: Record<InvestmentStatus, string> = {
   cancelled: "Not paid in time",
   withdrawn: "Withdrawn early",
 };
+
+/**
+ * What an investment shows as its state. Once an early withdrawal is asked for it reads
+ * "Withdrawn early", though the API keeps it `active` until the money has moved.
+ */
+export function investmentLabel(investment: { status: InvestmentStatus; withdrawalRequestedAt: string | null }): string {
+  return investment.withdrawalRequestedAt ? statusLabel.withdrawn : statusLabel[investment.status];
+}

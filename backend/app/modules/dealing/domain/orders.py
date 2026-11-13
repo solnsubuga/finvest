@@ -251,3 +251,29 @@ def check_result_rejection(order: Order, by: str, note: str) -> Refusal | None:
 
 def valid_note(text: str) -> bool:
     return isinstance(text, str) and len(text.strip()) > 0 and len(text) <= MAX_NOTE_LENGTH
+
+
+class Action(StrEnum):
+    """What a member of staff may do to an order as it stands. The console shows only these."""
+
+    APPROVE = "approve"
+    SEND_BACK = "send_back"
+    WITHDRAW = "withdraw"
+    RECORD_RESULT = "record_result"
+    CONFIRM_RESULT = "confirm_result"
+    REJECT_RESULT = "reject_result"
+
+
+def allowed_actions(order: Order, by: str) -> tuple[Action, ...]:
+    """The steps `by` may take now, from the same checks the commands make. A step that also
+    needs a note or a result is listed when only that is missing."""
+    allowed: list[Action] = []
+    if check_approval(order, by) is None:
+        allowed += [Action.APPROVE, Action.SEND_BACK]
+    if check_withdrawal(order, by) is None:
+        allowed.append(Action.WITHDRAW)
+    if order.status is OrderStatus.APPROVED:
+        allowed.append(Action.RECORD_RESULT)
+    if check_confirmation(order, by) is None:
+        allowed += [Action.CONFIRM_RESULT, Action.REJECT_RESULT]
+    return tuple(allowed)

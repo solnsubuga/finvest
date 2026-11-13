@@ -5,8 +5,10 @@ from collections.abc import AsyncIterator
 from typing import Any
 
 import pytest
+from sqlalchemy import text
 
 from app.infrastructure.database import Database
+from app.modules.notifications.domain.email_events import address_hash
 from app.modules.reconciliation import transfers
 from app.modules.reconciliation.domain.statements import StatementSource
 from app.shared.business_day import business_date
@@ -130,3 +132,70 @@ async def test_every_role_has_an_inbox_and_signed_out_callers_do_not(api: Api) -
     assert (await api.http.get("/staff/approvals")).status_code == 401
     await api.client()
     assert (await api.http.get("/staff/approvals")).status_code in (401, 403)
+
+
+async def test_locks_lifts_and_team_changes_wait_for_the_right_second_person(
+    api: Api, migrator_database: Database
+) -> None:
+    client = await api.client()
+    hashed = await suppressed_address(migrator_database)
+    maker = await api.staff("operations")
+    lock = await api.http.post(
+        f"/staff/clients/{client.id}/locks", json={"kind": "lock", "reason": "Lost phone"}
+    )
+    assert lock.status_code == 201, lock.text
+    lift = await api.http.post(
+        f"/staff/email-suppressions/{hashed}/lifts", json={"reason": "Inbox fixed"}
+    )
+    assert lift.status_code == 201, lift.text
+    mine = await inbox(api)
+    assert mine[lock.json()["id"]]["kind"] == "client_lock"
+    assert mine[lift.json()["id"]]["subject"] == hashed[:12]
+    assert not any(mine[i]["can_decide"] for i in (lock.json()["id"], lift.json()["id"]))
+
+    # Support sees both and may lift, but locking is not theirs.
+    await api.staff("support")
+    theirs = await inbox(api)
+    assert theirs[lift.json()["id"]]["can_decide"] is True
+    assert theirs[lock.json()["id"]]["can_decide"] is False
+    assert maker.id == theirs[lock.json()["id"]]["proposed_by"]
+    assert theirs[lock.json()["id"]]["proposed_by_name"] == "Grace Auma"
+
+    first = await api.staff("admin")
+    target = await api.staff("support")
+    await api.as_staff(first)
+    change = await api.http.post(
+        "/staff/team/changes",
+        json={"kind": "deactivate", "staff_id": target.id, "reason": "Left"},
+    )
+    assert change.status_code == 201, change.text
+    await api.staff("admin")
+    other = (await inbox(api))[change.json()["id"]]
+    assert (other["kind"], other["subject"], other["can_decide"]) == (
+        "team_change",
+        "deactivate",
+        True,
+    )
+
+
+async def suppressed_address(migrator: Database) -> str:
+    """A permanent bounce, as the Resend webhook and the worker leave it."""
+    hashed = address_hash(f"client.{secrets.token_hex(6)}@example.com")
+    svix_id = f"msg_{secrets.token_hex(8)}"
+    async with migrator.transaction() as session:
+        await session.execute(
+            text(
+                "INSERT INTO notification_email_events (svix_id, delivery, email_id, recipients, "
+                "permanent, received_at, processed_at, outcome) VALUES (:svix, 'bounced', :e, "
+                "ARRAY[:hash]::text[], true, now(), now(), 'applied')"
+            ),
+            {"svix": svix_id, "e": secrets.token_hex(8), "hash": hashed},
+        )
+        await session.execute(
+            text(
+                "INSERT INTO notification_email_suppressions (address_hash, reason, svix_id, "
+                "created_at) VALUES (:hash, 'bounced', :svix, now())"
+            ),
+            {"hash": hashed, "svix": svix_id},
+        )
+    return hashed

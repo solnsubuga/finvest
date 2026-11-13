@@ -87,6 +87,19 @@
         "title": "AccountView",
         "type": "object"
       },
+      "Action": {
+        "description": "What a member of staff may do to an order as it stands. The console shows only these.",
+        "enum": [
+          "approve",
+          "send_back",
+          "withdraw",
+          "record_result",
+          "confirm_result",
+          "reject_result"
+        ],
+        "title": "Action",
+        "type": "string"
+      },
       "Amount-Output": {
         "additionalProperties": false,
         "description": "An amount in the smallest unit of its currency: whole shillings, or cents.",
@@ -111,6 +124,24 @@
           "currency"
         ],
         "title": "Amount",
+        "type": "object"
+      },
+      "AmountOut": {
+        "additionalProperties": false,
+        "properties": {
+          "currency": {
+            "$ref": "#/components/schemas/Currency"
+          },
+          "minor": {
+            "title": "Minor",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "minor",
+          "currency"
+        ],
+        "title": "AmountOut",
         "type": "object"
       },
       "AmountView": {
@@ -294,7 +325,13 @@
               "rate_change",
               "migration_totals",
               "migration_sign_off",
-              "phone_change"
+              "phone_change",
+              "team_change",
+              "client_lock",
+              "suppression_lift",
+              "complaint_outcome",
+              "announcement",
+              "payout_account"
             ],
             "title": "Kind",
             "type": "string"
@@ -311,6 +348,17 @@
             "title": "Proposed By",
             "type": "string"
           },
+          "proposed_by_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Proposed By Name"
+          },
           "subject": {
             "title": "Subject",
             "type": "string"
@@ -325,6 +373,7 @@
           "id",
           "subject",
           "proposed_by",
+          "proposed_by_name",
           "proposed_at",
           "yours",
           "can_decide"
@@ -660,6 +709,61 @@
           "file"
         ],
         "title": "Body_upload_proof_client_payout_destinations__destination_id__proof_post",
+        "type": "object"
+      },
+      "BufferLevel": {
+        "enum": [
+          "on_target",
+          "under_target",
+          "below_floor"
+        ],
+        "title": "BufferLevel",
+        "type": "string"
+      },
+      "BufferOut": {
+        "additionalProperties": false,
+        "properties": {
+          "after_promised": {
+            "$ref": "#/components/schemas/AmountOut"
+          },
+          "balance": {
+            "$ref": "#/components/schemas/AmountOut"
+          },
+          "floor": {
+            "$ref": "#/components/schemas/AmountOut"
+          },
+          "from_buffer_up_to": {
+            "$ref": "#/components/schemas/AmountOut"
+          },
+          "level": {
+            "$ref": "#/components/schemas/BufferLevel"
+          },
+          "pay_within_working_days": {
+            "title": "Pay Within Working Days",
+            "type": "integer"
+          },
+          "short": {
+            "$ref": "#/components/schemas/AmountOut"
+          },
+          "target": {
+            "$ref": "#/components/schemas/AmountOut"
+          },
+          "to_raise": {
+            "$ref": "#/components/schemas/AmountOut"
+          }
+        },
+        "required": [
+          "balance",
+          "after_promised",
+          "target",
+          "floor",
+          "level",
+          "from_buffer_up_to",
+          "pay_within_working_days",
+          "short",
+          "to_raise"
+        ],
+        "title": "BufferOut",
         "type": "object"
       },
       "CategoryChannels": {
@@ -2070,6 +2174,16 @@
         "title": "ConversationSummary",
         "type": "object"
       },
+      "Cover": {
+        "enum": [
+          "covered",
+          "bid_needed",
+          "on_order",
+          "surplus"
+        ],
+        "title": "Cover",
+        "type": "string"
+      },
       "Currency": {
         "enum": [
           "UGX",
@@ -2277,6 +2391,59 @@
           "approve"
         ],
         "title": "DecisionRequest",
+        "type": "object"
+      },
+      "DeskOut": {
+        "additionalProperties": false,
+        "properties": {
+          "bills_held": {
+            "$ref": "#/components/schemas/AmountOut"
+          },
+          "buffer": {
+            "$ref": "#/components/schemas/BufferOut"
+          },
+          "early_withdrawals": {
+            "$ref": "#/components/schemas/WithdrawalsOut"
+          },
+          "matches_custodian": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Matches Custodian"
+          },
+          "money_to_place": {
+            "$ref": "#/components/schemas/AmountOut"
+          },
+          "orders": {
+            "items": {
+              "$ref": "#/components/schemas/OrderOut"
+            },
+            "title": "Orders",
+            "type": "array"
+          },
+          "positions": {
+            "items": {
+              "$ref": "#/components/schemas/PositionOut"
+            },
+            "title": "Positions",
+            "type": "array"
+          }
+        },
+        "required": [
+          "money_to_place",
+          "bills_held",
+          "matches_custodian",
+          "buffer",
+          "early_withdrawals",
+          "positions",
+          "orders"
+        ],
+        "title": "DeskOut",
         "type": "object"
       },
       "DestinationOut": {
@@ -3225,6 +3392,82 @@
         ],
         "title": "Figure",
         "type": "string"
+      },
+      "FillIn": {
+        "additionalProperties": false,
+        "properties": {
+          "amount_minor": {
+            "maximum": 1000000000000000.0,
+            "minimum": 1.0,
+            "title": "Amount Minor",
+            "type": "integer"
+          },
+          "custodian_reference": {
+            "maxLength": 64,
+            "minLength": 1,
+            "title": "Custodian Reference",
+            "type": "string"
+          },
+          "face_minor": {
+            "maximum": 1000000000000000.0,
+            "minimum": 1.0,
+            "title": "Face Minor",
+            "type": "integer"
+          },
+          "matures_on": {
+            "format": "date",
+            "title": "Matures On",
+            "type": "string"
+          },
+          "settled_on": {
+            "format": "date",
+            "title": "Settled On",
+            "type": "string"
+          }
+        },
+        "required": [
+          "face_minor",
+          "amount_minor",
+          "settled_on",
+          "matures_on",
+          "custodian_reference"
+        ],
+        "title": "FillIn",
+        "type": "object"
+      },
+      "FillOut": {
+        "additionalProperties": false,
+        "properties": {
+          "amount": {
+            "$ref": "#/components/schemas/AmountOut"
+          },
+          "custodian_reference": {
+            "title": "Custodian Reference",
+            "type": "string"
+          },
+          "face": {
+            "$ref": "#/components/schemas/AmountOut"
+          },
+          "matures_on": {
+            "format": "date",
+            "title": "Matures On",
+            "type": "string"
+          },
+          "settled_on": {
+            "format": "date",
+            "title": "Settled On",
+            "type": "string"
+          }
+        },
+        "required": [
+          "face",
+          "amount",
+          "settled_on",
+          "matures_on",
+          "custodian_reference"
+        ],
+        "title": "FillOut",
+        "type": "object"
       },
       "Frequency": {
         "enum": [
@@ -5031,6 +5274,38 @@
         "title": "NewGroup",
         "type": "object"
       },
+      "NewOrderIn": {
+        "additionalProperties": false,
+        "properties": {
+          "currency": {
+            "$ref": "#/components/schemas/Currency"
+          },
+          "face_minor": {
+            "maximum": 1000000000000000.0,
+            "minimum": 1.0,
+            "title": "Face Minor",
+            "type": "integer"
+          },
+          "kind": {
+            "$ref": "#/components/schemas/OrderKind"
+          },
+          "product_code": {
+            "maxLength": 32,
+            "minLength": 1,
+            "pattern": "^[A-Z0-9-]+$",
+            "title": "Product Code",
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind",
+          "product_code",
+          "face_minor",
+          "currency"
+        ],
+        "title": "NewOrderIn",
+        "type": "object"
+      },
       "NewPasskey": {
         "additionalProperties": false,
         "properties": {
@@ -5121,6 +5396,22 @@
           "reason"
         ],
         "title": "NotMatchedIn",
+        "type": "object"
+      },
+      "NoteIn": {
+        "additionalProperties": false,
+        "properties": {
+          "note": {
+            "maxLength": 500,
+            "minLength": 1,
+            "title": "Note",
+            "type": "string"
+          }
+        },
+        "required": [
+          "note"
+        ],
+        "title": "NoteIn",
         "type": "object"
       },
       "NotificationItem": {
@@ -5227,6 +5518,118 @@
         ],
         "title": "NotificationPage",
         "type": "object"
+      },
+      "OrderKind": {
+        "enum": [
+          "auction_bid",
+          "secondary_purchase",
+          "secondary_sale"
+        ],
+        "title": "OrderKind",
+        "type": "string"
+      },
+      "OrderOut": {
+        "additionalProperties": false,
+        "properties": {
+          "allowed": {
+            "items": {
+              "$ref": "#/components/schemas/Action"
+            },
+            "title": "Allowed",
+            "type": "array"
+          },
+          "face": {
+            "$ref": "#/components/schemas/AmountOut"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "kind": {
+            "$ref": "#/components/schemas/OrderKind"
+          },
+          "note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note"
+          },
+          "prepared_at": {
+            "format": "date-time",
+            "title": "Prepared At",
+            "type": "string"
+          },
+          "prepared_by": {
+            "title": "Prepared By",
+            "type": "string"
+          },
+          "product_code": {
+            "title": "Product Code",
+            "type": "string"
+          },
+          "product_name": {
+            "title": "Product Name",
+            "type": "string"
+          },
+          "result": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/FillOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "result_recorded_by": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Result Recorded By"
+          },
+          "status": {
+            "$ref": "#/components/schemas/OrderStatus"
+          }
+        },
+        "required": [
+          "id",
+          "kind",
+          "product_code",
+          "product_name",
+          "face",
+          "status",
+          "prepared_by",
+          "prepared_at",
+          "note",
+          "result",
+          "result_recorded_by",
+          "allowed"
+        ],
+        "title": "OrderOut",
+        "type": "object"
+      },
+      "OrderStatus": {
+        "enum": [
+          "prepared",
+          "approved",
+          "sent_back",
+          "withdrawn",
+          "result_recorded",
+          "settled",
+          "unsuccessful"
+        ],
+        "title": "OrderStatus",
+        "type": "string"
       },
       "Outcome": {
         "additionalProperties": false,
@@ -5680,6 +6083,45 @@
         "title": "PendingOutcome",
         "type": "object"
       },
+      "PeopleList": {
+        "additionalProperties": false,
+        "properties": {
+          "people": {
+            "items": {
+              "$ref": "#/components/schemas/PersonView"
+            },
+            "title": "People",
+            "type": "array"
+          }
+        },
+        "required": [
+          "people"
+        ],
+        "title": "PeopleList",
+        "type": "object"
+      },
+      "PersonView": {
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "maxLength": 20,
+            "minLength": 20,
+            "pattern": "^[-0-9A-Z_a-z]{20}$",
+            "title": "Id",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name"
+        ],
+        "title": "PersonView",
+        "type": "object"
+      },
       "PhoneChangeList": {
         "additionalProperties": false,
         "properties": {
@@ -5901,6 +6343,58 @@
         ],
         "title": "PlanStatus",
         "type": "string"
+      },
+      "PositionOut": {
+        "additionalProperties": false,
+        "properties": {
+          "bills_held": {
+            "$ref": "#/components/schemas/AmountOut"
+          },
+          "clients_owed": {
+            "$ref": "#/components/schemas/AmountOut"
+          },
+          "cover": {
+            "$ref": "#/components/schemas/Cover"
+          },
+          "discount_only": {
+            "title": "Discount Only",
+            "type": "boolean"
+          },
+          "face_held": {
+            "$ref": "#/components/schemas/AmountOut"
+          },
+          "lot_size": {
+            "$ref": "#/components/schemas/AmountOut"
+          },
+          "on_order": {
+            "$ref": "#/components/schemas/AmountOut"
+          },
+          "product_code": {
+            "title": "Product Code",
+            "type": "string"
+          },
+          "product_name": {
+            "title": "Product Name",
+            "type": "string"
+          },
+          "to_buy": {
+            "$ref": "#/components/schemas/AmountOut"
+          }
+        },
+        "required": [
+          "product_code",
+          "product_name",
+          "discount_only",
+          "lot_size",
+          "clients_owed",
+          "bills_held",
+          "to_buy",
+          "on_order",
+          "face_held",
+          "cover"
+        ],
+        "title": "PositionOut",
+        "type": "object"
       },
       "PreferenceChange": {
         "additionalProperties": false,
@@ -7058,6 +7552,26 @@
         "title": "ResetStarted",
         "type": "object"
       },
+      "ResultIn": {
+        "additionalProperties": false,
+        "properties": {
+          "fill": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/FillIn"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "fill"
+        ],
+        "title": "ResultIn",
+        "type": "object"
+      },
       "ReviewOut": {
         "additionalProperties": false,
         "properties": {
@@ -7169,6 +7683,7 @@
                 "automatic_investing.view",
                 "goals.view",
                 "dealing_desk.view",
+                "dealing_orders.change",
                 "finance.view",
                 "products.view",
                 "rates.view",
@@ -9415,6 +9930,7 @@
                 "automatic_investing.view",
                 "goals.view",
                 "dealing_desk.view",
+                "dealing_orders.change",
                 "finance.view",
                 "products.view",
                 "rates.view",
@@ -10149,6 +10665,24 @@
           "destination_id"
         ],
         "title": "WithdrawalRequest",
+        "type": "object"
+      },
+      "WithdrawalsOut": {
+        "additionalProperties": false,
+        "properties": {
+          "asked": {
+            "$ref": "#/components/schemas/AmountOut"
+          },
+          "clients": {
+            "title": "Clients",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "asked",
+          "clients"
+        ],
+        "title": "WithdrawalsOut",
         "type": "object"
       },
       "WordingList": {
@@ -21090,6 +21624,821 @@
         ]
       }
     },
+    "/staff/dealing/desk": {
+      "get": {
+        "operationId": "get_desk_staff_dealing_desk_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "currency",
+            "required": false,
+            "schema": {
+              "$ref": "#/components/schemas/Currency",
+              "default": "UGX"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DeskOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          }
+        },
+        "summary": "Get Desk",
+        "tags": [
+          "dealing desk"
+        ]
+      }
+    },
+    "/staff/dealing/orders": {
+      "post": {
+        "description": "Prepare an order for a second member of staff to approve.",
+        "operationId": "prepare_order_staff_dealing_orders_post",
+        "parameters": [
+          {
+            "description": "A value the caller chooses once per intended action and sends again on every retry of it. Pattern: `[A-Za-z0-9._:-]{8,128}`.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "A value the caller chooses once per intended action and sends again on every retry of it. Pattern: `[A-Za-z0-9._:-]{8,128}`.",
+              "title": "Idempotency-Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NewOrderIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DeskOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          }
+        },
+        "summary": "Prepare Order",
+        "tags": [
+          "dealing desk"
+        ]
+      }
+    },
+    "/staff/dealing/orders/{order_id}/approve": {
+      "post": {
+        "operationId": "route_staff_dealing_orders__order_id__approve_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "order_id",
+            "required": true,
+            "schema": {
+              "title": "Order Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "A value the caller chooses once per intended action and sends again on every retry of it. Pattern: `[A-Za-z0-9._:-]{8,128}`.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "A value the caller chooses once per intended action and sends again on every retry of it. Pattern: `[A-Za-z0-9._:-]{8,128}`.",
+              "title": "Idempotency-Key"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DeskOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          }
+        },
+        "summary": "Approve an order as the second person",
+        "tags": [
+          "dealing desk"
+        ]
+      }
+    },
+    "/staff/dealing/orders/{order_id}/confirm-result": {
+      "post": {
+        "operationId": "route_staff_dealing_orders__order_id__confirm_result_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "order_id",
+            "required": true,
+            "schema": {
+              "title": "Order Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "A value the caller chooses once per intended action and sends again on every retry of it. Pattern: `[A-Za-z0-9._:-]{8,128}`.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "A value the caller chooses once per intended action and sends again on every retry of it. Pattern: `[A-Za-z0-9._:-]{8,128}`.",
+              "title": "Idempotency-Key"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DeskOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          }
+        },
+        "summary": "Confirm a recorded result as the second person, which settles the order",
+        "tags": [
+          "dealing desk"
+        ]
+      }
+    },
+    "/staff/dealing/orders/{order_id}/reject-result": {
+      "post": {
+        "operationId": "route_staff_dealing_orders__order_id__reject_result_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "order_id",
+            "required": true,
+            "schema": {
+              "title": "Order Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "A value the caller chooses once per intended action and sends again on every retry of it. Pattern: `[A-Za-z0-9._:-]{8,128}`.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "A value the caller chooses once per intended action and sends again on every retry of it. Pattern: `[A-Za-z0-9._:-]{8,128}`.",
+              "title": "Idempotency-Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NoteIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DeskOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          }
+        },
+        "summary": "Reject a recorded result with a note",
+        "tags": [
+          "dealing desk"
+        ]
+      }
+    },
+    "/staff/dealing/orders/{order_id}/result": {
+      "post": {
+        "description": "Record what the custodian's note says was dealt. A fill of null means nothing was.",
+        "operationId": "record_result_staff_dealing_orders__order_id__result_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "order_id",
+            "required": true,
+            "schema": {
+              "title": "Order Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "A value the caller chooses once per intended action and sends again on every retry of it. Pattern: `[A-Za-z0-9._:-]{8,128}`.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "A value the caller chooses once per intended action and sends again on every retry of it. Pattern: `[A-Za-z0-9._:-]{8,128}`.",
+              "title": "Idempotency-Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ResultIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DeskOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          }
+        },
+        "summary": "Record Result",
+        "tags": [
+          "dealing desk"
+        ]
+      }
+    },
+    "/staff/dealing/orders/{order_id}/send-back": {
+      "post": {
+        "operationId": "route_staff_dealing_orders__order_id__send_back_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "order_id",
+            "required": true,
+            "schema": {
+              "title": "Order Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "A value the caller chooses once per intended action and sends again on every retry of it. Pattern: `[A-Za-z0-9._:-]{8,128}`.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "A value the caller chooses once per intended action and sends again on every retry of it. Pattern: `[A-Za-z0-9._:-]{8,128}`.",
+              "title": "Idempotency-Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NoteIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DeskOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          }
+        },
+        "summary": "Send an order back with a note",
+        "tags": [
+          "dealing desk"
+        ]
+      }
+    },
+    "/staff/dealing/orders/{order_id}/withdraw": {
+      "post": {
+        "operationId": "route_staff_dealing_orders__order_id__withdraw_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "order_id",
+            "required": true,
+            "schema": {
+              "title": "Order Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "A value the caller chooses once per intended action and sends again on every retry of it. Pattern: `[A-Za-z0-9._:-]{8,128}`.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "A value the caller chooses once per intended action and sends again on every retry of it. Pattern: `[A-Za-z0-9._:-]{8,128}`.",
+              "title": "Idempotency-Key"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DeskOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          }
+        },
+        "summary": "Withdraw an order you prepared",
+        "tags": [
+          "dealing desk"
+        ]
+      }
+    },
     "/staff/email-suppressions": {
       "get": {
         "description": "The newest 200 suppressions, whether each still applies, and any lift waiting.",
@@ -25545,6 +26894,83 @@
         "summary": "Remove Destination",
         "tags": [
           "staff payout accounts"
+        ]
+      }
+    },
+    "/staff/people": {
+      "get": {
+        "description": "The names of the members of staff with these IDs, or of every active one if none are given.\n\nAn ID with no account is left out.",
+        "operationId": "staff_people_staff_people_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "ids",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "items": {
+                    "maxLength": 20,
+                    "minLength": 20,
+                    "pattern": "^[-0-9A-Z_a-z]{20}$",
+                    "type": "string"
+                  },
+                  "maxItems": 100,
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Ids"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PeopleList"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          }
+        },
+        "summary": "Staff People",
+        "tags": [
+          "staff people"
         ]
       }
     },

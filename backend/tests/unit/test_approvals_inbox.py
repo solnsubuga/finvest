@@ -17,9 +17,30 @@ def test_every_source_names_real_permissions() -> None:
         assert source.view in PERMISSIONS and source.decide in PERMISSIONS
 
 
-def test_admin_sees_every_kind_and_support_sees_none_of_these() -> None:
+def test_admin_sees_every_kind_and_support_sees_what_touches_clients() -> None:
     assert visible_kinds(permissions_for("admin")) == set(SOURCES)
-    assert visible_kinds(permissions_for("support")) == set()
+    assert visible_kinds(permissions_for("support")) == {
+        "client_lock",
+        "suppression_lift",
+        "complaint_outcome",
+    }
+
+
+def test_support_may_decide_a_lift_but_not_a_lock_or_a_complaint_outcome() -> None:
+    items = [waiting("client_lock", id="a"), waiting("suppression_lift", id="b")]
+    items.append(waiting("complaint_outcome", id="c"))
+    shown = {i.kind: i.can_decide for i in inbox(items, "me", permissions_for("support"))}
+    assert shown == {"client_lock": False, "suppression_lift": True, "complaint_outcome": False}
+
+
+def test_nobody_decides_a_team_change_about_themselves() -> None:
+    about_me = Waiting("team_change", "x", "change_role", "other", T0, about_staff="me")
+    [item] = inbox([about_me], "me", permissions_for("admin"))
+    assert (item.yours, item.can_decide) == (False, False)
+    [item] = inbox([about_me], "third", permissions_for("admin"))
+    assert item.can_decide is True
+    # Only admins change the team, though others see it.
+    assert inbox([about_me], "third", permissions_for("operations")) == []
 
 
 def test_the_proposer_can_never_decide_their_own_item() -> None:
@@ -34,6 +55,23 @@ def test_someone_else_decides_only_with_the_deciding_permission() -> None:
     # Operations see the migration but cannot sign it off.
     [item] = inbox([waiting("migration_sign_off")], "me", permissions_for("operations"))
     assert (item.yours, item.can_decide) == (False, False)
+
+
+def test_a_payout_account_is_decided_only_by_those_who_change_payout_accounts() -> None:
+    # Finance see the review queue but cannot approve a payout account; compliance can.
+    [item] = inbox([waiting("payout_account")], "me", permissions_for("finance"))
+    assert item.can_decide is False
+    [item] = inbox([waiting("payout_account")], "me", permissions_for("compliance"))
+    assert item.can_decide is True
+
+
+def test_finance_see_a_checked_payout_account_but_cannot_approve_it() -> None:
+    [item] = inbox([waiting("payout_account")], "me", permissions_for("finance"))
+    assert (item.yours, item.can_decide) == (False, False)
+    for role in ("operations", "compliance"):
+        [item] = inbox([waiting("payout_account")], "me", permissions_for(role))
+        assert item.can_decide is True
+    assert inbox([waiting("payout_account")], "me", permissions_for("support")) == []
 
 
 def test_items_the_reader_cannot_see_are_left_out() -> None:

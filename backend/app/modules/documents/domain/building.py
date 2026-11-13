@@ -89,6 +89,9 @@ class InvestmentFacts:
     # At maturity: the investment its money rolled into, and the payout carrying it, if any.
     rolled_into_id: str | None = None
     payout_id: str | None = None
+    # Early withdrawal: the business day it was withdrawn, and the payout carrying it, if any.
+    withdrawn_on: date | None = None
+    withdrawal_payout_id: str | None = None
 
 
 # The one place an investment's status becomes words on a statement. Every status has a label,
@@ -110,6 +113,8 @@ def holding_status(facts: InvestmentFacts, *, period: Period, value_at_end: Mone
     it rolls over (shown as a holding of its own), or to the client's payout account, where it
     still counts as theirs until the payout is sent.
     """
+    if facts.status is InvestmentStatus.WITHDRAWN:
+        return _withdrawn_status(facts, period=period, value_at_end=value_at_end)
     matured_by_then = facts.maturity_date is not None and facts.maturity_date <= period.end
     if facts.status is InvestmentStatus.MATURED and matured_by_then:
         if facts.rolled_into_id is not None:
@@ -127,6 +132,19 @@ def holding_status(facts: InvestmentFacts, *, period: Period, value_at_end: Mone
     if facts.status is InvestmentStatus.ACTIVE and matured_by_then:
         return "Matured"
     return STATUS_LABELS[facts.status]
+
+
+def _withdrawn_status(facts: InvestmentFacts, *, period: Period, value_at_end: Money) -> str:
+    """An early withdrawal moves the money to the client's payout account, still under this
+    investment and still theirs, until the payout is sent. One withdrawn after the period ended
+    was still running at its end."""
+    if facts.withdrawn_on is None or facts.withdrawn_on > period.end:
+        return STATUS_LABELS[InvestmentStatus.ACTIVE]
+    if value_at_end.is_zero:
+        return "Withdrawn early and paid out"
+    if facts.withdrawal_payout_id is not None:
+        return "Withdrawn early, being paid out"
+    return "Withdrawn early, waiting to be paid out"
 
 
 def holding(
