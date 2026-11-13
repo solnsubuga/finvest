@@ -70,6 +70,20 @@ Agreed with the investing and payments threads on 13 November 2026.
 - **The payment.** `payments.service.request_planned_deposit` saves a mobile money deposit for that investment and its send job in the same transaction. It is idempotent through the deposit for that investment, because the idempotency table belongs to clients and staff. Payments adds the worker's right to insert it, in a payments migration.
 - **The outcome.** When the deposit is confirmed, the investment starts in the usual way and the run is `paid`. When it fails, the run is `failed` and, on its first attempt, retried the next day.
 
+## Client routes
+
+Under `/client/autoinvest/plans`, for the signed-in client only. Amounts are integers in the smallest unit with their currency. Every route answers with a plan: `plan_id`, `product_code`, `product_name`, `currency`, `amount_minor`, `frequency`, `day`, `network`, `payer_msisdn`, `at_maturity`, `status`, `next_run_on`, `created_at`, `paused_at`, `stopped_at` and `runs`. `runs` is latest first, and each run has `run_id`, `due_on`, `status`, `attempt`, `retry_on`, `code` and `investment_id`. The list leaves `runs` empty.
+
+| Route | Does |
+| --- | --- |
+| `GET ?include_stopped=false` | The client's plans, newest first, as `{"plans": [...]}`. |
+| `POST` | Sets up a plan from `product_code`, `amount_minor`, `currency` (UGX), `frequency`, `day`, `network`, an optional `phone` and an optional `at_maturity`. It needs an `Idempotency-Key`. The same key returns the same plan, and the same key with other details is refused with `idempotency_key_reused` (422). Answers 201. |
+| `GET /{plan_id}` | One plan with its runs. |
+| `PUT /{plan_id}` | Replaces what the plan does, with the same body as `POST`. |
+| `POST /{plan_id}/pause`, `/resume`, `/stop` | Sets the state. Sending one again changes nothing, so they carry no key. |
+
+`phone` defaults to the number on the account, and any other number is refused on `phone`. A client whose identity check is not approved gets `forbidden` (403). The eleventh open plan, or resuming a stopped plan, gets `conflict` (409). Another client's plan is `not_found` (404). An amount, day or product that no run could be paid for gets `validation_failed` (422) with the field.
+
 ## Not built yet
 
-Asking for the investment and the payment for each run, and settling its outcome, wait for the investing module's maturity migration and the payments module's bank transfer change, and arrive in the next pull request. Until then the scheduler does not run `autoinvest.open_due_runs`, so no run is opened in a deployed system. Also not built: HTTP routes, telling the client about a failed or missed run (it waits for notifications), approving a new plan with the app PIN (it waits for devices and PINs), pausing a client's plans when their phone number changes, and the screens.
+Asking for the investment and the payment for each run, and settling its outcome, wait for the investing module's maturity migration and the payments module's bank transfer change, and arrive in the next pull request. Until then the scheduler does not run `autoinvest.open_due_runs`, so no run is opened in a deployed system. Also not built: staff routes for the console, telling the client about a failed or missed run (it waits for notifications), approving a new plan with the app PIN (it waits for devices and PINs), pausing a client's plans when their phone number changes. The client app screens run on a demo until they are wired to these routes.
