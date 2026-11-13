@@ -1,7 +1,7 @@
 """Tighten payout destinations after review.
 
 Revision ID: 0032_payout_destination_guards
-Revises: 0031_payouts
+Revises: 0006_passkeys
 
 * One account, one client. An account approved for one client cannot be approved for another.
   The check is made at approval, which only staff see, so it tells a client nothing about
@@ -18,7 +18,7 @@ from collections.abc import Sequence
 from alembic import op
 
 revision: str = "0032_payout_destination_guards"
-down_revision: str | None = "0031_payouts"
+down_revision: str | None = "0006_passkeys"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 
@@ -50,12 +50,12 @@ CREATE FUNCTION finvest_payout_destinations_review_guard() RETURNS trigger
 
 THRESHOLD_FUNCTION = """
 CREATE FUNCTION finvest_payouts_review_threshold() RETURNS trigger
-    LANGUAGE plpgsql SECURITY DEFINER SET search_path = pg_catalog, public, pg_temp
+    LANGUAGE plpgsql SECURITY DEFINER SET search_path = pg_catalog, pg_temp
     AS $$
     DECLARE
         threshold bigint;
     BEGIN
-        SELECT review_above INTO threshold FROM withdrawal_limits
+        SELECT review_above INTO threshold FROM public.withdrawal_limits
          WHERE effective_from <= NEW.business_date AND currency = NEW.currency
          ORDER BY effective_from DESC LIMIT 1;
         IF NEW.status = 'queued' AND threshold IS NOT NULL AND NEW.amount_minor > threshold THEN
