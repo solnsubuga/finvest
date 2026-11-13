@@ -14,7 +14,8 @@ from pydantic import BeforeValidator, Field
 from app.infrastructure.database import Database
 from app.modules.identity.api import require_permission
 from app.modules.identity.service import StaffSession
-from app.modules.migration import service
+from app.modules.migration import claims, service
+from app.modules.migration.domain.claim import Progress
 from app.modules.migration.domain.finance import ControlTotals, Figure, InvalidFinanceCheck
 from app.modules.migration.domain.sheet import Severity, Sheet
 from app.shared.actors import Actor
@@ -131,6 +132,14 @@ class DifferenceView(Contract):
     sign_off: SignOffView | None
 
 
+class ClaimProgressView(Contract):
+    invited: int
+    claimed_and_confirmed: int
+    said_something_is_wrong: int
+    not_yet_claimed: int
+    cannot_be_invited: int
+
+
 class OverviewView(Contract):
     trials_run: int
     trial: TrialView | None
@@ -139,6 +148,8 @@ class OverviewView(Contract):
     lines: list[TotalLineView]
     differences: list[DifferenceView]
     blockers: list[service.BlockerCode]
+    # Null until the switch has created the claims.
+    claims: ClaimProgressView | None
     # What the signed-in person may do here. Each route checks it again.
     allowed: list[Allowed]
 
@@ -245,7 +256,19 @@ def _allowed(staff: StaffSession) -> list[Allowed]:
     return allowed
 
 
-def _overview(view: service.Overview, staff: StaffSession) -> OverviewView:
+def _claims(progress: Progress) -> ClaimProgressView | None:
+    if progress.invited + progress.cannot_be_invited == 0:
+        return None
+    return ClaimProgressView(
+        invited=progress.invited,
+        claimed_and_confirmed=progress.claimed_and_confirmed,
+        said_something_is_wrong=progress.said_something_is_wrong,
+        not_yet_claimed=progress.not_yet_claimed,
+        cannot_be_invited=progress.cannot_be_invited,
+    )
+
+
+def _overview(view: service.Overview, progress: Progress, staff: StaffSession) -> OverviewView:
     trial = view.trial
     return OverviewView(
         trials_run=view.trials_run,
@@ -290,6 +313,7 @@ def _overview(view: service.Overview, staff: StaffSession) -> OverviewView:
             for key, figures in view.differing.items()
         ],
         blockers=list(view.blockers),
+        claims=_claims(progress),
         allowed=_allowed(staff),
     )
 
@@ -297,7 +321,9 @@ def _overview(view: service.Overview, staff: StaffSession) -> OverviewView:
 async def _read(request: Request, staff: StaffSession) -> OverviewView:
     database, _ = _state(request)
     async with database.actor_transaction(_actor(staff)) as session:
-        return _overview(await service.overview(session), staff)
+        return _overview(
+            await service.overview(session), await claims.claim_progress(session), staff
+        )
 
 
 @router.get("")

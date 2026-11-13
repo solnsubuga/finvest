@@ -114,6 +114,21 @@ Operations and admins hold `migration.import`. Finance and admins hold `migratio
 
 At the switch each investment is opened with one ledger entry: the principal to the client's holding, interest after tax to the client's accrued interest, the tax to the tax payable account, and the three together against a migration opening balances account, which finance clears against the custodian and bank position.
 
+## Claiming an account
+
+Each migrated client has one claim in `migration_claims`, created by the switch. It holds the client's ID, their Finvest 1.0 reference, whether they redo the full ID check, the step they have reached, and the reminders sent. It never holds a name, phone number or document: those stay with the identity module. The steps, and who may take each, are in `backend/app/modules/migration/domain/claim.py`. A trigger holds the database to the same table, so a step is never skipped or taken by the wrong kind of actor. The service is `backend/app/modules/migration/claims.py`.
+
+| Step | Moved by |
+| --- | --- |
+| Not invited to invited | The switch, or staff after checking a phone number |
+| Invited to signed in | The client, when the link is used and a password set |
+| Signed in to identity submitted | The client |
+| Identity submitted to identity confirmed, or back to signed in | The identity checks module |
+| Identity confirmed to confirmed, or to problem reported | The client |
+| Problem reported to identity confirmed | Staff, with a reason |
+
+A link is a 32-byte random token sent once by SMS and email. Only its SHA-256 hash is stored in `migration_claim_links`. A link works once, for 72 hours. A fresh link cancels the one before it, and the database allows one live link per client. A visitor opening a link is not signed in, so the API looks it up through `finvest_migration_claim_link(hash)`, which returns only that link's claim. The visitor is told only that a link no longer works. Staff can see why: unknown, used, cancelled, expired or already claimed. Reminders go weekly to a client who has not used their link, up to eight. After that, staff call the client and can still send a link by hand.
+
 ## What Finvest 1.0 was
 
 For reference when writing the import: a Django and Django REST Framework backend with Celery, and a React, Vite and shadcn frontend. The flow was KYC, pick a product, create an order with a bank slip upload or mobile money, an admin verifies the deposit, the order becomes an investment, interest accrues daily, and redemption and transfer need admin approval. Its code is no longer in this repository or its history, so the column names above come from this description and not from the old database. They must be checked against a real export before the first trial.

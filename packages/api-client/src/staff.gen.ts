@@ -107,6 +107,15 @@ export const BankTransferPage = z.object({
 });
 export type BankTransferPage = z.infer<typeof BankTransferPage>;
 
+export const ClaimProgressView = z.object({
+  cannot_be_invited: z.number().int(),
+  claimed_and_confirmed: z.number().int(),
+  invited: z.number().int(),
+  not_yet_claimed: z.number().int(),
+  said_something_is_wrong: z.number().int(),
+});
+export type ClaimProgressView = z.infer<typeof ClaimProgressView>;
+
 export const CloseComplaint = z.object({
   client_accepted: z.boolean(),
   outcome: z.enum(["upheld", "partly_upheld", "not_upheld"]),
@@ -416,6 +425,7 @@ export type TrialView = z.infer<typeof TrialView>;
 export const OverviewView = z.object({
   allowed: z.array(z.enum(["run_trial", "enter_totals", "sign_off"])),
   blockers: z.array(z.enum(["no_trial", "import_has_errors", "totals_not_entered", "totals_not_confirmed", "difference_not_signed_off"])),
+  claims: ClaimProgressView.nullable(),
   differences: z.array(DifferenceView),
   lines: z.array(TotalLineView),
   totals: TotalsView.nullable(),
