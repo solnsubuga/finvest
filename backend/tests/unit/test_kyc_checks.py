@@ -15,9 +15,11 @@ from app.modules.kyc.domain.checks import (
     always_needs_person,
     can_move,
     detail_problems,
+    mask_document_number,
     missing_for_submission,
     required_photos,
     retake_problem,
+    staff_moves,
     status_on_submit,
 )
 from app.modules.kyc.domain.provider import (
@@ -202,3 +204,31 @@ def test_a_check_reported_twice_is_not_trusted() -> None:
 def test_a_score_is_a_whole_percentage(score: int) -> None:
     with pytest.raises(ValueError, match="whole percentage"):
         CheckOutcome(AutomaticCheck.SELFIE_MATCH, Verdict.UNSURE, score)
+
+
+@pytest.mark.parametrize(
+    ("number", "masked"),
+    [
+        ("CM90123456784PL", "CM90••••••••4PL"),
+        ("B1234567", "B123•567"),
+        ("A123456", "•••••••"),
+        ("AB123", "•••••"),
+    ],
+)
+def test_a_masked_document_number_shows_its_ends_only_when_long_enough(
+    number: str, masked: str
+) -> None:
+    assert mask_document_number(number) == masked
+    assert len(masked) == len(number)
+
+
+def test_staff_have_something_to_decide_only_in_review_or_with_compliance() -> None:
+    assert staff_moves(S.NEEDS_REVIEW) == {
+        S.APPROVED,
+        S.REJECTED,
+        S.AWAITING_CLIENT,
+        S.WITH_COMPLIANCE,
+    }
+    assert staff_moves(S.WITH_COMPLIANCE) == {S.APPROVED, S.REJECTED, S.AWAITING_CLIENT}
+    for status in (S.DRAFT, S.SUBMITTED, S.AWAITING_CLIENT, S.APPROVED, S.REJECTED):
+        assert staff_moves(status) == frozenset()

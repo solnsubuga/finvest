@@ -14,6 +14,7 @@ from app.api.request_id import RequestIdMiddleware
 from app.api.request_log import RequestLogMiddleware
 from app.infrastructure.database import Database
 from app.infrastructure.email.webhooks import ResendHookSettings, WebhookVerifier
+from app.infrastructure.sealing import Sealer
 from app.infrastructure.settings import Settings
 from app.infrastructure.storage import FileStorage, StorageSettings
 from app.modules.audit import api as audit_api
@@ -29,6 +30,9 @@ from app.modules.identity.passkeys import PasskeyService
 from app.modules.identity.service import IdentityService
 from app.modules.insights import api as insights_api
 from app.modules.investments import api as investments_api
+from app.modules.kyc import api as kyc_api
+from app.modules.kyc.domain.provider import IdentityProvider
+from app.modules.kyc.settings import KycSettings
 from app.modules.migration import api as migration_api
 from app.modules.notifications import api as notifications_api
 from app.modules.notifications import hooks as notification_hooks
@@ -53,6 +57,8 @@ def create_app(
     collections: CollectionsProvider | None = None,
     storage: FileStorage | None = None,
     email_hooks: WebhookVerifier | None = None,
+    identity_sealer: Sealer | None = None,
+    identity_provider: IdentityProvider | None = None,
 ) -> FastAPI:
     owned = database is None
     database = database or Database(settings)
@@ -60,6 +66,10 @@ def create_app(
     collections = collections or collections_provider(PaymentsSettings(), clock)
     storage = storage or StorageSettings().storage()
     email_hooks = email_hooks or ResendHookSettings().verifier()
+    identity_checks = KycSettings()
+    if identity_sealer is None and identity_checks.identity_data_key is not None:
+        identity_sealer = identity_checks.sealer()
+    identity_provider = identity_provider or identity_checks.provider()
 
     @asynccontextmanager
     async def lifespan(_: FastAPI) -> AsyncIterator[None]:
@@ -135,5 +145,7 @@ def create_app(
     app.include_router(migration_api.router)
     app.include_router(insights_api.router)
     for router in investments_api.routers:
+        app.include_router(router)
+    for router in kyc_api.create_routers(identity_sealer, identity_provider, storage):
         app.include_router(router)
     return app
