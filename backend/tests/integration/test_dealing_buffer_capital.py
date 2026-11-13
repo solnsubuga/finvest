@@ -16,6 +16,8 @@ from sqlalchemy.exc import DBAPIError
 from app.infrastructure.database import Database
 from app.modules.dealing import capital, holdings
 from app.modules.dealing.domain.capital import Direction, MovementStatus
+from app.modules.ledger import service as ledger
+from app.modules.ledger.domain.errors import DayClosed
 from app.shared.actors import SYSTEM, Actor
 from app.shared.errors import ApplicationError
 from app.shared.money import Currency, Money
@@ -278,3 +280,23 @@ async def test_the_database_refuses_one_person_a_changed_proposal_and_a_made_up_
         with pytest.raises(DBAPIError):
             async with worker_database.actor_transaction(SYSTEM) as session:
                 await session.execute(text(statement), {"id": movement.id})
+
+
+async def test_a_pay_in_whose_day_closed_before_approval_is_refused_clearly(
+    app_database: Database, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    movement = await propose(
+        app_database, new_staff(), Direction.IN, 800, reference=f"FT{push_id()}", value_date=TODAY
+    )
+
+    async def day_closed(*args: object, **kwargs: object) -> None:
+        raise DayClosed("The entry is dated in a day that is closed")
+
+    # Closing a day is permanent in the shared database, so the ledger's answer stands in.
+    monkeypatch.setattr(ledger, "post_entry", day_closed)
+    with pytest.raises(ApplicationError) as closed:
+        await approve(app_database, new_staff(), movement.id)
+    assert refusal(closed) == "day_closed_decline_and_record_again"
+    monkeypatch.undo()
+    async with app_database.actor_transaction(new_staff()) as session:
+        assert (await capital.get_movement(session, movement.id)).status is MovementStatus.PROPOSED

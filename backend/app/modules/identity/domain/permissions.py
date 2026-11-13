@@ -35,8 +35,9 @@ Permission = Literal[
     "goals.view",
     "dealing_desk.view",
     # Preparing, approving, sending back or withdrawing a dealing order, and recording,
-    # confirming or rejecting its result, which settles it into the ledger. Seeing the desk is
-    # `dealing_desk.view`. Every step still takes a second person.
+    # confirming or rejecting its result, which settles it into the ledger. Also changing the
+    # liquidity buffer's rules and moving Finvest's own money into or out of it. Seeing the desk
+    # is `dealing_desk.view`. Every step still takes a second person.
     "dealing_orders.change",
     "finance.view",
     "products.view",
