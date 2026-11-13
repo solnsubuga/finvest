@@ -24,6 +24,7 @@ from app.modules.documents.service import MONTHLY_KIND
 from app.modules.goals.jobs import REFRESH_GROUPS_KIND
 from app.modules.investments.jobs import ACCRUE_KIND, CANCEL_UNPAID_KIND, MATURE_KIND
 from app.modules.kyc.service import SWEEP_UNANSWERED
+from app.modules.notifications.keyed_backfill import KEY_HASHES
 from app.modules.notifications.service import PURGE_MESSAGES
 from app.modules.payments import service as payments
 from app.modules.payments.settings import PaymentsSettings
@@ -137,6 +138,15 @@ def schedules() -> list[Schedule]:
             name="notifications.purge",
             trigger=CronTrigger(minute=17, timezone=UTC),
             kind=PURGE_MESSAGES,
+        )
+    )
+    # Fills the keyed hash of email rows saved before the key existed. Nothing to do once all
+    # are filled; a run with pages left queues the next page itself.
+    runs.append(
+        Schedule(
+            name="notifications.key_email_hashes",
+            trigger=CronTrigger(minute=41, timezone=UTC),
+            kind=KEY_HASHES,
         )
     )
     return runs
