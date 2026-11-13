@@ -47,7 +47,10 @@ async function wrap<T>(work: () => Promise<T>): Promise<T> {
 
 const SECOND_STEPS: readonly SecondStep[] = ["passkey", "authenticator", "code"];
 
-/** Only the steps this app can offer on this device, in the API's order (strongest first). */
+/**
+ * The API's list in its order (strongest first), less what this device cannot
+ * do. The app adds nothing, so a rule change on the server is never undone here.
+ */
 function usable(methods: readonly string[]): SecondStep[] {
   return methods.filter(
     (method): method is SecondStep =>
@@ -106,10 +109,7 @@ export function createApiAuthClient(): AuthClient {
     startLogin: (phone, password) =>
       wrap(async () => {
         const result = await api("POST /client/login/start", { body: { phone, password } });
-        const methods = usable(result.methods);
-        // Every client can receive an SMS code, so a log in always has a way through.
-        if (!methods.includes("code")) methods.push("code");
-        return { loginId: result.login_id, phone, methods };
+        return { loginId: result.login_id, phone, methods: usable(result.methods) };
       }),
 
     verifyWithPasskey: (loginId) =>
@@ -135,9 +135,7 @@ export function createApiAuthClient(): AuthClient {
     listSecondSteps: () =>
       wrap(async () => {
         const result = await api("GET /client/second-steps", {});
-        const methods = usable(result.methods);
-        if (!methods.includes("code")) methods.push("code");
-        return methods;
+        return usable(result.methods);
       }),
 
     addPasskey: () =>
@@ -145,7 +143,7 @@ export function createApiAuthClient(): AuthClient {
         if (!passkeysSupported()) throw new AuthError("passkey_unsupported");
         const options = await api("POST /client/passkeys/options", {});
         const credential = await createPasskey(options.public_key);
-        await api("POST /client/passkeys", { body: { credential, name: "" } });
+        await api("POST /client/passkeys", { body: { credential } });
       }),
 
     startAuthenticatorSetup: () =>

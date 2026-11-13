@@ -2,10 +2,12 @@ import { Platform } from "react-native";
 
 /**
  * Where the Finvest API is. Set EXPO_PUBLIC_API_URL at build time to point a
- * build elsewhere, such as a local backend on http://localhost:8000. A build
- * without it talks to production.
+ * build elsewhere. Without it, a development build talks to a local backend
+ * (`make dev`), so test sign-ups never reach production, and only a
+ * production build talks to production.
  */
-export const API_URL = (process.env.EXPO_PUBLIC_API_URL || "https://api.finvestug.com").replace(/\/+$/, "");
+const FALLBACK = __DEV__ ? "http://localhost:8000" : "https://api.finvestug.com";
+export const API_URL = (process.env.EXPO_PUBLIC_API_URL || FALLBACK).replace(/\/+$/, "");
 
 /**
  * On the web the session is an HttpOnly cookie the browser keeps, and the

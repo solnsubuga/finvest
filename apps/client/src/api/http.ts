@@ -11,9 +11,11 @@ import { readToken } from "./token";
  * - The answer is checked against the generated validator before a screen
  *   sees it. Anything that does not match is treated like an outage, never
  *   shown half-read.
- * - A request that could not be sent fails with `offline`. One that was sent
- *   and got no answer in time fails with `timeout`: it may have reached the
- *   API, so a screen that moves money must not treat it as "nothing happened".
+ * - A request that got no answer fails with `offline` when the connection
+ *   failed, and `timeout` when nothing came back in time. Neither proves the
+ *   request never arrived (a connection can drop after it left), so both are
+ *   `uncertain`, and a screen that moves money must not treat them as
+ *   "nothing happened".
  * - Every refusal carries the API's error code, so screens never parse text.
  */
 
@@ -90,7 +92,12 @@ export class ApiError extends Error {
 
   /** True when the request may have reached the API, so its outcome is unknown. */
   get uncertain(): boolean {
-    return this.code === "timeout" || this.code === "internal_error" || this.code === "bad_response";
+    return (
+      this.code === "offline" ||
+      this.code === "timeout" ||
+      this.code === "internal_error" ||
+      this.code === "bad_response"
+    );
   }
 }
 
@@ -243,7 +250,9 @@ export async function api<K extends OperationName>(name: K, input: ApiInput<K>):
   } catch (error) {
     if (timedOut) throw new ApiError("timeout");
     if (loose.signal?.aborted) throw error;
-    // fetch rejects only when nothing came back: no network, DNS, TLS, or a refused connection.
+    // fetch rejects when no answer came back: no network, DNS, TLS, a refused connection, or
+    // one that dropped after the request left. Only the last may have reached the API, and the
+    // app cannot tell them apart, so `offline` counts as uncertain.
     throw new ApiError("offline");
   } finally {
     clearTimeout(timer);

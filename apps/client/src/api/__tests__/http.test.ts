@@ -1,3 +1,4 @@
+import { API_URL } from "../config";
 import { api, ApiError, onUnauthorized, setFetch } from "../http";
 import { saveToken } from "../token";
 
@@ -55,7 +56,7 @@ describe("api", () => {
       idempotencyKey: "key-1",
     });
     expect(result.amount).toEqual({ minor: 500000, currency: "UGX" });
-    expect(calls[0]!.url).toBe("https://api.finvestug.com/client/investments/a%2Fb/payments/mobile-money");
+    expect(calls[0]!.url).toBe(`${API_URL}/client/investments/a%2Fb/payments/mobile-money`);
     const headers = calls[0]!.init.headers as Record<string, string>;
     expect(headers["Idempotency-Key"]).toBe("key-1");
     expect(headers.Authorization).toBe("Bearer token-1");
@@ -68,8 +69,8 @@ describe("api", () => {
     await api("GET /client/insights", { query: { months: 6 } });
     await api("GET /client/insights", {});
     expect(calls.map((call) => call.url)).toEqual([
-      "https://api.finvestug.com/client/insights?months=6",
-      "https://api.finvestug.com/client/insights",
+      `${API_URL}/client/insights?months=6`,
+      `${API_URL}/client/insights`,
     ]);
   });
 
@@ -117,13 +118,13 @@ describe("api", () => {
     expect(error.uncertain).toBe(true);
   });
 
-  it("says offline when nothing could be sent", async () => {
+  it("says offline when the connection failed, which may still have reached the API", async () => {
     setFetch(async () => {
       throw new TypeError("Network request failed");
     });
     const error = (await api("GET /client/session", {}).catch((e: unknown) => e)) as ApiError;
     expect(error.code).toBe("offline");
-    expect(error.uncertain).toBe(false);
+    expect(error.uncertain).toBe(true);
   });
 
   it("says timeout, which may have reached the API, when no answer comes in time", async () => {

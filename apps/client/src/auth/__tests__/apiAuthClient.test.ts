@@ -1,3 +1,4 @@
+import { API_URL } from "@/api/config";
 import { ApiError, setFetch } from "@/api/http";
 import { readToken, saveToken } from "@/api/token";
 
@@ -22,7 +23,7 @@ type Route = { status: number; body?: unknown };
 function serve(routes: Record<string, Route | (() => Route)>) {
   const seen: { key: string; body: unknown; auth: string | undefined }[] = [];
   setFetch(async (url, init) => {
-    const key = `${init?.method} ${String(url).replace("https://api.finvestug.com", "")}`;
+    const key = `${init?.method} ${String(url).replace(API_URL, "")}`;
     const headers = (init?.headers ?? {}) as Record<string, string>;
     seen.push({ key, body: init?.body ? JSON.parse(String(init.body)) : null, auth: headers.Authorization });
     const found = routes[key];
@@ -71,10 +72,15 @@ describe("the sign-in client for the real API", () => {
     expect(seen.at(-1)!.auth).toBe("Bearer phone-token");
   });
 
-  it("offers only what a phone can do: no passkey without WebAuthn, and always an SMS code", async () => {
+  it("keeps the API's list and order, less a passkey on a phone without WebAuthn", async () => {
     serve({ "POST /client/login/start": { status: 200, body: { login_id: ID, methods: ["passkey", "authenticator", "code"] } } });
     const challenge = await createApiAuthClient().startLogin("+256772123456", "pw");
     expect(challenge.methods).toEqual(["authenticator", "code"]);
+  });
+
+  it("adds nothing the API did not list", async () => {
+    serve({ "GET /client/second-steps": { status: 200, body: { methods: ["authenticator"] } } });
+    await expect(createApiAuthClient().listSecondSteps()).resolves.toEqual(["authenticator"]);
   });
 
   it("marks a session opened with an SMS code as restricted until the API's time", async () => {

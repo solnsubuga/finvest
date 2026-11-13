@@ -49,9 +49,9 @@ The screens talk to the `AuthClient` interface in `src/auth/types.ts`. It follow
 
 `src/auth/apiAuthClient.ts` answers it from the real API.
 
-- **Where the API is.** `EXPO_PUBLIC_API_URL` at build time, such as `http://localhost:8000` for a local backend (`make dev`). Without it a build talks to `https://api.finvestug.com`. The local API must list the app's origin in `FINVEST_CLIENT_ALLOWED_ORIGINS`; Compose already allows `http://localhost:8081`.
+- **Where the API is.** `EXPO_PUBLIC_API_URL` at build time. Without it a development build talks to a local backend on `http://localhost:8000` (`make dev`), and only a production build talks to `https://api.finvestug.com`. The local API must list the app's origin in `FINVEST_CLIENT_ALLOWED_ORIGINS`; Compose already allows `http://localhost:8081`.
 - **The session.** On the web it is the API's HttpOnly cookie, so the page never sees it. On a phone the API hands over a token, kept in the Keychain or Keystore with `expo-secure-store`, this device only. The app looks the session up when it starts, so a reload keeps you signed in, and goes back to log in when the API says the session has ended.
-- **Errors.** Every refusal arrives as the API's error code and becomes a sentence from `describeAuthError`. "Offline" (nothing was sent) and "timeout" (it may have arrived) are kept apart in `src/api/http.ts`, which matters for anything that moves money.
+- **Errors.** Every refusal arrives as the API's error code and becomes a sentence from `describeAuthError`. "Offline" and "timeout" are told apart in `src/api/http.ts` for the wording, but both count as uncertain, because a connection can drop after the request arrived. That matters for anything that moves money.
 - **Passkeys** use the browser's WebAuthn on the web. A phone build has no WebAuthn, so it hides the passkey option at log in and says so on the add screen. Passkeys on Android and iPhone need a native module and a development build, which is not done yet.
 
 The in-memory demo in `src/auth/stubAuthClient.ts` answers in tests, and in a build only with `EXPO_PUBLIC_DEMO_AUTH=1`, and the app says so on screen while it is active. A normal production build leaves it out, and CI checks that.
