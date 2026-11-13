@@ -34,6 +34,27 @@ export const AmountView = z.object({
 });
 export type AmountView = z.infer<typeof AmountView>;
 
+export const AnnouncementView = z.object({
+  decided_at: z.string().nullable(),
+  decided_by: z.string().nullable(),
+  decision_reason: z.string().nullable(),
+  id: z.string(),
+  message: z.string(),
+  proposed_at: z.string(),
+  proposed_by: z.string(),
+  reason: z.string(),
+  status: z.enum(["proposed", "approved", "rejected", "withdrawn"]),
+  title: z.string(),
+  told: z.number().int(),
+  yours: z.boolean(),
+});
+export type AnnouncementView = z.infer<typeof AnnouncementView>;
+
+export const AnnouncementList = z.object({
+  announcements: z.array(AnnouncementView),
+});
+export type AnnouncementList = z.infer<typeof AnnouncementList>;
+
 export const ApprovalItemOut = z.object({
   can_decide: z.boolean(),
   id: z.string(),
@@ -322,6 +343,12 @@ export const ConversationItem = z.object({
   waiting_since: z.string().nullable(),
 });
 export type ConversationItem = z.infer<typeof ConversationItem>;
+
+export const DecideAnnouncement = z.object({
+  decision: z.enum(["approved", "rejected", "withdrawn"]),
+  reason: z.string().nullable().optional(),
+});
+export type DecideAnnouncement = z.infer<typeof DecideAnnouncement>;
 
 export const DecideLift = z.object({
   decision: z.enum(["approved", "rejected", "withdrawn"]),
@@ -755,6 +782,13 @@ export const ProposalView = z.object({
 });
 export type ProposalView = z.infer<typeof ProposalView>;
 
+export const ProposeAnnouncement = z.object({
+  message: z.string(),
+  reason: z.string(),
+  title: z.string(),
+});
+export type ProposeAnnouncement = z.infer<typeof ProposeAnnouncement>;
+
 export const ProposeLift = z.object({
   reason: z.string(),
 });
@@ -1081,6 +1115,41 @@ export type WordingList = z.infer<typeof WordingList>;
 
 /** Every route, by method and path, with what it takes and what it answers. */
 export const operations = {
+  "GET /staff/announcements": {
+    method: "GET",
+    path: "/staff/announcements",
+    params: z.object({}),
+    query: z.object({}),
+    body: null,
+    bodyKind: null,
+    idempotent: false,
+    status: 200,
+    response: AnnouncementList,
+  },
+  "POST /staff/announcements": {
+    method: "POST",
+    path: "/staff/announcements",
+    params: z.object({}),
+    query: z.object({}),
+    body: ProposeAnnouncement,
+    bodyKind: "json",
+    idempotent: false,
+    status: 201,
+    response: AnnouncementView,
+  },
+  "POST /staff/announcements/{announcement_id}/decision": {
+    method: "POST",
+    path: "/staff/announcements/{announcement_id}/decision",
+    params: z.object({
+    announcement_id: z.string(),
+  }),
+    query: z.object({}),
+    body: DecideAnnouncement,
+    bodyKind: "json",
+    idempotent: false,
+    status: 200,
+    response: AnnouncementView,
+  },
   "GET /staff/approvals": {
     method: "GET",
     path: "/staff/approvals",

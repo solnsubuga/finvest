@@ -97,4 +97,3 @@ Row policies in PostgreSQL enforce this, as well as the routes.
 - **Chat messages and complaint details are personal data.** They are free text and will hold names, phone numbers and account details. They are never written to a log, an audit record or a job payload. They are not encrypted field by field yet. They are protected by the row policies and disk encryption like other tables. Whether to seal them like identity details, with `app/infrastructure/sealing.py`, is an open question (see decisions.md).
 - Public holidays in the deadline.
 - A quarterly complaints report for the regulator. The register's figures are its start.
-- Announcements from staff to all clients. They come with the sending work in [notifications](notifications.md).
