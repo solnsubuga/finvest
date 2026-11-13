@@ -17,7 +17,7 @@ import { GoalCategory, GoalsClient, Standing } from "./types";
 /** Opens the pretend group "Wedding in Mbarara" in the demo. */
 export const DEMO_INVITE_CODE = "DemoInviteWeddingMbara";
 
-type Other = { displayName: string; joinedAt: string; value: number; isOwner: boolean };
+type Other = { id: string; displayName: string; joinedAt: string; value: number; isOwner: boolean };
 
 type StoredGroup = {
   id: string;
@@ -101,8 +101,8 @@ export function createStubGroupsClient(options: StubOptions): GroupsClient {
         ownName: "Amara",
         joinedAt: `${createdOn}T07:00:00Z`,
         others: [
-          { displayName: "Daniel", joinedAt: `${createdOn}T10:12:00Z`, value: 1_850_000, isOwner: false },
-          { displayName: "Miriam", joinedAt: `${addMonths(createdOn, 1)}T16:40:00Z`, value: 950_000, isOwner: false },
+          { id: "demo-member-daniel", displayName: "Daniel", joinedAt: `${createdOn}T10:12:00Z`, value: 1_850_000, isOwner: false },
+          { id: "demo-member-miriam", displayName: "Miriam", joinedAt: `${addMonths(createdOn, 1)}T16:40:00Z`, value: 950_000, isOwner: false },
         ],
         invite: null,
       });
@@ -119,12 +119,14 @@ export function createStubGroupsClient(options: StubOptions): GroupsClient {
       joinedAt: stored.joinedAt,
       isYou: true,
       isOwner: stored.isOwner,
+      memberId: null,
     };
     const others: GroupMember[] = stored.others.map((o) => ({
       displayName: o.displayName,
       joinedAt: o.joinedAt,
       isYou: false,
       isOwner: o.isOwner,
+      memberId: stored.isOwner ? o.id : null,
     }));
     const members = [you, ...others].sort((a, b) => a.joinedAt.localeCompare(b.joinedAt));
     const open = stored.invite && Date.parse(stored.invite.expiresAt) > now() ? stored.invite : null;
@@ -285,9 +287,9 @@ export function createStubGroupsClient(options: StubOptions): GroupsClient {
         ownName: member.displayName,
         joinedAt: at,
         others: [
-          { displayName: invite.ownerName, joinedAt: `${createdOn}T08:00:00Z`, value: 6_400_000, isOwner: true },
-          { displayName: "Brian", joinedAt: `${createdOn}T12:30:00Z`, value: 2_100_000, isOwner: false },
-          { displayName: "Esther", joinedAt: `${addMonths(createdOn, 1)}T09:05:00Z`, value: 1_500_000, isOwner: false },
+          { id: "demo-member-owner", displayName: invite.ownerName, joinedAt: `${createdOn}T08:00:00Z`, value: 6_400_000, isOwner: true },
+          { id: "demo-member-brian", displayName: "Brian", joinedAt: `${createdOn}T12:30:00Z`, value: 2_100_000, isOwner: false },
+          { id: "demo-member-esther", displayName: "Esther", joinedAt: `${addMonths(createdOn, 1)}T09:05:00Z`, value: 1_500_000, isOwner: false },
         ].slice(0, invite.members),
         invite: null,
       });
@@ -300,6 +302,16 @@ export function createStubGroupsClient(options: StubOptions): GroupsClient {
       const stored = find(groupId);
       if (stored.isOwner && stored.status === "active") throw new GroupError("owner_cannot_leave");
       groups.delete(groupId);
+    },
+
+    async removeMember(groupId, memberId) {
+      await pause();
+      const stored = owned(groupId);
+      if (!stored.others.some((o) => o.id === memberId)) throw new GroupError("not_found");
+      stored.others = stored.others.filter((o) => o.id !== memberId);
+      // The one removed may still hold the link, so it stops working.
+      stored.invite = null;
+      return view(stored);
     },
 
     async closeGroup(groupId) {
