@@ -87,11 +87,11 @@ describe("settings: announcements", () => {
     await waitFor(async () => expect(await card("App update")).toHaveTextContent("Withdrawn by you, 13 Nov, 12:00"));
   });
 
-  it("shows a role that cannot change messages who approves", async () => {
+  it("shows a role that cannot send announcements who approves", async () => {
     renderSection({ canChange: false });
     const waiting = await card("Office closed on Monday");
     expect(within(waiting).queryByRole("button")).not.toBeInTheDocument();
-    expect(waiting).toHaveTextContent("Someone who can change client messages approves it.");
+    expect(waiting).toHaveTextContent("Someone who can send announcements approves it.");
     expect(screen.queryByRole("button", { name: "New announcement" })).not.toBeInTheDocument();
   });
 
