@@ -19,12 +19,13 @@ from app.infrastructure.jobs.worker import default_worker_id
 from app.infrastructure.logging import configure_logging
 from app.infrastructure.process import keep_heartbeat, stop_on_signals
 from app.infrastructure.settings import Settings
-from app.modules.investments.jobs import CANCEL_UNPAID_KIND
+from app.modules.investments.jobs import ACCRUE_KIND, CANCEL_UNPAID_KIND
 from app.modules.kyc.service import SWEEP_UNANSWERED
 from app.modules.notifications.service import PURGE_MESSAGES
 from app.modules.payments import service as payments
 from app.modules.payments.settings import PaymentsSettings
 from app.modules.payments.wiring import ensure_allowed
+from app.shared.business_day import KAMPALA
 from app.shared.clock import SystemClock
 
 
@@ -47,6 +48,16 @@ def schedules() -> list[Schedule]:
             trigger=IntervalTrigger(minutes=15),
             kind=CANCEL_UNPAID_KIND,
             max_age=timedelta(minutes=30),
+        ),
+        # Pays each running investment its interest for the day, shortly after the day begins
+        # in Kampala. Every missed day gets its own run, and a run still counts days later.
+        Schedule(
+            name="investments.accrue_interest",
+            trigger=CronTrigger(hour=0, minute=30, timezone=KAMPALA),
+            kind=ACCRUE_KIND,
+            catch_up="all",
+            max_catch_up=31,
+            max_age=timedelta(days=7),
         ),
     ]
     payments_settings = PaymentsSettings()

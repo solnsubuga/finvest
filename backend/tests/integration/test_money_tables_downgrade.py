@@ -40,12 +40,17 @@ ROWS = {
         "'-Nabc0000000000000A1', 'test.run', 'key-0001', repeat('0', 64), 200, '{}', now())",
         "refusing to drop operation receipts",
     ),
+    "0062_investment_interest_runs": (
+        "INSERT INTO investment_interest_runs (run_date, currency, started_at) "
+        "VALUES (DATE '2026-11-14', 'UGX', now())",
+        "refusing to drop interest runs",
+    ),
     "0061_investments": (
         "INSERT INTO investments (id, client_id, product_id, currency, principal_minor, "
         "annual_rate_bps, tax_bps, term_days, at_maturity, created_at, pay_by, updated_at) "
         "VALUES ('-Nabc0000000000000A1', '-Nabc0000000000000B1', 'FvProduct1TREA91_001', "
-        "'UGX', 1000000, 1250, 1500, 91, 'roll_over', TIMESTAMPTZ '2026-11-13 09:00+00', "
-        "TIMESTAMPTZ '2026-11-16 09:00+00', now())",
+        "'UGX', 1000000, 1250, 1500, 91, 'roll_over', now(), now() + interval '72 hours', "
+        "now())",
         "refusing to drop investments",
     ),
     "0060_investment_products": (

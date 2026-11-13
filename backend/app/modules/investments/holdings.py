@@ -15,7 +15,7 @@ from datetime import date, datetime
 from typing import Any
 
 import structlog
-from sqlalchemy import Row, text
+from sqlalchemy import Row, TextClause, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.infrastructure.idempotency import Receipt, run_once
@@ -43,6 +43,8 @@ from app.modules.investments.domain.rates import RateVersion, rate_in_force
 from app.modules.kyc import service as kyc
 from app.modules.ledger import service as ledger
 from app.modules.ledger.domain.entries import AccountKind, AccountSpec, EntryDraft, credit, debit
+from app.modules.payments import service as payments
+from app.modules.payments.domain.deposits import Purpose
 from app.shared.actors import Actor
 from app.shared.business_day import business_date
 from app.shared.clock import Clock
@@ -132,7 +134,15 @@ _COLUMNS = (
     "i.accrued_gross_minor, i.accrued_tax_minor"
 )
 _FROM = "FROM investments i JOIN investment_products p ON p.id = i.product_id"
+
+
+def select_investments(tail: str) -> TextClause:
+    """A query for whole investments, for the other parts of this module."""
+    return text(f"SELECT {_COLUMNS} {_FROM} {tail}")
+
+
 _BY_ID = text(f"SELECT {_COLUMNS} {_FROM} WHERE i.id = :id")
+_BY_ID_SHARED = text(f"SELECT {_COLUMNS} {_FROM} WHERE i.id = :id FOR SHARE OF i")
 _BY_ID_LOCKED = text(f"SELECT {_COLUMNS} {_FROM} WHERE i.id = :id FOR UPDATE OF i")
 _FOR_CLIENT = text(
     f"SELECT {_COLUMNS} {_FROM} WHERE i.client_id = :client_id "
@@ -278,10 +288,12 @@ async def payable_investment(
     `not_found` if there is no such investment or it is another client's. `conflict` if it can
     no longer be paid for: it has started, was cancelled, or its payment window has closed.
     """
-    row = (await session.execute(_BY_ID, {"id": investment_id})).one_or_none()
+    # Shared with the sweep's lock: either the sweep sees the deposit this check lets in, or
+    # this check sees the investment the sweep cancelled. Never neither.
+    row = (await session.execute(_BY_ID_SHARED, {"id": investment_id})).one_or_none()
     if row is None or row.client_id != client_id:
         raise ApplicationError("not_found")
-    investment = _investment(row)
+    investment = investment_from_row(row)
     if not can_be_paid(investment.status, investment.pay_by, clock.now()):
         raise ApplicationError("conflict")
     return PayableInvestment(investment.id, investment.client_id, investment.amount)
@@ -305,7 +317,7 @@ async def start_investment(
     row = (await session.execute(_BY_ID_LOCKED, {"id": investment_id})).one_or_none()
     if row is None:
         raise ApplicationError("not_found")
-    investment = _investment(row)
+    investment = investment_from_row(row)
     if investment.status is InvestmentStatus.ACTIVE:
         return investment
     now = clock.now()
@@ -382,12 +394,13 @@ async def cancel_unpaid(session: AsyncSession, clock: Clock, *, limit: int = SWE
     """Cancel investments nobody paid for in time. Worker only. Returns how many.
 
     One with money waiting is left alone: that money arrived, so it starts or goes to staff.
+    So is one with a deposit that has not failed, which may still confirm.
     """
     now = clock.now()
     cancelled = 0
     rows = (await session.execute(_OVERDUE, {"cutoff": now, "limit": limit})).all()
     for row in rows:
-        investment = _investment(row)
+        investment = investment_from_row(row)
         awaiting = await ledger.open_account(
             session,
             AccountSpec(
@@ -401,7 +414,12 @@ async def cancel_unpaid(session: AsyncSession, clock: Clock, *, limit: int = SWE
             clock,
         )
         waiting = await ledger.get_balance(session, awaiting.id)
-        if can_be_cancelled(investment.status, investment.pay_by, now, waiting):
+        # A deposit still pending or uncertain may yet confirm. The row is locked, so a
+        # deposit cannot be let in between this question and the cancel.
+        live = await payments.has_live_deposit(
+            session, purpose=Purpose.INVESTMENT, purpose_id=investment.id
+        )
+        if not live and can_be_cancelled(investment.status, investment.pay_by, now, waiting):
             await session.execute(_CANCEL, {"id": investment.id, "now": now})
             cancelled += 1
     return cancelled
@@ -415,7 +433,7 @@ async def get_investment(session: AsyncSession, investment_id: str) -> Investmen
     row = (await session.execute(_BY_ID, {"id": investment_id})).one_or_none()
     if row is None:
         raise ApplicationError("not_found")
-    return _investment(row)
+    return investment_from_row(row)
 
 
 async def list_investments(
@@ -431,7 +449,7 @@ async def list_investments(
         _FOR_STAFF,
         {"status": status.value if status else None, "limit": max(1, min(limit, MAX_PAGE_SIZE))},
     )
-    return [_investment(row) for row in rows.all()]
+    return [investment_from_row(row) for row in rows.all()]
 
 
 async def client_investments(
@@ -444,7 +462,7 @@ async def client_investments(
     rows = await session.execute(
         _FOR_CLIENT, {"client_id": client.id, "limit": max(1, min(limit, MAX_PAGE_SIZE))}
     )
-    return [_client_view(_investment(row), today) for row in rows.all()]
+    return [_client_view(investment_from_row(row), today) for row in rows.all()]
 
 
 async def client_investment(
@@ -455,7 +473,7 @@ async def client_investment(
     row = (await session.execute(_BY_ID, {"id": investment_id})).one_or_none()
     if row is None or row.client_id != client.id:
         raise ApplicationError("not_found")
-    return _client_view(_investment(row), business_date(clock.now()))
+    return _client_view(investment_from_row(row), business_date(clock.now()))
 
 
 # Internals --------------------------------------------------------------------------------------
@@ -472,7 +490,7 @@ def holding_account(investment: Investment) -> AccountSpec:
     )
 
 
-def _investment(row: Row[Any]) -> Investment:
+def investment_from_row(row: Row[Any]) -> Investment:
     currency = Currency(row.currency)
     return Investment(
         id=row.id,

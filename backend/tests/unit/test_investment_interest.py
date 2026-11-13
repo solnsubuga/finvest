@@ -1,4 +1,4 @@
-from datetime import date
+from datetime import date, timedelta
 
 import pytest
 
@@ -12,6 +12,7 @@ from app.modules.investments.domain.interest import (
     day_accrual,
     days_earned,
     maturity_date,
+    posting_due,
 )
 from app.shared.money import Currency, Money
 
@@ -155,3 +156,131 @@ def test_an_open_term_keeps_earning() -> None:
     assert days_earned(date(2026, 11, 13), date(2028, 11, 13), None) == 731
     with pytest.raises(InvalidTerms):
         days_earned(date(2026, 11, 13), date(2026, 11, 14), 0)
+
+
+# What a daily run posts -------------------------------------------------------------------------
+
+START = date(2026, 11, 13)
+NOTHING = Accrual(ugx(0), ugx(0))
+
+
+def due(
+    run_date: date,
+    posted: Accrual = NOTHING,
+    posted_through: date | None = None,
+    terms: Terms = BILL_91,
+    term_days: int | None = 91,
+) -> Accrual | None:
+    posting = posting_due(
+        terms,
+        start=START,
+        term_days=term_days,
+        posted=posted,
+        posted_through=posted_through,
+        run_date=run_date,
+    )
+    return posting.amount if posting else None
+
+
+def test_nothing_is_posted_on_or_before_the_start_date() -> None:
+    assert due(START) is None
+    assert due(START - timedelta(days=3)) is None
+
+
+def test_the_first_run_after_the_start_posts_one_day() -> None:
+    posting = posting_due(
+        BILL_91,
+        start=START,
+        term_days=91,
+        posted=NOTHING,
+        posted_through=None,
+        run_date=START + timedelta(days=1),
+    )
+    assert posting is not None
+    assert (posting.days, posting.through) == (1, date(2026, 11, 14))
+    assert posting.amount == posting.total == Accrual(ugx(342), ugx(51))
+    assert posting.amount.net == ugx(291)
+
+
+def test_a_run_after_missed_days_posts_them_all_at_once() -> None:
+    one_day = accrued(BILL_91, 1)
+    amount = due(START + timedelta(days=4), posted=one_day, posted_through=date(2026, 11, 14))
+    four_days = accrued(BILL_91, 4)
+    assert amount == Accrual(four_days.gross - one_day.gross, four_days.tax - one_day.tax)
+
+
+def test_a_day_already_paid_is_not_paid_again() -> None:
+    two_days = accrued(BILL_91, 2)
+    paid_through = START + timedelta(days=2)
+    assert due(paid_through, posted=two_days, posted_through=paid_through) is None
+    assert (
+        due(paid_through - timedelta(days=1), posted=two_days, posted_through=paid_through) is None
+    )
+
+
+def test_runs_over_a_whole_term_post_exactly_the_formula_and_then_stop() -> None:
+    posted, through = NOTHING, None
+    for offset in range(1, 120):
+        posting = posting_due(
+            BILL_91,
+            start=START,
+            term_days=91,
+            posted=posted,
+            posted_through=through,
+            run_date=START + timedelta(days=offset),
+        )
+        assert (posting is None) == (offset > 91)
+        if posting is not None:
+            posted, through = posting.total, posting.through
+    assert posted == accrued(BILL_91, 91)
+    assert posted.net == ugx(26_490)
+    assert through == maturity_date(START, 91)
+
+
+def test_a_run_long_after_maturity_pays_only_to_maturity() -> None:
+    posting = posting_due(
+        BILL_91,
+        start=START,
+        term_days=91,
+        posted=NOTHING,
+        posted_through=None,
+        run_date=START + timedelta(days=400),
+    )
+    assert posting is not None
+    assert (posting.days, posting.through) == (91, date(2027, 2, 12))
+
+
+def test_an_open_term_is_paid_for_as_long_as_it_runs() -> None:
+    bond = Terms(usd(50_000), annual_rate_bps=725, tax_bps=500)
+    posting = posting_due(
+        bond,
+        start=START,
+        term_days=None,
+        posted=Accrual(usd(0), usd(0)),
+        posted_through=None,
+        run_date=START + timedelta(days=400),
+    )
+    assert posting is not None
+    assert posting.days == 400
+    assert posting.total == accrued(bond, 400)
+
+
+def test_a_day_that_earns_nothing_is_still_marked_as_paid() -> None:
+    tiny = Terms(ugx(100), annual_rate_bps=1250, tax_bps=1500)
+    posting = posting_due(
+        tiny,
+        start=START,
+        term_days=91,
+        posted=NOTHING,
+        posted_through=None,
+        run_date=START + timedelta(days=1),
+    )
+    assert posting is not None
+    assert posting.amount == NOTHING
+    assert posting.through == date(2026, 11, 14)
+
+
+def test_interest_is_never_taken_back() -> None:
+    too_much = Accrual(ugx(5_000), ugx(750))
+    with pytest.raises(InvalidTerms):
+        due(START + timedelta(days=2), posted=too_much, posted_through=date(2026, 11, 14))
