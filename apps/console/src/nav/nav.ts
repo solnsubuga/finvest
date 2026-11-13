@@ -109,6 +109,14 @@ export const NAV_GROUPS: readonly NavGroup[] = [
         phase: 2,
       },
       {
+        path: "automatic-investing",
+        label: "Automatic Investing",
+        title: "Automatic investing",
+        summary: "Plans that invest the same amount every week or month, and what each day's run did.",
+        permission: "automatic_investing.view",
+        phase: 4,
+      },
+      {
         path: "dealing-desk",
         label: "Dealing Desk",
         title: "Dealing desk",
