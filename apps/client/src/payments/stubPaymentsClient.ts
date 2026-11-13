@@ -1,3 +1,5 @@
+import { addDemoPayable, demoPayable, markDemoPaid } from "@/demo/payables";
+
 import { MAX_RECEIPT_BYTES } from "./receipt";
 import {
   BankReceiptSubmission,
@@ -45,26 +47,19 @@ const DEMO_PAYABLE: Payable = {
 
 /**
  * Other demos can add something to pay for, such as the investment a goal
- * saving makes. Kept for as long as the app runs, like everything else here.
+ * saving makes. They share one store with the demo investing.
  */
-const extraPayables = new Map<string, Payable>();
-
-export function addDemoPayable(payable: Payable): void {
-  extraPayables.set(payable.id, payable);
-}
-
-function demoPayable(payableId: string): Payable {
-  const found = payableId === DEMO_PAYABLE_ID ? DEMO_PAYABLE : extraPayables.get(payableId);
-  if (!found) {
-    throw new PaymentError("not_payable");
-  }
-  return found;
-}
+export { addDemoPayable };
 
 /** How long each demo step lasts. The real ones are set by the network and the client. */
 const SENDING_MS = 1_500;
 const OUTCOME_MS = 7_000;
 const CHECKING_MS = 14_000;
+
+/** The fixed demo payable, or one the demo investing has saved. */
+function payableFor(payableId: string): Payable | null {
+  return payableId === DEMO_PAYABLE_ID ? DEMO_PAYABLE : demoPayable(payableId);
+}
 
 type Outcome = { status: DepositStatus; failure: FailureReason | null };
 
@@ -148,7 +143,11 @@ export function createStubPaymentsClient(options: StubOptions = {}): PaymentsCli
     const outcome = outcomeFor(stored.scenario, elapsed);
     const confirmed = outcome.status === "confirmed";
     const confirmedAfter = stored.scenario === "04" ? CHECKING_MS : OUTCOME_MS;
-    const payable = demoPayable(stored.request.payableId);
+    const payable = payableFor(stored.request.payableId) ?? DEMO_PAYABLE;
+    const confirmedAt = confirmed ? new Date(stored.requestedAtMs + confirmedAfter).toISOString() : null;
+    if (confirmedAt) {
+      markDemoPaid(payable.id, confirmedAt);
+    }
     return {
       id: stored.id,
       payable,
@@ -158,7 +157,7 @@ export function createStubPaymentsClient(options: StubOptions = {}): PaymentsCli
       status: outcome.status,
       failure: outcome.failure,
       requestedAt: new Date(stored.requestedAtMs).toISOString(),
-      confirmedAt: confirmed ? new Date(stored.requestedAtMs + confirmedAfter).toISOString() : null,
+      confirmedAt,
       networkReference: confirmed ? `DEMO-${stored.id.toUpperCase()}` : null,
       reference: `FV-DEMO-${stored.id}`,
     };
@@ -168,9 +167,13 @@ export function createStubPaymentsClient(options: StubOptions = {}): PaymentsCli
     const scenario = stored.submission.transactionNumber.slice(-2);
     const matched = now() - stored.submittedAtMs >= MATCHING_MS;
     const reason = scenario === "01" ? "amount_differs" : scenario === "02" ? "not_on_statement" : null;
+    const payable = payableFor(stored.submission.payableId) ?? DEMO_PAYABLE;
+    if (matched && !reason) {
+      markDemoPaid(payable.id, new Date(stored.submittedAtMs + MATCHING_MS).toISOString());
+    }
     return {
       id: stored.id,
-      payable: demoPayable(stored.submission.payableId),
+      payable,
       amountSent: stored.submission.amountSent,
       status: !matched ? "checking" : reason ? "not_matched" : "confirmed",
       reason: matched ? reason : null,
@@ -212,7 +215,11 @@ export function createStubPaymentsClient(options: StubOptions = {}): PaymentsCli
   return {
     async getPayable(payableId) {
       await pause();
-      return demoPayable(payableId);
+      const payable = payableFor(payableId);
+      if (!payable) {
+        throw new PaymentError("not_payable");
+      }
+      return payable;
     },
 
     async payWithMobileMoney(request) {
@@ -231,7 +238,9 @@ export function createStubPaymentsClient(options: StubOptions = {}): PaymentsCli
         }
         return read(first);
       }
-      demoPayable(request.payableId);
+      if (!payableFor(request.payableId)) {
+        throw new PaymentError("not_payable");
+      }
       refuseIfTaken(request.payableId);
       counter += 1;
       const stored: Stored = {
@@ -247,7 +256,11 @@ export function createStubPaymentsClient(options: StubOptions = {}): PaymentsCli
 
     async getBankInstructions(payableId) {
       await pause();
-      return { payable: demoPayable(payableId), ...DEMO_BANK };
+      const payable = payableFor(payableId);
+      if (!payable) {
+        throw new PaymentError("not_payable");
+      }
+      return { payable, ...DEMO_BANK };
     },
 
     async submitBankReceipt(submission) {
@@ -261,7 +274,9 @@ export function createStubPaymentsClient(options: StubOptions = {}): PaymentsCli
         }
         return readTransfer(first);
       }
-      demoPayable(submission.payableId);
+      if (!payableFor(submission.payableId)) {
+        throw new PaymentError("not_payable");
+      }
       if (submission.file.sizeBytes > MAX_RECEIPT_BYTES) {
         throw new PaymentError("receipt_not_accepted");
       }

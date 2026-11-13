@@ -1,0 +1,290 @@
+import { addDemoPayable, demoPaidAt } from "@/demo/payables";
+
+import {
+  Amount,
+  Investment,
+  InvestingClient,
+  InvestingError,
+  NewInvestment,
+  Product,
+  Quote,
+} from "./types";
+
+/**
+ * An in-memory stand-in for the investing API, so the screens can be built and
+ * tried before the routes are wired in. Nothing here is real: no money, and
+ * everything is forgotten when the app reloads. `resolveInvesting.ts` keeps it
+ * out of production builds.
+ *
+ * It works interest out the way the backend does, in whole shillings rounded
+ * down, so the demo figures match: UGX 1,000,000 for 91 days at 12.5% before
+ * 15% tax earns UGX 26,490. The screens never do this sum themselves.
+ */
+
+type Terms = { rateBps: number; taxBps: number };
+
+const PRODUCTS: (Product & Terms)[] = [
+  {
+    code: "TREA-91",
+    name: "91 Day Treasury Bill",
+    kind: "treasury_bill",
+    currency: "UGX",
+    termDays: 91,
+    minimum: { currency: "UGX", minor: 100_000 },
+    interestPaid: "at_maturity",
+    status: "live",
+    ratePercent: "10.63",
+    rateBps: 1250,
+    taxBps: 1500,
+  },
+  {
+    code: "TREA-182",
+    name: "182 Day Treasury Bill",
+    kind: "treasury_bill",
+    currency: "UGX",
+    termDays: 182,
+    minimum: { currency: "UGX", minor: 200_000 },
+    interestPaid: "at_maturity",
+    status: "live",
+    ratePercent: "11.69",
+    rateBps: 1375,
+    taxBps: 1500,
+  },
+  {
+    code: "USD-BOND",
+    name: "USD Fixed Income",
+    kind: "fixed_income",
+    currency: "USD",
+    termDays: null,
+    minimum: { currency: "USD", minor: 500_00 },
+    interestPaid: "monthly",
+    status: "paused",
+    ratePercent: "6.89",
+    rateBps: 725,
+    taxBps: 500,
+  },
+];
+
+const DAY_MS = 24 * 60 * 60 * 1000;
+/** Uganda keeps UTC+3 all year. */
+const KAMPALA_OFFSET_MS = 3 * 60 * 60 * 1000;
+const PAY_WINDOW_MS = 72 * 60 * 60 * 1000;
+const MAX_UNPAID = 3;
+
+function kampalaDay(ms: number): string {
+  return new Date(ms + KAMPALA_OFFSET_MS).toISOString().slice(0, 10);
+}
+
+function addDays(isoDate: string, days: number): string {
+  return new Date(Date.parse(`${isoDate}T00:00:00Z`) + days * DAY_MS).toISOString().slice(0, 10);
+}
+
+function daysBetween(from: string, to: string): number {
+  return Math.round((Date.parse(`${to}T00:00:00Z`) - Date.parse(`${from}T00:00:00Z`)) / DAY_MS);
+}
+
+/** Net interest for a number of days, rounded down twice as the backend rounds it. */
+function netInterest(principal: number, terms: Terms, days: number): number {
+  const gross = Math.floor((principal * terms.rateBps * days) / (10_000 * 365));
+  const tax = Math.floor((gross * terms.taxBps) / 10_000);
+  return gross - tax;
+}
+
+type Stored = {
+  id: string;
+  product: Product & Terms;
+  amount: Amount;
+  atMaturity: Investment["atMaturity"];
+  createdAtMs: number;
+  /** Set for the sample investments, which start already running. */
+  startDate: string | null;
+};
+
+/**
+ * Shared by every demo client in the app's lifetime, so two never hand out the same ID: the
+ * demo payments remember payments by ID.
+ */
+let nextId = 0;
+
+export type StubOptions = {
+  /** Artificial delay so loading states are visible. Tests pass 0. */
+  delayMs?: number;
+  /** The clock, in milliseconds. */
+  now?: () => number;
+  /** "empty" starts with no investments, as a new client does. */
+  sample?: "default" | "empty";
+};
+
+export function createStubInvestingClient(options: StubOptions = {}): InvestingClient {
+  const delayMs = options.delayMs ?? 350;
+  const now = options.now ?? Date.now;
+  const stored = new Map<string, Stored>();
+  const byKey = new Map<string, { id: string; request: string }>();
+
+  const pause = () =>
+    delayMs > 0 ? new Promise<void>((resolve) => setTimeout(resolve, delayMs)) : Promise.resolve();
+
+  const find = (code: string) => PRODUCTS.find((product) => product.code === code);
+
+  if (options.sample !== "empty") {
+    const today = kampalaDay(now());
+    const seed = (code: string, minor: number, startedDaysAgo: number, atMaturity: Stored["atMaturity"]) => {
+      const product = find(code) as Product & Terms;
+      nextId += 1;
+      const id = `demo-investment-${nextId}`;
+      stored.set(id, {
+        id,
+        product,
+        amount: { currency: product.currency, minor },
+        atMaturity,
+        createdAtMs: now() - (startedDaysAgo + 1) * DAY_MS,
+        startDate: addDays(today, -startedDaysAgo),
+      });
+    };
+    seed("TREA-91", 5_000_000, 85, "roll_over");
+    seed("TREA-182", 2_000_000, 40, "pay_out");
+  }
+
+  function startDate(entry: Stored): string | null {
+    if (entry.startDate) {
+      return entry.startDate;
+    }
+    const paidAt = demoPaidAt(entry.id);
+    return paidAt ? kampalaDay(Date.parse(paidAt)) : null;
+  }
+
+  function view(entry: Stored): Investment {
+    const { product, amount } = entry;
+    const today = kampalaDay(now());
+    const start = startDate(entry);
+    const maturity = start && product.termDays !== null ? addDays(start, product.termDays) : null;
+    const lapsed = !start && now() > entry.createdAtMs + PAY_WINDOW_MS;
+    const matured = maturity !== null && today >= maturity;
+    const status: Investment["status"] = lapsed ? "cancelled" : !start ? "awaiting_payment" : matured ? "matured" : "active";
+    // Interest is earned from the day after the start, up to today or the maturity date.
+    const lastDay = maturity && maturity < today ? maturity : today;
+    const days = start ? Math.max(0, daysBetween(start, lastDay)) : 0;
+    const soFar = netInterest(amount.minor, product, days);
+    const yesterday = days > 0 ? netInterest(amount.minor, product, days - 1) : 0;
+    const atMaturityInterest = product.termDays === null ? null : netInterest(amount.minor, product, product.termDays);
+    const money = (minor: number): Amount => ({ currency: amount.currency, minor });
+    return {
+      id: entry.id,
+      productCode: product.code,
+      productName: product.name,
+      status,
+      amount,
+      ratePercent: product.ratePercent,
+      termDays: product.termDays,
+      atMaturity: entry.atMaturity,
+      canChangeMaturity: product.termDays !== null && (status === "awaiting_payment" || (status === "active" && maturity !== null && today < addDays(maturity, -1))),
+      payBy: new Date(entry.createdAtMs + PAY_WINDOW_MS).toISOString(),
+      startDate: start,
+      maturityDate: maturity,
+      daysEarned: days,
+      interestSoFar: money(soFar),
+      interestToday: money(status === "active" ? soFar - yesterday : 0),
+      value: money(amount.minor + soFar),
+      interestAtMaturity: atMaturityInterest === null ? null : money(atMaturityInterest),
+      totalAtMaturity: atMaturityInterest === null ? null : money(amount.minor + atMaturityInterest),
+      rolledIntoId: null,
+      payoutId: null,
+      waitingForDestination: false,
+    };
+  }
+
+  function check(productCode: string, amount: Amount): Product & Terms {
+    const product = find(productCode);
+    if (!product) {
+      throw new InvestingError("not_found");
+    }
+    if (product.status !== "live" || amount.currency !== product.currency) {
+      throw new InvestingError("product_not_open");
+    }
+    if (amount.minor < product.minimum.minor) {
+      throw new InvestingError("below_minimum");
+    }
+    return product;
+  }
+
+  return {
+    async listProducts() {
+      await pause();
+      return PRODUCTS.map(({ rateBps: _rate, taxBps: _tax, ...product }) => product);
+    },
+
+    async quote(productCode, amount): Promise<Quote> {
+      await pause();
+      const product = check(productCode, amount);
+      const startsOn = kampalaDay(now());
+      if (product.termDays === null) {
+        return { productCode, amount, startsOn, maturesOn: null, interest: null, total: null };
+      }
+      const interest = netInterest(amount.minor, product, product.termDays);
+      return {
+        productCode,
+        amount,
+        startsOn,
+        maturesOn: addDays(startsOn, product.termDays),
+        interest: { currency: amount.currency, minor: interest },
+        total: { currency: amount.currency, minor: amount.minor + interest },
+      };
+    },
+
+    async requestInvestment(request: NewInvestment) {
+      await pause();
+      // Like the backend: a known key returns its investment, and the same key with
+      // different details is refused rather than saving or replaying the wrong thing.
+      const details = JSON.stringify([request.productCode, request.amount, request.atMaturity ?? null]);
+      const known = byKey.get(request.idempotencyKey);
+      if (known) {
+        if (known.request !== details) {
+          throw new InvestingError("key_reused");
+        }
+        return view(stored.get(known.id) as Stored);
+      }
+      const product = check(request.productCode, request.amount);
+      const unpaid = [...stored.values()].filter((entry) => view(entry).status === "awaiting_payment");
+      if (unpaid.length >= MAX_UNPAID) {
+        throw new InvestingError("too_many_unpaid");
+      }
+      nextId += 1;
+      const entry: Stored = {
+        id: `demo-investment-${nextId}`,
+        product,
+        amount: request.amount,
+        atMaturity: product.termDays === null ? null : (request.atMaturity ?? "roll_over"),
+        createdAtMs: now(),
+        startDate: null,
+      };
+      stored.set(entry.id, entry);
+      byKey.set(request.idempotencyKey, { id: entry.id, request: details });
+      if (entry.amount.currency === "UGX") {
+        addDemoPayable({
+          id: entry.id,
+          kind: "investment",
+          title: product.name,
+          amount: { currency: "UGX", minor: entry.amount.minor },
+        });
+      }
+      return view(entry);
+    },
+
+    async listInvestments() {
+      await pause();
+      return [...stored.values()]
+        .map(view)
+        .filter((investment) => investment.status !== "cancelled")
+        .reverse();
+    },
+
+    async getInvestment(investmentId) {
+      await pause();
+      const entry = stored.get(investmentId);
+      if (!entry) {
+        throw new InvestingError("not_found");
+      }
+      return view(entry);
+    },
+  };
+}

@@ -2,7 +2,7 @@
 
 The Finvest client app. One codebase for Android, iPhone and the web at app.finvestug.com.
 
-**Status:** app shell. Navigation, theme, the welcome, sign up and log in screens, Sign in and security (add a passkey, set up an authenticator app), paying for an investment by mobile money or bank transfer, and notifications, help chat and complaints. Sign-in talks to the real API. The other areas still run against in-memory demos until they are connected one by one. No investing screens yet.
+**Status:** app shell. Navigation, theme, the welcome, sign up and log in screens, Sign in and security (add a passkey, set up an authenticator app), investing (products, a calculator, review and confirm, the portfolio and each investment), paying for an investment by mobile money or bank transfer, and notifications, help chat and complaints. Sign-in talks to the real API. The other areas still run against in-memory demos until they are connected one by one.
 
 ## Stack
 
@@ -33,6 +33,7 @@ Add Expo packages with `npx expo install <package>` so the version matches the S
 | `src/theme/` | Re-exports `@finvest/tokens`, loads Plus Jakarta Sans, and holds the wide breakpoint |
 | `src/api/` | The typed API client: one call per route, answers checked, offline and timeout told apart, the phone's session token in the secure store |
 | `src/auth/` | The sign-in contract, the API client for it, the demo stub, WebAuthn for passkeys, and the phone and password rules |
+| `src/investing/` | The investing contract, the demo stub, amount and date formatting, and the product and investment cards |
 | `src/payments/` | The payments contract, the demo stub, money and time formatting, and the status polling |
 | `src/autoinvest/` | The automatic investing contract, the demo stub, and the schedule rules shown on screen |
 | `src/insights/` | The insights contract, the API client for it, the demo stub, and the chart helpers |
@@ -88,6 +89,17 @@ The goal screens live in `src/app/goals/` and talk to the `GoalsClient` interfac
 - Creating a goal and each saving carry an idempotency key made once per visit to the screen. When the answer to a saving is lost, being offline included, the amount is locked so a retry is the same saving under the same key.
 - Saving needs an approved ID check, because it makes an investment. The API refuses it before that, and the screen says to finish the ID check.
 - Every figure, the plan's rate included, arrives after tax from the API and is shown as sent.
+
+## Investing
+
+The investing screens talk to the `InvestingClient` interface in `src/investing/types.ts`, shaped to the client routes in `backend/app/modules/investments/api.py`. A client sees only the yearly rate after tax and net amounts, never a tax rate or a figure before tax, and every figure comes from the backend's quote or investment. The app adds nothing up.
+
+- `/invest` lists the products. `/invest/[code]` shows one, with a calculator: the amount typed is quoted after a short pause, and Review opens once the quote is back.
+- `/invest/review` saves the investment at today's rate with one idempotency key per visit, so a double tap saves one investment, then replaces itself with the pay screen for that investment. A fixed term asks what happens at the end: roll over (the default) or pay out.
+- `/portfolio` lists the client's investments with what each is worth today. `/investment/[id]` shows one, with interest so far, what it pays at maturity, and a Pay button while it waits for payment.
+- The demo (`src/investing/stubInvestingClient.ts`) has two investments already running, works interest out as the backend does, and starts a term when the demo payment for it is confirmed (`src/demo/payables.ts` joins the two demos). Open `/?sample=empty` on the web to start as a client with no investments.
+
+Not built yet: changing what happens at maturity from the investment screen (it needs the payout destinations screens), withdrawing early, and statements.
 
 ## Paying
 

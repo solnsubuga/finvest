@@ -90,3 +90,8 @@ jobs:
             echo "The demo notifications or help chat were bundled into a production build" >&2
             exit 1
           fi
+          # Nor the demo investing, which invents investments and interest.
+          if grep -rIl -e "demo-investment-" dist; then
+            echo "The demo investing was bundled into a production build" >&2
+            exit 1
+          fi
