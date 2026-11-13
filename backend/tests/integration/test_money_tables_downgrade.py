@@ -2,7 +2,8 @@
 history, the receipts that stop a command running twice, the identity records, the payout
 destinations, the withdrawal limits, the payouts and their send attempts, the migration
 checks, the imported statements, the day closes, the pot transfers, the help chat, the
-complaints register, the goals, the email delivery records or the complaint outcomes."""
+complaints register, the goals, the email delivery records, the unclaimed accounts, the
+complaint outcomes or the suppression lifts."""
 
 import os
 from collections.abc import Iterator
@@ -323,6 +324,19 @@ ROWS = {
         "'mtn', 'bank', 'trust', 'UGX', 5, 5, DATE '2026-11-10', 'IOT-1', 'proposed', "
         "'-Nabc0000000000000B1', now(), 'Sweep')",
         "refusing to drop pot transfers",
+    ),
+    "0153_email_suppression_lifts": (
+        "BEGIN; SELECT set_config('finvest.actor_kind', 'staff', true); "
+        "SELECT set_config('finvest.actor_id', '-Nabc0000000000000S1', true); "
+        "INSERT INTO notification_email_events (svix_id, delivery, email_id, recipients, "
+        "permanent, received_at) VALUES ('msg_lift1', 'bounced', 'email-1', "
+        "ARRAY[repeat('a', 64)], true, now()); "
+        "INSERT INTO notification_email_suppressions (address_hash, reason, svix_id, created_at) "
+        "VALUES (repeat('a', 64), 'bounced', 'msg_lift1', now()); "
+        "INSERT INTO notification_email_suppression_lifts (id, address_hash, reason, "
+        "proposed_by, proposed_at) VALUES ('-Nabc0000000000000A1', repeat('a', 64), "
+        "'Fixed their inbox', '-Nabc0000000000000S1', now()); COMMIT",
+        "refusing to drop suppression lifts",
     ),
     "0009_claims": (
         "INSERT INTO identity_clients (id, phone, status, created_at) VALUES "

@@ -465,6 +465,7 @@ async def test_staff_session_lists_the_role_and_its_permissions(api: Api) -> Non
             "complaints.view",
             "complaints.manage",
             "clients.view",
+            "email_suppressions.lift",
         ],
     }
     refused = await api.http.get("/staff/team-test")
