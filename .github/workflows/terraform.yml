@@ -147,6 +147,7 @@ jobs:
       - run: |
           for env in staging production; do
             cd infra/terraform/envs/$env
+            terraform init -backend=false >/dev/null
             terraform providers lock -platform=linux_amd64 -platform=darwin_arm64 -platform=darwin_amd64 -platform=windows_amd64 >/dev/null
             echo "=====BEGIN $env"; cat .terraform.lock.hcl; echo "=====END $env"
             cd - >/dev/null
