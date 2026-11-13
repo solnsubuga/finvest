@@ -32,6 +32,10 @@ Permission = Literal[
     "finance.view",
     "products.view",
     "rates.view",
+    # Proposing a rate change, approving or sending back someone else's, and withdrawing your
+    # own. Seeing rates is `rates.view`. A rate still takes effect only with a second person.
+    # Not a screen: the console's own list gains it with the rates screen.
+    "rates.change",
     "compliance.view",
     "team.view",
     "reports.view",
@@ -99,6 +103,7 @@ ROLE_PERMISSIONS: dict[Role, frozenset[Permission]] = {
             "finance.view",
             "products.view",
             "rates.view",
+            "rates.change",
             "reports.view",
             "bank_transfers.change",
             "migration.view",

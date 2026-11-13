@@ -349,6 +349,13 @@ async def test_each_staff_route_checks_its_permission(api: Api) -> None:
         headers=support,
     )
     assert proposed.status_code == 403
+    for action in ("approve", "withdraw"):
+        response = await api.http.post(f"/staff/rate-proposals/x/{action}", headers=support)
+        assert (response.status_code, code(response)) == (403, "forbidden"), action
+    sent_back = await api.http.post(
+        "/staff/rate-proposals/x/send-back", json={"note": "x"}, headers=support
+    )
+    assert (sent_back.status_code, code(sent_back)) == (403, "forbidden")
     _, client = await signed_in_client(api, approved=False)
     assert (await api.http.get("/staff/investments", headers=client)).status_code == 401
 
