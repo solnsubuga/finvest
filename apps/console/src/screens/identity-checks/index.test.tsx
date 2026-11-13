@@ -44,7 +44,30 @@ describe("identity checks screen", () => {
     const review = await openCheck("David Mugisha");
     expect(within(review).getByText("CM90••••••••4PL")).toBeInTheDocument();
     await user.click(within(review).getByRole("button", { name: "Show" }));
-    expect(within(review).getByText("CM90123456784PL")).toBeInTheDocument();
+    expect(await within(review).findByText("CM90123456784PL")).toBeInTheDocument();
+  });
+
+  it("says what the client has not given yet, and asks for the number only once shown", async () => {
+    const stub = createStubKycApi(0);
+    const api: KycApi = {
+      ...stub,
+      getCheck: async (id) => ({
+        ...(await stub.getCheck(id)),
+        name: null,
+        surname: null,
+        givenNames: null,
+        documentNumberMasked: null,
+        dateOfBirth: null,
+        documentExpiresOn: null,
+      }),
+      showDocumentNumber: vi.fn(stub.showDocumentNumber),
+    };
+    renderScreen(api);
+    const review = await openCheck("a client");
+    expect(within(review).getByRole("heading", { name: "Details not confirmed yet" })).toBeInTheDocument();
+    expect(within(review).getAllByText("Not given yet")).toHaveLength(4);
+    expect(within(review).queryByRole("button", { name: "Show" })).toBeNull();
+    expect(api.showDocumentNumber).not.toHaveBeenCalled();
   });
 
   it("opens another check from the queue and says when no automatic checks ran", async () => {

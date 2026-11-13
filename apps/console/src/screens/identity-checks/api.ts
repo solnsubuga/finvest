@@ -1,10 +1,9 @@
 /**
  * The console's view of identity checks.
  *
- * A stand-in for the generated client in packages/api-client, like AuthApi.
- * The shapes follow backend/app/modules/kyc (see docs/identity-checks.md). When
- * the backend publishes its routes, an implementation that calls them replaces
- * the stub in index.tsx and the screen does not change.
+ * The shapes follow the staff routes of backend/app/modules/kyc (see
+ * docs/identity-checks.md). `http.ts` calls them; `stub.ts` is the sample for
+ * `pnpm dev` and previews.
  */
 
 export const CHECK_STATUSES = [
@@ -50,11 +49,13 @@ export interface AutomaticCheck {
 
 export interface CheckDetail extends QueueItem {
   documentCountry: string;
-  surname: string;
-  givenNames: string;
-  documentNumber: string;
-  dateOfBirth: string;
-  documentExpiresOn: string;
+  /** The details the client confirmed. Null until they have. */
+  surname: string | null;
+  givenNames: string | null;
+  /** Masked, such as `CM90••••••••4PL`. The whole number is read with `showDocumentNumber`, which is audited. */
+  documentNumberMasked: string | null;
+  dateOfBirth: string | null;
+  documentExpiresOn: string | null;
   photos: readonly Photo[];
   automaticChecks: readonly AutomaticCheck[];
   /** Photos staff asked the client to take again. */
@@ -67,7 +68,10 @@ export interface CheckDetail extends QueueItem {
 export interface KycApi {
   /** Checks that are not decided, the ones needing a person first. */
   listQueue(): Promise<QueueItem[]>;
+  /** The check, with short-lived links to its photos. Opening the photos is an audit event. */
   getCheck(id: string): Promise<CheckDetail>;
+  /** The whole document number. Each call is an audit event. */
+  showDocumentNumber(id: string): Promise<string>;
   approve(id: string, reason: string): Promise<CheckDetail>;
   reject(id: string, reason: string, clientMessage: string): Promise<CheckDetail>;
   askForPhotos(id: string, photos: readonly PhotoKind[], clientMessage: string): Promise<CheckDetail>;
@@ -105,6 +109,7 @@ const notConnected = () => Promise.reject(new KycError("not_connected"));
 export const notConnectedKycApi: KycApi = {
   listQueue: notConnected,
   getCheck: notConnected,
+  showDocumentNumber: notConnected,
   approve: notConnected,
   reject: notConnected,
   askForPhotos: notConnected,

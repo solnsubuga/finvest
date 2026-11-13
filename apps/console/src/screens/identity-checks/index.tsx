@@ -1,15 +1,23 @@
 import { useCallback, useEffect, useState } from "react";
 import { useSearchParams } from "react-router";
+import { apiBaseUrl, createHttp } from "@/api/http.ts";
 import { isStubAuth } from "@/auth/index.ts";
 import { Button } from "@/components/ui/button.tsx";
 import { PageHeader } from "@/pages/PageHeader.tsx";
 import { KycError, kycErrorMessage, notConnectedKycApi, type CheckDetail, type KycApi, type QueueItem } from "./api.ts";
 import { Queue } from "./Queue.tsx";
 import { Review, type DecisionInput } from "./Review.tsx";
+import { createHttpKycApi } from "./http.ts";
 import { createStubKycApi } from "./stub.ts";
 
-/** Sample checks under `pnpm dev` or a preview build, like sign-in. Otherwise nothing until the API client exists. */
-const defaultApi: KycApi = isStubAuth() ? createStubKycApi() : notConnectedKycApi;
+/** Sample checks under `pnpm dev` or a preview build, like sign-in. Otherwise the real API. */
+function defaultKycApi(): KycApi {
+  if (isStubAuth()) return createStubKycApi();
+  const base = apiBaseUrl();
+  return base ? createHttpKycApi(createHttp(base)) : notConnectedKycApi;
+}
+
+const defaultApi: KycApi = defaultKycApi();
 
 type Load<T> = { state: "loading" } | { state: "failed"; message: string } | { state: "ready"; value: T };
 
@@ -139,7 +147,14 @@ export function IdentityChecksScreen({ api = defaultApi, now = () => new Date() 
             ) : check.state === "failed" ? (
               <Failure message={check.message} />
             ) : (
-              <Review check={check.value} busy={busy} error={decisionError} onDecide={(input) => void decide(input)} />
+              <Review
+                key={check.value.id}
+                check={check.value}
+                busy={busy}
+                error={decisionError}
+                onDecide={(input) => void decide(input)}
+                onShowNumber={() => api.showDocumentNumber(check.value.id)}
+              />
             )}
           </div>
         </div>
