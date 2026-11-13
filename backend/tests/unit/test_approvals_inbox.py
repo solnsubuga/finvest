@@ -57,6 +57,14 @@ def test_someone_else_decides_only_with_the_deciding_permission() -> None:
     assert (item.yours, item.can_decide) == (False, False)
 
 
+def test_a_payout_account_is_decided_only_by_those_who_change_payout_accounts() -> None:
+    # Finance see the review queue but cannot approve a payout account; compliance can.
+    [item] = inbox([waiting("payout_account")], "me", permissions_for("finance"))
+    assert item.can_decide is False
+    [item] = inbox([waiting("payout_account")], "me", permissions_for("compliance"))
+    assert item.can_decide is True
+
+
 def test_items_the_reader_cannot_see_are_left_out() -> None:
     items = [waiting("wording_change"), waiting("dealing_order")]
     assert inbox(items, "me", permissions_for("compliance")) == []
