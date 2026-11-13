@@ -9,6 +9,9 @@ depends_on = None
 
 
 def upgrade() -> None:
+    # PostgreSQL lets every role execute a new function unless told otherwise. Turn that off for
+    # everything the migrator creates from now on, so each function names who may call it.
+    op.execute("ALTER DEFAULT PRIVILEGES REVOKE EXECUTE ON FUNCTIONS FROM PUBLIC")
     # Every ID column uses this type. "C" collation keeps database ordering equal to the ASCII
     # ordering the IDs are generated in, whatever the database locale is.
     op.execute(
@@ -20,6 +23,11 @@ def upgrade() -> None:
     # The application sets these transaction-local settings (Database.actor_transaction). Row
     # policies call the functions. Anything unset or unrecognised is NULL, and a policy that
     # compares with NULL shows no rows, so a transaction with no actor fails closed.
+    #
+    # These settings are a fence against bugs, not a credential: any role can set them for
+    # itself. So a policy that trusts the 'system' actor must be written TO finvest_worker only.
+    # Written for finvest_app, it would let the API reach every row by naming itself the system.
+    # tests/integration/test_foundation.py fails if such a policy exists.
     op.execute(
         """
         CREATE FUNCTION finvest_actor_kind() RETURNS text
@@ -55,3 +63,4 @@ def downgrade() -> None:
     op.execute("DROP FUNCTION finvest_actor_id()")
     op.execute("DROP FUNCTION finvest_actor_kind()")
     op.execute("DROP DOMAIN push_id")
+    op.execute("ALTER DEFAULT PRIVILEGES GRANT EXECUTE ON FUNCTIONS TO PUBLIC")

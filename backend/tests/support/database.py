@@ -43,10 +43,17 @@ class TestDatabase:
         ).render_as_string(hide_password=False)
 
     def settings(self, role: str, *, pool_size: int = 5) -> Settings:
-        return Settings(database_url=self.url(role), database_pool_size=pool_size)
+        # The disposable test database has no certificate.
+        return Settings(
+            database_url=self.url(role), database_pool_size=pool_size, database_ssl_mode="disable"
+        )
 
     def environment(self, role: str) -> dict[str, str]:
-        return {**os.environ, "FINVEST_DATABASE_URL": self.url(role)}
+        return {
+            **os.environ,
+            "FINVEST_DATABASE_URL": self.url(role),
+            "FINVEST_DATABASE_SSL_MODE": "disable",
+        }
 
 
 def admin_url() -> URL:

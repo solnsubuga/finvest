@@ -37,7 +37,7 @@ One image, four processes. Each connects to PostgreSQL as its own role, given in
 | Scheduler | `python -m app.scheduler_main` | `finvest_worker` | `python -m app.infrastructure.process scheduler` |
 | Migrate | `python -m app.migrate_main` | `finvest_migrator` | Exits 0 when migrations are applied |
 
-For a managed database, set `FINVEST_DATABASE_SSL_MODE=verify-full`, and `FINVEST_DATABASE_SSL_ROOT_CERT` to the provider's CA file if it signs with its own CA.
+TLS to the database is verified by default (`FINVEST_DATABASE_SSL_MODE=verify-full`). Set `FINVEST_DATABASE_SSL_ROOT_CERT` to the provider's CA file if it signs with its own CA. Only the local stack and the tests set the mode to `disable`.
 
 The worker and scheduler only check their role and keep a heartbeat for now. They get their real work with the job queue.
 
@@ -67,10 +67,10 @@ import-linter enforces the purity of `app/shared` and of every `app/modules/*/do
 
 - **IDs.** Use `push_id()` from `app.shared.push_ids` and the `push_id` column type created by migration 0001. No auto-increment and no UUIDs.
 - **Time.** Take a `Clock` from `app.shared.clock`. Never call `datetime.now()` in a rule. Tests use `FakeClock`.
-- **Transactions.** `Database.actor_transaction(actor)` opens a transaction acting for a client, a staff member or the system. Row policies read the actor with `finvest_actor_kind()` and `finvest_actor_id()`. `Database.transaction()` has no actor, so a policy shows it nothing.
+- **Transactions.** `Database.actor_transaction(actor)` opens a transaction acting for a client, a staff member or the system. Row policies read the actor with `finvest_actor_kind()` and `finvest_actor_id()`. `Database.transaction()` has no actor, so a policy shows it nothing. The actor is a fence against bugs, not a credential, because a connection sets it for itself. A policy that admits the `system` actor must be `TO finvest_worker` only, never `finvest_app`.
 - **Contracts.** Request and response bodies extend `Contract`. It is strict, so `"1000"` and `1000.0` are refused where an integer amount is expected.
 - **Errors.** Raise `ApplicationError(code)`. Every failure leaves the API as the same envelope with a request ID and a code, and never echoes a submitted value.
-- **Migrations.** Hand-write SQL with `op.execute`. Grant each table to `finvest_app` and `finvest_worker` explicitly, with only the privileges they need. A test fails if the history has two heads.
+- **Migrations.** Hand-write SQL with `op.execute`. Grant each table and each function to `finvest_app` and `finvest_worker` explicitly, with only the privileges they need. Nothing is granted by default, including `EXECUTE` on new functions. A test fails if the history has two heads.
 - **Logs.** Log an event name, the request ID (bound automatically) and codes. Never personal data, account details or amounts.
 
 See [docs/architecture.md](../docs/architecture.md), [docs/engineering-patterns.md](../docs/engineering-patterns.md) and [docs/rules.md](../docs/rules.md).
