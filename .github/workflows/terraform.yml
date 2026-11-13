@@ -1,7 +1,11 @@
 name: Terraform
 
-# Plans run on every pull request that touches infrastructure.
-# Applies run only by hand from main, and wait for approval on the GitHub environment.
+# Pull requests get format and validate only, with no credentials.
+# Plans and applies run only by hand from main:
+#   1. "Plan" runs in the <env>-plan environment, which holds read-only tokens.
+#   2. "Apply" runs in the <env> environment, which holds the write tokens and waits for approval.
+#      It plans again and refuses to apply if that plan differs from the one the approver read.
+# Both environments must be limited to the main branch, so no other branch can reach their secrets.
 
 on:
   pull_request:
@@ -11,13 +15,18 @@ on:
   workflow_dispatch:
     inputs:
       environment:
-        description: "Environment to apply"
+        description: "Environment to plan and apply"
         type: choice
         options: [staging, production]
         required: true
 
 permissions:
   contents: read
+
+concurrency:
+  # Manual runs for one environment queue behind each other. PR checks hold no credentials.
+  group: terraform-${{ github.event_name == 'workflow_dispatch' && inputs.environment || github.ref }}
+  cancel-in-progress: false
 
 env:
   TF_VERSION: "1.13.4"
@@ -29,8 +38,8 @@ jobs:
     name: Format and validate
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v5
-      - uses: hashicorp/setup-terraform@v3
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+      - uses: hashicorp/setup-terraform@b9cd54a3c349d3f38e8881555d616ced269862dd # v3.1.2
         with:
           terraform_version: ${{ env.TF_VERSION }}
       - name: Format
@@ -43,17 +52,13 @@ jobs:
           done
 
   plan:
-    name: Plan ${{ matrix.environment }}
+    name: Plan
     needs: check
-    if: github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch'
+    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        environment: ${{ github.event_name == 'workflow_dispatch' && fromJSON(format('["{0}"]', inputs.environment)) || fromJSON('["staging","production"]') }}
-    concurrency:
-      group: terraform-${{ matrix.environment }}
-      cancel-in-progress: false
+    environment: ${{ inputs.environment }}-plan
+    outputs:
+      plan_hash: ${{ steps.plan.outputs.plan_hash }}
     env:
       DIGITALOCEAN_TOKEN: ${{ secrets.DIGITALOCEAN_TOKEN }}
       SPACES_ACCESS_KEY_ID: ${{ secrets.SPACES_ACCESS_KEY_ID }}
@@ -67,56 +72,35 @@ jobs:
       TF_VAR_admin_access_emails: ${{ vars.TF_ADMIN_ACCESS_EMAILS || '[]' }}
       TF_VAR_alert_emails: ${{ vars.TF_ALERT_EMAILS || '[]' }}
     steps:
-      - name: Check credentials
-        id: creds
-        run: |
-          if [ -z "$DIGITALOCEAN_TOKEN" ] || [ -z "$CLOUDFLARE_API_TOKEN" ] || [ -z "$SPACES_ACCESS_KEY_ID" ]; then
-            echo "Infrastructure secrets are not set yet, so the plan is skipped." >> "$GITHUB_STEP_SUMMARY"
-            echo "ready=false" >> "$GITHUB_OUTPUT"
-          else
-            echo "ready=true" >> "$GITHUB_OUTPUT"
-          fi
-      - uses: actions/checkout@v5
-        if: steps.creds.outputs.ready == 'true'
-      - uses: hashicorp/setup-terraform@v3
-        if: steps.creds.outputs.ready == 'true'
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+      - uses: hashicorp/setup-terraform@b9cd54a3c349d3f38e8881555d616ced269862dd # v3.1.2
         with:
           terraform_version: ${{ env.TF_VERSION }}
           terraform_wrapper: false
-      - name: Plan
-        if: steps.creds.outputs.ready == 'true'
-        working-directory: infra/terraform/envs/${{ matrix.environment }}
+      - name: Plan ${{ inputs.environment }}
+        id: plan
+        working-directory: infra/terraform/envs/${{ inputs.environment }}
         run: |
-          terraform init
-          set +e
-          terraform plan -no-color -detailed-exitcode -out=tfplan > plan.txt 2>&1
-          code=$?
-          set -e
+          terraform init -lockfile=readonly
+          terraform plan -no-color -lock=false -out=tfplan
           {
-            echo "### Terraform plan: ${{ matrix.environment }}"
-            echo '```'
-            grep -E '^(Plan:|No changes|Error)' plan.txt || true
-            echo '```'
-            echo "<details><summary>Full plan</summary>"
+            echo "### Terraform plan: ${{ inputs.environment }}"
+            echo
+            echo "Approve the apply only if this is what you expect. The apply stops if its own plan differs."
             echo
             echo '```'
-            cat plan.txt
+            terraform show -no-color tfplan
             echo '```'
-            echo "</details>"
           } >> "$GITHUB_STEP_SUMMARY"
-          cat plan.txt
-          if [ "$code" = "1" ]; then exit 1; fi
+          echo "plan_hash=$(../../scripts/plan-hash.sh tfplan)" >> "$GITHUB_OUTPUT"
 
   apply:
-    name: Apply ${{ inputs.environment }}
+    name: Apply
     needs: plan
     if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
-    # Add required reviewers to these GitHub environments so every apply waits for approval.
+    # Required reviewers on this environment make every apply wait for approval.
     environment: ${{ inputs.environment }}
-    concurrency:
-      group: terraform-${{ inputs.environment }}
-      cancel-in-progress: false
     env:
       DIGITALOCEAN_TOKEN: ${{ secrets.DIGITALOCEAN_TOKEN }}
       SPACES_ACCESS_KEY_ID: ${{ secrets.SPACES_ACCESS_KEY_ID }}
@@ -130,14 +114,40 @@ jobs:
       TF_VAR_admin_access_emails: ${{ vars.TF_ADMIN_ACCESS_EMAILS || '[]' }}
       TF_VAR_alert_emails: ${{ vars.TF_ALERT_EMAILS || '[]' }}
     steps:
-      - uses: actions/checkout@v5
-      - uses: hashicorp/setup-terraform@v3
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+      - uses: hashicorp/setup-terraform@b9cd54a3c349d3f38e8881555d616ced269862dd # v3.1.2
         with:
           terraform_version: ${{ env.TF_VERSION }}
           terraform_wrapper: false
-      - name: Apply
+      - name: Apply ${{ inputs.environment }}
         working-directory: infra/terraform/envs/${{ inputs.environment }}
+        env:
+          REVIEWED_PLAN_HASH: ${{ needs.plan.outputs.plan_hash }}
         run: |
-          terraform init
+          echo "Applying to ${{ inputs.environment }}" >> "$GITHUB_STEP_SUMMARY"
+          terraform init -lockfile=readonly
           terraform plan -no-color -out=tfplan
+          hash=$(../../scripts/plan-hash.sh tfplan)
+          if [ "$hash" != "$REVIEWED_PLAN_HASH" ]; then
+            echo "The plan changed since it was reviewed. Run the workflow again and review the new plan." | tee -a "$GITHUB_STEP_SUMMARY"
+            exit 1
+          fi
           terraform apply -no-color tfplan
+
+  print-lock:
+    # Temporary: prints provider lock files so they can be committed. Removed before merge.
+    name: Print provider lock files
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+      - uses: hashicorp/setup-terraform@b9cd54a3c349d3f38e8881555d616ced269862dd # v3.1.2
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+      - run: |
+          for env in staging production; do
+            cd infra/terraform/envs/$env
+            terraform providers lock -platform=linux_amd64 -platform=darwin_arm64 -platform=darwin_amd64 -platform=windows_amd64 >/dev/null
+            echo "=====BEGIN $env"; cat .terraform.lock.hcl; echo "=====END $env"
+            cd - >/dev/null
+          done
