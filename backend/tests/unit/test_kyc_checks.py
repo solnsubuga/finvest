@@ -155,10 +155,16 @@ def passed(*checks: AutomaticCheck) -> tuple[CheckOutcome, ...]:
     return tuple(CheckOutcome(check, Verdict.PASS) for check in checks)
 
 
-def test_every_check_passing_approves() -> None:
-    decision = decide(passed(*AutomaticCheck))
+def test_every_check_passing_approves_only_when_that_is_switched_on() -> None:
+    decision = decide(passed(*AutomaticCheck), automatic_approval=True)
     assert decision.approve
     assert decision.flags == ()
+
+
+def test_a_clean_result_still_goes_to_a_person_by_default() -> None:
+    decision = decide(passed(*AutomaticCheck))
+    assert not decision.approve
+    assert decision.flags == ("automatic_checks_passed",)
 
 
 @pytest.mark.parametrize("check", AutomaticCheck)
@@ -169,19 +175,20 @@ def test_any_check_that_did_not_pass_sends_the_client_to_a_person(
     outcomes = passed(*(other for other in AutomaticCheck if other is not check))
     if verdict is not None:
         outcomes += (CheckOutcome(check, verdict, 62),)
-    decision = decide(outcomes)
-    assert not decision.approve
-    assert decision.flags == (f"{check.value}_{verdict.value if verdict else 'not_run'}",)
+    for switched_on in (False, True):
+        decision = decide(outcomes, automatic_approval=switched_on)
+        assert not decision.approve
+        assert decision.flags == (f"{check.value}_{verdict.value if verdict else 'not_run'}",)
 
 
 def test_no_checks_at_all_never_approves() -> None:
-    assert not decide(()).approve
+    assert not decide((), automatic_approval=True).approve
 
 
 def test_a_check_reported_twice_is_not_trusted() -> None:
     outcomes = (*passed(*AutomaticCheck), CheckOutcome(AutomaticCheck.SCREENING, Verdict.FAIL))
     assert decide(outcomes) == decide(outcomes[::-1])
-    assert not decide(outcomes).approve
+    assert not decide(outcomes, automatic_approval=True).approve
 
 
 @pytest.mark.parametrize("score", [-1, 101, True])
