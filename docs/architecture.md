@@ -54,7 +54,8 @@ Each can be restarted or scaled alone without splitting the code.
 | Payments | Deposits and payouts through ioTec Pay (MTN and Airtel) and the bank. Talks to providers and posts to the ledger. |
 | Investments | Products, rates, client holdings, daily interest accrual, maturity, rollover |
 | Dealing | The dealing desk: orders for bills and bonds, bills held at the custodian, allocation to client investments, the liquidity buffer |
-| Goals | Goals, saving rules, automatic investing, group goals and approvals |
+| Goals | Goals, saving rules, group goals and approvals |
+| Automatic investing | Plans that invest the same amount weekly or monthly, and the runs that ask for each payment. Module `autoinvest`. See [automatic-investing.md](automatic-investing.md). |
 | Reconciliation | Statement import, matching, exceptions, daily close |
 | Notifications | Templates and delivery by push, SMS and email |
 | Console and audit | Review queue, maker and checker approvals, audit trail, reports |
