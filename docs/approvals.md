@@ -45,7 +45,7 @@ Where a module has no separate deciding permission, the screen's own is used.
 
 Only the sources the reader's permissions show are read, and all of them inside the reader's staff transaction, so row policies apply as they do on each module's own screen.
 
-Not in the inbox, because they are not two-person decisions: identity checks (one reviewer, by the owner's decision), large payouts and withdrawal limits, refusing a payout account (one person, as it lets no money out), products and support. Dealing buffer rule changes are two-person but have no staff route yet, so they join when one exists.
+Not in the inbox, because they are not two-person decisions: identity checks (one reviewer, by the owner's decision), large payouts and withdrawal limits, refusing or removing a payout account (one person each, as neither lets money out), products and support. Dealing buffer rule changes are two-person but have no staff route yet, so they join when one exists.
 
 ## Where it lives
 

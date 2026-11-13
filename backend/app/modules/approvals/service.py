@@ -203,6 +203,7 @@ async def _announcements(session: AsyncSession) -> list[Waiting]:
 
 
 async def _payout_accounts(session: AsyncSession) -> list[Waiting]:
+    # The subject is the kind of account, never the number or the holder's name.
     return [
         Waiting("payout_account", d.id, d.kind.value, d.checked_by, d.checked_at)
         for d in await destinations.checks_awaiting_approval(session)
