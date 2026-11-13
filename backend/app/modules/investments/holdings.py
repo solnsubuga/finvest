@@ -162,6 +162,10 @@ def select_investments(tail: str) -> TextClause:
 
 
 _BY_ID = text(f"SELECT {_COLUMNS} {_FROM} WHERE i.id = :id")
+_BY_IDS = text(
+    f"SELECT {_COLUMNS} {_FROM} WHERE i.id = ANY(CAST(:ids AS text[])) "
+    "ORDER BY i.created_at DESC, i.id DESC"
+)
 _BY_ID_SHARED = text(f"SELECT {_COLUMNS} {_FROM} WHERE i.id = :id FOR SHARE OF i")
 _BY_ID_LOCKED = text(f"SELECT {_COLUMNS} {_FROM} WHERE i.id = :id FOR UPDATE OF i")
 _FOR_CLIENT = text(
@@ -456,6 +460,15 @@ async def get_investment(session: AsyncSession, investment_id: str) -> Investmen
     return investment_from_row(row)
 
 
+async def get_investments(session: AsyncSession, investment_ids: list[str]) -> list[Investment]:
+    """These investments, newest first, in one query, leaving out any this transaction may not
+    see. For staff and the worker."""
+    if not investment_ids:
+        return []
+    rows = await session.execute(_BY_IDS, {"ids": list(investment_ids)})
+    return [investment_from_row(row) for row in rows.all()]
+
+
 async def list_investments(
     session: AsyncSession,
     staff: Actor,
@@ -494,6 +507,21 @@ async def client_investment(
     if row is None or row.client_id != client.id:
         raise ApplicationError("not_found")
     return _client_view(investment_from_row(row), business_date(clock.now()))
+
+
+async def client_investments_by_id(
+    session: AsyncSession, client: Actor, investment_ids: list[str], clock: Clock
+) -> list[ClientInvestment]:
+    """These of the client's investments, newest first, in one query. Another client's are left
+    out. Figures after tax."""
+    if client.kind != "client":
+        raise ApplicationError("forbidden")
+    today = business_date(clock.now())
+    return [
+        _client_view(investment, today)
+        for investment in await get_investments(session, investment_ids)
+        if investment.client_id == client.id
+    ]
 
 
 # Internals --------------------------------------------------------------------------------------

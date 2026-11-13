@@ -1,10 +1,29 @@
-import { MigrationError, type MigrationApi, type Overview, type Problem, type TotalLine, type TrialInput } from "./api.ts";
+import {
+  MigrationError,
+  type Allowed,
+  type Amounts,
+  type Blocker,
+  type Difference,
+  type EnteredTotals,
+  type MigrationApi,
+  type Overview,
+  type Problem,
+  type SignOff,
+  type TotalLine,
+  type TotalsInput,
+  type TrialInput,
+} from "./api.ts";
 
 /**
  * Sample migration figures for `pnpm dev` and previews. Not real clients and
  * not connected to Finvest. A trial here reads nothing from the chosen files:
  * the first one reports sample problems and the next one comes back clean.
+ *
+ * The signed-in person is "you". Grace Finance and Daniel Admin stand in for
+ * colleagues, so a sample proposal can be approved and your own cannot.
  */
+
+const YOU = "You";
 
 const PROBLEMS: readonly Problem[] = [
   { sheet: "clients", row: 214, column: "phone", code: "duplicate_phone", severity: "error" },
@@ -19,93 +38,238 @@ const PROBLEMS: readonly Problem[] = [
   { sheet: "investments", row: 611, column: "maturity_date", code: "past_maturity", severity: "warning" },
 ];
 
-const line = (key: string, figure: TotalLine["figure"], currency: TotalLine["currency"], old: string, next: string): TotalLine => ({
-  key,
-  figure,
-  currency,
-  old,
-  new: next,
-  signedOff: null,
+const ROUNDING = "Finvest 1.0 rounded each day's dollar interest up.";
+
+const approvedBy = (id: string, reason: string): SignOff => ({
+  id,
+  reason,
+  state: "approved",
+  proposedBy: "Grace Finance",
+  decidedBy: "Daniel Admin",
+  decisionReason: null,
+  mine: false,
 });
 
-function overview(trialsRun: number, asOf: string, clean: boolean): Overview {
-  const problems = clean ? PROBLEMS.filter((problem) => problem.severity === "warning") : PROBLEMS;
-  const errors = problems.filter((problem) => problem.severity === "error").length;
+/** What each trial imports, by line key. */
+function newTotals(clean: boolean): Record<string, string> {
   return {
-    trialsRun,
-    trial: {
-      asOf,
-      ranAt: "2026-11-13T15:40:00Z",
-      ranBy: "Sarah Operations",
-      errorCount: errors,
-      warningCount: clean ? 108 : 112,
-      problems,
-    },
-    lines: [
-      line("total:clients", "clients", null, "1912", clean ? "1912" : "1909"),
-      line("total:verified_identities", "verified_identities", null, "1804", clean ? "1804" : "1802"),
-      line("total:running_investments", "running_investments", null, "3207", clean ? "3204" : "3201"),
-      line("total:pending_orders", "pending_orders", null, "14", "14"),
-      line("total:invested:UGX", "invested", "UGX", "18240000000", clean ? "18240000000" : "18212500000"),
-      line("total:interest_before_tax:UGX", "interest_before_tax", "UGX", "420101240", "420100000"),
-      {
-        ...line("total:invested:USD", "invested", "USD", "25450000", "25450000"),
-      },
-      {
-        ...line("total:interest_before_tax:USD", "interest_before_tax", "USD", "61275", "61270"),
-        signedOff: { reason: "Finvest 1.0 rounded each day's dollar interest up.", signedBy: "Grace Finance" },
-      },
-    ],
-    differences: [
-      { key: "investment:INV-20418", kind: "interest", row: 418, legacyInvestmentRef: "INV-20418", currency: "UGX", old: "184620", new: "184000", signedOff: null },
-      { key: "investment:INV-20977", kind: "interest", row: 977, legacyInvestmentRef: "INV-20977", currency: "UGX", old: "96120", new: "95500", signedOff: null },
-      { key: "tax_rate:INV-19034", kind: "tax_rate", row: 34, legacyInvestmentRef: "INV-19034", currency: "UGX", old: "1000", new: "1500", signedOff: null },
-      {
-        key: "investment:USD-0091",
-        kind: "interest",
-        row: 3190,
-        legacyInvestmentRef: "USD-0091",
-        currency: "USD",
-        old: "4105",
-        new: "4100",
-        signedOff: { reason: "Finvest 1.0 rounded each day's dollar interest up.", signedBy: "Grace Finance" },
-      },
-    ],
-    claims: null,
-    blockers: clean ? ["difference_not_signed_off"] : ["import_has_errors", "difference_not_signed_off"],
-    allowed: ["run_trial"],
+    "total:clients": clean ? "1912" : "1909",
+    "total:verified_identities": clean ? "1804" : "1802",
+    "total:running_investments": clean ? "3204" : "3201",
+    "total:pending_orders": "14",
+    "total:invested:UGX": clean ? "18240000000" : "18212500000",
+    "total:interest_before_tax:UGX": "420100000",
+    "total:invested:USD": "25450000",
+    "total:interest_before_tax:USD": "61270",
   };
 }
 
-const EMPTY: Overview = {
-  trialsRun: 0,
-  trial: null,
-  lines: [],
-  differences: [],
-  claims: null,
-  blockers: ["no_trial"],
-  allowed: ["run_trial"],
+const LINES: readonly Pick<TotalLine, "key" | "figure" | "currency">[] = [
+  { key: "total:clients", figure: "clients", currency: null },
+  { key: "total:verified_identities", figure: "verified_identities", currency: null },
+  { key: "total:running_investments", figure: "running_investments", currency: null },
+  { key: "total:pending_orders", figure: "pending_orders", currency: null },
+  { key: "total:invested:UGX", figure: "invested", currency: "UGX" },
+  { key: "total:interest_before_tax:UGX", figure: "interest_before_tax", currency: "UGX" },
+  { key: "total:invested:USD", figure: "invested", currency: "USD" },
+  { key: "total:interest_before_tax:USD", figure: "interest_before_tax", currency: "USD" },
+];
+
+function oldFigure(totals: TotalsInput, line: Pick<TotalLine, "figure" | "currency">): string {
+  const amounts = (values: Amounts) => (line.currency ? (values[line.currency] ?? "0") : "0");
+  switch (line.figure) {
+    case "clients":
+      return totals.clients;
+    case "verified_identities":
+      return totals.verifiedIdentities;
+    case "running_investments":
+      return totals.runningInvestments;
+    case "pending_orders":
+      return totals.pendingOrders;
+    case "invested":
+      return amounts(totals.invested);
+    case "interest_before_tax":
+      return amounts(totals.interestBeforeTax);
+  }
+}
+
+const SAMPLE_TOTALS: EnteredTotals = {
+  id: "totals-sample",
+  asOf: "2026-11-12",
+  clients: "1912",
+  verifiedIdentities: "1804",
+  runningInvestments: "3207",
+  pendingOrders: "14",
+  invested: { UGX: "18240000000", USD: "25450000" },
+  interestBeforeTax: { UGX: "420101240", USD: "61275" },
+  enteredBy: "Grace Finance",
+  enteredAt: "2026-11-13T14:05:00Z",
+  confirmedBy: "Daniel Admin",
+  mine: false,
 };
 
-/** `start` picks what the screen opens with: nothing imported yet, or a first trial with problems. */
-export function createStubMigrationApi(delayMs = 150, start: "empty" | "imported" = "imported"): MigrationApi {
-  let current = start === "empty" ? EMPTY : overview(1, "2026-11-12", false);
-  const wait = <T>(value: () => T): Promise<T> =>
+const DIFFERENCES: readonly Difference[] = [
+  { key: "investment:INV-20418", kind: "interest", row: 418, legacyInvestmentRef: "INV-20418", currency: "UGX", old: "184620", new: "184000", signedOff: null },
+  {
+    key: "investment:INV-20977",
+    kind: "interest",
+    row: 977,
+    legacyInvestmentRef: "INV-20977",
+    currency: "UGX",
+    old: "96120",
+    new: "95500",
+    signedOff: { id: "sign-off-20977", reason: "Finvest 1.0 counted the start date as a day earned.", state: "proposed", proposedBy: "Grace Finance", decidedBy: null, decisionReason: null, mine: false },
+  },
+  { key: "tax_rate:INV-19034", kind: "tax_rate", row: 34, legacyInvestmentRef: "INV-19034", currency: "UGX", old: "1000", new: "1500", signedOff: null },
+  { key: "investment:USD-0091", kind: "interest", row: 3190, legacyInvestmentRef: "USD-0091", currency: "USD", old: "4105", new: "4100", signedOff: approvedBy("sign-off-0091", ROUNDING) },
+];
+
+interface State {
+  trialsRun: number;
+  asOf: string;
+  clean: boolean;
+  totals: EnteredTotals | null;
+  differences: Difference[];
+  // Sign-offs on total lines, by key.
+  lineSignOffs: Record<string, SignOff>;
+  allowed: readonly Allowed[];
+}
+
+function build(state: State): Overview {
+  if (state.trialsRun === 0) {
+    return { trialsRun: 0, trial: null, totals: null, lines: [], differences: [], claims: null, blockers: ["no_trial"], allowed: state.allowed };
+  }
+  const problems = state.clean ? PROBLEMS.filter((problem) => problem.severity === "warning") : PROBLEMS;
+  const errorCount = problems.filter((problem) => problem.severity === "error").length;
+  const imported = newTotals(state.clean);
+  const confirmed = state.totals?.confirmedBy ? state.totals : null;
+  const lines: TotalLine[] = LINES.map((line) => {
+    const old = confirmed ? oldFigure(confirmed, line) : null;
+    const differs = old !== null && BigInt(old) !== BigInt(imported[line.key]!);
+    return { ...line, old, new: imported[line.key]!, signedOff: differs ? (state.lineSignOffs[line.key] ?? null) : null };
+  });
+  const open = [...lines.filter((line) => line.old !== null && BigInt(line.old) !== BigInt(line.new)), ...state.differences].some(
+    (item) => item.signedOff?.state !== "approved",
+  );
+  const blockers: Blocker[] = [];
+  if (errorCount > 0) blockers.push("import_has_errors");
+  if (!state.totals) blockers.push("totals_not_entered");
+  else if (!confirmed) blockers.push("totals_not_confirmed");
+  if (open) blockers.push("difference_not_signed_off");
+  return {
+    trialsRun: state.trialsRun,
+    trial: { asOf: state.asOf, ranAt: "2026-11-13T15:40:00Z", ranBy: "Sarah Operations", errorCount, warningCount: state.clean ? 108 : 112, problems },
+    totals: state.totals,
+    lines,
+    differences: state.differences,
+    claims: null,
+    blockers,
+    allowed: state.allowed,
+  };
+}
+
+let counter = 0;
+const nextId = (prefix: string) => `${prefix}-${++counter}`;
+
+/**
+ * `start` picks what the screen opens with: nothing imported yet, a first trial
+ * with problems, or that trial with Finvest 1.0 totals a colleague entered and
+ * nobody has confirmed. `allowed` is everything by default, like an admin.
+ */
+export function createStubMigrationApi(delayMs = 150, start: "empty" | "imported" | "unconfirmed" = "imported", allowed: readonly Allowed[] = ["run_trial", "enter_totals", "sign_off"]): MigrationApi {
+  const state: State =
+    start === "empty"
+      ? { trialsRun: 0, asOf: "2026-11-12", clean: false, totals: null, differences: [], lineSignOffs: {}, allowed }
+      : {
+          trialsRun: 1,
+          asOf: "2026-11-12",
+          clean: false,
+          totals: start === "unconfirmed" ? { ...SAMPLE_TOTALS, confirmedBy: null } : SAMPLE_TOTALS,
+          differences: DIFFERENCES.map((item) => ({ ...item })),
+          lineSignOffs: { "total:interest_before_tax:USD": approvedBy("sign-off-usd", ROUNDING) },
+          allowed,
+        };
+
+  const wait = (change: () => void): Promise<Overview> =>
     new Promise((resolve, reject) =>
       setTimeout(() => {
         try {
-          resolve(value());
+          change();
+          resolve(build(state));
         } catch (error) {
           reject(error instanceof Error ? error : new MigrationError("unavailable"));
         }
       }, delayMs),
     );
+
+  function may(action: Allowed) {
+    if (!state.allowed.includes(action)) throw new MigrationError("forbidden");
+  }
+
+  function signOffFor(key: string): SignOff | null {
+    return state.lineSignOffs[key] ?? state.differences.find((item) => item.key === key)?.signedOff ?? null;
+  }
+
+  function setSignOff(key: string, signOff: SignOff | null) {
+    const item = state.differences.find((difference) => difference.key === key);
+    if (item) item.signedOff = signOff;
+    else if (signOff) state.lineSignOffs[key] = signOff;
+    else delete state.lineSignOffs[key];
+  }
+
+  function keyOf(signOffId: string): string {
+    const all = [...Object.entries(state.lineSignOffs), ...state.differences.map((item) => [item.key, item.signedOff] as const)];
+    const found = all.find(([, signOff]) => signOff?.id === signOffId);
+    if (!found) throw new MigrationError("conflict");
+    return found[0];
+  }
+
   return {
-    getOverview: () => wait(() => current),
+    getOverview: () => wait(() => undefined),
     runTrial: (input: TrialInput) =>
       wait(() => {
-        current = overview(current.trialsRun + 1, input.asOf, current.trialsRun > 0);
-        return current;
+        may("run_trial");
+        state.clean = state.trialsRun > 0;
+        state.trialsRun += 1;
+        state.asOf = input.asOf;
+        if (state.totals && state.totals.asOf !== input.asOf) state.totals = null;
+        if (state.trialsRun === 1) state.differences = DIFFERENCES.map((item) => ({ ...item }));
+      }),
+    enterTotals: (input: TotalsInput) =>
+      wait(() => {
+        may("enter_totals");
+        // A new entry replaces the last and waits for a second person. As in the backend, a sign-off
+        // on a total line counts again only if that line's Finvest 1.0 figure comes out the same.
+        const before = state.totals;
+        const entered: EnteredTotals = { ...input, id: nextId("totals"), enteredBy: YOU, enteredAt: new Date().toISOString(), confirmedBy: null, mine: true };
+        for (const line of LINES) {
+          if (before === null || BigInt(oldFigure(before, line)) !== BigInt(oldFigure(entered, line))) delete state.lineSignOffs[line.key];
+        }
+        state.totals = entered;
+      }),
+    confirmTotals: (totalsId: string) =>
+      wait(() => {
+        may("enter_totals");
+        if (!state.totals || state.totals.id !== totalsId || state.totals.confirmedBy) throw new MigrationError("conflict");
+        if (state.totals.mine) throw new MigrationError("forbidden");
+        state.totals = { ...state.totals, confirmedBy: YOU };
+      }),
+    proposeSignOff: (key: string, reason: string) =>
+      wait(() => {
+        may("sign_off");
+        // A rejected sign-off may be proposed again, and the new one replaces it.
+        const current = signOffFor(key);
+        if (current && current.state !== "rejected") throw new MigrationError("conflict");
+        setSignOff(key, { id: nextId("sign-off"), reason, state: "proposed", proposedBy: YOU, decidedBy: null, decisionReason: null, mine: true });
+      }),
+    decideSignOff: (signOffId: string, approve: boolean, reason?: string) =>
+      wait(() => {
+        may("sign_off");
+        const key = keyOf(signOffId);
+        const signOff = signOffFor(key)!;
+        if (signOff.mine) throw new MigrationError("forbidden");
+        if (signOff.state !== "proposed") throw new MigrationError("conflict");
+        setSignOff(key, { ...signOff, state: approve ? "approved" : "rejected", decidedBy: YOU, decisionReason: reason?.trim() || null });
       }),
   };
 }

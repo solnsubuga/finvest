@@ -8,6 +8,7 @@ on:
     paths:
       - "apps/client/**"
       - "packages/tokens/**"
+      - "packages/api-client/**"
       - "package.json"
       - "pnpm-lock.yaml"
       - "pnpm-workspace.yaml"
@@ -17,6 +18,7 @@ on:
     paths:
       - "apps/client/**"
       - "packages/tokens/**"
+      - "packages/api-client/**"
       - "package.json"
       - "pnpm-lock.yaml"
       - "pnpm-workspace.yaml"
@@ -41,6 +43,11 @@ jobs:
           node-version: 22
           cache: pnpm
       - run: pnpm install --frozen-lockfile
+      - name: The generated API types match openapi.json
+        working-directory: packages/api-client
+        run: |
+          pnpm check
+          pnpm typecheck
       - name: Client app
         working-directory: apps/client
         run: |
@@ -69,7 +76,12 @@ jobs:
           fi
           # Nor the demo goals, which show savings that were never made, nor any rate before
           # tax, which clients never see.
-          if grep -rIl -e "School fees, Term 1" -e "demo-goal-" -e "taxBps" -e "annualRateBps" dist; then
+          if grep -rIl -e "School fees, Term 1" -e "demo-goal-" -e "taxBps" -e "annualRateBps" -e "before_tax" dist; then
             echo "The demo goals or a rate before tax were bundled into a production build" >&2
+            exit 1
+          fi
+          # Nor the demo notifications and help chat, which show alerts and replies nobody sent.
+          if grep -rIl -e "no one at Finvest has seen your message" -e "You earned UGX 2,416 today" dist; then
+            echo "The demo notifications or help chat were bundled into a production build" >&2
             exit 1
           fi

@@ -24,6 +24,8 @@
 | [migration.md](migration.md) | Moving Finvest 1.0 clients onto the new system |
 | [security.md](security.md) | The security review before launch: findings, the ASVS checklist and the penetration test scope |
 | [observability.md](observability.md) | Logs, health checks, alerts and the first steps when an alert fires |
+| [backup-and-restore.md](backup-and-restore.md) | What is backed up, the restore drill and its record, and a real restore |
+| [launch.md](launch.md) | The parallel run against Finvest 1.0, go or no go, switch day, rollback and what only the owner can provide |
 | [decisions.md](decisions.md) | Decisions made so far and questions still open |
 | [design.md](design.md) | The design canvas, brand and tokens |
 

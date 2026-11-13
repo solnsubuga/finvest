@@ -64,6 +64,7 @@ export const BLOCKER_LABELS: Record<Blocker, string> = {
   no_trial: "Run a trial import",
   import_has_errors: "Fix every error in the spreadsheet",
   totals_not_entered: "Finance enters the Finvest 1.0 totals",
+  totals_not_confirmed: "A second person confirms the Finvest 1.0 totals",
   difference_not_signed_off: "Finance signs off every difference with a reason",
 };
 
@@ -93,20 +94,55 @@ export function difference(old: string, next: string): string {
   return (BigInt(old) - BigInt(next)).toString();
 }
 
-export type LineResult = "agrees" | "look_into" | "signed_off" | "not_entered";
+export type LineResult = "agrees" | "look_into" | "waiting" | "signed_off" | "not_entered";
 
 export function lineResult(line: TotalLine): LineResult {
   if (line.old === null) return "not_entered";
-  if (line.old === line.new) return "agrees";
-  return line.signedOff ? "signed_off" : "look_into";
+  // Compared as numbers, so "0100" and "100" agree. Never as text, never as floats.
+  if (BigInt(line.old) === BigInt(line.new)) return "agrees";
+  if (!line.signedOff || line.signedOff.state === "rejected") return "look_into";
+  return line.signedOff.state === "approved" ? "signed_off" : "waiting";
 }
 
 export const RESULT_LABELS: Record<LineResult, string> = {
   agrees: "Agrees",
   look_into: "Look into",
+  waiting: "Waiting for approval",
   signed_off: "Signed off",
   not_entered: "Not entered",
 };
+
+/** The largest whole number a browser holds exactly, which is also the backend's limit. */
+const MAX_WHOLE = 2n ** 53n - 1n;
+
+/** A count typed by a person, as "1,912" or "1912". Null when it is not a whole number. */
+export function parseCount(text: string): string | null {
+  const cleaned = text.trim().replace(/,/g, "");
+  if (!/^\d{1,16}$/.test(cleaned)) return null;
+  const value = BigInt(cleaned);
+  return value <= MAX_WHOLE ? value.toString() : null;
+}
+
+/**
+ * An amount typed by a person, in the smallest unit: "1,500.50" dollars is
+ * "150050" cents. Shillings have no fraction. Worked out on the digits, so no
+ * floating point number is ever made. Empty means none of that currency.
+ */
+export function parseAmount(text: string, currency: Currency): string | null {
+  const cleaned = text.trim().replace(/,/g, "");
+  if (cleaned === "") return "0";
+  const places = MINOR_DIGITS[currency];
+  const pattern = places ? /^(\d{1,16})(?:\.(\d{1,2}))?$/ : /^(\d{1,16})$/;
+  const match = pattern.exec(cleaned);
+  if (!match) return null;
+  const value = BigInt(match[1]!) * 10n ** BigInt(places) + BigInt((match[2] ?? "").padEnd(places, "0") || "0");
+  return value <= MAX_WHOLE ? value.toString() : null;
+}
+
+/** Bytes as "40 MB", for the size limit on a sheet. */
+export function formatMegabytes(bytes: number): string {
+  return `${Math.floor(bytes / 1_000_000)} MB`;
+}
 
 export function lineLabel(line: TotalLine): string {
   return line.currency ? `${FIGURE_LABELS[line.figure]}, ${line.currency}` : FIGURE_LABELS[line.figure];

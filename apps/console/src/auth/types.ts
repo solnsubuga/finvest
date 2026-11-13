@@ -15,7 +15,7 @@ export const ROLE_LABELS: Record<Role, string> = {
  * sends them with the session. The console only uses them to choose what to
  * show: the API checks every request again.
  */
-export const PERMISSIONS = [
+export const SCREEN_PERMISSIONS = [
   "overview.view",
   "review_queue.view",
   "identity_checks.view",
@@ -27,6 +27,7 @@ export const PERMISSIONS = [
   "reconciliation.view",
   "investments.view",
   "automatic_investing.view",
+  "goals.view",
   "dealing_desk.view",
   "finance.view",
   "products.view",
@@ -37,6 +38,30 @@ export const PERMISSIONS = [
   "settings.view",
   "migration.view",
 ] as const;
+
+/**
+ * What a member of staff may do on a screen they can open. Looking is the
+ * screen's `.view` permission. Each action that changes something has its own,
+ * the same names as the backend's catalogue.
+ */
+export const ACTION_PERMISSIONS = [
+  // Running a trial import, and proposing or approving a sign-off for the switch.
+  "migration.import",
+  "migration.sign_off",
+  // Writing to a client in the help chat, solving or filing a chat, keeping saved replies.
+  "support.reply",
+  // Logging a complaint for a client, assigning it, moving it, adding notes, and proposing or withdrawing an outcome.
+  "complaints.manage",
+  // Confirming or rejecting an outcome someone else proposed. Confirming closes the complaint.
+  "complaints.close",
+  // Proposing or deciding a change to the words of a client message.
+  "wordings.change",
+  // Matching a bank transfer to a statement line, refusing it, and approving someone else's match.
+  "bank_transfers.change",
+] as const;
+
+export const PERMISSIONS = [...SCREEN_PERMISSIONS, ...ACTION_PERMISSIONS] as const;
+export type ScreenPermission = (typeof SCREEN_PERMISSIONS)[number];
 export type Permission = (typeof PERMISSIONS)[number];
 
 export interface StaffSession {

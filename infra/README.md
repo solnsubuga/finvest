@@ -18,12 +18,12 @@ Infrastructure as code for Finvest, modelled on Fidiba's provisioning. Terraform
 | Droplet | Ubuntu 24.04, `s-1vcpu-2gb` | `s-2vcpu-4gb`, weekly backups | Runs the Compose stack: Caddy, API, worker, scheduler, frontends. 2 GB swap. |
 | Reserved IP | Assigned to the droplet | Same | Stable address for DNS and `DEPLOY_HOST`, kept if the droplet is rebuilt |
 | Cloud firewall | Same rules | Same rules | 80 and 443 only from Cloudflare's ranges, so nobody can skip the edge. SSH only from `SSH_SOURCE_ADDRESSES`, plus the Provision run while it prepares the host. |
-| Managed PostgreSQL 17 | `db-s-1vcpu-1gb` | `db-s-1vcpu-2gb` | One node, database `finvest`, daily backups and point in time recovery. Only the droplet may connect. |
+| Managed PostgreSQL 17 | `db-s-1vcpu-1gb` | `db-s-1vcpu-2gb` | One node, database `finvest`, daily backups and point in time recovery, rehearsed by the drill in [docs/backup-and-restore.md](../docs/backup-and-restore.md). Only the droplet may connect. |
 | Database roles | Same | Same | `finvest_migrator`, `finvest_app`, `finvest_worker`, created from the host with `backend/db/init-roles.sql` and generated passwords |
 | Spaces bucket and key | `finvest-staging-documents` | `finvest-production-documents` | Private, versioned, read by the console through short-lived links (no browser uploads), and a key limited to the bucket |
-| Cloudflare | Proxied records, Origin CA certificate | Same, plus Access on the back office | Full (strict) TLS from the edge to the host |
+| Cloudflare | Proxied records, Origin CA certificate | Same, plus Access on the back office, and on the client app until switch day | Full (strict) TLS from the edge to the host |
 | GitHub settings | Written into the `staging` environment | Written into `production` | See below |
-| Alerts | When `ALERT_EMAILS` is set | Same | Uptime on `https://<api>/health/ready`, host CPU and disk |
+| Alerts | When `ALERT_EMAILS` is set | Same | Uptime on `https://<api>/health/ready` and `/health/operations`, host CPU and disk, database CPU, memory and disk. What each alert means: [docs/observability.md](../docs/observability.md) |
 | Tag | `finvest-staging` | `finvest-production` | Tells the environments apart inside the one project |
 
 The droplet, database cluster, bucket and project have `prevent_destroy`: Terraform refuses any plan that would delete them. Changing the droplet's SSH key or image later does not rebuild it, because cloud-init runs only on first boot.
@@ -128,6 +128,7 @@ Repository variables under **Settings → Secrets and variables → Actions → 
 | `CLOUDFLARE_ACCOUNT_ID` | From the Cloudflare dashboard. Required for production. |
 | `ADMIN_ACCESS_EMAILS` | Staff emails allowed into the back office, comma separated. Required for production. |
 | `ALERT_EMAILS` | Optional, comma separated |
+| `CLIENT_APP_PUBLIC` | Leave unset until switch day. Until then the production client app host lets in only `ADMIN_ACCESS_EMAILS`, through Cloudflare Access, while the API stays public. On switch day ([docs/launch.md](../docs/launch.md)) set it to `true` and run Provision `production` (plan, then apply) to lift Access from the app host. The back office keeps it. |
 
 ## Provision
 
@@ -190,7 +191,7 @@ In each of the `staging` and `production` GitHub environments, beside what Terra
 | `FINVEST_IDENTITY_DATA_KEY` | Secret | `python3 -c "import secrets; print(secrets.token_urlsafe(32))"`, one per environment. It encrypts clients' document numbers, dates of birth and TINs, and reaches the API and worker only. Never change it once clients have been checked: saved checks become unreadable. Keep an offline copy. |
 | `FINVEST_EMAIL_RESEND_API_KEY` | Secret | The Resend key, once email is set up |
 | `FINVEST_EMAIL_BACKEND`, `FINVEST_EMAIL_FROM` | Variables | `resend` and `Finvest <no-reply@finvestug.com>` |
-
+| `FINVEST_CLIENT_SIGNUP_OPEN` | Variable | `true` opens client sign-up on the API. Leave it unset in production until switch day ([docs/launch.md](../docs/launch.md)). In staging, set it only for the pen test weeks. Anything else keeps sign-up closed. |
 | `SITE_PUBLISHED` | Variable, production only | The owner's decision, nobody else's: `true` puts the public website live at the production address. Set it when the owner launches the website. |
 | `SITE_INDEXABLE` | Variable, production only | `true` lets search engines index the website. Leave it unset until launch. Staging, the API, the back office and the client app address always send `X-Robots-Tag: noindex`, whatever this says. |
 
