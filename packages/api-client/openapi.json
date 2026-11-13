@@ -301,6 +301,17 @@
             "title": "Proposed By",
             "type": "string"
           },
+          "proposed_by_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Proposed By Name"
+          },
           "subject": {
             "title": "Subject",
             "type": "string"
@@ -315,6 +326,7 @@
           "id",
           "subject",
           "proposed_by",
+          "proposed_by_name",
           "proposed_at",
           "yours",
           "can_decide"
