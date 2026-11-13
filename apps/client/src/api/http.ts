@@ -66,6 +66,7 @@ const KNOWN_CODES = new Set<string>([
   "internal_error",
 ]);
 
+/** A field the API refused, by its dotted path such as `target_date`, and why. */
 export type FieldProblem = { field: string; code: string };
 
 export class ApiError extends Error {
@@ -182,10 +183,11 @@ async function refusal(response: Response): Promise<ApiError> {
     : response.status >= 500
       ? "internal_error"
       : "unavailable";
+  // The API names a field by its path, such as ["target_date"] or ["items", 0, "amount"].
   const fields = Array.isArray(envelope?.error?.fields)
-    ? (envelope.error.fields as { field?: unknown; code?: unknown }[])
-        .filter((f) => typeof f.field === "string" && typeof f.code === "string")
-        .map((f) => ({ field: f.field as string, code: f.code as string }))
+    ? (envelope.error.fields as { field_path?: unknown; code?: unknown }[])
+        .filter((f) => Array.isArray(f.field_path) && typeof f.code === "string")
+        .map((f) => ({ field: (f.field_path as unknown[]).map(String).join("."), code: f.code as string }))
     : [];
   const requestId = typeof envelope?.request_id === "string" ? envelope.request_id : response.headers.get("x-request-id");
   return new ApiError(code, { status: response.status, requestId, fields });

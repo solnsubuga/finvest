@@ -81,7 +81,7 @@ describe("api", () => {
   it("carries the API's error code, request ID and field problems", async () => {
     answer(422, {
       request_id: "R".repeat(20),
-      error: { code: "leaked_password", message: "x", fields: [{ field: "password", code: "leaked" }] },
+      error: { code: "leaked_password", message: "x", fields: [{ field_path: ["body", "password"], code: "leaked" }] },
     });
     const error = await api("POST /client/signup/complete", { body: { ticket: "t".repeat(20), password: "p" } }).catch(
       (e: unknown) => e,
@@ -91,7 +91,7 @@ describe("api", () => {
       code: "leaked_password",
       status: 422,
       requestId: "R".repeat(20),
-      fields: [{ field: "password", code: "leaked" }],
+      fields: [{ field: "body.password", code: "leaked" }],
     });
   });
 
