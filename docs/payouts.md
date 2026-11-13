@@ -145,6 +145,7 @@ Settle is refused by the ledger if the pot does not hold the money, because an a
 | A payout that may have left is never queued again | No actor has a step from sent or uncertain back to queued |
 | A finished payout never changes, and none is deleted | The same trigger, for every role including the table owner |
 | The terms never change | Client, destination, amount, currency, source and request key are fixed at creation |
+| A large payout starts held | A new payout above the review threshold in force cannot be inserted as queued |
 | A review is signed by who made it | `reviewed_by` must be the staff member of the transaction |
 | Mobile money carries at most UGX 5,000,000 | A CHECK on `payouts` and on `withdrawal_limits` |
 | A limits version takes two people | CHECK that proposer and approver differ, and a policy that the approver is the staff member inserting it |
