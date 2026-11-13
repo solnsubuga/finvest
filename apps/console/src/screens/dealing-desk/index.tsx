@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useAuth } from "@/auth/context.ts";
 import { isStubAuth } from "@/auth/index.ts";
 import { Button } from "@/components/ui/button.tsx";
@@ -15,7 +15,7 @@ type Load = { state: "loading" } | { state: "failed"; message: string } | { stat
 
 interface DealingDeskScreenProps {
   api: DealingApi;
-  /** Makes the idempotency key for one attempt at a command. */
+  /** Makes the idempotency key for one command. Every try at the same command carries the same key. */
   newKey?: () => string;
   /** The Kampala business day, as a calendar date. */
   today?: () => string;
@@ -31,6 +31,23 @@ export function DealingDeskScreen({ api, newKey = () => crypto.randomUUID(), tod
   const [failed, setFailed] = useState<{ on: string; message: string } | null>(null);
   // Bumped after each command, so a half-filled form on a card is dropped once the order moves on.
   const [round, setRound] = useState(0);
+  // The key of a command that has not been answered yet, by the order it is for.
+  // A second press sends the same key, so a first try that did reach the service is replayed, not applied twice.
+  const pending = useRef(new Map<string, { request: string; key: string }>());
+
+  function keyFor(on: string, request: string): string {
+    const waiting = pending.current.get(on);
+    if (waiting?.request === request) return waiting.key;
+    const key = newKey();
+    pending.current.set(on, { request, key });
+    return key;
+  }
+
+  /** The person gave the command up, so the next one for this order is a new command. */
+  function cancel(on: string) {
+    pending.current.delete(on);
+    setFailed((last) => (last?.on === on ? null : last));
+  }
 
   const fetchDesk = useCallback(
     (): Promise<Load> =>
@@ -49,15 +66,21 @@ export function DealingDeskScreen({ api, newKey = () => crypto.randomUUID(), tod
     };
   }, [fetchDesk]);
 
-  /** Runs one command. The key is made once here, so a retry inside the client reuses it. */
-  async function run(on: string, command: (key: string) => Promise<Desk>): Promise<boolean> {
+  /**
+   * Runs one command. `request` is everything the person asked for, written out,
+   * so the key is kept while they press again and replaced once they change a value.
+   */
+  async function run(on: string, request: unknown, command: (key: string) => Promise<Desk>): Promise<boolean> {
     setBusy(on);
     setFailed(null);
     try {
-      setLoad({ state: "ready", desk: await command(newKey()) });
+      setLoad({ state: "ready", desk: await command(keyFor(on, JSON.stringify(request))) });
+      pending.current.delete(on);
       setRound((count) => count + 1);
       return true;
     } catch (error) {
+      // Only an answer that never arrived leaves the command open. A refusal is an answer.
+      if (error instanceof DealingError && error.code !== "unavailable") pending.current.delete(on);
       setFailed({ on, message: dealingErrorMessage(error) });
       if (error instanceof DealingError && (error.code === "conflict" || error.code === "not_found")) {
         const fresh = await fetchDesk();
@@ -70,11 +93,11 @@ export function DealingDeskScreen({ api, newKey = () => crypto.randomUUID(), tod
   }
 
   async function prepare(order: NewOrder) {
-    if (await run(NEW_ORDER, (key) => api.prepareOrder(key, order))) setPreparing(false);
+    if (await run(NEW_ORDER, order, (key) => api.prepareOrder(key, order))) setPreparing(false);
   }
 
   function act(orderId: string, command: OrderCommand) {
-    void run(orderId, (key) => {
+    void run(orderId, command, (key) => {
       switch (command.action) {
         case "approve":
           return api.approve(key, orderId);
@@ -140,7 +163,7 @@ export function DealingDeskScreen({ api, newKey = () => crypto.randomUUID(), tod
               error={failed?.on === NEW_ORDER ? failed.message : null}
               onCancel={() => {
                 setPreparing(false);
-                setFailed(null);
+                cancel(NEW_ORDER);
               }}
               onSubmit={(order) => void prepare(order)}
             />
@@ -162,6 +185,7 @@ export function DealingDeskScreen({ api, newKey = () => crypto.randomUUID(), tod
               error={failed?.on === order.id ? failed.message : null}
               today={today()}
               onCommand={(command) => act(order.id, command)}
+              onCancel={() => cancel(order.id)}
             />
           ))}
         </aside>

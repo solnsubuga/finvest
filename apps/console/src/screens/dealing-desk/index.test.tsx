@@ -1,4 +1,4 @@
-import { render, screen, within } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 import { DealingError, notConnectedDealingApi, type DealingApi } from "./api.ts";
@@ -173,6 +173,11 @@ describe("dealing desk screen", () => {
     expect(within(card).getByText("Grace")).toBeInTheDocument();
     expect(positionRow("182 Day Treasury Bill").slice(1, 3)).toEqual(["9,716.0m", "154.0m"]);
     await user.click(within(card).getByRole("button", { name: "Confirm against the custodian's note" }));
+    // Posting cannot be taken back, so the screen asks once more and repeats the figures.
+    const question = within(card).getByRole("group", { name: "Confirm the result" });
+    expect(question).toHaveTextContent("UGX 50,000,000 of face value for UGX 46,900,000");
+    expect(positionRow("182 Day Treasury Bill").slice(1, 3)).toEqual(["9,716.0m", "154.0m"]);
+    await user.click(within(question).getByRole("button", { name: "Yes, confirm and post" }));
     await order(BID_182);
     expect(screen.queryByRole("article", { name: PURCHASE_182 })).not.toBeInTheDocument();
     expect(positionRow("182 Day Treasury Bill").slice(1, 3)).toEqual(["9,762.9m", "107.1m"]);
@@ -203,13 +208,87 @@ describe("dealing desk screen", () => {
     expect(within(await order(BID_182)).queryByRole("alert")).not.toBeInTheDocument();
   });
 
-  it("uses one idempotency key for each attempt", async () => {
+  it("backs out of confirming a result without sending anything", async () => {
+    const { user, api } = renderDesk();
+    const confirm = vi.spyOn(api, "confirmResult");
+    const card = await order(PURCHASE_182);
+    await user.click(within(card).getByRole("button", { name: "Confirm against the custodian's note" }));
+    await user.click(within(card).getByRole("button", { name: "Cancel" }));
+    expect(within(card).getByRole("button", { name: "Confirm against the custodian's note" })).toBeInTheDocument();
+    expect(confirm).not.toHaveBeenCalled();
+  });
+
+  it("uses a different idempotency key for each command", async () => {
     const { user, api } = renderDesk();
     const approve = vi.spyOn(api, "approve");
     await user.click(within(await order(BID_91)).getByRole("button", { name: "Approve as second person" }));
     await user.click(within(await order(BID_182)).getByRole("button", { name: "Approve as second person" }));
     await within(await order(BID_182)).findByText("Approved, waiting for the result");
     expect(approve.mock.calls.map(([key]) => key)).toEqual(["key-1", "key-2"]);
+  });
+
+  it("sends the same key again when the first try got no answer", async () => {
+    const api = createStubDealingApi(ME, 0, () => TODAY);
+    const real = api.approve.bind(api);
+    // The first try reaches the service and is applied, but the answer is lost on the way back.
+    const approve = vi.spyOn(api, "approve").mockImplementationOnce(async (key, orderId) => {
+      await real(key, orderId);
+      throw new DealingError("unavailable");
+    });
+    const { user } = renderDesk(api);
+    const card = await order(BID_91);
+    await user.click(within(card).getByRole("button", { name: "Approve as second person" }));
+    expect(await within(card).findByRole("alert")).toHaveTextContent("We could not reach Finvest");
+    await user.click(within(card).getByRole("button", { name: "Approve as second person" }));
+    expect(await within(await order(BID_91)).findByText("Approved, waiting for the result")).toBeInTheDocument();
+    expect(approve.mock.calls.map(([key]) => key)).toEqual(["key-1", "key-1"]);
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+  });
+
+  it("keeps the key of a new order through a failed try, until the amount is changed", async () => {
+    const api = createStubDealingApi(ME, 0, () => TODAY);
+    const prepare = vi.spyOn(api, "prepareOrder");
+    prepare.mockRejectedValueOnce(new DealingError("unavailable")).mockRejectedValueOnce(new DealingError("unavailable"));
+    const { user } = renderDesk(api);
+    await order(BID_91);
+    await user.click(screen.getByRole("button", { name: "Prepare an order" }));
+    const form = screen.getByRole("form", { name: "Prepare an order" });
+    const face = within(form).getByLabelText("Face value (UGX)");
+    const send = within(form).getByRole("button", { name: "Send for approval" });
+    await user.type(face, "10,000,000");
+    await user.click(send);
+    expect(await within(form).findByRole("alert")).toHaveTextContent("We could not reach Finvest");
+    await user.click(send);
+    expect(await within(form).findByRole("alert")).toBeInTheDocument();
+    await user.clear(face);
+    await user.type(face, "20,000,000");
+    await user.click(send);
+    await waitFor(() => expect(screen.getAllByRole("article", { name: BID_91 })).toHaveLength(2));
+    expect(screen.queryByRole("form", { name: "Prepare an order" })).not.toBeInTheDocument();
+    expect(prepare.mock.calls.map(([key, sent]) => [key, sent.face.minor])).toEqual([
+      ["key-1", 10_000_000],
+      ["key-1", 10_000_000],
+      ["key-2", 20_000_000],
+    ]);
+  });
+
+  it("starts a new key once a failed note is cancelled", async () => {
+    const api = createStubDealingApi(ME, 0, () => TODAY);
+    const sendBack = vi.spyOn(api, "sendBack").mockRejectedValueOnce(new DealingError("unavailable"));
+    const { user } = renderDesk(api);
+    const card = await order(BID_182);
+    await user.click(within(card).getByRole("button", { name: "Send back" }));
+    await user.type(within(card).getByLabelText("Why are you sending it back?"), "Too large");
+    await user.click(within(card).getByRole("button", { name: "Send back" }));
+    expect(await within(card).findByRole("alert")).toBeInTheDocument();
+    await user.click(within(card).getByRole("button", { name: "Cancel" }));
+    expect(within(card).queryByRole("alert")).not.toBeInTheDocument();
+    await user.click(within(card).getByRole("button", { name: "Send back" }));
+    await user.type(within(card).getByLabelText("Why are you sending it back?"), "Too large");
+    await user.click(within(card).getByRole("button", { name: "Send back" }));
+    await order(BID_91);
+    expect(screen.queryByRole("article", { name: BID_182 })).not.toBeInTheDocument();
+    expect(sendBack.mock.calls.map(([key]) => key)).toEqual(["key-1", "key-2"]);
   });
 
   it("says when the desk is not connected, and offers to try again", async () => {
@@ -250,6 +329,15 @@ describe("dealing desk formatting", () => {
     expect(formatExact({ minor: 240_000_000, currency: "UGX" })).toBe("UGX 240,000,000");
     expect(formatExact({ minor: 36_200_050, currency: "USD" })).toBe("$362,000.50");
     expect(formatExact({ minor: -5, currency: "USD" })).toBe("-$0.05");
+  });
+
+  it("rounds short figures half up without leaving whole numbers", () => {
+    expect(formatShort({ minor: 149_950_000, currency: "UGX" })).toBe("UGX 150.0m");
+    expect(formatShort({ minor: 149_949_999, currency: "UGX" })).toBe("UGX 149.9m");
+    expect(formatShort({ minor: 9_007_199_254_740_991, currency: "UGX" }, false)).toBe("9,007,199,254.7m");
+    expect(formatShort({ minor: -23_500_000, currency: "UGX" })).toBe("UGX -23.5m");
+    expect(formatShort({ minor: 36_200_050, currency: "USD" })).toBe("$362,001");
+    expect(formatShort({ minor: -149, currency: "USD" })).toBe("-$1");
   });
 
   it("shortens shillings to millions and dollars to whole dollars", () => {

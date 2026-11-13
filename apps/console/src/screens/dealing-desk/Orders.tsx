@@ -22,11 +22,17 @@ interface OrderCardProps {
   error: string | null;
   today: string;
   onCommand: (command: OrderCommand) => void;
+  /** The person closed a form without sending it, or after a try that failed. */
+  onCancel: () => void;
 }
 
 /** One open order, what has happened to it, and what the signed-in person may do next. */
-export function OrderCard({ order, position, busy, error, today, onCommand }: OrderCardProps) {
-  const [open, setOpen] = useState<"send_back" | "reject_result" | "record_result" | null>(null);
+export function OrderCard({ order, position, busy, error, today, onCommand, onCancel }: OrderCardProps) {
+  const [open, setOpen] = useState<"send_back" | "reject_result" | "record_result" | "confirm_result" | null>(null);
+  const close = () => {
+    setOpen(null);
+    onCancel();
+  };
   const can = (action: Order["allowed"][number]) => order.allowed.includes(action);
   const sells = order.kind === "secondary_sale";
   const waitsForOther =
@@ -80,15 +86,34 @@ export function OrderCard({ order, position, busy, error, today, onCommand }: Or
           discountOnly={position?.discountOnly ?? false}
           today={today}
           busy={busy}
-          onCancel={() => setOpen(null)}
+          onCancel={close}
           onSubmit={(fill) => onCommand({ action: "record_result", fill })}
         />
+      ) : open === "confirm_result" ? (
+        <div role="group" aria-label="Confirm the result" className="flex flex-col gap-2 border-t border-divider pt-3">
+          <p className="m-0 text-md font-bold leading-normal">
+            {order.result
+              ? `Does the custodian's note show ${formatExact(order.result.face)} of face value for ${formatExact(order.result.amount)}?`
+              : "Does the custodian's note match this result?"}
+          </p>
+          <p className="m-0 text-sm leading-[1.45] text-muted">
+            This posts the {sells ? "sale" : "purchase"} to the ledger. A ledger entry is never edited afterwards.
+          </p>
+          <div className="flex flex-wrap gap-2">
+            <Button disabled={busy} onClick={() => onCommand({ action: "confirm_result" })}>
+              Yes, confirm and post
+            </Button>
+            <Button variant="secondary" disabled={busy} onClick={close}>
+              Cancel
+            </Button>
+          </div>
+        </div>
       ) : open ? (
         <NoteForm
           label={open === "send_back" ? "Why are you sending it back?" : "What does not match the custodian's note?"}
           submit={open === "send_back" ? "Send back" : "Reject the result"}
           busy={busy}
-          onCancel={() => setOpen(null)}
+          onCancel={close}
           onSubmit={(note) => onCommand({ action: open, note })}
         />
       ) : (
@@ -99,7 +124,7 @@ export function OrderCard({ order, position, busy, error, today, onCommand }: Or
             </Button>
           ) : null}
           {can("confirm_result") ? (
-            <Button size="block" className="h-12 rounded-pill" disabled={busy} onClick={() => onCommand({ action: "confirm_result" })}>
+            <Button size="block" className="h-12 rounded-pill" disabled={busy} onClick={() => setOpen("confirm_result")}>
               Confirm against the custodian's note
             </Button>
           ) : null}

@@ -20,10 +20,18 @@ export function formatExact(amount: Amount): string {
  * worked out from these.
  */
 export function formatShort(amount: Amount, withCurrency = true): string {
-  if (amount.currency === "USD") return `$${GROUPED.format(Math.round(amount.minor / 100))}`;
-  const tenths = Math.round(amount.minor / 100_000);
-  const text = `${GROUPED.format(Math.trunc(tenths / 10))}.${Math.abs(tenths % 10)}m`;
+  const sign = amount.minor < 0 ? "-" : "";
+  if (amount.currency === "USD") return `${sign}$${GROUPED.format(roundedUnits(amount.minor, 100))}`;
+  const tenths = roundedUnits(amount.minor, 100_000);
+  const text = `${sign}${GROUPED.format((tenths - (tenths % 10)) / 10)}.${tenths % 10}m`;
   return withCurrency ? `UGX ${text}` : text;
+}
+
+/** How many whole `unit`s are in the size of `minor`, half rounding up. Integers throughout. */
+function roundedUnits(minor: number, unit: number): number {
+  const size = Math.abs(minor);
+  const rest = size % unit;
+  return (size - rest) / unit + (rest * 2 >= unit ? 1 : 0);
 }
 
 /** Reads "240,000,000" or "240000000" as whole major units. Null when it is anything else. */
