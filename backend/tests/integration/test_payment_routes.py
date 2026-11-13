@@ -32,6 +32,7 @@ from app.modules.ledger import service as ledger
 from app.modules.payments import bank_transfers as bank
 from app.modules.payments.bank_transfers import BankTransferJobs
 from app.modules.payments.domain.outcomes import Accepted, Pending
+from app.modules.payments.settings import BankAccountDetails
 from app.modules.reconciliation import statements
 from app.modules.reconciliation.domain.pots import CASH_POTS
 from app.modules.reconciliation.domain.statements import CsvFormat, StatementSource, parse_csv
@@ -55,8 +56,17 @@ STAFF_ORIGIN = "https://admin.finvestug.com"
 PASSWORD = "copper-harbour-violin"
 HASHER = PasswordHasher(memory_kib=19_456, time_cost=2)
 # Real time: the database refuses an investment not created now.
+# The database refuses an investment not created at the current time, so each test's clock
+# starts when the test does (`now()`), not when this file was imported. NOW only fixes the day
+# a transfer was sent.
 NOW = datetime.now(UTC)
 SENT_ON = business_date(NOW) - timedelta(days=1)
+
+
+def now() -> datetime:
+    return datetime.now(UTC)
+
+
 FORMAT = CsvFormat(
     value_date="Date",
     date_format="%Y-%m-%d",
@@ -131,13 +141,27 @@ async def api(test_database: TestDatabase, app_database: Database) -> AsyncItera
             "staff_allowed_origins": [STAFF_ORIGIN],
         }
     )
-    clock = FakeClock(NOW)
+    clock = FakeClock(now())
     collections = FakeCollections()
     storage = MemoryStorage()
     app = create_app(
-        settings, app_database, clock, HASHER, collections=collections, storage=storage
+        settings,
+        app_database,
+        clock,
+        HASHER,
+        collections=collections,
+        storage=storage,
+        bank_accounts={Currency.UGX: TRUST_ACCOUNT},
     )
     yield Api(app, app.state.identity, clock, app_database, collections, storage)
+
+
+TRUST_ACCOUNT = BankAccountDetails(
+    bank_name="Example Bank Uganda",
+    account_name="Finvest Clients Trust Account",
+    account_number="9030001234567",
+    branch="Kampala Road",
+)
 
 
 def key() -> dict[str, str]:
@@ -188,6 +212,71 @@ async def test_a_client_pays_by_mobile_money_from_their_own_number(api: Api) -> 
         current = await http.get(f"/client/investments/{investment.id}/payment")
         assert current.status_code == 200 and current.json()["id"] == body["id"]
         assert (await http.get(f"/client/payments/{body['id']}")).json()["id"] == body["id"]
+
+
+async def test_a_client_is_shown_where_to_send_a_transfer_until_a_payment_starts(
+    api: Api,
+) -> None:
+    async with api.http() as http, api.http() as stranger_http:
+        client, phone = await api.client(http)
+        investment = await request_investment(api.database, client, api.clock)
+        async with api.database.actor_transaction(client) as session:
+            assert client.id is not None
+            holder = await kyc.account_holder(session, client.id)
+        assert holder is not None
+
+        shown = await http.get(f"/client/investments/{investment.id}/bank-transfer-details")
+        assert shown.status_code == 200, shown.text
+        assert shown.json() == {
+            "bank_name": "Example Bank Uganda",
+            "account_name": "Finvest Clients Trust Account",
+            "account_number": "9030001234567",
+            "branch": "Kampala Road",
+            "reference": holder.account_number,
+            "amount": {"minor": investment.amount.minor, "currency": "UGX"},
+        }
+        await api.client(stranger_http)
+        assert (
+            await stranger_http.get(f"/client/investments/{investment.id}/bank-transfer-details")
+        ).status_code == 404
+        assert (
+            await http.get(f"/client/investments/{push_id()}/bank-transfer-details")
+        ).status_code == 404
+
+        api.collections.on_send(phone, Accepted("ref-details"))
+        paid = await http.post(
+            f"/client/investments/{investment.id}/payments/mobile-money",
+            json={"network": "mtn"},
+            headers=key(),
+        )
+        assert paid.status_code == 201
+        # A payment is under way: the app shows that one instead.
+        assert (
+            await http.get(f"/client/investments/{investment.id}/bank-transfer-details")
+        ).status_code == 409
+
+
+async def test_without_an_account_for_the_currency_no_details_are_shown(
+    test_database: TestDatabase, app_database: Database
+) -> None:
+    settings = test_database.settings("finvest_app")
+    clock = FakeClock(now())
+    app = create_app(
+        settings,
+        app_database,
+        clock,
+        HASHER,
+        collections=FakeCollections(),
+        storage=MemoryStorage(),
+        bank_accounts={},
+    )
+    api = Api(app, app.state.identity, clock, app_database, FakeCollections(), MemoryStorage())
+    async with api.http() as http:
+        client, _ = await api.client(http)
+        investment = await request_investment(api.database, client, api.clock)
+        answer = await http.get(f"/client/investments/{investment.id}/bank-transfer-details")
+        assert answer.status_code == 503
+        assert answer.json()["error"]["code"] == "unavailable"
 
 
 async def test_a_client_cannot_pay_for_someone_elses_investment_or_see_their_payment(
@@ -557,7 +646,7 @@ async def test_without_storage_no_transfer_is_saved(
     settings = test_database.settings("finvest_app").model_copy(
         update={"client_allowed_origins": [CLIENT_ORIGIN]}
     )
-    clock = FakeClock(NOW)
+    clock = FakeClock(now())
     app = create_app(
         settings,
         app_database,

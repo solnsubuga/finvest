@@ -20,6 +20,22 @@ export const AuthenticatorState = z.object({
 });
 export type AuthenticatorState = z.infer<typeof AuthenticatorState>;
 
+export const MoneyView = z.object({
+  currency: z.enum(["UGX", "USD"]),
+  minor: z.number().int(),
+});
+export type MoneyView = z.infer<typeof MoneyView>;
+
+export const BankTransferDetails = z.object({
+  account_name: z.string(),
+  account_number: z.string(),
+  amount: MoneyView,
+  bank_name: z.string(),
+  branch: z.string().nullable(),
+  reference: z.string(),
+});
+export type BankTransferDetails = z.infer<typeof BankTransferDetails>;
+
 export const Put = z.object({
   photo: Upload,
 });
@@ -447,12 +463,6 @@ export const JoinGroup = z.object({
   own_target_minor: z.number().int(),
 });
 export type JoinGroup = z.infer<typeof JoinGroup>;
-
-export const MoneyView = z.object({
-  currency: z.enum(["UGX", "USD"]),
-  minor: z.number().int(),
-});
-export type MoneyView = z.infer<typeof MoneyView>;
 
 export const LimitsOut = z.object({
   bank_per_day: MoneyView.nullable(),
@@ -1384,6 +1394,19 @@ export const operations = {
     idempotent: false,
     status: 200,
     response: ClientInvestmentOut,
+  },
+  "GET /client/investments/{investment_id}/bank-transfer-details": {
+    method: "GET",
+    path: "/client/investments/{investment_id}/bank-transfer-details",
+    params: z.object({
+    investment_id: z.string(),
+  }),
+    query: z.object({}),
+    body: null,
+    bodyKind: null,
+    idempotent: false,
+    status: 200,
+    response: BankTransferDetails,
   },
   "POST /client/investments/{investment_id}/pay-out": {
     method: "POST",

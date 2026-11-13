@@ -442,6 +442,52 @@
         "title": "AutomaticCheck",
         "type": "string"
       },
+      "BankTransferDetails": {
+        "additionalProperties": false,
+        "description": "Where to send a bank transfer for one investment, and what to write on it.",
+        "properties": {
+          "account_name": {
+            "title": "Account Name",
+            "type": "string"
+          },
+          "account_number": {
+            "title": "Account Number",
+            "type": "string"
+          },
+          "amount": {
+            "$ref": "#/components/schemas/MoneyView"
+          },
+          "bank_name": {
+            "title": "Bank Name",
+            "type": "string"
+          },
+          "branch": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Branch"
+          },
+          "reference": {
+            "title": "Reference",
+            "type": "string"
+          }
+        },
+        "required": [
+          "bank_name",
+          "account_name",
+          "account_number",
+          "branch",
+          "reference",
+          "amount"
+        ],
+        "title": "BankTransferDetails",
+        "type": "object"
+      },
       "BankTransferOut": {
         "additionalProperties": false,
         "properties": {
@@ -14524,6 +14570,102 @@
         ]
       }
     },
+    "/client/investments/{investment_id}/bank-transfer-details": {
+      "get": {
+        "description": "Where to send a bank transfer for this investment, for exactly the amount owed.\n\nThe same refusals as paying: 404 if it is not the client's, 409 if it can no longer be\npaid or already has a payment under way or paid (fetch that from\n`GET /client/investments/{investment_id}/payment`). 503 if no account is set for the\ninvestment's currency, so the app offers mobile money instead.",
+        "operationId": "bank_transfer_details_client_investments__investment_id__bank_transfer_details_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "investment_id",
+            "required": true,
+            "schema": {
+              "maxLength": 20,
+              "minLength": 20,
+              "pattern": "^[-0-9A-Z_a-z]{20}$",
+              "title": "Investment Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BankTransferDetails"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "summary": "Bank Transfer Details",
+        "tags": [
+          "client payments"
+        ]
+      }
+    },
     "/client/investments/{investment_id}/pay-out": {
       "post": {
         "description": "Send on the money of a matured investment that is waiting for a destination.\n\nSafe to repeat without an idempotency key: the payout's key is\n`maturity:<investment id>:<destination id>`, so the same destination asked twice is the\nsame payout.",
@@ -14695,6 +14837,16 @@
               }
             },
             "description": "Unprocessable Content"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Service Unavailable"
           }
         },
         "summary": "Current Payment",
@@ -14809,6 +14961,16 @@
               }
             },
             "description": "Unprocessable Content"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Service Unavailable"
           }
         },
         "summary": "Pay By Bank Transfer",
@@ -14923,6 +15085,16 @@
               }
             },
             "description": "Unprocessable Content"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Service Unavailable"
           }
         },
         "summary": "Pay By Mobile Money",
@@ -16432,6 +16604,16 @@
               }
             },
             "description": "Unprocessable Content"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Service Unavailable"
           }
         },
         "summary": "Get Payment",
@@ -24259,6 +24441,16 @@
               }
             },
             "description": "Unprocessable Content"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Service Unavailable"
           }
         },
         "summary": "Bank Transfers In Review",
@@ -24345,6 +24537,16 @@
               }
             },
             "description": "Unprocessable Content"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Service Unavailable"
           }
         },
         "summary": "Bank Transfer",
@@ -24449,6 +24651,16 @@
               }
             },
             "description": "Unprocessable Content"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Service Unavailable"
           }
         },
         "summary": "Approve Bank Match",
@@ -24578,6 +24790,16 @@
               }
             },
             "description": "Unprocessable Content"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Service Unavailable"
           }
         },
         "summary": "Review Bank Transfer",
