@@ -14,7 +14,7 @@ from starlette.types import ASGIApp, Message, Receive, Scope, Send
 logger = structlog.get_logger()
 
 # Probes from the uptime checker and the container health check would drown everything else.
-QUIET_ROUTES = frozenset({"/health/live", "/health/ready"})
+QUIET_ROUTES = frozenset({"/health/live", "/health/ready", "/health/operations"})
 
 
 def route_template(scope: Scope) -> str:

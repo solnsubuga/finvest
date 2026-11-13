@@ -19,6 +19,7 @@ from app.infrastructure.sms import SmsSettings
 from app.modules.autoinvest.jobs import AutoinvestJobs
 from app.modules.dealing.jobs import DealingJobs
 from app.modules.documents.jobs import DocumentJobs
+from app.modules.goals.jobs import GoalJobs
 from app.modules.investments.jobs import InvestmentJobs
 from app.modules.kyc.jobs import ProviderJobs, sweep_unanswered
 from app.modules.kyc.service import SWEEP_UNANSWERED
@@ -46,6 +47,7 @@ def handlers(
         **AutoinvestJobs(database, clock).handlers(),
         **DealingJobs(clock).handlers(),
         **DocumentJobs(database, clock).handlers(),
+        **GoalJobs(database, clock).handlers(),
     }
     identity = KycSettings()
     if identity.identity_provider != "manual":

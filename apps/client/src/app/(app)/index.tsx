@@ -4,6 +4,7 @@ import { useRouter } from "expo-router";
 import { useAuth } from "@/auth/AuthProvider";
 import { useSecondSteps } from "@/auth/useSecondSteps";
 import { AppPage } from "@/components/AppPage";
+import { Bell } from "@/components/Bell";
 import { Notice } from "@/components/Blocks";
 import { Icon } from "@/components/Icon";
 import { LinkCard } from "@/components/LinkCard";
@@ -36,6 +37,7 @@ export default function Home() {
       subtitle={
         wide ? "The same account as your phone, on a bigger screen." : undefined
       }
+      action={<Bell />}
     >
       {session?.restricted ? (
         <Notice tone="warning">
