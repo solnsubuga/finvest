@@ -384,6 +384,68 @@ async def test_an_entry_with_fewer_than_two_lines_cannot_be_committed(
     assert await balances(application_database, books) == (0, 0)
 
 
+async def test_an_early_check_does_not_let_a_later_line_through(
+    application_database: Database, fake_clock: FakeClock
+) -> None:
+    # SET CONSTRAINTS ... IMMEDIATE runs the deferred check on the spot. A line added after it,
+    # in the same transaction, must be checked again or money appears from nothing.
+    books = await funded_books(application_database, fake_clock, 0)
+    other = await funded_books(application_database, fake_clock, 0)
+    entry = push_id()
+    with pytest.raises(DBAPIError, match="lines must sum to zero"):
+        async with application_database.actor_transaction(
+            operator(application_database)
+        ) as session:
+            await session.execute(INSERT_ENTRY, {"id": entry, "key": key(), "reverses": None})
+            for line_no, (account, amount) in enumerate(
+                [(books.cash, 100), (books.holding, -100)], start=1
+            ):
+                await session.execute(
+                    INSERT_LINE,
+                    {"entry": entry, "line_no": line_no, "account": account, "amount": amount},
+                )
+            await session.execute(text("SET CONSTRAINTS ALL IMMEDIATE"))
+            await session.execute(
+                INSERT_LINE,
+                {"entry": entry, "line_no": 3, "account": other.cash, "amount": 5_000},
+            )
+    assert await balances(application_database, books) == (0, 0)
+    assert await balances(application_database, other) == (0, 0)
+
+
+async def test_an_early_check_does_not_let_a_reversal_stop_mirroring(
+    application_database: Database, fake_clock: FakeClock
+) -> None:
+    books = await funded_books(application_database, fake_clock, 1_000)
+    other = await funded_books(application_database, fake_clock, 1_000)
+    original = await raw_entry(application_database, [(books.cash, 300), (books.holding, -300)])
+    entry = push_id()
+    with pytest.raises(DBAPIError, match="must mirror the entry it reverses"):
+        async with application_database.actor_transaction(
+            operator(application_database)
+        ) as session:
+            await session.execute(INSERT_ENTRY, {"id": entry, "key": key(), "reverses": original})
+            lines = [(books.cash, -300), (books.holding, 300)]
+            for line_no, (account, amount) in enumerate(lines, start=1):
+                await session.execute(
+                    INSERT_LINE,
+                    {"entry": entry, "line_no": line_no, "account": account, "amount": amount},
+                )
+            await session.execute(text("SET CONSTRAINTS ALL IMMEDIATE"))
+            # A balanced pair on other accounts: only the mirror rule can refuse it. With checks
+            # immediate, the first of the pair is refused as unbalanced, so defer them again.
+            await session.execute(text("SET CONSTRAINTS ALL DEFERRED"))
+            for line_no, (account, amount) in enumerate(
+                [(other.holding, 50), (other.cash, -50)], start=3
+            ):
+                await session.execute(
+                    INSERT_LINE,
+                    {"entry": entry, "line_no": line_no, "account": account, "amount": amount},
+                )
+    assert await balances(application_database, books) == (1_300, 1_300)
+    assert await balances(application_database, other) == (1_000, 1_000)
+
+
 async def test_a_zero_line_is_refused(
     application_database: Database, fake_clock: FakeClock
 ) -> None:
@@ -814,6 +876,58 @@ async def test_a_client_request_can_post_and_replay_its_own_entry(
         with pytest.raises(IdempotencyKeyReused):
             await ledger.post_entry(session, draft, fake_clock)
     assert await balances(app_database, books) == (6_000, 6_000)
+
+
+async def test_a_client_command_can_post_against_a_system_account_it_cannot_read(
+    app_database: Database, fake_clock: FakeClock
+) -> None:
+    code = f"test.payouts_in_transit_{push_id().lower().replace('-', 'x').replace('_', 'y')}"
+    alice = client()
+    async with app_database.actor_transaction(staff()) as session:
+        system = await ledger.open_account(
+            session,
+            AccountSpec(code, AccountKind.LIABILITY, Currency.UGX, "Payouts in transit"),
+            fake_clock,
+        )
+        # Same code, but a client's account and a referenced one: neither is the system account.
+        await ledger.open_account(
+            session,
+            AccountSpec(code, AccountKind.LIABILITY, Currency.UGX, "Hers", alice.id),
+            fake_clock,
+        )
+        await ledger.open_account(
+            session,
+            AccountSpec(code, AccountKind.LIABILITY, Currency.UGX, "Other", reference=push_id()),
+            fake_clock,
+        )
+        books = await open_books(session, fake_clock, alice)
+        await ledger.post_entry(session, deposit(books, 10_000), fake_clock)
+
+    async with app_database.actor_transaction(alice) as session:
+        found = await ledger.system_account_id(session, code, Currency.UGX)
+        assert found == system.id
+        with pytest.raises(UnknownAccount):
+            await ledger.get_balance(session, found)
+        with pytest.raises(UnknownAccount):
+            await ledger.system_account_id(session, code, Currency.USD)
+        with pytest.raises(UnknownAccount):
+            await ledger.system_account_id(session, "test.no_such_account", Currency.UGX)
+        await ledger.post_entry(
+            session,
+            EntryDraft(
+                entry_type="test.payout_requested",
+                effective_date=DAY,
+                lines=(debit(books.holding, ugx(4_000)), credit(found, ugx(4_000))),
+                idempotency_key=key(),
+            ),
+            fake_clock,
+        )
+    async with app_database.actor_transaction(staff()) as session:
+        assert (await ledger.get_balance(session, system.id)).minor == 4_000
+        assert (await ledger.get_balance(session, books.holding)).minor == 6_000
+    # With no actor at all the lookup still gives only an ID.
+    async with app_database.transaction() as session:
+        assert await ledger.system_account_id(session, code, Currency.UGX) == system.id
 
 
 # The whole ledger

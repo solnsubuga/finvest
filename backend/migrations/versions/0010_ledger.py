@@ -8,8 +8,9 @@ The rules in docs/rules.md are enforced here, not only in application code:
 * Insert only. The service roles hold SELECT and INSERT on accounts, entries and lines, and
   SELECT on balances. Triggers refuse UPDATE, DELETE and TRUNCATE for every role, the table
   owner included.
-* Every entry balances. A deferred constraint trigger checks at commit that an entry has at
-  least two lines and that they sum to zero.
+* Every entry balances. Deferred constraint triggers on the entry and on each of its lines
+  check at commit that an entry has at least two lines and that they sum to zero. A check made
+  early is made again for any line added after it.
 * History is closed. Lines can be added only by the transaction that created their entry.
 * Balances never go negative. Each line updates its account's cached balance in the same
   statement, and a CHECK constraint refuses a balance below zero.
@@ -189,11 +190,22 @@ CREATE FUNCTION finvest_ledger_check_entry() RETURNS trigger
     LANGUAGE plpgsql SECURITY DEFINER SET search_path = pg_catalog, pg_temp
     AS $$
     DECLARE
+        checked_id public.push_id;
+        reversed_id public.push_id;
         line_count bigint;
         line_total numeric;
     BEGIN
+        -- Fired for the entry row and again for every line, so a check that ran early (after
+        -- SET CONSTRAINTS ... IMMEDIATE) is queued again by any line added after it.
+        IF TG_TABLE_NAME = 'ledger_lines' THEN
+            checked_id := NEW.entry_id;
+        ELSE
+            checked_id := NEW.id;
+        END IF;
+        SELECT reverses_entry_id INTO reversed_id
+        FROM public.ledger_journal_entries WHERE id = checked_id;
         SELECT count(*), coalesce(sum(amount_minor), 0) INTO line_count, line_total
-        FROM public.ledger_lines WHERE entry_id = NEW.id;
+        FROM public.ledger_lines WHERE entry_id = checked_id;
         IF line_count < 2 THEN
             RAISE EXCEPTION 'journal entry needs at least two lines'
                 USING ERRCODE = '23514', CONSTRAINT = 'ledger_entry_has_lines';
@@ -202,24 +214,24 @@ CREATE FUNCTION finvest_ledger_check_entry() RETURNS trigger
             RAISE EXCEPTION 'journal entry lines must sum to zero'
                 USING ERRCODE = '23514', CONSTRAINT = 'ledger_entry_balanced';
         END IF;
-        IF NEW.reverses_entry_id IS NOT NULL THEN
+        IF reversed_id IS NOT NULL THEN
             IF EXISTS (
                 SELECT FROM public.ledger_journal_entries
-                WHERE id = NEW.reverses_entry_id AND reverses_entry_id IS NOT NULL
+                WHERE id = reversed_id AND reverses_entry_id IS NOT NULL
             ) THEN
                 RAISE EXCEPTION 'a reversal cannot itself be reversed'
                     USING ERRCODE = '23514', CONSTRAINT = 'ledger_reversal_of_reversal';
             END IF;
             IF EXISTS (
-                (SELECT account_id, amount_minor FROM public.ledger_lines WHERE entry_id = NEW.id
+                (SELECT account_id, amount_minor FROM public.ledger_lines WHERE entry_id = checked_id
                  EXCEPT
                  SELECT account_id, -amount_minor FROM public.ledger_lines
-                 WHERE entry_id = NEW.reverses_entry_id)
+                 WHERE entry_id = reversed_id)
                 UNION ALL
                 (SELECT account_id, -amount_minor FROM public.ledger_lines
-                 WHERE entry_id = NEW.reverses_entry_id
+                 WHERE entry_id = reversed_id
                  EXCEPT
-                 SELECT account_id, amount_minor FROM public.ledger_lines WHERE entry_id = NEW.id)
+                 SELECT account_id, amount_minor FROM public.ledger_lines WHERE entry_id = checked_id)
             ) THEN
                 RAISE EXCEPTION 'a reversal must mirror the entry it reverses'
                     USING ERRCODE = '23514', CONSTRAINT = 'ledger_reversal_mirrors';
@@ -229,6 +241,26 @@ CREATE FUNCTION finvest_ledger_check_entry() RETURNS trigger
     END;
     $$
 """,
+]
+
+# A client transaction cannot see Finvest's own accounts, but a client command still posts against
+# them (a payout debits the client's holding and credits a system account). This gives any
+# transaction the ID of a system account by its code, and nothing else about it: not its
+# balance, not its lines.
+SYSTEM_ACCOUNT_LOOKUP = [
+    """
+CREATE FUNCTION finvest_ledger_system_account(account_code text, account_currency text)
+    RETURNS public.push_id
+    LANGUAGE sql STABLE SECURITY DEFINER SET search_path = pg_catalog, pg_temp
+    AS $$
+    SELECT id FROM public.ledger_accounts
+    WHERE code = account_code AND currency = account_currency
+      AND owner_client_id IS NULL AND reference IS NULL
+    $$
+""",
+    "REVOKE ALL ON FUNCTION finvest_ledger_system_account(text, text) FROM PUBLIC",
+    f"GRANT EXECUTE ON FUNCTION finvest_ledger_system_account(text, text) "
+    f"TO {APP_ROLE}, {WORKER_ROLE}",
 ]
 
 TRIGGERS = [
@@ -267,6 +299,8 @@ TRIGGERS = [
     "CREATE TRIGGER ledger_lines_apply AFTER INSERT ON ledger_lines "
     "FOR EACH ROW EXECUTE FUNCTION finvest_ledger_apply_line()",
     "CREATE CONSTRAINT TRIGGER ledger_journal_entries_check AFTER INSERT ON ledger_journal_entries "
+    "DEFERRABLE INITIALLY DEFERRED FOR EACH ROW EXECUTE FUNCTION finvest_ledger_check_entry()",
+    "CREATE CONSTRAINT TRIGGER ledger_lines_check_entry AFTER INSERT ON ledger_lines "
     "DEFERRABLE INITIALLY DEFERRED FOR EACH ROW EXECUTE FUNCTION finvest_ledger_check_entry()",
 ]
 
@@ -328,14 +362,34 @@ def split(sql: str) -> list[str]:
 
 
 def upgrade() -> None:
-    for statement in [*split(TABLES), *FUNCTIONS, *TRIGGERS, *policies()]:
+    for statement in [
+        *split(TABLES),
+        *FUNCTIONS,
+        *TRIGGERS,
+        *SYSTEM_ACCOUNT_LOOKUP,
+        *policies(),
+    ]:
         op.execute(statement)
 
 
+EMPTY_GUARD = """
+DO $$
+BEGIN
+    IF EXISTS (SELECT FROM ledger_accounts) OR EXISTS (SELECT FROM ledger_journal_entries) THEN
+        RAISE EXCEPTION 'refusing to drop a ledger that holds accounts or entries';
+    END IF;
+END
+$$
+"""
+
+
 def downgrade() -> None:
+    # Dropping the tables would delete the books. Only an empty ledger can be downgraded.
+    op.execute(EMPTY_GUARD)
     # Read policies name other ledger tables, so they go before the tables they name.
     for table in ("ledger_journal_entries", "ledger_lines", "ledger_balances"):
         op.execute(f"DROP POLICY {table}_app_read ON {table}")
+    op.execute("DROP FUNCTION finvest_ledger_system_account(text, text)")
     for table in ("ledger_lines", "ledger_journal_entries", "ledger_balances", "ledger_accounts"):
         op.execute(f"DROP TABLE {table}")
     for function in (

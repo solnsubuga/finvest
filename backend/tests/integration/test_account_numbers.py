@@ -3,10 +3,12 @@
 import asyncio
 import secrets
 from collections.abc import Callable
+from contextlib import AbstractAsyncContextManager
 
 import pytest
 from sqlalchemy import text
 from sqlalchemy.exc import DBAPIError
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.infrastructure.database import Database
 from app.modules.account_numbers.domain.numbers import (
@@ -21,6 +23,8 @@ from app.modules.account_numbers.service import (
     is_issued,
     issue_account_number,
 )
+from app.shared.actors import SYSTEM, Actor
+from app.shared.push_ids import push_id
 from tests.support.clock import AsyncBarrier, FakeClock
 from tests.support.ledger import operator
 
@@ -51,7 +55,7 @@ async def test_an_issued_number_is_valid_and_recorded(
         assert await is_issued(session, number)
     assert number.account_type is account_type
     assert AccountNumber(number.value) == number
-    async with application_database.transaction() as session:
+    async with application_database.actor_transaction(operator(application_database)) as session:
         assert await is_issued(session, number)
         issued_at = (
             await session.execute(
@@ -69,7 +73,7 @@ async def test_a_number_is_not_kept_if_the_approval_rolls_back(
         async with app_database.actor_transaction(operator(app_database)) as session:
             number = await issue_account_number(session, AccountType.PERSONAL, fake_clock)
             raise RuntimeError("approval failed")
-    async with app_database.transaction() as session:
+    async with app_database.actor_transaction(operator(app_database)) as session:
         assert not await is_issued(session, number)
 
 
@@ -185,7 +189,7 @@ async def test_the_database_and_python_agree_on_check_digits(app_database: Datab
     bad = [
         value[:9] + str((int(value[9]) + 1 + index % 9) % 10) for index, value in enumerate(good)
     ]
-    async with app_database.transaction() as session:
+    async with app_database.actor_transaction(operator(app_database)) as session:
         results = (
             await session.execute(
                 text(
@@ -226,5 +230,25 @@ async def test_a_number_is_never_changed_or_released(
     with pytest.raises(DBAPIError, match="never changed or removed"):
         async with migrator_database.transaction() as session:
             await session.execute(text(statement))
-    async with app_database.transaction() as session:
+    async with app_database.actor_transaction(operator(app_database)) as session:
         assert await is_issued(session, number)
+
+
+async def test_only_staff_and_the_worker_can_issue_or_look_up_numbers(
+    app_database: Database, fake_clock: FakeClock
+) -> None:
+    async with app_database.actor_transaction(operator(app_database)) as session:
+        number = await issue_account_number(session, AccountType.PERSONAL, fake_clock)
+    outsiders: tuple[Actor | None, ...] = (None, Actor("client", push_id()), SYSTEM)
+
+    def as_outsider(actor: Actor | None) -> AbstractAsyncContextManager[AsyncSession]:
+        return app_database.actor_transaction(actor) if actor else app_database.transaction()
+
+    for outsider in outsiders:
+        async with as_outsider(outsider) as session:
+            assert not await is_issued(session, number)
+            count = (await session.execute(text("SELECT count(*) FROM account_numbers"))).scalar()
+            assert count == 0
+        with pytest.raises(DBAPIError, match="row-level security"):
+            async with as_outsider(outsider) as session:
+                await issue_account_number(session, AccountType.PERSONAL, fake_clock)

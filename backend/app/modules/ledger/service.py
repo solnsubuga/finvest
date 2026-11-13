@@ -87,6 +87,7 @@ _SELECT_ACCOUNT = text(
     "AND owner_client_id IS NOT DISTINCT FROM :owner_client_id "
     "AND reference IS NOT DISTINCT FROM :reference"
 )
+_SELECT_SYSTEM_ACCOUNT = text("SELECT finvest_ledger_system_account(:code, :currency)")
 _INSERT_ENTRY = text(
     "INSERT INTO ledger_journal_entries (id, entry_type, currency, effective_date, posted_at, "
     "idempotency_key, request_digest, source_type, source_id, reverses_entry_id, correlation_id) "
@@ -159,6 +160,22 @@ async def open_account(session: AsyncSession, spec: AccountSpec, clock: Clock) -
     if account.kind is not spec.kind:
         raise AccountMismatch("The account already exists with another kind")
     return account
+
+
+async def system_account_id(session: AsyncSession, code: str, currency: Currency) -> str:
+    """The ID of one of Finvest's own accounts: no owner and no reference.
+
+    Works in any transaction, a client's included, so a client command can post against a
+    system account it is not allowed to read. It gives the ID and nothing else. The account
+    must already exist: system accounts are opened by staff or by the worker, never by a
+    client request.
+    """
+    account_id = (
+        await session.execute(_SELECT_SYSTEM_ACCOUNT, {"code": code, "currency": currency.value})
+    ).scalar_one_or_none()
+    if account_id is None:
+        raise UnknownAccount("No such system account")
+    return str(account_id)
 
 
 async def post_entry(
@@ -268,6 +285,12 @@ async def reverse_entry(
 
 
 async def get_entry(session: AsyncSession, entry_id: str) -> PostedEntry:
+    """The entry as this transaction may see it.
+
+    Staff and the worker get every line. A client transaction gets only the lines on that
+    client's own accounts, so there `lines` is not the whole entry and does not sum to zero.
+    The same is true of a replayed entry returned by `post_entry`.
+    """
     row = (await session.execute(_SELECT_ENTRY_BY_ID, {"id": entry_id})).one_or_none()
     if row is None:
         raise UnknownEntry("No such journal entry")
@@ -376,4 +399,5 @@ __all__ = [
     "open_account",
     "post_entry",
     "reverse_entry",
+    "system_account_id",
 ]

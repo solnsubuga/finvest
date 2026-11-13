@@ -110,6 +110,19 @@ def upgrade() -> None:
         op.execute(statement)
 
 
+EMPTY_GUARD = """
+DO $$
+BEGIN
+    IF EXISTS (SELECT FROM audit_events) THEN
+        RAISE EXCEPTION 'refusing to drop an audit trail that holds events';
+    END IF;
+END
+$$
+"""
+
+
 def downgrade() -> None:
+    # Dropping the table would erase the trail.
+    op.execute(EMPTY_GUARD)
     op.execute("DROP TABLE audit_events")
     op.execute("DROP FUNCTION finvest_audit_events_immutable()")
