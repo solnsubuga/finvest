@@ -324,6 +324,23 @@ ROWS = {
         "'monthly_statement', '2026-10', DATE '2026-10-01', DATE '2026-10-31', now())",
         "refusing to drop documents",
     ),
+    "0141_document_emails": (
+        # Only the worker queues an email, and only for a ready document. The migrator owns
+        # both tables, so it sets their guards aside to write the row this test needs.
+        "BEGIN; "
+        "INSERT INTO documents (id, client_id, kind, idempotency_key, period_start, period_end, "
+        "requested_at) VALUES ('-Nabc0000000000000A1', '-Nabc0000000000000B1', "
+        "'monthly_statement', '2026-10', DATE '2026-10-01', DATE '2026-10-31', now()); "
+        "ALTER TABLE documents DISABLE TRIGGER documents_guard; "
+        "UPDATE documents SET status = 'ready', finished_at = now(), file_name = 'a.pdf', "
+        "content = 'abc', sha256 = sha256('abc'), byte_size = 3; "
+        "ALTER TABLE documents ENABLE TRIGGER documents_guard; "
+        "ALTER TABLE document_emails DISABLE TRIGGER document_emails_guard; "
+        "INSERT INTO document_emails (document_id, client_id, queued_at) VALUES "
+        "('-Nabc0000000000000A1', '-Nabc0000000000000B1', now()); "
+        "ALTER TABLE document_emails ENABLE TRIGGER document_emails_guard; COMMIT",
+        "refusing to drop document emails",
+    ),
     "0042_pot_transfers": (
         "INSERT INTO reconciliation_pot_transfers (id, from_source, from_reference, to_source, "
         "to_reference, currency, sent_minor, received_minor, value_date, provider_reference, "

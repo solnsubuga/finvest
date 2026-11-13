@@ -1,3 +1,4 @@
+import base64
 import json
 
 import httpx
@@ -5,6 +6,7 @@ import pytest
 from pydantic import SecretStr, ValidationError
 
 from app.infrastructure.email import (
+    Attachment,
     DisabledTransport,
     EmailDeferred,
     EmailMessage,
@@ -56,6 +58,52 @@ def resend(handler: httpx.MockTransport) -> ResendTransport:
 def test_a_message_that_could_inject_or_break_is_refused(changes: dict[str, object]) -> None:
     with pytest.raises(InvalidEmail):
         message(**changes)
+
+
+PDF = b"%PDF-1.7 statement"
+
+
+@pytest.mark.parametrize(
+    "file",
+    [
+        {"file_name": "statement.exe", "content": PDF},
+        {"file_name": "../statement.pdf", "content": PDF},
+        {"file_name": "a\nBcc.pdf", "content": PDF},
+        {"file_name": " statement.pdf", "content": PDF},
+        {"file_name": "statement.pdf", "content": b""},
+        {"file_name": "statement.pdf", "content": PDF, "content_type": "text/html"},
+    ],
+)
+def test_an_attachment_that_is_not_a_plain_pdf_is_refused(file: dict[str, object]) -> None:
+    with pytest.raises(InvalidEmail):
+        Attachment(**file)  # type: ignore[arg-type]
+
+
+def test_a_message_takes_a_few_small_attachments_only() -> None:
+    one = Attachment("Finvest statement October 2026.pdf", PDF)
+    assert message(attachments=(one,)).attachments == (one,)
+    with pytest.raises(InvalidEmail, match="too many"):
+        message(attachments=(one,) * 4)
+    with pytest.raises(InvalidEmail, match="too large"):
+        message(attachments=(Attachment("big.pdf", b"x" * (10 * 1024 * 1024 + 1)),))
+    assert "PDF-1.7" not in repr(one)
+
+
+async def test_resend_gets_an_attachment_as_base64() -> None:
+    seen: list[httpx.Request] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen.append(request)
+        return httpx.Response(200, json={"id": "re_124"})
+
+    file = Attachment("Finvest receipt RC-1.pdf", PDF)
+    await resend(httpx.MockTransport(handler)).send(message(attachments=(file,)))
+    (sent,) = json.loads(seen[0].content)["attachments"]
+    assert sent == {
+        "filename": "Finvest receipt RC-1.pdf",
+        "content": base64.b64encode(PDF).decode(),
+        "content_type": "application/pdf",
+    }
 
 
 def test_a_message_does_not_show_its_content_when_printed() -> None:
