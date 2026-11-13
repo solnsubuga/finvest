@@ -51,6 +51,7 @@ Whenever the stub is active, a banner reading "Sample sign-in. Not connected to 
 | `src/nav/nav.ts` | The menu: groups, screens, and the permission each one needs |
 | `src/routes.tsx` | Routes. Each screen is guarded by its permission, so typing an address does not get around the menu. |
 | `src/components/` | The shell, sidebar and logo |
+| `src/screens/` | One folder per built screen, picked up automatically |
 | `src/pages/` | Sign-in, placeholder, no access and not found |
 
 ### Roles and permissions
@@ -61,9 +62,11 @@ The role to screen table in `src/auth/stub.ts` is a proposal, read from the role
 
 ### Adding a screen
 
-1. Build the page in `src/pages/`.
-2. In `src/routes.tsx`, render it for its menu item in place of the placeholder.
+1. Create a folder in `src/screens/` named after the screen's path in `src/nav/nav.ts`, for example `src/screens/identity-checks/`.
+2. Give it an `index.tsx` that default-exports the page. Keep the screen's other files in the same folder.
 3. Add screenshots to the PR.
+
+That replaces the placeholder. The route, the menu entry and the permission check are already there, and no shared file needs editing, so screens built at the same time do not conflict.
 
 ## Notes
 
