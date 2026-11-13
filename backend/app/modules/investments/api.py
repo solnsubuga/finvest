@@ -247,6 +247,7 @@ async def _transaction(request: Request, actor: Actor | None) -> AsyncIterator[A
 
 ProductsViewer = Annotated[StaffSession, Depends(require_permission("products.view"))]
 RatesViewer = Annotated[StaffSession, Depends(require_permission("rates.view"))]
+RatesChanger = Annotated[StaffSession, Depends(require_permission("rates.change"))]
 InvestmentsViewer = Annotated[StaffSession, Depends(require_permission("investments.view"))]
 
 
@@ -543,7 +544,9 @@ async def pay_out_matured(
 ) -> ClientInvestmentOut:
     """Send on the money of a matured investment that is waiting for a destination.
 
-    Safe to repeat: the same destination asked twice is the same payout.
+    Safe to repeat without an idempotency key: the payout's key is
+    `maturity:<investment id>:<destination id>`, so the same destination asked twice is the
+    same payout.
     """
     try:
         async with _transaction(request, client.actor) as session:
@@ -596,7 +599,7 @@ async def staff_rate_proposals(
 
 @staff_router.post("/rate-proposals", status_code=201)
 async def staff_propose_rate(
-    request: Request, staff: RatesViewer, clock: AppClock, body: ProposalIn
+    request: Request, staff: RatesChanger, clock: AppClock, body: ProposalIn
 ) -> ProposalOut:
     """Propose a new rate. A second member of staff must approve it."""
     async with _transaction(request, staff.actor) as session:
@@ -615,7 +618,7 @@ async def staff_propose_rate(
 
 @staff_router.post("/rate-proposals/{proposal_id}/approve")
 async def staff_approve_rate(
-    request: Request, staff: RatesViewer, clock: AppClock, proposal_id: str
+    request: Request, staff: RatesChanger, clock: AppClock, proposal_id: str
 ) -> ProposalOut:
     async with _transaction(request, staff.actor) as session:
         view = await service.approve_rate(session, staff.actor, proposal_id, clock)
@@ -624,7 +627,7 @@ async def staff_approve_rate(
 
 @staff_router.post("/rate-proposals/{proposal_id}/send-back")
 async def staff_send_back_rate(
-    request: Request, staff: RatesViewer, clock: AppClock, proposal_id: str, body: SendBack
+    request: Request, staff: RatesChanger, clock: AppClock, proposal_id: str, body: SendBack
 ) -> ProposalOut:
     async with _transaction(request, staff.actor) as session:
         view = await service.send_back_rate(session, staff.actor, proposal_id, body.note, clock)
@@ -633,7 +636,7 @@ async def staff_send_back_rate(
 
 @staff_router.post("/rate-proposals/{proposal_id}/withdraw")
 async def staff_withdraw_rate(
-    request: Request, staff: RatesViewer, clock: AppClock, proposal_id: str
+    request: Request, staff: RatesChanger, clock: AppClock, proposal_id: str
 ) -> ProposalOut:
     async with _transaction(request, staff.actor) as session:
         view = await service.withdraw_rate(session, staff.actor, proposal_id, clock)
