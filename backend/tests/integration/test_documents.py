@@ -32,6 +32,7 @@ from app.modules.documents.events import RECEIPT_KIND
 from app.modules.documents.jobs import DocumentJobs
 from app.modules.documents.service import DocumentKind, DocumentStatus
 from app.modules.identity import service as identity_service
+from app.modules.identity.email_checks import EmailCheckService
 from app.modules.identity.hashing import PasswordHasher
 from app.modules.identity.service import ClientContact, IdentityService
 from app.modules.investments import accrual
@@ -902,13 +903,30 @@ async def test_a_client_asks_for_and_downloads_a_statement_over_http(
 # Emailing ----------------------------------------------------------------------------------------
 
 
-async def client_with_email(identity: IdentityService, app_database: Database) -> Actor:
-    """An approved client who can be reached at an email address."""
+async def client_with_email(
+    identity: IdentityService,
+    app_database: Database,
+    worker_database: Database,
+    *,
+    proved: bool = True,
+) -> Actor:
+    """An approved client who can be reached at an email address, proved with a link unless not."""
+    address = f"amara.{push_id().lower().replace('_', '').replace('-', '')}@example.com"
     client_id = await identity.create_client(
-        phone=f"+2567{abs(hash(push_id())) % 10**8:08d}",
-        email=f"amara.{push_id().lower().replace('_', '').replace('-', '')}@example.com",
-        password=PASSWORD,
+        phone=f"+2567{abs(hash(push_id())) % 10**8:08d}", email=address, password=PASSWORD
     )
+    if proved:
+        checks = EmailCheckService(app_database, FakeClock(), "https://app.finvestug.com")
+        assert await checks.send_link(client_id)
+        async with worker_database.transaction() as session:
+            link = await session.scalar(
+                text(
+                    "SELECT variables->>'link' FROM notification_messages "
+                    "WHERE recipient = :r AND template = 'email_verification'"
+                ),
+                {"r": address},
+            )
+        await checks.confirm(link.split("#", 1)[1])
     client = Actor("client", client_id)
     async with app_database.actor_transaction(client) as session:
         await ready_draft(session, client, LATER)
@@ -936,7 +954,7 @@ async def test_a_ready_statement_is_emailed_once_with_its_pdf_attached(
     worker_database: Database,
 ) -> None:
     _, identity = http
-    client = await client_with_email(identity, app_database)
+    client = await client_with_email(identity, app_database, worker_database)
     asked = await ask(app_database, client)
     email = FakeEmail()
     await run_jobs(worker_database, email=email)
@@ -976,7 +994,7 @@ async def test_an_unclaimed_account_is_not_sent_a_document(
     # Identity answers for an account carried over from Finvest 1.0 so it can be reminded to
     # claim it, and says it is unclaimed. Identity's own tests cover when that is so.
     _, identity = http
-    client = await client_with_email(identity, app_database)
+    client = await client_with_email(identity, app_database, worker_database)
     real = identity_service.client_contact
 
     async def unclaimed(session: AsyncSession, client_id: str) -> ClientContact | None:
@@ -989,6 +1007,22 @@ async def test_an_unclaimed_account_is_not_sent_a_document(
     await run_jobs(worker_database, email=email)
     assert email.sent == []
     assert await emails_of(worker_database, asked.id) == [("skipped", "no_email")]
+
+
+async def test_an_address_the_client_has_not_proved_is_not_sent_a_document(
+    http: tuple[httpx.AsyncClient, IdentityService],
+    app_database: Database,
+    worker_database: Database,
+) -> None:
+    # The PDF carries the account number and figures and has no password, so a mistyped
+    # address must not receive it.
+    _, identity = http
+    client = await client_with_email(identity, app_database, worker_database, proved=False)
+    asked = await ask(app_database, client)
+    email = FakeEmail()
+    await run_jobs(worker_database, email=email)
+    assert email.sent == []
+    assert await emails_of(worker_database, asked.id) == [("skipped", "email_not_verified")]
 
 
 async def suppress(app_database: Database, worker_database: Database, address: str) -> None:
@@ -1020,7 +1054,7 @@ async def test_a_suppressed_address_is_not_sent_a_document(
     worker_database: Database,
 ) -> None:
     _, identity = http
-    client = await client_with_email(identity, app_database)
+    client = await client_with_email(identity, app_database, worker_database)
     async with worker_database.actor_transaction(SYSTEM) as session:
         contact = await identity_service.client_contact(session, str(client.id))
     assert contact is not None and contact.email is not None
@@ -1039,7 +1073,7 @@ async def test_a_deferred_email_waits_and_a_refused_one_is_recorded(
     worker_database: Database,
 ) -> None:
     _, identity = http
-    client = await client_with_email(identity, app_database)
+    client = await client_with_email(identity, app_database, worker_database)
     asked = await ask(app_database, client)
     await run_jobs(worker_database, email=FakeEmail(EmailDeferred("Resend is unreachable")))
     assert await emails_of(worker_database, asked.id) == [("queued", None)]
@@ -1086,7 +1120,7 @@ async def test_a_confirmed_payment_gets_a_receipt_that_is_built_and_emailed(
     worker_database: Database,
 ) -> None:
     _, identity = http
-    client = await client_with_email(identity, app_database)
+    client = await client_with_email(identity, app_database, worker_database)
     deposit_id, _ = await confirmed_bank_transfer(app_database, worker_database, client)
     async with worker_database.actor_transaction(SYSTEM) as session:
         # As the outbox delivers `payments.deposit_confirmed` to this consumer. Twice.
