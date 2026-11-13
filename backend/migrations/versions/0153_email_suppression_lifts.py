@@ -14,6 +14,7 @@ Owned by the notifications module. See "Lifting a suppression" in docs/notificat
 * Staff transactions may read the suppression list and the events, which hold only address
   hashes, so the console can list them.
 * A GIN index on the events' recipients finds an address's latest suppressing event.
+* An address that ever sent a spam complaint is never lifted: the guard refuses the proposal.
 """
 
 from alembic import op
@@ -66,15 +67,27 @@ CREATE INDEX ix_notification_email_events_recipients
 # The actor settings are a fence against bugs, not a credential (see migration 0001).
 GUARD = """
 CREATE FUNCTION finvest_notification_email_suppression_lifts_guard() RETURNS trigger
-    LANGUAGE plpgsql SET search_path = pg_catalog, public, pg_temp
+    LANGUAGE plpgsql SET search_path = pg_catalog, pg_temp
     AS $$
     BEGIN
-        IF finvest_actor_kind() IS DISTINCT FROM 'staff' THEN
+        IF public.finvest_actor_kind() IS DISTINCT FROM 'staff' THEN
             RAISE EXCEPTION 'only staff lift a suppression' USING ERRCODE = '42501';
         END IF;
         IF TG_OP = 'INSERT' THEN
-            IF NEW.status <> 'proposed' OR NEW.proposed_by <> finvest_actor_id() THEN
+            IF NEW.status <> 'proposed' OR NEW.proposed_by <> public.finvest_actor_id() THEN
                 RAISE EXCEPTION 'a lift starts as a proposal by the acting member of staff'
+                    USING ERRCODE = '42501';
+            END IF;
+            -- A spam complaint is the person refusing our email. It is never lifted.
+            IF EXISTS (
+                SELECT FROM public.notification_email_suppressions AS s
+                WHERE s.address_hash = NEW.address_hash AND s.reason = 'complained'
+            ) OR EXISTS (
+                SELECT FROM public.notification_email_events AS e
+                WHERE e.recipients @> ARRAY[NEW.address_hash::text]
+                  AND e.delivery = 'complained'
+            ) THEN
+                RAISE EXCEPTION 'an address that complained is never lifted'
                     USING ERRCODE = '42501';
             END IF;
             RETURN NEW;
@@ -82,11 +95,16 @@ CREATE FUNCTION finvest_notification_email_suppression_lifts_guard() RETURNS tri
         IF OLD.status <> 'proposed' THEN
             RAISE EXCEPTION 'a decided lift never changes' USING ERRCODE = '42501';
         END IF;
-        IF NEW.status = 'proposed' OR NEW.decided_by IS DISTINCT FROM finvest_actor_id()
+        IF NEW.status = 'proposed' OR NEW.decided_by IS DISTINCT FROM public.finvest_actor_id()
             OR (to_jsonb(NEW) - ARRAY['status', 'decided_by', 'decided_at', 'decision_reason'])
                <> (to_jsonb(OLD) - ARRAY['status', 'decided_by', 'decided_at',
                                          'decision_reason']) THEN
             RAISE EXCEPTION 'a lift is decided once, by the acting member of staff'
+                USING ERRCODE = '42501';
+        END IF;
+        IF NOT EXISTS (SELECT FROM public.identity_staff
+                       WHERE id = NEW.decided_by AND status = 'active') THEN
+            RAISE EXCEPTION 'only an active member of staff decides a lift'
                 USING ERRCODE = '42501';
         END IF;
         RETURN NEW;

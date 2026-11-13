@@ -15,6 +15,7 @@ from app.modules.notifications.domain.email_events import address_hash
 from app.modules.notifications.email_delivery import is_suppressed
 from app.shared.actors import Actor
 from app.shared.errors import ApplicationError
+from app.shared.push_ids import push_id
 from tests.support.database import TestDatabase
 from tests.support.http import Api, running_api
 
@@ -117,11 +118,80 @@ async def test_a_transient_bounce_after_a_lift_does_not_suppress(
     api: Api, migrator_database: Database, worker_database: Database
 ) -> None:
     address = an_address()
-    await bounce(migrator_database, address, api.clock.now() - timedelta(days=1), "complained")
+    await bounce(migrator_database, address, api.clock.now() - timedelta(days=1))
     await lift(api, address, await api.staff("support"), await api.staff("admin"))
     api.clock.advance(hours=1)
     await bounce(migrator_database, address, api.clock.now(), permanent=False)
     assert not await suppressed(worker_database, address)
+
+
+async def test_an_address_that_complained_is_never_lifted(
+    api: Api, migrator_database: Database, worker_database: Database
+) -> None:
+    address = an_address()
+    hashed = address_hash(address)
+    await bounce(migrator_database, address, api.clock.now(), "complained")
+    await api.staff("admin")
+    found = (
+        await api.http.post("/staff/email-suppressions/lookup", json={"email": address})
+    ).json()["suppression"]
+    assert (found["suppressed"], found["complained"]) == (True, True)
+    refused = await api.http.post(
+        f"/staff/email-suppressions/{hashed}/lifts", json={"reason": "Client asked"}
+    )
+    assert refused.status_code == 409
+    assert refused.json()["error"]["fields"][0]["code"] == "complained"
+    assert await suppressed(worker_database, address)
+
+
+async def test_a_complaint_after_a_lifted_bounce_blocks_any_further_lift(
+    api: Api, migrator_database: Database
+) -> None:
+    address = an_address()
+    await bounce(migrator_database, address, api.clock.now() - timedelta(days=1))
+    await lift(api, address, await api.staff("support"), await api.staff("admin"))
+    api.clock.advance(hours=1)
+    await bounce(migrator_database, address, api.clock.now(), "complained")
+    staff = await api.staff("support")
+    with pytest.raises(ApplicationError) as refused:
+        async with api.database.actor_transaction(staff) as session:
+            await lifts.propose(session, staff, address_hash(address), "Again", api.clock)
+    assert refused.value.code == "conflict"
+
+
+async def test_the_database_refuses_to_lift_a_complaint(
+    api: Api, migrator_database: Database
+) -> None:
+    address = an_address()
+    await bounce(migrator_database, address, api.clock.now(), "complained")
+    staff = await api.staff("support")
+    with pytest.raises(DBAPIError, match="complained is never lifted"):
+        async with api.database.actor_transaction(staff) as session:
+            await session.execute(
+                text(
+                    "INSERT INTO notification_email_suppression_lifts (id, address_hash, "
+                    "reason, proposed_by, proposed_at) VALUES (:id, :hash, 'x', :me, now())"
+                ),
+                {"id": push_id(), "hash": address_hash(address), "me": staff.id},
+            )
+
+
+async def test_a_member_of_staff_no_longer_active_cannot_decide(
+    api: Api, migrator_database: Database
+) -> None:
+    address = an_address()
+    await bounce(migrator_database, address, api.clock.now())
+    maker, checker = await api.staff("support"), await api.staff("operations")
+    async with api.database.actor_transaction(maker) as session:
+        proposal = await lifts.propose(session, maker, address_hash(address), "Fixed", api.clock)
+    async with migrator_database.transaction() as session:
+        await session.execute(
+            text("UPDATE identity_staff SET status = 'disabled' WHERE id = :id"),
+            {"id": checker.id},
+        )
+    with pytest.raises(DBAPIError, match="only an active member of staff"):
+        async with api.database.actor_transaction(checker) as session:
+            await lifts.decide(session, checker, proposal.id, "approved", "Checked", api.clock)
 
 
 async def test_nobody_approves_their_own_lift(api: Api, migrator_database: Database) -> None:

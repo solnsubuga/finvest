@@ -101,17 +101,20 @@ Only facts are kept. Each address is stored as the sha256 of its lower-cased for
 
 ### Lifting a suppression
 
-An address on the suppression list gets no email. When the client has fixed their inbox, or the complaint was a mistake, staff can send to it again, with two people (`suppression_lifts.py`, migration `0153_email_suppression_lifts`):
+An address on the suppression list gets no email. When a client whose address bounced has fixed their inbox, staff can send to it again, with two people (`suppression_lifts.py`, migration `0153_email_suppression_lifts`):
 
 | Route | Who | Use |
 | --- | --- | --- |
 | `GET /staff/email-suppressions` | `clients.view` | The newest 200 suppressions: the address hash, bounced or complained, when, the latest suppressing event, whether it still applies, and any lift waiting. |
 | `POST /staff/email-suppressions/lookup` | `clients.view` | Whether one address is suppressed. The address is sent in the body, hashed, and never stored or logged. |
-| `POST /staff/email-suppressions/{address_hash}/lifts` | `email_suppressions.lift` | Propose a lift, with a reason. Only for an address that is suppressed now. |
+| `POST /staff/email-suppressions/{address_hash}/lifts` | `email_suppressions.lift` | Propose a lift, with a reason. Only for an address that is suppressed now and never complained. |
 | `POST /staff/email-suppressions/lifts/{id}/decision` | `email_suppressions.lift` | `approved` or `rejected` by someone else, `withdrawn` by the proposer, with a reason. |
 
 `email_suppressions.lift` is held by admin, operations and support.
 
+- **A complaint is never lifted.** A spam complaint is the person telling their mail provider they do not want our email. An address that ever complained, before or after a lift, is refused with `complained`, by the API and by PostgreSQL. The list shows `complained: true` so the console offers no lift.
+- **Resend keeps its own list.** Resend suppresses the address on its side too, so lifting ours does not by itself make Resend deliver: the next email would be dropped there. After approving a lift, the approver removes the address from the suppression list in the Resend dashboard. This is a manual step for now. A later job may call Resend's API for it, from the worker and outside any transaction.
+- **Only active staff decide.** PostgreSQL refuses a decision by a member of staff who is no longer active.
 - **Nothing is erased.** The suppression row and its events stay. An approved lift outweighs the suppressing events before it.
 - **A new bounce suppresses again.** `is_suppressed` finds the address's latest lasting bounce or complaint in `notification_email_events` (a GIN index on `recipients`) and compares it with the latest approved lift. A bounce Resend calls transient never suppresses.
 - **Two people.** The database refuses a lift decided by its proposer, and one open lift per address.

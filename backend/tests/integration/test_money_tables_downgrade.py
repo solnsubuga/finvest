@@ -273,6 +273,19 @@ ROWS = {
         "'-Nabc0000000000000B1', now(), 'Sweep')",
         "refusing to drop pot transfers",
     ),
+    "0153_email_suppression_lifts": (
+        "BEGIN; SELECT set_config('finvest.actor_kind', 'staff', true); "
+        "SELECT set_config('finvest.actor_id', '-Nabc0000000000000S1', true); "
+        "INSERT INTO notification_email_events (svix_id, delivery, email_id, recipients, "
+        "permanent, received_at) VALUES ('msg_lift1', 'bounced', 'email-1', "
+        "ARRAY[repeat('a', 64)], true, now()); "
+        "INSERT INTO notification_email_suppressions (address_hash, reason, svix_id, created_at) "
+        "VALUES (repeat('a', 64), 'bounced', 'msg_lift1', now()); "
+        "INSERT INTO notification_email_suppression_lifts (id, address_hash, reason, "
+        "proposed_by, proposed_at) VALUES ('-Nabc0000000000000A1', repeat('a', 64), "
+        "'Fixed their inbox', '-Nabc0000000000000S1', now()); COMMIT",
+        "refusing to drop suppression lifts",
+    ),
 }
 
 

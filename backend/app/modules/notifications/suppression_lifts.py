@@ -6,6 +6,8 @@ different one approves it. Nothing in the suppression list is updated or deleted
 outweighs the suppressing events before it, and a bounce or complaint after the lift
 suppresses the address again. Migration 0153 holds the rules PostgreSQL enforces.
 
+An address that ever sent a spam complaint is never lifted.
+
 Every function works inside the caller's staff transaction. Addresses are only ever held as
 hashes (`address_hash`); an address typed into the console is hashed and never stored.
 """
@@ -43,6 +45,12 @@ LATEST_LIFT = (
     "(SELECT max(l.decided_at) FROM notification_email_suppression_lifts l "
     "WHERE l.address_hash = {hash} AND l.status = 'approved')"
 )
+# A spam complaint is the person refusing our email, so an address that ever complained is
+# never lifted. PostgreSQL refuses the proposal too.
+EVER_COMPLAINED = (
+    "(s.reason = 'complained' OR EXISTS (SELECT FROM notification_email_events e "
+    "WHERE e.recipients @> ARRAY[s.address_hash]::text[] AND e.delivery = 'complained'))"
+)
 # True while the address is on the list and no lift has come after its latest suppressing
 # event. Used by the worker before every email, and by the console.
 SUPPRESSED_NOW = "({lift} IS NULL OR {lift} < coalesce({event}, s.created_at))"
@@ -79,6 +87,8 @@ class Suppression:
     suppressed: bool
     lifted_at: datetime | None
     open_lift: Lift | None
+    # True when the address ever sent a spam complaint. Such an address is never lifted.
+    complained: bool
 
 
 _LIFT_COLUMNS = (
@@ -89,7 +99,8 @@ _SUPPRESSIONS = (
     "SELECT s.address_hash, s.reason, s.created_at, "  # noqa: S608 - fixed SQL only
     f"{LATEST_SUPPRESSING.format(hash='s.address_hash')} AS last_event_at, "
     f"{suppressed_now('s.address_hash')} AS suppressed, "
-    f"{LATEST_LIFT.format(hash='s.address_hash')} AS lifted_at "
+    f"{LATEST_LIFT.format(hash='s.address_hash')} AS lifted_at, "
+    f"{EVER_COMPLAINED} AS complained "
     "FROM notification_email_suppressions s "
 )
 _LIST = text(_SUPPRESSIONS + "ORDER BY s.created_at DESC, s.address_hash LIMIT :limit")
@@ -144,6 +155,8 @@ async def propose(
         raise ApplicationError("not_found")
     if not current.suppressed:
         raise _refused("not_suppressed")
+    if current.complained:
+        raise _refused("complained")
     lift_id = push_id(clock)
     try:
         async with session.begin_nested():
@@ -231,6 +244,7 @@ def _suppression(row: Row[Any], open_lift: Lift | None) -> Suppression:
         suppressed=row.suppressed,
         lifted_at=row.lifted_at,
         open_lift=open_lift,
+        complained=row.complained,
     )
 
 

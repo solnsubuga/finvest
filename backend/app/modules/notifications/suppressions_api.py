@@ -69,6 +69,8 @@ class SuppressionView(Contract):
     last_event_at: datetime | None
     suppressed: bool
     lifted_at: datetime | None
+    # Never lifted: the address sent a spam complaint.
+    complained: bool
     open_lift: LiftView | None
 
 
@@ -145,6 +147,7 @@ def _view(item: lifts.Suppression, staff: StaffSession) -> SuppressionView:
         last_event_at=item.last_event_at,
         suppressed=item.suppressed,
         lifted_at=item.lifted_at,
+        complained=item.complained,
         open_lift=_lift(item.open_lift, staff) if item.open_lift else None,
     )
 
