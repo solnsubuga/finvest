@@ -25,6 +25,10 @@ async function press(label: string) {
   await fireEvent.press(screen.getByText(label));
 }
 
+// The first test in a file renders the whole router from cold, which takes several seconds on
+// a busy CI runner. The assertions are unchanged; only the time allowed to reach them is.
+jest.setTimeout(30_000);
+
 describe("the shell, from the first screen", () => {
   it("sends a signed-out visitor to the welcome screen", async () => {
     await openApp();

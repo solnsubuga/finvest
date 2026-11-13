@@ -61,6 +61,24 @@ resource "cloudflare_zero_trust_access_policy" "admin_staff" {
   }]
 }
 
+# Until switch day the production client app is for staff only, like the back office. The API
+# stays public: provider callbacks, Resend webhooks and the phone apps call it directly. The
+# phone apps are held back from the stores until this is lifted (docs/launch.md).
+resource "cloudflare_zero_trust_access_application" "app" {
+  count = var.environment == "production" && !var.client_app_public ? 1 : 0
+
+  zone_id          = data.cloudflare_zone.this.id
+  name             = "${local.name} client app (staff only until launch)"
+  domain           = var.app_domain
+  type             = "self_hosted"
+  session_duration = "12h"
+
+  policies = [{
+    id         = cloudflare_zero_trust_access_policy.admin_staff[0].id
+    precedence = 1
+  }]
+}
+
 resource "cloudflare_zero_trust_access_application" "admin" {
   count = length(var.admin_access_emails) > 0 ? 1 : 0
 

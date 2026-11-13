@@ -577,7 +577,7 @@ async def test_the_worker_can_read_how_to_reach_a_client_and_nothing_more(
     phone, client_id = await a_client(api)
     async with worker_database.transaction() as session:
         contact = await client_contact(session, client_id)
-        assert contact == ClientContact(phone, None)
+        assert contact == ClientContact(phone, None, claimed=True)
         assert await client_contact(session, "-Nabc0000000000000Z9") is None
     for column in ("password_hash", "restricted_until", "created_at"):
         with pytest.raises(DBAPIError, match="permission denied"):
@@ -604,7 +604,8 @@ async def test_the_api_can_change_only_the_account_columns_sign_in_needs(api: Ap
     for statement, account in (
         ("UPDATE identity_staff SET role = 'admin' WHERE id = :id", staff_id),
         ("UPDATE identity_staff SET email = 'other@example.com' WHERE id = :id", staff_id),
-        ("UPDATE identity_clients SET phone = '+256772000001' WHERE id = :id", client_id),
+        ("UPDATE identity_clients SET email = 'other@example.com' WHERE id = :id", client_id),
+        ("UPDATE identity_clients SET created_at = now() WHERE id = :id", client_id),
         ("UPDATE identity_clients SET status = 'closed' WHERE id = :id", client_id),
     ):
         with pytest.raises(DBAPIError, match="permission denied"):

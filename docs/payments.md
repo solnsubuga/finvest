@@ -80,6 +80,8 @@ Client routes, signed in as the client. Each `POST` needs an `Idempotency-Key`.
 | `GET /client/investments/{id}/payment` | The investment's payment that has not failed. A `409` from either `POST` means one exists: show this one instead of asking the client to pay again. |
 | `GET /client/payments/{id}` | One payment, the client's own only. |
 
+Every payment leaves a trail in the audit log. A client asking to pay, by mobile money or by bank receipt, writes `payments.deposit_requested` as the client, with the method. When the deposit settles, the system writes `payments.deposit_confirmed` or `payments.deposit_failed`, with the method, what settled it (such as `status_read` or `staff_review`) and, for a failure, the failure code. Amounts and phone numbers are not put in these events: the deposit holds them.
+
 
 Seeing transfers needs `reconciliation.view`. Matching, refusing and approving need `bank_transfers.change`, because they confirm money. Admin, operations and finance hold both for now. Opening a transfer writes a `payments.bank_transfer_opened` access event to the audit trail, because the receipt and the bank's narrative can name the client and the sender.
 

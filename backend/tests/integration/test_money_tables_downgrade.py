@@ -2,7 +2,7 @@
 history, the receipts that stop a command running twice, the identity records, the payout
 destinations, the withdrawal limits, the payouts, the migration checks, the imported
 statements, the day closes, the pot transfers, the help chat, the complaints register, the
-goals or the email delivery records."""
+goals, the email delivery records, the unclaimed accounts or the suppression lifts."""
 
 import os
 from collections.abc import Iterator
@@ -133,6 +133,29 @@ ROWS = {
         "'-Nabc0000000000000A1', 'TREA-91', 'UGX', 100000, 97000, DATE '2026-11-19', "
         "DATE '2027-02-18', 'CSD-1'); COMMIT",
         "refusing to drop bills held or settled orders",
+    ),
+    # The owner turns the guards off for this one transaction: a real maturity needs a settled
+    # purchase and its ledger entries, which is more than this test is about.
+    "0082_dealing_maturities": (
+        "BEGIN; "
+        "ALTER TABLE dealing_orders DISABLE TRIGGER dealing_orders_guard; "
+        "ALTER TABLE dealing_lots DISABLE TRIGGER dealing_lots_guard; "
+        "ALTER TABLE dealing_lot_maturities DISABLE TRIGGER dealing_lot_maturities_guard; "
+        "INSERT INTO dealing_orders (id, kind, product_code, currency, face_minor, prepared_by, "
+        "prepared_at) VALUES ('-Nabc0000000000000A1', 'auction_bid', 'TREA-91', 'UGX', 100000, "
+        "'-Nabc0000000000000B1', now()); "
+        "INSERT INTO dealing_lots (id, order_id, product_code, currency, face_minor, cost_minor, "
+        "settled_on, matures_on, custodian_reference) VALUES ('-Nabc0000000000000L1', "
+        "'-Nabc0000000000000A1', 'TREA-91', 'UGX', 100000, 97000, DATE '2026-11-19', "
+        "DATE '2027-02-18', 'CSD-1'); "
+        "INSERT INTO dealing_lot_maturities (lot_id, matured_on, face_minor, cost_minor, "
+        "ledger_entry_id, recorded_at) VALUES ('-Nabc0000000000000L1', DATE '2027-02-18', "
+        "100000, 97000, '-Nabc0000000000000E1', now()); "
+        "ALTER TABLE dealing_orders ENABLE TRIGGER dealing_orders_guard; "
+        "ALTER TABLE dealing_lots ENABLE TRIGGER dealing_lots_guard; "
+        "ALTER TABLE dealing_lot_maturities ENABLE TRIGGER dealing_lot_maturities_guard; "
+        "COMMIT",
+        "refusing to drop bill maturities",
     ),
     "0050_kyc": (
         "INSERT INTO kyc_checks (id, client_id, document_type, document_country, created_at, "
@@ -285,6 +308,11 @@ ROWS = {
         "proposed_by, proposed_at) VALUES ('-Nabc0000000000000A1', repeat('a', 64), "
         "'Fixed their inbox', '-Nabc0000000000000S1', now()); COMMIT",
         "refusing to drop suppression lifts",
+    ),
+    "0009_claims": (
+        "INSERT INTO identity_clients (id, phone, status, created_at) VALUES "
+        "('-Nabc0000000000000A1', '+256772123456', 'unclaimed', now())",
+        "refusing to drop unclaimed accounts or claim codes",
     ),
 }
 
