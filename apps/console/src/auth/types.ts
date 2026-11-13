@@ -56,6 +56,8 @@ export const ACTION_PERMISSIONS = [
   "complaints.close",
   // Proposing or deciding a change to the words of a client message.
   "wordings.change",
+  // Matching a bank transfer to a statement line, refusing it, and approving someone else's match.
+  "bank_transfers.change",
 ] as const;
 
 export const PERMISSIONS = [...SCREEN_PERMISSIONS, ...ACTION_PERMISSIONS] as const;
