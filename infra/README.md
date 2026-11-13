@@ -128,7 +128,7 @@ Repository variables under **Settings → Secrets and variables → Actions → 
 | `CLOUDFLARE_ACCOUNT_ID` | From the Cloudflare dashboard. Required for production. |
 | `ADMIN_ACCESS_EMAILS` | Staff emails allowed into the back office, comma separated. Required for production. |
 | `ALERT_EMAILS` | Optional, comma separated |
-| `CLIENT_APP_PUBLIC` | Leave unset until switch day. Until then the production client app host lets in only `ADMIN_ACCESS_EMAILS`, through Cloudflare Access, while the API stays public. At step T+75 of [docs/launch.md](../docs/launch.md) set it to `true` and run Provision `production` (plan, then apply) to lift Access from the app host. The back office keeps it. |
+| `CLIENT_APP_PUBLIC` | Leave unset until switch day. Until then the production client app host lets in only `ADMIN_ACCESS_EMAILS`, through Cloudflare Access, while the API stays public. On switch day ([docs/launch.md](../docs/launch.md)) set it to `true` and run Provision `production` (plan, then apply) to lift Access from the app host. The back office keeps it. |
 
 ## Provision
 
