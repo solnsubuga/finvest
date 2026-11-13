@@ -8,6 +8,7 @@ A bank transfer arrives as a form with the receipt file. The file is stored firs
 transaction, then the transfer is saved pointing at it, so a saved transfer always has its file.
 """
 
+from collections.abc import Mapping
 from datetime import date, datetime, timedelta
 from typing import Annotated, Literal
 
@@ -22,6 +23,7 @@ from app.infrastructure.storage import FileStorage, InvalidFile, NewFile, Storag
 from app.modules.identity.api import CurrentClient, require_permission
 from app.modules.identity.service import ClientSession, StaffSession
 from app.modules.investments import holdings
+from app.modules.kyc import service as kyc
 from app.modules.payments import bank_transfers as bank
 from app.modules.payments import service
 from app.modules.payments.domain.bank_transfers import (
@@ -42,10 +44,12 @@ from app.modules.payments.domain.deposits import (
 )
 from app.modules.payments.domain.provider import CollectionsProvider
 from app.modules.payments.service import Deposit, DepositRequest
+from app.modules.payments.settings import BankAccountDetails
 from app.modules.reconciliation.statements import StatementLineView
 from app.shared.clock import Clock
 from app.shared.contracts import Contract, PushId
 from app.shared.errors import ApplicationError, ErrorEnvelope, FieldProblem
+from app.shared.money import Currency
 
 logger = structlog.get_logger()
 
@@ -54,6 +58,7 @@ _REFUSALS: dict[int | str, dict[str, object]] = {
     403: {"model": ErrorEnvelope},
     404: {"model": ErrorEnvelope},
     409: {"model": ErrorEnvelope},
+    503: {"model": ErrorEnvelope},
 }
 # Matching a transfer to the bank statement is reconciliation work. Admin, operations and finance.
 BankStaff = Annotated[StaffSession, Depends(require_permission("reconciliation.view"))]
@@ -109,6 +114,19 @@ class PaymentView(Contract):
     receipt: ReceiptView | None
     created_at: datetime
     confirmed_at: datetime | None
+
+
+class BankTransferDetails(Contract):
+    """Where to send a bank transfer for one investment, and what to write on it."""
+
+    bank_name: str
+    account_name: str
+    account_number: str
+    branch: str | None
+    # The client's Finvest account number. The client writes it on the transfer so staff can
+    # find the line on the statement.
+    reference: str
+    amount: MoneyView
 
 
 class MobileMoneyPayment(Contract):
@@ -183,8 +201,45 @@ async def _payment_view(session: AsyncSession, deposit: Deposit) -> PaymentView:
     return _view(deposit)
 
 
-def create_client_router(collections: CollectionsProvider | None) -> APIRouter:
+def create_client_router(
+    collections: CollectionsProvider | None,
+    bank_accounts: Mapping[Currency, BankAccountDetails] | None = None,
+) -> APIRouter:
     router = APIRouter(prefix="/client", tags=["client payments"], responses=_REFUSALS)
+    accounts = dict(bank_accounts or {})
+
+    @router.get("/investments/{investment_id}/bank-transfer-details")
+    async def bank_transfer_details(
+        investment_id: PushId, client: CurrentClient, database: Db, clock: Time
+    ) -> BankTransferDetails:
+        """Where to send a bank transfer for this investment, for exactly the amount owed.
+
+        The same refusals as paying: 404 if it is not the client's, 409 if it can no longer be
+        paid or already has a payment under way or paid (fetch that from
+        `GET /client/investments/{investment_id}/payment`). 503 if no account is set for the
+        investment's currency, so the app offers mobile money instead.
+        """
+        async with database.actor_transaction(client.actor) as session:
+            payable = await holdings.payable_investment(
+                session, client_id=client.client_id, investment_id=investment_id, clock=clock
+            )
+            live = await service.live_deposit_for(
+                session, purpose=Purpose.INVESTMENT, purpose_id=payable.investment_id
+            )
+            if live is not None:
+                raise ApplicationError("conflict")
+            holder = await kyc.account_holder(session, client.client_id)
+        account = accounts.get(payable.amount.currency)
+        if account is None or holder is None:
+            raise ApplicationError("unavailable")
+        return BankTransferDetails(
+            bank_name=account.bank_name,
+            account_name=account.account_name,
+            account_number=account.account_number,
+            branch=account.branch,
+            reference=holder.account_number,
+            amount=MoneyView(minor=payable.amount.minor, currency=payable.amount.currency.value),
+        )
 
     @router.post("/investments/{investment_id}/payments/mobile-money", status_code=201)
     async def pay_by_mobile_money(

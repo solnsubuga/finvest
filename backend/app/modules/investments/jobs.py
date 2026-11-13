@@ -22,8 +22,9 @@ from app.infrastructure.jobs import (
     PermanentJobError,
 )
 from app.infrastructure.jobs import queue as job_queue
-from app.modules.investments import accrual, holdings, maturity
-from app.modules.investments.events import START_KIND
+from app.modules.investments import accrual, holdings, maturity, withdrawal
+from app.modules.investments.events import PAY_EARLY_WITHDRAWAL_KIND, START_KIND, WITHDRAW_KIND
+from app.modules.payouts import payouts
 from app.shared.actors import SYSTEM
 from app.shared.business_day import business_date
 from app.shared.clock import Clock
@@ -46,6 +47,8 @@ class InvestmentJobs:
             CANCEL_UNPAID_KIND: self.cancel_unpaid,
             ACCRUE_KIND: self.accrue_interest,
             MATURE_KIND: self.mature,
+            WITHDRAW_KIND: self.withdraw_early,
+            PAY_EARLY_WITHDRAWAL_KIND: self.pay_early_withdrawal,
         }
 
     async def start_from_deposit(self, job: ClaimedJob, context: JobContext) -> None:
@@ -73,6 +76,46 @@ class InvestmentJobs:
             except ApplicationError as error:
                 raise PermanentJobError(code=f"investment_{error.code}") from error
             return {"investment_id": investment.id, "status": investment.status.value}
+
+        await context.apply(effect)
+
+    async def withdraw_early(self, job: ClaimedJob, context: JobContext) -> None:
+        """A client asked to withdraw early: move the money to payouts for the dealing desk."""
+        investment_id = job.payload.get("investment_id")
+        if not isinstance(investment_id, str):
+            raise PermanentJobError(code="investment_id_missing")
+
+        async def effect(session: AsyncSession) -> Mapping[str, object]:
+            try:
+                investment = await withdrawal.withdraw(session, investment_id, self._clock)
+            except ApplicationError as error:
+                raise PermanentJobError(code=f"investment_{error.code}") from error
+            return {"investment_id": investment.id, "status": investment.status.value}
+
+        await context.apply(effect)
+
+    async def pay_early_withdrawal(self, job: ClaimedJob, context: JobContext) -> None:
+        """The dealing desk funded a withdrawal: create its payout.
+
+        A refusal fails the job for good, and staff see it among the failed jobs: the money is
+        in the client's payout pending account and is not sent on a guess.
+        """
+        data = job.payload.get("data")
+        try:
+            funded = withdrawal.funded_from(dict(data) if isinstance(data, Mapping) else {})
+        except ValueError as error:
+            raise PermanentJobError(code="withdrawal_funded_incomplete") from error
+
+        async def effect(session: AsyncSession) -> Mapping[str, object]:
+            try:
+                # In a savepoint, so a refusal part way leaves nothing of the payout behind.
+                async with session.begin_nested():
+                    investment = await withdrawal.pay_funded(session, funded, self._clock)
+            except payouts.PayoutRefused as refused:
+                raise PermanentJobError(code=f"payout_{refused.code}") from refused
+            except ApplicationError as error:
+                raise PermanentJobError(code=f"investment_{error.code}") from error
+            return {"investment_id": investment.id, "payout_id": investment.withdrawal_payout_id}
 
         await context.apply(effect)
 

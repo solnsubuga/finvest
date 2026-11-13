@@ -12,7 +12,7 @@ from datetime import date, datetime
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.modules.ledger.domain.errors import UnknownAccount
+from app.modules.ledger.domain.errors import MixedAccountKinds, UnknownAccount
 from app.shared.money import Currency, Money
 
 
@@ -45,6 +45,13 @@ _SELECT_BALANCE_AS_OF = text(
     "SELECT coalesce(sum(line.amount_minor), 0) AS debit_minor "
     "FROM ledger_lines AS line JOIN ledger_journal_entries AS entry ON entry.id = line.entry_id "
     "WHERE line.account_id = :account_id AND entry.effective_date <= :on"
+)
+_SELECT_TOTAL = text(
+    "SELECT count(DISTINCT account.kind) AS kinds, "
+    "coalesce(sum(balance.balance_minor), 0)::bigint AS total_minor "
+    "FROM ledger_accounts AS account "
+    "JOIN ledger_balances AS balance ON balance.account_id = account.id "
+    "WHERE account.code = :code AND account.currency = :currency"
 )
 _DEBIT_NORMAL = frozenset({"asset", "expense"})
 
@@ -191,6 +198,20 @@ async def clients_with_accounts(
     return [row.owner_client_id for row in rows.all()]
 
 
+async def total_balance(session: AsyncSession, code: str, currency: Currency) -> Money:
+    """The balances of every account with this code in `currency`, added up, each in its normal
+    direction. Zero when there is none.
+
+    For staff and the worker, who see every account. A client transaction sees only that
+    client's own accounts, so the total would be theirs alone. Refuses a code whose accounts
+    are of more than one kind, since their balances could not be added.
+    """
+    row = (await session.execute(_SELECT_TOTAL, {"code": code, "currency": currency.value})).one()
+    if int(row.kinds) > 1:
+        raise MixedAccountKinds("Accounts with this code are of more than one kind")
+    return Money(int(row.total_minor), currency)
+
+
 async def account_owner(session: AsyncSession, account_id: str) -> str | None:
     """The client the account belongs to, or None for one of Finvest's own accounts."""
     _, _, owner = await _account(session, account_id)
@@ -285,4 +306,5 @@ __all__ = [
     "client_month_totals",
     "client_owed_as_of",
     "clients_with_accounts",
+    "total_balance",
 ]

@@ -1,7 +1,6 @@
 import { View } from "react-native";
 import { Redirect, Stack, useLocalSearchParams, useRouter } from "expo-router";
 
-import { formatE164 } from "@/auth/phone";
 import { Card, Notice } from "@/components/Blocks";
 import { Button, TextLink } from "@/components/Button";
 import { Screen } from "@/components/Screen";
@@ -68,7 +67,7 @@ export default function DepositStatusScreen() {
   }
 
   const network = networkName[deposit.network];
-  const payer = formatE164(deposit.payer);
+  const payer = deposit.payer;
   const amount = formatMoney(deposit.amount);
   const checking = deposit.status === "checking";
   const sent = deposit.status !== "sending";
@@ -147,7 +146,7 @@ function Failed({
       <Stack.Screen options={{ title: "Payment did not go through" }} />
       <View style={{ marginTop: 20, gap: 10 }} accessibilityLiveRegion="polite">
         <Title>Your payment did not go through</Title>
-        <Txt color={colors.muted}>{copy.sentence(network, formatE164(deposit.payer))}</Txt>
+        <Txt color={colors.muted}>{copy.sentence(network, deposit.payer)}</Txt>
       </View>
       <View style={{ marginTop: 20, gap: 16 }}>
         <Card>

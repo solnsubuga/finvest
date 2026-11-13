@@ -1,6 +1,6 @@
 """Build the one FastAPI application. Modules add their routers here."""
 
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Mapping
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
@@ -24,9 +24,16 @@ from app.modules.console import api as console_api
 from app.modules.documents import api as documents_api
 from app.modules.goals import api as goals_api
 from app.modules.identity import api as identity_api
-from app.modules.identity import codes_api, passkeys_api, phone_changes_api, team_api
+from app.modules.identity import (
+    codes_api,
+    email_checks_api,
+    passkeys_api,
+    phone_changes_api,
+    team_api,
+)
 from app.modules.identity.authenticators import AuthenticatorService
 from app.modules.identity.codes import CodeService
+from app.modules.identity.email_checks import EmailCheckService
 from app.modules.identity.hashing import PasswordHasher
 from app.modules.identity.passkeys import PasskeyService
 from app.modules.identity.phone_changes import PhoneChangeService
@@ -43,12 +50,18 @@ from app.modules.notifications import suppressions_api
 from app.modules.payments import api as payments_api
 from app.modules.payments import routes as payment_routes
 from app.modules.payments.domain.provider import CollectionsProvider
-from app.modules.payments.settings import PaymentsSettings
+from app.modules.payments.settings import (
+    BankAccountDetails,
+    BankTransferSettings,
+    PaymentsSettings,
+)
 from app.modules.payments.wiring import collections_provider
 from app.modules.payouts import api as payouts_api
+from app.modules.payouts import staff_api as payouts_staff_api
 from app.modules.support import api as support_api
 from app.shared.clock import Clock, SystemClock
 from app.shared.errors import ErrorEnvelope
+from app.shared.money import Currency
 
 
 def create_app(
@@ -59,6 +72,7 @@ def create_app(
     *,
     collections: CollectionsProvider | None = None,
     storage: FileStorage | None = None,
+    bank_accounts: Mapping[Currency, BankAccountDetails] | None = None,
     email_hooks: WebhookVerifier | None = None,
     identity_sealer: Sealer | None = None,
     identity_provider: IdentityProvider | None = None,
@@ -68,6 +82,8 @@ def create_app(
     clock = clock or SystemClock()
     collections = collections or collections_provider(PaymentsSettings(), clock)
     storage = storage or StorageSettings().storage()
+    if bank_accounts is None:
+        bank_accounts = BankTransferSettings().accounts
     email_hooks = email_hooks or ResendHookSettings().verifier()
     identity_checks = KycSettings()
     if identity_sealer is None and identity_checks.identity_data_key is not None:
@@ -103,6 +119,11 @@ def create_app(
     app.state.authenticators = AuthenticatorService(database, clock, settings, identity, passkeys)
     app.state.codes = CodeService(database, clock, identity, passkeys, hasher)
     app.state.phone_changes = PhoneChangeService(database, clock)
+    app.state.email_checks = EmailCheckService(
+        database,
+        clock,
+        settings.client_allowed_origins[0] if settings.client_allowed_origins else None,
+    )
     install_error_handlers(app)
     # The last middleware added is the outermost, so the request ID exists before anything runs.
     origins = sorted({*settings.client_allowed_origins, *settings.staff_allowed_origins})
@@ -133,6 +154,7 @@ def create_app(
         *passkeys_api.routers,
         *codes_api.routers,
         *phone_changes_api.routers,
+        *email_checks_api.routers,
         *team_api.routers,
         *notifications_api.routers,
         *suppressions_api.routers,
@@ -142,13 +164,14 @@ def create_app(
         *audit_api.routers,
         *payouts_api.routers,
         *approvals_api.routers,
+        *payouts_staff_api.routers,
     ):
         app.include_router(router)
     app.include_router(payments_api.create_router(collections))
     for router in (*goals_api.routers, *autoinvest_api.routers):
         app.include_router(router)
     app.include_router(notification_hooks.create_router(email_hooks))
-    app.include_router(payment_routes.create_client_router(collections))
+    app.include_router(payment_routes.create_client_router(collections, bank_accounts))
     app.include_router(payment_routes.staff_router)
     app.include_router(migration_api.router)
     app.include_router(insights_api.router)

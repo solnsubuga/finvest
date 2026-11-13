@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { createMemoryRouter, RouterProvider } from "react-router";
 import { describe, expect, it } from "vitest";
@@ -49,7 +49,8 @@ describe("staff set-up from a one-time link", () => {
     await user.click(screen.getByRole("button", { name: "Create passkey and finish" }));
 
     expect(await screen.findByText("Sample Invitee, Support")).toBeInTheDocument();
-    expect(router.state.location.pathname).toBe("/overview");
+    // The app opens "/" first and then sends the person to their first screen.
+    await waitFor(() => expect(router.state.location.pathname).toBe("/overview"));
     await expect(api.getEnrolment(STUB_ENROLMENT_TOKEN)).rejects.toMatchObject({ code: "link_expired" });
     expect((await api.startSignIn("invited@finvest.test", "anything")).methods).toEqual(["passkey"]);
   });

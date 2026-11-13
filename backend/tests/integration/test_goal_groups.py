@@ -298,6 +298,10 @@ async def test_the_owner_removes_a_member_but_never_leaves(app_database: Databas
             await refused(groups.remove_member(session, owner, group.id, group.own_goal_id, NOW))
             == "conflict"
         )
+    # The owner sees a member id for the others only; the member sees none at all.
+    seen = await read(app_database, owner, group.id)
+    assert [m.member_id for m in seen.members] == [None, joined.own_goal_id]
+    assert [m.member_id for m in joined.members] == [None, None]
     async with app_database.actor_transaction(owner) as session:
         removed = await groups.remove_member(session, owner, group.id, joined.own_goal_id, NOW)
     assert len(removed.members) == 1

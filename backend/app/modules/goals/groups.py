@@ -86,6 +86,9 @@ class ClientMember:
     joined_at: datetime
     is_you: bool
     is_owner: bool
+    # What the one who set the group up sends to remove this member. Only they see it, and only
+    # for the others. It names the member's own goal, which nobody else can read.
+    member_id: str | None
 
 
 @dataclass(frozen=True, slots=True)
@@ -492,14 +495,14 @@ async def leave_group(session: AsyncSession, client: Actor, group_id: str, clock
 
 
 async def remove_member(
-    session: AsyncSession, client: Actor, group_id: str, member_goal_id: str, clock: Clock
+    session: AsyncSession, client: Actor, group_id: str, member_id: str, clock: Clock
 ) -> ClientGroup:
     """Take a member out of the group. Only the owner may, and never themselves. The member's
     own goal and its savings carry on as theirs. The current invite is withdrawn too, so the
     member cannot rejoin with the link they had."""
     group = await _owned(session, client, group_id)
     members = {m.goal_id: m for m in await _members(session, group) if m.left_at is None}
-    member = members.get(member_goal_id)
+    member = members.get(member_id)
     if member is None:
         raise ApplicationError("not_found")
     if member.client_id == group.owner_client_id:
@@ -575,6 +578,11 @@ async def client_group(
                 joined_at=m.joined_at,
                 is_you=m.client_id == client_id,
                 is_owner=m.client_id == group.owner_client_id,
+                member_id=(
+                    m.goal_id
+                    if group.owner_client_id == client_id and m.client_id != client_id
+                    else None
+                ),
             )
             for m in current
         ],

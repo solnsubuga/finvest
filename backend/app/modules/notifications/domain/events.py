@@ -56,6 +56,11 @@ _SPECS = (
     _event("investment_started", Category.INVESTMENTS, "investments", "amount", "product"),
     _event("investment_maturing", Category.INVESTMENTS, "investments", "product", "date"),
     _event("investment_matured", Category.INVESTMENTS, "investments", "amount", "product"),
+    # Cashing out a running investment before it matures. The amount is what the client gets.
+    _event(
+        "investment_withdrawal_requested", Category.INVESTMENTS, "investments", "amount", "product"
+    ),
+    _event("investment_withdrawal_paid", Category.INVESTMENTS, "investments", "amount", "product"),
     _event("interest_earned", Category.EARNINGS, "investments", "amount", "count"),
     # The account.
     _event("kyc_approved", Category.ACCOUNT, "kyc"),

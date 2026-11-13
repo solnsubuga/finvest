@@ -42,6 +42,8 @@ class InvestmentStatus(StrEnum):
     ACTIVE = "active"
     CANCELLED = "cancelled"
     MATURED = "matured"
+    # Closed early at the client's request. The money went to payouts.
+    WITHDRAWN = "withdrawn"
 
 
 class AtMaturity(StrEnum):
@@ -140,6 +142,19 @@ class HoldReason(StrEnum):
 class MaturityPlan:
     step: MaturityStep
     hold_reason: HoldReason | None = None
+
+
+def can_withdraw_early(
+    status: InvestmentStatus, maturity: date | None, today: date, *, requested: bool
+) -> bool:
+    """Whether the client may ask to withdraw a running investment early.
+
+    Once, while it runs, and up to the day before a fixed term matures: on the day itself the
+    maturity run pays it out or rolls it over as chosen.
+    """
+    if status is not InvestmentStatus.ACTIVE or requested:
+        return False
+    return maturity is None or today < maturity
 
 
 def can_choose_maturity(

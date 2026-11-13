@@ -1,7 +1,10 @@
 import { createApiGoalsClient } from "./apiGoalsClient";
+import { createApiGroupsClient } from "./apiGroupsClient";
+import { GroupsClient } from "./groups";
 import { GoalsClient } from "./types";
 
 type StubModule = typeof import("./stubGoalsClient");
+type GroupStubModule = typeof import("./stubGroupsClient");
 
 /**
  * The in-memory demo shows goals and savings that never happened, so it must
@@ -30,4 +33,24 @@ export function resolveGoalsClient(
     return stub.createStubGoalsClient({ seeded: phone === SEEDED_DEMO_PHONE });
   }
   return createApiGoalsClient();
+}
+
+function loadGroupStub(): GroupStubModule | null {
+  if (process.env.EXPO_PUBLIC_DEMO_AUTH === "1" || process.env.NODE_ENV === "test") {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    return require("./stubGroupsClient") as GroupStubModule;
+  }
+  return null;
+}
+
+/** The same choice for group goals. In the demo a member's own part is a goal in `goals`. */
+export function resolveGroupsClient(
+  phone: string | null,
+  goals: GoalsClient,
+  stub: GroupStubModule | null = loadGroupStub(),
+): GroupsClient {
+  if (stub) {
+    return stub.createStubGroupsClient({ goals, seeded: phone === SEEDED_DEMO_PHONE });
+  }
+  return createApiGroupsClient();
 }

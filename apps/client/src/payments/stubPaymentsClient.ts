@@ -98,6 +98,11 @@ const DEMO_BANK = {
   reference: "1001004827",
 };
 
+/** The paying number as the API shows it again: "+256 77• ••• •56". */
+export function maskPhone(e164: string): string {
+  return `${e164.slice(0, 4)} ${e164.slice(4, 6)}• ••• •${e164.slice(-2)}`;
+}
+
 type StoredTransfer = { submission: BankReceiptSubmission; id: string; submittedAtMs: number };
 
 type Stored = { request: MobileMoneyRequest; id: string; requestedAtMs: number; scenario: string };
@@ -153,7 +158,7 @@ export function createStubPaymentsClient(options: StubOptions = {}): PaymentsCli
       payable,
       amount: payable.amount,
       network: stored.request.network,
-      payer: stored.request.payer,
+      payer: maskPhone(stored.request.payer),
       status: outcome.status,
       failure: outcome.failure,
       requestedAt: new Date(stored.requestedAtMs).toISOString(),
@@ -195,7 +200,7 @@ export function createStubPaymentsClient(options: StubOptions = {}): PaymentsCli
         throw new PaymentError("not_payable");
       }
       if (status !== "failed") {
-        throw new PaymentError("already_paying");
+        throw new PaymentError("already_paying", { id: stored.id, method: "mobile_money" });
       }
     }
     for (const stored of transfers.values()) {
@@ -207,7 +212,7 @@ export function createStubPaymentsClient(options: StubOptions = {}): PaymentsCli
         throw new PaymentError("not_payable");
       }
       if (status === "checking") {
-        throw new PaymentError("already_paying");
+        throw new PaymentError("already_paying", { id: stored.id, method: "bank_transfer" });
       }
     }
   }

@@ -68,6 +68,10 @@ class Settings(BaseSettings):
     # machine and closed anywhere deployed, so production takes no sign-ups before switch day
     # (docs/launch.md). Sign-in, the code fallback, password reset and claims stay open.
     client_signup_open: bool | None = None
+    # Whether a client may withdraw a running investment early. Off everywhere until the
+    # dealing desk's funding and the payout that follows are both wired, so no withdrawal is
+    # ever made that nothing would pay (docs/investing.md).
+    early_withdrawal_open: bool = False
 
     # `/docs` and `/openapi.json`. Off unless turned on: a deployed API hands no route catalogue
     # to anonymous visitors.

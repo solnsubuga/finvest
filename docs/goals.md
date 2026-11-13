@@ -54,7 +54,7 @@ A closed goal is not followed: its investments keep rolling over as the client's
 One target that several clients save towards together, such as a family buying land. Decided for now by Solo (2026-11-13): a shared target, with each member saving into their own investments. Nothing is pooled, nothing needs an approval, and every member can leave with their own money. It is ordinary investing with a shared progress bar, so it stays clear of the open question of whether a pooled group is a collective investment scheme. The code is `groups.py` and `domain/groups.py`, and the database side is migration 0112.
 
 - **Setting up.** The client gives the group's name, what it is for, the shared target and date, the name the others will see them by, and their own part. Their part is a goal of their own, with the group's date and their part as its target. They save into it like any goal.
-- **Inviting.** The one who set the group up makes an invite code and sends the link by WhatsApp or SMS. It works for 7 days. A new code replaces the old one, which stops working, and the code can be withdrawn. Only its SHA-256 is stored, so it is shown once.
+- **Inviting.** The one who set the group up makes an invite code and sends the link by WhatsApp or SMS. The app's link is `https://app.finvestug.com/goals/groups/join#<code>`: the code is after `#`, so it never reaches a server log. It works for 7 days. A new code replaces the old one, which stops working, and the code can be withdrawn. Only its SHA-256 is stored, so it is shown once.
 - **Joining.** With the code, a client sees the group's name, target, date, how many are in it and the first member's name, and nothing else. Joining makes them a goal of their own named after the group, for their own part. A client is in a group once at a time, and a group has at most 10 members.
 - **What members see.** The names each member chose, when they joined, and the combined value against the target, with the same On track or Behind labels as any goal. Never another member's savings, amounts or investments one by one. With two members, each can work out the other's total from the combined value, and the app says so before joining.
 - **The combined value.** The member's own goal is counted as it is now. The others are counted as the worker last recorded them, once a day at 01:30 Kampala time, after interest and maturities (`goals.refresh_groups`). The app shows that day. A client never reads another client's investments, and never writes a figure the group is shown.
@@ -105,7 +105,7 @@ The database holds these, in migration 0112:
 | `POST /client/goal-groups/invites/preview` | What the invite is for, before joining. The code is in the body, never the path, so it stays out of access logs. |
 | `POST /client/goal-groups/join` | Join with the code and the client's own part. Takes an `Idempotency-Key`. |
 | `POST /client/goal-groups/{id}/leave` | Leave. The client's own goal carries on. |
-| `POST /client/goal-groups/{id}/members/{goal_id}/remove` | Remove a member. Only for the one who set it up. |
+| `POST /client/goal-groups/{id}/members/{member_id}/remove` | Remove a member. Only for the one who set it up, who sees each other member's `member_id` in the group. Nobody else sees one. |
 | `POST /client/goal-groups/{id}/close` | Close the group for good |
 | `GET /staff/goal-groups`, `GET /staff/goal-groups/{id}` | Staff with `goals.view`, with each member's figure as last recorded |
 
@@ -114,5 +114,6 @@ Client responses carry net figures and the yearly rate after tax as a label. No 
 ## Not built yet
 
 - Saving rules: a monthly saving collected on a set day, with a mobile money prompt sent by the worker.
-- Screens for group goals in the client app and the console.
+- Connecting the console's Goals screen, goals and group goals alike, to the staff routes. It shows sample data under `pnpm dev` and says it is not connected in a normal build.
+- Removing a member from the client app. The API gives the one who set the group up a `member_id` for it.
 - Withdrawing from a goal before its date, which waits for early withdrawal.

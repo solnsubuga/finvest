@@ -465,6 +465,8 @@ class MemberView(Contract):
     joined_at: datetime
     is_you: bool
     is_owner: bool
+    # Only for the one who set the group up, and only for the others: send it to remove them.
+    member_id: PushId | None
 
 
 class GroupView(Contract):
@@ -568,6 +570,7 @@ def _group_view(group: groups.ClientGroup) -> GroupView:
                 joined_at=m.joined_at,
                 is_you=m.is_you,
                 is_owner=m.is_owner,
+                member_id=m.member_id,
             )
             for m in group.members
         ],
@@ -743,16 +746,16 @@ async def leave_group(
     return Response(status_code=204)
 
 
-@group_router.post("/{group_id}/members/{goal_id}/remove")
+@group_router.post("/{group_id}/members/{member_id}/remove")
 async def remove_member(
     group_id: PushId,
-    goal_id: PushId,
+    member_id: PushId,
     client: CurrentClient,
     database: DatabaseDep,
     clock: ClockDep,
 ) -> GroupView:
     async with database.actor_transaction(client.actor) as session:
-        group = await groups.remove_member(session, client.actor, group_id, goal_id, clock)
+        group = await groups.remove_member(session, client.actor, group_id, member_id, clock)
     return _group_view(group)
 
 

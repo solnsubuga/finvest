@@ -79,7 +79,8 @@ class Batch:
 _DATABASE_NOW = text("SELECT clock_timestamp()")
 _LOCKED = select_investments("WHERE i.id = :id FOR UPDATE OF i")
 _DUE = select_investments(
-    "WHERE i.status = 'active' AND i.maturity_date <= :run_date AND i.id > :after "
+    "WHERE i.status = 'active' AND i.withdrawal_requested_at IS NULL "
+    "AND i.maturity_date <= :run_date AND i.id > :after "
     "ORDER BY i.id LIMIT :limit FOR UPDATE OF i SKIP LOCKED"
 )
 _CHOOSE = text(
@@ -345,7 +346,7 @@ async def _roll_over(
             entry_type="investment.rolled_over",
             effective_date=business_date(now),
             lines=(
-                *await _out_of_holding(session, investment, clock),
+                *await out_of_holding(session, investment, clock),
                 credit(new_holding.id, proceeds),
             ),
             idempotency_key=f"investment-rollover:{investment.id}",
@@ -415,7 +416,7 @@ async def _hand_over(
             entry_type="investment.matured",
             effective_date=business_date(now),
             lines=(
-                *await _out_of_holding(session, investment, clock),
+                *await out_of_holding(session, investment, clock),
                 credit(handover.id, proceeds),
             ),
             idempotency_key=f"investment-matured:{investment.id}",
@@ -480,7 +481,7 @@ async def _hand_over(
     )
 
 
-async def _out_of_holding(
+async def out_of_holding(
     session: AsyncSession, investment: Investment, clock: Clock
 ) -> tuple[Line, ...]:
     """The debits that empty an investment: its principal, and the interest it earned."""

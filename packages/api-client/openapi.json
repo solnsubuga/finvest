@@ -255,6 +255,22 @@
         "title": "AnnouncementView",
         "type": "object"
       },
+      "Approval": {
+        "additionalProperties": false,
+        "properties": {
+          "reason": {
+            "maxLength": 500,
+            "minLength": 1,
+            "title": "Reason",
+            "type": "string"
+          }
+        },
+        "required": [
+          "reason"
+        ],
+        "title": "Approval",
+        "type": "object"
+      },
       "ApprovalItemOut": {
         "additionalProperties": false,
         "properties": {
@@ -425,6 +441,52 @@
         ],
         "title": "AutomaticCheck",
         "type": "string"
+      },
+      "BankTransferDetails": {
+        "additionalProperties": false,
+        "description": "Where to send a bank transfer for one investment, and what to write on it.",
+        "properties": {
+          "account_name": {
+            "title": "Account Name",
+            "type": "string"
+          },
+          "account_number": {
+            "title": "Account Number",
+            "type": "string"
+          },
+          "amount": {
+            "$ref": "#/components/schemas/MoneyView"
+          },
+          "bank_name": {
+            "title": "Bank Name",
+            "type": "string"
+          },
+          "branch": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Branch"
+          },
+          "reference": {
+            "title": "Reference",
+            "type": "string"
+          }
+        },
+        "required": [
+          "bank_name",
+          "account_name",
+          "account_number",
+          "branch",
+          "reference",
+          "amount"
+        ],
+        "title": "BankTransferDetails",
+        "type": "object"
       },
       "BankTransferOut": {
         "additionalProperties": false,
@@ -818,6 +880,57 @@
         "title": "ChangeView",
         "type": "object"
       },
+      "CheckOut": {
+        "additionalProperties": false,
+        "description": "The first person's check of the current proof.",
+        "properties": {
+          "checked_at": {
+            "format": "date-time",
+            "title": "Checked At",
+            "type": "string"
+          },
+          "checked_by": {
+            "maxLength": 20,
+            "minLength": 20,
+            "pattern": "^[-0-9A-Z_a-z]{20}$",
+            "title": "Checked By",
+            "type": "string"
+          },
+          "name_match": {
+            "enum": [
+              "exact",
+              "partial"
+            ],
+            "title": "Name Match",
+            "type": "string"
+          },
+          "proof_name": {
+            "title": "Proof Name",
+            "type": "string"
+          },
+          "statement_date": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Statement Date"
+          }
+        },
+        "required": [
+          "proof_name",
+          "name_match",
+          "statement_date",
+          "checked_by",
+          "checked_at"
+        ],
+        "title": "CheckOut",
+        "type": "object"
+      },
       "CheckStatus": {
         "enum": [
           "draft",
@@ -1178,6 +1291,10 @@
             "title": "Can Change Maturity",
             "type": "boolean"
           },
+          "can_withdraw": {
+            "title": "Can Withdraw",
+            "type": "boolean"
+          },
           "client_rate_percent": {
             "title": "Client Rate Percent",
             "type": "string"
@@ -1326,6 +1443,18 @@
           "waiting_for_destination": {
             "title": "Waiting For Destination",
             "type": "boolean"
+          },
+          "withdrawal_requested_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Withdrawal Requested At"
           }
         },
         "required": [
@@ -1351,7 +1480,9 @@
           "total_at_maturity_minor",
           "rolled_into_id",
           "payout_id",
-          "waiting_for_destination"
+          "waiting_for_destination",
+          "can_withdraw",
+          "withdrawal_requested_at"
         ],
         "title": "ClientInvestmentOut",
         "type": "object"
@@ -1502,6 +1633,22 @@
             "pattern": "^[-0-9A-Z_a-z]{20}$",
             "title": "Client Id",
             "type": "string"
+          },
+          "email": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Email"
+          },
+          "email_verified": {
+            "default": false,
+            "title": "Email Verified",
+            "type": "boolean"
           },
           "phone": {
             "title": "Phone",
@@ -2611,6 +2758,37 @@
         "title": "DocumentType",
         "type": "string"
       },
+      "EmailConfirm": {
+        "additionalProperties": false,
+        "properties": {
+          "token": {
+            "maxLength": 128,
+            "minLength": 20,
+            "title": "Token",
+            "type": "string"
+          }
+        },
+        "required": [
+          "token"
+        ],
+        "title": "EmailConfirm",
+        "type": "object"
+      },
+      "EmailLinkSent": {
+        "additionalProperties": false,
+        "description": "`sent` is false when the address was already proved, so nothing was sent.",
+        "properties": {
+          "sent": {
+            "title": "Sent",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "sent"
+        ],
+        "title": "EmailLinkSent",
+        "type": "object"
+      },
       "Enrol": {
         "additionalProperties": false,
         "properties": {
@@ -3669,7 +3847,8 @@
           "awaiting_payment",
           "active",
           "cancelled",
-          "matured"
+          "matured",
+          "withdrawn"
         ],
         "title": "InvestmentStatus",
         "type": "string"
@@ -3841,6 +4020,17 @@
             ],
             "title": "Decided By"
           },
+          "decided_by_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Decided By Name"
+          },
           "decision_reason": {
             "anyOf": [
               {
@@ -3871,6 +4061,17 @@
             "title": "Proposed By",
             "type": "string"
           },
+          "proposed_by_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Proposed By Name"
+          },
           "reason": {
             "title": "Reason",
             "type": "string"
@@ -3895,9 +4096,11 @@
           "address_hash",
           "reason",
           "proposed_by",
+          "proposed_by_name",
           "proposed_at",
           "status",
           "decided_by",
+          "decided_by_name",
           "decided_at",
           "decision_reason",
           "yours"
@@ -4488,13 +4691,28 @@
             "format": "date-time",
             "title": "Joined At",
             "type": "string"
+          },
+          "member_id": {
+            "anyOf": [
+              {
+                "maxLength": 20,
+                "minLength": 20,
+                "pattern": "^[-0-9A-Z_a-z]{20}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Member Id"
           }
         },
         "required": [
           "display_name",
           "joined_at",
           "is_you",
-          "is_owner"
+          "is_owner",
+          "member_id"
         ],
         "title": "MemberView",
         "type": "object"
@@ -4660,6 +4878,42 @@
         ],
         "title": "Network",
         "type": "string"
+      },
+      "NewCheck": {
+        "additionalProperties": false,
+        "description": "What the first person read on the proof. The name is compared on the server.",
+        "properties": {
+          "proof_name": {
+            "maxLength": 120,
+            "minLength": 1,
+            "title": "Proof Name",
+            "type": "string"
+          },
+          "reason": {
+            "maxLength": 500,
+            "minLength": 1,
+            "title": "Reason",
+            "type": "string"
+          },
+          "statement_date": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Statement Date"
+          }
+        },
+        "required": [
+          "proof_name",
+          "reason"
+        ],
+        "title": "NewCheck",
+        "type": "object"
       },
       "NewDestination": {
         "additionalProperties": false,
@@ -5856,6 +6110,26 @@
         "title": "ProgressView",
         "type": "object"
       },
+      "ProofLinkOut": {
+        "additionalProperties": false,
+        "properties": {
+          "expires_at": {
+            "format": "date-time",
+            "title": "Expires At",
+            "type": "string"
+          },
+          "url": {
+            "title": "Url",
+            "type": "string"
+          }
+        },
+        "required": [
+          "url",
+          "expires_at"
+        ],
+        "title": "ProofLinkOut",
+        "type": "object"
+      },
       "ProposalIn": {
         "additionalProperties": false,
         "properties": {
@@ -6595,6 +6869,35 @@
         "title": "ReceiptView",
         "type": "object"
       },
+      "Refusal": {
+        "additionalProperties": false,
+        "properties": {
+          "reason": {
+            "maxLength": 500,
+            "minLength": 1,
+            "title": "Reason",
+            "type": "string"
+          },
+          "rejection_reason": {
+            "enum": [
+              "name_different",
+              "proof_unreadable",
+              "proof_too_old",
+              "proof_wrong_account",
+              "proof_wrong_document",
+              "suspected_fraud"
+            ],
+            "title": "Rejection Reason",
+            "type": "string"
+          }
+        },
+        "required": [
+          "rejection_reason",
+          "reason"
+        ],
+        "title": "Refusal",
+        "type": "object"
+      },
       "Register": {
         "additionalProperties": false,
         "properties": {
@@ -6657,6 +6960,22 @@
           "note"
         ],
         "title": "Rejection",
+        "type": "object"
+      },
+      "Removal": {
+        "additionalProperties": false,
+        "properties": {
+          "reason": {
+            "maxLength": 500,
+            "minLength": 1,
+            "title": "Reason",
+            "type": "string"
+          }
+        },
+        "required": [
+          "reason"
+        ],
+        "title": "Removal",
         "type": "object"
       },
       "Rename": {
@@ -6865,6 +7184,7 @@
                 "announcements.send",
                 "migration.view",
                 "bank_transfers.change",
+                "payout_accounts.change",
                 "migration.import",
                 "migration.sign_off",
                 "client_phones.change"
@@ -7946,6 +8266,398 @@
         "title": "StaffComplaint",
         "type": "object"
       },
+      "StaffDestinationDetail": {
+        "additionalProperties": false,
+        "description": "One account opened to check it: the whole number, the name on the verified ID (None if\nthe client has no approved identity check) and a link to the proof that works for five\nminutes (None when there is no file or the store cannot be reached).",
+        "properties": {
+          "account": {
+            "title": "Account",
+            "type": "string"
+          },
+          "account_number": {
+            "title": "Account Number",
+            "type": "string"
+          },
+          "approved_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Approved At"
+          },
+          "approved_by": {
+            "anyOf": [
+              {
+                "maxLength": 20,
+                "minLength": 20,
+                "pattern": "^[-0-9A-Z_a-z]{20}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Approved By"
+          },
+          "bank_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Bank Code"
+          },
+          "check": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CheckOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "client_id": {
+            "maxLength": 20,
+            "minLength": 20,
+            "pattern": "^[-0-9A-Z_a-z]{20}$",
+            "title": "Client Id",
+            "type": "string"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "holder_name": {
+            "title": "Holder Name",
+            "type": "string"
+          },
+          "id": {
+            "maxLength": 20,
+            "minLength": 20,
+            "pattern": "^[-0-9A-Z_a-z]{20}$",
+            "title": "Id",
+            "type": "string"
+          },
+          "id_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Id Name"
+          },
+          "kind": {
+            "enum": [
+              "mobile_money",
+              "bank"
+            ],
+            "title": "Kind",
+            "type": "string"
+          },
+          "network": {
+            "anyOf": [
+              {
+                "enum": [
+                  "mtn",
+                  "airtel"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Network"
+          },
+          "payable_from": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Payable From"
+          },
+          "proof_kind": {
+            "anyOf": [
+              {
+                "enum": [
+                  "bank_statement",
+                  "bank_letter",
+                  "bank_card",
+                  "network_registered_name"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Proof Kind"
+          },
+          "proof_link": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ProofLinkOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "rejection_reason": {
+            "anyOf": [
+              {
+                "enum": [
+                  "name_different",
+                  "proof_unreadable",
+                  "proof_too_old",
+                  "proof_wrong_account",
+                  "proof_wrong_document",
+                  "suspected_fraud"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rejection Reason"
+          },
+          "status": {
+            "enum": [
+              "awaiting_code",
+              "awaiting_proof",
+              "in_review",
+              "approved",
+              "rejected",
+              "removed"
+            ],
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "client_id",
+          "kind",
+          "network",
+          "bank_code",
+          "account",
+          "holder_name",
+          "status",
+          "proof_kind",
+          "check",
+          "rejection_reason",
+          "approved_by",
+          "approved_at",
+          "payable_from",
+          "created_at",
+          "account_number",
+          "id_name",
+          "proof_link"
+        ],
+        "title": "StaffDestinationDetail",
+        "type": "object"
+      },
+      "StaffDestinationOut": {
+        "additionalProperties": false,
+        "description": "An account in the queue. `check` is None until the first person has checked it; an\naccount with a check waits for a different person to approve it.",
+        "properties": {
+          "account": {
+            "title": "Account",
+            "type": "string"
+          },
+          "approved_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Approved At"
+          },
+          "approved_by": {
+            "anyOf": [
+              {
+                "maxLength": 20,
+                "minLength": 20,
+                "pattern": "^[-0-9A-Z_a-z]{20}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Approved By"
+          },
+          "bank_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Bank Code"
+          },
+          "check": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CheckOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "client_id": {
+            "maxLength": 20,
+            "minLength": 20,
+            "pattern": "^[-0-9A-Z_a-z]{20}$",
+            "title": "Client Id",
+            "type": "string"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "holder_name": {
+            "title": "Holder Name",
+            "type": "string"
+          },
+          "id": {
+            "maxLength": 20,
+            "minLength": 20,
+            "pattern": "^[-0-9A-Z_a-z]{20}$",
+            "title": "Id",
+            "type": "string"
+          },
+          "kind": {
+            "enum": [
+              "mobile_money",
+              "bank"
+            ],
+            "title": "Kind",
+            "type": "string"
+          },
+          "network": {
+            "anyOf": [
+              {
+                "enum": [
+                  "mtn",
+                  "airtel"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Network"
+          },
+          "payable_from": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Payable From"
+          },
+          "proof_kind": {
+            "anyOf": [
+              {
+                "enum": [
+                  "bank_statement",
+                  "bank_letter",
+                  "bank_card",
+                  "network_registered_name"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Proof Kind"
+          },
+          "rejection_reason": {
+            "anyOf": [
+              {
+                "enum": [
+                  "name_different",
+                  "proof_unreadable",
+                  "proof_too_old",
+                  "proof_wrong_account",
+                  "proof_wrong_document",
+                  "suspected_fraud"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rejection Reason"
+          },
+          "status": {
+            "enum": [
+              "awaiting_code",
+              "awaiting_proof",
+              "in_review",
+              "approved",
+              "rejected",
+              "removed"
+            ],
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "client_id",
+          "kind",
+          "network",
+          "bank_code",
+          "account",
+          "holder_name",
+          "status",
+          "proof_kind",
+          "check",
+          "rejection_reason",
+          "approved_by",
+          "approved_at",
+          "payable_from",
+          "created_at"
+        ],
+        "title": "StaffDestinationOut",
+        "type": "object"
+      },
       "StaffGoalDetail": {
         "additionalProperties": false,
         "properties": {
@@ -8718,6 +9430,7 @@
                 "announcements.send",
                 "migration.view",
                 "bank_transfers.change",
+                "payout_accounts.change",
                 "migration.import",
                 "migration.sign_off",
                 "client_phones.change"
@@ -9420,6 +10133,23 @@
         ],
         "title": "Verdict",
         "type": "string"
+      },
+      "WithdrawalRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "destination_id": {
+            "maxLength": 20,
+            "minLength": 20,
+            "pattern": "^[-0-9A-Z_a-z]{20}$",
+            "title": "Destination Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "destination_id"
+        ],
+        "title": "WithdrawalRequest",
+        "type": "object"
       },
       "WordingList": {
         "additionalProperties": false,
@@ -11294,6 +12024,153 @@
         ]
       }
     },
+    "/client/email/verification": {
+      "post": {
+        "description": "Email a one-time link to the client's address, to prove it is theirs.",
+        "operationId": "send_email_link_client_email_verification_post",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EmailLinkSent"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "410": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Gone"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          }
+        },
+        "summary": "Send Email Link",
+        "tags": [
+          "client email"
+        ]
+      }
+    },
+    "/client/email/verification/confirm": {
+      "post": {
+        "description": "Spend the link from the email. It works on any device, without signing in.",
+        "operationId": "confirm_email_client_email_verification_confirm_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EmailConfirm"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "410": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Gone"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          }
+        },
+        "summary": "Confirm Email",
+        "tags": [
+          "client email"
+        ]
+      }
+    },
     "/client/goal-groups": {
       "get": {
         "operationId": "list_groups_client_goal_groups_get",
@@ -12257,9 +13134,9 @@
         ]
       }
     },
-    "/client/goal-groups/{group_id}/members/{goal_id}/remove": {
+    "/client/goal-groups/{group_id}/members/{member_id}/remove": {
       "post": {
-        "operationId": "remove_member_client_goal_groups__group_id__members__goal_id__remove_post",
+        "operationId": "remove_member_client_goal_groups__group_id__members__member_id__remove_post",
         "parameters": [
           {
             "in": "path",
@@ -12275,13 +13152,13 @@
           },
           {
             "in": "path",
-            "name": "goal_id",
+            "name": "member_id",
             "required": true,
             "schema": {
               "maxLength": 20,
               "minLength": 20,
               "pattern": "^[-0-9A-Z_a-z]{20}$",
-              "title": "Goal Id",
+              "title": "Member Id",
               "type": "string"
             }
           }
@@ -13887,6 +14764,102 @@
         ]
       }
     },
+    "/client/investments/{investment_id}/bank-transfer-details": {
+      "get": {
+        "description": "Where to send a bank transfer for this investment, for exactly the amount owed.\n\nThe same refusals as paying: 404 if it is not the client's, 409 if it can no longer be\npaid or already has a payment under way or paid (fetch that from\n`GET /client/investments/{investment_id}/payment`). 503 if no account is set for the\ninvestment's currency, so the app offers mobile money instead.",
+        "operationId": "bank_transfer_details_client_investments__investment_id__bank_transfer_details_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "investment_id",
+            "required": true,
+            "schema": {
+              "maxLength": 20,
+              "minLength": 20,
+              "pattern": "^[-0-9A-Z_a-z]{20}$",
+              "title": "Investment Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BankTransferDetails"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "summary": "Bank Transfer Details",
+        "tags": [
+          "client payments"
+        ]
+      }
+    },
     "/client/investments/{investment_id}/pay-out": {
       "post": {
         "description": "Send on the money of a matured investment that is waiting for a destination.\n\nSafe to repeat without an idempotency key: the payout's key is\n`maturity:<investment id>:<destination id>`, so the same destination asked twice is the\nsame payout.",
@@ -14058,6 +15031,16 @@
               }
             },
             "description": "Unprocessable Content"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Service Unavailable"
           }
         },
         "summary": "Current Payment",
@@ -14172,6 +15155,16 @@
               }
             },
             "description": "Unprocessable Content"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Service Unavailable"
           }
         },
         "summary": "Pay By Bank Transfer",
@@ -14286,11 +15279,132 @@
               }
             },
             "description": "Unprocessable Content"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Service Unavailable"
           }
         },
         "summary": "Pay By Mobile Money",
         "tags": [
           "client payments"
+        ]
+      }
+    },
+    "/client/investments/{investment_id}/withdraw": {
+      "post": {
+        "description": "Ask to withdraw a running investment early. It pays `value_minor` from the investment\nas shown: interest stops now. The money is sent once the dealing desk has funded it.\n\nRefused with `conflict` while early withdrawal is switched off, before anything is saved.",
+        "operationId": "withdraw_early_client_investments__investment_id__withdraw_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "investment_id",
+            "required": true,
+            "schema": {
+              "title": "Investment Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "A value the caller chooses once per intended action and sends again on every retry of it. Pattern: `[A-Za-z0-9._:-]{8,128}`.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "A value the caller chooses once per intended action and sends again on every retry of it. Pattern: `[A-Za-z0-9._:-]{8,128}`.",
+              "title": "Idempotency-Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/WithdrawalRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ClientInvestmentOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          }
+        },
+        "summary": "Withdraw Early",
+        "tags": [
+          "client investing"
         ]
       }
     },
@@ -15684,6 +16798,16 @@
               }
             },
             "description": "Unprocessable Content"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Service Unavailable"
           }
         },
         "summary": "Get Payment",
@@ -23511,6 +24635,16 @@
               }
             },
             "description": "Unprocessable Content"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Service Unavailable"
           }
         },
         "summary": "Bank Transfers In Review",
@@ -23597,6 +24731,16 @@
               }
             },
             "description": "Unprocessable Content"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Service Unavailable"
           }
         },
         "summary": "Bank Transfer",
@@ -23701,6 +24845,16 @@
               }
             },
             "description": "Unprocessable Content"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Service Unavailable"
           }
         },
         "summary": "Approve Bank Match",
@@ -23830,11 +24984,567 @@
               }
             },
             "description": "Unprocessable Content"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Service Unavailable"
           }
         },
         "summary": "Review Bank Transfer",
         "tags": [
           "staff bank transfers"
+        ]
+      }
+    },
+    "/staff/payout-destinations": {
+      "get": {
+        "description": "Accounts waiting for staff, oldest first: those with no check yet, and those with a\ncheck waiting for a second person.",
+        "operationId": "review_queue_staff_payout_destinations_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/StaffDestinationOut"
+                  },
+                  "title": "Response Review Queue Staff Payout Destinations Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          }
+        },
+        "summary": "Review Queue",
+        "tags": [
+          "staff payout accounts"
+        ]
+      }
+    },
+    "/staff/payout-destinations/{destination_id}": {
+      "get": {
+        "description": "Open one account to check it. Writes a `payouts.destination_opened` access event.",
+        "operationId": "open_destination_staff_payout_destinations__destination_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "destination_id",
+            "required": true,
+            "schema": {
+              "maxLength": 20,
+              "minLength": 20,
+              "pattern": "^[-0-9A-Z_a-z]{20}$",
+              "title": "Destination Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StaffDestinationDetail"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          }
+        },
+        "summary": "Open Destination",
+        "tags": [
+          "staff payout accounts"
+        ]
+      }
+    },
+    "/staff/payout-destinations/{destination_id}/approve": {
+      "post": {
+        "description": "Approve someone else's check. The account can be paid 24 hours later.\n\n403 `checked_by_you` for whoever made the check. 409 `destination_not_checked` before a\ncheck, and `account_in_use` when the account is approved for another client.",
+        "operationId": "approve_destination_staff_payout_destinations__destination_id__approve_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "destination_id",
+            "required": true,
+            "schema": {
+              "maxLength": 20,
+              "minLength": 20,
+              "pattern": "^[-0-9A-Z_a-z]{20}$",
+              "title": "Destination Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Approval"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StaffDestinationOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          }
+        },
+        "summary": "Approve Destination",
+        "tags": [
+          "staff payout accounts"
+        ]
+      }
+    },
+    "/staff/payout-destinations/{destination_id}/check": {
+      "post": {
+        "description": "Record what you read on the proof. The account then waits for a different person.\n\n422 `name_different` when the name on the proof is not the client's; refuse the proof\ninstead. 409 `client_not_verified` when the client has no approved identity check.",
+        "operationId": "check_destination_staff_payout_destinations__destination_id__check_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "destination_id",
+            "required": true,
+            "schema": {
+              "maxLength": 20,
+              "minLength": 20,
+              "pattern": "^[-0-9A-Z_a-z]{20}$",
+              "title": "Destination Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NewCheck"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StaffDestinationOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          }
+        },
+        "summary": "Check Destination",
+        "tags": [
+          "staff payout accounts"
+        ]
+      }
+    },
+    "/staff/payout-destinations/{destination_id}/reject": {
+      "post": {
+        "description": "Refuse the proof. The client may send better proof, unless it is `suspected_fraud`.",
+        "operationId": "reject_destination_staff_payout_destinations__destination_id__reject_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "destination_id",
+            "required": true,
+            "schema": {
+              "maxLength": 20,
+              "minLength": 20,
+              "pattern": "^[-0-9A-Z_a-z]{20}$",
+              "title": "Destination Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Refusal"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StaffDestinationOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          }
+        },
+        "summary": "Reject Destination",
+        "tags": [
+          "staff payout accounts"
+        ]
+      }
+    },
+    "/staff/payout-destinations/{destination_id}/remove": {
+      "post": {
+        "description": "Take an account out of use for good, recorded as an operator control. A payout already\non its way is not stopped.",
+        "operationId": "remove_destination_staff_payout_destinations__destination_id__remove_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "destination_id",
+            "required": true,
+            "schema": {
+              "maxLength": 20,
+              "minLength": 20,
+              "pattern": "^[-0-9A-Z_a-z]{20}$",
+              "title": "Destination Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Removal"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StaffDestinationOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          }
+        },
+        "summary": "Remove Destination",
+        "tags": [
+          "staff payout accounts"
         ]
       }
     },

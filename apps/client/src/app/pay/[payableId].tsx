@@ -14,7 +14,7 @@ import { formatMoney, networkName, networkProduct } from "@/payments/format";
 import { newIdempotencyKey } from "@/payments/idempotency";
 import { AmountCard, Loading } from "@/payments/Parts";
 import { usePayments } from "@/payments/PaymentsProvider";
-import { describePaymentError, Network, Payable, PaymentError } from "@/payments/types";
+import { describePaymentError, openPaymentHref, Network, Payable, PaymentError } from "@/payments/types";
 import { colors, fontSizes, radii } from "@/theme";
 
 const NETWORKS: Network[] = ["mtn", "airtel"];
@@ -80,6 +80,12 @@ export default function Pay() {
       // Replace, so Back from the status screen cannot land on a form that pays again.
       router.replace(`/pay/deposit/${deposit.id}`);
     } catch (caught) {
+      // Already paying: show that payment instead of a form that cannot pay again.
+      const open = openPaymentHref(caught);
+      if (open) {
+        router.replace(open);
+        return;
+      }
       if (outcomeUnknown(caught)) {
         setLocked(true);
       }

@@ -120,7 +120,7 @@ export const NAV_GROUPS: readonly NavGroup[] = [
         path: "goals",
         label: "Goals",
         title: "Goals",
-        summary: "What clients are saving towards, and the investments each goal is made of.",
+        summary: "What clients are saving towards, alone or together, and the investments each goal is made of.",
         permission: "goals.view",
         phase: 4,
       },

@@ -12,6 +12,10 @@ const mockSend = jest.fn();
 const mockSave = jest.fn();
 const mockComplain = jest.fn((_complaint: { key: string }): "made" | "made then lost" | "refused" => "made");
 
+// The screens read the clock once when they open. They read the demo's clock here, so "today"
+// does not depend on when the tests run: after midnight in Kampala, 14:40 would read "Fri".
+jest.mock("@/support/useNow", () => ({ useNow: () => mockClock.ms }));
+
 jest.mock("@/auth/stubAuthClient", () => {
   const actual = jest.requireActual("@/auth/stubAuthClient");
   return {

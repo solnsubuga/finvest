@@ -20,7 +20,7 @@ export type ProductKind = "treasury_bill" | "fixed_income";
 export type ProductStatus = "live" | "paused";
 export type InterestPaid = "at_maturity" | "monthly";
 export type AtMaturity = "roll_over" | "pay_out";
-export type InvestmentStatus = "awaiting_payment" | "active" | "matured" | "cancelled";
+export type InvestmentStatus = "awaiting_payment" | "active" | "matured" | "cancelled" | "withdrawn";
 
 export type Product = {
   code: string;
@@ -103,6 +103,7 @@ export type InvestingErrorCode =
   | "too_many_unpaid"
   | "not_found"
   | "key_reused"
+  | "invalid"
   | "unavailable";
 
 export class InvestingError extends Error {
@@ -122,6 +123,7 @@ const messages: Record<InvestingErrorCode, string> = {
   too_many_unpaid: "You have investments waiting to be paid for. Pay for one of those, or let it lapse, before starting another.",
   not_found: "We could not find that.",
   key_reused: "Something changed since you last tried. Go back and review your investment again.",
+  invalid: "We could not accept that investment. Go back, check the details and try again.",
   unavailable: "We could not reach Finvest. Check your connection and try again.",
 };
 

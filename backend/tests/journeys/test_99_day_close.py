@@ -23,6 +23,7 @@ from app.modules.reconciliation.domain.statements import (
     StatementSource,
 )
 from app.shared.business_day import KAMPALA
+from tests.journeys import gaps
 from tests.journeys.money import TrustBank, today, ugx
 from tests.support.books import audit_for, missing
 from tests.support.journey import Collected, Person, World
@@ -160,12 +161,12 @@ async def test_each_day_ties_to_its_statements_and_is_closed_by_two_people(
     await bank.statement(
         world, importer, now, [(move.bank_reference, move.amount_minor) for move in dealt]
     )
-    # Every collection pairs with its ledger movement by its reference. The bank's lines do not:
-    # staff pair them by hand (see gaps.HAND_MATCHED).
+    # Every collection pairs with its ledger movement by its reference. The bank's lines pair
+    # with what was recorded about them: the transfer's approved review names its line, and the
+    # dealing desk gives the bank's reference. Nothing is left for staff to pair by hand.
     hand_matched = await pair_by_hand(world, preparer, now)
-    assert sorted(hand_matched) == sorted(
-        [amount for lines in bank.lines.values() for _, amount in lines]
-    ), hand_matched
+    assert hand_matched == [], hand_matched
+    assert gaps.HAND_MATCHED == ()
     async with world.api_database.actor_transaction(preparer.actor) as session:
         prepared = await day_close.prepare(session, preparer.actor, now, world.clock)
         for pot in CASH_POTS:

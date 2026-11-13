@@ -1,4 +1,4 @@
-import { Insights, InsightsClient, InsightsError } from "./types";
+import { Currency, Insights, InsightsClient, InsightsError } from "./types";
 
 /**
  * An in-memory stand-in for `GET /client/insights`. Nothing here is real.
@@ -6,7 +6,8 @@ import { Insights, InsightsClient, InsightsError } from "./types";
  *
  * The two demo accounts have a few months of history, with figures from the
  * design canvas. An account made by signing up has none yet, which shows the
- * empty state. A number ending in 99 cannot reach the service.
+ * empty state. A number ending in 99 cannot reach the service. The demo holds no
+ * dollars, so its dollar figures are all zero.
  */
 
 const SEEDED = new Set(["+256772123456", "+256701000200"]);
@@ -17,8 +18,8 @@ const EARNED = [0, 15_400, 29_800, 28_800, 61_800, 31_408];
 const INVESTED = [0, 1_000_000, 3_000_000, 0, 4_250_000, 250_000];
 const PAID_OUT = [0, 0, 0, 1_015_400, 0, 0];
 
-function ugx(minor: number) {
-  return { currency: "UGX" as const, minor };
+function inCurrency(currency: Currency) {
+  return (minor: number) => ({ currency, minor });
 }
 
 function monthsEnding(now: Date, count: number): string[] {
@@ -40,16 +41,25 @@ export function createStubInsightsClient(
   now: () => Date = () => new Date(),
 ): InsightsClient {
   return {
-    async getInsights(count) {
+    async heldCurrencies() {
+      if (!phone || phone.endsWith("99")) {
+        throw new InsightsError();
+      }
+      return ["UGX"];
+    },
+
+    async getInsights(count, currency) {
       await new Promise((resolve) => setTimeout(resolve, 150));
       if (!phone || phone.endsWith("99")) {
         throw new InsightsError();
       }
-      const seeded = SEEDED.has(phone);
+      const ugx = inCurrency(currency);
+      const seeded = SEEDED.has(phone) && currency === "UGX";
       const months = monthsEnding(now(), count);
       const pick = (series: number[], index: number) =>
         ugx(seeded ? (series[series.length - months.length + index] ?? 0) : 0);
       const insights: Insights = {
+        currency,
         months: months.map((month, index) => ({
           month,
           invested: pick(INVESTED, index),

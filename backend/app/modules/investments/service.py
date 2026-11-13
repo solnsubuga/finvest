@@ -58,6 +58,13 @@ from app.modules.investments.maturity import (
     mature_investment,
     pay_out_matured,
 )
+from app.modules.investments.withdrawal import (
+    WITHDRAWN_EARLY_TOPIC,
+    Funded,
+    pay_funded,
+    request_withdrawal,
+    withdraw,
+)
 
 __all__ = [
     "MATURED_TOPIC",
@@ -66,9 +73,11 @@ __all__ = [
     "REQUEST_OPERATION",
     "ROLLED_OVER_TOPIC",
     "STARTED_TOPIC",
+    "WITHDRAWN_EARLY_TOPIC",
     "ClientInvestment",
     "ClientProduct",
     "ClientQuote",
+    "Funded",
     "InterestRun",
     "Investment",
     "PayableInvestment",
@@ -95,14 +104,17 @@ __all__ = [
     "mature_investment",
     "maturing",
     "owed_by_product",
+    "pay_funded",
     "pay_out_matured",
     "payable_investment",
     "propose_rate",
     "public_products",
     "rate_history",
     "request_investment",
+    "request_withdrawal",
     "running_investments",
     "send_back_rate",
     "start_investment",
+    "withdraw",
     "withdraw_rate",
 ]
