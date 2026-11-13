@@ -269,8 +269,8 @@ export function createStubGroupsClient(options: StubOptions): GroupsClient {
       const known = remembered(idempotencyKey, body);
       if (known) return view(find(known));
       const invite = lookUp(code);
-      if (groups.has(invite.groupId)) throw new GroupError("already_in");
-      if (invite.members >= MAX_MEMBERS) throw new GroupError("full");
+      // One refusal for all of these, as the API gives.
+      if (groups.has(invite.groupId) || invite.members >= MAX_MEMBERS) throw new GroupError("not_added");
       const goal = await ownGoal(invite.name, invite.category, member.ownTarget, invite.targetDate, `join-${idempotencyKey}`);
       const at = new Date(now()).toISOString();
       const createdOn = kampalaDay(now() - 60 * DAY_MS);

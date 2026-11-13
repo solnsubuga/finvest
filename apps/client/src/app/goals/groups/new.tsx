@@ -41,12 +41,14 @@ export default function NewGroup() {
   const [sending, setSending] = useState(false);
   const [failure, setFailure] = useState<string | null>(null);
   // Kept for retries, so a lost answer never sets up a second group.
-  const [key] = useState(newIdempotencyKey);
+  const [key, setKey] = useState(newIdempotencyKey);
   const [locked, setLocked] = useState(false);
 
   const targetDate = horizon === "none" ? null : addMonths(kampalaToday(), horizon);
 
   const choose = (chosen: GoalCategory) => {
+    // After a lost answer the same key must go with the same details.
+    if (locked) return;
     setCategory(chosen);
     if (!name || CATEGORIES.some((c) => categoryCopy[c].name === name)) {
       setName(chosen === "other" ? "" : categoryCopy[chosen].name);
@@ -86,7 +88,13 @@ export default function NewGroup() {
       );
       router.replace(`/goals/groups/${group.id}`);
     } catch (caught) {
-      if (groupOutcomeUnknown(caught)) setLocked(true);
+      if (groupOutcomeUnknown(caught)) {
+        setLocked(true);
+      } else {
+        // Refused, so nothing was set up under this key, even if an earlier try was lost.
+        setKey(newIdempotencyKey());
+        setLocked(false);
+      }
       setFailure(describeGroupError(caught));
     } finally {
       setSending(false);
@@ -115,8 +123,9 @@ export default function NewGroup() {
             <Pressable
               key={option}
               accessibilityRole="radio"
-              accessibilityState={{ checked: on }}
+              accessibilityState={{ checked: on, disabled: locked }}
               accessibilityLabel={copy.name}
+              disabled={locked}
               onPress={() => choose(option)}
               style={[styles.chip, on && styles.chipOn]}
               testID={`group-category-${option}`}
@@ -168,8 +177,9 @@ export default function NewGroup() {
                 <Pressable
                   key={String(option)}
                   accessibilityRole="radio"
-                  accessibilityState={{ checked: on }}
-                  onPress={() => !locked && setHorizon(option)}
+                  accessibilityState={{ checked: on, disabled: locked }}
+                  disabled={locked}
+                  onPress={() => setHorizon(option)}
                   style={[styles.chip, on && styles.chipOn]}
                   testID={`group-horizon-${option}`}
                 >

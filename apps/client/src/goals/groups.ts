@@ -67,7 +67,7 @@ export type NewInvite = { code: string; expiresAt: string };
 export type GroupErrorCode =
   | "not_found"
   | "link_not_working"
-  | "already_in"
+  | "not_added"
   | "full"
   | "too_many_goals"
   | "closed"
@@ -126,7 +126,8 @@ const errorCopy: Record<GroupErrorCode, string> = {
   not_found: "We could not find this group goal.",
   link_not_working:
     "This link is not working. It may have expired after 7 days or been replaced. Ask for a new one.",
-  already_in: "You are already in this group goal.",
+  not_added:
+    "We could not add you. You may already be in this group goal, it may be full or closed, or you may have 20 open goals.",
   full: `This group goal has ${MAX_MEMBERS} people, which is the most at once.`,
   too_many_goals: "You have 20 open goals, which is the most at once. Close one to join or start another.",
   closed: "This group goal is closed.",

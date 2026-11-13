@@ -128,8 +128,17 @@ export default function GroupDetail() {
       {state.status === "loading" ? (
         <Loading label="Loading the group goal" />
       ) : state.status === "error" ? (
-        <View style={{ marginTop: 20 }}>
+        <View style={{ marginTop: 20, gap: 12 }}>
           <Notice tone="danger">{state.message}</Notice>
+          <Button
+            label="Try again"
+            onPress={() => {
+              setState({ status: "loading" });
+              load();
+            }}
+            variant="primary"
+            testID="group-retry"
+          />
         </View>
       ) : group ? (
         <View style={{ marginTop: 16, gap: 14 }}>
@@ -172,7 +181,8 @@ export default function GroupDetail() {
           </View>
           <Card padded={false}>
             {group.members.map((member, index) => (
-              <MemberRow key={`${member.displayName}-${member.joinedAt}`} member={member} first={index === 0} />
+              // Names and times can repeat, and members never change places in the list.
+              <MemberRow key={index} member={member} first={index === 0} />
             ))}
           </Card>
           <Notice tone="neutral">

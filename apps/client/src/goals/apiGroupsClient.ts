@@ -68,9 +68,9 @@ export function toGroupError(error: unknown, call: Call = "other"): GroupError {
       return new GroupError("key_reused");
     case "conflict":
       if (call === "create") return new GroupError("too_many_goals");
-      // Already in it, full, or 20 open goals: the API does not say which, so the copy for
-      // joining names the most likely.
-      if (call === "join") return new GroupError("already_in");
+      // Already in it, full, closed, or 20 open goals: the API does not say which, so neither
+      // does the app.
+      if (call === "join") return new GroupError("not_added");
       if (call === "invite") return new GroupError("full");
       if (call === "leave") return new GroupError("owner_cannot_leave");
       return new GroupError("closed");

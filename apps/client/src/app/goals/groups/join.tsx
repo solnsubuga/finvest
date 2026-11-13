@@ -12,9 +12,11 @@ import { groupDigits, parseShillings } from "@/goals/amount";
 import { useGroups } from "@/goals/GoalsProvider";
 import {
   describeGroupError,
+  GroupError,
   groupOutcomeUnknown,
   InvitePreview,
   MAX_DISPLAY_NAME,
+  MAX_MEMBERS,
   readInviteCode,
 } from "@/goals/groups";
 import { categoryCopy } from "@/goals/types";
@@ -45,7 +47,7 @@ export default function JoinGroup() {
   // A link that opened the app is looked up straight away.
   const [busy, setBusy] = useState(arrived !== null);
   const [failure, setFailure] = useState<string | null>(null);
-  const [key] = useState(newIdempotencyKey);
+  const [key, setKey] = useState(newIdempotencyKey);
   const [locked, setLocked] = useState(false);
 
   const lookUp = async (text: string = code) => {
@@ -98,8 +100,16 @@ export default function JoinGroup() {
       );
       router.replace(`/goals/groups/${group.id}`);
     } catch (caught) {
-      if (groupOutcomeUnknown(caught)) setLocked(true);
-      setFailure(describeGroupError(caught));
+      if (groupOutcomeUnknown(caught)) {
+        setLocked(true);
+      } else {
+        // Refused, so nothing was joined under this key, even if an earlier try was lost.
+        setKey(newIdempotencyKey());
+        setLocked(false);
+      }
+      // The screen knows when the group is full; the API's refusal does not say which.
+      const full = caught instanceof GroupError && caught.code === "not_added" && preview.invite.members >= MAX_MEMBERS;
+      setFailure(describeGroupError(full ? new GroupError("full") : caught));
     } finally {
       setBusy(false);
     }

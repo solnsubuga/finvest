@@ -54,7 +54,7 @@ describe("errors from the API", () => {
 
   it("reads a conflict by the call that met it", () => {
     expect(toGroupError(api("conflict"), "create").code).toBe("too_many_goals");
-    expect(toGroupError(api("conflict"), "join").code).toBe("already_in");
+    expect(toGroupError(api("conflict"), "join").code).toBe("not_added");
     expect(toGroupError(api("conflict"), "invite").code).toBe("full");
     expect(toGroupError(api("conflict"), "leave").code).toBe("owner_cannot_leave");
     expect(toGroupError(api("conflict")).code).toBe("closed");
@@ -62,6 +62,6 @@ describe("errors from the API", () => {
 
   it("treats a lost answer as an unknown outcome and a refusal as nothing made", () => {
     expect(groupOutcomeUnknown(toGroupError(new TypeError("Network request failed")))).toBe(true);
-    expect(groupOutcomeUnknown(new GroupError("already_in"))).toBe(false);
+    expect(groupOutcomeUnknown(new GroupError("not_added"))).toBe(false);
   });
 });

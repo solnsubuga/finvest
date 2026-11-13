@@ -25,12 +25,33 @@ jest.mock("@/goals/stubGoalsClient", () => {
   };
 });
 
+// What the next set-up or join calls do: "lost" loses the answer, "refuse" is a definite refusal.
+// Each call records the idempotency key it was sent.
+const mockFaults: Record<"createGroup" | "joinGroup", ("lost" | "refuse")[]> = { createGroup: [], joinGroup: [] };
+const mockKeys: Record<"createGroup" | "joinGroup", string[]> = { createGroup: [], joinGroup: [] };
+
 jest.mock("@/goals/stubGroupsClient", () => {
   const actual = jest.requireActual("@/goals/stubGroupsClient");
+  const { GroupError } = jest.requireActual("@/goals/groups");
   return {
     ...actual,
-    createStubGroupsClient: (options: object) =>
-      actual.createStubGroupsClient({ ...options, delayMs: 0, now: () => Date.parse("2026-11-13T09:00:00Z") }),
+    createStubGroupsClient: (options: object) => {
+      const client = actual.createStubGroupsClient({
+        ...options,
+        delayMs: 0,
+        now: () => Date.parse("2026-11-13T09:00:00Z"),
+      });
+      const faulty =
+        (name: "createGroup" | "joinGroup") =>
+        async (...args: unknown[]) => {
+          mockKeys[name].push(args[args.length - 1] as string);
+          const fault = mockFaults[name].shift();
+          if (fault === "lost") throw new TypeError("Network request failed");
+          if (fault === "refuse") throw new GroupError("invalid");
+          return client[name](...args);
+        };
+      return { ...client, createGroup: faulty("createGroup"), joinGroup: faulty("joinGroup") };
+    },
   };
 });
 
@@ -66,6 +87,35 @@ async function openGoals() {
 }
 
 beforeAll(warmRouter, WARM_ROUTER_MS);
+
+beforeEach(() => {
+  for (const name of ["createGroup", "joinGroup"] as const) {
+    mockFaults[name] = [];
+    mockKeys[name] = [];
+  }
+});
+
+async function fillNewGroup() {
+  await openGoals();
+  await fireEvent.press(await screen.findByTestId("new-group"));
+  await fireEvent.press(await screen.findByTestId("group-category-wedding"));
+  await fireEvent.changeText(screen.getByTestId("group-name"), "Our wedding");
+  await fireEvent.changeText(screen.getByTestId("group-target"), "10000000");
+  await fireEvent.changeText(screen.getByTestId("group-part"), "5000000");
+  await fireEvent.changeText(screen.getByTestId("group-you"), "Amara");
+}
+
+async function fillJoin() {
+  await openGoals();
+  await fireEvent.press(await screen.findByTestId("join-group"));
+  await fireEvent.changeText(await screen.findByTestId("join-code"), "DemoInviteWeddingMbara");
+  await fireEvent.press(screen.getByTestId("group-look-up"));
+  await fireEvent.changeText(await screen.findByTestId("join-part"), "2000000");
+  await fireEvent.changeText(screen.getByTestId("join-you"), "Amara");
+}
+
+const LOST_CREATE = "We did not hear back. Pressing again sends the same group goal, so it is never set up twice.";
+const LOST_JOIN = "We did not hear back. Pressing again sends the same request, so you never join twice.";
 
 describe("group goals", () => {
   it("shows the demo family group once, not the own part as a goal of its own", async () => {
@@ -153,5 +203,71 @@ describe("group goals", () => {
     // Back on the list, the part is now an ordinary goal of the client's own.
     expect(await screen.findByText("Wedding in Mbarara")).toBeTruthy();
     expect(screen.queryByTestId("group-demo-group-wedding")).toBeNull();
+  });
+
+  it("locks the set-up form after a lost answer and retries with the same key", async () => {
+    await fillNewGroup();
+    mockFaults.createGroup = ["lost"];
+    await fireEvent.press(screen.getByTestId("group-create"));
+    expect(await screen.findByText(LOST_CREATE)).toBeTruthy();
+    expect(screen.getByTestId("group-name").props.editable).toBe(false);
+    expect(screen.getByTestId("group-category-wedding").props.accessibilityState).toMatchObject({ disabled: true });
+    expect(screen.getByTestId("group-horizon-24").props.accessibilityState).toMatchObject({ disabled: true });
+
+    await fireEvent.press(screen.getByTestId("group-create"));
+    expect(await screen.findByText("Members, 1 of 10")).toBeTruthy();
+    expect(mockKeys.createGroup).toHaveLength(2);
+    expect(mockKeys.createGroup[1]).toBe(mockKeys.createGroup[0]);
+  });
+
+  it("unlocks the set-up form with a new key when a retry is refused", async () => {
+    await fillNewGroup();
+    mockFaults.createGroup = ["lost", "refuse"];
+    await fireEvent.press(screen.getByTestId("group-create"));
+    expect(await screen.findByText(LOST_CREATE)).toBeTruthy();
+    await fireEvent.press(screen.getByTestId("group-create"));
+    expect(await screen.findByText("Something here is not right. Check it and try again.")).toBeTruthy();
+    expect(screen.queryByText(LOST_CREATE)).toBeNull();
+    expect(screen.getByTestId("group-name").props.editable).toBe(true);
+    expect(screen.getByTestId("group-category-wedding").props.accessibilityState).toMatchObject({ disabled: false });
+
+    await fireEvent.changeText(screen.getByTestId("group-name"), "Our wedding day");
+    await fireEvent.press(screen.getByTestId("group-create"));
+    expect(await screen.findByText("Our wedding day")).toBeTruthy();
+    expect(mockKeys.createGroup).toHaveLength(3);
+    expect(mockKeys.createGroup[1]).toBe(mockKeys.createGroup[0]);
+    expect(mockKeys.createGroup[2]).not.toBe(mockKeys.createGroup[0]);
+  });
+
+  it("locks the join form after a lost answer and retries with the same key", async () => {
+    await fillJoin();
+    mockFaults.joinGroup = ["lost"];
+    await fireEvent.press(screen.getByTestId("group-join"));
+    expect(await screen.findByText(LOST_JOIN)).toBeTruthy();
+    expect(screen.getByTestId("join-part").props.editable).toBe(false);
+    expect(screen.getByTestId("join-you").props.editable).toBe(false);
+
+    await fireEvent.press(screen.getByTestId("group-join"));
+    expect(await screen.findByText("Members, 4 of 10")).toBeTruthy();
+    expect(mockKeys.joinGroup).toHaveLength(2);
+    expect(mockKeys.joinGroup[1]).toBe(mockKeys.joinGroup[0]);
+  });
+
+  it("unlocks the join form with a new key when a retry is refused", async () => {
+    await fillJoin();
+    mockFaults.joinGroup = ["lost", "refuse"];
+    await fireEvent.press(screen.getByTestId("group-join"));
+    expect(await screen.findByText(LOST_JOIN)).toBeTruthy();
+    await fireEvent.press(screen.getByTestId("group-join"));
+    expect(await screen.findByText("Something here is not right. Check it and try again.")).toBeTruthy();
+    expect(screen.queryByText(LOST_JOIN)).toBeNull();
+    expect(screen.getByTestId("join-you").props.editable).toBe(true);
+
+    await fireEvent.changeText(screen.getByTestId("join-part"), "1500000");
+    await fireEvent.press(screen.getByTestId("group-join"));
+    expect(await screen.findByText("Members, 4 of 10")).toBeTruthy();
+    expect(mockKeys.joinGroup).toHaveLength(3);
+    expect(mockKeys.joinGroup[1]).toBe(mockKeys.joinGroup[0]);
+    expect(mockKeys.joinGroup[2]).not.toBe(mockKeys.joinGroup[0]);
   });
 });

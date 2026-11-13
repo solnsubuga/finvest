@@ -17,7 +17,8 @@ import { useIsWide } from "@/theme/useIsWide";
 
 type State =
   | { status: "loading" }
-  | { status: "ready"; goals: Goal[]; groups: Group[] }
+  // `groups` is null when only the group goals could not be loaded.
+  | { status: "ready"; goals: Goal[]; groups: Group[] | null }
   | { status: "error"; message: string };
 
 export default function Goals() {
@@ -30,10 +31,10 @@ export default function Goals() {
   const load = useCallback(() => {
     let live = true;
     setState((current) => (current.status === "ready" ? current : { status: "loading" }));
-    Promise.all([client.listGoals(), groupsClient.listGroups()]).then(
+    Promise.all([client.listGoals(), groupsClient.listGroups().catch(() => null)]).then(
       ([goals, groups]) => {
         // A member's own part of a group is shown in the group, not twice.
-        const parts = new Set(groups.map((group) => group.ownGoalId));
+        const parts = new Set((groups ?? []).map((group) => group.ownGoalId));
         live && setState({ status: "ready", goals: goals.filter((goal) => !parts.has(goal.id)), groups });
       },
       (caught) => live && setState({ status: "error", message: describeGoalError(caught) }),
@@ -60,11 +61,11 @@ export default function Goals() {
           <Notice tone="danger">{state.message}</Notice>
           <Button label="Try again" onPress={load} variant="primary" testID="goals-retry" />
         </View>
-      ) : state.goals.length === 0 && state.groups.length === 0 ? (
+      ) : state.goals.length === 0 && (state.groups ?? []).length === 0 ? (
         <>
           <Empty onStart={newGoal} />
           <Together
-            groups={[]}
+            groups={state.groups}
             wide={wide}
             onOpen={(id) => router.push(`/goals/groups/${id}`)}
             onStart={() => router.push("/goals/groups/new")}
@@ -124,7 +125,7 @@ function Together({
   onStart,
   onJoin,
 }: {
-  groups: Group[];
+  groups: Group[] | null;
   wide: boolean;
   onOpen: (groupId: string) => void;
   onStart: () => void;
@@ -141,7 +142,9 @@ function Together({
           can touch your money.
         </Txt>
       </View>
-      {groups.length > 0 ? (
+      {groups === null ? (
+        <Notice tone="warning">Your group goals could not be loaded. Your own goals are above.</Notice>
+      ) : groups.length > 0 ? (
         <View style={[styles.list, wide && styles.grid]}>
           {groups.map((group) => (
             <View key={group.id} style={wide ? styles.cell : undefined}>
