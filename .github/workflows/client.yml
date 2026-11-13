@@ -1,0 +1,47 @@
+name: Client app
+
+on:
+  pull_request:
+    paths:
+      - "apps/client/**"
+      - "packages/tokens/**"
+      - "package.json"
+      - "pnpm-lock.yaml"
+      - "pnpm-workspace.yaml"
+      - ".github/workflows/client.yml"
+  push:
+    branches: [main]
+    paths:
+      - "apps/client/**"
+      - "packages/tokens/**"
+      - "package.json"
+      - "pnpm-lock.yaml"
+      - "pnpm-workspace.yaml"
+      - ".github/workflows/client.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: client-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Client app
+        working-directory: apps/client
+        run: |
+          pnpm lint
+          pnpm typecheck
+          pnpm test
+          pnpm build:web

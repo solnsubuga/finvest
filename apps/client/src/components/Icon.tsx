@@ -1,0 +1,57 @@
+import Svg, { Circle, Path } from "react-native-svg";
+
+import { colors } from "@/theme";
+
+const paths = {
+  back: ["M15 6l-6 6 6 6"],
+  chevron: ["M9 6l6 6-6 6"],
+  check: ["M5 12.5l4.5 4.5L19 7.5"],
+  eye: ["M2 12s3.6-6.5 10-6.5S22 12 22 12s-3.6 6.5-10 6.5S2 12 2 12z"],
+  eyeOff: ["M2 12s3.6-6.5 10-6.5S22 12 22 12s-3.6 6.5-10 6.5S2 12 2 12z", "M4 4l16 16"],
+  key: ["M12 12h9M18 12v3M21 12v2"],
+  home: ["M4 11l8-7 8 7v9H4z"],
+  invest: ["M4 19V5M4 19h16M8 15l4-4 3 3 5-6"],
+  portfolio: ["M4 8h16v11H4zM9 8V5h6v3"],
+  goals: [],
+  activity: ["M5 7h14M5 12h14M5 17h9"],
+  documents: ["M7 3h7l4 4v14H7zM14 3v4h4M10 12h5M10 16h5"],
+  profile: ["M5 20c1-4 4-5.5 7-5.5s6 1.5 7 5.5"],
+  help: ["M9.5 9.5a2.5 2.5 0 115 0c0 1.5-2.5 2-2.5 4M12 17.5v.01"],
+  bell: ["M6 16V11a6 6 0 0112 0v5l2 2H4zM10 21h4"],
+} as const;
+
+export type IconName = keyof typeof paths;
+
+type Props = { name: IconName; size?: number; color?: string; strokeWidth?: number };
+
+/** Line icons drawn to match the design canvas. Decorative: label the control, not the icon. */
+export function Icon({ name, size = 20, color = colors.ink, strokeWidth = 2 }: Props) {
+  return (
+    <Svg
+      width={size}
+      height={size}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke={color}
+      strokeWidth={strokeWidth}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      accessibilityElementsHidden
+      importantForAccessibility="no-hide-descendants"
+    >
+      {paths[name].map((d) => (
+        <Path key={d} d={d} />
+      ))}
+      {name === "eye" || name === "eyeOff" ? <Circle cx={12} cy={12} r={2.8} /> : null}
+      {name === "key" ? <Circle cx={8} cy={12} r={4} /> : null}
+      {name === "goals" ? (
+        <>
+          <Circle cx={12} cy={12} r={8} />
+          <Circle cx={12} cy={12} r={3} />
+        </>
+      ) : null}
+      {name === "profile" ? <Circle cx={12} cy={8} r={3.5} /> : null}
+      {name === "help" ? <Circle cx={12} cy={12} r={9} /> : null}
+    </Svg>
+  );
+}
