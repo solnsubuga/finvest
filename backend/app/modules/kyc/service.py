@@ -266,6 +266,23 @@ async def choose_document(
     return await _view_by_id(session, sealer, row.id)
 
 
+def photo_key(check_id: str, photo_id: str) -> str:
+    """Where a photo's file is kept in private storage."""
+    return f"kyc/{check_id}/{photo_id}"
+
+
+async def photo_slot(
+    session: AsyncSession, client: Actor, kind: PhotoKind, *, content_type: str, byte_size: int
+) -> str:
+    """The check a photo of this kind may be added to now, or the refusal add_photo would give.
+
+    Run before the file is stored, so a refused photo never leaves a file behind.
+    """
+    row = await _editable(session, client)
+    _check_photo(row, kind, content_type, byte_size)
+    return str(row.id)
+
+
 async def add_photo(
     session: AsyncSession,
     client: Actor,
@@ -275,24 +292,18 @@ async def add_photo(
     byte_size: int,
     sha256: str,
     clock: Clock,
+    photo_id: str | None = None,
 ) -> PhotoView:
     """Record a photo the client uploaded, replacing the current one of the same kind.
 
-    The file itself goes to private storage under the returned key. The earlier photo row is
-    kept, marked as replaced.
+    The file itself goes to private storage under `photo_key(check, photo_id)`. The earlier
+    photo row is kept, marked as replaced.
     """
     row = await _editable(session, client)
-    if kind not in _required(row):
-        raise _invalid("kind", "photo_not_part_of_document")
-    if row.status == CheckStatus.AWAITING_CLIENT and kind.value not in row.retake_photos:
-        raise ApplicationError("conflict")
-    if content_type not in PHOTO_CONTENT_TYPES:
-        raise _invalid("content_type", "unsupported_content_type")
-    if type(byte_size) is not int or not 0 < byte_size <= MAX_PHOTO_BYTES:
-        raise _invalid("byte_size", "invalid_size")
+    _check_photo(row, kind, content_type, byte_size)
     now = clock.now()
-    photo_id = push_id()
-    storage_key = f"kyc/{row.id}/{photo_id}"
+    photo_id = photo_id or push_id()
+    storage_key = photo_key(row.id, photo_id)
     await session.execute(_REPLACE_PHOTO, {"check_id": row.id, "kind": kind.value, "now": now})
     await session.execute(
         _INSERT_PHOTO,
@@ -633,6 +644,28 @@ async def account_holder(session: AsyncSession, client_id: str) -> AccountHolder
     return AccountHolder(row.surname, row.given_names, row.account_number)
 
 
+async def show_document_number(
+    session: AsyncSession, sealer: Sealer, staff: Actor, check_id: str, clock: Clock
+) -> str:
+    """The whole document number, for the staff member who asked. Each look is on the trail."""
+    _person(staff, "staff")
+    view = await _view_by_id(session, sealer, check_id)
+    if view.details is None:
+        raise ApplicationError("not_found")
+    await _audit(session, staff, "access", "kyc.check.document_number_shown", check_id, clock)
+    return view.details.document_number
+
+
+async def photos_for_viewing(
+    session: AsyncSession, sealer: Sealer, staff: Actor, check_id: str, clock: Clock
+) -> tuple[PhotoView, ...]:
+    """The check's current photos, for signing links to them. Each request is on the trail."""
+    _person(staff, "staff")
+    view = await _view_by_id(session, sealer, check_id)
+    await _audit(session, staff, "access", "kyc.check.photos_viewed", check_id, clock)
+    return view.photos
+
+
 async def approve(
     session: AsyncSession, sealer: Sealer, staff: Actor, check_id: str, reason: str, clock: Clock
 ) -> CheckView:
@@ -764,6 +797,17 @@ def _message(value: str | None, *, required: bool) -> str | None:
 def _require_move(actor: ActorKind, current: CheckStatus, target: CheckStatus) -> None:
     if not can_move(actor, current, target):
         raise ApplicationError("conflict")
+
+
+def _check_photo(row: Row[Any], kind: PhotoKind, content_type: str, byte_size: int) -> None:
+    if kind not in _required(row):
+        raise _invalid("kind", "photo_not_part_of_document")
+    if row.status == CheckStatus.AWAITING_CLIENT and kind.value not in row.retake_photos:
+        raise ApplicationError("conflict")
+    if content_type not in PHOTO_CONTENT_TYPES:
+        raise _invalid("content_type", "unsupported_content_type")
+    if type(byte_size) is not int or not 0 < byte_size <= MAX_PHOTO_BYTES:
+        raise _invalid("byte_size", "invalid_size")
 
 
 def _required(row: Row[Any]) -> frozenset[PhotoKind]:

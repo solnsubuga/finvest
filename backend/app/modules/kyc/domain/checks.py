@@ -70,6 +70,18 @@ def can_move(actor: ActorKind, current: CheckStatus, target: CheckStatus) -> boo
     return target in _TRANSITIONS[actor].get(current, frozenset())
 
 
+def staff_moves(current: CheckStatus) -> frozenset[CheckStatus]:
+    """Where staff may take a check from here. Empty when there is nothing for them to decide."""
+    return _TRANSITIONS["staff"].get(current, frozenset())
+
+
+def mask_document_number(value: str) -> str:
+    """Enough of a number to recognise it, as "CM90••••••••4PL". A short one shows nothing."""
+    if len(value) <= 7:
+        return "•" * len(value)
+    return value[:4] + "•" * (len(value) - 7) + value[-3:]
+
+
 _BOTH_SIDES = frozenset({PhotoKind.FRONT, PhotoKind.BACK, PhotoKind.SELFIE})
 _REQUIRED_PHOTOS: dict[DocumentType, frozenset[PhotoKind]] = {
     DocumentType.NATIONAL_ID: _BOTH_SIDES,
@@ -181,3 +193,18 @@ def retake_problem(document_type: DocumentType, photos: frozenset[PhotoKind]) ->
     if not photos <= required_photos(document_type):
         return "photo_not_part_of_document"
     return None
+
+
+def photo_matches_type(content_type: str, data: bytes) -> bool:
+    """Whether the file starts the way a file of the claimed type does.
+
+    The type is the client's claim. Checking the first bytes keeps anything else, such as a
+    page a browser would run, out of the bucket under an image's name.
+    """
+    if content_type == "image/jpeg":
+        return data.startswith(b"\xff\xd8\xff")
+    if content_type == "image/png":
+        return data.startswith(b"\x89PNG\r\n\x1a\n")
+    if content_type == "image/webp":
+        return len(data) >= 12 and data[:4] == b"RIFF" and data[8:12] == b"WEBP"
+    return False

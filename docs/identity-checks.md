@@ -99,12 +99,36 @@ A result that arrives after the check moved on changes nothing.
 
 Settings, all optional while the provider is `manual`: `FINVEST_IDENTITY_PROVIDER` (`manual` or `development-stub`), `FINVEST_IDENTITY_AUTOMATIC_APPROVAL` (off; the owner's decision), and `FINVEST_IDENTITY_DATA_KEY`, which any provider other than `manual` requires in the worker.
 
+## Routes
+
+The client's own check, under `/client/identity-check`, with the client's session:
+
+| Route | What it does |
+| --- | --- |
+| `GET` | The check, or `null` before a document is chosen. Nothing about providers, flags or who decided. |
+| `PUT /document` | Start the check, or change the document while it is a draft. |
+| `POST /photos` | Describe a photo (kind, type, size, SHA-256) and get a link to upload it. |
+| `PUT /details` | Save the details the client confirmed. |
+| `POST /submit` | Hand the check in. Says which photos or details are missing if it is not ready. |
+
+The review queue, under `/staff/identity-checks`. Reading needs the permission `identity_checks.view`. Deciding needs `identity_checks.review`. Admin, Operations and Compliance hold both.
+
+| Route | What it does |
+| --- | --- |
+| `GET` | Checks that are not decided, the ones needing a person first. |
+| `GET /{id}` | One check, with the document number masked (`CM90••••••••4PL`) and the decisions allowed in its state. |
+| `POST /{id}/document-number` | The whole document number. Each call is an audit event. |
+| `POST /{id}/photo-links` | Links to the photos that last 5 minutes. Each call is an audit event. |
+| `POST /{id}/approve`, `/reject`, `/ask-for-photos`, `/escalate` | The decisions. Each needs a reason or a message to the client. |
+
+Photos never pass through the API. An upload link lasts 10 minutes and its signature fixes the content type and the SHA-256 of the file, so storage refuses any other body. Links are never stored or logged. Object storage is configured with `FINVEST_OBJECT_STORAGE_BUCKET`, `_ENDPOINT`, `_REGION`, `_ACCESS_KEY_ID` and `_SECRET_ACCESS_KEY` (`app/infrastructure/storage`).
+
+Without `FINVEST_IDENTITY_DATA_KEY` the routes answer `unavailable`, and so do the photo routes without object storage.
+
 ## Not built yet
 
-- HTTP routes for the client app and the console.
-- Upload and signed download links for object storage.
-- Reading `FINVEST_IDENTITY_DATA_KEY` in the API (nothing calls the module over HTTP yet).
-- The console route that returns the ID number masked, and a separate route that returns it in full and writes an audit event.
+- Checking that a photo was really uploaded before the check is handed in. Today the row is saved when the link is given out.
+- The console and the client app calling these routes. Both still use sample data.
 - Replacing the identity data key. Do not rotate it yet: a sealed value records which key sealed it and an old key can still be read, but nothing seals the rows again, and the document fingerprints are made with the current key only, so the one-document rule would stop matching earlier clients.
 - Notifications when a check is approved or needs a new photo.
 - Checking that the name matches the name registered on the client's mobile money number.
