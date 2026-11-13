@@ -286,6 +286,24 @@ async def get_destination(session: AsyncSession, destination_id: str) -> Destina
     return _view(row)
 
 
+_SEND_TO = text(
+    "SELECT network, account_number FROM payout_destinations "
+    "WHERE id = :id AND kind = 'mobile_money'"
+)
+
+
+async def mobile_money_number(session: AsyncSession, destination_id: str) -> tuple[str, str]:
+    """The network and full number a mobile money payout is sent to. For the worker only.
+
+    The number is personal data: it goes to the provider and nowhere else, never into a log,
+    a job payload or a message.
+    """
+    row = (await session.execute(_SEND_TO, {"id": destination_id})).one_or_none()
+    if row is None or row.network is None:
+        raise ApplicationError("not_found")
+    return row.network, row.account_number
+
+
 async def usable_destination(
     session: AsyncSession, client_id: str, destination_id: str
 ) -> DestinationView:
