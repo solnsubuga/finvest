@@ -30,7 +30,7 @@ type Load = { state: "loading" } | { state: "failed"; message: string } | { stat
 interface AnnouncementsSectionProps {
   api: AnnouncementsApi;
   directory: Directory;
-  /** `wordings.change`: propose and decide. The API checks it again. */
+  /** `announcements.send`: propose and decide. The API checks it again. */
   canChange: boolean;
 }
 
@@ -330,7 +330,7 @@ function AnnouncementCard({ item, canChange, staffName, busy, error, onDecide }:
         </p>
       ) : null}
       {waiting && !canChange ? (
-        <p className="m-0 text-sm text-muted">Someone who can change client messages approves it.</p>
+        <p className="m-0 text-sm text-muted">Someone who can send announcements approves it.</p>
       ) : null}
       {waiting && canChange && item.yours ? (
         <div className="flex flex-wrap items-center gap-3">

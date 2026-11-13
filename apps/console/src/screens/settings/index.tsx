@@ -33,9 +33,11 @@ interface SettingsScreenProps {
   directory: Directory;
   /** `wordings.change`: propose and decide changes. The API checks it again. */
   canChange: boolean;
+  /** `announcements.send`: propose and decide announcements. The API checks it again. */
+  canSend: boolean;
 }
 
-export function SettingsScreen({ api, announcements, directory, canChange }: SettingsScreenProps) {
+export function SettingsScreen({ api, announcements, directory, canChange, canSend }: SettingsScreenProps) {
   const [load, setLoad] = useState<Load>({ state: "loading" });
   const [selected, setSelected] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -119,7 +121,7 @@ export function SettingsScreen({ api, announcements, directory, canChange }: Set
         <p role="status" className="m-0 text-md text-muted">
           Loading settings
         </p>
-        <AnnouncementsSection api={announcements} directory={directory} canChange={canChange} />
+        <AnnouncementsSection api={announcements} directory={directory} canChange={canSend} />
       </>
     );
   }
@@ -140,7 +142,7 @@ export function SettingsScreen({ api, announcements, directory, canChange }: Set
             Try again
           </Button>
         </section>
-        <AnnouncementsSection api={announcements} directory={directory} canChange={canChange} />
+        <AnnouncementsSection api={announcements} directory={directory} canChange={canSend} />
       </>
     );
   }
@@ -213,7 +215,7 @@ export function SettingsScreen({ api, announcements, directory, canChange }: Set
           </div>
         )}
       </section>
-      <AnnouncementsSection api={announcements} directory={directory} canChange={canChange} />
+      <AnnouncementsSection api={announcements} directory={directory} canChange={canSend} />
     </>
   );
 }
@@ -243,6 +245,7 @@ export default function SettingsPage() {
       announcements={announcements}
       directory={directory}
       canChange={session ? can(session, "wordings.change") : false}
+      canSend={session ? can(session, "announcements.send") : false}
     />
   );
 }
