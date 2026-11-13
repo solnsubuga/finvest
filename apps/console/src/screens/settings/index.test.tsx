@@ -5,13 +5,21 @@ import { createStubDirectory } from "@/directory/stub.ts";
 import { notConnectedWordingsApi, WordingsError, type WordingsApi } from "./api.ts";
 import { SettingsScreen } from "./index.tsx";
 import { checkWording, fillSample, outsideLinks } from "./rules.ts";
+import { createStubAnnouncementsApi } from "./announcementsStub.ts";
 import { createStubWordingsApi } from "./stub.ts";
 
 const ME = { id: "sample-me", name: "Amina Kintu" };
 const NOW = Date.parse("2026-11-13T09:00:00Z");
 
 function renderSettings({ api = createStubWordingsApi(ME, () => NOW), canChange = true }: { api?: WordingsApi; canChange?: boolean } = {}) {
-  render(<SettingsScreen api={api} directory={createStubDirectory(ME)} canChange={canChange} />);
+  render(
+    <SettingsScreen
+      api={api}
+      announcements={createStubAnnouncementsApi(ME, () => NOW)}
+      directory={createStubDirectory(ME)}
+      canChange={canChange}
+    />,
+  );
   return { api, user: userEvent.setup() };
 }
 
