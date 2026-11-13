@@ -200,6 +200,8 @@ export type ClientLoginStart = z.infer<typeof ClientLoginStart>;
 
 export const ClientSessionView = z.object({
   client_id: z.string(),
+  email: z.string().nullable().optional(),
+  email_verified: z.boolean().optional(),
   phone: z.string(),
   restricted_until: z.string().nullable(),
 });
@@ -263,6 +265,16 @@ export const DocumentList = z.object({
   items: z.array(DocumentItem),
 });
 export type DocumentList = z.infer<typeof DocumentList>;
+
+export const EmailConfirm = z.object({
+  token: z.string(),
+});
+export type EmailConfirm = z.infer<typeof EmailConfirm>;
+
+export const EmailLinkSent = z.object({
+  sent: z.boolean(),
+});
+export type EmailLinkSent = z.infer<typeof EmailLinkSent>;
 
 export const Frequency = z.enum(["weekly", "monthly"]);
 export type Frequency = z.infer<typeof Frequency>;
@@ -1036,6 +1048,28 @@ export const operations = {
     bodyKind: null,
     idempotent: false,
     status: 200,
+    response: null,
+  },
+  "POST /client/email/verification": {
+    method: "POST",
+    path: "/client/email/verification",
+    params: z.object({}),
+    query: z.object({}),
+    body: null,
+    bodyKind: null,
+    idempotent: false,
+    status: 200,
+    response: EmailLinkSent,
+  },
+  "POST /client/email/verification/confirm": {
+    method: "POST",
+    path: "/client/email/verification/confirm",
+    params: z.object({}),
+    query: z.object({}),
+    body: EmailConfirm,
+    bodyKind: "json",
+    idempotent: false,
+    status: 204,
     response: null,
   },
   "GET /client/goal-groups": {

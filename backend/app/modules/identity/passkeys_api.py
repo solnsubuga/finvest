@@ -152,6 +152,8 @@ async def client_signed_in(
             client_id=session.client_id,
             phone=session.phone,
             restricted_until=session.restricted_until,
+            email=session.email,
+            email_verified=session.email_verified,
         ),
     )
 

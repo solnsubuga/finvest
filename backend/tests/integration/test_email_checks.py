@@ -1,0 +1,184 @@
+"""A client proves their email address with a one-time link, through the API."""
+
+import itertools
+from collections.abc import AsyncIterator
+from dataclasses import dataclass
+from datetime import timedelta
+
+import httpx
+import pytest
+from sqlalchemy import text
+from sqlalchemy.exc import DBAPIError
+
+from app.api.app import create_app
+from app.infrastructure.database import Database
+from app.modules.identity.email_checks import LINK_LIFETIME, LINKS_PER_CLIENT, VERIFY_PATH
+from app.modules.identity.hashing import PasswordHasher
+from app.modules.identity.service import IdentityService, client_contact
+from app.shared.actors import Actor
+from tests.support.clock import FakeClock
+from tests.support.database import TestDatabase
+
+pytestmark = pytest.mark.integration
+
+PASSWORD = "copper-harbour-violin"
+ORIGIN = "https://app.finvestug.com"
+HASHER = PasswordHasher(memory_kib=19_456, time_cost=2)
+_numbers = itertools.count(750_000_000)
+
+
+@dataclass
+class Api:
+    http: httpx.AsyncClient
+    identity: IdentityService
+    clock: FakeClock
+    database: Database
+    worker: Database
+    owner: Database
+
+
+@pytest.fixture
+async def api(
+    test_database: TestDatabase,
+    app_database: Database,
+    worker_database: Database,
+    migrator_database: Database,
+) -> AsyncIterator[Api]:
+    settings = test_database.settings("finvest_app").model_copy(
+        update={"client_allowed_origins": [ORIGIN]}
+    )
+    clock = FakeClock()
+    app = create_app(settings, app_database, clock, HASHER)
+    transport = httpx.ASGITransport(app=app, raise_app_exceptions=False)
+    async with httpx.AsyncClient(transport=transport, base_url="https://api") as http:
+        yield Api(http, app.state.identity, clock, app_database, worker_database, migrator_database)
+
+
+async def a_client(api: Api, email: str | None = "set") -> tuple[str, str | None, dict[str, str]]:
+    number = next(_numbers)
+    address = f"client{number}@example.com" if email else None
+    client_id = await api.identity.create_client(
+        phone=f"+256{number}", email=address, password=PASSWORD
+    )
+    issued = await api.identity.issue_session(
+        Actor("client", client_id), second_step="passkey", transport="token"
+    )
+    return client_id, address, {"Authorization": f"Bearer {issued.token}"}
+
+
+async def links(api: Api, recipient: str) -> list[str]:
+    async with api.worker.transaction() as session:
+        rows = await session.execute(
+            text(
+                "SELECT variables->>'link' AS link FROM notification_messages "
+                "WHERE recipient = :r AND template = 'email_verification' ORDER BY id"
+            ),
+            {"r": recipient},
+        )
+        return [row.link for row in rows]
+
+
+def token_of(link: str) -> str:
+    assert link.startswith(f"{ORIGIN}{VERIFY_PATH}#")
+    return link.split("#", 1)[1]
+
+
+async def confirm(api: Api, token: str) -> httpx.Response:
+    return await api.http.post("/client/email/verification/confirm", json={"token": token})
+
+
+async def test_a_client_proves_their_address_with_the_link(api: Api) -> None:
+    client_id, email, bearer = await a_client(api)
+    assert email is not None
+    before = await api.http.get("/client/session", headers=bearer)
+    assert (before.json()["email"], before.json()["email_verified"]) == (email, False)
+    sent = await api.http.post("/client/email/verification", headers=bearer)
+    assert (sent.status_code, sent.json()) == (200, {"sent": True})
+    [link] = await links(api, email)
+
+    # The link works on any device, without a session.
+    assert (await confirm(api, token_of(link))).status_code == 204
+    after = await api.http.get("/client/session", headers=bearer)
+    assert after.json()["email_verified"] is True
+    async with api.worker.transaction() as session:
+        contact = await client_contact(session, client_id)
+    assert contact is not None
+    assert contact.email_verified
+    # It works once, and a proved address needs no new link.
+    again = await confirm(api, token_of(link))
+    assert again.status_code == 410
+    assert (await api.http.post("/client/email/verification", headers=bearer)).json() == {
+        "sent": False
+    }
+    async with api.owner.transaction() as session:
+        actions = await session.scalars(
+            text("SELECT action FROM audit_events WHERE resource_id = :id"), {"id": client_id}
+        )
+        assert "identity.email.verified" in list(actions)
+
+
+async def test_a_newer_link_replaces_an_older_one_and_links_expire(api: Api) -> None:
+    _, email, bearer = await a_client(api)
+    assert email is not None
+    await api.http.post("/client/email/verification", headers=bearer)
+    await api.http.post("/client/email/verification", headers=bearer)
+    old, new = await links(api, email)
+    assert (await confirm(api, token_of(old))).status_code == 410
+    api.clock.advance(seconds=(LINK_LIFETIME + timedelta(seconds=1)).total_seconds())
+    assert (await confirm(api, token_of(new))).status_code == 410
+
+
+async def test_only_a_digest_of_the_token_is_stored(api: Api) -> None:
+    client_id, email, bearer = await a_client(api)
+    assert email is not None
+    await api.http.post("/client/email/verification", headers=bearer)
+    [link] = await links(api, email)
+    async with api.owner.transaction() as session:
+        stored = await session.scalar(
+            text("SELECT token_hash FROM identity_email_checks WHERE client_id = :id"),
+            {"id": client_id},
+        )
+    assert token_of(link).encode() not in bytes(stored)
+    assert len(bytes(stored)) == 32
+
+
+async def test_a_link_proves_only_the_address_it_was_sent_to(api: Api) -> None:
+    client_id, email, bearer = await a_client(api)
+    assert email is not None
+    await api.http.post("/client/email/verification", headers=bearer)
+    [link] = await links(api, email)
+    async with api.owner.transaction() as session:
+        await session.execute(
+            text("UPDATE identity_clients SET email = 'other@example.com' WHERE id = :id"),
+            {"id": client_id},
+        )
+    assert (await confirm(api, token_of(link))).status_code == 410
+    async with api.worker.transaction() as session:
+        contact = await client_contact(session, client_id)
+    assert contact is not None
+    assert not contact.email_verified
+
+
+async def test_no_address_no_link_and_requests_are_limited(api: Api) -> None:
+    _, _, bearer = await a_client(api, email=None)
+    missing = await api.http.post("/client/email/verification", headers=bearer)
+    assert missing.status_code == 422
+    _, _, bearer = await a_client(api)
+    for _ in range(LINKS_PER_CLIENT):
+        assert (
+            await api.http.post("/client/email/verification", headers=bearer)
+        ).status_code == 200
+    limited = await api.http.post("/client/email/verification", headers=bearer)
+    assert limited.status_code == 429
+    unsigned = await api.http.post("/client/email/verification")
+    assert unsigned.status_code == 401
+
+
+async def test_the_api_cannot_mark_an_address_proved_itself(api: Api) -> None:
+    client_id, _, _ = await a_client(api)
+    with pytest.raises(DBAPIError, match="permission denied"):
+        async with api.database.transaction() as session:
+            await session.execute(
+                text("UPDATE identity_clients SET email_verified_at = now() WHERE id = :id"),
+                {"id": client_id},
+            )
