@@ -15,6 +15,7 @@ A running log. Add a row when a decision is made, and move an open question up w
 | 2026-11-13 | No wallet for now. Every payment in is for a specific investment or goal, and every payment out goes straight to mobile money or bank. |
 | 2026-11-13 | ioTec for payments (ioTec Pay), SMS (Messaging) and phone number verification (Verify) for now, each behind its own adapter. |
 | 2026-11-13 | Email provider is Resend. |
+| 2026-11-13 | Resend's delivery events reach the API through the shared webhook router at hooks.fidiba.com, at `POST /webhooks/resend`, signed the Svix way with `RESEND_HOOK_SECRET`. Every Resend email carries the `fidiba_environment` tag (`app_finvest_prod` in production). Lasting bounces and spam complaints stop further email to that address. Asked for by the owner. |
 | 2026-11-13 | No bank partner yet. The bank sits behind an adapter that works with uploaded statements today and can take a bank API later. |
 | 2026-11-13 | Early withdrawals are funded from a liquidity buffer first, then by secondary market sales. |
 | 2026-11-13 | Account numbers are 10 digits: 2 for type, 7 random, 1 Luhn check digit. See [account-numbers.md](account-numbers.md). |

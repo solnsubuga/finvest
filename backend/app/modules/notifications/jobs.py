@@ -35,6 +35,7 @@ from app.infrastructure.sms import (
     SmsUncertain,
 )
 from app.modules.notifications.domain.templates import InvalidTemplate, render, render_sms
+from app.modules.notifications.email_delivery import is_suppressed
 from app.modules.notifications.service import PURGE_MESSAGES, SEND_MESSAGE
 from app.shared.clock import Clock
 
@@ -100,7 +101,9 @@ def handlers(
         if row is None:
             raise PermanentJobError("The queued message does not exist", code="message_missing")
 
-        async def finished(session: AsyncSession, status: str, sent: _Sent | None) -> None:
+        async def finished(
+            session: AsyncSession, status: str, sent: _Sent | None, failure: str = "rejected"
+        ) -> None:
             await session.execute(
                 text(
                     "UPDATE notification_messages SET status = :status, "
@@ -112,7 +115,7 @@ def handlers(
                     "status": status,
                     "provider": sent.provider if sent else None,
                     "message_id": sent.message_id if sent else None,
-                    "failure": None if status == "sent" else "rejected",
+                    "failure": None if status == "sent" else failure,
                     "now": clock.now(),
                     "id": row.id,
                 },
@@ -122,6 +125,20 @@ def handlers(
             # Sent by an earlier attempt whose result was saved, or cleared since.
             await context.apply(_nothing)
             return
+        if row.channel == "email":
+            async with database.transaction() as session:
+                suppressed = await is_suppressed(session, row.recipient)
+            if suppressed:
+                # The address bounced for good or reported our mail as spam. Sending again
+                # would only harm the sending domain's standing with every other inbox.
+
+                async def suppress(session: AsyncSession) -> dict[str, object]:
+                    await finished(session, "failed", None, "suppressed")
+                    return {"suppressed": True}
+
+                await context.apply(suppress)
+                logger.warning("message_suppressed", message_id=row.id, template=row.template)
+                return
         try:
             # No transaction is open while the provider is called.
             sent = await deliver(

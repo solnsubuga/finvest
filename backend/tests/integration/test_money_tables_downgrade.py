@@ -1,7 +1,8 @@
 """A downgrade must never delete the books, the issued numbers, the audit trail, the job
 history, the receipts that stop a command running twice, the identity records, the payout
 destinations, the withdrawal limits, the payouts, the migration checks, the imported
-statements, the day closes, the help chat, the complaints register or the goals."""
+statements, the day closes, the help chat, the complaints register, the goals or the email
+delivery records."""
 
 import os
 from collections.abc import Iterator
@@ -176,6 +177,11 @@ ROWS = {
         "INSERT INTO notification_preferences (client_id, category, channels, updated_at) "
         "VALUES ('-Nabc0000000000000B1', 'money', ARRAY['push'], now())",
         "refusing to drop notifications",
+    ),
+    "0092_email_delivery": (
+        "INSERT INTO notification_email_events (svix_id, delivery, email_id, recipients, "
+        "permanent, received_at) VALUES ('msg_test1', 'delivered', 'email-1', '{}', false, now())",
+        "refusing to drop email delivery records",
     ),
     "0007_notifications": (
         "INSERT INTO notification_messages (id, idempotency_key, channel, recipient, template, "

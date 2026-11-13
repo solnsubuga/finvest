@@ -13,6 +13,7 @@ from app.api.hardening import BodyLimitMiddleware, SecurityHeadersMiddleware
 from app.api.request_id import RequestIdMiddleware
 from app.api.request_log import RequestLogMiddleware
 from app.infrastructure.database import Database
+from app.infrastructure.email.webhooks import ResendHookSettings, WebhookVerifier
 from app.infrastructure.settings import Settings
 from app.infrastructure.storage import FileStorage, StorageSettings
 from app.modules.goals import api as goals_api
@@ -24,6 +25,7 @@ from app.modules.identity.passkeys import PasskeyService
 from app.modules.identity.service import IdentityService
 from app.modules.migration import api as migration_api
 from app.modules.notifications import api as notifications_api
+from app.modules.notifications import hooks as notification_hooks
 from app.modules.payments import api as payments_api
 from app.modules.payments import routes as payment_routes
 from app.modules.payments.domain.provider import CollectionsProvider
@@ -42,12 +44,14 @@ def create_app(
     *,
     collections: CollectionsProvider | None = None,
     storage: FileStorage | None = None,
+    email_hooks: WebhookVerifier | None = None,
 ) -> FastAPI:
     owned = database is None
     database = database or Database(settings)
     clock = clock or SystemClock()
     collections = collections or collections_provider(PaymentsSettings(), clock)
     storage = storage or StorageSettings().storage()
+    email_hooks = email_hooks or ResendHookSettings().verifier()
 
     @asynccontextmanager
     async def lifespan(_: FastAPI) -> AsyncIterator[None]:
@@ -111,6 +115,7 @@ def create_app(
     app.include_router(payments_api.create_router(collections))
     for router in goals_api.routers:
         app.include_router(router)
+    app.include_router(notification_hooks.create_router(email_hooks))
     app.include_router(payment_routes.create_client_router(collections))
     app.include_router(payment_routes.staff_router)
     app.include_router(migration_api.router)
