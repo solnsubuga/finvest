@@ -1,42 +1,50 @@
 """The worker process: `python -m app.worker_main`. Connect it as `finvest_worker`.
 
-It will claim and run jobs from the PostgreSQL jobs table. The job queue arrives in its own
-pull request; until then the process checks its database role, keeps a heartbeat and waits.
+It claims jobs from the PostgreSQL jobs table and runs their handlers. Every provider call in
+the system happens here, never in the API and never inside a database transaction.
 """
 
 import asyncio
-
-import structlog
+from datetime import timedelta
 
 from app.infrastructure.database import Database
 from app.infrastructure.database.roles import WORKER, check_role
+from app.infrastructure.jobs import JobHandler, Worker, WorkerConfig
+from app.infrastructure.jobs.settings import JobProcessSettings
 from app.infrastructure.logging import configure_logging
-from app.infrastructure.process import (
-    HEARTBEAT_SECONDS,
-    beat,
-    heartbeat_path,
-    stop_on_signals,
-    wait_or_stop,
-)
+from app.infrastructure.process import keep_heartbeat, stop_on_signals
 from app.infrastructure.settings import Settings
+from app.shared.clock import Clock, SystemClock
+
+
+def handlers(database: Database, clock: Clock) -> dict[str, JobHandler]:
+    """Every job kind this worker runs. A module adds its handlers here, keyed by kind."""
+    return {}
 
 
 async def run(settings: Settings, stop: asyncio.Event | None = None) -> None:
     stop = stop or stop_on_signals()
-    log = structlog.get_logger()
+    jobs = JobProcessSettings()
+    clock = SystemClock()
     database = Database(settings)
-    heartbeat = heartbeat_path("worker")
     try:
         await check_role(database, WORKER)
-        log.info("worker_started")
-        while not stop.is_set():
-            if await database.ready():
-                beat(heartbeat)
-            await wait_or_stop(stop, HEARTBEAT_SECONDS)
+        worker = Worker(
+            database,
+            handlers(database, clock),
+            WorkerConfig(
+                queue=jobs.queue,
+                lease=jobs.lease,
+                concurrency=jobs.concurrency,
+                poll_interval=timedelta(seconds=jobs.poll_seconds),
+            ),
+            clock,
+        )
+        async with asyncio.TaskGroup() as group:
+            group.create_task(keep_heartbeat("worker", database.ready, stop))
+            group.create_task(worker.run(stop))
     finally:
-        heartbeat.unlink(missing_ok=True)
         await database.close()
-        log.info("worker_stopped")
 
 
 def main() -> None:
