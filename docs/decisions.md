@@ -147,3 +147,4 @@ A running log. Add a row when a decision is made, and move an open question up w
 | Complaints: should closing a complaint as not upheld need a second person, or be refused for whoever logged it or is named in it? Built: one person with `complaints.close`, which the support role does not hold. | Owner, counsel |
 | Complaints: should chat messages and complaint details be sealed field by field like identity details? Built: fenced by row policies and disk encryption only. | Owner |
 | Investing: the design canvas also offers "roll over the principal and pay out the interest" and "move to a goal" at maturity. Built so far: roll over everything, or pay out everything. Are the other two wanted for launch? | Owner |
+| Investing: proposing and approving a rate change use the `rates.view` permission, because the catalogue has only view permissions. Should there be a separate `rates.change` held by fewer roles? | Owner |
