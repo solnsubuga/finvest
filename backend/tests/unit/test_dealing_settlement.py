@@ -2,16 +2,20 @@ from datetime import date
 
 import pytest
 
+from app.modules.dealing.domain.holdings import InvalidLot, Lot
 from app.modules.dealing.domain.orders import Fill, OrderKind
 from app.modules.dealing.domain.settlement import (
     BANK_TRUST,
+    BILL_INCOME,
     BILLS,
+    MATURITY_LOSSES,
     SALE_GAINS,
     SALE_LOSSES,
     SOURCE_TYPE,
     InvalidSettlement,
     Settlement,
     accounts,
+    maturity_entry,
     settlement_entry,
 )
 from app.modules.ledger.domain.entries import AccountKind
@@ -22,6 +26,8 @@ IDS = {
     BILLS: "acct-bills",
     SALE_GAINS: "acct-gain",
     SALE_LOSSES: "acct-loss",
+    BILL_INCOME: "acct-income",
+    MATURITY_LOSSES: "acct-maturity-loss",
 }
 SETTLED = date(2026, 11, 19)
 
@@ -88,7 +94,40 @@ def test_the_accounts_are_the_desks_own_in_one_currency() -> None:
         BILLS: AccountKind.ASSET,
         SALE_GAINS: AccountKind.INCOME,
         SALE_LOSSES: AccountKind.EXPENSE,
+        BILL_INCOME: AccountKind.INCOME,
+        MATURITY_LOSSES: AccountKind.EXPENSE,
     }
     assert all(
         spec.currency is Currency.USD and spec.owner_client_id is None for spec in specs.values()
     )
+
+
+MATURES = date(2027, 2, 18)
+
+
+@pytest.mark.parametrize(
+    ("cost", "expected"),
+    [
+        (97, {"acct-bank": 100, "acct-bills": -97, "acct-income": -3}),
+        (100, {"acct-bank": 100, "acct-bills": -100}),
+        (102, {"acct-bank": 100, "acct-bills": -102, "acct-maturity-loss": 2}),
+    ],
+)
+def test_a_maturity_pays_the_face_value_and_books_the_difference_from_cost(
+    cost: int, expected: dict[str, int]
+) -> None:
+    entry = maturity_entry("-OdLot", Lot(ugx(100), ugx(cost), MATURES), MATURES, IDS)
+    assert {line.account_id: line.amount.minor for line in entry.lines} == expected
+    assert (entry.entry_type, entry.effective_date) == ("dealing.maturity", MATURES)
+    assert (entry.source_type, entry.source_id) == ("dealing.lot", "-OdLot")
+    assert entry.idempotency_key == "dealing-lot:-OdLot:mature"
+
+
+def test_a_late_maturity_is_still_dated_on_the_maturity_date() -> None:
+    entry = maturity_entry("-OdLot", Lot(ugx(100), ugx(97), MATURES), date(2027, 3, 1), IDS)
+    assert entry.effective_date == MATURES
+
+
+def test_a_lot_is_not_paid_before_it_matures() -> None:
+    with pytest.raises(InvalidLot):
+        maturity_entry("-OdLot", Lot(ugx(100), ugx(97), MATURES), date(2027, 2, 17), IDS)
