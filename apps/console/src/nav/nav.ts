@@ -1,4 +1,4 @@
-import { can, type Permission, type StaffSession } from "@/auth/types.ts";
+import { can, type ScreenPermission, type StaffSession } from "@/auth/types.ts";
 
 export interface NavItem {
   /** URL path segment, and the key of the screen. */
@@ -8,7 +8,7 @@ export interface NavItem {
   title: string;
   /** One line under the page heading. */
   summary: string;
-  permission: Permission;
+  permission: ScreenPermission;
   /** Roadmap phase in which the real screen ships. See docs/roadmap.md. */
   phase: 0 | 1 | 2 | 3 | 4;
 }
