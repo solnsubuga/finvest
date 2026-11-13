@@ -1,0 +1,32 @@
+---
+import { signupUrl } from "../config.ts";
+import { fallback } from "../data/fallback.ts";
+import { formatMoney } from "../lib/format.ts";
+
+// The smallest amount anyone can start with: the lowest minimum among shilling products.
+const smallest = fallback.products
+  .filter((p) => p.currency === "UGX" && p.status === "live")
+  .sort((a, b) => a.minimumMinor - b.minimumMinor)[0];
+---
+
+<section class="band band--flush-top">
+  <div class="wrap cta">
+    <div>
+      <h2>
+        {
+          smallest ? (
+            <>
+              Start with <span data-minimum={smallest.code}>{formatMoney(smallest.minimumMinor, "UGX")}</span>.
+            </>
+          ) : (
+            "Start investing."
+          )
+        }
+      </h2>
+      <p>
+        Open an account in about five minutes with your National ID and a mobile money number.
+      </p>
+    </div>
+    <a class="button button--large" href={signupUrl}>Open an account</a>
+  </div>
+</section>

@@ -258,6 +258,20 @@ async def get_destination(session: AsyncSession, destination_id: str) -> Destina
     return _view(row)
 
 
+async def usable_destination(
+    session: AsyncSession, client_id: str, destination_id: str
+) -> DestinationView:
+    """The destination, if it is this client's and approved. Otherwise `not_found`.
+
+    For a module that stores a destination as a standing choice, such as where an investment
+    pays out at maturity. Whether it can be paid right now is checked when the payout is made.
+    """
+    view = await get_destination(session, destination_id)
+    if view.client_id != client_id or view.status is not DestinationStatus.APPROVED:
+        raise ApplicationError("not_found")
+    return view
+
+
 async def destinations_for_client(session: AsyncSession, client_id: str) -> list[DestinationView]:
     rows = await session.execute(_FOR_CLIENT, {"client_id": client_id})
     return [_view(row) for row in rows.all()]

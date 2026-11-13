@@ -13,6 +13,10 @@ export const colors = {
   lime: "#B6EB0A",
   /** Darker lime for a border around lime on a light background. */
   limeBorder: "#6E8F00",
+  /** Pale lime behind a positive label, such as "On track". */
+  limeSurface: "#E9F7B5",
+  /** Text on the pale lime surface. */
+  limeText: "#2A3800",
   /** Body text. */
   ink: "#141414",
   /** Secondary text on light backgrounds. */

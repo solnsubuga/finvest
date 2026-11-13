@@ -64,3 +64,6 @@ Thumbs.db
 # Logs and local data
 *.log
 tmp/
+
+# Astro
+.astro/

@@ -1,0 +1,72 @@
+---
+import { quoteEndpoint } from "../config.ts";
+import { fallback } from "../data/fallback.ts";
+import { estimate } from "../lib/estimate.ts";
+import { formatMoney, formatWhole } from "../lib/format.ts";
+
+/**
+ * "What you could earn." Works without JavaScript as a worked example for the first product.
+ * With JavaScript it follows what is typed (src/scripts/calculator.ts).
+ */
+const startAmount = 1_000_000n;
+const choices = fallback.products.filter(
+  (p) => p.termDays !== null && p.status === "live" && p.currency === "UGX",
+);
+const first = choices[0];
+const example = first && first.termDays !== null
+  ? estimate(startAmount, first.clientRatePercent, first.termDays)
+  : null;
+---
+
+{
+  first && example && (
+    <form
+      class="calc"
+      data-calculator
+      data-quote-url={quoteEndpoint}
+      data-products={JSON.stringify(choices)}
+      novalidate
+    >
+      <label class="calc__label" for="calc-amount">If you invest</label>
+      <div class="calc__amount">
+        <span aria-hidden="true">UGX</span>
+        <input
+          id="calc-amount"
+          name="amount"
+          inputmode="numeric"
+          autocomplete="off"
+          value={formatWhole(startAmount)}
+          aria-describedby="calc-error calc-note"
+        />
+      </div>
+      <p class="calc__error" id="calc-error" role="alert" data-calc-error hidden />
+      <fieldset class="calc__terms">
+        <legend>For</legend>
+        <div class="segmented">
+          {choices.map((product, index) => (
+            <label>
+              <input type="radio" name="product" value={product.code} checked={index === 0} />
+              {product.termDays} days
+            </label>
+          ))}
+        </div>
+      </fieldset>
+      <div class="calc__result" aria-live="polite">
+        <p class="calc__when" data-calc-when>After {first.termDays} days you get back about</p>
+        <p class="calc__total" data-calc-total>{formatMoney(example.total, "UGX")}</p>
+        <p class="chip" data-calc-interest>
+          About {formatMoney(example.interest, "UGX")} interest, after tax
+        </p>
+      </div>
+      <p class="calc__note" id="calc-note" data-calc-note>
+        An estimate at today's rate of {first.clientRatePercent}% a year after tax. The app shows
+        the exact amount before you pay. The rate is fixed on the day your investment starts.
+      </p>
+    </form>
+  )
+}
+
+<script>
+  import { startCalculators } from "../scripts/calculator.ts";
+  startCalculators();
+</script>

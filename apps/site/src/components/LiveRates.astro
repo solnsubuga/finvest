@@ -1,0 +1,13 @@
+---
+import { productsEndpoint } from "../config.ts";
+---
+
+<!-- Put this on any page that shows a rate. It swaps in today's figures from the API. -->
+<div data-live-rates={productsEndpoint} hidden></div>
+
+<script>
+  import { startLiveRates } from "../scripts/live.ts";
+
+  const endpoint = document.querySelector<HTMLElement>("[data-live-rates]")?.dataset["liveRates"];
+  if (endpoint) void startLiveRates(endpoint);
+</script>

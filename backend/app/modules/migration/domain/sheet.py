@@ -215,7 +215,8 @@ class _Cells:
         if value is not None and _REFERENCE.fullmatch(value) is None:
             self.problem(column, "reference_invalid")
             return None
-        return value
+        # "c1" and "C1" are one reference: a spreadsheet does not keep case reliably.
+        return value.upper() if value is not None else None
 
     def day(self, column: str) -> date | None:
         value = self.text(column)
@@ -300,7 +301,7 @@ def _read[RowT](
                 continue
             cells = _Cells(sheet, row, dict(zip(header, values, strict=True)))
             parsed = parse(cells, row)
-            reference = " ".join(values[header.index(reference_column)].split())
+            reference = " ".join(values[header.index(reference_column)].split()).upper()
             if reference:
                 references.setdefault(reference, []).append(row)
             problems += cells.problems

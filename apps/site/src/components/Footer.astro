@@ -1,0 +1,66 @@
+---
+import Logo from "./Logo.astro";
+
+// Each group lists only pages and sections that exist. Add a link when its page is built.
+const groups = [
+  {
+    title: "Invest",
+    links: [
+      { href: "/products", label: "Treasury bills" },
+      { href: "/products", label: "Dollar fixed income" },
+      { href: "/#goals", label: "Goals" },
+    ],
+  },
+  {
+    title: "Finvest",
+    links: [
+      { href: "/", label: "Home" },
+      { href: "/#safety", label: "Safety" },
+    ],
+  },
+  {
+    title: "Help",
+    links: [{ href: "/#questions", label: "Questions" }],
+  },
+];
+const year = new Date().getUTCFullYear();
+---
+
+<footer class="footer">
+  <div class="wrap">
+    <div class="footer__grid">
+      <div class="footer__about">
+        <a class="brand" href="/" aria-label="Finvest home"><Logo /><span>finvest</span></a>
+        <p>Treasury bills and fixed income for everyone in Uganda, from your phone.</p>
+      </div>
+      <div class="footer__links">
+        {
+          groups.map((group) => (
+            <nav aria-label={group.title}>
+              <h2>{group.title}</h2>
+              <ul>
+                {group.links.map((link) => (
+                  <li>
+                    <a href={link.href}>{link.label}</a>
+                  </li>
+                ))}
+              </ul>
+            </nav>
+          ))
+        }
+      </div>
+    </div>
+    <div class="footer__small">
+      <p>
+        Finvest is a trading name of [REGISTERED COMPANY NAME], regulated by [REGULATOR] under
+        licence [LICENCE NUMBER]. [OFFICE ADDRESS], Kampala, Uganda.
+      </p>
+      <p>
+        Rates shown are yearly and after tax, and they change with each auction. The value of
+        investments can go down as well as up. Withdrawing before maturity can return less than
+        you put in.
+      </p>
+      <p>© {year} Finvest. All rights reserved.</p>
+    </div>
+  </div>
+</footer>
