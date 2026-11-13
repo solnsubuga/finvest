@@ -204,11 +204,11 @@ async def test_a_payment_goes_by_push_and_sms_as_the_defaults_say(
     assert alert.tokens == (token,)
     assert (alert.title, alert.body) == (
         "Payment received",
-        "We received UGX 150,000 from MTN Mobile Money.",
+        "We received your payment from MTN Mobile Money.",
     )
     assert alert.data == {"notification_id": told, "kind": "deposit", "id": "-Nabc0000000000000D1"}
     [text_message] = rig.sms.sent
-    assert text_message.text == "Finvest: we received UGX 150,000 from MTN Mobile Money."
+    assert text_message.text == "Finvest: we received your payment from MTN Mobile Money."
     assert text_message.idempotency_key == f"notice:{told}:sms"
     # Money is push and SMS by default. Email is the client's to switch on.
     assert rig.email.sent == []
@@ -228,7 +228,7 @@ async def test_the_client_choice_of_channels_is_followed(rig: Rig, app_database:
     assert rig.sms.sent == []
     [mail] = rig.email.sent
     assert mail.subject == "Payment received"
-    assert "We received UGX 150,000 from MTN Mobile Money." in mail.text
+    assert "We received your payment from MTN Mobile Money." in mail.text
     assert "Profile, under Notifications" in mail.text
     assert mail.idempotency_key == f"notice:{told}:email"
 

@@ -162,7 +162,7 @@ async def test_the_choice_and_the_maturity_are_audited_and_the_client_is_told(
             )
         ).all()
     assert [tuple(row) for row in told] == [
-        ("Your 91 Day Treasury Bill has matured at UGX 1,026,490.", investment.id),
+        ("Your 91 Day Treasury Bill has matured. See what it paid in the app.", investment.id),
     ]
 
 
