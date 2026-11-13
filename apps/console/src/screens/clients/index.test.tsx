@@ -5,14 +5,21 @@ import { describe, expect, it } from "vitest";
 import { notConnectedClientsApi, type ClientsApi } from "./api.ts";
 import { ClientsScreen } from "./index.tsx";
 import { createStubClientsApi } from "./stub.ts";
+import type { SuppressionsApi } from "./suppressions.ts";
+import { createStubSuppressionsApi } from "./suppressionsStub.ts";
 
 const ME = { id: "stub-admin", name: "Solomon N." };
 const NOW = Date.parse("2026-11-13T09:00:00Z");
 
-function renderClients(api: ClientsApi = createStubClientsApi(ME, () => NOW), address = "/clients") {
+function renderClients(
+  api: ClientsApi = createStubClientsApi(ME, () => NOW),
+  address = "/clients",
+  suppressions: SuppressionsApi = createStubSuppressionsApi(ME, () => NOW),
+  canLift = true,
+) {
   render(
     <MemoryRouter initialEntries={[address]}>
-      <ClientsScreen api={api} />
+      <ClientsScreen api={api} suppressions={suppressions} canLift={canLift} />
     </MemoryRouter>,
   );
   return { api, user: userEvent.setup() };

@@ -185,7 +185,7 @@ export function ClientDetails({ page }: { page: ClientPage }) {
   );
 }
 
-function ReasonForm({
+export function ReasonForm({
   label,
   hint,
   submit,
