@@ -78,6 +78,8 @@ An **error** must be fixed in the spreadsheet, and the final import is refused w
 | A start date after the "as of" date, a maturity date that is not the start date plus the term, tax greater than interest | An investment past its maturity date that was not yet paid out |
 | A verified identity with no document type, number or date of birth | A client under 18 |
 
+The checks for the same person entered twice look only at rows that have no error of their own, so a duplicate can first appear on the next trial, after an unrelated cell in one of the two rows is fixed. Run the trial again after every round of fixes.
+
 A row with an error is left out of the trial's totals, together with the investments of a client whose row has one. The totals are the number of clients, verified identities, clients who will redo the ID check, clients with no phone, running investments, pending orders, money invested and interest before tax, per currency. The finance check compares them with the old system.
 
 ## The finance check
