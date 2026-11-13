@@ -51,7 +51,7 @@ def handlers(
         **InvestmentJobs(database, clock).handlers(),
         **AutoinvestJobs(database, clock).handlers(),
         **DealingJobs(clock).handlers(),
-        **DocumentJobs(database, clock).handlers(),
+        **DocumentJobs(database, clock, email=EmailSettings().transport()).handlers(),
         **GoalJobs(database, clock).handlers(),
     }
     identity = KycSettings()
