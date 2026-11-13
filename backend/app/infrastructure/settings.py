@@ -62,6 +62,13 @@ class Settings(BaseSettings):
     # Attempt limits key on that address, so the header is believed from nobody else.
     trusted_proxies: list[str] = Field(default_factory=list)
 
+    # `staging` or `production` where deployed (infra/README.md). Unset on a developer's machine.
+    environment: str | None = None
+    # Whether anyone may open a new client account. Unset, sign-up is open on a developer's
+    # machine and closed anywhere deployed, so production takes no sign-ups before switch day
+    # (docs/launch.md). Sign-in, the code fallback, password reset and claims stay open.
+    client_signup_open: bool | None = None
+
     # `/docs` and `/openapi.json`. Off unless turned on: a deployed API hands no route catalogue
     # to anonymous visitors.
     api_docs: bool = False
@@ -131,6 +138,12 @@ class Settings(BaseSettings):
         if self.database_ssl_root_cert is not None and self.database_ssl_mode != "verify-full":
             raise ValueError("A database root certificate is used only with verify-full TLS")
         return self
+
+    def signup_open(self) -> bool:
+        if self.client_signup_open is not None:
+            return self.client_signup_open
+        # A name this code does not know counts as deployed.
+        return self.environment in (None, "", "local")
 
     def database_connect_args(self) -> dict[str, object]:
         """The same certificate and host name verification in every process and in migrations."""
