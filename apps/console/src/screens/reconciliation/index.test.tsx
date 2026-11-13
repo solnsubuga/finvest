@@ -108,7 +108,7 @@ describe("bank transfers on the reconciliation screen", () => {
     expect(within(card).queryByRole("button")).toBeNull();
   });
 
-  it("sends the same key again when an answer never arrived, and a new one after a refusal", async () => {
+  it("sends the same key again when an answer never arrived or the error is unknown, and a new one after a refusal", async () => {
     const stub = createStubBankTransfersApi(ME, 0, "sample", () => NOW);
     let calls = 0;
     const seen: string[] = [];
@@ -118,7 +118,8 @@ describe("bank transfers on the reconciliation screen", () => {
         seen.push(key);
         calls += 1;
         if (calls === 1) return Promise.reject(new BankTransferError("unavailable"));
-        if (calls === 2) return Promise.reject(new BankTransferError("same_person"));
+        if (calls === 2) return Promise.reject(new TypeError("Failed to fetch"));
+        if (calls === 3) return Promise.reject(new BankTransferError("same_person"));
         return stub.approve(key, id);
       },
     };
@@ -128,9 +129,11 @@ describe("bank transfers on the reconciliation screen", () => {
     await approve();
     expect(await within(card).findByRole("alert")).toHaveTextContent("We could not reach Finvest");
     await approve();
+    expect(await within(card).findByRole("alert")).toBeInTheDocument();
+    await approve();
     expect(await within(card).findByRole("alert")).toHaveTextContent("A second person has to approve this");
     await approve();
-    expect(seen).toEqual(["key-1", "key-1", "key-2"]);
+    expect(seen).toEqual(["key-1", "key-1", "key-1", "key-2"]);
   });
 
   it("says when there is nothing to check, and when the service cannot be reached", async () => {

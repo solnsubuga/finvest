@@ -94,7 +94,13 @@ function ReceiptView({ transfer }: { transfer: TransferDetail }) {
         ) : isImage ? (
           <img src={receipt.url} alt="The client's receipt" className="size-full object-contain" />
         ) : (
-          <iframe src={receipt.url} title="The client's receipt" className="size-full border-0 bg-white" />
+          <iframe
+            src={receipt.url}
+            title="The client's receipt"
+            sandbox=""
+            referrerPolicy="no-referrer"
+            className="size-full border-0 bg-white"
+          />
         )}
       </div>
       <figcaption className="flex flex-wrap items-center justify-between gap-2 text-xs text-muted">
