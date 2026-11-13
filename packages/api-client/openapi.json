@@ -13005,6 +13005,15 @@
               "title": "Months",
               "type": "integer"
             }
+          },
+          {
+            "in": "query",
+            "name": "currency",
+            "required": false,
+            "schema": {
+              "$ref": "#/components/schemas/Currency",
+              "default": "UGX"
+            }
           }
         ],
         "responses": {

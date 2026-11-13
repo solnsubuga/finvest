@@ -13,6 +13,7 @@ from app.modules.investments.domain.investments import AtMaturity
 from app.shared.clock import Clock
 from app.shared.contracts import Contract, PushId
 from app.shared.errors import ErrorEnvelope
+from app.shared.money import Currency
 
 router = APIRouter(
     prefix="/client",
@@ -51,11 +52,15 @@ async def client_insights(
     request: Request,
     client: CurrentClient,
     months: Annotated[int, Query(ge=1, le=MAX_MONTHS)] = DEFAULT_MONTHS,
+    # One currency per answer. Figures in different currencies are never added together.
+    currency: Currency = Currency.UGX,
 ) -> InsightsView:
     database: Database = request.app.state.database
     clock: Clock = request.app.state.clock
     async with database.actor_transaction(client.actor) as session:
-        insights = await service.client_insights(session, client.actor, clock, months=months)
+        insights = await service.client_insights(
+            session, client.actor, clock, months=months, currency=currency
+        )
     return InsightsView(
         currency=insights.currency.value,
         months=[
