@@ -9,7 +9,7 @@ from pydantic import Field
 from app.infrastructure.database import Database
 from app.modules.identity.api import CurrentClient, require_permission
 from app.modules.identity.service import StaffSession
-from app.modules.notifications import inbox, preferences, wording_store
+from app.modules.notifications import devices, inbox, preferences, wording_store
 from app.modules.notifications.domain.events import EVENTS, Category, Channel
 from app.modules.notifications.domain.preferences import ALWAYS_ON, CHANNELS
 from app.modules.notifications.domain.wording import Wording, render, sample_values
@@ -171,6 +171,37 @@ async def save_preferences(
     }
     async with database.actor_transaction(client.actor) as session:
         return _preferences(await preferences.save(session, client.actor, choices, clock.now()))
+
+
+class PushDevice(Contract):
+    # The Expo push token the app was given, `ExponentPushToken[...]`.
+    token: Annotated[str, Field(min_length=1, max_length=256)]
+    platform: Literal["ios", "android"]
+
+
+class PushDeviceToken(Contract):
+    token: Annotated[str, Field(min_length=1, max_length=256)]
+
+
+@client_router.put("/push-devices", status_code=204)
+async def register_push_device(
+    body: PushDevice, client: CurrentClient, database: Db, clock: Time
+) -> None:
+    """Send this phone the client's push alerts. The app calls it after each sign-in."""
+    async with database.actor_transaction(client.actor) as session:
+        await devices.register(session, client.actor, body.token, body.platform, clock.now())
+
+
+@client_router.post("/push-devices/remove", status_code=204)
+async def remove_push_device(
+    body: PushDeviceToken, client: CurrentClient, database: Db, clock: Time
+) -> None:
+    """Stop sending to this phone. The app calls it at sign-out.
+
+    The token is in the body, not the address, so it is not written to access logs.
+    """
+    async with database.actor_transaction(client.actor) as session:
+        await devices.remove(session, client.actor, body.token, clock.now())
 
 
 class WordingText(Contract):

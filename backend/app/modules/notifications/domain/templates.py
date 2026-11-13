@@ -1,5 +1,9 @@
 """The words of every email and text message Finvest sends. Pure text in, text out.
 
+The templates here carry a code or a set-up link and are fixed in code. `client_notice` is the
+one exception: it is the envelope for a notification whose words come from `wording.py`, which
+staff edit with a second person's approval. It carries no code and no link of its own.
+
 Each template lists the variables it needs. Every value is escaped before it goes into HTML,
 so nothing a person typed can add markup or a link.
 
@@ -16,7 +20,12 @@ from dataclasses import dataclass
 from typing import Literal, get_args
 
 Template = Literal[
-    "signup_code", "sign_in_code", "password_reset_code", "claim_code", "staff_enrolment"
+    "signup_code",
+    "sign_in_code",
+    "password_reset_code",
+    "claim_code",
+    "staff_enrolment",
+    "client_notice",
 ]
 TEMPLATES: tuple[Template, ...] = get_args(Template)
 
@@ -26,6 +35,12 @@ _VARIABLES: dict[Template, frozenset[str]] = {
     "password_reset_code": frozenset({"code", "minutes"}),
     "claim_code": frozenset({"code", "minutes"}),
     "staff_enrolment": frozenset({"name", "link", "hours"}),
+    # A notification's words, already filled in: the title and body for an email.
+    "client_notice": frozenset({"title", "body"}),
+}
+# Templates whose text message needs other variables than their email.
+_SMS_VARIABLES: dict[Template, frozenset[str]] = {
+    "client_notice": frozenset({"sms"}),
 }
 MAX_VALUE = 2000
 
@@ -41,11 +56,12 @@ class Rendered:
     html: str
 
 
-def check(template: str, variables: Mapping[str, object]) -> dict[str, str]:
+def check(template: str, variables: Mapping[str, object], *, sms: bool = False) -> dict[str, str]:
     """The variables as text, or `InvalidTemplate` if the template or a variable is wrong."""
     if template not in TEMPLATES:
         raise InvalidTemplate("Unknown email template")
-    if set(variables) != _VARIABLES[template]:
+    wanted = _SMS_VARIABLES.get(template, _VARIABLES[template]) if sms else _VARIABLES[template]
+    if set(variables) != wanted:
         raise InvalidTemplate("The email template was given the wrong variables")
     values = {name: str(value) for name, value in variables.items()}
     if any(not value or len(value) > MAX_VALUE for value in values.values()):
@@ -62,12 +78,14 @@ _SMS: dict[str, str] = {
     "{minutes} minutes. Never share it.",
     "claim_code": "Your code to claim your Finvest account is {code}. It works for {minutes} "
     "minutes. Never share it. Finvest staff will never ask for it.",
+    # The SMS words of the notification, which already start with "Finvest:".
+    "client_notice": "{sms}",
 }
 
 
 def render_sms(template: str, variables: Mapping[str, object]) -> str:
     """The text of an SMS. Short enough for two message parts, and plain GSM characters."""
-    values = check(template, variables)
+    values = check(template, variables, sms=True)
     if template not in _SMS:
         raise InvalidTemplate("This template is not sent by SMS")
     return _SMS[template].format(**values)
@@ -100,6 +118,15 @@ def render(
                 f"It works once, for {values['minutes']} minutes.",
                 "If you did not try to sign in, change your password. Finvest staff will never "
                 "ask you for this code.",
+            ],
+        )
+    if template == "client_notice":
+        return _message(
+            values["title"],
+            [
+                values["body"],
+                "Open the Finvest app to see it. You can choose how we reach you in Profile, "
+                "under Notifications.",
             ],
         )
     if template == "password_reset_code":

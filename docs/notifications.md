@@ -86,6 +86,35 @@ Security alerts cannot be silenced. A client can change their channels, but SMS 
 
 SMS is on by default only for money and security, because each text is paid for.
 
+## Sending beyond the app
+
+`notify` writes the notification and, in the same transaction, queues one fan-out job that carries the notification's ID and nothing else. The worker does the rest (`delivery.py`):
+
+1. **Fan-out** reads the notification and the client's channels for its kind of alert. If push is chosen and the client has a phone registered, it queues a push job. If SMS or email is chosen, it asks identity where to reach the client (`client_contact`) and queues the text or the email through `queue_message` under the `client_notice` template. Everything it queues commits with the job, so it happens once.
+2. **Push** sends the title and body to the client's phones through Expo, with no transaction open. The app gets the notification's ID and its link, so a tap opens the right screen.
+3. **SMS and email** are sent by the same jobs as sign-in codes, with the same retries, and their content is cleared once sent.
+
+Rules:
+
+- **Once per notification.** Only a new notification queues a fan-out, and every key is the notification's ID and the channel: `fan-out:<id>`, `push:<id>`, `notice:<id>:sms`, `notice:<id>:email`.
+- **A push that may have arrived is not sent again.** Expo has no idempotency key. If the answer is lost, the job stops as uncertain rather than show the client the same alert twice. The notification is in the app either way. SMS and email are not held back by it.
+- **Late is not sent.** A push still waiting after 6 hours, or a text or email after 12, is dropped. The app still has it.
+- **A shared phone.** When two clients sign in on the same phone, only the one who registered it last is sent pushes. Signing in again hands it back.
+- **A phone Expo no longer knows** (the app was removed) is marked `not_registered` and not used again until the app registers it.
+- **Nobody is messaged after closing their account.** Identity answers nothing for a client who is locked or closed, so no SMS or email is queued.
+- **A statement or receipt is not emailed twice.** The documents module emails `statement_ready` and `receipt_ready` itself, with the PDF attached, so the fan-out sends those by push and in the app only.
+- A client has at most 10 phones registered.
+
+### Phones
+
+The app registers its Expo push token after each sign-in with `PUT /client/push-devices` and gives it up at sign-out with `POST /client/push-devices/remove`. The token is sent in the body, so it is never in an address or an access log. A client sees only their own phones, and staff see none. Only the API adds a phone. The worker may only mark one removed.
+
+### Settings
+
+The worker reads `FINVEST_PUSH_BACKEND`: `none` (the default) holds pushes until they expire, `local-console` prints them on a developer's machine and refuses to start anywhere deployed, and `expo` sends them. `FINVEST_PUSH_EXPO_ACCESS_TOKEN` is needed only if the Expo project turns on enhanced push security.
+
+Not built yet: reading Expo's delivery receipts, which report a phone that stopped taking pushes some minutes after the send.
+
 ## Email delivery events
 
 Resend reports what happened to each email (sent, delayed, delivered, failed, bounced, complained). Its webhooks reach us through the shared router at hooks.fidiba.com, which routes each event by the tag every Resend email carries: `fidiba_environment`, set from `FINVEST_EMAIL_FIDIBA_ENVIRONMENT` on the worker (`app_finvest_prod` in production). Without the variable, mail still sends but its events are not routed back.
@@ -125,6 +154,8 @@ An announcement carries the words staff wrote when sending it, so it has no word
 | `POST /client/notifications/read` | Client | Marks the named notifications read, or all of them when `ids` is left out |
 | `GET /client/notification-preferences` | Client | Channels for each kind of alert |
 | `PUT /client/notification-preferences` | Client | Changes the kinds of alert named and leaves the rest |
+| `PUT /client/push-devices` | Client | Sends this phone the client's pushes. `token` is the Expo push token, `platform` is `ios` or `android`. |
+| `POST /client/push-devices/remove` | Client | Stops sending to this phone, at sign-out |
 | `GET /staff/notification-wordings` | Staff with `settings.view` | Every message, its words, a preview with sample values, and any change waiting |
 | `POST /staff/notification-wordings/{event}/proposals` | Staff with `wordings.change` | Proposes new words, with a reason |
 | `POST /staff/notification-wordings/proposals/{id}/decision` | Staff with `wordings.change` | `approved` or `rejected` by someone else, `withdrawn` by the proposer |
