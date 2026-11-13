@@ -254,4 +254,4 @@ The audit event for a recorded result carries its figures, so a result later rej
 
 ## Not built yet
 
-HTTP routes for allocations, the custodian statement comparison and the allocation report. The buffer rules changes and Finvest's money have routes but no console screen yet. The console screen runs on sample data until the routes exist.
+HTTP routes for allocations, the custodian statement comparison and the allocation report. The console's buffer section, under the desk, calls the buffer routes. The console screen runs on sample data until the routes exist.

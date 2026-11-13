@@ -1,11 +1,20 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { apiBaseUrl, createHttp } from "@/api/http.ts";
 import { useAuth } from "@/auth/context.ts";
 import { isStubAuth } from "@/auth/index.ts";
+import { can } from "@/auth/types.ts";
+import { emptyDirectory, type Directory } from "@/directory/api.ts";
+import { createHttpDirectory } from "@/directory/http.ts";
+import { createStubDirectory } from "@/directory/stub.ts";
 import { Button } from "@/components/ui/button.tsx";
 import { PageHeader } from "@/pages/PageHeader.tsx";
 import { DealingError, dealingErrorMessage, notConnectedDealingApi, type DealingApi, type Desk, type NewOrder } from "./api.ts";
 import { OrderCard, PrepareForm, type OrderCommand } from "./Orders.tsx";
 import { BufferRules, Figures, PositionTable } from "./Position.tsx";
+import { BufferSection } from "./Buffer.tsx";
+import { notConnectedBufferApi, type BufferApi } from "./buffer.ts";
+import { createHttpBufferApi } from "./bufferHttp.ts";
+import { BUFFER_COLLEAGUE, createStubBufferApi } from "./bufferStub.ts";
 import { createStubDealingApi } from "./stub.ts";
 
 const SUMMARY = "Turn client payments into real bills, and keep enough cash to pay people out.";
@@ -200,5 +209,36 @@ export default function DealingDeskPage() {
   const [api] = useState<DealingApi>(() =>
     isStubAuth() && session ? createStubDealingApi({ id: session.staffId, name: session.name }) : notConnectedDealingApi,
   );
-  return <DealingDeskScreen api={api} />;
+  // The buffer is on the real API. Under the stub, `?sample=empty` shows it before Finvest has paid any money in,
+  // and `?sample=offline` as if Finvest could not be reached.
+  const [buffer] = useState<{ api: BufferApi; directory: Directory }>(() => {
+    if (isStubAuth() && session) {
+      const sample = new URLSearchParams(window.location.search).get("sample");
+      const directory = createStubDirectory({ id: session.staffId, name: session.name });
+      const names: Directory = {
+        ...directory,
+        staffName: async (id) => (id === BUFFER_COLLEAGUE.id ? BUFFER_COLLEAGUE.name : directory.staffName(id)),
+      };
+      if (sample === "offline") return { api: notConnectedBufferApi, directory: names };
+      return { api: createStubBufferApi({ id: session.staffId }, sample === "empty" ? "empty" : "sample"), directory: names };
+    }
+    const base = apiBaseUrl();
+    if (!base) return { api: notConnectedBufferApi, directory: emptyDirectory };
+    const http = createHttp(base);
+    return { api: createHttpBufferApi(http), directory: createHttpDirectory(http) };
+  });
+  return (
+    <>
+      <DealingDeskScreen api={api} />
+      {session ? (
+        <BufferSection
+          api={buffer.api}
+          directory={buffer.directory}
+          me={session.staffId}
+          canChange={can(session, "dealing_orders.change")}
+          today={kampalaToday}
+        />
+      ) : null}
+    </>
+  );
 }

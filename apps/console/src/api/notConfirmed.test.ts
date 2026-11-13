@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { clientsErrorMessage, toClientsError } from "@/screens/clients/api.ts";
 import { suppressionsErrorMessage, toSuppressionsError } from "@/screens/clients/suppressions.ts";
+import { bufferErrorMessage } from "@/screens/dealing-desk/buffer.ts";
+import { toBufferError } from "@/screens/dealing-desk/bufferHttp.ts";
 import { complaintsErrorMessage } from "@/screens/complaints/api.ts";
 import { toComplaintsError } from "@/screens/complaints/http.ts";
 import { kycErrorMessage } from "@/screens/identity-checks/api.ts";
@@ -22,6 +24,7 @@ const SCREENS: [string, (error: unknown) => unknown, (error: unknown) => string]
   ["identity checks", toKycError, kycErrorMessage],
   ["client locks", (e) => toClientsError(e, true), clientsErrorMessage],
   ["suppression lifts", (e) => toSuppressionsError(e, true), suppressionsErrorMessage],
+  ["liquidity buffer", toBufferError, bufferErrorMessage],
 ];
 
 describe("a decision the person did not confirm", () => {
