@@ -167,6 +167,7 @@ function toSession(staff: StubStaff): StaffSession {
     name: staff.name,
     role: staff.role,
     permissions: STUB_ROLE_PERMISSIONS[staff.role],
+    secondSteps: staff.methods,
   };
 }
 
