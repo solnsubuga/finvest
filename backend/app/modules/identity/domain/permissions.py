@@ -46,6 +46,9 @@ Permission = Literal[
     "bank_transfers.change",
     "migration.import",
     "migration.sign_off",
+    # Proposing a new mobile number for a client, or approving someone else's proposal. The
+    # number is how a client proves who they are with a code, so a change takes two people.
+    "client_phones.change",
 ]
 PERMISSIONS: tuple[Permission, ...] = get_args(Permission)
 
@@ -75,6 +78,7 @@ ROLE_PERMISSIONS: dict[Role, frozenset[Permission]] = {
             "migration.view",
             "bank_transfers.change",
             "migration.import",
+            "client_phones.change",
         }
     ),
     "finance": frozenset(

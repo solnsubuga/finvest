@@ -3,11 +3,11 @@
 Each template lists the variables it needs. Every value is escaped before it goes into HTML,
 so nothing a person typed can add markup or a link.
 
-This file owns only the messages that carry a secret or open an account: sign-in, signup,
-reset and claim codes and the staff set-up link. They are fixed in code so that nobody can edit
-them into a phishing message, and so that they work before anything else is set up. Every
-other client notice is worded in `domain/wording.py`, which staff edit with a second person
-approving. Neither file adds text of the other kind.
+This file owns only the messages that carry a secret or guard an account: sign-in, signup,
+reset and claim codes, the notice that a number changed, and the staff set-up link. They are
+fixed in code so that nobody can edit them into a phishing message, and so that they work
+before anything else is set up. Every other client notice is worded in `domain/wording.py`,
+which staff edit with a second person approving. Neither file adds text of the other kind.
 """
 
 import html
@@ -16,7 +16,12 @@ from dataclasses import dataclass
 from typing import Literal, get_args
 
 Template = Literal[
-    "signup_code", "sign_in_code", "password_reset_code", "claim_code", "staff_enrolment"
+    "signup_code",
+    "sign_in_code",
+    "password_reset_code",
+    "claim_code",
+    "phone_changed",
+    "staff_enrolment",
 ]
 TEMPLATES: tuple[Template, ...] = get_args(Template)
 
@@ -25,6 +30,7 @@ _VARIABLES: dict[Template, frozenset[str]] = {
     "sign_in_code": frozenset({"code", "minutes"}),
     "password_reset_code": frozenset({"code", "minutes"}),
     "claim_code": frozenset({"code", "minutes"}),
+    "phone_changed": frozenset({"ending"}),
     "staff_enrolment": frozenset({"name", "link", "hours"}),
 }
 MAX_VALUE = 2000
@@ -62,6 +68,8 @@ _SMS: dict[str, str] = {
     "{minutes} minutes. Never share it.",
     "claim_code": "Your code to claim your Finvest account is {code}. It works for {minutes} "
     "minutes. Never share it. Finvest staff will never ask for it.",
+    "phone_changed": "The mobile number on your Finvest account was changed to one ending "
+    "{ending}. If you did not ask for this, contact Finvest support now.",
 }
 
 
@@ -100,6 +108,17 @@ def render(
                 f"It works once, for {values['minutes']} minutes.",
                 "If you did not try to sign in, change your password. Finvest staff will never "
                 "ask you for this code.",
+            ],
+        )
+    if template == "phone_changed":
+        return _message(
+            "Your Finvest mobile number was changed",
+            [
+                f"The mobile number on your Finvest account was changed to one ending "
+                f"{values['ending']}.",
+                "For your safety you were signed out everywhere, and for the next 24 hours "
+                "money can be paid out only to accounts you already use.",
+                "If you did not ask for this, contact Finvest support now.",
             ],
         )
     if template == "password_reset_code":

@@ -20,11 +20,12 @@ from app.modules.autoinvest import api as autoinvest_api
 from app.modules.documents import api as documents_api
 from app.modules.goals import api as goals_api
 from app.modules.identity import api as identity_api
-from app.modules.identity import codes_api, passkeys_api
+from app.modules.identity import codes_api, passkeys_api, phone_changes_api
 from app.modules.identity.authenticators import AuthenticatorService
 from app.modules.identity.codes import CodeService
 from app.modules.identity.hashing import PasswordHasher
 from app.modules.identity.passkeys import PasskeyService
+from app.modules.identity.phone_changes import PhoneChangeService
 from app.modules.identity.service import IdentityService
 from app.modules.insights import api as insights_api
 from app.modules.investments import api as investments_api
@@ -86,6 +87,7 @@ def create_app(
     app.state.passkeys = passkeys
     app.state.authenticators = AuthenticatorService(database, clock, settings, identity, passkeys)
     app.state.codes = CodeService(database, clock, identity, passkeys, hasher)
+    app.state.phone_changes = PhoneChangeService(database, clock)
     install_error_handlers(app)
     # The last middleware added is the outermost, so the request ID exists before anything runs.
     origins = sorted({*settings.client_allowed_origins, *settings.staff_allowed_origins})
@@ -115,6 +117,7 @@ def create_app(
         *identity_api.routers,
         *passkeys_api.routers,
         *codes_api.routers,
+        *phone_changes_api.routers,
         *notifications_api.routers,
         *support_api.routers,
         *documents_api.routers,
