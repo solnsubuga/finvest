@@ -39,7 +39,7 @@ export const SCREEN_PERMISSIONS = [
 ] as const;
 
 /** What a member of staff may do on a screen they can open, beyond looking. */
-export const ACTION_PERMISSIONS = ["migration.import", "migration.sign_off"] as const;
+export const ACTION_PERMISSIONS = ["migration.import", "migration.sign_off", "bank_transfers.change"] as const;
 
 /** Every permission the console uses. The backend may send others, for screens not built yet. */
 export const PERMISSIONS = [...SCREEN_PERMISSIONS, ...ACTION_PERMISSIONS] as const;
