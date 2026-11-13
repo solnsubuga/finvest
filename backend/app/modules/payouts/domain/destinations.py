@@ -312,6 +312,9 @@ def submit_proof(destination: Destination, proof: ProofKind) -> Destination:
     """The client uploaded proof, or uploaded a better one after a rejection."""
     if destination.status not in (DestinationStatus.AWAITING_PROOF, DestinationStatus.REJECTED):
         raise DestinationError("destination_not_awaiting_proof")
+    if destination.rejection_reason is RejectionReason.SUSPECTED_FRAUD:
+        # Final. A better document does not answer a suspicion of fraud.
+        raise DestinationError("destination_rejected_final")
     if not proof_fits(destination.kind, proof):
         raise DestinationError("proof_kind_not_accepted")
     return replace(destination, status=DestinationStatus.IN_REVIEW, rejection_reason=None)

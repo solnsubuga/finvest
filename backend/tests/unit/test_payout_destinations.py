@@ -327,6 +327,18 @@ def test_a_rejected_destination_can_be_proved_again() -> None:
     assert again.rejection_reason is None
 
 
+def test_a_rejection_for_suspected_fraud_cannot_be_proved_again() -> None:
+    rejected = reject(in_review(), RejectionReason.SUSPECTED_FRAUD)
+    with pytest.raises(DestinationError) as refused:
+        submit_proof(rejected, ProofKind.BANK_STATEMENT)
+    assert refused.value.code == "destination_rejected_final"
+    assert remove(rejected).status is DestinationStatus.REMOVED
+    for reason in RejectionReason:
+        if reason is not RejectionReason.SUSPECTED_FRAUD:
+            again = submit_proof(reject(in_review(), reason), ProofKind.BANK_LETTER)
+            assert again.status is DestinationStatus.IN_REVIEW
+
+
 def test_a_removed_destination_stays_removed() -> None:
     removed = remove(approved())
     assert removed.status is DestinationStatus.REMOVED
