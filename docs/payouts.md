@@ -198,6 +198,18 @@ A checked account also waits in the approvals inbox (`GET /staff/approvals`) as 
 
 The database guard runs with its search path pinned to `pg_catalog, pg_temp` and names the functions it calls in full (migration 0036).
 
+### Held payouts
+
+A payout above the review threshold starts held, with its money already reserved (`backend/app/modules/payouts/reviews.py`, routes in `staff_held_api.py`). The client asked for it, so one member of staff with `payout_accounts.change` is the second person who decides it, as for payout accounts. Deciding needs the second step in the last ten minutes (403 `confirm_it_is_you`), a reason and an `Idempotency-Key`: a retried request returns what the first one did, and a key reused for a different request is refused with `idempotency_key_reused`.
+
+| Route | What it does |
+| --- | --- |
+| `GET /staff/payouts/held` | Held payouts, oldest first, at most 100. Needs `review_queue.view`. The amount, kind, client and destination, never the account number |
+| `POST /staff/payouts/{id}/approve` | `{reason}`. The payout is queued; a mobile money payout is sent, a bank payout waits for staff to pay it. 409 `payout_not_held` |
+| `POST /staff/payouts/{id}/decline` | `{reason}`. The payout is cancelled and its money goes back where it came from. 409 `payout_not_held` |
+
+Both are written to the audit trail as approvals, with the reason, and the database still checks that `reviewed_by` is the member of staff of the transaction.
+
 ## Sending a payout
 
 A queued mobile money payout gets a send job in the same transaction that queued it: when it is created, or when staff approve a held one. The worker sends it through the disbursements provider and reads its status back. The code is in `backend/app/modules/payouts/jobs.py`, the rules in `domain/sending.py`, and migration 0033 adds `payout_send_attempts`.
