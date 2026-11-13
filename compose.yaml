@@ -9,6 +9,12 @@ x-backend: &backend
   image: finvest-backend:local
   restart: unless-stopped
 
+# The local database is on the Compose network and has no certificate, so TLS is turned off
+# here on purpose. Everywhere else the default, verify-full, applies.
+x-backend-environment: &backend-environment
+  FINVEST_DATABASE_SSL_MODE: disable
+  FINVEST_LOG_FORMAT: console
+
 x-roles: &role-passwords
   FINVEST_MIGRATOR_PASSWORD: local-migrator
   FINVEST_APP_PASSWORD: local-app
@@ -16,7 +22,7 @@ x-roles: &role-passwords
 
 services:
   db:
-    image: postgres:17
+    image: postgres:17@sha256:846a7ddaa67a4b354ae1d21087b683901aa6113a4ed626d3787cfbf6c85e3e07
     environment:
       POSTGRES_PASSWORD: local-admin
       POSTGRES_DB: finvest
@@ -32,7 +38,7 @@ services:
 
   # Creates the three database roles. Idempotent, so it runs on every start.
   db-roles:
-    image: postgres:17
+    image: postgres:17@sha256:846a7ddaa67a4b354ae1d21087b683901aa6113a4ed626d3787cfbf6c85e3e07
     depends_on:
       db:
         condition: service_healthy
@@ -50,8 +56,8 @@ services:
       db-roles:
         condition: service_completed_successfully
     environment:
+      <<: *backend-environment
       FINVEST_DATABASE_URL: postgresql+asyncpg://finvest_migrator:local-migrator@db:5432/finvest
-      FINVEST_LOG_FORMAT: console
     command: ["python", "-m", "app.migrate_main"]
     restart: "no"
 
@@ -61,9 +67,9 @@ services:
       migrate:
         condition: service_completed_successfully
     environment:
+      <<: *backend-environment
       FINVEST_DATABASE_URL: postgresql+asyncpg://finvest_app:local-app@db:5432/finvest
       FINVEST_API_DOCS: "true"
-      FINVEST_LOG_FORMAT: console
     ports:
       - "127.0.0.1:${FINVEST_API_PORT:-8000}:8000"
     healthcheck:
@@ -78,8 +84,8 @@ services:
       migrate:
         condition: service_completed_successfully
     environment:
+      <<: *backend-environment
       FINVEST_DATABASE_URL: postgresql+asyncpg://finvest_worker:local-worker@db:5432/finvest
-      FINVEST_LOG_FORMAT: console
     command: ["python", "-m", "app.worker_main"]
     healthcheck:
       test: ["CMD", "python", "-m", "app.infrastructure.process", "worker"]
@@ -93,8 +99,8 @@ services:
       migrate:
         condition: service_completed_successfully
     environment:
+      <<: *backend-environment
       FINVEST_DATABASE_URL: postgresql+asyncpg://finvest_worker:local-worker@db:5432/finvest
-      FINVEST_LOG_FORMAT: console
     command: ["python", "-m", "app.scheduler_main"]
     healthcheck:
       test: ["CMD", "python", "-m", "app.infrastructure.process", "scheduler"]

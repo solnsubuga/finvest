@@ -20,7 +20,9 @@ class Settings(BaseSettings):
     database_url: SecretStr = Field(
         validation_alias=AliasChoices("FINVEST_DATABASE_URL", "DATABASE_URL")
     )
-    database_ssl_mode: Literal["disable", "verify-full"] = "disable"
+    # Verified TLS unless a deployment says otherwise. Only a database on the same private
+    # network, such as the local Compose stack, turns it off, and it must say so.
+    database_ssl_mode: Literal["disable", "verify-full"] = "verify-full"
     # PEM bundle of the CA that signs the database certificate, for a managed provider with its
     # own CA. Without it, verification uses the system trust store.
     database_ssl_root_cert: Path | None = None
@@ -52,7 +54,7 @@ class Settings(BaseSettings):
     @model_validator(mode="after")
     def root_cert_needs_tls(self) -> Self:
         if self.database_ssl_root_cert is not None and self.database_ssl_mode != "verify-full":
-            raise ValueError("A database root certificate requires verify-full TLS")
+            raise ValueError("A database root certificate is used only with verify-full TLS")
         return self
 
     def database_connect_args(self) -> dict[str, object]:

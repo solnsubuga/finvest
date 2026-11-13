@@ -148,3 +148,40 @@ async def test_readiness_fails_when_the_database_is_unreachable(
         assert not await database.ready()
     finally:
         await database.close()
+
+
+async def test_new_functions_are_not_executable_until_granted(
+    migrator_database: Database, application_database: Database
+) -> None:
+    async with migrator_database.transaction() as session:
+        await session.execute(
+            text("CREATE FUNCTION finvest_test_probe() RETURNS int LANGUAGE sql AS 'SELECT 1'")
+        )
+    try:
+        with pytest.raises(DBAPIError, match="permission denied"):
+            async with application_database.transaction() as session:
+                await session.execute(text("SELECT finvest_test_probe()"))
+    finally:
+        async with migrator_database.transaction() as session:
+            await session.execute(text("DROP FUNCTION finvest_test_probe()"))
+
+
+async def test_no_policy_trusts_the_system_actor_for_the_api_role(
+    migrator_database: Database,
+) -> None:
+    # The actor settings are set by the connection itself, so finvest_app could claim to be the
+    # system. A policy that admits the system actor is therefore only ever for finvest_worker.
+    async with migrator_database.transaction() as session:
+        rows = await session.execute(
+            text(
+                "SELECT tablename, policyname, roles FROM pg_policies "
+                "WHERE schemaname = 'public' "
+                "AND (coalesce(qual, '') || coalesce(with_check, '')) LIKE '%''system''%'"
+            )
+        )
+        offenders = [
+            f"{row.tablename}.{row.policyname}"
+            for row in rows
+            if set(row.roles) != {"finvest_worker"}
+        ]
+    assert offenders == []

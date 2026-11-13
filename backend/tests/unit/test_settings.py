@@ -47,19 +47,23 @@ def test_the_database_url_is_required(monkeypatch: pytest.MonkeyPatch) -> None:
 URL = f"postgresql://finvest_app:{SECRET}@db/finvest"
 
 
-def test_tls_is_off_only_when_disabled() -> None:
-    assert settings(URL).database_connect_args() == {"ssl": False}
-    context = Settings(database_url=URL, database_ssl_mode="verify-full").database_connect_args()[
-        "ssl"
-    ]
+def test_tls_is_verified_unless_explicitly_disabled(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.delenv("FINVEST_DATABASE_SSL_MODE", raising=False)
+    context = settings(URL).database_connect_args()["ssl"]
     assert isinstance(context, ssl.SSLContext)
     assert context.verify_mode is ssl.CERT_REQUIRED
     assert context.check_hostname
+    disabled = Settings(database_url=URL, database_ssl_mode="disable")
+    assert disabled.database_connect_args() == {"ssl": False}
 
 
 def test_a_root_certificate_needs_verified_tls(tmp_path: Path) -> None:
-    with pytest.raises(ValidationError, match="requires verify-full"):
-        Settings(database_url=URL, database_ssl_root_cert=tmp_path / "ca.crt")
+    with pytest.raises(ValidationError, match="only with verify-full"):
+        Settings(
+            database_url=URL,
+            database_ssl_mode="disable",
+            database_ssl_root_cert=tmp_path / "ca.crt",
+        )
 
 
 def test_a_missing_root_certificate_fails_instead_of_falling_back(tmp_path: Path) -> None:
