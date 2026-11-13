@@ -13,7 +13,7 @@ is listed here for finance to explain. It is never posted to the ledger.
 from __future__ import annotations
 
 from collections.abc import Iterable, Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import date
 from enum import StrEnum
 
@@ -246,31 +246,40 @@ def opening_for(investment: InvestmentRow, product: Product, *, opened_on: date)
     )
 
 
-def check_finances(
-    report: TrialReport,
-    old: ControlTotals,
-    products: Mapping[str, Product],
-    tax_bps: Mapping[str, int],
-) -> FinanceCheck:
-    """Compare a trial import with the old system's totals, and its interest with the formula.
+@dataclass(frozen=True, slots=True)
+class InvestmentCheck:
+    """Every running investment against the formula. It needs no totals from the old system."""
 
-    The interest line compares the old system's total with what the new system will open
-    with, so a difference on that line is explained by the investments listed under it.
+    openings: tuple[Opening, ...]
+    interest_differences: tuple[InterestDifference, ...]
+    tax_rate_differences: tuple[TaxRateDifference, ...]
+
+    @property
+    def differing(self) -> dict[str, tuple[int, ...]]:
+        differing = {item.key: item.figures for item in self.interest_differences}
+        differing.update({item.key: item.figures for item in self.tax_rate_differences})
+        return differing
+
+
+def check_investments(
+    report: TrialReport, products: Mapping[str, Product], tax_bps: Mapping[str, int]
+) -> InvestmentCheck:
+    """Compare each running investment's stated interest and tax rate with the new system's.
 
     `tax_bps` is the tax on interest each product withholds, by product code. An investment
     stated with another tax rate is opened with the stated one only once finance signs it off,
-    because the tax held for every later day follows from it.
+    because the tax held for every later day follows from it. A product with no rate yet has
+    nothing to compare with.
     """
     openings: list[Opening] = []
     differences: list[InterestDifference] = []
     tax_rates: list[TaxRateDifference] = []
-    new_interest: dict[Currency, int] = {}
     for investment in report.investments:
         if investment.status is not InvestmentStatus.RUNNING:
             continue
         opening = opening_for(investment, products[investment.product_code], opened_on=report.as_of)
         openings.append(opening)
-        product_tax = tax_bps[investment.product_code]
+        product_tax = tax_bps.get(investment.product_code, opening.terms.tax_bps)
         if opening.terms.tax_bps != product_tax:
             tax_rates.append(
                 TaxRateDifference(
@@ -281,7 +290,6 @@ def check_finances(
                 )
             )
         gross, tax = opening.interest.gross, opening.interest.tax
-        new_interest[gross.currency] = new_interest.get(gross.currency, 0) + gross.minor
         old_gross, old_tax = investment.interest_before_tax, investment.tax_withheld
         if old_gross is None:
             raise InvalidFinanceCheck("A running investment has an interest figure")
@@ -296,30 +304,57 @@ def check_finances(
                     tax,
                 )
             )
+    return InvestmentCheck(tuple(openings), tuple(differences), tuple(tax_rates))
 
+
+def new_totals(report: TrialReport, investments: InvestmentCheck) -> dict[str, int]:
+    """The new system's side of every total line, by the line's key.
+
+    Interest is what the new system will open with, not the sum of what the sheet states, so
+    a difference on that line is explained by the investments listed under it.
+    """
     summary = report.summary
-    lines = [
-        TotalLine(figure, None, getattr(old, figure.value), getattr(summary, figure.value))
-        for figure in _COUNTS
-    ]
-    lines += _money_lines(Figure.INVESTED, old.invested, _by_currency(summary.invested))
-    lines += _money_lines(Figure.INTEREST_BEFORE_TAX, old.interest_before_tax, new_interest)
-    return FinanceCheck(tuple(lines), tuple(differences), tuple(tax_rates), tuple(openings))
+    totals = {
+        TotalLine(figure, None, 0, 0).key: int(getattr(summary, figure.value)) for figure in _COUNTS
+    }
+    for amount in summary.invested:
+        totals[TotalLine(Figure.INVESTED, amount.currency, 0, 0).key] = amount.minor
+    for opening in investments.openings:
+        gross = opening.interest.gross
+        key = TotalLine(Figure.INTEREST_BEFORE_TAX, gross.currency, 0, 0).key
+        totals[key] = totals.get(key, 0) + gross.minor
+    return totals
 
 
-def _by_currency(amounts: Iterable[Money]) -> dict[Currency, int]:
-    return {amount.currency: amount.minor for amount in amounts}
+def total_lines(old: ControlTotals, new: Mapping[str, int]) -> tuple[TotalLine, ...]:
+    """One line per count, then money invested and interest for every currency on either side."""
+    lines = [TotalLine(figure, None, getattr(old, figure.value), 0) for figure in _COUNTS]
+    for figure, amounts in (
+        (Figure.INVESTED, old.invested),
+        (Figure.INTEREST_BEFORE_TAX, old.interest_before_tax),
+    ):
+        before = {amount.currency: amount.minor for amount in amounts}
+        for currency in Currency:
+            line = TotalLine(figure, currency, before.get(currency, 0), 0)
+            if currency in before or line.key in new:
+                lines.append(line)
+    return tuple(replace(line, new=new.get(line.key, 0)) for line in lines)
 
 
-def _money_lines(
-    figure: Figure, old: tuple[Money, ...], new: Mapping[Currency, int]
-) -> list[TotalLine]:
-    before = _by_currency(old)
-    return [
-        TotalLine(figure, currency, before.get(currency, 0), new.get(currency, 0))
-        for currency in Currency
-        if currency in before or currency in new
-    ]
+def check_finances(
+    report: TrialReport,
+    old: ControlTotals,
+    products: Mapping[str, Product],
+    tax_bps: Mapping[str, int],
+) -> FinanceCheck:
+    """Compare a trial import with the old system's totals, and its interest with the formula."""
+    investments = check_investments(report, products, tax_bps)
+    return FinanceCheck(
+        total_lines(old, new_totals(report, investments)),
+        investments.interest_differences,
+        investments.tax_rate_differences,
+        investments.openings,
+    )
 
 
 class Blocker(StrEnum):
