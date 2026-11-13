@@ -13,7 +13,7 @@ Each item has:
 | `kind` | What it is, from the table below |
 | `id` | The item's ID in its own module |
 | `subject` | A short label from the item, such as a product code, a date or a message name. Never personal data. |
-| `proposed_by`, `proposed_at` | Who asked, and when |
+| `proposed_by`, `proposed_by_name`, `proposed_at` | Who asked, by ID and name, and when |
 | `yours` | The reader proposed it. They can only withdraw it. |
 | `can_decide` | The reader may approve or reject it |
 

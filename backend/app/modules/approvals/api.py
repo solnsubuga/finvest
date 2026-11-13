@@ -13,7 +13,7 @@ from app.infrastructure.database import Database
 from app.modules.approvals import service
 from app.modules.approvals.domain.inbox import Kind
 from app.modules.identity.api import require_permission
-from app.modules.identity.service import StaffSession
+from app.modules.identity.service import StaffSession, staff_names
 from app.shared.contracts import Contract, PushId
 from app.shared.errors import ErrorEnvelope
 
@@ -27,6 +27,8 @@ class ApprovalItemOut(Contract):
     id: str
     subject: str
     proposed_by: PushId
+    # None only if the account was removed, which never happens to staff.
+    proposed_by_name: str | None
     proposed_at: datetime
     yours: bool
     can_decide: bool
@@ -50,6 +52,7 @@ async def approvals(request: Request, staff: Reader) -> ApprovalsOut:
     database: Database = request.app.state.database
     async with database.actor_transaction(staff.actor) as session:
         items = await service.waiting_for(session, staff, request.app.state.clock.now())
+        names = await staff_names(session, {item.proposed_by for item in items})
     return ApprovalsOut(
         items=[
             ApprovalItemOut(
@@ -57,6 +60,7 @@ async def approvals(request: Request, staff: Reader) -> ApprovalsOut:
                 id=item.id,
                 subject=item.subject,
                 proposed_by=item.proposed_by,
+                proposed_by_name=names.get(item.proposed_by),
                 proposed_at=item.proposed_at,
                 yours=item.yours,
                 can_decide=item.can_decide,

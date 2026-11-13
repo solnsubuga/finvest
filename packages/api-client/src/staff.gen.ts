@@ -75,6 +75,7 @@ export const ApprovalItemOut = z.object({
   kind: z.enum(["wording_change", "ledger_correction", "pot_transfer", "bank_transfer_match", "day_close", "dealing_order", "dealing_result", "rate_change", "migration_totals", "migration_sign_off", "phone_change", "team_change", "client_lock", "suppression_lift", "complaint_outcome", "announcement", "payout_account"]),
   proposed_at: z.string(),
   proposed_by: z.string(),
+  proposed_by_name: z.string().nullable(),
   subject: z.string(),
   yours: z.boolean(),
 });
