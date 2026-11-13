@@ -107,8 +107,9 @@ export function BankTransfersScreen({ api, canDecide, newKey = () => crypto.rand
       setLoaded({ id, load: { state: "ready", value: updated } });
       await loadQueue();
     } catch (error) {
-      // Only an answer that never arrived leaves the command open. A refusal is an answer.
-      if (!(error instanceof BankTransferError) || error.code !== "unavailable") pending.current = null;
+      // Only a definite refusal closes the command. An answer that never arrived, or an error
+      // we do not recognise, is an unknown outcome, so the next try reuses the same key.
+      if (error instanceof BankTransferError && error.code !== "unavailable") pending.current = null;
       setFailed({ id, message: bankTransferErrorMessage(error) });
       if (error instanceof BankTransferError && ["conflict", "not_found", "line_not_found", "line_already_used"].includes(error.code)) {
         setLoaded({ id, load: await loadTransfer(id) });
