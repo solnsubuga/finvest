@@ -9,6 +9,7 @@ from app.modules.dealing.domain.liquidity import (
     DeskCash,
     Funding,
     InvalidBufferRules,
+    InvalidCash,
     buffer_level,
     desk_cash,
     fund_early_withdrawal,
@@ -61,14 +62,14 @@ def test_a_buffer_on_its_floor_always_holds_enough_for_one_withdrawal() -> None:
 
 @pytest.mark.parametrize(("amount", "buffer"), [(0, M), (-1, M), (1, -1)])
 def test_funding_refuses_figures_that_make_no_sense(amount: int, buffer: int) -> None:
-    with pytest.raises(ValueError, match=r"positive|negative"):
+    with pytest.raises(InvalidCash, match=r"positive|negative"):
         fund_early_withdrawal(ugx(amount), ugx(buffer), RULES)
 
 
 def test_funding_never_converts_currencies() -> None:
-    with pytest.raises(ValueError, match="currency"):
+    with pytest.raises(InvalidCash, match="currency"):
         fund_early_withdrawal(Money(100, Currency.USD), ugx(M), RULES)
-    with pytest.raises(ValueError, match="currency"):
+    with pytest.raises(InvalidCash, match="currency"):
         fund_early_withdrawal(ugx(100), Money(100, Currency.USD), RULES)
 
 
@@ -110,7 +111,7 @@ def test_client_money_is_counted_before_the_buffer(
 
 @pytest.mark.parametrize(("cash", "to_place", "promised"), [(-1, 0, 0), (0, -1, 0), (0, 0, -1)])
 def test_cash_figures_are_never_negative(cash: int, to_place: int, promised: int) -> None:
-    with pytest.raises(ValueError, match="negative"):
+    with pytest.raises(InvalidCash, match="negative"):
         desk_cash(ugx(cash), ugx(to_place), ugx(promised))
 
 
