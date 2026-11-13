@@ -1,10 +1,12 @@
 """Matching and the two-person day close. The rules are in `domain/`; migration 0041 repeats them.
 
 Reconciliation keeps its own copy of the ledger movements on each pot, read through the
-ledger's API. A statement line and a movement are paired by reference, or by a person with a
-reason. Whatever is left unpaired on either side is an open exception. A day can be closed
-only when, for every pot, the statement balance equals the ledger balance plus what the open
-exceptions account for, and two different members of staff have signed.
+ledger's API. A statement line and a movement are paired by what another module recorded (a
+bank transfer's approved review names its line; the dealing desk gives the bank's reference
+for a settlement), then by reference, or by a person with a reason. Whatever is left unpaired
+on either side is an open exception. A day can be closed only when, for every pot, the
+statement balance equals the ledger balance plus what the open exceptions account for, and two
+different members of staff have signed.
 
 Nothing here moves money. A difference is put right by a ledger entry made elsewhere, which
 then shows up as a movement and is matched.
@@ -20,9 +22,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.modules.audit import service as audit
 from app.modules.audit.domain.events import AuditActor, AuditCategory, AuditEvent
+from app.modules.dealing import holdings as dealing
 from app.modules.ledger import closing as ledger_closing
 from app.modules.ledger import service as ledger
 from app.modules.ledger import statements as ledger_statements
+from app.modules.payments import bank_transfers as payments_bank
 from app.modules.reconciliation import statements
 from app.modules.reconciliation.domain import day_close as rules
 from app.modules.reconciliation.domain.day_close import CloseError, CloseStatus, PotPosition
@@ -30,6 +34,7 @@ from app.modules.reconciliation.domain.matching import (
     LedgerMovement,
     ReconciliationException,
     match,
+    pair_recorded,
 )
 from app.modules.reconciliation.domain.pots import CASH_POTS, Pot
 from app.modules.reconciliation.domain.statements import (
@@ -86,7 +91,8 @@ _OPEN_LINES = text(
 )
 _OPEN_MOVEMENTS = text(
     "SELECT movement.entry_id, movement.line_no, movement.effective_date, movement.currency, "
-    "movement.amount_minor, movement.reference FROM reconciliation_movements AS movement "
+    "movement.amount_minor, movement.reference, movement.entry_type "
+    "FROM reconciliation_movements AS movement "
     "WHERE movement.source = :source AND movement.account_reference = :account_reference "
     "AND movement.effective_date <= :day AND NOT EXISTS (SELECT FROM reconciliation_matches "
     "AS matched WHERE matched.entry_id = movement.entry_id "
@@ -178,7 +184,35 @@ async def refresh(
                     },
                 )
         lines, movements = await _open_items(session, pot, day)
-        for pair in match(lines, movements).matches:
+        line_for, reference_for = await _recorded_links(session, staff, movements, day)
+        recorded = pair_recorded(
+            lines, movements, line_for_movement=line_for, reference_for_movement=reference_for
+        )
+        for pair in recorded:
+            entry_id, line_no = _movement_key(pair.movement)
+            await session.execute(
+                _INSERT_MATCH,
+                {
+                    "statement_line_id": pair.statement_line.fingerprint,
+                    "entry_id": entry_id,
+                    "line_no": line_no,
+                    "how": "recorded",
+                    "matched_by": staff.id,
+                    "reason": (
+                        _BY_PAYMENT_REVIEW
+                        if pair.movement.line_id in line_for
+                        else _BY_DEALING_REFERENCE
+                    ),
+                    "now": now,
+                },
+            )
+        paired_lines = {pair.statement_line.fingerprint for pair in recorded}
+        paired_moves = {pair.movement.line_id for pair in recorded}
+        rest = match(
+            [line for line in lines if line.fingerprint not in paired_lines],
+            [movement for movement in movements if movement.line_id not in paired_moves],
+        )
+        for pair in rest.matches:
             entry_id, line_no = _movement_key(pair.movement)
             await session.execute(
                 _INSERT_MATCH,
@@ -502,6 +536,40 @@ async def _blockers(
     )
 
 
+_DEPOSIT_CONFIRMED = "payment.deposit_confirmed"
+_BY_PAYMENT_REVIEW = "The approved review of the bank transfer names this statement line"
+_BY_DEALING_REFERENCE = "The dealing desk gives this bank reference for the settlement"
+
+
+async def _recorded_links(
+    session: AsyncSession, staff: Actor, movements: Sequence[LedgerMovement], day: date
+) -> tuple[dict[str, str], dict[str, str]]:
+    """What other modules recorded about the open movements: the statement line each
+    confirmed bank transfer was approved against, and the bank's reference for each dealing
+    settlement. Keyed by the movement's `line_id`."""
+    line_for: dict[str, str] = {}
+    for movement in movements:
+        if movement.entry_type != _DEPOSIT_CONFIRMED or not movement.reference:
+            continue
+        review = await payments_bank.get_review(session, staff, movement.reference)
+        if (
+            review is not None
+            and review.outcome == "matched"
+            and review.approved_by is not None
+            and review.statement_line_id is not None
+        ):
+            line_for[movement.line_id] = review.statement_line_id
+    reference_for: dict[str, str] = {}
+    if movements:
+        expected = await dealing.expected_bank_movements(session, date_from=_EPOCH, date_to=day)
+        by_entry = {move.ledger_entry_id: move.bank_reference for move in expected}
+        for movement in movements:
+            entry_id, _ = _movement_key(movement)
+            if by_entry.get(entry_id):
+                reference_for[movement.line_id] = by_entry[entry_id]
+    return line_for, reference_for
+
+
 async def _open_items(
     session: AsyncSession, pot: Pot, day: date
 ) -> tuple[list[StatementLine], list[LedgerMovement]]:
@@ -526,6 +594,7 @@ async def _open_items(
             direction=Direction.IN if row.amount_minor > 0 else Direction.OUT,
             amount=Money(abs(int(row.amount_minor)), Currency(row.currency)),
             reference=row.reference,
+            entry_type=row.entry_type,
         )
         for row in (await session.execute(_OPEN_MOVEMENTS, where)).all()
     ]
