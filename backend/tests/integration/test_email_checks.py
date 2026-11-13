@@ -182,3 +182,63 @@ async def test_the_api_cannot_mark_an_address_proved_itself(api: Api) -> None:
                 text("UPDATE identity_clients SET email_verified_at = now() WHERE id = :id"),
                 {"id": client_id},
             )
+
+
+async def test_a_new_address_is_never_taken_as_proved(api: Api) -> None:
+    client_id, email, bearer = await a_client(api)
+    assert email is not None
+    await api.http.post("/client/email/verification", headers=bearer)
+    [link] = await links(api, email)
+    assert (await confirm(api, token_of(link))).status_code == 204
+    # Whoever changes the address, and however, the proof goes with the old one.
+    async with api.owner.transaction() as session:
+        await session.execute(
+            text(
+                "UPDATE identity_clients SET email = 'new@example.com', "
+                "email_verified_at = now() WHERE id = :id"
+            ),
+            {"id": client_id},
+        )
+    async with api.worker.transaction() as session:
+        contact = await client_contact(session, client_id)
+    assert contact is not None
+    assert (contact.email, contact.email_verified) == ("new@example.com", False)
+    # Changing something else keeps a proof.
+    async with api.owner.transaction() as session:
+        await session.execute(
+            text("UPDATE identity_clients SET email_verified_at = now() WHERE id = :id"),
+            {"id": client_id},
+        )
+        await session.execute(
+            text("UPDATE identity_clients SET restricted_until = NULL WHERE id = :id"),
+            {"id": client_id},
+        )
+    async with api.worker.transaction() as session:
+        contact = await client_contact(session, client_id)
+    assert contact is not None
+    assert contact.email_verified
+
+
+async def test_the_api_sees_only_the_links_of_the_client_it_acts_for(api: Api) -> None:
+    client_id, _, bearer = await a_client(api)
+    other_id, _, _ = await a_client(api)
+    await api.http.post("/client/email/verification", headers=bearer)
+    count = text("SELECT count(*) FROM identity_email_checks WHERE client_id = :id")
+    async with api.database.actor_transaction(Actor("client", client_id)) as session:
+        assert await session.scalar(count, {"id": client_id}) == 1
+    for actor in (Actor("client", other_id), Actor("staff", "-Nabc0000000000000S1")):
+        async with api.database.actor_transaction(actor) as session:
+            assert await session.scalar(count, {"id": client_id}) == 0
+    async with api.database.transaction() as session:
+        assert await session.scalar(count, {"id": client_id}) == 0
+    with pytest.raises(DBAPIError, match="row-level security"):
+        async with api.database.actor_transaction(Actor("client", other_id)) as session:
+            await session.execute(
+                text(
+                    "INSERT INTO identity_email_checks (id, client_id, email, token_hash, "
+                    "created_at, expires_at) VALUES ('-Nabc0000000000000A1', :id, "
+                    "'a@example.com', decode(repeat('00', 32), 'hex'), now(), "
+                    "now() + interval '1 day')"
+                ),
+                {"id": client_id},
+            )
