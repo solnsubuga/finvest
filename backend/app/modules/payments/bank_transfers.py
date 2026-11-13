@@ -482,6 +482,24 @@ async def get_review(session: AsyncSession, staff: Actor, deposit_id: str) -> Re
     )
 
 
+async def record_opened(session: AsyncSession, staff: Actor, deposit_id: str, clock: Clock) -> None:
+    """Write to the audit trail that a member of staff opened a transfer. Its receipt and the
+    bank's narrative can name the client and the sender, so each look is recorded."""
+    if staff.kind != "staff" or staff.id is None:
+        raise ApplicationError("forbidden")
+    await audit.record(
+        session,
+        AuditEvent(
+            category="access",
+            action="payments.bank_transfer_opened",
+            resource_type="payment_deposit",
+            resource_id=deposit_id,
+            actor=AuditActor(staff.kind, staff.id),
+        ),
+        clock,
+    )
+
+
 async def matched_line(
     session: AsyncSession, staff: Actor, deposit_id: str
 ) -> StatementLineView | None:
