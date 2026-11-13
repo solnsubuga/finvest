@@ -241,6 +241,22 @@ export const DestinationOut = z.object({
 });
 export type DestinationOut = z.infer<typeof DestinationOut>;
 
+export const DeviceSessionView = z.object({
+  current: z.boolean(),
+  device: z.string(),
+  id: z.string(),
+  last_seen_at: z.string(),
+  second_step: z.enum(["passkey", "authenticator", "code", "signup"]),
+  signed_in_at: z.string(),
+  transport: z.enum(["cookie", "token"]),
+});
+export type DeviceSessionView = z.infer<typeof DeviceSessionView>;
+
+export const DeviceSessionList = z.object({
+  items: z.array(DeviceSessionView),
+});
+export type DeviceSessionList = z.infer<typeof DeviceSessionList>;
+
 export const DocumentBody = z.object({
   document_country: z.string(),
   document_type: DocumentType,
@@ -794,6 +810,11 @@ export const SendMessage = z.object({
   topic: z.enum(["deposit", "withdrawal", "investment", "identity", "account", "other"]).optional(),
 });
 export type SendMessage = z.infer<typeof SendMessage>;
+
+export const SignedOut = z.object({
+  ended: z.number().int(),
+});
+export type SignedOut = z.infer<typeof SignedOut>;
 
 export const SignupComplete = z.object({
   password: z.string(),
@@ -1881,6 +1902,41 @@ export const operations = {
     idempotent: false,
     status: 200,
     response: ClientSessionView,
+  },
+  "GET /client/sessions": {
+    method: "GET",
+    path: "/client/sessions",
+    params: z.object({}),
+    query: z.object({}),
+    body: null,
+    bodyKind: null,
+    idempotent: false,
+    status: 200,
+    response: DeviceSessionList,
+  },
+  "POST /client/sessions/sign-out-others": {
+    method: "POST",
+    path: "/client/sessions/sign-out-others",
+    params: z.object({}),
+    query: z.object({}),
+    body: null,
+    bodyKind: null,
+    idempotent: false,
+    status: 200,
+    response: SignedOut,
+  },
+  "DELETE /client/sessions/{session_id}": {
+    method: "DELETE",
+    path: "/client/sessions/{session_id}",
+    params: z.object({
+    session_id: z.string(),
+  }),
+    query: z.object({}),
+    body: null,
+    bodyKind: null,
+    idempotent: false,
+    status: 204,
+    response: null,
   },
   "POST /client/sign-out": {
     method: "POST",
