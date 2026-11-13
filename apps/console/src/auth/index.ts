@@ -30,5 +30,6 @@ export function createAuthApi(): AuthApi {
 export function createConfirmationApi(): ConfirmationApi | null {
   if (isStubAuth()) return null;
   const base = apiBaseUrl();
-  return base ? createHttpConfirmationApi(createHttp(base), browserPasskeys) : null;
+  // Its own requests never ask to confirm, so the dialog can never wait on itself.
+  return base ? createHttpConfirmationApi(createHttp(base, fetch, () => Promise.resolve(false)), browserPasskeys) : null;
 }

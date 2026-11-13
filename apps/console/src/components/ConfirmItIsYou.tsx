@@ -25,11 +25,14 @@ export function confirmationErrorMessage(error: unknown): string {
     case "rate_limited": {
       const minutes = error.retryAfterSeconds ? Math.max(1, Math.ceil(error.retryAfterSeconds / 60)) : null;
       return minutes
-        ? `Too many wrong codes. Try again in ${minutes} minute${minutes === 1 ? "" : "s"}.`
-        : "Too many wrong codes. Wait a few minutes and try again.";
+        ? `Too many attempts. Try again in ${minutes} minute${minutes === 1 ? "" : "s"}.`
+        : "Too many attempts. Wait a few minutes and try again.";
     }
-    default:
+    case "unavailable":
       return "We could not reach Finvest. Check your connection and try again.";
+    default:
+      // A definite refusal, such as a session that has ended.
+      return "Finvest did not accept that. Sign in again if this keeps happening.";
   }
 }
 
@@ -165,8 +168,8 @@ export function ConfirmItIsYou({ api, children }: ConfirmItIsYouProps) {
             {method === "passkey" ? (
               <>
                 <p className="mt-2 mb-0 text-md leading-normal text-muted">
-                  Deciding someone else&apos;s change needs your passkey. Your browser will ask for your
-                  fingerprint, face or device PIN.
+                  This decision needs your passkey. Your browser will ask for your fingerprint, face or
+                  device PIN.
                 </p>
                 {error ? <ErrorNote id={errorId} message={error} /> : null}
                 <Button size="lg" autoFocus disabled={busy} onClick={() => void confirmPasskey()} className="mt-5">
@@ -177,8 +180,8 @@ export function ConfirmItIsYou({ api, children }: ConfirmItIsYouProps) {
             ) : (
               <form onSubmit={(event) => void submitCode(event)} noValidate className="flex flex-col">
                 <p className="mt-2 mb-0 text-md leading-normal text-muted">
-                  Deciding someone else&apos;s change needs a code. Open your authenticator app and enter the
-                  6-digit code for Finvest.
+                  This decision needs a code. Open your authenticator app and enter the 6-digit code for
+                  Finvest.
                 </p>
                 <div className="mt-4 flex flex-col gap-1.5">
                   <Label htmlFor={codeId}>6-digit code</Label>

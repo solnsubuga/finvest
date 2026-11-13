@@ -5,7 +5,7 @@ import { askToConfirm, type ConfirmationApi } from "@/api/confirmation.ts";
 import { ApiError } from "@/api/http.ts";
 import { AuthContext, type AuthState } from "@/auth/context.ts";
 import type { StaffSession } from "@/auth/types.ts";
-import { ConfirmItIsYou } from "./ConfirmItIsYou.tsx";
+import { ConfirmItIsYou, confirmationErrorMessage } from "./ConfirmItIsYou.tsx";
 
 function session(secondSteps: StaffSession["secondSteps"]): StaffSession {
   return { staffId: "s1", name: "Grace Auma", role: "admin", permissions: [], secondSteps };
@@ -87,7 +87,16 @@ describe("confirm it is you", () => {
     await ask();
     await userEvent.type(screen.getByLabelText("6-digit code"), "111111");
     await userEvent.click(screen.getByRole("button", { name: "Confirm" }));
-    expect(await screen.findByRole("alert")).toHaveTextContent("Try again in 2 minutes.");
+    expect(await screen.findByRole("alert")).toHaveTextContent("Too many attempts. Try again in 2 minutes.");
+  });
+
+  it("says a lost connection only when Finvest could not be reached", () => {
+    expect(confirmationErrorMessage(new ApiError("unavailable", 0))).toMatch(/could not reach Finvest/);
+    for (const code of ["unauthorized", "forbidden", "validation_failed"]) {
+      expect(confirmationErrorMessage(new ApiError(code, 403))).toBe(
+        "Finvest did not accept that. Sign in again if this keeps happening.",
+      );
+    }
   });
 
   it("stops asking once unmounted, leaving the request refused", async () => {
