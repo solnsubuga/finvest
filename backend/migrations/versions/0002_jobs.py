@@ -235,7 +235,23 @@ def upgrade() -> None:
         op.execute(statement)
 
 
+# The outbox, the job history and the receipts say what was sent and applied. A downgrade that
+# dropped them with rows inside would let work be sent or applied a second time.
+EMPTY_GUARD = """
+DO $$
+BEGIN
+    IF EXISTS (SELECT FROM outbox_events) OR EXISTS (SELECT FROM jobs)
+        OR EXISTS (SELECT FROM consumer_receipts) OR EXISTS (SELECT FROM schedule_instances)
+        OR EXISTS (SELECT FROM schedule_progress) THEN
+        RAISE EXCEPTION 'refusing to drop job tables that hold rows';
+    END IF;
+END
+$$
+"""
+
+
 def downgrade() -> None:
+    op.execute(EMPTY_GUARD)
     op.execute(f"DROP FUNCTION {CLAIM_SIGNATURE}")
     op.execute(
         "DROP TABLE schedule_instances, schedule_progress, scheduler_leadership, "

@@ -125,17 +125,23 @@ async def claim(
     now: datetime,
     lease: timedelta,
     limit: int,
+    external_kinds: Sequence[str] = (),
 ) -> list[ClaimedJob]:
-    """Lease due jobs and commit the lease before any handler runs."""
+    """Lease due jobs and commit the lease before any handler runs.
+
+    A job of an `external_kinds` kind whose lease expired is not leased again. Its attempt
+    started and nobody recorded how it ended, so it fails as `uncertain_outcome`.
+    """
     async with database.transaction() as session:
         rows = await session.execute(
             text(
-                "SELECT * FROM finvest_claim_jobs(:queue, CAST(:kinds AS text[]), :worker, :now, "
-                ":lease, :limit)"
+                "SELECT * FROM finvest_claim_jobs(:queue, CAST(:kinds AS text[]), "
+                "CAST(:external_kinds AS text[]), :worker, :now, :lease, :limit)"
             ),
             {
                 "queue": queue,
                 "kinds": list(kinds),
+                "external_kinds": list(external_kinds),
                 "worker": worker,
                 "now": now,
                 "lease": lease,

@@ -19,6 +19,7 @@ from app.infrastructure.database import Database
 from app.infrastructure.jobs import (
     ClaimedJob,
     Consumer,
+    Handler,
     JobContext,
     JobHandler,
     JobRequest,
@@ -35,6 +36,7 @@ from app.infrastructure.jobs import (
     Worker,
     WorkerConfig,
     enqueue,
+    external_effect,
     publish,
 )
 from app.infrastructure.jobs import queue as job_queue
@@ -136,7 +138,7 @@ async def effects(database: Database, names: Names) -> object:
 def worker(
     database: Database,
     names: Names,
-    handlers: Mapping[str, JobHandler],
+    handlers: Mapping[str, JobHandler | Handler],
     clock: FakeClock,
     *,
     worker_id: str = "a",
@@ -262,7 +264,8 @@ async def test_the_api_role_can_add_work_and_nothing_else(
         "SELECT payload FROM outbox_events",
         "SELECT count(*) FROM consumer_receipts",
         "INSERT INTO scheduler_leadership VALUES ('x', 'x', 1, now(), now(), now())",
-        "SELECT * FROM finvest_claim_jobs('default', ARRAY['x'], 'w', now(), interval '30s', 1)",
+        "SELECT * FROM finvest_claim_jobs('default', ARRAY['x'], ARRAY[]::text[], 'w', now(), "
+        "interval '30s', 1)",
     ):
         with pytest.raises(DBAPIError, match="permission denied"):
             async with app_database.transaction() as session:
@@ -687,6 +690,173 @@ async def test_the_worker_loop_runs_jobs_until_told_to_stop(
     assert sorted(seen) == [f"j{index}" for index in range(6)]
     pending = "SELECT count(*) FROM jobs WHERE queue = :q AND status <> 'succeeded'"
     assert await scalar(worker_database, pending, q=names.queue) == 0
+
+
+# Handlers with an external effect
+
+
+async def test_an_unsorted_exception_from_an_external_effect_is_uncertain_and_never_rerun(
+    worker_database: Database, names: Names, fake_clock: FakeClock
+) -> None:
+    kind = names.kind("provider")
+    calls = 0
+
+    async def handler(job: ClaimedJob, context: JobContext) -> None:
+        nonlocal calls
+        calls += 1
+        raise RuntimeError(SECRET_TEXT)  # the call may or may not have reached the provider
+
+    job_id = await add_job(
+        worker_database,
+        fake_clock,
+        JobRequest(kind=kind, idempotency_key="send", payload={}, queue=names.queue),
+    )
+    runner = worker(worker_database, names, {kind: external_effect(handler)}, fake_clock)
+    assert await runner.run_once() == 1
+
+    row = await job_row(worker_database, job_id)
+    assert (row["status"], row["last_error_code"]) == ("failed", "uncertain_outcome")
+    assert row["last_error_message"] == "RuntimeError"
+    assert await attempts(worker_database, job_id) == [(1, "failed", "uncertain_outcome")]
+    fake_clock.advance(hours=1)
+    assert await runner.run_once() == 0
+    assert calls == 1
+
+
+async def test_an_external_effect_still_retries_what_its_handler_says_did_not_happen(
+    worker_database: Database, names: Names, fake_clock: FakeClock
+) -> None:
+    kind = names.kind("provider")
+    calls = 0
+
+    async def handler(job: ClaimedJob, context: JobContext) -> None:
+        nonlocal calls
+        calls += 1
+        if calls == 1:
+            raise RetryableJobError("provider refused the connection", code="provider_down")
+
+    job_id = await add_job(
+        worker_database,
+        fake_clock,
+        JobRequest(kind=kind, idempotency_key="send", payload={}, queue=names.queue),
+    )
+    runner = worker(worker_database, names, {kind: external_effect(handler)}, fake_clock)
+    assert await runner.run_once() == 1
+    fake_clock.advance(minutes=2)
+    assert await runner.run_once() == 1
+    assert await attempts(worker_database, job_id) == [
+        (1, "retry", "provider_down"),
+        (2, "succeeded", None),
+    ]
+
+
+async def test_an_expired_lease_on_an_external_effect_is_uncertain_and_never_rerun(
+    worker_database: Database, pools: list[Database], names: Names, fake_clock: FakeClock
+) -> None:
+    external, internal = names.kind("provider"), names.kind("internal")
+    stalled, resume = asyncio.Event(), asyncio.Event()
+    calls: list[str] = []
+    late: list[BaseException] = []
+
+    async def slow(job: ClaimedJob, context: JobContext) -> None:
+        calls.append(job.kind)
+        if job.kind == internal:
+            return
+        stalled.set()
+        await resume.wait()
+        try:
+            await context.apply(effect(names, "late", fake_clock))
+        except StaleLeaseError as error:
+            late.append(error)
+            raise
+
+    job_id = await add_job(
+        worker_database,
+        fake_clock,
+        JobRequest(kind=external, idempotency_key="send", payload={}, queue=names.queue),
+    )
+    handlers: Mapping[str, JobHandler | Handler] = {
+        external: external_effect(slow),
+        internal: slow,
+    }
+    first = asyncio.create_task(worker(pools[0], names, handlers, fake_clock).run_once())
+    await asyncio.wait_for(stalled.wait(), 5)
+    # A job without an external effect whose worker died is simply run again.
+    other_id = await add_job(
+        worker_database,
+        fake_clock,
+        JobRequest(kind=internal, idempotency_key="tidy", payload={}, queue=names.queue),
+    )
+    dead = await job_queue.claim(
+        worker_database,
+        queue=names.queue,
+        kinds=[internal],
+        worker="dead",
+        now=fake_clock.now(),
+        lease=LEASE,
+        limit=10,
+    )
+    assert [job.id for job in dead] == [other_id]
+    fake_clock.advance(seconds=LEASE.total_seconds() + 1)
+
+    second = worker(worker_database, names, handlers, fake_clock, worker_id="b")
+    assert await second.run_once() == 1  # only the internal job is leased again
+    row = await job_row(worker_database, job_id)
+    assert (row["status"], row["last_error_code"]) == ("failed", "uncertain_outcome")
+    assert (row["lease_owner"], row["attempts"]) == (None, 1)
+    assert await attempts(worker_database, job_id) == [(1, "lease_expired", "lease_expired")]
+    assert await attempts(worker_database, other_id) == [
+        (1, "lease_expired", "lease_expired"),
+        (2, "succeeded", None),
+    ]
+
+    # The stalled worker wakes up. Its result is refused: reconciliation owns the outcome now.
+    resume.set()
+    assert await first == 1
+    assert len(late) == 1
+    assert await effects(worker_database, names) == 0
+    assert (await job_row(worker_database, job_id))["status"] == "failed"
+    fake_clock.advance(hours=1)
+    assert await second.run_once() == 0
+    assert calls == [external, internal]
+
+
+async def test_an_expired_lease_on_an_external_effect_is_uncertain_before_it_is_out_of_attempts(
+    worker_database: Database, names: Names, fake_clock: FakeClock
+) -> None:
+    kind = names.kind("provider")
+    job_id = await add_job(
+        worker_database,
+        fake_clock,
+        JobRequest(
+            kind=kind,
+            idempotency_key="send",
+            payload={},
+            queue=names.queue,
+            max_attempts=1,
+            max_age=timedelta(minutes=5),
+        ),
+    )
+
+    async def handler(job: ClaimedJob, context: JobContext) -> None:
+        raise AssertionError("the job must not run again")
+
+    claimed = await job_queue.claim(
+        worker_database,
+        queue=names.queue,
+        kinds=[kind],
+        external_kinds=[kind],
+        worker="dead",
+        now=fake_clock.now(),
+        lease=LEASE,
+        limit=10,
+    )
+    assert len(claimed) == 1
+    fake_clock.advance(minutes=6)
+    runner = worker(worker_database, names, {kind: external_effect(handler)}, fake_clock)
+    assert await runner.run_once() == 0
+    # Out of attempts and past its age as well, but uncertain is what reconciliation must see.
+    assert (await job_row(worker_database, job_id))["last_error_code"] == "uncertain_outcome"
 
 
 # The scheduler
