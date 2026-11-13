@@ -19,11 +19,11 @@ These rules are not preferences. A change that breaks one is wrong even if it wo
 
 ## Security
 
-- Client sign-in is never a texted code alone. A new device or the web needs the mobile number and password, then a second step: a passkey, or an SMS or email code for clients whose phone cannot hold a passkey.
+- Client sign-in is never a texted code alone. A new device or the web needs the mobile number and password, then a second step. The second step is any one of the methods the client has set up: a passkey, an authenticator app, or a code sent by SMS or email. The strongest one is offered first and the client can choose another.
 - On a phone that is already signed in, the app PIN or fingerprint opens the app and approves payments. The PIN never signs in a new device.
 - Passwords are at least 10 characters, checked against leaked password lists, and stored with Argon2id.
 - Passkeys use WebAuthn, so the server keeps only a public key.
-- Signing in with a code in place of a passkey limits withdrawals to known accounts for 24 hours. So does any password reset.
+- Signing in with a code sent by SMS or email limits withdrawals to known accounts for 24 hours. So does any password reset. A passkey or an authenticator app does not, because neither depends on the SIM card.
 - Risky actions need extra confirmation: a new payout destination, a large withdrawal, a new device.
 - A new payout destination must be in the client's name, is confirmed by SMS code, needs proof of ownership checked by staff, and waits 24 hours before its first payout.
 - Every staff account must have a second step, with no exceptions for any role. Staff sign in with a password and then a passkey or a code from an authenticator app. Each member of staff sets up either or both, and whichever they have set up is accepted. A passkey is not required. An account with neither set up cannot sign in or open the console. There is no SMS or email code option for staff. Permissions are by role, and sensitive actions need two people.

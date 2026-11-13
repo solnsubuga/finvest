@@ -40,17 +40,17 @@ One navigator with two faces. Below 900 points wide it shows bottom tabs: Home, 
 
 ## Sign-in
 
-The screens talk to the `AuthClient` interface in `src/auth/types.ts`. It follows [docs/rules.md](../../docs/rules.md): the password never opens a session by itself, the second step is a passkey first and a code as backup, and a session opened with a code is marked restricted.
+The screens talk to the `AuthClient` interface in `src/auth/types.ts`. It follows [docs/rules.md](../../docs/rules.md): the password never opens a session by itself, the second step is whichever of a passkey, an authenticator app or an SMS code the client has set up, with the strongest offered first and the others one tap away, and a session opened with an SMS code is marked restricted.
 
 Until the backend sign-in API exists, the only implementation is the in-memory stub in `src/auth/stubAuthClient.ts`. It is a demo, and the app says so on screen while it is active.
 
 - It runs in development, and in a production build only when `EXPO_PUBLIC_DEMO_AUTH=1` is set at build time. Without the flag a production build refuses every sign-in.
-- Any SMS code is `123456`. One account exists already: `772 123 456` with the password `correcthorse1`. These are demo values, not credentials for any real system.
+- Any SMS or authenticator code is `123456`. Two accounts exist already, both with the password `correcthorse1`: `772 123 456` has a passkey, an authenticator app and SMS, and `701 000 200` has an authenticator app and SMS but no passkey. An account you create by signing up has SMS only. These are demo values, not credentials for any real system.
 - Nothing is stored. Reloading the app signs you out.
 
 `startSignup` answers the same way whether or not the number already has an account. Only `confirmSignupCode`, after the SMS code proves ownership, may say `phone_taken`. The backend must keep that property.
 
-What the stub does not cover yet, each with a screen on the design canvas: the app PIN, passkey setup, the ID check, password reset, log in by email, and company or group accounts. Links to those lead to a short "not ready yet" screen.
+What the stub does not cover yet, each with a screen on the design canvas: the app PIN, passkey setup, authenticator app setup (not on the canvas yet), the ID check, password reset, log in by email, and company or group accounts. Links to those lead to a short "not ready yet" screen.
 
 Still outstanding on the sign up screen: "the terms" and "the privacy notice" are not links yet, because neither document exists. They must link to the real documents before launch.
 

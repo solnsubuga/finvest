@@ -1,4 +1,10 @@
-import { createStubAuthClient, DEMO_CODE, DEMO_PASSWORD, DEMO_PHONE } from "../stubAuthClient";
+import {
+  createStubAuthClient,
+  DEMO_CODE,
+  DEMO_PASSWORD,
+  DEMO_PHONE,
+  DEMO_PHONE_AUTHENTICATOR,
+} from "../stubAuthClient";
 import { AuthError, describeAuthError } from "../types";
 
 const NEW_PHONE = "+256701555012";
@@ -74,7 +80,7 @@ describe("log in", () => {
   it("never opens a session from the password alone", async () => {
     const challenge = await client().startLogin(DEMO_PHONE, DEMO_PASSWORD);
     expect(challenge).not.toHaveProperty("session");
-    expect(challenge.methods).toEqual(["passkey", "code"]);
+    expect(challenge.methods).toEqual(["passkey", "authenticator", "code"]);
   });
 
   it("gives the same answer for a wrong password and an unknown number", async () => {
@@ -99,12 +105,42 @@ describe("log in", () => {
     expect(session.restricted).toBe(true);
   });
 
+  it("offers only the methods the client has set up", async () => {
+    const auth = client();
+    const challenge = await auth.startLogin(DEMO_PHONE_AUTHENTICATOR, DEMO_PASSWORD);
+    expect(challenge.methods).toEqual(["authenticator", "code"]);
+    expect(await codeOf(auth.verifyWithPasskey(challenge.loginId))).toBe("expired");
+  });
+
+  it("opens a full session with an authenticator app code", async () => {
+    const auth = client();
+    const challenge = await auth.startLogin(DEMO_PHONE, DEMO_PASSWORD);
+    expect(await codeOf(auth.verifyWithAuthenticator(challenge.loginId, "000000"))).toBe(
+      "invalid_code",
+    );
+    const session = await auth.verifyWithAuthenticator(challenge.loginId, DEMO_CODE);
+    expect(session).toEqual({ phone: DEMO_PHONE, displayName: "Amara Nakato", restricted: false });
+  });
+
+  it("lets the client switch method within one log in", async () => {
+    const auth = client();
+    const challenge = await auth.startLogin(DEMO_PHONE, DEMO_PASSWORD);
+    // Starts with the authenticator, gets it wrong, then uses an SMS code.
+    await codeOf(auth.verifyWithAuthenticator(challenge.loginId, "000000"));
+    await auth.sendLoginCode(challenge.loginId);
+    const session = await auth.verifyWithCode(challenge.loginId, DEMO_CODE);
+    expect(session.restricted).toBe(true);
+  });
+
   it("uses a login only once", async () => {
     const auth = client();
     const challenge = await auth.startLogin(DEMO_PHONE, DEMO_PASSWORD);
     await auth.verifyWithPasskey(challenge.loginId);
     expect(await codeOf(auth.verifyWithPasskey(challenge.loginId))).toBe("expired");
     expect(await codeOf(auth.verifyWithCode(challenge.loginId, DEMO_CODE))).toBe("expired");
+    expect(await codeOf(auth.verifyWithAuthenticator(challenge.loginId, DEMO_CODE))).toBe(
+      "expired",
+    );
   });
 
   it("offers only a code to an account with no passkey", async () => {
@@ -116,6 +152,9 @@ describe("log in", () => {
     const challenge = await auth.startLogin(NEW_PHONE, "green matooke sunday");
     expect(challenge.methods).toEqual(["code"]);
     expect(await codeOf(auth.verifyWithPasskey(challenge.loginId))).toBe("expired");
+    expect(await codeOf(auth.verifyWithAuthenticator(challenge.loginId, DEMO_CODE))).toBe(
+      "expired",
+    );
   });
 });
 

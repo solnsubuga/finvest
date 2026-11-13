@@ -72,11 +72,11 @@ describe("the shell, from the first screen", () => {
     await fireEvent.changeText(screen.getByTestId("password-input"), DEMO_PASSWORD);
     await fireEvent.press(screen.getByTestId("login-submit"));
     await screen.findByText("Confirm it is you");
-    await fireEvent.press(screen.getByTestId("send-code"));
+    await fireEvent.press(screen.getByTestId("use-code"));
     await screen.findByText("Enter the code we sent you");
     await fireEvent.changeText(screen.getByTestId("code-input"), DEMO_CODE);
     await fireEvent.press(screen.getByTestId("code-submit"));
-    await screen.findByText(/You signed in with a code/);
+    await screen.findByText(/You signed in with an SMS code/);
   });
 
   it("signs a new client up and lands on the home screen", async () => {
@@ -125,5 +125,44 @@ describe("the shell, from the first screen", () => {
     await screen.findByText("This number already has a Finvest account. Log in instead.");
     await fireEvent.press(screen.getByTestId("go-to-login"));
     await screen.findByText("Welcome back");
+  });
+
+  it("logs in with an authenticator app code, after a wrong one, with no 24 hour limit", async () => {
+    await openApp();
+    await press("Log in");
+    await screen.findByText("Welcome back");
+    await fireEvent.changeText(screen.getByTestId("phone-input"), "772123456");
+    await fireEvent.changeText(screen.getByTestId("password-input"), DEMO_PASSWORD);
+    await fireEvent.press(screen.getByTestId("login-submit"));
+
+    // All three ways this client has set up are on offer.
+    await screen.findByText("Confirm it is you");
+    expect(screen.getByTestId("use-passkey")).toBeTruthy();
+    expect(screen.getByTestId("use-authenticator")).toBeTruthy();
+    expect(screen.getByTestId("use-code")).toBeTruthy();
+
+    await fireEvent.press(screen.getByTestId("use-authenticator"));
+    await screen.findByText("Enter the code from your app");
+    await fireEvent.changeText(screen.getByTestId("code-input"), "000000");
+    await fireEvent.press(screen.getByTestId("code-submit"));
+    await screen.findByText("That code is not right. Check it and try again.");
+
+    await fireEvent.changeText(screen.getByTestId("code-input"), DEMO_CODE);
+    await fireEvent.press(screen.getByTestId("code-submit"));
+    await screen.findByText("Welcome, Amara");
+    expect(screen.queryByText(/You signed in with an SMS code/)).toBeNull();
+  });
+
+  it("offers the authenticator first, and no passkey, to a client without a passkey", async () => {
+    await openApp();
+    await press("Log in");
+    await screen.findByText("Welcome back");
+    await fireEvent.changeText(screen.getByTestId("phone-input"), "701000200");
+    await fireEvent.changeText(screen.getByTestId("password-input"), DEMO_PASSWORD);
+    await fireEvent.press(screen.getByTestId("login-submit"));
+
+    await screen.findByText("Your authenticator app");
+    expect(screen.queryByTestId("use-passkey")).toBeNull();
+    expect(screen.getByTestId("use-code")).toBeTruthy();
   });
 });

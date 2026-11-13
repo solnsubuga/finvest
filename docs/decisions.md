@@ -22,6 +22,7 @@ A running log. Add a row when a decision is made, and move an open question up w
 | 2026-11-13 | Staff second step is a passkey or an authenticator app code, whichever the member of staff has set up. This replaces "password and passkey" for staff in the sign-in row above. Still no SMS option for staff. |
 | 2026-11-13 | A second step is mandatory for every staff account. Either a passkey or an authenticator app counts, and passkeys are not required for any role. An account with neither is blocked from the console. |
 | 2026-11-13 | Which console screens each staff role opens: the table in `apps/console/src/auth/stub.ts` is the working default, and the backend permissions module seeds roles from it. In short: Operations opens Money Movement, Reconciliation and Migration. Finance opens the Review Queue but not Complaints. Support opens Clients. Only Admin opens Team and Permissions and Settings. The owner can change it at any time. |
+| 2026-11-13 | Clients can also use an authenticator app as the second step, and can sign in with any second step they have set up: passkey, authenticator app or SMS code. This extends the row above. Staff sign-in is covered by the two rows above. |
 | 2026-11-13 | Clients save their own payout bank accounts and mobile money numbers, with proof of ownership. |
 | 2026-11-13 | Domains: finvestug.com for the website, app.finvestug.com for the client app, admin.finvestug.com for the back office. |
 | 2026-11-13 | Infrastructure is Terraform on DigitalOcean and Cloudflare. |
@@ -40,6 +41,7 @@ A running log. Add a row when a decision is made, and move an open question up w
 | ioTec: fees, sandbox, settlement speed from the ioTec wallet to our bank, payout limits, and whether Verify sends its own code. | ioTec |
 | Identity check provider: Smile ID coverage and pricing for Uganda. | Provider |
 | Will passkeys become compulsory for clients? | Owner |
+| Should signing in with an authenticator app carry the 24 hour withdrawal limit? Built as no: only SMS and email codes carry it. | Owner |
 | Is api.finvestug.com the backend address? | Owner |
 | Confirm the role to screen table for the console. In use as the working default since 2026-11-13 (see Decided). It decides who can open Money Movement, Reconciliation and the other screens. | Owner |
 | Card payments. Stripe is not available to Ugandan businesses. A local card acquirer, capped, is a possible later addition. | Owner |

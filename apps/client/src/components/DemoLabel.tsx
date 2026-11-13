@@ -16,7 +16,7 @@ export function DemoLabel({ onDark = false, signedIn = false }: { onDark?: boole
   }
   const text = signedIn
     ? "Demo. Not connected to Finvest yet, so nothing here is real."
-    : `Demo sign-in, not connected to Finvest yet. Any SMS code is ${demoCode}.`;
+    : `Demo sign-in, not connected to Finvest yet. Any SMS or authenticator code is ${demoCode}.`;
   return (
     <View
       style={{

@@ -12,8 +12,9 @@ export type Session = {
   /** Known only after the identity check, so it is absent for new sign-ups. */
   displayName: string | null;
   /**
-   * True when the second step was a code, not a passkey. The server then
-   * limits withdrawals to known accounts for 24 hours (docs/rules.md).
+   * True when the second step was a code sent by SMS or email. The server
+   * then limits withdrawals to known accounts for 24 hours (docs/rules.md).
+   * A passkey or an authenticator app opens a full session.
    */
   restricted: boolean;
 };
@@ -40,11 +41,18 @@ export type SignupStart = { phone: string; email: string; inviteCode?: string };
 export type SignupChallenge = { challengeId: string; phone: string };
 export type SignupTicket = { ticket: string; phone: string };
 
-export type SecondStep = "passkey" | "code";
+/**
+ * The ways to confirm a log in. A client can use any one they have set up:
+ * a passkey, an authenticator app, or a code sent by SMS.
+ */
+export type SecondStep = "passkey" | "authenticator" | "code";
 export type LoginChallenge = {
   loginId: string;
   phone: string;
-  /** In the order they should be offered. A passkey always comes first. */
+  /**
+   * Only the methods this client has set up, strongest first. The first is
+   * offered up front and the client can switch to any of the others.
+   */
   methods: SecondStep[];
 };
 
@@ -65,9 +73,11 @@ export interface AuthClient {
 
   /** Log in, step 1: number and password. Never opens a session on its own. */
   startLogin(phone: string, password: string): Promise<LoginChallenge>;
-  /** Log in, step 2, preferred. */
+  /** Log in, step 2, with a passkey. */
   verifyWithPasskey(loginId: string): Promise<Session>;
-  /** Log in, step 2, backup. Opens a restricted session. */
+  /** Log in, step 2, with the 6 digit code from an authenticator app. */
+  verifyWithAuthenticator(loginId: string, code: string): Promise<Session>;
+  /** Log in, step 2, with a code sent by SMS. Opens a restricted session. */
   sendLoginCode(loginId: string): Promise<void>;
   verifyWithCode(loginId: string, code: string): Promise<Session>;
 
@@ -76,7 +86,7 @@ export interface AuthClient {
 
 const messages: Record<AuthErrorCode, string> = {
   invalid_credentials: "That number and password do not match. Check both and try again.",
-  invalid_code: "That code is not right. Check the SMS and try again.",
+  invalid_code: "That code is not right. Check it and try again.",
   phone_taken: "This number already has a Finvest account. Log in instead.",
   leaked_password:
     "This password has appeared in a known leak, so it is not safe to use. Choose a different one.",
