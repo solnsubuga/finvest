@@ -117,6 +117,16 @@ DEFAULTS: dict[str, Wording] = {
         "Your {product} has matured at {amount}.",
         "Finvest: your {product} has matured at {amount}.",
     ),
+    "investment_withdrawal_requested": Wording(
+        "Early withdrawal requested",
+        "We will pay you {amount} from your {product}. We will tell you when it is sent.",
+        "Finvest: we will pay you {amount} from your {product}. We will tell you when it is sent.",
+    ),
+    "investment_withdrawal_paid": Wording(
+        "Early withdrawal sent",
+        "{amount} from your {product} has been sent to you.",
+        "Finvest: {amount} from your {product} has been sent to you.",
+    ),
     "interest_earned": Wording(
         "You earned {amount} today",
         "Interest across {count} investments, after tax.",
