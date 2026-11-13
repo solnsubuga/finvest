@@ -1,0 +1,67 @@
+name: Backend
+on:
+  pull_request:
+  push:
+    branches: [main]
+permissions:
+  contents: read
+concurrency:
+  group: backend-${{ github.ref }}
+  cancel-in-progress: true
+env:
+  UV_VERSION: "0.11.32"
+jobs:
+  checks:
+    name: Lint, types and unit tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          version: ${{ env.UV_VERSION }}
+          enable-cache: true
+          cache-dependency-glob: backend/uv.lock
+      - run: make bootstrap
+      - run: make check-backend
+      - run: make audit
+
+  integration:
+    name: Integration tests on PostgreSQL
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          # A throwaway database that lives for this job only.
+          POSTGRES_PASSWORD: ci-admin
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 2s
+          --health-timeout 2s
+          --health-retries 30
+    env:
+      FINVEST_TEST_ADMIN_URL: postgresql://postgres:ci-admin@127.0.0.1:5432/postgres
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          version: ${{ env.UV_VERSION }}
+          enable-cache: true
+          cache-dependency-glob: backend/uv.lock
+      - run: psql --version
+      - run: make bootstrap
+      - run: make test-integration
+
+  stack:
+    name: Image build and Compose health
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - run: make test-stack
+      - if: failure()
+        run: docker compose logs --no-color --tail=200
