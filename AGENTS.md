@@ -86,6 +86,8 @@ Backend commands, run from the repository root. [backend/README.md](backend/READ
 | `make test-stack` | Build the image and wait for all four processes to be healthy |
 | `make audit` | pip-audit |
 
+JavaScript packages share one pnpm workspace (`pnpm-workspace.yaml`). Run `pnpm install` once at the repository root. Commands for the console are in [apps/console/README.md](apps/console/README.md) and for the tokens in [packages/tokens/README.md](packages/tokens/README.md).
+
 For any other area, until a command is documented here or in a directory README, do not assume it exists. Check the directory first.
 
 ## Testing expectations

@@ -4,7 +4,7 @@
 | --- | --- | --- |
 | Backend language and framework | Python with FastAPI and Pydantic | Stays in Python, is fast and async, and produces the OpenAPI description automatically from typed code. |
 | Data access and migrations | SQLAlchemy 2 with Alembic, using the asyncpg driver | The standard pairing with FastAPI. Explicit transactions and row locks, which the ledger needs. |
-| Sign-in, permissions and audit | Our own modules, following Fidiba's identity, roles and audit modules. Passkeys (WebAuthn) for clients and staff. Passwords hashed with Argon2id. | FastAPI does not include these, and Fidiba already has a working pattern. |
+| Sign-in, permissions and audit | Our own modules, following Fidiba's identity, roles and audit modules. Passkeys (WebAuthn) for clients and staff, and authenticator app codes (TOTP) as a second option for staff. Passwords hashed with Argon2id. | FastAPI does not include these, and Fidiba already has a working pattern. |
 | Database | PostgreSQL | Strong transactions and constraints, which the ledger depends on. Amounts are stored as whole shillings or cents in integer columns. |
 | Background work | Jobs stored in PostgreSQL, run by our own worker and scheduler processes. No Celery and no Redis. | A job is saved in the same transaction as the business change, so money and its follow-up work can never drift apart. |
 | API style | REST with the OpenAPI description FastAPI generates | Typed clients for the app and console are generated from it, so the three codebases cannot drift apart. |

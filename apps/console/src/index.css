@@ -1,0 +1,88 @@
+@import "tailwindcss";
+@import "@finvest/tokens/tokens.css";
+@import "@fontsource-variable/plus-jakarta-sans";
+
+/*
+ * Tailwind's theme points at the shared tokens. Brand values are never written
+ * here: change them in packages/tokens.
+ */
+@theme inline {
+  --font-sans: var(--fv-font-family);
+
+  --color-*: initial;
+  --color-black: var(--fv-color-black);
+  --color-lime: var(--fv-color-lime);
+  --color-lime-border: var(--fv-color-lime-border);
+  --color-ink: var(--fv-color-ink);
+  --color-muted: var(--fv-color-muted);
+  --color-aqua: var(--fv-color-aqua);
+  --color-white: var(--fv-color-white);
+  --color-paper: var(--fv-color-paper);
+  --color-surface: var(--fv-color-surface);
+  --color-surface-sunken: var(--fv-color-surface-sunken);
+  --color-border: var(--fv-color-border);
+  --color-border-strong: var(--fv-color-border-strong);
+  --color-divider: var(--fv-color-divider);
+  --color-neutral: var(--fv-color-neutral);
+  --color-on-black-surface: var(--fv-color-on-black-surface);
+  --color-on-black-divider: var(--fv-color-on-black-divider);
+  --color-on-black-border: var(--fv-color-on-black-border);
+  --color-on-black-muted: var(--fv-color-on-black-muted);
+  --color-warning: var(--fv-color-warning);
+  --color-warning-text: var(--fv-color-warning-text);
+  --color-warning-surface: var(--fv-color-warning-surface);
+  --color-danger: var(--fv-color-danger);
+  --color-danger-surface: var(--fv-color-danger-surface);
+  --color-success: var(--fv-color-success);
+  --color-success-surface: var(--fv-color-success-surface);
+  --color-transparent: transparent;
+  --color-current: currentColor;
+
+  --text-*: initial;
+  --text-2xs: var(--fv-font-size-2xs);
+  --text-xs: var(--fv-font-size-xs);
+  --text-sm: var(--fv-font-size-sm);
+  --text-md: var(--fv-font-size-md);
+  --text-lg: var(--fv-font-size-lg);
+  --text-xl: var(--fv-font-size-xl);
+  --text-2xl: var(--fv-font-size-2xl);
+  --text-3xl: var(--fv-font-size-3xl);
+  --text-4xl: var(--fv-font-size-4xl);
+
+  --radius-*: initial;
+  --radius-sm: var(--fv-radius-sm);
+  --radius-md: var(--fv-radius-md);
+  --radius-lg: var(--fv-radius-lg);
+  --radius-xl: var(--fv-radius-xl);
+  --radius-pill: var(--fv-radius-pill);
+}
+
+@layer base {
+  html {
+    font-family: var(--font-sans);
+    color: var(--color-ink);
+    background: var(--color-paper);
+    -webkit-font-smoothing: antialiased;
+  }
+
+  body {
+    margin: 0;
+    min-height: 100dvh;
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--color-ink);
+    outline-offset: 2px;
+  }
+
+  /* The menu can be taller than the window. Keep its scrollbar visible on black. */
+  .menu-scroll {
+    scrollbar-width: thin;
+    scrollbar-color: var(--color-on-black-border) transparent;
+    scrollbar-gutter: stable;
+  }
+
+  .on-black :focus-visible {
+    outline-color: var(--color-lime);
+  }
+}

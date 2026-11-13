@@ -26,7 +26,7 @@ These rules are not preferences. A change that breaks one is wrong even if it wo
 - Signing in with a code in place of a passkey limits withdrawals to known accounts for 24 hours. So does any password reset.
 - Risky actions need extra confirmation: a new payout destination, a large withdrawal, a new device.
 - A new payout destination must be in the client's name, is confirmed by SMS code, needs proof of ownership checked by staff, and waits 24 hours before its first payout.
-- Staff sign in with a password and a passkey. There is no SMS option for staff. Permissions are by role, and sensitive actions need two people.
+- Every staff account must have a second step, with no exceptions for any role. Staff sign in with a password and then a passkey or a code from an authenticator app. Each member of staff sets up either or both, and whichever they have set up is accepted. A passkey is not required. An account with neither set up cannot sign in or open the console. There is no SMS or email code option for staff. Permissions are by role, and sensitive actions need two people.
 - Personal data and documents are encrypted at rest. Documents are served only through short-lived signed links.
 - Secrets live in a secrets manager, never in the repository. Terraform state, kept in a private bucket, is the one recorded exception.
 - The audit trail records who did what and why, and cannot be edited.

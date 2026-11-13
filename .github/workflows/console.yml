@@ -1,0 +1,65 @@
+name: Console and tokens
+
+# Path filtered, so do not make this a required check as it stands: a PR that
+# touches none of these paths would wait on it forever.
+
+on:
+  pull_request:
+    paths:
+      - "apps/console/**"
+      - "packages/tokens/**"
+      - "package.json"
+      - "pnpm-lock.yaml"
+      - "pnpm-workspace.yaml"
+      - ".github/workflows/console.yml"
+  push:
+    branches: [main]
+    paths:
+      - "apps/console/**"
+      - "packages/tokens/**"
+      - "package.json"
+      - "pnpm-lock.yaml"
+      - "pnpm-workspace.yaml"
+      - ".github/workflows/console.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: console-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+      - uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6.1.1
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6.5.0
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Tokens
+        working-directory: packages/tokens
+        run: |
+          pnpm typecheck
+          pnpm test
+      - name: Console
+        working-directory: apps/console
+        run: |
+          pnpm lint
+          pnpm typecheck
+          pnpm test
+          pnpm build
+      - name: A production build refuses the sample sign-in
+        working-directory: apps/console
+        env:
+          VITE_STUB_API: "true"
+          VITE_DEPLOY_ENV: production
+        run: |
+          if pnpm build; then
+            echo "A production build with the sample sign-in must fail" >&2
+            exit 1
+          fi
