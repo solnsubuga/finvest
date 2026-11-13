@@ -156,6 +156,12 @@ async def test_the_same_reference_opens_one_investment(worker_database: Database
     with pytest.raises(ApplicationError) as refused:
         await carry_over(worker_database, legacy, client_id=client_id, annual_rate_bps=1200)
     assert refused.value.code == "conflict"
+    # So is another "as of" day: the first call does not silently win.
+    with pytest.raises(ApplicationError) as refused:
+        await carry_over(
+            worker_database, legacy, client_id=client_id, interest_through=AS_OF - timedelta(days=1)
+        )
+    assert refused.value.code == "conflict"
 
 
 async def test_two_openings_at_once_open_once(worker_database: Database) -> None:
