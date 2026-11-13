@@ -260,3 +260,14 @@ def test_the_app_knows_which_switch_cannot_be_turned_off() -> None:
     both = frozenset({Channel.SMS, Channel.EMAIL})
     assert can_change(Category.SECURITY, Channel.SMS, both)
     assert can_change(Category.MONEY, Channel.SMS, frozenset({Channel.SMS}))
+
+
+@pytest.mark.parametrize("name", ["investment_withdrawal_requested", "investment_withdrawal_paid"])
+def test_early_withdrawal_notices_carry_no_amount(name: str) -> None:
+    # Push and email use the in-app words, and SMS has its own, so no channel shows the amount.
+    spec = EVENTS[name]
+    values = sample_values(spec)
+    rendered = render(spec, DEFAULTS[name], values)
+    amount = format_value(values["amount"])
+    for part in (rendered.title, rendered.body, rendered.sms):
+        assert amount not in part
