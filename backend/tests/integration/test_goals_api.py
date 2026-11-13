@@ -171,7 +171,7 @@ GROUP = {
 
 
 async def test_a_group_goal_is_set_up_shared_and_joined_over_http(staff_api: StaffApi) -> None:
-    await staff_api.client()
+    owner = await staff_api.client()
     created = await staff_api.http.post(
         "/client/goal-groups", json=GROUP, headers={"Idempotency-Key": key()}
     )
@@ -194,10 +194,44 @@ async def test_a_group_goal_is_set_up_shared_and_joined_over_http(staff_api: Sta
     group = joined.json()
     assert [m["display_name"] for m in group["members"]] == ["Grace", "Daniel"]
     # A member sees names, never what anyone else saved.
-    assert keys_of(group["members"]) == {"display_name", "joined_at", "is_you", "is_owner"}
+    assert keys_of(group["members"]) == {
+        "display_name",
+        "joined_at",
+        "is_you",
+        "is_owner",
+        "member_id",
+    }
+    # Only the one who set the group up gets a member id, to remove someone with.
+    assert [m["member_id"] for m in group["members"]] == [None, None]
     assert group["invite_expires_at"] is None
     listed = await staff_api.http.get("/client/goal-groups")
     assert [g["group_id"] for g in listed.json()["groups"]] == [group_id]
+
+    await staff_api.as_client(owner)
+    seen = (await staff_api.http.get(f"/client/goal-groups/{group_id}")).json()["members"]
+    assert seen[0]["member_id"] is None
+    assert seen[1]["member_id"] is not None
+    removed = await staff_api.http.post(
+        f"/client/goal-groups/{group_id}/members/{seen[1]['member_id']}/remove"
+    )
+    assert removed.status_code == 200, removed.json()
+    assert [m["display_name"] for m in removed.json()["members"]] == ["Grace"]
+
+
+async def test_a_member_leaves_over_http(staff_api: StaffApi) -> None:
+    await staff_api.client()
+    created = await staff_api.http.post(
+        "/client/goal-groups", json=GROUP, headers={"Idempotency-Key": key()}
+    )
+    group_id = created.json()["group_id"]
+    code = (await staff_api.http.post(f"/client/goal-groups/{group_id}/invite")).json()["code"]
+    await staff_api.client()
+    joined = await staff_api.http.post(
+        "/client/goal-groups/join",
+        json={"code": code, "display_name": "Daniel", "own_target_minor": 5_000_000},
+        headers={"Idempotency-Key": key()},
+    )
+    assert joined.status_code == 201, joined.json()
     assert (await staff_api.http.post(f"/client/goal-groups/{group_id}/leave")).status_code == 204
     assert (await staff_api.http.get(f"/client/goal-groups/{group_id}")).status_code == 404
 
