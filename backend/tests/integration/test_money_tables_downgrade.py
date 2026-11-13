@@ -121,6 +121,11 @@ ROWS = {
         "'-Nabc0000000000000S1', '\\x01', '\\x02', 0, '{}', 'Laptop', now())",
         "refusing to drop second steps",
     ),
+    "0090_notification_inbox": (
+        "INSERT INTO notification_preferences (client_id, category, channels, updated_at) "
+        "VALUES ('-Nabc0000000000000B1', 'money', ARRAY['push'], now())",
+        "refusing to drop notifications",
+    ),
 }
 
 

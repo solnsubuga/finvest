@@ -28,6 +28,9 @@ Permission = Literal[
     "team.view",
     "reports.view",
     "settings.view",
+    # Proposing or deciding a change to the words of a client message. Seeing them is
+    # `settings.view`. Not a screen: the console's own list gains it with the wordings screen.
+    "wordings.change",
     "migration.view",
 ]
 PERMISSIONS: tuple[Permission, ...] = get_args(Permission)
