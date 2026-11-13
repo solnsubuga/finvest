@@ -41,7 +41,8 @@ class ProductPosition:
     clients_owed: Money
     # Cost of the bills held for the product.
     bills_held: Money
-    # Expected cost of orders to buy that are prepared or approved and not yet settled.
+    # Open orders to buy that have not settled, at face value: the cost is not known until the
+    # result is, and for a Treasury bill it is never more than the face value.
     on_order: Money
 
     def __post_init__(self) -> None:

@@ -27,6 +27,10 @@ class InvalidBufferRules(ValueError):
     """A set of buffer rules that contradicts itself."""
 
 
+class InvalidCash(ValueError):
+    """Cash figures that cannot be used: negative, or in the wrong currency."""
+
+
 @dataclass(frozen=True, slots=True)
 class BufferRules:
     """One version of the rules for one currency."""
@@ -108,7 +112,7 @@ def desk_cash(cash: Money, to_place: Money, promised: Money) -> DeskCash:
     """
     for amount in (cash, to_place, promised):
         if amount.is_negative:
-            raise ValueError("Cash figures are never negative")
+            raise InvalidCash("Cash figures are never negative")
     free = cash - to_place - promised
     zero = Money.zero(cash.currency)
     return DeskCash(buffer=free, short=zero) if not free.is_negative else DeskCash(zero, -free)
@@ -145,11 +149,11 @@ def fund_early_withdrawal(amount: Money, buffer: Money, rules: BufferRules) -> F
     below the floor.
     """
     if amount.currency is not rules.currency or buffer.currency is not rules.currency:
-        raise ValueError("The withdrawal and the buffer are in the currency of the rules")
+        raise InvalidCash("The withdrawal and the buffer are in the currency of the rules")
     if not amount.is_positive:
-        raise ValueError("A withdrawal is a positive amount")
+        raise InvalidCash("A withdrawal is a positive amount")
     if buffer.is_negative:
-        raise ValueError("The buffer is never negative")
+        raise InvalidCash("The buffer is never negative")
     if amount > rules.from_buffer_up_to:
         return Funding.SECONDARY_SALE
     return Funding.QUEUED if buffer < rules.floor else Funding.FROM_BUFFER
@@ -159,6 +163,6 @@ def to_raise(buffer: Money, rules: BufferRules, waiting_for_sale: Money) -> Mone
     """Cash the desk should raise by selling: enough to pay the withdrawals waiting for a sale
     and bring the buffer back to its target."""
     if waiting_for_sale.is_negative or buffer.is_negative:
-        raise ValueError("Cash figures are never negative")
+        raise InvalidCash("Cash figures are never negative")
     gap = rules.target - buffer
     return waiting_for_sale + (gap if gap.is_positive else Money.zero(rules.currency))
