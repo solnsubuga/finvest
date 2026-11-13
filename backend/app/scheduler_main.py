@@ -6,8 +6,9 @@ and each fire time becomes exactly one job.
 """
 
 import asyncio
-from datetime import timedelta
+from datetime import UTC, timedelta
 
+from apscheduler.triggers.cron import CronTrigger  # type: ignore[import-untyped]
 from apscheduler.triggers.interval import IntervalTrigger  # type: ignore[import-untyped]
 
 from app.infrastructure.database import Database
@@ -20,6 +21,7 @@ from app.infrastructure.process import keep_heartbeat, stop_on_signals
 from app.infrastructure.settings import Settings
 from app.modules.investments.jobs import CANCEL_UNPAID_KIND
 from app.modules.kyc.service import SWEEP_UNANSWERED
+from app.modules.notifications.service import PURGE_MESSAGES
 from app.modules.payments import service as payments
 from app.modules.payments.settings import PaymentsSettings
 from app.modules.payments.wiring import ensure_allowed
@@ -59,6 +61,14 @@ def schedules() -> list[Schedule]:
                 max_age=timedelta(minutes=5),
             )
         )
+    # Clears the content of messages that were never sent, and old addresses and numbers.
+    runs.append(
+        Schedule(
+            name="notifications.purge",
+            trigger=CronTrigger(minute=17, timezone=UTC),
+            kind=PURGE_MESSAGES,
+        )
+    )
     return runs
 
 

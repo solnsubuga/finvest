@@ -87,7 +87,16 @@ async def a_staff_member(api: Api, role: str = "admin") -> tuple[str, str]:
         role=role,  # type: ignore[arg-type]
         created_by=None,
     )
-    await api.identity.set_staff_password(staff_id, PASSWORD)
+    # Test set-up only: a password with no second step. Enrolment, which is the only way the
+    # application activates staff, is covered in test_second_steps.
+    async with api.database.transaction() as session:
+        await session.execute(
+            text(
+                "UPDATE identity_staff SET password_hash = :hash, status = 'active', "
+                "password_changed_at = created_at WHERE id = :id"
+            ),
+            {"hash": await HASHER.hash(PASSWORD), "id": staff_id},
+        )
     return email, staff_id
 
 
@@ -173,16 +182,21 @@ async def test_every_sign_in_failure_looks_the_same(api: Api) -> None:
         }
 
 
-async def test_staff_are_never_offered_a_texted_code(api: Api) -> None:
+async def test_staff_with_no_second_step_cannot_sign_in(api: Api) -> None:
     email, _ = await a_staff_member(api)
     response = await api.http.post(
         "/staff/login/start",
         json={"email": email.upper(), "password": PASSWORD},
         headers={"Origin": STAFF_ORIGIN},
     )
-    assert response.status_code == 200
-    # Only what the person enrolled with is offered, and this account has neither yet.
-    assert response.json()["methods"] == []
+    assert (response.status_code, code(response)) == (403, "second_step_missing")
+    # Said only to someone who knows the password. A wrong one looks like any other failure.
+    wrong = await api.http.post(
+        "/staff/login/start",
+        json={"email": email, "password": "wrong-password-1"},
+        headers={"Origin": STAFF_ORIGIN},
+    )
+    assert (wrong.status_code, code(wrong)) == (401, "invalid_credentials")
 
 
 async def test_staff_sign_in_is_refused_from_any_other_site(api: Api) -> None:

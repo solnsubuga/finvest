@@ -172,28 +172,6 @@ class IdentityService:
         logger.info("staff_invited", staff_id=staff_id, role=role)
         return staff_id
 
-    async def set_staff_password(self, staff_id: str, password: str) -> None:
-        """Set the password and make the account active. Used by enrolment."""
-        async with self.database.transaction() as session:
-            email = await session.scalar(
-                text("SELECT email FROM identity_staff WHERE id = :id AND status <> 'disabled'"),
-                {"id": staff_id},
-            )
-        if email is None:
-            raise ApplicationError("not_found")
-        problem = password_problem(password, (email,))
-        if problem is not None:
-            raise _invalid("password", problem)
-        hashed = await self.hasher.hash(password)
-        async with self.database.transaction() as session:
-            await session.execute(
-                text(
-                    "UPDATE identity_staff SET password_hash = :hash, status = 'active', "
-                    "password_changed_at = :now WHERE id = :id AND status <> 'disabled'"
-                ),
-                {"hash": hashed, "now": self.clock.now(), "id": staff_id},
-            )
-
     # Step one
 
     async def start_login(
@@ -250,14 +228,23 @@ class IdentityService:
                 ),
                 {"kind": kind, "actor": account.id},
             )
-            has_app = kind == "staff" and await session.scalar(
+            has_app = await session.scalar(
                 text(
                     "SELECT EXISTS (SELECT 1 FROM identity_authenticators WHERE actor_kind = "
-                    "'staff' AND actor_id = :actor AND confirmed_at IS NOT NULL "
+                    ":kind AND actor_id = :actor AND confirmed_at IS NOT NULL "
                     "AND removed_at IS NULL)"
                 ),
-                {"actor": account.id},
+                {"kind": kind, "actor": account.id},
             )
+            methods: list[SecondStep] = ["passkey"] if has_passkey else []
+            if has_app:
+                methods.append("authenticator")
+            if kind == "client":
+                # A texted or emailed code is the backup for clients. Staff never have one.
+                methods.append("code")
+            if not methods:
+                # Staff must hold a second step. Without one, nothing can finish a sign-in.
+                raise ApplicationError("second_step_missing")
             await session.execute(
                 text(
                     "INSERT INTO identity_login_challenges "
@@ -275,13 +262,8 @@ class IdentityService:
         # The right password clears the wrong-guess counts for this account, not for the address.
         await clear_attempts(self.database, [account_key, pair_key])
         logger.info("login_started", kind=kind, login_id=challenge_id)
-        # Staff have no texted or emailed code. Clients are offered a passkey first once they
-        # have one.
-        if kind == "staff":
-            # Whichever the person enrolled with. An account always has one of the two.
-            methods: list[SecondStep] = ["passkey"] if has_passkey else []
-            return LoginChallenge(challenge_id, [*methods, "authenticator"] if has_app else methods)
-        return LoginChallenge(challenge_id, ["passkey", "code"] if has_passkey else ["code"])
+        # In the order to offer them. The person finishes with any one.
+        return LoginChallenge(challenge_id, methods)
 
     # Sessions
 
