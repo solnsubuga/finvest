@@ -191,6 +191,8 @@ Agreed with the payments and payouts threads on 13 November 2026. Starting and d
 
 - **Starting.** The client reviews and confirms, which saves an investment that is awaiting payment. Its ID is the purpose of the deposit. Payments asks `investments.service.payable_investment` for the exact amount before taking a deposit. When the deposit is confirmed, payments publishes `payments.deposit_confirmed`, and the `investments.start_from_deposit` job moves the money from `client.awaiting_start` to `client.holding` and starts the investment.
 - **Maturity.** See [Maturity](#maturity). Payouts finds the handover by the client and the investment ID (`payouts.domain.posting.funding_account`), and owns everything after `create_payout`.
+- **Dealing desk.** It reads the book through `owed_by_product(session, on)`, `running_investments(session, product_code, started_after=None)` and `maturing(session, date_from, date_to)` in `investments.service`, and follows the outbox topics `investments.started`, `investments.matured` and `investments.rolled_over`. Interest in these reads is net of tax, as posted so far.
+- **Saving sources.** An investment the client did not make themselves, from an automatic investing run or a goal's saving rule, carries `source_type` (`autoinvest_run` or `goal_saving`) and `source_id`. Only the worker creates one, at most one per source, through `request_system_investment`, which the automatic investing module writes.
 - **Unwinding.** For a deposit credited by mistake, `investments.service.unwind_investment` will move the principal back to `client.awaiting_start` and reverse interest not yet paid out. It refuses if anything was already paid out.
 
 ## Not built yet
