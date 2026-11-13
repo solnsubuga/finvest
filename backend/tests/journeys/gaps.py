@@ -23,11 +23,6 @@ Steps of the client journey with no code to test yet, and so no journey yet:
 # steps around them are audited; these are the client's own commands and the worker's
 # confirmations, which the trail cannot show today.
 UNAUDITED = {
-    # Payments: a client asking for a mobile money prompt, or telling us of a bank transfer,
-    # and the worker confirming a deposit.
-    "payments.deposit_requested",
-    "payments.bank_transfer_submitted",
-    "payments.deposit_confirmed",
     # Investing: a client confirming an investment, and it starting once paid.
     "investments.requested",
     "investments.started",
