@@ -1321,6 +1321,7 @@ export const operations = {
     params: z.object({}),
     query: z.object({
     months: z.number().int().optional(),
+    currency: Currency.optional(),
   }),
     body: null,
     bodyKind: null,
