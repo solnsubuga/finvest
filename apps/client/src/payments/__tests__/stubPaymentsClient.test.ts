@@ -152,6 +152,22 @@ describe("the demo payments client, bank transfer", () => {
     expect(again.status).toBe("checking");
   });
 
+  it.each<[string, (r: BankReceiptSubmission) => BankReceiptSubmission]>([
+    ["thing to pay for", (r) => ({ ...r, payableId: "other" })],
+    ["file name", (r) => ({ ...r, file: { ...r.file, name: "other.pdf" } })],
+    ["file size", (r) => ({ ...r, file: { ...r.file, sizeBytes: 4096 } })],
+    ["amount", (r) => ({ ...r, amountSent: { currency: "UGX", minor: 2_000_000 } })],
+    ["day sent", (r) => ({ ...r, sentOn: "2026-11-12" })],
+    ["bank", (r) => ({ ...r, bankName: "Other Bank" })],
+    ["transaction number", (r) => ({ ...r, transactionNumber: "TXN778" })],
+  ])("refuses a known key sent with a different %s", async (_field, change) => {
+    const { client } = setup();
+    await client.submitBankReceipt(receipt("TXN777"));
+    await expect(client.submitBankReceipt(change(receipt("TXN777")))).rejects.toEqual(
+      new PaymentError("key_reused"),
+    );
+  });
+
   it("takes one payment for a thing, whichever way it is paid", async () => {
     const { client, request } = setup();
     await client.submitBankReceipt(receipt("TXN777"));

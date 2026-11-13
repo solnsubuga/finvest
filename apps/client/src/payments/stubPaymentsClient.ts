@@ -98,6 +98,20 @@ export type StubOptions = {
   scenarioFor?: (payer: string) => string;
 };
 
+function sameSubmission(a: BankReceiptSubmission, b: BankReceiptSubmission): boolean {
+  return (
+    a.payableId === b.payableId &&
+    a.file.name === b.file.name &&
+    a.file.sizeBytes === b.file.sizeBytes &&
+    a.file.mimeType === b.file.mimeType &&
+    a.amountSent.currency === b.amountSent.currency &&
+    a.amountSent.minor === b.amountSent.minor &&
+    a.sentOn === b.sentOn &&
+    a.bankName === b.bankName &&
+    a.transactionNumber === b.transactionNumber
+  );
+}
+
 export function createStubPaymentsClient(options: StubOptions = {}): PaymentsClient {
   const delayMs = options.delayMs ?? 450;
   const now = options.now ?? Date.now;
@@ -223,7 +237,12 @@ export function createStubPaymentsClient(options: StubOptions = {}): PaymentsCli
       await pause();
       const known = transferByKey.get(submission.idempotencyKey);
       if (known) {
-        return readTransfer(transfers.get(known) as StoredTransfer);
+        const first = transfers.get(known) as StoredTransfer;
+        // The backend refuses a key sent again with a different body, so the stub does too.
+        if (!sameSubmission(first.submission, submission)) {
+          throw new PaymentError("key_reused");
+        }
+        return readTransfer(first);
       }
       if (submission.payableId !== DEMO_PAYABLE_ID) {
         throw new PaymentError("not_payable");
