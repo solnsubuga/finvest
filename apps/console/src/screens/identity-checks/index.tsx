@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useState } from "react";
 import { useSearchParams } from "react-router";
 import { apiBaseUrl, createHttp } from "@/api/http.ts";
+import { useAuth } from "@/auth/context.ts";
 import { isStubAuth } from "@/auth/index.ts";
+import { can } from "@/auth/types.ts";
 import { Button } from "@/components/ui/button.tsx";
 import { PageHeader } from "@/pages/PageHeader.tsx";
 import { KycError, kycErrorMessage, notConnectedKycApi, type CheckDetail, type KycApi, type QueueItem } from "./api.ts";
@@ -21,7 +23,16 @@ const defaultApi: KycApi = defaultKycApi();
 
 type Load<T> = { state: "loading" } | { state: "failed"; message: string } | { state: "ready"; value: T };
 
-export function IdentityChecksScreen({ api = defaultApi, now = () => new Date() }: { api?: KycApi; now?: () => Date }) {
+export function IdentityChecksScreen({
+  api = defaultApi,
+  now = () => new Date(),
+  canDecide = true,
+}: {
+  api?: KycApi;
+  now?: () => Date;
+  /** Whether this person holds `identity_checks.review`. */
+  canDecide?: boolean;
+}) {
   const [params, setParams] = useSearchParams();
   const requestedId = params.get("check");
   const [queue, setQueue] = useState<Load<QueueItem[]>>({ state: "loading" });
@@ -31,6 +42,8 @@ export function IdentityChecksScreen({ api = defaultApi, now = () => new Date() 
   const [busy, setBusy] = useState(false);
   // The check being worked on stays open after a decision, even though it leaves the queue.
   const [kept, setKept] = useState<string | null>(null);
+  // Bumped by "Try again" on a check that failed to load, to fetch that one check again.
+  const [attempt, setAttempt] = useState(0);
 
   const fetchQueue = useCallback(
     (): Promise<Load<QueueItem[]>> =>
@@ -65,7 +78,7 @@ export function IdentityChecksScreen({ api = defaultApi, now = () => new Date() 
     return () => {
       current = false;
     };
-  }, [api, selectedId]);
+  }, [api, selectedId, attempt]);
 
   const check: Load<CheckDetail> = loaded?.id === selectedId ? loaded.load : { state: "loading" };
   const decisionError = failed?.id === selectedId ? failed.message : null;
@@ -145,7 +158,14 @@ export function IdentityChecksScreen({ api = defaultApi, now = () => new Date() 
                 Loading this check
               </p>
             ) : check.state === "failed" ? (
-              <Failure message={check.message} />
+              <Failure
+                title="This check could not be loaded"
+                message={check.message}
+                onRetry={() => {
+                  setLoaded(null);
+                  setAttempt((count) => count + 1);
+                }}
+              />
             ) : (
               <Review
                 key={check.value.id}
@@ -154,6 +174,7 @@ export function IdentityChecksScreen({ api = defaultApi, now = () => new Date() 
                 error={decisionError}
                 onDecide={(input) => void decide(input)}
                 onShowNumber={() => api.showDocumentNumber(check.value.id)}
+                canDecide={canDecide}
               />
             )}
           </div>
@@ -163,10 +184,18 @@ export function IdentityChecksScreen({ api = defaultApi, now = () => new Date() 
   );
 }
 
-function Failure({ message, onRetry }: { message: string; onRetry?: () => void }) {
+function Failure({
+  title = "Identity checks could not be loaded",
+  message,
+  onRetry,
+}: {
+  title?: string;
+  message: string;
+  onRetry?: () => void;
+}) {
   return (
     <section role="alert" className="flex max-w-[640px] flex-col items-start gap-3 rounded-xl border border-border bg-surface p-5">
-      <h2 className="m-0 text-xl font-extrabold">Identity checks could not be loaded</h2>
+      <h2 className="m-0 text-xl font-extrabold">{title}</h2>
       <p className="m-0 text-md leading-normal text-muted">{message}</p>
       {onRetry ? (
         <Button variant="secondary" onClick={onRetry}>
@@ -178,5 +207,6 @@ function Failure({ message, onRetry }: { message: string; onRetry?: () => void }
 }
 
 export default function IdentityChecksPage() {
-  return <IdentityChecksScreen />;
+  const { session } = useAuth();
+  return <IdentityChecksScreen canDecide={session ? can(session, "identity_checks.review") : false} />;
 }

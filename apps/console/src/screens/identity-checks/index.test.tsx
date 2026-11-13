@@ -9,10 +9,9 @@ import { createStubKycApi } from "./stub.ts";
 
 const DAVID = "-OdSample0000000001A";
 
-function renderScreen(api: KycApi = createStubKycApi(0), entry = "/identity-checks") {
-  const router = createMemoryRouter([{ path: "/identity-checks", element: <IdentityChecksScreen api={api} /> }], {
-    initialEntries: [entry],
-  });
+function renderScreen(api: KycApi = createStubKycApi(0), entry = "/identity-checks", canDecide = true) {
+  const element = <IdentityChecksScreen api={api} canDecide={canDecide} />;
+  const router = createMemoryRouter([{ path: "/identity-checks", element }], { initialEntries: [entry] });
   render(<RouterProvider router={router} />);
   return { api, router, user: userEvent.setup() };
 }
@@ -199,6 +198,60 @@ describe("identity checks screen", () => {
     await user.click(screen.getByRole("button", { name: "Try again" }));
     await openCheck("David Mugisha");
     expect(list).toHaveBeenCalledTimes(2);
+  });
+
+  it("lets someone without the review permission look but not decide", async () => {
+    renderScreen(undefined, "/identity-checks", false);
+    const review = await openCheck("David Mugisha");
+    expect(within(review).queryByRole("form", { name: "Decision" })).not.toBeInTheDocument();
+    expect(within(review).getByText(/Deciding it needs the identity check review permission/)).toBeInTheDocument();
+    expect(within(review).getByRole("button", { name: "Show" })).toBeInTheDocument();
+  });
+
+  it("moves focus to the confirmation before approving", async () => {
+    const { user } = renderScreen();
+    const review = await openCheck("David Mugisha");
+    await user.type(within(review).getByLabelText("Reason for your decision"), "Photos match");
+    await user.click(within(review).getByRole("button", { name: "Approve" }));
+    expect(within(review).getByRole("button", { name: "Yes, approve" })).toHaveFocus();
+  });
+
+  it("offers to try again when one check cannot be loaded", async () => {
+    const api = createStubKycApi(0);
+    const get = vi.spyOn(api, "getCheck").mockRejectedValueOnce(new KycError("unavailable"));
+    const { user } = renderScreen(api);
+    expect(await screen.findByRole("heading", { name: "This check could not be loaded" })).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Try again" }));
+    await openCheck("David Mugisha");
+    expect(get).toHaveBeenCalledTimes(2);
+  });
+
+  it("names the provider and expiry flags, and opens photos without a referrer", async () => {
+    const stub = createStubKycApi(0);
+    for (const [flag, words] of [
+      ["automatic_checks_passed", "Automatic checks passed"],
+      ["document_expired", "ID has expired"],
+      ["provider_not_received", "Provider never received the check"],
+      ["provider_refused", "Provider refused the check"],
+      ["provider_no_answer", "Provider did not answer"],
+    ] as const) {
+      const api: KycApi = {
+        ...stub,
+        getCheck: async (id) => ({
+          ...(await stub.getCheck(id)),
+          reviewFlags: [flag],
+          photos: [{ kind: "selfie", url: "https://files.test/selfie" }],
+        }),
+      };
+      const router = createMemoryRouter([{ path: "/identity-checks", element: <IdentityChecksScreen api={api} /> }], {
+        initialEntries: ["/identity-checks"],
+      });
+      const { unmount } = render(<RouterProvider router={router} />);
+      const review = await openCheck("David Mugisha");
+      expect(within(review).getByText(words)).toBeInTheDocument();
+      expect(within(review).getByRole("img", { name: "Selfie" })).toHaveAttribute("referrerpolicy", "no-referrer");
+      unmount();
+    }
   });
 
   it("says it is not connected in a build with no API client", async () => {
