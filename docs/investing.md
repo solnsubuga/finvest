@@ -109,6 +109,24 @@ Each run leaves a row per currency in `investment_interest_runs`: how many inves
 
 Not decided yet: nothing here pays interest out. Accrued interest sits in `client.interest_accrued` until maturity, and the monthly payment for the open term dollar product is not built.
 
+## Maturity
+
+On its maturity date a fixed-term investment has earned its last day. The scheduler fires `investments.mature` at 01:00 Kampala time, after the interest run, and the worker closes every active investment whose maturity date has come. Each is closed in its own savepoint, in one transaction with all its money moves. If the interest run has not reached the last days, they are posted first. Nothing is paid past the maturity date, however late the run is.
+
+The client chooses what happens at maturity, from review and confirm up to the day before maturity. Rolling over is the default. Paying out needs one of the client's own approved payout destinations (`payouts.destinations.usable_destination`). The database refuses a change on or after the maturity date, by its own clock. Only the client can change the choice. Staff cannot.
+
+| Choice | What the run does | Ledger entry |
+| --- | --- | --- |
+| Roll over, product still live | A new investment in the same product, for principal plus interest after tax, at the rate in force that day. It starts on the old maturity date, so no day goes without interest. | `investment.rolled_over`: debit the old `client.holding` and `client.interest_accrued`, credit the new `client.holding` |
+| Pay out, destination chosen | Hands principal and interest to payouts and calls `payouts.payouts.create_payout` to that destination in the same transaction, with request key `maturity:<id>:<destination>`. | `investment.matured`: debit `client.holding` and `client.interest_accrued`, credit `client.payout_pending` (reference the investment) |
+| Pay out, no destination | The same handover, and the money waits. | `investment.matured` |
+| Roll over, product paused or closed | The same handover, and the money waits. It is never rolled into something the client did not choose. | `investment.matured` |
+| Payouts refuses the payout | The handover stays. The refusal code (for example a mobile money limit) is kept on the investment. | `investment.matured` |
+
+Money that waits shows in the payouts console queue. The client sends it on with `pay_out_matured` to a destination of theirs, and may try another destination if one is refused. A matured investment is final. The only change the database allows afterwards is recording the payout that carries waiting money.
+
+The run publishes `investments.rolled_over` or `investments.matured`. A matured investment carries its maturity entry and exactly one of: the investment it rolled into, the payout, or the reason the money is waiting.
+
 ## What clients see
 
 Clients see the yearly rate after tax and the interest they earn after tax. They never see the tax rate, the tax amount or the rate before tax. In the code, `ClientReturns` and `RateVersion.client_rate_percent` are the only figures a client-facing response is built from, and the service functions `client_products` and `client_quote` are the only ones a client-facing route may call. `client_quote` is the returns calculator and the review screen: what an amount earns after tax if it starts today, and when it matures. The rate shown is a label, rounded to two decimal places. No amount is ever worked out from it.
@@ -122,6 +140,7 @@ One payment by one client into one product. The code is in `backend/app/modules/
 | `awaiting_payment` | The client reviewed and confirmed. The terms are fixed. Nothing has been paid. |
 | `active` | The payment was confirmed and the money is in the client's holding. It earns interest from the next day. |
 | `cancelled` | It was not paid for in time. Final. No money ever moved. |
+| `matured` | Its term ended and its money left the holding: rolled into a new investment or handed to payouts. Final. |
 
 1. **Review and confirm.** `request_investment` saves the investment under the client's idempotency key, so two taps invest once. The client must have passed the identity check. The terms are the product's rate and tax that day, and the investment keeps them for good.
 2. **Pay.** The investment's ID is the purpose of the deposit. Payments asks `payable_investment` who pays and exactly how much. A review stays payable for 72 hours.
@@ -171,9 +190,9 @@ The investments module opens these. The entries are described with the commands 
 Agreed with the payments and payouts threads on 13 November 2026. Starting and daily interest are built. Maturity and unwinding are not.
 
 - **Starting.** The client reviews and confirms, which saves an investment that is awaiting payment. Its ID is the purpose of the deposit. Payments asks `investments.service.payable_investment` for the exact amount before taking a deposit. When the deposit is confirmed, payments publishes `payments.deposit_confirmed`, and the `investments.start_from_deposit` job moves the money from `client.awaiting_start` to `client.holding` and starts the investment.
-- **Maturity.** The client chooses in advance to roll over or be paid out. For a payout, the maturity run moves principal and interest to `client.payout_pending` (reference the investment) and calls `payouts.payouts.create_payout` with that account, in one transaction. If the payout is refused the money stays there and appears in the payouts staff queue.
+- **Maturity.** See [Maturity](#maturity). Payouts finds the handover by the client and the investment ID (`payouts.domain.posting.funding_account`), and owns everything after `create_payout`.
 - **Unwinding.** For a deposit credited by mistake, `investments.service.unwind_investment` will move the principal back to `client.awaiting_start` and reverse interest not yet paid out. It refuses if anything was already paid out.
 
 ## Not built yet
 
-HTTP routes (they need sign-in sessions and permissions), editing a product, maturity and rollover, early withdrawal, the monthly coupon for open terms, statements, and every screen. The dealing desk is its own module: see [dealing-desk.md](dealing-desk.md).
+HTTP routes (they need sign-in sessions and permissions), editing a product, a staff refund of money that did not start an investment, early withdrawal, the monthly coupon for open terms, statements, and every screen. The dealing desk is its own module: see [dealing-desk.md](dealing-desk.md).
