@@ -84,6 +84,9 @@ export function toKycError(error: unknown): KycError {
   if (error instanceof KycError) return error;
   if (!(error instanceof ApiError)) return new KycError("unavailable");
   switch (error.code) {
+    // A reason or message the backend refused, such as one too long. A definite answer.
+    case "validation_failed":
+      return new KycError("invalid");
     case "not_found":
       return new KycError("not_found");
     // A decision the check's state no longer allows, or a document another approved client holds.

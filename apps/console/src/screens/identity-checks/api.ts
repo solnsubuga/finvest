@@ -78,7 +78,7 @@ export interface KycApi {
   escalate(id: string, reason: string): Promise<CheckDetail>;
 }
 
-export type KycErrorCode = "not_found" | "conflict" | "duplicate_document" | "forbidden" | "not_connected" | "unavailable";
+export type KycErrorCode = "invalid" | "not_found" | "conflict" | "duplicate_document" | "forbidden" | "not_connected" | "unavailable";
 
 export class KycError extends Error {
   readonly code: KycErrorCode;
@@ -91,6 +91,7 @@ export class KycError extends Error {
 }
 
 const MESSAGES: Record<KycErrorCode, string> = {
+  invalid: "Finvest refused the reason or the message to the client. Check them, keep them short and send again.",
   not_found: "This check no longer exists.",
   conflict: "Someone else has already acted on this check. It has been reloaded.",
   duplicate_document: "Another approved client already holds this identity document. Escalate to compliance.",

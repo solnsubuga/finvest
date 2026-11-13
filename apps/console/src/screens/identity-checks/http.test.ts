@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import { createHttp } from "@/api/http.ts";
+import { kycErrorMessage } from "./api.ts";
 import { createHttpKycApi } from "./http.ts";
 
 const CHECK = {
@@ -112,6 +113,12 @@ describe("identity checks over HTTP", () => {
     await expect(createHttpKycApi(createHttp("https://api.test", forbidden)).escalate(CHECK.id, "x")).rejects.toMatchObject({
       code: "forbidden",
     });
+    const invalid = vi.fn<typeof globalThis.fetch>(() => refusal(422, "validation_failed"));
+    const refused = await createHttpKycApi(createHttp("https://api.test", invalid))
+      .reject(CHECK.id, "x", "y")
+      .catch((caught: unknown) => caught);
+    expect(refused).toMatchObject({ code: "invalid" });
+    expect(kycErrorMessage(refused)).toMatch(/refused the reason or the message/);
     const offline = vi.fn<typeof globalThis.fetch>(() => Promise.reject(new TypeError("offline")));
     await expect(createHttpKycApi(createHttp("https://api.test", offline)).listQueue()).rejects.toMatchObject({ code: "unavailable" });
   });
