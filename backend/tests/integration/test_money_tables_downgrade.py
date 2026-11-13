@@ -137,6 +137,12 @@ ROWS = {
         "VALUES ('-Nabc0000000000000A1', DATE '2026-11-13', '{}', '-Nabc0000000000000S1', now())",
         "refusing to drop migration checks",
     ),
+    "0140_documents": (
+        "INSERT INTO documents (id, client_id, kind, idempotency_key, period_start, period_end, "
+        "requested_at) VALUES ('-Nabc0000000000000A1', '-Nabc0000000000000B1', "
+        "'monthly_statement', '2026-10', DATE '2026-10-01', DATE '2026-10-31', now())",
+        "refusing to drop documents",
+    ),
 }
 
 

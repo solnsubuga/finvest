@@ -13,6 +13,7 @@ from app.api.hardening import BodyLimitMiddleware, SecurityHeadersMiddleware
 from app.api.request_id import RequestIdMiddleware
 from app.infrastructure.database import Database
 from app.infrastructure.settings import Settings
+from app.modules.documents import api as documents_api
 from app.modules.identity import api as identity_api
 from app.modules.identity import passkeys_api
 from app.modules.identity.authenticators import AuthenticatorService
@@ -91,7 +92,12 @@ def create_app(
         ProxyHeadersMiddleware, trusted_hosts=settings.trusted_proxies or ["127.0.0.1"]
     )
     app.include_router(health.router)
-    for router in (*identity_api.routers, *passkeys_api.routers, *notifications_api.routers):
+    for router in (
+        *identity_api.routers,
+        *passkeys_api.routers,
+        *notifications_api.routers,
+        *documents_api.routers,
+    ):
         app.include_router(router)
     app.include_router(payments_api.create_router(collections))
     return app

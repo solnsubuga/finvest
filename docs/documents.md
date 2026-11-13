@@ -4,7 +4,7 @@ What Finvest sends a client in writing about their money: a statement after ever
 
 The code is `backend/app/modules/documents`. Tax certificates and transaction notes will join this module later.
 
-**Status:** this first part is the pure rules, the PDF drawing and the email wording. The tables, the monthly run, the request route, sending and the app screen arrive in their own pull requests. Nothing is sent yet.
+**Status:** statements are asked for, built from the ledger, stored and downloadable, and the monthly run asks for every client's. **Nothing is emailed yet**: sending with the PDF attached, receipts for confirmed payments and the app screen arrive in their own pull requests. The table is migration `0140_documents`.
 
 The designs are in `/mnt/project-files/screenshots/statements/` in the project folder: the statement PDF, the receipt PDF, the three emails at phone and wide sizes, and the app's Documents screen in every state.
 
@@ -50,3 +50,57 @@ One receipt for each confirmed payment. It shows the amount, what it paid for, w
 - **Links only to Finvest:** the app's Documents screen and finvestug.com.
 - Every value is escaped before it goes into the HTML.
 - Every email ends with a reminder that Finvest never asks for a password, PIN or code.
+
+## How a document is made
+
+A document is asked for first and built later, so no request waits on the ledger or a PDF.
+
+| Who asks | Kind | Key, unique per client and kind |
+| --- | --- | --- |
+| The client, in the app | `requested_statement` | The client's `Idempotency-Key` |
+| The monthly run, for every client with a ledger account | `monthly_statement` | The month, `2026-10` |
+| A confirmed payment (next pull request) | `receipt` | The deposit ID, also unique on its own |
+
+1. **Ask.** `service.ask` writes a `pending` row and queues `documents.build` naming only the document's ID, in the same transaction. Asking again with the same key writes nothing and returns the first row, so two taps or a retried run ask once.
+2. **Build.** The worker reads the ledger and the names it needs, checks the figures add up, draws the PDF and stores it in the row as `ready`, all in the one fenced transaction that completes the job. A monthly statement with nothing in it becomes `empty` and is never shown or sent. A statement that does not add up becomes `failed` with `does_not_add_up` and is logged as an error for staff. A client with no approved account fails with `not_approved`.
+3. **Tell.** A ready statement raises `statement_ready` in the notification centre, keyed by the document ID and linked to it.
+
+**The monthly run** is the schedule `documents.monthly_statements`, at 06:00 in Kampala on the first of each month. It covers the whole calendar month before. It asks for each client with a ledger account, 200 at a time, and each page queues the next, so a run of any size finishes and a client is asked once.
+
+**Limits.** A client may ask for 10 statements a Kampala day, because each one reads their whole period.
+
+### Where the figures come from
+
+Only from the ledger, through `app.modules.ledger.statements`: `client_owed_as_of` for the value at the end of the day before the period and at the end of its last day, and `client_lines` for every line on the client's own accounts in between. Lines are grouped by journal entry. An entry that only moves money between the client's own accounts, such as a payment starting its investment, changes nothing the client is owed and is not a line. Every other entry is one line:
+
+| Entry | Line |
+| --- | --- |
+| `payment.deposit_confirmed` | Payment received, with the method from payments |
+| `investment.interest_accrued` | Interest, with the product's name, on the investment it was posted to |
+| `payout.*` taking money out | Paid out to your mobile money or bank account |
+| `payout.*` bringing money back | Payout returned (a correction) |
+| Anything else | Correction |
+
+The other modules only give names: the product of an investment, how a payment was made, where a payout went, and the client's name and account number from their approved identity check (`kyc.service.account_holder`). A name that cannot be found leaves a plain description, never a wrong one. An investment's status becomes words in one place, `domain/building.py`, and a unit test fails if a status has no label.
+
+### What the database enforces
+
+| Rule | How |
+| --- | --- |
+| Asked before built | A new row must be `pending`, with no file. |
+| Built once | Only the system actor moves a row out of `pending`, and a finished row never changes. What it was asked for never changes. |
+| A file matches its record | A `ready` row has its PDF, name, size and SHA-256, and the database checks that the size and hash are the file's. Nothing else holds a file. At most 5 MB. |
+| Shape | A statement has a period of at most 366 days and no deposit. A receipt has a deposit and no period, and a deposit has one receipt. Only a monthly statement can be `empty`. |
+| Clients are fenced | A client reads only their own rows and may only ask for a `requested_statement` of their own. Staff read any. |
+| Nothing is deleted | No role holds DELETE, and a trigger refuses TRUNCATE. A downgrade refuses while any row exists. |
+
+The PDF is kept in the row. A statement is a few tens of kilobytes, and keeping it beside its record means it is backed up, fenced and kept exactly like the record.
+
+## Routes
+
+| Route | Who | What |
+| --- | --- | --- |
+| `POST /client/statements` | Client, with `Idempotency-Key` | Ask for a statement from `date_from` to `date_to`. Answers 202 with the document, `pending`. A refused period is 422 with the reason on the field. |
+| `GET /client/documents` | Client | Their statements and receipts, newest first |
+| `GET /client/documents/{id}` | Client | One document, to poll until it is `ready` |
+| `GET /client/documents/{id}/file` | Client | The PDF, as a download, never cached |

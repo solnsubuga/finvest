@@ -19,12 +19,14 @@ from app.infrastructure.jobs.worker import default_worker_id
 from app.infrastructure.logging import configure_logging
 from app.infrastructure.process import keep_heartbeat, stop_on_signals
 from app.infrastructure.settings import Settings
+from app.modules.documents.service import MONTHLY_KIND
 from app.modules.investments.jobs import CANCEL_UNPAID_KIND
 from app.modules.kyc.service import SWEEP_UNANSWERED
 from app.modules.notifications.service import PURGE_MESSAGES
 from app.modules.payments import service as payments
 from app.modules.payments.settings import PaymentsSettings
 from app.modules.payments.wiring import ensure_allowed
+from app.shared.business_day import KAMPALA
 from app.shared.clock import SystemClock
 
 
@@ -47,6 +49,14 @@ def schedules() -> list[Schedule]:
             trigger=IntervalTrigger(minutes=15),
             kind=CANCEL_UNPAID_KIND,
             max_age=timedelta(minutes=30),
+        ),
+        # Last month's statement for every client, at 06:00 in Kampala on the first. A run
+        # missed while the scheduler was down is made up once; each client is asked once.
+        Schedule(
+            name="documents.monthly_statements",
+            trigger=CronTrigger(day=1, hour=6, minute=0, timezone=KAMPALA),
+            kind=MONTHLY_KIND,
+            max_age=timedelta(days=3),
         ),
     ]
     payments_settings = PaymentsSettings()

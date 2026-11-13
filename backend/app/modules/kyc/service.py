@@ -607,6 +607,32 @@ async def verified_name(session: AsyncSession, client_id: str) -> str | None:
     return None if row is None else f"{row.surname} {row.given_names}"
 
 
+@dataclass(frozen=True, slots=True)
+class AccountHolder:
+    """Who an approved account belongs to, as printed on a statement or a receipt."""
+
+    surname: str
+    given_names: str
+    account_number: str  # ten digits, issued at approval
+
+
+_ACCOUNT_HOLDER = text(
+    "SELECT surname, given_names, account_number FROM kyc_checks "
+    "WHERE client_id = :client_id AND status = 'approved'"
+)
+
+
+async def account_holder(session: AsyncSession, client_id: str) -> AccountHolder | None:
+    """The approved client's name and account number, or None until they are approved.
+
+    For the worker and staff, such as the documents module writing a statement.
+    """
+    row = (await session.execute(_ACCOUNT_HOLDER, {"client_id": client_id})).one_or_none()
+    if row is None or row.account_number is None:
+        return None
+    return AccountHolder(row.surname, row.given_names, row.account_number)
+
+
 async def approve(
     session: AsyncSession, sealer: Sealer, staff: Actor, check_id: str, reason: str, clock: Clock
 ) -> CheckView:

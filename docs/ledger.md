@@ -127,6 +127,9 @@ What this does not do: it does not stop a staff command from calling `post_entry
 `app.modules.ledger.statements` is read-only and is what reconciliation uses, since no other module reads the ledger's tables.
 
 - `account_movements(session, account_id, date_from=..., date_to=...)` lists every line on the account dated in the range, both days included. Each has the entry ID and line number, the date, the signed amount (a debit is positive), the entry type and the entry's `source_type` and `source_id`. A statement line is matched to a movement on `source_id`.
+- `client_lines(session, client_id, date_from=..., date_to=...)` lists every line on the client's own accounts in the range, with its entry, the account's code and reference, and the change to what Finvest owes the client (positive when the client is owed more). Statements are built from it.
+- `client_owed_as_of(session, client_id, on)` gives what Finvest owed the client at the end of `on`, per account code and reference, counting only entries dated up to then.
+- `clients_with_accounts(session, after=..., limit=...)` pages through the clients that own a ledger account, for the monthly statement run.
 - `balance_as_of(session, account_id, day)` is the balance counting only entries dated on or before that day, in the account's normal direction.
 - `account_owner(session, account_id)` is the client the account belongs to, or nothing for one of Finvest's own accounts.
 
