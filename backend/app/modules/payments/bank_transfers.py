@@ -158,6 +158,13 @@ _INSERT_APPROVAL = text(
     "VALUES (:deposit_id, :approved_by, :now)"
 )
 _SELECT_APPROVED = text("SELECT 1 FROM payment_bank_approvals WHERE deposit_id = :id")
+_AWAITING_APPROVAL = text(
+    "SELECT review.deposit_id, review.reviewed_by, review.reviewed_at "
+    "FROM payment_bank_reviews AS review LEFT JOIN payment_bank_approvals AS approval "
+    "ON approval.deposit_id = review.deposit_id "
+    "WHERE review.outcome = 'matched' AND approval.deposit_id IS NULL "
+    "ORDER BY review.reviewed_at, review.deposit_id LIMIT :limit"
+)
 _USED_LINES = text(
     "SELECT statement_line_id FROM payment_bank_reviews "
     "WHERE statement_line_id = ANY(CAST(:ids AS text[]))"
@@ -541,6 +548,26 @@ async def get_review(session: AsyncSession, staff: Actor, deposit_id: str) -> Re
         approved_by=row.approved_by,
         approved_at=row.approved_at,
     )
+
+
+@dataclass(frozen=True, slots=True)
+class MatchAwaitingApproval:
+    """A transfer someone matched to the statement, waiting for a different person."""
+
+    deposit_id: str
+    matched_by: str
+    matched_at: datetime
+
+
+async def matches_awaiting_approval(
+    session: AsyncSession, *, limit: int = 100
+) -> list[MatchAwaitingApproval]:
+    """Matches nobody has approved yet, oldest first. Empty outside a staff transaction."""
+    rows = await session.execute(_AWAITING_APPROVAL, {"limit": max(1, min(limit, 200))})
+    return [
+        MatchAwaitingApproval(row.deposit_id, row.reviewed_by, row.reviewed_at)
+        for row in rows.all()
+    ]
 
 
 async def record_opened(session: AsyncSession, staff: Actor, deposit_id: str, clock: Clock) -> None:

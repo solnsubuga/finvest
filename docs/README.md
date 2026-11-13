@@ -20,6 +20,7 @@
 | [automatic-investing.md](automatic-investing.md) | Plans that invest the same amount on a schedule, the daily run that asks for each payment, and what the database enforces |
 | [insights.md](insights.md) | What a client invested, earned and was paid each month, what comes next, and where each figure is read from in the ledger |
 | [account-numbers.md](account-numbers.md) | Format, generation and lifetime of client account numbers |
+| [approvals.md](approvals.md) | The approvals inbox: what waits for a second member of staff, who sees it and who may decide |
 | [roadmap.md](roadmap.md) | Build phases and the feature checklist for the client app and back office |
 | [migration.md](migration.md) | Moving Finvest 1.0 clients onto the new system |
 | [security.md](security.md) | The security review before launch: findings, the ASVS checklist and the penetration test scope |
