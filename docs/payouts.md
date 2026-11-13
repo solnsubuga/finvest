@@ -181,6 +181,19 @@ No route creates a payout. The module whose money is paid out creates it: an inv
 
 A new account moves from `awaiting_code` to `awaiting_proof` when the client enters a code texted for it: to the mobile money number itself, or for a bank account to the client's own number. The identity module issues and spends the code (purpose `payout_account`, migration 0034), and the account moves on in the same transaction that spends it. A wrong code still counts as one of the five tries. A mobile money account then waits at `awaiting_proof` until Finvest can read the name the network holds for the number, which is not built yet.
 
+## Staff routes
+
+In `backend/app/modules/payouts/staff_api.py`. Seeing the queue and opening an account needs `review_queue.view`. Every decision needs `payout_accounts.change`, held by admin, operations and compliance for now.
+
+| Route | What it does |
+| --- | --- |
+| `GET /staff/payout-destinations` | Accounts in review, oldest first. `check` is null until the first person checks one; with a check it waits for a second person |
+| `GET /staff/payout-destinations/{id}` | Open one: the whole account number, the name on the client's verified ID (`id_name`, null without an approved identity check) and a link to the proof that works for five minutes. Writes a `payouts.destination_opened` access event |
+| `POST /staff/payout-destinations/{id}/check` | `{proof_name, statement_date?, reason}`. Records the check. 422 `name_different` on `proof_name`, `statement_date_required` or `statement_too_old` on `statement_date`; 409 `client_not_verified` |
+| `POST /staff/payout-destinations/{id}/approve` | `{reason}`. Approves someone else's check; the account can be paid 24 hours later. 403 `checked_by_you`; 409 `destination_not_checked` or `account_in_use` |
+| `POST /staff/payout-destinations/{id}/reject` | `{rejection_reason, reason}`. One person refuses the proof |
+| `POST /staff/payout-destinations/{id}/remove` | `{reason}`. Takes the account out of use for good, as an operator control |
+
 ## Sending a payout
 
 A queued mobile money payout gets a send job in the same transaction that queued it: when it is created, or when staff approve a held one. The worker sends it through the disbursements provider and reads its status back. The code is in `backend/app/modules/payouts/jobs.py`, the rules in `domain/sending.py`, and migration 0033 adds `payout_send_attempts`.
