@@ -6,7 +6,8 @@ change of status names the one ledger movement that goes with it, so the service
 that entry in the same transaction and the payout and the books cannot drift apart.
 
 The rule that matters most is here as a table: once we do not know whether the provider took a
-payout, it is never sent again. Only reading the status back from the provider can move it.
+payout, it is never sent again. Only reading the status back from the provider can move it,
+or, when the provider has no answer at all, two staff members working from the statement.
 """
 
 from __future__ import annotations
@@ -47,6 +48,9 @@ class PayoutEvent(StrEnum):
     STATUS_FAILED = "status_failed"
     STATUS_PENDING = "status_pending"  # the provider has it and is still working
     STATUS_UNKNOWN = "status_unknown"  # the read failed, or the provider has no record yet
+    # Two staff members settled a payout the provider cannot answer for, from the statement.
+    STAFF_RESOLVED_PAID = "staff_resolved_paid"
+    STAFF_RESOLVED_FAILED = "staff_resolved_failed"
 
 
 class LedgerEffect(StrEnum):
@@ -101,6 +105,10 @@ _TABLE: dict[tuple[PayoutStatus, PayoutEvent], Transition] = {
     # The provider has it after all, so it is no longer uncertain, only unfinished.
     (_S.UNCERTAIN, _E.STATUS_PENDING): Transition(_S.SENT),
     (_S.UNCERTAIN, _E.STATUS_UNKNOWN): Transition(_S.UNCERTAIN),
+    (_S.SENT, _E.STAFF_RESOLVED_PAID): _PAID,
+    (_S.SENT, _E.STAFF_RESOLVED_FAILED): _FAILED,
+    (_S.UNCERTAIN, _E.STAFF_RESOLVED_PAID): _PAID,
+    (_S.UNCERTAIN, _E.STAFF_RESOLVED_FAILED): _FAILED,
 }
 
 
@@ -114,6 +122,19 @@ def apply(status: PayoutStatus, event: PayoutEvent) -> Transition:
         return _TABLE[(status, event)]
     except KeyError:
         raise IllegalTransition(status, event) from None
+
+
+# A person's word replaces the provider's, so it takes two people and is always audited.
+NEEDS_TWO_PEOPLE = frozenset({PayoutEvent.STAFF_RESOLVED_PAID, PayoutEvent.STAFF_RESOLVED_FAILED})
+
+
+def staff_may_resolve(status: PayoutStatus, *, provider_has_answer: bool) -> bool:
+    """True when two staff members may settle the payout by hand.
+
+    Only for a payout that may have left, and only when a fresh status read gave no answer.
+    While the provider can say what happened, its answer is the one that counts.
+    """
+    return needs_status_read(status) and not provider_has_answer
 
 
 def may_send(status: PayoutStatus) -> bool:

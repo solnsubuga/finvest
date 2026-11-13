@@ -37,11 +37,11 @@ The comparison is a hint for the staff member. It never approves a destination b
 ### When a destination can be paid
 
 - Not before the staff approval plus 24 hours, to the second.
-- If the client signed in with a code in place of a passkey, or reset their password, in the last 24 hours, only a destination that had already received money before that sign-in can be paid.
+- If the client signed in with an SMS or email code in place of a passkey, or reset their password, in the last 24 hours, only a destination that had already received money before that sign-in can be paid.
 
 ## Withdrawal limits
 
-Limits are versioned by effective date. The version in force on the Kampala calendar day of the request applies. No version in force is an error, never "no limit".
+Limits are versioned by effective date. The version in force on the business day of the request applies. The business day is the Kampala calendar day (`app/shared/business_day.py`). No version in force is an error, never "no limit".
 
 | Limit | Value at launch |
 | --- | --- |
@@ -74,8 +74,11 @@ Each step into a final status carries exactly one ledger movement, posted in the
 | Failed | To the client's "payout pending" account, and staff are alerted |
 | Cancelled | Back where it came from |
 
+The "payout pending" account is not a wallet. The client cannot spend it, invest from it or see it as a balance. It only holds a failed payout until staff send it again or return it to the investment, and it should be empty within a day.
+
 Three rules are fixed in the transition table and tested for every combination of status and event:
 
 - Only a queued payout may be sent. A send that certainly did not leave stays queued and may be tried again.
 - A payout that is sent or uncertain is never sent again. Only reading its status back from the provider moves it.
+- If the provider has no record of a payout and cannot answer, two staff members may settle it from the statement as paid or failed. It takes two different people, a reason, and an audit event. While the provider can answer, its answer is the one that counts.
 - A finished payout never changes. A payout can be cancelled only while it is held.

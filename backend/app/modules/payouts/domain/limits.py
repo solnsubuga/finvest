@@ -9,24 +9,14 @@ from __future__ import annotations
 
 from collections.abc import Iterable
 from dataclasses import dataclass
-from datetime import date, datetime, timedelta, timezone
+from datetime import date
 from enum import StrEnum
 
 from app.modules.payouts.domain.destinations import DestinationKind
 from app.shared.money import Currency, Money
 
-# Uganda keeps East Africa Time all year. A client's "today" is the Kampala calendar day.
-KAMPALA = timezone(timedelta(hours=3), "EAT")
-
 # The most a mobile money wallet accepts in one transfer.
 MOBILE_MONEY_PER_PAYOUT_UGX = Money(5_000_000, Currency.UGX)
-
-
-def business_date(now: datetime) -> date:
-    """The Kampala calendar day that a moment falls in."""
-    if now.utcoffset() is None:
-        raise ValueError("Times must be timezone-aware")
-    return now.astimezone(KAMPALA).date()
 
 
 class InvalidLimits(ValueError):
@@ -123,8 +113,9 @@ def check_withdrawal(
     """Decide whether one payout fits the limits.
 
     `already_today` is what the client has withdrawn to this kind of destination on the same
-    Kampala day, counting every payout that was not cancelled or failed. The service reads it
-    and inserts the new payout in one transaction under a lock on the client, so two requests
+    business day (`app.shared.business_day`), counting every payout that was not cancelled or
+    failed. The service reads it and inserts the new payout in one transaction under a lock on
+    the client, so two requests
     cannot both fit under the same remaining allowance.
     """
     if amount.currency is not limits.currency or already_today.currency is not limits.currency:
