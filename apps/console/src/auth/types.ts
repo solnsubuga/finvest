@@ -58,6 +58,8 @@ export const ACTION_PERMISSIONS = [
   "wordings.change",
   // Matching a bank transfer to a statement line, refusing it, and approving someone else's match.
   "bank_transfers.change",
+  // Proposing a rate change, approving or sending back someone else's, and withdrawing your own.
+  "rates.change",
 ] as const;
 
 export const PERMISSIONS = [...SCREEN_PERMISSIONS, ...ACTION_PERMISSIONS] as const;
