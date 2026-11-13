@@ -193,6 +193,19 @@ Ledger entry for the start (`investment.started`, key `investment-start:<investm
 | --- | --- |
 | `client.awaiting_start`, the client's, reference the investment | `client.holding`, the client's, reference the investment |
 
+### The audit trail and the client's messages
+
+Each step of an investment's life is an audit event on resource `investment`, written in the same transaction as the step:
+
+| Action | Actor | Details |
+| --- | --- | --- |
+| `investments.requested` | the client | `product`, `at_maturity` |
+| `investments.maturity_chosen` | the client | `at_maturity`, `destination_id` |
+| `investments.started` | the system | `start_date`, `ledger_entry_id` |
+| `investments.matured` | the system | `step`: `roll_over`, `pay_out` or `hold` |
+
+A retried request or a second start writes nothing new. The client is told when an investment starts (`investment_started`) and when it matures (`investment_matured`, with the amount after tax), through `notifications.notify` in the same transaction, keyed by the investment. The daily `interest_earned` message is not sent yet.
+
 ## Ledger accounts
 
 The investments module opens these. The entries are described with the commands that post them.

@@ -21,12 +21,8 @@ Steps of the client journey with no code to test yet, and so no journey yet:
 
 # Client and system steps that move or commit money and record no audit event. The staff
 # steps around them are audited; these are the client's own commands and the worker's
-# confirmations, which the trail cannot show today.
-UNAUDITED = {
-    # Investing: a client confirming an investment, and it starting once paid.
-    "investments.requested",
-    "investments.started",
-}
+# confirmations, which the trail cannot show today. None are known now.
+UNAUDITED: set[str] = set()
 
 # Movements on the trust bank account that the day close cannot pair with the statement by
 # reference, so staff pair them by hand with a reason:
