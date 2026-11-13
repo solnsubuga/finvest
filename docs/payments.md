@@ -95,7 +95,7 @@ Seeing transfers needs `reconciliation.view`. Matching, refusing and approving n
 | Event | Debit | Credit |
 | --- | --- | --- |
 | Deposit confirmed (`payment.deposit_confirmed`) | Asset `<provider>.wallet`, reference `mtn` or `airtel`. With ioTec this is `iotec.wallet`. | Liability `client.awaiting_start`, owned by the client, reference the investment or goal ID |
-| Bank transfer confirmed (`payment.deposit_confirmed`) | Asset `bank.trust`, reference the account reference of the bank statement the line came from | Liability `client.awaiting_start`, as above |
+| Bank transfer confirmed (`payment.deposit_confirmed`) | Asset `bank.trust`. For the trust account (statement account reference `trust`) it is the reconciled pot's own account, with no reference, the one the day close checks and dealing pays from. A statement for any other bank account gets `bank.trust` with that account reference. | Liability `client.awaiting_start`, as above |
 
 The entry's idempotency key is `deposit:<deposit ID>` and its source is the deposit, so a deposit can only ever be posted once. Payouts leave from the same wallet account, which lets reconciliation tie one ledger account to one provider statement.
 
