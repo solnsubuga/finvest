@@ -48,6 +48,7 @@ from app.modules.kyc import api as kyc_api
 from app.modules.kyc.domain.provider import IdentityProvider
 from app.modules.kyc.settings import KycSettings
 from app.modules.migration import api as migration_api
+from app.modules.migration import claims_api as migration_claims_api
 from app.modules.notifications import api as notifications_api
 from app.modules.notifications import hooks as notification_hooks
 from app.modules.notifications import suppressions_api
@@ -183,6 +184,7 @@ def create_app(
     app.include_router(payment_routes.create_client_router(collections, bank_accounts))
     app.include_router(payment_routes.staff_router)
     app.include_router(migration_api.router)
+    app.include_router(migration_claims_api.router)
     app.include_router(insights_api.router)
     for router in investments_api.routers:
         app.include_router(router)
