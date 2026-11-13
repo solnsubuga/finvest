@@ -426,7 +426,7 @@ async def test_a_finished_order_never_changes_and_is_never_removed(
     # Not even the table owner removes one.
     for statement in (
         "DELETE FROM dealing_orders",
-        "TRUNCATE dealing_orders, dealing_lots, dealing_lot_sales",
+        "TRUNCATE dealing_orders CASCADE",
     ):
         with pytest.raises(DBAPIError, match=r"never (removed|changed or removed)"):
             async with migrator_database.transaction() as session:
