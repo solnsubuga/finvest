@@ -27,6 +27,7 @@ from app.shared.money import Currency, Money
 from app.shared.push_ids import push_id
 from tests.integration.test_dealing_settlement import M, bought, confirm, fill, maturity, recorded
 from tests.support.clock import AsyncBarrier, FakeClock
+from tests.support.database import TEST_SOURCE
 from tests.support.ledger import client, key
 from tests.support.ledger import staff as new_staff
 
@@ -77,6 +78,8 @@ async def post(
                 NOW.now().date(),
                 (debit(debited.id, usd(cents)), credit(credited.id, usd(cents))),
                 key(),
+                source_type=TEST_SOURCE,
+                source_id=push_id(),
             ),
             NOW,
         )

@@ -182,6 +182,8 @@ async def test_the_total_balance_adds_every_account_with_the_code(
                     effective_date=DAY,
                     lines=(debit(books.cash, ugx(amount)), credit(account.id, ugx(amount))),
                     idempotency_key=key(),
+                    source_type=TEST_SOURCE,
+                    source_id=push_id(),
                 ),
                 fake_clock,
             )
