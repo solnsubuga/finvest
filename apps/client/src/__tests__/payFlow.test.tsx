@@ -75,6 +75,10 @@ beforeEach(() => {
   mockScenario.code = "00";
 });
 
+// The first test in a file renders the whole router from cold, which takes several seconds on
+// a busy CI runner. The assertions are unchanged; only the time allowed to reach them is.
+jest.setTimeout(30_000);
+
 describe("paying for an investment by mobile money", () => {
   it("shows the amount and the account's own number, which cannot be changed", async () => {
     await openPayScreen();
