@@ -24,6 +24,8 @@ Staff and their roles live in the identity module (`backend/app/modules/identity
 
 `team.change` is held by admins only.
 
+Other staff routes name who proposed or decided something by staff ID, because their modules do not read identity tables. `GET /staff/people?ids=…` (up to 100) gives the names for those IDs, and with no IDs it lists every active member of staff, for a screen that picks one. Every role holds `overview.view`, which is all it needs, and it returns only IDs and names.
+
 Rules, and where they are enforced:
 
 - **Two admins.** The approver is never the proposer, and only the proposer withdraws. The database refuses anything else (`ck_identity_staff_changes_two_people`), and its guard accepts a proposal or a decision only from an active admin.
