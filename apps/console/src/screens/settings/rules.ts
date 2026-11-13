@@ -76,6 +76,8 @@ export function problemText(code: ProblemCode, field: Field, variables: readonly
       return `Link only to ${OWN_SITE}.`;
     case "no_rates":
       return "Remove the percent sign. Clients see net amounts, never a rate.";
+    case "not_accepted":
+      return "Finvest did not accept this. Change it and try again.";
   }
 }
 

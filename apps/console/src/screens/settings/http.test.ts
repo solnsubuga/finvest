@@ -91,6 +91,7 @@ describe("wordings over HTTP", () => {
         { field_path: ["body"], code: "unknown_placeholder" },
         { field_path: ["body", "wording", "sms"], code: "string_too_long" },
         { field_path: ["reason"], code: "required" },
+        { field_path: ["body", "wording", "title"], code: "string_pattern_mismatch" },
       ]),
     );
     const error = await createHttpWordingsApi(createHttp("https://api.test", fetch))
@@ -101,6 +102,7 @@ describe("wordings over HTTP", () => {
     expect((error as WordingsError).problems).toEqual([
       { field: "body", code: "unknown_placeholder" },
       { field: "sms", code: "too_long" },
+      { field: "title", code: "not_accepted" },
     ]);
   });
 
@@ -119,6 +121,18 @@ describe("wordings over HTTP", () => {
     });
     const offline = vi.fn<typeof globalThis.fetch>(() => Promise.reject(new TypeError("offline")));
     await expect(createHttpWordingsApi(createHttp("https://api.test", offline)).list()).rejects.toMatchObject({ code: "unavailable" });
+  });
+});
+
+describe("wordings over HTTP, after a change", () => {
+  it("says the list is stale when a change went through but cannot be read back", async () => {
+    const fetch = vi
+      .fn<typeof globalThis.fetch>()
+      .mockImplementationOnce(() => reply(201, wording(true).proposal))
+      .mockImplementationOnce(() => Promise.reject(new TypeError("offline")));
+    await expect(
+      createHttpWordingsApi(createHttp("https://api.test", fetch)).propose("deposit_received", TEXT, "Clearer"),
+    ).rejects.toMatchObject({ code: "stale" });
   });
 });
 

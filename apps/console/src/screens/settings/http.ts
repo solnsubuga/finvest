@@ -119,8 +119,15 @@ const ANNOUNCEMENT_CODES: readonly string[] = [
 function problems<T>(error: ApiError, fields: readonly string[], codes: readonly string[]): T[] {
   return error.fields.flatMap((problem) => {
     const field = problem.field_path[problem.field_path.length - 1];
-    // Pydantic's own limits arrive as its codes; they are all a length or a missing value.
-    const code = codes.includes(problem.code) ? problem.code : problem.code.includes("long") ? "too_long" : "required";
+    // Pydantic's own codes: `string_too_long`, `missing` and `string_too_short` are known; anything else
+    // is shown as not accepted rather than guessed.
+    const code = codes.includes(problem.code)
+      ? problem.code
+      : problem.code === "string_too_long"
+        ? "too_long"
+        : problem.code === "missing" || problem.code === "string_too_short"
+          ? "required"
+          : "not_accepted";
     return typeof field === "string" && fields.includes(field) ? [{ field, code } as T] : [];
   });
 }
@@ -175,6 +182,19 @@ export function createHttpWordingsApi(http: Http): WordingsApi {
     return found;
   }
 
+  /**
+   * The message after a change went through. If it cannot be read, say `stale`, so the screen
+   * reloads its list and shows what Finvest now holds, rather than "could not reach Finvest"
+   * followed by a refusal when the person tries again.
+   */
+  async function afterWrite(event: string): Promise<Wording> {
+    try {
+      return await current(event);
+    } catch {
+      throw new WordingsError("stale");
+    }
+  }
+
   return {
     async list() {
       try {
@@ -189,7 +209,7 @@ export function createHttpWordingsApi(http: Http): WordingsApi {
       } catch (error) {
         throw toWordingsError(error);
       }
-      return current(event).catch((error: unknown) => Promise.reject(toWordingsError(error)));
+      return afterWrite(event);
     },
     async decide(proposalId, decision, reason) {
       const event = proposalEvents.get(proposalId);
@@ -200,7 +220,7 @@ export function createHttpWordingsApi(http: Http): WordingsApi {
       }
       proposalEvents.delete(proposalId);
       if (!event) throw new WordingsError("not_found");
-      return current(event).catch((error: unknown) => Promise.reject(toWordingsError(error)));
+      return afterWrite(event);
     },
   };
 }
