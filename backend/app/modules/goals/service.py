@@ -166,6 +166,14 @@ _INSERT_SAVING = text(
     "INSERT INTO goal_savings (investment_id, goal_id, client_id, created_at) "
     "VALUES (:investment_id, :goal_id, :client_id, :now) ON CONFLICT (investment_id) DO NOTHING"
 )
+# The group a goal is in now, if any, and whether that group is still active.
+_IN_GROUP = text(
+    "SELECT m.group_id, g.owner_client_id, g.status FROM goal_group_members m "
+    "JOIN goal_groups g ON g.id = m.group_id WHERE m.goal_id = :goal_id AND m.left_at IS NULL"
+)
+_LEAVE_GROUP = text(
+    "UPDATE goal_group_members SET left_at = :now WHERE goal_id = :goal_id AND left_at IS NULL"
+)
 # One client's goal commands run one at a time, so the cap on open goals cannot be raced.
 _CLIENT_LOCK = text("SELECT pg_advisory_xact_lock(hashtextextended(:lock, 0))")
 
@@ -229,29 +237,15 @@ async def create_goal(
     client_id = _client_id(client)
 
     async def command() -> Receipt:
-        today = business_date(clock.now())
-        cleaned = _checked(name, target, target_date, today)
-        await session.execute(_CLIENT_LOCK, {"lock": f"finvest.goals.client:{client_id}"})
-        active = (await session.execute(_COUNT_ACTIVE, {"client_id": client_id})).scalar_one()
-        if active >= MAX_ACTIVE_GOALS:
-            raise ApplicationError("conflict")
-        product = await _product(session, target, target_date, today, clock)
-        goal_id = push_id()
-        await session.execute(
-            _INSERT,
-            {
-                "id": goal_id,
-                "client_id": client_id,
-                "name": cleaned,
-                "category": category.value,
-                "currency": target.currency.value,
-                "target_minor": target.minor,
-                "target_date": target_date,
-                "product_code": product.code,
-                "now": clock.now(),
-            },
+        goal_id = await open_goal(
+            session,
+            client_id,
+            name=name,
+            category=category,
+            target=target,
+            target_date=target_date,
+            clock=clock,
         )
-        logger.info("goal_created", goal_id=goal_id, category=category.value)
         return Receipt(201, {"goal_id": goal_id})
 
     outcome = await run_once(
@@ -270,6 +264,44 @@ async def create_goal(
         command=command,
     )
     return await client_goal(session, client, str(outcome.receipt.response["goal_id"]), clock)
+
+
+async def open_goal(
+    session: AsyncSession,
+    client_id: str,
+    *,
+    name: str,
+    category: GoalCategory,
+    target: Money,
+    target_date: date | None,
+    clock: Clock,
+) -> str:
+    """Save a new goal for the client and return its ID. No idempotency of its own: the
+    caller's command holds the key. Also used for a member's own goal in a group goal."""
+    today = business_date(clock.now())
+    cleaned = _checked(name, target, target_date, today)
+    await session.execute(_CLIENT_LOCK, {"lock": f"finvest.goals.client:{client_id}"})
+    active = (await session.execute(_COUNT_ACTIVE, {"client_id": client_id})).scalar_one()
+    if active >= MAX_ACTIVE_GOALS:
+        raise ApplicationError("conflict")
+    product = await _product(session, target, target_date, today, clock)
+    goal_id = push_id()
+    await session.execute(
+        _INSERT,
+        {
+            "id": goal_id,
+            "client_id": client_id,
+            "name": cleaned,
+            "category": category.value,
+            "currency": target.currency.value,
+            "target_minor": target.minor,
+            "target_date": target_date,
+            "product_code": product.code,
+            "now": clock.now(),
+        },
+    )
+    logger.info("goal_created", goal_id=goal_id, category=category.value)
+    return goal_id
 
 
 async def update_goal(
@@ -324,10 +356,18 @@ async def close_goal(
 ) -> ClientGoal:
     """Stop a goal. Its investments carry on as the client's ordinary investments.
 
-    Closing a closed goal again changes nothing.
+    A goal in a group goal leaves the group as it closes. The one who set a group up closes the
+    group first. Closing a closed goal again changes nothing.
     """
     goal = await _own_goal(session, client, goal_id, lock=True)
     if goal.status is GoalStatus.ACTIVE:
+        group = (await session.execute(_IN_GROUP, {"goal_id": goal.id})).one_or_none()
+        if group is not None:
+            if group.owner_client_id == goal.client_id and group.status == "active":
+                # The one who set a group up closes the group, not their part of it.
+                raise ApplicationError("conflict")
+            # A closed goal takes no saving, so it leaves its group.
+            await session.execute(_LEAVE_GROUP, {"goal_id": goal.id, "now": clock.now()})
         await session.execute(_CLOSE, {"id": goal.id, "now": clock.now()})
         logger.info("goal_closed", goal_id=goal.id)
     return await client_goal(session, client, goal.id, clock)
@@ -496,6 +536,21 @@ async def follow_rollover(
     return True
 
 
+async def client_goal_value(
+    session: AsyncSession, client: Actor, goal_id: str, clock: Clock
+) -> Money:
+    """What the client's own goal is worth now, after tax: its running investments."""
+    goal = await _own_goal(session, client, goal_id, lock=False)
+    return (await _progress_of(session, client, goal, clock)).value
+
+
+async def goal_value(session: AsyncSession, goal: Goal) -> Money:
+    """What a goal is worth now, after tax. For the worker, which may read every goal."""
+    found = await investments.get_investments(session, await _saving_ids(session, goal.id))
+    zero = Money.zero(goal.target.currency)
+    return sum((s.amount + s.accrued_net for s in found if _counts(s.status)), zero)
+
+
 async def get_goal(session: AsyncSession, goal_id: str) -> Goal:
     """The goal, if this transaction may see it. For staff and the worker."""
     row = (await session.execute(_BY_ID, {"id": goal_id})).one_or_none()
@@ -524,6 +579,11 @@ def _invalid(refusal: GoalRefusal) -> ApplicationError:
     return ApplicationError(
         "validation_failed", fields=[FieldProblem(field_path=[field], code=refusal.value)]
     )
+
+
+def check_goal_details(name: str, target: Money, target_date: date | None, clock: Clock) -> str:
+    """The cleaned name, or a validation error, by the rules for any goal. For group goals."""
+    return _checked(name, target, target_date, business_date(clock.now()))
 
 
 def _checked(name: str, target: Money, target_date: date | None, today: date) -> str:

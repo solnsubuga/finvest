@@ -158,3 +158,59 @@ async def test_staff_without_goals_view_are_refused(staff_api: StaffApi, role: s
     await staff_api.staff(role)
     assert (await staff_api.http.get("/staff/goals")).status_code == 403
     assert (await staff_api.http.get(f"/staff/goals/{key()}")).status_code == 403
+
+
+GROUP = {
+    **GOAL,
+    "name": "Land in Mukono",
+    "category": "land_or_home",
+    "target_minor": 10_000_000,
+    "display_name": "Grace",
+    "own_target_minor": 5_000_000,
+}
+
+
+async def test_a_group_goal_is_set_up_shared_and_joined_over_http(staff_api: StaffApi) -> None:
+    await staff_api.client()
+    created = await staff_api.http.post(
+        "/client/goal-groups", json=GROUP, headers={"Idempotency-Key": key()}
+    )
+    assert created.status_code == 201, created.json()
+    group_id = created.json()["group_id"]
+    made = await staff_api.http.post(f"/client/goal-groups/{group_id}/invite")
+    assert made.status_code == 201
+    code = made.json()["code"]
+
+    await staff_api.client()
+    preview = await staff_api.http.get(f"/client/goal-groups/invites/{code}")
+    assert preview.status_code == 200
+    assert (preview.json()["owner_name"], preview.json()["members"]) == ("Grace", 1)
+    joined = await staff_api.http.post(
+        f"/client/goal-groups/invites/{code}/join",
+        json={"display_name": "Daniel", "own_target_minor": 5_000_000},
+        headers={"Idempotency-Key": key()},
+    )
+    assert joined.status_code == 201, joined.json()
+    group = joined.json()
+    assert [m["display_name"] for m in group["members"]] == ["Grace", "Daniel"]
+    # A member sees names, never what anyone else saved.
+    assert keys_of(group["members"]) == {"display_name", "joined_at", "is_you", "is_owner"}
+    assert group["invite_expires_at"] is None
+    listed = await staff_api.http.get("/client/goal-groups")
+    assert [g["group_id"] for g in listed.json()["groups"]] == [group_id]
+    assert (await staff_api.http.post(f"/client/goal-groups/{group_id}/leave")).status_code == 204
+    assert (await staff_api.http.get(f"/client/goal-groups/{group_id}")).status_code == 404
+
+
+async def test_an_invite_code_of_the_wrong_shape_is_refused(staff_api: StaffApi) -> None:
+    await staff_api.client()
+    response = await staff_api.http.get("/client/goal-groups/invites/short")
+    assert response.status_code == 422
+
+
+@pytest.mark.parametrize(("role", "status"), [("finance", 200), ("support", 403)])
+async def test_the_staff_group_routes_need_goals_view(
+    staff_api: StaffApi, role: str, status: int
+) -> None:
+    await staff_api.staff(role)
+    assert (await staff_api.http.get("/staff/goal-groups")).status_code == status
