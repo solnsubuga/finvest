@@ -49,6 +49,8 @@ Nothing personal goes into a job payload or a log. The words live in the `notifi
 | `investment_started` | Investments | `amount`, `product` | Investments |
 | `investment_maturing` | Investments | `product`, `date` | Investments |
 | `investment_matured` | Investments | `amount`, `product` | Investments |
+| `investment_withdrawal_requested` | Investments | `amount`, `product` | Investments |
+| `investment_withdrawal_paid` | Investments | `amount`, `product` | Investments |
 | `interest_earned` | Investments | `amount`, `count` | Daily earnings |
 | `kyc_approved` | Identity checks | none | Account |
 | `kyc_retake_requested` | Identity checks | none | Account |

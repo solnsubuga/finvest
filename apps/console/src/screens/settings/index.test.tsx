@@ -51,7 +51,7 @@ describe("settings: client messages", () => {
       "Security",
       "Help and complaints",
     ]);
-    expect(within(messages()).getAllByRole("button")).toHaveLength(21);
+    expect(within(messages()).getAllByRole("button")).toHaveLength(23);
   });
 
   it("approves someone else's change with a reason, and clients then see it", async () => {
