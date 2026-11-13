@@ -1,0 +1,11 @@
+# The colour Caddy sends traffic to. deploy.sh writes the other colour's names on a switch.
+(api_upstream) {
+	reverse_proxy api-blue:8000 {
+		# The visitor alone, as the Caddyfile's trusted proxies resolve it from CF-Connecting-IP:
+		# sign-in limits count attempts per visitor, not per Cloudflare edge.
+		header_up X-Forwarded-For {client_ip}
+	}
+}
+(console_upstream) {
+	reverse_proxy console-blue:8080
+}

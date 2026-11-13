@@ -1,0 +1,86 @@
+# The edge, ported from Fidiba's infra/deployment/Caddyfile. Every request arrives through
+# Cloudflare's proxy (the DigitalOcean firewall admits nothing else on 80 and 443), and Cloudflare
+# connects with Full (strict) TLS against the Origin CA certificate that Terraform made.
+{
+	# The certificate comes from Cloudflare, not from ACME.
+	auto_https disable_certs
+	# Believe Cloudflare's visitor address header only from Cloudflare's own ranges
+	# (https://www.cloudflare.com/ips/, checked 2026-11-13).
+	servers {
+		trusted_proxies static 173.245.48.0/20 103.21.244.0/22 103.22.200.0/22 103.31.4.0/22 141.101.64.0/18 108.162.192.0/18 190.93.240.0/20 188.114.96.0/20 197.234.240.0/22 198.41.128.0/17 162.158.0.0/15 104.16.0.0/13 104.24.0.0/14 172.64.0.0/13 131.0.72.0/22 2400:cb00::/32 2606:4700::/32 2803:f800::/32 2405:b500::/32 2405:8100::/32 2a06:98c0::/29 2c0f:f248::/32
+		client_ip_headers CF-Connecting-IP
+	}
+}
+
+import /etc/caddy/upstreams.caddy
+
+(origin_tls) {
+	tls /etc/caddy-tls/origin.pem /etc/caddy-tls/origin.key
+}
+
+# While a deployment stops the previous release for a migration it cannot run beside, say so and
+# ask clients to retry.
+(updating) {
+	handle_errors 502 {
+		header Retry-After 30
+		respond "Finvest is being updated. Please try again in a minute." 503
+	}
+}
+
+(common_headers) {
+	header {
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		X-Content-Type-Options nosniff
+		Referrer-Policy strict-origin-when-cross-origin
+		X-Frame-Options DENY
+		Permissions-Policy "accelerometer=(), camera=(), geolocation=(), gyroscope=(), magnetometer=(), microphone=(), payment=(), usb=()"
+		-Server
+	}
+}
+
+(private_paths) {
+	@private path_regexp private (?i)(^|/)(\.env[^/]*|\.git)(/|$)|\.(php|bak|old|save|sql|log)$
+	respond @private 404
+}
+
+{$FINVEST_API_DOMAIN} {
+	import origin_tls
+	import updating
+	import common_headers
+	encode zstd gzip
+	# The API answers JSON only, so nothing it returns may run script or be framed.
+	header ?Content-Security-Policy "default-src 'none'; frame-ancestors 'none'"
+	route {
+		import private_paths
+		import api_upstream
+	}
+}
+
+{$FINVEST_ADMIN_DOMAIN} {
+	import origin_tls
+	import updating
+	import common_headers
+	encode zstd gzip
+	# Scripts and styles come from this origin; Cloudflare Web Analytics, which Cloudflare may add
+	# to the pages it serves, reports to cloudflareinsights.com. Data comes only from the API.
+	header ?Content-Security-Policy "default-src 'self'; script-src 'self' https://static.cloudflareinsights.com; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self' data:; connect-src 'self' https://{$FINVEST_API_DOMAIN} https://cloudflareinsights.com; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'"
+	route {
+		import private_paths
+		import console_upstream
+	}
+}
+
+# The client web app is not built yet.
+{$FINVEST_APP_DOMAIN} {
+	import origin_tls
+	import common_headers
+	header Cache-Control no-store
+	respond "Finvest is coming soon." 503
+}
+
+# The public website: generated per environment (site.caddy).
+import /etc/caddy/site.caddy
+
+:80, :443 {
+	abort
+}

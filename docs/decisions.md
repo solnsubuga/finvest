@@ -29,6 +29,7 @@ A running log. Add a row when a decision is made, and move an open question up w
 | 2026-11-13 | Domains: finvestug.com for the website, app.finvestug.com for the client app, admin.finvestug.com for the back office. |
 | 2026-11-13 | Infrastructure is Terraform on DigitalOcean and Cloudflare. |
 | 2026-11-13 | Provisioning and deployment follow Fidiba. Terraform creates every DigitalOcean resource inside one project named `finvest`, generates the database role passwords and bucket key, and writes the deployment settings into the GitHub environments. See [infra/README.md](../infra/README.md). |
+| 2026-11-13 | Data is hosted in DigitalOcean London (`lon1`), for staging and production. Confirmed by the owner. |
 | 2026-11-13 | Terraform state may hold the credentials Terraform generates (database admin connection, role passwords, bucket key, origin certificate key). It is the one exception to keeping secrets out of Terraform state. The state bucket is private and only the Provision workflow on `main` can read it. |
 | 2026-11-13 | APScheduler keeps time for the scheduler process and nothing else. It only says when a schedule is due. PostgreSQL owns the leadership lease and each scheduled run, unique by name and fire time, and APScheduler's own job stores are not used. This adds no Celery or Redis. |
 | 2026-11-13 | Decided for now, by the investing thread. The catalogue is seeded with 91 Day Treasury Bill (12.50% a year, minimum UGX 100,000), 182 Day Treasury Bill (13.75%, minimum UGX 200,000) and USD Fixed Income (7.25%, open term, minimum $500). Tax on interest is 15% for the Treasury bills and 5% for the dollar product, as on the design canvas. See [investing.md](investing.md). |
@@ -45,7 +46,7 @@ A running log. Add a row when a decision is made, and move an open question up w
 | Question | Who answers |
 | --- | --- |
 | Is money in transit through the trust account covered by the current licence? | Counsel |
-| Data protection: registration, consent wording, and whether personal data may be stored outside Uganda. This decides the hosting region. | Counsel |
+| Data protection: registration and consent wording for data hosted in London. | Counsel |
 | Do group goals with two approvals count as a collective scheme? | Counsel |
 | ioTec: fees, sandbox, settlement speed from the ioTec wallet to our bank, payout limits, and whether Verify sends its own code. | ioTec |
 | Identity check provider: Smile ID coverage and pricing for Uganda, or ioTec Verify if it can check identity documents. Until one is chosen every client is reviewed by a person. See [identity-checks.md](identity-checks.md). | Owner |

@@ -3,12 +3,14 @@
 
 locals {
   github_variables = {
-    SITE_DOMAINS                    = join(",", var.site_domains)
-    APP_DOMAIN                      = var.app_domain
-    ADMIN_DOMAIN                    = var.admin_domain
-    API_DOMAIN                      = var.api_domain
-    DEPLOY_HOST                     = digitalocean_reserved_ip.app.ip_address
-    DEPLOY_USER                     = var.deploy_user
+    SITE_DOMAINS = join(",", var.site_domains)
+    APP_DOMAIN   = var.app_domain
+    ADMIN_DOMAIN = var.admin_domain
+    API_DOMAIN   = var.api_domain
+    DEPLOY_HOST  = digitalocean_reserved_ip.app.ip_address
+    DEPLOY_USER  = var.deploy_user
+    # The deploy run admits its own address to SSH on this firewall, then removes it.
+    DEPLOY_FIREWALL_ID              = digitalocean_firewall.app.id
     DATABASE_HOST                   = digitalocean_database_cluster.postgres.private_host
     DATABASE_PORT                   = tostring(digitalocean_database_cluster.postgres.port)
     DATABASE_NAME                   = digitalocean_database_db.finvest.name

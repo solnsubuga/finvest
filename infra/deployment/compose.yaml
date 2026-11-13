@@ -1,0 +1,131 @@
+# The deployed stack, ported from Fidiba's infra/deployment/compose.yaml. Not for local development
+# (that is the root compose.yaml).
+#
+# Two kinds of project share this file (deploy.sh). Each release runs as a colour, blue or green:
+# the project <name>-<colour> with api, worker, scheduler and console. The project <name> itself
+# runs only Caddy (the `edge` profile), which outlives releases and sends traffic to the colour
+# named in its upstreams.caddy, so a deployment starts the new colour beside the old one and
+# switches over without a gap.
+name: ${FINVEST_DEPLOY_PROJECT:?Set the deployment project}
+
+x-logs: &logs
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "3"
+    labels: com.docker.compose.service,com.docker.compose.project
+
+x-hardened: &hardened
+  init: true
+  restart: unless-stopped
+  read_only: true
+  tmpfs: [/tmp]
+  cap_drop: [ALL]
+  security_opt: [no-new-privileges:true]
+  logging: *logs
+
+x-backend: &backend
+  <<: *hardened
+  image: ${BACKEND_IMAGE:?Set the immutable backend image reference}
+  stop_grace_period: 35s
+  # The database provider's CA certificate (FINVEST_DATABASE_SSL_ROOT_CERT in runtime/*.env).
+  volumes:
+    - ./database-ca:/etc/finvest/database-ca:ro
+
+services:
+  # Runs once per deployment, before the new colour starts. Connects as finvest_migrator.
+  migrate:
+    <<: *backend
+    profiles: [tools]
+    restart: "no"
+    env_file:
+      - path: ./runtime/migrate.env
+        format: raw
+    command: [python, -m, app.migrate_main]
+
+  api:
+    <<: *backend
+    env_file:
+      - path: ./runtime/api.env
+        format: raw
+    healthcheck:
+      test: [CMD, python, -c, "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health/ready', timeout=5)"]
+      interval: 10s
+      timeout: 6s
+      retries: 12
+      start_period: 15s
+    networks:
+      default:
+      edge:
+        aliases: ["api-${FINVEST_COLOUR:-blue}"]
+
+  worker:
+    <<: *backend
+    command: [python, -m, app.worker_main]
+    env_file:
+      - path: ./runtime/worker.env
+        format: raw
+    healthcheck:
+      test: [CMD, python, -m, app.infrastructure.process, worker]
+      interval: 10s
+      timeout: 6s
+      retries: 6
+      start_period: 15s
+
+  # Turns recurring schedules into jobs; a database lease keeps one leader across colours.
+  scheduler:
+    <<: *backend
+    command: [python, -m, app.scheduler_main]
+    env_file:
+      - path: ./runtime/scheduler.env
+        format: raw
+    healthcheck:
+      test: [CMD, python, -m, app.infrastructure.process, scheduler]
+      interval: 10s
+      timeout: 6s
+      retries: 6
+      start_period: 15s
+
+  console:
+    <<: *hardened
+    image: ${CONSOLE_IMAGE:?Set the immutable console image reference}
+    networks:
+      default:
+      edge:
+        aliases: ["console-${FINVEST_COLOUR:-blue}"]
+
+  caddy:
+    image: caddy:2.11.4-alpine@sha256:6aeddd44c3078b0f9a35206472a11420648a79c184603ef95957d0a20044cb2b
+    profiles: [edge]
+    restart: unless-stopped
+    environment:
+      FINVEST_API_DOMAIN: ${FINVEST_API_DOMAIN:?Set the API domain}
+      FINVEST_ADMIN_DOMAIN: ${FINVEST_ADMIN_DOMAIN:?Set the back office domain}
+      FINVEST_APP_DOMAIN: ${FINVEST_APP_DOMAIN:?Set the client app domain}
+    ports:
+      # Only Cloudflare reaches these: the DigitalOcean firewall admits nothing else.
+      - "${FINVEST_BIND_ADDRESS:-0.0.0.0}:${FINVEST_HTTP_PORT:-80}:80"
+      - "${FINVEST_BIND_ADDRESS:-0.0.0.0}:${FINVEST_HTTPS_PORT:-443}:443"
+    volumes:
+      # Caddyfile, upstreams.caddy and site.caddy, from a directory outside any release, so Caddy
+      # keeps running across releases and only reloads.
+      - ${FINVEST_EDGE_DIR:-./edge}:/etc/caddy:ro
+      # The Cloudflare Origin CA certificate and key, also outside any release.
+      - ${FINVEST_TLS_DIR:-./tls}:/etc/caddy-tls:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    networks: [edge]
+    logging: *logs
+
+networks:
+  # Caddy reaches each colour's api and console here, by their colour's alias. deploy.sh creates
+  # it with a fixed subnet, which the API trusts for X-Forwarded-For (FINVEST_TRUSTED_PROXIES).
+  edge:
+    name: ${FINVEST_DEPLOY_PROJECT}-edge
+    external: true
+
+volumes:
+  caddy_data:
+    name: ${FINVEST_DEPLOY_PROJECT}_caddy_data
+  caddy_config:
+    name: ${FINVEST_DEPLOY_PROJECT}_caddy_config

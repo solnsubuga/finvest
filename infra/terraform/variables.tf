@@ -9,7 +9,7 @@ variable "environment" {
 }
 
 variable "region" {
-  description = "DigitalOcean region. Confirm against Uganda's Data Protection and Privacy Act before production data is stored."
+  description = "DigitalOcean region. London, as the owner decided (docs/decisions.md)."
   type        = string
   default     = "lon1"
 }

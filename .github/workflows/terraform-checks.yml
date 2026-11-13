@@ -1,4 +1,4 @@
-name: Terraform checks
+name: Infrastructure checks
 
 # Runs on pull requests with no credentials at all: format, validate, terraform test, shellcheck and
 # the plan hash script. Plans and applies happen only in the Provision workflow.
@@ -9,6 +9,9 @@ on:
       - "infra/**"
       - ".github/workflows/terraform-checks.yml"
       - ".github/workflows/provision.yml"
+      - ".github/workflows/deploy*.yml"
+      - "backend/Dockerfile"
+      - "backend/db/init-roles.sql"
 
 permissions:
   contents: read
@@ -64,3 +67,17 @@ jobs:
           terraform plan -input=false -out=three >/dev/null
           [ "$first" != "$(bash "$script" three)" ]
           echo "plan hash script ok"
+
+  deployment:
+    name: Deployment tests and rehearsal
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+        with:
+          persist-credentials: false
+      - name: Release preparation tests
+        run: python3 -m unittest discover -s infra/deployment
+      - name: Rehearse a deployment
+        # Real images, roles, migrations, two blue and green switches and a rollback, on the runner.
+        run: bash infra/deployment/rehearse.sh
