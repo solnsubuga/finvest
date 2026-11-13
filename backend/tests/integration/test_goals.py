@@ -9,16 +9,20 @@ from sqlalchemy import text
 from sqlalchemy.exc import DBAPIError
 
 from app.infrastructure.database import Database
+from app.infrastructure.jobs import Worker, WorkerConfig
 from app.modules.goals import service as goals
 from app.modules.goals.domain.goals import MAX_ACTIVE_GOALS, GoalCategory, GoalStatus, Standing
 from app.modules.goals.domain.plans import add_months
+from app.modules.goals.events import FOLLOW_ROLLOVER_KIND
+from app.modules.goals.jobs import GoalJobs
 from app.modules.investments import service as investments
 from app.modules.investments.domain.investments import AtMaturity, InvestmentStatus
 from app.shared.actors import SYSTEM, Actor
 from app.shared.errors import ApplicationError
 from app.shared.money import Currency, Money
+from app.shared.push_ids import push_id
 from tests.support.clock import AsyncBarrier
-from tests.support.investments import PRESENT, approved_client, pay, today
+from tests.support.investments import PRESENT, approved_client, at, pay, today
 from tests.support.ledger import key, ugx
 from tests.support.ledger import staff as new_staff
 
@@ -85,13 +89,14 @@ async def started_saving(
     client: Actor,
     goal_id: str,
     amount: Money,
-) -> None:
+) -> str:
     saving = await save(app_database, client, goal_id, amount)
     async with worker_database.actor_transaction(SYSTEM) as session:
         investment = await investments.get_investment(session, saving.id)
     await pay(worker_database, investment, amount, NOW)
     async with worker_database.actor_transaction(SYSTEM) as session:
         await investments.start_investment(session, saving.id, confirmed_on=DAY, clock=NOW)
+    return saving.id
 
 
 async def view(database: Database, client: Actor, goal_id: str) -> goals.ClientGoal:
@@ -612,3 +617,139 @@ async def test_a_goal_keeps_its_client_and_currency(
                     text(f"UPDATE goals SET {change} WHERE id = :id"),  # noqa: S608
                     {"id": goal.id},
                 )
+
+
+# Rollovers --------------------------------------------------------------------------------------
+
+
+async def mature(worker_database: Database, investment_id: str) -> investments.Investment:
+    """Mature an investment on its maturity day, which rolls it over."""
+    async with worker_database.actor_transaction(SYSTEM) as session:
+        investment = await investments.get_investment(session, investment_id)
+    assert investment.maturity_date is not None
+    async with worker_database.actor_transaction(SYSTEM) as session:
+        return await investments.mature_investment(
+            session, investment_id, investment.maturity_date, at(investment.maturity_date)
+        )
+
+
+async def linked(database: Database, goal_id: str) -> list[tuple[str, str | None]]:
+    async with database.actor_transaction(SYSTEM) as session:
+        rows = await session.execute(
+            text(
+                "SELECT investment_id, rolled_from_investment_id FROM goal_savings "
+                "WHERE goal_id = :goal_id ORDER BY created_at, investment_id"
+            ),
+            {"goal_id": goal_id},
+        )
+        return [(row.investment_id, row.rolled_from_investment_id) for row in rows]
+
+
+async def test_a_saving_that_rolls_over_stays_in_its_goal(
+    app_database: Database, worker_database: Database
+) -> None:
+    client = await approved_client(app_database, NOW)
+    goal = await new_goal(app_database, client)
+    first = await started_saving(app_database, worker_database, client, goal.id, ugx(1_000_000))
+
+    old = await mature(worker_database, first)
+    assert old.rolled_into_id is not None
+    assert old.maturity_date is not None
+    # The rollover's job is due when the old investment matured.
+    runner = Worker(
+        worker_database,
+        GoalJobs(worker_database, at(old.maturity_date)).handlers(),
+        WorkerConfig(),
+        at(old.maturity_date, hour=10),
+    )
+    while await runner.run_once():
+        pass
+    async with worker_database.actor_transaction(SYSTEM) as session:
+        status = await session.scalar(
+            text(
+                "SELECT status FROM jobs WHERE kind = :kind "
+                "AND payload -> 'data' ->> 'investment_id' = :id"
+            ),
+            {"kind": FOLLOW_ROLLOVER_KIND, "id": first},
+        )
+    assert status == "succeeded"
+
+    assert await linked(worker_database, goal.id) == [(first, None), (old.rolled_into_id, first)]
+    async with worker_database.actor_transaction(SYSTEM) as session:
+        new = await investments.get_investment(session, old.rolled_into_id)
+    seen = await view(app_database, client, goal.id)
+    assert {s.id for s in seen.savings} == {first, new.id}
+    # Only the running investment counts, so the goal holds the proceeds once.
+    assert seen.progress.value == new.amount
+    assert seen.progress.value > ugx(1_000_000)
+
+
+async def test_following_a_rollover_twice_links_it_once(
+    app_database: Database, worker_database: Database
+) -> None:
+    client = await approved_client(app_database, NOW)
+    goal = await new_goal(app_database, client)
+    first = await started_saving(app_database, worker_database, client, goal.id, ugx(1_000_000))
+    old = await mature(worker_database, first)
+    assert old.rolled_into_id is not None
+    for _ in range(2):
+        async with worker_database.actor_transaction(SYSTEM) as session:
+            assert await goals.follow_rollover(
+                session, investment_id=first, new_investment_id=old.rolled_into_id, clock=NOW
+            )
+    assert await linked(worker_database, goal.id) == [(first, None), (old.rolled_into_id, first)]
+
+
+async def test_a_closed_goal_and_an_investment_made_outside_goals_are_not_followed(
+    app_database: Database, worker_database: Database
+) -> None:
+    client = await approved_client(app_database, NOW)
+    goal = await new_goal(app_database, client)
+    first = await started_saving(app_database, worker_database, client, goal.id, ugx(1_000_000))
+    async with app_database.actor_transaction(client) as session:
+        await goals.close_goal(session, client, goal.id, NOW)
+    old = await mature(worker_database, first)
+    assert old.rolled_into_id is not None
+    async with worker_database.actor_transaction(SYSTEM) as session:
+        assert not await goals.follow_rollover(
+            session, investment_id=first, new_investment_id=old.rolled_into_id, clock=NOW
+        )
+        assert not await goals.follow_rollover(
+            session,
+            investment_id=push_id(),
+            new_investment_id=push_id(),
+            clock=NOW,
+        )
+    assert await linked(worker_database, goal.id) == [(first, None)]
+
+
+async def test_only_the_worker_records_a_rollover_and_only_from_the_same_goal(
+    app_database: Database, worker_database: Database
+) -> None:
+    client = await approved_client(app_database, NOW)
+    goal = await new_goal(app_database, client)
+    other = await new_goal(app_database, client, name="Land")
+    first = await started_saving(app_database, worker_database, client, goal.id, ugx(1_000_000))
+    insert = text(
+        "INSERT INTO goal_savings (investment_id, goal_id, client_id, created_at, "
+        "rolled_from_investment_id) VALUES (:id, :goal_id, :client_id, now(), :rolled_from)"
+    )
+    values = {"goal_id": goal.id, "client_id": client.id, "rolled_from": first}
+    # The client cannot pass a saving off as a rollover.
+    with pytest.raises(DBAPIError):
+        async with app_database.actor_transaction(client) as session:
+            await session.execute(insert, {**values, "id": push_id()})
+    # The worker cannot record a saving that is not a rollover.
+    with pytest.raises(DBAPIError):
+        async with worker_database.actor_transaction(SYSTEM) as session:
+            await session.execute(insert, {**values, "id": push_id(), "rolled_from": None})
+    # Nor a rollover into another goal than the saving's own.
+    with pytest.raises(DBAPIError):
+        async with worker_database.actor_transaction(SYSTEM) as session:
+            await session.execute(insert, {**values, "id": push_id(), "goal_id": other.id})
+    # Nor a second rollover from the same saving.
+    async with worker_database.actor_transaction(SYSTEM) as session:
+        await session.execute(insert, {**values, "id": push_id()})
+    with pytest.raises(DBAPIError):
+        async with worker_database.actor_transaction(SYSTEM) as session:
+            await session.execute(insert, {**values, "id": push_id()})

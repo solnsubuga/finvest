@@ -125,7 +125,7 @@ The client chooses what happens at maturity, from review and confirm up to the d
 
 Money that waits shows in the payouts console queue. The client sends it on with `pay_out_matured` to a destination of theirs, and may try another destination if one is refused. A matured investment is final. The only change the database allows afterwards is recording the payout that carries waiting money.
 
-The run publishes `investments.rolled_over` or `investments.matured`. A matured investment carries its maturity entry and exactly one of: the investment it rolled into, the payout, or the reason the money is waiting.
+The run publishes `investments.rolled_over` or `investments.matured`. The goals module follows `investments.rolled_over` (consumer `goals.follow_rollover`) to keep a rolled-over saving in its goal. A matured investment carries its maturity entry and exactly one of: the investment it rolled into, the payout, or the reason the money is waiting.
 
 ## What clients see
 

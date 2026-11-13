@@ -17,6 +17,7 @@ from app.infrastructure.process import keep_heartbeat, stop_on_signals
 from app.infrastructure.settings import Settings
 from app.infrastructure.sms import SmsSettings
 from app.modules.autoinvest.jobs import AutoinvestJobs
+from app.modules.goals.jobs import GoalJobs
 from app.modules.investments.jobs import InvestmentJobs
 from app.modules.kyc.jobs import ProviderJobs, sweep_unanswered
 from app.modules.kyc.service import SWEEP_UNANSWERED
@@ -39,6 +40,7 @@ def handlers(database: Database, clock: Clock) -> dict[str, JobHandler | Handler
         SWEEP_UNANSWERED: sweep_unanswered(clock),
         **InvestmentJobs(database, clock).handlers(),
         **AutoinvestJobs(database, clock).handlers(),
+        **GoalJobs(database, clock).handlers(),
     }
     identity = KycSettings()
     if identity.identity_provider != "manual":

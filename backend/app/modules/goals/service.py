@@ -150,6 +150,15 @@ _SAVINGS = text(
     "SELECT investment_id FROM goal_savings WHERE goal_id = :goal_id "
     "ORDER BY created_at DESC, investment_id DESC"
 )
+_SAVED_FROM = text(
+    "SELECT s.goal_id, s.client_id, g.status FROM goal_savings s "
+    "JOIN goals g ON g.id = s.goal_id WHERE s.investment_id = :investment_id"
+)
+_INSERT_ROLLOVER = text(
+    "INSERT INTO goal_savings (investment_id, goal_id, client_id, created_at, "
+    "rolled_from_investment_id) VALUES (:investment_id, :goal_id, :client_id, :now, :rolled_from) "
+    "ON CONFLICT (investment_id) DO NOTHING"
+)
 _INSERT_SAVING = text(
     "INSERT INTO goal_savings (investment_id, goal_id, client_id, created_at) "
     "VALUES (:investment_id, :goal_id, :client_id, :now) ON CONFLICT (investment_id) DO NOTHING"
@@ -401,7 +410,9 @@ async def client_goals(
     rows = await session.execute(
         _FOR_CLIENT, {"client_id": client_id, "limit": max(1, min(limit, MAX_PAGE_SIZE))}
     )
-    return [await _client_view(session, client, _goal(row), clock) for row in rows.all()]
+    goals = [_goal(row) for row in rows.all()]
+    products = await plan_products(session, clock) if goals else []
+    return [await _client_view(session, client, goal, clock, products) for goal in goals]
 
 
 async def client_goal(
@@ -436,11 +447,8 @@ async def staff_goal(session: AsyncSession, staff: Actor, goal_id: str, clock: C
     if staff.kind != "staff":
         raise ApplicationError("forbidden")
     goal = await get_goal(session, goal_id)
-    savings = [
-        await investments.get_investment(session, investment_id)
-        for investment_id in await _saving_ids(session, goal.id)
-    ]
-    savings = [s for s in savings if s.status is not InvestmentStatus.CANCELLED]
+    found = await investments.get_investments(session, await _saving_ids(session, goal.id))
+    savings = [s for s in found if s.status is not InvestmentStatus.CANCELLED]
     zero = Money.zero(goal.target.currency)
     value = sum((s.amount + s.accrued_net for s in savings if _counts(s.status)), zero)
     interest = sum((s.accrued_net for s in savings if _counts(s.status)), zero)
@@ -450,6 +458,31 @@ async def staff_goal(session: AsyncSession, staff: Actor, goal_id: str, clock: C
         progress=_standing(goal, value, interest, waiting, clock),
         savings=savings,
     )
+
+
+async def follow_rollover(
+    session: AsyncSession, *, investment_id: str, new_investment_id: str, clock: Clock
+) -> bool:
+    """Link the investment a saving rolled over into to the saving's goal. For the worker.
+
+    False when the investment was not saved towards a goal, or its goal is closed: a closed
+    goal's investments keep running but are no longer followed. Running it again changes
+    nothing.
+    """
+    row = (await session.execute(_SAVED_FROM, {"investment_id": investment_id})).one_or_none()
+    if row is None or row.status != GoalStatus.ACTIVE.value:
+        return False
+    await session.execute(
+        _INSERT_ROLLOVER,
+        {
+            "investment_id": new_investment_id,
+            "goal_id": row.goal_id,
+            "client_id": row.client_id,
+            "now": clock.now(),
+            "rolled_from": investment_id,
+        },
+    )
+    return True
 
 
 async def get_goal(session: AsyncSession, goal_id: str) -> Goal:
@@ -544,11 +577,10 @@ def _waiting(status: InvestmentStatus) -> bool:
 async def _client_savings(
     session: AsyncSession, client: Actor, goal: Goal, clock: Clock
 ) -> list[investments.ClientInvestment]:
-    savings = [
-        await investments.client_investment(session, client, investment_id, clock)
-        for investment_id in await _saving_ids(session, goal.id)
-    ]
-    return [s for s in savings if s.status is not InvestmentStatus.CANCELLED]
+    found = await investments.client_investments_by_id(
+        session, client, await _saving_ids(session, goal.id), clock
+    )
+    return [s for s in found if s.status is not InvestmentStatus.CANCELLED]
 
 
 async def _progress_of(session: AsyncSession, client: Actor, goal: Goal, clock: Clock) -> Progress:
@@ -578,8 +610,14 @@ def _standing(goal: Goal, value: Money, interest: Money, waiting: Money, clock: 
 
 
 async def _client_view(
-    session: AsyncSession, client: Actor, goal: Goal, clock: Clock
+    session: AsyncSession,
+    client: Actor,
+    goal: Goal,
+    clock: Clock,
+    products: list[PlanProduct] | None = None,
 ) -> ClientGoal:
+    """The goal as its client sees it. `products` are today's plan products, when the caller
+    already read them for other goals in the same request."""
     savings = await _client_savings(session, client, goal, clock)
     standing = _client_progress(goal, savings, clock)
     plan: ClientPlan | None = None
@@ -591,8 +629,10 @@ async def _client_view(
         and goal.target_date > today
         and needed.is_positive
     ):
-        products = [p for p in await plan_products(session, clock) if p.code == goal.product_code]
-        found = best_plan(products, needed, today, goal.target_date)
+        if products is None:
+            products = await plan_products(session, clock)
+        own = [p for p in products if p.code == goal.product_code]
+        found = best_plan(own, needed, today, goal.target_date)
         plan = None if found is None else _client_plan(found)
     return ClientGoal(
         id=goal.id,
