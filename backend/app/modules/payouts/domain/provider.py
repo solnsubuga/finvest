@@ -4,6 +4,11 @@ The adapter does the network call and sorts every way it can end into a `SendRes
 `StatusReading`, the same outcomes a collection has. It never raises for a provider or network
 failure. An exception that does escape a request is treated as uncertain, because the money
 may have gone.
+
+An adapter's request must time out well within `sending.SEND_GRACE` (two minutes), say after
+30 seconds. A send still waiting for its answer after the grace is marked interrupted by the
+sweep: that is safe, since it fails toward not sending, but it turns a slow success into days
+of status reads.
 """
 
 from __future__ import annotations
