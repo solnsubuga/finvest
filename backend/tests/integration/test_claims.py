@@ -4,6 +4,7 @@ import asyncio
 import itertools
 from collections.abc import AsyncIterator
 from dataclasses import dataclass
+from typing import get_args
 
 import httpx
 import pytest
@@ -12,7 +13,7 @@ from sqlalchemy.exc import DBAPIError
 
 from app.api.app import create_app
 from app.infrastructure.database import Database
-from app.modules.identity.codes import CLAIM_COMPLETIONS, MAX_TRIES, CodeService
+from app.modules.identity.codes import CLAIM_COMPLETIONS, MAX_TRIES, CodeService, Purpose
 from app.modules.identity.hashing import PasswordHasher
 from app.modules.identity.service import (
     ClientContact,
@@ -120,7 +121,9 @@ async def test_an_imported_account_cannot_sign_in_until_it_is_claimed(api: Api) 
 
     challenge = await api.codes.claim_start(client_id, address=None)
     [sent] = await texted(api, phone)
-    claimed = await api.codes.claim_complete(challenge, sent, PASSWORD, "token")
+    claimed = await api.codes.claim_complete(
+        challenge, sent, PASSWORD, "token", client_id=client_id
+    )
     assert claimed.client_id == client_id
     opened = await api.identity.client_session(claimed.session.token)
     assert opened is not None
@@ -146,13 +149,32 @@ async def test_a_claim_works_once(api: Api) -> None:
     phone, client_id = await imported(api)
     challenge = await api.codes.claim_start(client_id, address=None)
     [sent] = await texted(api, phone)
-    await api.codes.claim_complete(challenge, sent, PASSWORD, "token")
+    await api.codes.claim_complete(challenge, sent, PASSWORD, "token", client_id=client_id)
     with pytest.raises(ApplicationError) as again:
-        await api.codes.claim_complete(challenge, sent, PASSWORD, "token")
+        await api.codes.claim_complete(challenge, sent, PASSWORD, "token", client_id=client_id)
     assert again.value.code == "expired"
     with pytest.raises(ApplicationError) as restart:
         await api.codes.claim_start(client_id, address=None)
     assert restart.value.code == "not_found"
+
+
+async def test_a_claim_passes_the_client_status_guard(api: Api) -> None:
+    # Migration 0152 guards every change of a client's status. A claim is the one move it
+    # leaves to identity_claim_client.
+    phone, client_id = await imported(api)
+    challenge = await api.codes.claim_start(client_id, address=None)
+    [sent] = await texted(api, phone)
+    await api.codes.claim_complete(challenge, sent, PASSWORD, "token", client_id=client_id)
+    async with api.owner.transaction() as session:
+        guards = await session.scalar(
+            text(
+                "SELECT count(*) FROM pg_trigger WHERE tgname = 'tr_identity_clients_status_guard'"
+            )
+        )
+        status = await session.scalar(
+            text("SELECT status FROM identity_clients WHERE id = :id"), {"id": client_id}
+        )
+    assert (guards, status) == (1, "active")
 
 
 async def test_two_claims_at_once_make_one_password(api: Api) -> None:
@@ -163,8 +185,8 @@ async def test_two_claims_at_once_make_one_password(api: Api) -> None:
     second = await api.codes.claim_start(client_id, address=None)
     second_code = (await texted(api, phone))[-1]
     results = await asyncio.gather(
-        api.codes.claim_complete(first, first_code, PASSWORD, "token"),
-        api.codes.claim_complete(second, second_code, PASSWORD, "token"),
+        api.codes.claim_complete(first, first_code, PASSWORD, "token", client_id=client_id),
+        api.codes.claim_complete(second, second_code, PASSWORD, "token", client_id=client_id),
         return_exceptions=True,
     )
     assert sum(not isinstance(result, BaseException) for result in results) == 1
@@ -180,10 +202,10 @@ async def test_a_claim_code_allows_five_tries(api: Api) -> None:
     wrong = "000000" if sent != "000000" else "111111"
     for _ in range(MAX_TRIES):
         with pytest.raises(ApplicationError) as refused:
-            await api.codes.claim_complete(challenge, wrong, PASSWORD, "token")
+            await api.codes.claim_complete(challenge, wrong, PASSWORD, "token", client_id=client_id)
         assert refused.value.code == "invalid_code"
     with pytest.raises(ApplicationError) as spent:
-        await api.codes.claim_complete(challenge, sent, PASSWORD, "token")
+        await api.codes.claim_complete(challenge, sent, PASSWORD, "token", client_id=client_id)
     assert spent.value.code == "expired"
 
 
@@ -192,9 +214,9 @@ async def test_a_weak_password_leaves_the_code_unspent(api: Api) -> None:
     challenge = await api.codes.claim_start(client_id, address=None)
     [sent] = await texted(api, phone)
     with pytest.raises(ApplicationError) as weak:
-        await api.codes.claim_complete(challenge, sent, phone, "token")
+        await api.codes.claim_complete(challenge, sent, phone, "token", client_id=client_id)
     assert weak.value.code in ("validation_failed", "leaked_password")
-    assert await api.codes.claim_complete(challenge, sent, PASSWORD, "token")
+    assert await api.codes.claim_complete(challenge, sent, PASSWORD, "token", client_id=client_id)
 
 
 async def test_a_number_that_has_an_account_is_not_imported_twice(api: Api) -> None:
@@ -251,9 +273,9 @@ async def test_finishing_one_claim_is_limited(api: Api) -> None:
     challenge = await api.codes.claim_start(client_id, address=None)
     for _ in range(CLAIM_COMPLETIONS):
         with pytest.raises(ApplicationError):
-            await api.codes.claim_complete(challenge, "000000", phone, "token")
+            await api.codes.claim_complete(challenge, "000000", phone, "token", client_id=client_id)
     with pytest.raises(ApplicationError) as limited:
-        await api.codes.claim_complete(challenge, "000000", PASSWORD, "token")
+        await api.codes.claim_complete(challenge, "000000", PASSWORD, "token", client_id=client_id)
     assert limited.value.code == "rate_limited"
 
 
@@ -263,7 +285,7 @@ async def test_a_claimed_account_never_becomes_unclaimed(
     phone, client_id = await imported(api)
     challenge = await api.codes.claim_start(client_id, address=None)
     [sent] = await texted(api, phone)
-    await api.codes.claim_complete(challenge, sent, PASSWORD, "token")
+    await api.codes.claim_complete(challenge, sent, PASSWORD, "token", client_id=client_id)
     with pytest.raises(DBAPIError, match="cannot become unclaimed"):
         async with migrator_database.transaction() as session:
             await session.execute(
@@ -273,3 +295,35 @@ async def test_a_claimed_account_never_becomes_unclaimed(
                 ),
                 {"id": client_id},
             )
+
+
+async def test_a_claim_code_is_still_issued_beside_payout_account_codes(api: Api) -> None:
+    # 0034 rewrote the purposes a code may have; claims must have kept theirs.
+    phone, client_id = await imported(api)
+    await api.codes.claim_start(client_id, address=None)
+    [code] = await texted(api, phone)
+    assert len(code) == 6
+    async with api.owner.transaction() as session:
+        definition = await session.scalar(
+            text(
+                "SELECT pg_get_constraintdef(oid) FROM pg_constraint "
+                "WHERE conname = 'ck_identity_codes_purpose'"
+            )
+        )
+    for purpose in get_args(Purpose):
+        assert f"'{purpose}'" in str(definition), purpose
+
+
+async def test_a_code_for_another_account_changes_nothing(api: Api) -> None:
+    phone, client_id = await imported(api)
+    other_phone, other_id = await imported(api)
+    challenge = await api.codes.claim_start(other_id, address=None)
+    [sent] = await texted(api, other_phone)
+    with pytest.raises(ApplicationError) as refused:
+        await api.codes.claim_complete(challenge, sent, PASSWORD, "token", client_id=client_id)
+    assert refused.value.code == "not_found"
+    # Neither account was claimed, and the code still works for its own account.
+    assert await events(api, client_id) == [("identity.client.imported", "staff")]
+    claimed = await api.codes.claim_complete(challenge, sent, PASSWORD, "token", client_id=other_id)
+    assert claimed.client_id == other_id
+    assert phone

@@ -13,6 +13,8 @@ Permission = Literal[
     "overview.view",
     "review_queue.view",
     "identity_checks.view",
+    # Deciding a check, as opposed to opening the screen.
+    "identity_checks.review",
     "maturities.view",
     "support.view",
     # Writing to a client in the help chat, solving or filing a chat, and keeping saved replies.
@@ -23,6 +25,9 @@ Permission = Literal[
     # Recording the outcome and closing a complaint for good.
     "complaints.close",
     "clients.view",
+    # Proposing or deciding to lock or unlock a client's account. Seeing clients is
+    # `clients.view`. Not a screen.
+    "clients.lock",
     "money_movement.view",
     "reconciliation.view",
     "investments.view",
@@ -32,6 +37,10 @@ Permission = Literal[
     "finance.view",
     "products.view",
     "rates.view",
+    # Proposing a rate change, approving or sending back someone else's, and withdrawing your
+    # own. Seeing rates is `rates.view`. A rate still takes effect only with a second person.
+    # Not a screen: the console's own list gains it with the rates screen.
+    "rates.change",
     "compliance.view",
     "team.view",
     "reports.view",
@@ -52,6 +61,9 @@ Permission = Literal[
     "bank_transfers.change",
     "migration.import",
     "migration.sign_off",
+    # Proposing a new mobile number for a client, or approving someone else's proposal. The
+    # number is how a client proves who they are with a code, so a change takes two people.
+    "client_phones.change",
 ]
 PERMISSIONS: tuple[Permission, ...] = get_args(Permission)
 
@@ -65,6 +77,7 @@ ROLE_PERMISSIONS: dict[Role, frozenset[Permission]] = {
             "overview.view",
             "review_queue.view",
             "identity_checks.view",
+            "identity_checks.review",
             "maturities.view",
             "support.view",
             "support.reply",
@@ -73,6 +86,7 @@ ROLE_PERMISSIONS: dict[Role, frozenset[Permission]] = {
             "complaints.close",
             "clients.view",
             "email_suppressions.lift",
+            "clients.lock",
             "money_movement.view",
             "reconciliation.view",
             "investments.view",
@@ -82,6 +96,7 @@ ROLE_PERMISSIONS: dict[Role, frozenset[Permission]] = {
             "migration.view",
             "bank_transfers.change",
             "migration.import",
+            "client_phones.change",
         }
     ),
     "finance": frozenset(
@@ -99,6 +114,7 @@ ROLE_PERMISSIONS: dict[Role, frozenset[Permission]] = {
             "finance.view",
             "products.view",
             "rates.view",
+            "rates.change",
             "reports.view",
             "bank_transfers.change",
             "migration.view",
@@ -110,10 +126,12 @@ ROLE_PERMISSIONS: dict[Role, frozenset[Permission]] = {
             "overview.view",
             "review_queue.view",
             "identity_checks.view",
+            "identity_checks.review",
             "complaints.view",
             "complaints.manage",
             "complaints.close",
             "clients.view",
+            "clients.lock",
             "compliance.view",
             "reports.view",
             "audit.view",

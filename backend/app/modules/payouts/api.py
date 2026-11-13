@@ -20,6 +20,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.infrastructure.database import Database
 from app.infrastructure.storage import FileStorage, InvalidFile, NewFile, StorageError
 from app.modules.identity.api import CurrentClient
+from app.modules.identity.codes import CodeService
 from app.modules.payments.domain.bank_transfers import (
     MAX_RECEIPT_BYTES,
     RECEIPT_CONTENT_TYPES,
@@ -75,6 +76,12 @@ def _storage(request: Request) -> FileStorage:
     return storage
 
 
+def _codes(request: Request) -> CodeService:
+    codes: CodeService = request.app.state.codes
+    return codes
+
+
+Codes = Annotated[CodeService, Depends(_codes)]
 Db = Annotated[Database, Depends(_database)]
 Files = Annotated[FileStorage, Depends(_storage)]
 Time = Annotated[Clock, Depends(_clock)]
@@ -103,7 +110,14 @@ class NewDestination(Contract):
     account_number: str | None = None
 
 
+class CodeAnswer(Contract):
+    code: Annotated[str, Field(min_length=4, max_length=12)]
+
+
 class DestinationOut(Contract):
+    """A payout account. A new one is `awaiting_code` until the client enters the code texted
+    for it, then `awaiting_proof`."""
+
     id: PushId
     kind: Literal["mobile_money", "bank"]
     network: Literal["mtn", "airtel"] | None
@@ -278,6 +292,58 @@ async def remove_destination(
         except DestinationError as error:
             raise _refused(error.code) from None
     return Response(status_code=204)
+
+
+@client_router.post("/payout-destinations/{destination_id}/code", status_code=204)
+async def send_code(
+    destination_id: PushId, client: CurrentClient, database: Db, codes: Codes
+) -> Response:
+    """Text a code that proves the client holds the account.
+
+    For a mobile money number the code goes to that number. For a bank account it goes to the
+    client's own number. A new code replaces the one before it; 429 after three in 15 minutes.
+    409 if the account is not waiting for its code.
+    """
+    async with database.actor_transaction(client.actor) as session:
+        view = await _own_destination(session, client.client_id, destination_id)
+        if view.status.value != "awaiting_code":
+            raise _refused("destination_not_awaiting_code")
+        if view.kind is DestinationKind.MOBILE_MONEY:
+            _, msisdn = await destinations.mobile_money_number(session, destination_id)
+            phone = f"+{msisdn}"
+        else:
+            phone = client.phone
+        await codes.send_payout_account_code(
+            session, client_id=client.client_id, account_id=destination_id, phone=phone
+        )
+    return Response(status_code=204)
+
+
+@client_router.post("/payout-destinations/{destination_id}/code/verify")
+async def verify_code(
+    destination_id: PushId,
+    body: CodeAnswer,
+    client: CurrentClient,
+    database: Db,
+    clock: Time,
+    codes: Codes,
+) -> DestinationOut:
+    """Enter the texted code. The account moves on to `awaiting_proof` in the same transaction
+    that spends the code. 401 `invalid_code` for a wrong code, which still counts as a try;
+    410 `expired` when no live code is left, after five tries or ten minutes."""
+    async with database.actor_transaction(client.actor) as session:
+        view = await _own_destination(session, client.client_id, destination_id)
+        if view.status.value != "awaiting_code":
+            raise _refused("destination_not_awaiting_code")
+        right = await codes.spend_payout_account_code(
+            session, client_id=client.client_id, account_id=destination_id, code=body.code
+        )
+        if right:
+            view = await destinations.confirm_code(session, client.actor, destination_id, clock)
+    # A wrong try is committed above, so it counts, and only then refused.
+    if not right:
+        raise ApplicationError("invalid_code")
+    return _destination_out(view)
 
 
 @client_router.post("/payout-destinations/{destination_id}/proof")

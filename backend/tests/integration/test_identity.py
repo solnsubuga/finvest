@@ -611,6 +611,8 @@ async def test_the_api_can_change_only_the_account_columns_sign_in_needs(api: Ap
         with pytest.raises(DBAPIError, match="permission denied"):
             async with api.database.transaction() as session:
                 await session.execute(text(statement), {"id": account})
+    # A client's status changes only through the claim function, or through a lock or unlock
+    # two people approved (migration 0152, and tests/integration/test_client_locks.py).
 
 
 async def test_nothing_personal_is_logged(api: Api, capsys: pytest.CaptureFixture[str]) -> None:

@@ -5,6 +5,7 @@ from collections.abc import AsyncIterator
 from datetime import UTC, datetime
 
 import pytest
+from sqlalchemy import text
 
 from app.infrastructure.database import Database
 from app.infrastructure.storage import MemoryStorage
@@ -218,3 +219,158 @@ async def test_the_payout_routes_need_a_signed_in_client(api: Api) -> None:
         assert response.status_code == 401, path
     await api.staff()
     assert (await api.http.get("/client/payouts")).status_code in (401, 403)
+
+
+async def texted(worker: Database, recipient: str) -> list[str]:
+    """The codes queued for a number, oldest first, as the worker would send them."""
+    async with worker.transaction() as session:
+        rows = await session.execute(
+            text(
+                "SELECT variables->>'code' AS code FROM notification_messages "
+                "WHERE recipient = :recipient ORDER BY id"
+            ),
+            {"recipient": recipient},
+        )
+        return [row.code for row in rows]
+
+
+async def test_a_code_texted_to_the_mobile_money_number_moves_the_account_on(
+    api: Api, worker_database: Database
+) -> None:
+    await api.client()
+    phone = number()
+    added = await add(api, phone=phone)
+    path = f"/client/payout-destinations/{added['id']}/code"
+    assert (await api.http.post(path)).status_code == 204
+    recipient = "+256" + phone[1:]
+    [first] = await texted(worker_database, recipient)
+
+    assert (await api.http.post(path)).status_code == 204  # a new code replaces the first
+    codes = await texted(worker_database, recipient)
+    assert len(codes) == 2
+    latest = codes[-1]
+    if first != latest:
+        stale = await api.http.post(f"{path}/verify", json={"code": first})
+        assert stale.status_code == 401
+
+    wrong = "000000" if latest != "000000" else "111111"
+    refused = await api.http.post(f"{path}/verify", json={"code": wrong})
+    assert refused.status_code == 401
+    assert refused.json()["error"]["code"] == "invalid_code"
+    moved = await api.http.post(f"{path}/verify", json={"code": latest})
+    assert moved.status_code == 200, moved.text
+    assert moved.json()["status"] == "awaiting_proof"
+    # Spent, and the account has moved on.
+    assert (await api.http.post(f"{path}/verify", json={"code": latest})).status_code == 409
+    assert (await api.http.post(path)).status_code == 409
+
+
+async def test_a_bank_account_code_goes_to_the_clients_own_number(
+    api: Api, worker_database: Database
+) -> None:
+    actor = await api.client()
+    account = str(10**12 + secrets.randbelow(10**12))
+    added = await add(api, kind="bank", bank_code="stanbic", account_number=account)
+    path = f"/client/payout-destinations/{added['id']}/code"
+    assert (await api.http.post(path)).status_code == 204
+    async with api.database.transaction() as session:
+        own = await session.scalar(
+            text("SELECT phone FROM identity_clients WHERE id = :id"), {"id": actor.id}
+        )
+    [code] = await texted(worker_database, str(own))
+    moved = await api.http.post(f"{path}/verify", json={"code": code})
+    assert moved.json()["status"] == "awaiting_proof"
+
+
+async def test_five_wrong_tries_use_up_the_code_and_another_client_cannot_spend_it(
+    api: Api, worker_database: Database
+) -> None:
+    owner = await api.client()
+    phone = number()
+    added = await add(api, phone=phone)
+    path = f"/client/payout-destinations/{added['id']}/code"
+    await api.http.post(path)
+    [code] = await texted(worker_database, "+256" + phone[1:])
+
+    await api.client()
+    assert (await api.http.post(f"{path}/verify", json={"code": code})).status_code == 404
+    await api.as_client(owner)
+    wrong = "000000" if code != "000000" else "111111"
+    for _ in range(5):
+        assert (await api.http.post(f"{path}/verify", json={"code": wrong})).status_code == 401
+    used_up = await api.http.post(f"{path}/verify", json={"code": code})
+    assert used_up.status_code == 410
+    assert (await api.http.get(f"/client/payout-destinations/{added['id']}")).json()[
+        "status"
+    ] == "awaiting_code"
+
+
+async def test_codes_for_one_account_are_limited(api: Api) -> None:
+    await api.client()
+    added = await add(api, phone=number())
+    path = f"/client/payout-destinations/{added['id']}/code"
+    for _ in range(3):
+        assert (await api.http.post(path)).status_code == 204
+    assert (await api.http.post(path)).status_code == 429
+
+
+async def bank_account(api: Api) -> str:
+    added = await add(
+        api,
+        kind="bank",
+        bank_code="stanbic",
+        account_number=str(10**12 + secrets.randbelow(10**12)),
+    )
+    return str(added["id"])
+
+
+async def test_codes_to_one_number_are_limited_across_accounts(api: Api) -> None:
+    # Every bank account's code goes to the client's own number.
+    await api.client()
+    first, second = await bank_account(api), await bank_account(api)
+    for account in (first, first, second):
+        assert (
+            await api.http.post(f"/client/payout-destinations/{account}/code")
+        ).status_code == 204
+    refused = await api.http.post(f"/client/payout-destinations/{second}/code")
+    assert refused.status_code == 429
+
+
+async def test_codes_for_one_client_are_limited_across_numbers(api: Api) -> None:
+    await api.client()
+    accounts = [str((await add(api, phone=number()))["id"]) for _ in range(3)]
+    for account in (*accounts[:2], *accounts[:2], accounts[2]):
+        assert (
+            await api.http.post(f"/client/payout-destinations/{account}/code")
+        ).status_code == 204
+    refused = await api.http.post(f"/client/payout-destinations/{accounts[2]}/code")
+    assert refused.status_code == 429
+
+
+async def test_codes_for_one_client_have_a_daily_ceiling(api: Api) -> None:
+    await api.client()
+    accounts = [str((await add(api, phone=number()))["id"]) for _ in range(3)]
+    for _ in range(2):
+        for account in (*accounts[:2], *accounts[:2], accounts[2]):
+            sent = await api.http.post(f"/client/payout-destinations/{account}/code")
+            assert sent.status_code == 204
+        api.clock.advance(minutes=16)
+    refused = await api.http.post(f"/client/payout-destinations/{accounts[2]}/code")
+    assert refused.status_code == 429
+    assert int(refused.headers["retry-after"]) > 60 * 60 * 23
+    api.clock.advance(days=1)
+    assert (
+        await api.http.post(f"/client/payout-destinations/{accounts[2]}/code")
+    ).status_code == 204
+
+
+async def test_a_client_holds_only_a_few_accounts_awaiting_their_code(api: Api) -> None:
+    await api.client()
+    for _ in range(5):
+        await add(api, phone=number())
+    sixth = await api.http.post(
+        "/client/payout-destinations",
+        json={"kind": "mobile_money", "holder_name": "Sarah Nakato", "phone": number()},
+    )
+    assert sixth.status_code == 409
+    assert sixth.json()["error"]["fields"][0]["code"] == "too_many_unconfirmed_accounts"

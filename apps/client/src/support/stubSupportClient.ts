@@ -162,6 +162,8 @@ export function createStubSupportClient(options: StubOptions = {}): SupportClien
   const pending: { at: number; message: Message }[] = [];
   let conversationId: string | null = null;
   let readThrough = 0;
+  // The API answers a repeated key with the complaint it already logged; the demo does too.
+  const complaintsByKey = new Map<string, string>();
   const complaints: Complaint[] = options.empty
     ? []
     : [
@@ -331,6 +333,11 @@ export function createStubSupportClient(options: StubOptions = {}): SupportClien
 
     async makeComplaint(input) {
       await pause();
+      const logged = complaintsByKey.get(input.key);
+      const repeat = logged ? complaints.find((candidate) => candidate.id === logged) : undefined;
+      if (repeat) {
+        return { ...repeat };
+      }
       const summary = clean(input.summary, MAX_SUMMARY);
       const details = clean(input.details, MAX_DETAILS);
       complaintNumber += 1;
@@ -348,6 +355,7 @@ export function createStubSupportClient(options: StubOptions = {}): SupportClien
         resolution: null,
       };
       complaints.unshift(complaint);
+      complaintsByKey.set(input.key, complaint.id);
       notifications.unshift({
         id: nextId("n"),
         category: "support",

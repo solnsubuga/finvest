@@ -99,12 +99,35 @@ A result that arrives after the check moved on changes nothing.
 
 Settings, all optional while the provider is `manual`: `FINVEST_IDENTITY_PROVIDER` (`manual` or `development-stub`), `FINVEST_IDENTITY_AUTOMATIC_APPROVAL` (off; the owner's decision), and `FINVEST_IDENTITY_DATA_KEY`, which any provider other than `manual` requires in the worker.
 
+## Routes
+
+The client's own check, under `/client/identity-check`, with the client's session:
+
+| Route | What it does |
+| --- | --- |
+| `GET` | The check, or `null` before a document is chosen. Nothing about providers, flags or who decided. |
+| `PUT /document` | Start the check, or change the document while it is a draft. |
+| `PUT /photos/{kind}` | Send one photo (`front`, `back` or `selfie`) as `multipart/form-data`, field `photo`: JPEG, PNG or WebP, at most 10 MiB. It replaces the photo of that kind. |
+| `PUT /details` | Save the details the client confirmed. |
+| `POST /submit` | Hand the check in. Says which photos or details are missing if it is not ready. |
+
+The review queue, under `/staff/identity-checks`. Reading needs the permission `identity_checks.view`. Deciding needs `identity_checks.review`. Admin, Operations and Compliance hold both.
+
+| Route | What it does |
+| --- | --- |
+| `GET` | Checks that are not decided, the ones needing a person first. |
+| `GET /{id}` | One check, with the document number masked (`CM90••••••••4PL`) and the decisions allowed in its state. |
+| `POST /{id}/document-number` | The whole document number. Each call is an audit event. |
+| `POST /{id}/photo-links` | Links to the photos that last 5 minutes. Each call is an audit event. |
+| `POST /{id}/approve`, `/reject`, `/ask-for-photos`, `/escalate` | The decisions. Each needs a reason or a message to the client. |
+
+The API stores each photo in the shared private storage (`app.infrastructure.storage`) under `kyc/<check>/<photo>`, never the browser. Everything that can refuse a photo runs first: the check must take a photo of that kind now, the type and size must be allowed, and the file must start the way a file of its type does. Then the file is stored, outside any transaction, and only then is its row saved with its size and SHA-256. If saving the row fails, the file is deleted. Read links are never stored or logged.
+
+Without `FINVEST_IDENTITY_DATA_KEY` the routes answer `unavailable`, and so do the photo routes when file storage is not configured.
+
 ## Not built yet
 
-- HTTP routes for the client app and the console.
-- Upload and signed download links for object storage.
-- Reading `FINVEST_IDENTITY_DATA_KEY` in the API (nothing calls the module over HTTP yet).
-- The console route that returns the ID number masked, and a separate route that returns it in full and writes an audit event.
+- The console and the client app calling these routes. Both still use sample data.
 - Replacing the identity data key. Do not rotate it yet: a sealed value records which key sealed it and an old key can still be read, but nothing seals the rows again, and the document fingerprints are made with the current key only, so the one-document rule would stop matching earlier clients.
 - Notifications when a check is approved or needs a new photo.
 - Checking that the name matches the name registered on the client's mobile money number.

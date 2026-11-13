@@ -3,7 +3,7 @@ history, the receipts that stop a command running twice, the identity records, t
 destinations, the withdrawal limits, the payouts and their send attempts, the migration
 checks, the imported statements, the day closes, the pot transfers, the help chat, the
 complaints register, the goals, the email delivery records, the unclaimed accounts, the
-complaint outcomes or the suppression lifts."""
+complaint outcomes, the suppression lifts, the client locks or the announcements."""
 
 import os
 from collections.abc import Iterator
@@ -239,6 +239,13 @@ ROWS = {
         "VALUES ('-Nabc0000000000000A1', 1, 'sandbox', now())",
         "refusing to drop payout send attempts",
     ),
+    "0034_payout_account_codes": (
+        "INSERT INTO identity_codes (id, purpose, channel, phone, actor_id, bound_to, "
+        "code_hash, created_at, expires_at) VALUES ('-Nabc0000000000000A1', 'payout_account', "
+        "'sms', '+256772123456', '-Nabc0000000000000B1', '-Nabc0000000000000C1', "
+        "decode(repeat('00', 32), 'hex'), now(), now())",
+        "refusing to drop payout account codes",
+    ),
     "0051_kyc_sealed_details": (
         "INSERT INTO kyc_checks (id, client_id, document_type, document_country, "
         "document_number_sealed, created_at, updated_at) VALUES ('-Nabc0000000000000A1', "
@@ -255,6 +262,15 @@ ROWS = {
         "INSERT INTO notification_preferences (client_id, category, channels, updated_at) "
         "VALUES ('-Nabc0000000000000B1', 'money', ARRAY['push'], now())",
         "refusing to drop notifications",
+    ),
+    "0102_announcements": (
+        # The guard admits only a member of staff proposing in their own name.
+        "WITH acting AS (SELECT set_config('finvest.actor_kind', 'staff', true), "
+        "set_config('finvest.actor_id', '-Nabc0000000000000A1', true)) "
+        "INSERT INTO notification_announcements (id, title, message, reason, proposed_by, "
+        "proposed_at) SELECT '-Nabc0000000000000A1', 'T', 'M', 'R', '-Nabc0000000000000A1', now() "
+        "FROM acting",
+        "refusing to drop announcements",
     ),
     "0092_email_delivery": (
         "INSERT INTO notification_email_events (svix_id, delivery, email_id, recipients, "
@@ -317,6 +333,23 @@ ROWS = {
         "'monthly_statement', '2026-10', DATE '2026-10-01', DATE '2026-10-31', now())",
         "refusing to drop documents",
     ),
+    "0141_document_emails": (
+        # Only the worker queues an email, and only for a ready document. The migrator owns
+        # both tables, so it sets their guards aside to write the row this test needs.
+        "BEGIN; "
+        "INSERT INTO documents (id, client_id, kind, idempotency_key, period_start, period_end, "
+        "requested_at) VALUES ('-Nabc0000000000000A1', '-Nabc0000000000000B1', "
+        "'monthly_statement', '2026-10', DATE '2026-10-01', DATE '2026-10-31', now()); "
+        "ALTER TABLE documents DISABLE TRIGGER documents_guard; "
+        "UPDATE documents SET status = 'ready', finished_at = now(), file_name = 'a.pdf', "
+        "content = 'abc', sha256 = sha256('abc'), byte_size = 3; "
+        "ALTER TABLE documents ENABLE TRIGGER documents_guard; "
+        "ALTER TABLE document_emails DISABLE TRIGGER document_emails_guard; "
+        "INSERT INTO document_emails (document_id, client_id, queued_at) VALUES "
+        "('-Nabc0000000000000A1', '-Nabc0000000000000B1', now()); "
+        "ALTER TABLE document_emails ENABLE TRIGGER document_emails_guard; COMMIT",
+        "refusing to drop document emails",
+    ),
     "0042_pot_transfers": (
         "INSERT INTO reconciliation_pot_transfers (id, from_source, from_reference, to_source, "
         "to_reference, currency, sent_minor, received_minor, value_date, provider_reference, "
@@ -348,6 +381,33 @@ ROWS = {
         "created_at, updated_at) VALUES ('-Nabc0000000000000A1', 'CL-1', false, 'not_invited', "
         "now(), now())",
         "refusing to drop migration claims",
+    ),
+    "0152_client_locks": (
+        "BEGIN; SELECT set_config('finvest.actor_kind', 'staff', true); "
+        "SELECT set_config('finvest.actor_id', '-Nabc0000000000000S1', true); "
+        "INSERT INTO identity_staff (id, email, name, role, password_hash, status, created_at) "
+        "VALUES ('-Nabc0000000000000S1', 'ops@finvestug.com', 'Ops', 'operations', 'x', "
+        "'active', now()); "
+        "INSERT INTO identity_clients (id, phone, password_hash, password_changed_at, status, "
+        "created_at) VALUES ('-Nabc0000000000000B1', '+256772123456', 'x', now(), 'active', "
+        "now()); "
+        "INSERT INTO identity_client_locks (id, kind, client_id, reason, proposed_by, "
+        "proposed_at) VALUES ('-Nabc0000000000000A1', 'lock', '-Nabc0000000000000B1', "
+        "'Phone stolen', '-Nabc0000000000000S1', now()); COMMIT",
+        "refusing to drop identity_client_locks",
+    ),
+    "0160_identity_phone_changes": (
+        "BEGIN; INSERT INTO identity_staff (id, email, name, role, created_at) VALUES "
+        "('-Nabc0000000000000S1', 'ada@finvestug.com', 'Ada', 'operations', now()); "
+        "INSERT INTO identity_clients (id, phone, status, created_at) VALUES "
+        "('-Nabc0000000000000B1', '+256772123456', 'unclaimed', now()); "
+        "SELECT set_config('finvest.actor_kind', 'staff', true); "
+        "SELECT set_config('finvest.actor_id', '-Nabc0000000000000S1', true); "
+        "INSERT INTO identity_phone_changes (id, client_id, new_phone, reason, proposed_by, "
+        "proposed_at, expires_at) VALUES ('-Nabc0000000000000A1', '-Nabc0000000000000B1', "
+        "'+256772123457', 'Lost SIM', '-Nabc0000000000000S1', now(), now() + interval '1 day'); "
+        "COMMIT",
+        "refusing to drop the record of number changes",
     ),
 }
 

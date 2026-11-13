@@ -145,8 +145,14 @@ async def test_a_matured_investment_pays_out_to_a_number_in_the_clients_own_name
         )
         assert (await ledger.get_balance(session, pending.id)).minor == 0
 
-    trail = await audit_for(migrator_database, [client.id, own, other, spelt, payout.id])
+    trail = await audit_for(
+        migrator_database, [client.id, own, other, spelt, payout.id, investment_id]
+    )
     expected = (
+        "investments.requested",
+        "investments.maturity_chosen",
+        "investments.started",
+        "investments.matured",
         "payouts.destination_added",
         "payouts.destination_code_confirmed",
         "payouts.destination_proof_submitted",

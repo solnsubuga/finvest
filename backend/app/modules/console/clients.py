@@ -1,0 +1,85 @@
+"""One client as staff see them: finding a client, and the client page.
+
+Everything here is read through the functions the owning modules expose. Nothing is written.
+"""
+
+import re
+from dataclasses import dataclass
+from datetime import date
+
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.modules.identity.client_locks import (
+    ClientAccount,
+    LockChange,
+    client_account,
+    client_by_phone,
+    lock_history,
+)
+from app.modules.kyc.service import CheckSummary, check_summary, client_for_account_number
+from app.modules.kyc.service import verified_name as kyc_verified_name
+from app.modules.ledger.statements import ClientOwed, client_owed_as_of
+from app.modules.payouts.destinations import DestinationView, destinations_for_client
+from app.modules.support.complaints import ComplaintView, complaints_for_client
+from app.modules.support.conversations import ConversationView, conversation_for_client
+from app.shared.push_ids import PUSH_ID_PATTERN
+
+_PUSH_ID = re.compile(PUSH_ID_PATTERN)
+_ACCOUNT_NUMBER = re.compile(r"\d{10}")
+
+
+@dataclass(frozen=True, slots=True)
+class ClientPage:
+    account: ClientAccount
+    # The name on the approved identity document. None until the check is approved.
+    verified_name: str | None
+    identity_check: CheckSummary | None
+    # What Finvest owes the client at the end of today, per ledger account.
+    owed: list[ClientOwed]
+    destinations: list[DestinationView]
+    locks: list[LockChange]
+    # None when the member of staff may not see support or complaints.
+    conversation: ConversationView | None
+    complaints: list[ComplaintView] | None
+
+
+async def find_client(session: AsyncSession, query: str) -> ClientAccount | None:
+    """A client by ID, by ten-digit account number, or by mobile number."""
+    cleaned = query.strip()
+    if _PUSH_ID.fullmatch(cleaned):
+        found = await client_account(session, cleaned)
+        if found is not None:
+            return found
+    digits = re.sub(r"[\s-]", "", cleaned)
+    if _ACCOUNT_NUMBER.fullmatch(digits) and not digits.startswith("0"):
+        client_id = await client_for_account_number(session, digits)
+        if client_id is not None:
+            return await client_account(session, client_id)
+    return await client_by_phone(session, cleaned)
+
+
+async def client_page(
+    session: AsyncSession,
+    client_id: str,
+    today: date,
+    *,
+    with_support: bool,
+    with_complaints: bool,
+) -> ClientPage | None:
+    account = await client_account(session, client_id)
+    if account is None:
+        return None
+    return ClientPage(
+        account=account,
+        verified_name=await kyc_verified_name(session, client_id),
+        identity_check=await check_summary(session, client_id),
+        owed=[
+            item for item in await client_owed_as_of(session, client_id, today) if item.owed.minor
+        ],
+        destinations=await destinations_for_client(session, client_id),
+        locks=await lock_history(session, client_id),
+        conversation=await conversation_for_client(session, client_id) if with_support else None,
+        complaints=await complaints_for_client(session, client_id, today)
+        if with_complaints
+        else None,
+    )

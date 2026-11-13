@@ -5,13 +5,22 @@ import { createStubDirectory } from "@/directory/stub.ts";
 import { notConnectedWordingsApi, WordingsError, type WordingsApi } from "./api.ts";
 import { SettingsScreen } from "./index.tsx";
 import { checkWording, fillSample, outsideLinks } from "./rules.ts";
+import { createStubAnnouncementsApi } from "./announcementsStub.ts";
 import { createStubWordingsApi } from "./stub.ts";
 
 const ME = { id: "sample-me", name: "Amina Kintu" };
 const NOW = Date.parse("2026-11-13T09:00:00Z");
 
-function renderSettings({ api = createStubWordingsApi(ME, () => NOW), canChange = true }: { api?: WordingsApi; canChange?: boolean } = {}) {
-  render(<SettingsScreen api={api} directory={createStubDirectory(ME)} canChange={canChange} />);
+function renderSettings({ api = createStubWordingsApi(ME, () => NOW), canChange = true, canSend = true }: { api?: WordingsApi; canChange?: boolean; canSend?: boolean } = {}) {
+  render(
+    <SettingsScreen
+      api={api}
+      announcements={createStubAnnouncementsApi(ME, () => NOW)}
+      directory={createStubDirectory(ME)}
+      canChange={canChange}
+      canSend={canSend}
+    />,
+  );
   return { api, user: userEvent.setup() };
 }
 
@@ -124,6 +133,12 @@ describe("settings: client messages", () => {
     const detail = await panel("Investment matures soon");
     expect(within(detail).queryByRole("button")).not.toBeInTheDocument();
     expect(within(detail).getByText(/Changing them needs an admin/)).toBeInTheDocument();
+  });
+
+  it("does not let a role that can change wordings send an announcement", async () => {
+    renderSettings({ canChange: true, canSend: false });
+    expect(await screen.findByText("Someone who can send announcements approves it.")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "New announcement" })).not.toBeInTheDocument();
   });
 
   it("says when client messages are not connected", async () => {

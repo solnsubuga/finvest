@@ -7,11 +7,11 @@ staff edit with a second person's approval. It carries no code and no link of it
 Each template lists the variables it needs. Every value is escaped before it goes into HTML,
 so nothing a person typed can add markup or a link.
 
-This file owns only the messages that carry a secret or open an account: sign-in, signup,
-reset and claim codes and the staff set-up link. They are fixed in code so that nobody can edit
-them into a phishing message, and so that they work before anything else is set up. Every
-other client notice is worded in `domain/wording.py`, which staff edit with a second person
-approving. Neither file adds text of the other kind.
+This file owns only the messages that carry a secret or guard an account: sign-in, signup,
+reset and claim codes, the notice that a number changed, and the staff set-up link. They are
+fixed in code so that nobody can edit them into a phishing message, and so that they work
+before anything else is set up. Every other client notice is worded in `domain/wording.py`,
+which staff edit with a second person approving. Neither file adds text of the other kind.
 """
 
 import html
@@ -24,6 +24,8 @@ Template = Literal[
     "sign_in_code",
     "password_reset_code",
     "claim_code",
+    "payout_account_code",
+    "phone_changed",
     "staff_enrolment",
     "client_notice",
 ]
@@ -34,6 +36,8 @@ _VARIABLES: dict[Template, frozenset[str]] = {
     "sign_in_code": frozenset({"code", "minutes"}),
     "password_reset_code": frozenset({"code", "minutes"}),
     "claim_code": frozenset({"code", "minutes"}),
+    "payout_account_code": frozenset({"code", "minutes"}),
+    "phone_changed": frozenset({"ending"}),
     "staff_enrolment": frozenset({"name", "link", "hours"}),
     # A notification's words, already filled in: the title and body for an email.
     "client_notice": frozenset({"title", "body"}),
@@ -80,6 +84,10 @@ _SMS: dict[str, str] = {
     "minutes. Never share it. Finvest staff will never ask for it.",
     # The SMS words of the notification, which already start with "Finvest:".
     "client_notice": "{sms}",
+    "payout_account_code": "Your Finvest code to add a new account for your withdrawals is "
+    "{code}. It works for {minutes} minutes. Never share it. If this was not you, call us.",
+    "phone_changed": "The mobile number on your Finvest account was changed to one ending "
+    "{ending}. If you did not ask for this, contact Finvest support now.",
 }
 
 
@@ -108,7 +116,7 @@ def render(
         and not any(link.startswith(f"{origin}/") for origin in link_origins)
     ):
         raise InvalidTemplate("The link does not point to a Finvest site")
-    if template in ("signup_code", "claim_code"):
+    if template in ("signup_code", "claim_code", "payout_account_code"):
         raise InvalidTemplate("This template is not sent by email")
     if template == "sign_in_code":
         return _message(
@@ -127,6 +135,17 @@ def render(
                 values["body"],
                 "Open the Finvest app to see it. You can choose how we reach you in Profile, "
                 "under Notifications.",
+            ],
+        )
+    if template == "phone_changed":
+        return _message(
+            "Your Finvest mobile number was changed",
+            [
+                f"The mobile number on your Finvest account was changed to one ending "
+                f"{values['ending']}.",
+                "For your safety you were signed out everywhere, and for the next 24 hours "
+                "money can be paid out only to accounts you already use.",
+                "If you did not ask for this, contact Finvest support now.",
             ],
         )
     if template == "password_reset_code":

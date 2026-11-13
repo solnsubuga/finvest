@@ -2,7 +2,7 @@
 
 The Finvest client app. One codebase for Android, iPhone and the web at app.finvestug.com.
 
-**Status:** app shell. Navigation, theme, the welcome, sign up and log in screens, Sign in and security (add a passkey, set up an authenticator app), paying for an investment by mobile money or bank transfer, and notifications, help chat and complaints. Sign-in talks to the real API. The other areas still run against in-memory demos until they are connected one by one. No investing screens yet.
+**Status:** app shell. Navigation, theme, the welcome, sign up and log in screens, Sign in and security (add a passkey, set up an authenticator app), investing (products, a calculator, review and confirm, the portfolio and each investment), paying for an investment by mobile money or bank transfer, and notifications, help chat and complaints. Sign-in talks to the real API. The other areas still run against in-memory demos until they are connected one by one.
 
 ## Stack
 
@@ -33,6 +33,7 @@ Add Expo packages with `npx expo install <package>` so the version matches the S
 | `src/theme/` | Re-exports `@finvest/tokens`, loads Plus Jakarta Sans, and holds the wide breakpoint |
 | `src/api/` | The typed API client: one call per route, answers checked, offline and timeout told apart, the phone's session token in the secure store |
 | `src/auth/` | The sign-in contract, the API client for it, the demo stub, WebAuthn for passkeys, and the phone and password rules |
+| `src/investing/` | The investing contract, the demo stub, amount and date formatting, and the product and investment cards |
 | `src/payments/` | The payments contract, the demo stub, money and time formatting, and the status polling |
 | `src/autoinvest/` | The automatic investing contract, the demo stub, and the schedule rules shown on screen |
 | `src/insights/` | The insights contract, the API client for it, the demo stub, and the chart helpers |
@@ -89,6 +90,17 @@ The goal screens live in `src/app/goals/` and talk to the `GoalsClient` interfac
 - Saving needs an approved ID check, because it makes an investment. The API refuses it before that, and the screen says to finish the ID check.
 - Every figure, the plan's rate included, arrives after tax from the API and is shown as sent.
 
+## Investing
+
+The investing screens talk to the `InvestingClient` interface in `src/investing/types.ts`, shaped to the client routes in `backend/app/modules/investments/api.py`. A client sees only the yearly rate after tax and net amounts, never a tax rate or a figure before tax, and every figure comes from the backend's quote or investment. The app adds nothing up.
+
+- `/invest` lists the products. `/invest/[code]` shows one, with a calculator: the amount typed is quoted after a short pause, and Review opens once the quote is back.
+- `/invest/review` saves the investment at today's rate with one idempotency key per visit, so a double tap saves one investment, then replaces itself with the pay screen for that investment. A fixed term asks what happens at the end: roll over (the default) or pay out.
+- `/portfolio` lists the client's investments with what each is worth today. `/investment/[id]` shows one, with interest so far, what it pays at maturity, and a Pay button while it waits for payment.
+- The demo (`src/investing/stubInvestingClient.ts`) has two investments already running, works interest out as the backend does, and starts a term when the demo payment for it is confirmed (`src/demo/payables.ts` joins the two demos). Open `/?sample=empty` on the web to start as a client with no investments.
+
+Not built yet: changing what happens at maturity from the investment screen (it needs the payout destinations screens), withdrawing early, and statements.
+
 ## Paying
 
 The pay screens live in `src/app/pay/` and talk to the `PaymentsClient` interface in `src/payments/types.ts`. A payment always pays for one thing, an investment or a goal, and its amount comes from that thing. There is no wallet and no amount field.
@@ -143,13 +155,13 @@ Not built yet: sending an investment to another client, changing a plan's amount
 
 ## Notifications, help and complaints
 
-The screens talk to the `SupportClient` interface in `src/support/types.ts`, whose shapes follow the backend routes in [docs/notifications.md](../../docs/notifications.md) and [docs/support.md](../../docs/support.md). Until those routes are live, the only implementation is the demo in `src/support/stubSupportClient.ts`, kept out of production builds the same way as the payments demo. CI checks that it is.
+The screens talk to the `SupportClient` interface in `src/support/types.ts`, whose shapes follow the backend routes in [docs/notifications.md](../../docs/notifications.md) and [docs/support.md](../../docs/support.md). `src/support/apiSupportClient.ts` answers it from the real API. The demo in `src/support/stubSupportClient.ts` answers only in tests and in a build with `EXPO_PUBLIC_DEMO_AUTH=1`, and CI checks that production builds leave it out. A lost connection shows the screen's "could not reach Finvest" state, and a chat message keeps its key, so it is never posted twice.
 
 - **Notifications.** The bell on Home shows the unread count and opens `/notifications`, the canvas screen. Tapping one marks it read and opens the screen it names. A notification carries a kind and an ID, never an address, so `src/support/links.ts` decides where it goes and a kind without a screen yet opens nothing.
 - **Notification settings.** `/notifications/settings` has push, SMS and email for each kind of alert, saved as each one is tapped. Security alerts keep SMS or email: the screen says so instead of sending a change the server would refuse.
 - **Help.** `/help` is the canvas screen: quick answers above, one chat with the Finvest team below. The chat asks for new messages every 4 seconds while it is in front and not at all otherwise. A message shows as "Sending" at once and keeps its key, so trying again after a lost answer never posts it twice. "Call us" appears only when `EXPO_PUBLIC_SUPPORT_PHONE` is set at build time, because Finvest has not published a support line yet.
 - **Quick answers** are in `src/support/answers.ts`. They say only what `docs/` establishes and show no tax rate. "Still stuck?" opens the chat filed under the answer's topic.
-- **Complaints.** `/support/complaints` lists the client's complaints, `/support/complaints/new` makes one, and each has a page with its reference, status, the date Finvest will answer by (5 working days) and the outcome once closed. Staff notes are never shown.
-- In the demo each signed-in account has its own memory. The two ready-made accounts start with the canvas's notifications and one closed complaint. An account made by signing up starts empty. A chat message gets one canned reply a few seconds later, which says it is the demo.
+- **Complaints.** `/support/complaints` lists the client's complaints, `/support/complaints/new` makes one, and each has a page with its reference, status, the date Finvest will answer by (5 working days) and the outcome once closed. Staff notes are never shown. The form makes one key and sends it again on a retry after a lost answer, so a complaint is logged once. A definite refusal logged nothing, so the next try gets a new key. After a lost answer the form's words are locked, because the API answers the same key with the first complaint, and the screen says that trying again sends the same complaint.
+- In the demo (tests, or `EXPO_PUBLIC_DEMO_AUTH=1`) each signed-in account has its own memory. The two ready-made accounts start with the canvas's notifications and one closed complaint. An account made by signing up starts empty. A chat message gets one canned reply a few seconds later, which says it is the demo.
 
 Not built: push notifications on the device (they come with the backend's sending work), attachments in chat, and the screens behind payout, payout account and identity check notifications.

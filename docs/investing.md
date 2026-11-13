@@ -141,10 +141,11 @@ The code is `backend/app/modules/investments/api.py`. Amounts are integers in th
 | `PUT /client/investments/{id}/at-maturity` | Signed-in client | `{at_maturity, destination_id?}`, up to the day before maturity. |
 | `POST /client/investments/{id}/pay-out` | Signed-in client | `{destination_id}`: send on money that matured and is waiting. A refusal from payouts is a 422 on `destination_id` with the payouts code. |
 | `GET /staff/products`, `GET /staff/products/{code}/rates` | `products.view`, `rates.view` | Products with the rate and tax in force and the next approved one, and each product's rate history. |
-| `GET /staff/rate-proposals?status=`, `POST /staff/rate-proposals`, `POST /staff/rate-proposals/{id}/approve`, `/send-back`, `/withdraw` | `rates.view` | Rate changes, with the second person enforced in the database. |
+| `GET /staff/rate-proposals?status=` | `rates.view` | Rate changes and their state. |
+| `POST /staff/rate-proposals`, `POST /staff/rate-proposals/{id}/approve`, `/send-back`, `/withdraw` | `rates.change` | Proposing and deciding rate changes, with the second person enforced in the database. |
 | `GET /staff/investments?status=&limit=`, `GET /staff/investments/{id}`, `GET /staff/interest-runs` | `investments.view` | Every investment with its tax, and the record of daily runs. |
 
-The permission catalogue has only "view" permissions for now, so proposing and deciding a rate need `rates.view`. That is safe because a rate never takes effect without a second person, but a separate `rates.change` permission may be wanted.
+Seeing rates needs `rates.view`. Proposing, approving, sending back and withdrawing a rate change need `rates.change`, held by admin and finance for now. A rate still never takes effect without a second person.
 
 ## What clients see
 
@@ -193,6 +194,19 @@ Ledger entry for the start (`investment.started`, key `investment-start:<investm
 | --- | --- |
 | `client.awaiting_start`, the client's, reference the investment | `client.holding`, the client's, reference the investment |
 
+### The audit trail and the client's messages
+
+Each step of an investment's life is an audit event on resource `investment`, written in the same transaction as the step:
+
+| Action | Actor | Details |
+| --- | --- | --- |
+| `investments.requested` | the client | `product`, `at_maturity` |
+| `investments.maturity_chosen` | the client | `at_maturity`, `destination_id` |
+| `investments.started` | the system | `start_date`, `ledger_entry_id` |
+| `investments.matured` | the system | `step`: `roll_over`, `pay_out` or `hold` |
+
+A retried request or a second start writes nothing new. The client is told when an investment starts (`investment_started`) and when it matures (`investment_matured`, with the amount after tax), through `notifications.notify` in the same transaction, keyed by the investment. The daily `interest_earned` message is not sent yet.
+
 ## Ledger accounts
 
 The investments module opens these. The entries are described with the commands that post them.
@@ -211,7 +225,7 @@ Agreed with the payments and payouts threads on 13 November 2026. Starting and d
 - **Starting.** The client reviews and confirms, which saves an investment that is awaiting payment. Its ID is the purpose of the deposit. Payments asks `investments.service.payable_investment` for the exact amount before taking a deposit. When the deposit is confirmed, payments publishes `payments.deposit_confirmed`, and the `investments.start_from_deposit` job moves the money from `client.awaiting_start` to `client.holding` and starts the investment.
 - **Maturity.** See [Maturity](#maturity). Payouts finds the handover by the client and the investment ID (`payouts.domain.posting.funding_account`), and owns everything after `create_payout`.
 - **Dealing desk.** It reads the book through `owed_by_product(session, on)`, `running_investments(session, product_code, started_after=None)` and `maturing(session, date_from, date_to)` in `investments.service`, and follows the outbox topics `investments.started`, `investments.matured` and `investments.rolled_over`. Interest in these reads is net of tax, as posted so far.
-- **Saving sources.** An investment the client did not make themselves, from an automatic investing run or a goal's saving rule, carries `source_type` (`autoinvest_run` or `goal_saving`) and `source_id`. Only the worker creates one, at most one per source, through `request_system_investment`, which the automatic investing module writes.
+- **Saving sources.** An investment the client did not make themselves, from an automatic investing run or a goal's saving rule, carries `source_type` (`autoinvest_run` or `goal_saving`) and `source_id`. The columns and their checks are on main (migration 0063): only the worker creates such an investment, at most one per source. The function that creates one, `request_system_investment`, is planned and arrives with the automatic investing work.
 - **Unwinding.** For a deposit credited by mistake, `investments.service.unwind_investment` will move the principal back to `client.awaiting_start` and reverse interest not yet paid out. It refuses if anything was already paid out.
 
 ## Not built yet

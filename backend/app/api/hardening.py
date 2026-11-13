@@ -30,6 +30,9 @@ BODY_LIMITS: dict[str, int] = {
     "/client/investments/*/payments/bank-transfer": 11 * 1024 * 1024,
     # Proof that a bank account is the client's: the same 10 MiB file limit and framing.
     "/client/payout-destinations/*/proof": 11 * 1024 * 1024,
+    # An identity document photo: at most 10 MiB, plus the multipart framing. The edge allows
+    # 12 MiB on the same path.
+    "/client/identity-check/photos/": 11 * 1024 * 1024,
 }
 
 

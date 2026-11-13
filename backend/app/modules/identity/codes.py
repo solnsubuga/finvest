@@ -1,4 +1,5 @@
-"""One-time codes by SMS or email: signup, the sign-in fallback, password reset and claims.
+"""One-time codes by SMS or email: signup, the sign-in fallback, password reset, claims and
+adding an account for withdrawals.
 
 A code is six digits, lasts ten minutes, allows five tries and works once. Only its digest is
 stored here. The code itself travels through the notifications queue, which empties it once
@@ -47,13 +48,20 @@ SENDS_PER_ADDRESS = 20
 SENDS_PER_LOGIN = 3
 # Tries at finishing one claim in fifteen minutes, counting weak passwords as well as codes.
 CLAIM_COMPLETIONS = 10
-Purpose = Literal["signup", "login", "password_reset", "claim"]
+Purpose = Literal["signup", "login", "password_reset", "claim", "payout_account"]
 _TEMPLATES: dict[Purpose, Template] = {
     "signup": "signup_code",
     "login": "sign_in_code",
     "password_reset": "password_reset_code",
     "claim": "claim_code",
+    "payout_account": "payout_account_code",
 }
+# Codes sent in fifteen minutes for one payout account, and for all of one client's accounts.
+SENDS_PER_PAYOUT_ACCOUNT = 3
+SENDS_PER_PAYOUT_CLIENT = 5
+# Codes for new payout accounts that one client may be sent in a day.
+PAYOUT_CODES_PER_DAY = 10
+PAYOUT_CODE_DAY = timedelta(days=1)
 
 logger = structlog.get_logger()
 
@@ -371,6 +379,71 @@ class CodeService:
             login_id, "client", second_step="code", transport=transport
         )
 
+    # A payout account
+
+    async def send_payout_account_code(
+        self, session: AsyncSession, *, client_id: str, account_id: str, phone: str
+    ) -> None:
+        """Text a code to prove the client holds a new payout account, in the caller's
+        transaction. `phone` is the mobile money number itself, or for a bank account the
+        client's own number. A new code replaces the one before it.
+
+        Sends are limited for the account, for the client and for the number texted, every
+        fifteen minutes, and for the client every day.
+        """
+        now = self.clock.now()
+        today = (
+            await session.execute(
+                text(
+                    "SELECT count(*) AS sent, min(created_at) AS oldest FROM identity_codes "
+                    "WHERE purpose = 'payout_account' AND actor_id = :actor AND created_at > :since"
+                ),
+                {"actor": client_id, "since": now - PAYOUT_CODE_DAY},
+            )
+        ).one()
+        if today.sent >= PAYOUT_CODES_PER_DAY:
+            wait = today.oldest + PAYOUT_CODE_DAY - now
+            raise ApplicationError(
+                "rate_limited", retry_after_seconds=max(1, int(wait.total_seconds()) + 1)
+            )
+        await reserve_attempts(
+            self.database,
+            self.clock,
+            [
+                (throttle_key("payout-account-code", account_id), SENDS_PER_PAYOUT_ACCOUNT),
+                (throttle_key("payout-account-client", client_id), SENDS_PER_PAYOUT_CLIENT),
+                (throttle_key("payout-account-number", phone), SENDS_PER_NUMBER),
+            ],
+        )
+        await self._issue(
+            session,
+            "payout_account",
+            "sms",
+            recipient=phone,
+            phone=phone,
+            actor_id=client_id,
+            bound_to=account_id,
+        )
+
+    async def spend_payout_account_code(
+        self, session: AsyncSession, *, client_id: str, account_id: str, code: str
+    ) -> bool:
+        """Count a try and spend the code if it is right, in the caller's transaction.
+
+        The caller must commit even when this returns False, so the try is counted. Raises
+        `expired` when no live code is left.
+        """
+        row = await self._spend(
+            session,
+            "bound_to = :bound AND actor_id = :actor AND purpose = 'payout_account'",
+            {"bound": account_id, "actor": client_id},
+            code,
+        )
+        if row is None:
+            logger.info("code_refused", purpose="payout_account", error_code="invalid_code")
+            return False
+        return True
+
     # Password reset
 
     async def reset_start(self, phone: str, *, address: str | None) -> str:
@@ -471,9 +544,12 @@ class CodeService:
         return code_id
 
     async def claim_complete(
-        self, challenge_id: str, code: str, password: str, transport: Transport
+        self, challenge_id: str, code: str, password: str, transport: Transport, *, client_id: str
     ) -> Claimed:
         """Check the code, set the password and open the first session, all at once.
+
+        `client_id` is the account the caller expects, from the claim link. A challenge for any
+        other account is refused with `not_found` before anything changes.
 
         The account becomes active. A code proves only the number, so, as with a code sign-in,
         withdrawals are limited to known accounts for 24 hours.
@@ -491,6 +567,9 @@ class CodeService:
             ).one_or_none()
         if account is None:
             raise ApplicationError("expired")
+        if account.id != client_id:
+            # A code for another account, sent with this account's link. Nothing changes.
+            raise ApplicationError("not_found")
         # Hashing is slow on purpose. Limit how often one claim can make us do it.
         await reserve_attempts(
             self.database,

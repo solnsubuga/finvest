@@ -10,6 +10,7 @@ from sqlalchemy.exc import DBAPIError
 
 from app.infrastructure.database import Database
 from app.infrastructure.jobs import JobRequest, Worker, WorkerConfig, enqueue
+from app.modules.audit import service as audit
 from app.modules.investments import service as investments
 from app.modules.investments.domain.interest import ClientReturns
 from app.modules.investments.domain.investments import AtMaturity, InvestmentStatus
@@ -333,6 +334,37 @@ async def test_the_confirmed_payment_moves_into_the_holding_and_the_investment_s
     assert await account_balance(worker_database, investment, HOLDING) == 1_000_000
     async with worker_database.actor_transaction(SYSTEM) as session:
         assert await ledger.find_balance_drift(session) == []
+
+
+async def test_the_request_and_the_start_are_audited_and_the_client_is_told(
+    app_database: Database, worker_database: Database
+) -> None:
+    client = await approved_client(app_database, NOW)
+    investment = await request(app_database, client, NOW)
+    await pay(worker_database, investment, ugx(1_000_000), NOW)
+    await start(worker_database, investment.id)
+    await start(worker_database, investment.id)
+
+    async with app_database.actor_transaction(new_staff()) as session:
+        events = await audit.events_for_resource(session, "investment", investment.id)
+    assert [(event.action, event.actor_kind, event.actor_id) for event in events] == [
+        ("investments.started", "system", None),
+        ("investments.requested", "client", client.id),
+    ]
+    assert events[1].details == {"product": "TREA-91", "at_maturity": "roll_over"}
+    async with app_database.actor_transaction(client) as session:
+        told = (
+            await session.execute(
+                text(
+                    "SELECT title, link_kind, link_id FROM notifications "
+                    "WHERE client_id = :client AND event = 'investment_started'"
+                ),
+                {"client": client.id},
+            )
+        ).all()
+    assert [tuple(row) for row in told] == [
+        ("Investment started", "investment", investment.id),
+    ]
 
 
 async def test_starting_twice_changes_nothing(
