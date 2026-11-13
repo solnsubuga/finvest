@@ -7,6 +7,7 @@
 | [engineering-patterns.md](engineering-patterns.md) | The backend patterns carried over from Fidiba: jobs in PostgreSQL, the outbox, idempotency, database roles |
 | [rules.md](rules.md) | Rules for money, security and compliance |
 | [ledger.md](ledger.md) | How the ledger, integer money, account number issuing and the audit trail are built, and what the database enforces |
+| [payouts.md](payouts.md) | Payout destinations, the name lock, the 24 hour wait, withdrawal limits and the life of a payout |
 | [account-numbers.md](account-numbers.md) | Format, generation and lifetime of client account numbers |
 | [roadmap.md](roadmap.md) | Build phases and the feature checklist for the client app and back office |
 | [migration.md](migration.md) | Moving Finvest 1.0 clients onto the new system |
