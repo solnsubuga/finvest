@@ -17,6 +17,7 @@ from app.infrastructure.push import PushFailure, PushMessage, PushResult, PushUn
 from app.infrastructure.sms import SmsMessage, SmsResult
 from app.modules.notifications import contract, devices, jobs, preferences, service
 from app.modules.notifications.delivery import DeliveryJobs
+from app.modules.notifications.domain.email_events import address_hash
 from app.modules.notifications.domain.events import Category, Channel
 from app.shared.actors import Actor
 from app.shared.errors import ApplicationError
@@ -263,6 +264,89 @@ async def test_nothing_is_queued_where_the_client_cannot_be_reached(
     assert await messages(rig.database, told) == {}
     # The notification is still in the app, and the fan-out finished.
     assert await jobs_of(rig.database, "notifications.fan_out", f"fan-out:{told}") == ["succeeded"]
+
+
+async def suppress(app_database: Database, worker_database: Database, address: str) -> None:
+    """Record the address as bounced for good, as Resend's webhook would, through the real roles."""
+    svix_id = f"msg_{secrets.token_hex(8)}"
+    async with app_database.transaction() as session:
+        await session.execute(
+            text(
+                "INSERT INTO notification_email_events "
+                "(svix_id, delivery, email_id, recipients, permanent, received_at) "
+                "VALUES (:svix_id, 'bounced', 'e-1', ARRAY[:hash], true, now())"
+            ),
+            {"svix_id": svix_id, "hash": address_hash(address)},
+        )
+    async with worker_database.transaction() as session:
+        await session.execute(
+            text(
+                "INSERT INTO notification_email_suppressions "
+                "(address_hash, reason, svix_id, created_at) "
+                "VALUES (:hash, 'bounced', :svix_id, now())"
+            ),
+            {"hash": address_hash(address), "svix_id": svix_id},
+        )
+
+
+async def security_by_push_and_email(rig: Rig, app_database: Database) -> tuple[Actor, str]:
+    client, _ = await a_client(rig, app_database)
+    async with app_database.actor_transaction(client) as session:
+        await preferences.save(
+            session,
+            client,
+            {Category.SECURITY: frozenset({Channel.PUSH, Channel.EMAIL})},
+            rig.clock.now(),
+        )
+    assert client.id is not None
+    email = rig.book.known[client.id].email
+    assert email is not None
+    return client, email
+
+
+async def test_a_security_alert_to_a_suppressed_address_goes_by_sms(
+    rig: Rig, app_database: Database
+) -> None:
+    client, email = await security_by_push_and_email(rig, app_database)
+    await suppress(app_database, rig.database, email)
+    told = await tell(app_database, client, rig.clock, "password_changed")
+    await rig.drain()
+
+    # The client chose push and email, but email cannot reach them, so a text goes instead.
+    assert len(rig.push.sent) == 1
+    assert rig.email.sent == []
+    [text_message] = rig.sms.sent
+    assert text_message.idempotency_key == f"notice:{told}:sms"
+    assert await messages(rig.database, told) == {"sms": "sent", "email": "failed"}
+
+
+async def test_a_security_alert_follows_the_choice_while_email_works(
+    rig: Rig, app_database: Database
+) -> None:
+    client, _ = await security_by_push_and_email(rig, app_database)
+    told = await tell(app_database, client, rig.clock, "password_changed")
+    await rig.drain()
+    assert rig.sms.sent == []
+    assert len(rig.email.sent) == 1
+    assert await messages(rig.database, told) == {"email": "sent"}
+
+
+async def test_other_alerts_to_a_suppressed_address_do_not_fall_back_to_sms(
+    rig: Rig, app_database: Database
+) -> None:
+    client, _ = await a_client(rig, app_database)
+    assert client.id is not None
+    address = rig.book.known[client.id].email
+    assert address is not None
+    async with app_database.actor_transaction(client) as session:
+        await preferences.save(
+            session, client, {Category.MONEY: frozenset({Channel.EMAIL})}, rig.clock.now()
+        )
+    await suppress(app_database, rig.database, address)
+    await tell(app_database, client, rig.clock)
+    await rig.drain()
+    # Only security alerts must reach the client outside the app. The rest wait in the app.
+    assert (rig.sms.sent, rig.email.sent) == ([], [])
 
 
 async def test_a_shared_phone_gets_only_the_alerts_of_whoever_signed_in_last(

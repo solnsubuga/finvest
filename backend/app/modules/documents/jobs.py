@@ -53,7 +53,6 @@ from app.modules.identity import service as identity
 from app.modules.ledger import closing
 from app.modules.ledger import statements as ledger
 from app.modules.notifications import contract as notifications
-from app.modules.notifications.email_delivery import is_suppressed
 from app.modules.payments import service as payments
 from app.shared.actors import SYSTEM
 from app.shared.business_day import business_date
@@ -369,7 +368,7 @@ class DocumentJobs:
                 # Nothing verifies an address yet and the PDF has no password, so an account
                 # carried over from Finvest 1.0 gets no statement until its owner claims it.
                 address = contact.email if contact is not None and contact.claimed else None
-                if address is not None and await is_suppressed(session, address):
+                if address is not None and await notifications.is_suppressed(session, address):
                     # The address bounced for good or reported our mail as spam. Sending a
                     # PDF every month would harm the sending domain, and a complaint means
                     # the person asked us to stop.
