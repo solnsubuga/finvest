@@ -35,7 +35,7 @@ Add Expo packages with `npx expo install <package>` so the version matches the S
 | `src/auth/` | The sign-in contract, the API client for it, the demo stub, WebAuthn for passkeys, and the phone and password rules |
 | `src/payments/` | The payments contract, the demo stub, money and time formatting, and the status polling |
 | `src/autoinvest/` | The automatic investing contract, the demo stub, and the schedule rules shown on screen |
-| `src/insights/` | The insights contract, the demo stub, and the chart helpers |
+| `src/insights/` | The insights contract, the API client for it, the demo stub, and the chart helpers |
 | `src/support/` | The notifications, help chat and complaints contract, the demo stub, quick answers, and the chat polling |
 | `docs/screenshots/` | Screenshots of every screen and state in this app |
 
@@ -120,7 +120,7 @@ The schedule rules in `src/autoinvest/schedule.ts` mirror the backend's (`docs/a
 
 `/insights` shows what the client's money earned each month for the last six months, what is invested now, what has been earned so far, this month's money in, earned and paid out, and the next maturities. Every figure is after tax, and no tax rate is shown. On a wide screen it has two columns.
 
-Until the backend publishes these client routes, the only implementations are the in-memory stubs in `src/autoinvest/stubAutoinvestClient.ts` and `src/insights/stubInsightsClient.ts`, loaded in development and in a build with `EXPO_PUBLIC_DEMO_AUTH=1`, and checked out of production builds by CI. The two demo accounts have one monthly plan and six months of figures. A new demo account starts empty, and one whose number ends in `99` cannot reach Finvest, to show the error states.
+Insights come from `GET /client/insights` through `src/insights/apiInsightsClient.ts`, in shillings: the chart labels are thousands of shillings, so an answer in another currency is shown as the error state rather than mislabelled. The insights demo in `src/insights/stubInsightsClient.ts` loads only in tests and in a build with `EXPO_PUBLIC_DEMO_AUTH=1`. Automatic investing still runs on the in-memory stub in `src/autoinvest/stubAutoinvestClient.ts`, in development as well, until its product list can come from the API. CI checks that production builds leave both out. The two demo accounts have one monthly plan and six months of figures. A new demo account starts empty, and one whose number ends in `99` cannot reach Finvest, to show the error states.
 
 Not built yet: sending an investment to another client, changing a plan's amount or day (the backend allows it, the screen does not yet), and the notifications before each prompt.
 
