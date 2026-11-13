@@ -1,5 +1,7 @@
+import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { fallback } from "../data/fallback.ts";
+import { mailtoLink } from "./contact.ts";
 import { estimate, rateHundredths } from "./estimate.ts";
 import {
   addDays,
@@ -10,6 +12,7 @@ import {
   todayInKampala,
 } from "./format.ts";
 import { parseCatalogue, parseQuote } from "./products.ts";
+import { matches } from "./search.ts";
 
 const answer = () => ({
   updated_on: "2026-12-01",
@@ -145,6 +148,52 @@ describe("the built-in rates", () => {
       })),
     };
     expect(parseCatalogue(asAnswer)).toEqual(fallback);
+  });
+});
+
+describe("the built-in rates and docs/investing.md", () => {
+  // The table under "Rates": | Product | Yearly rate | Tax on interest | Clients see |
+  const doc = readFileSync(new URL("../../../../docs/investing.md", import.meta.url), "utf-8");
+  const clientsSee = new Map<string, string>();
+  for (const line of doc.split("\n")) {
+    const cells = line.split("|").map((cell) => cell.trim());
+    const rate = /^(\d{1,2}\.\d{2})% a year, after tax$/.exec(cells[4] ?? "");
+    if (rate?.[1] !== undefined && cells[1]) clientsSee.set(cells[1], rate[1]);
+  }
+
+  it("finds the rates table", () => {
+    expect(clientsSee.size).toBeGreaterThanOrEqual(fallback.products.length);
+  });
+
+  it.each(fallback.products)("$name shows the rate clients see in the docs", (product) => {
+    expect(product.clientRatePercent).toBe(clientsSee.get(product.name));
+  });
+});
+
+describe("help search", () => {
+  it("needs every word, in any order and any case", () => {
+    const text = "Can I take my money out before maturity? You see the exact amount.";
+    expect(matches(text, "")).toBe(true);
+    expect(matches(text, "  ")).toBe(true);
+    expect(matches(text, "Maturity money")).toBe(true);
+    expect(matches(text, "maturity passkey")).toBe(false);
+  });
+});
+
+describe("the contact form's email", () => {
+  it("is addressed to support and carries the message, safely encoded", () => {
+    const link = mailtoLink("support@finvestug.com", "Amara N", "0772 000 000", "Hello?\r\nA & B");
+    expect(link.startsWith("mailto:support@finvestug.com?subject=")).toBe(true);
+    const query = new URLSearchParams(link.slice(link.indexOf("?") + 1).replace(/\+/g, "%2B"));
+    expect(query.get("subject")).toBe("Website message from Amara N");
+    expect(query.get("body")).toBe("Hello?\nA & B\n\nName: Amara N\nReply to: 0772 000 000");
+    expect(link).not.toMatch(/[\r\n&]B/);
+  });
+
+  it("cannot be given extra headers through the name", () => {
+    const link = mailtoLink("support@finvestug.com", "x\nBcc: other@example.com", "y", "z");
+    expect(link).not.toContain("&bcc");
+    expect(link.match(/[?&](subject|body)=/g)).toHaveLength(2);
   });
 });
 

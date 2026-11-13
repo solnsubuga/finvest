@@ -2,7 +2,7 @@
 
 The public Finvest website at finvestug.com. Astro, built to plain static files.
 
-**Status:** home, and products and rates. How it works, safety, about and contact, the help centre and the legal pages follow in the next pull request.
+**Status:** every page on row 8 of the canvas is built: home, products and rates, how it works, safety, about and contact, the help centre, and six legal pages that hold structure only.
 
 - It holds no client data and has no sign-in. A problem here cannot touch accounts.
 - It links to the client app. It never links to the back office, and a test fails the build output if it does.
@@ -21,7 +21,7 @@ Run `pnpm install` once at the repository root, then from this directory:
 | `pnpm typecheck` | `astro check`, with TypeScript at its strictest |
 | `pnpm test` | Unit tests for rates, money and the estimate |
 | `pnpm test:build` | Checks on the built pages in `dist/`. Run `pnpm build` first. |
-| `pnpm placeholders` | Lists the `[BRACKETED]` facts still missing. `--strict` fails if any are left. |
+| `pnpm placeholders` | Lists the `[BRACKETED]` facts still missing and the claims nobody has signed off. `--strict` fails if any are left. |
 
 ## Settings
 
@@ -51,7 +51,17 @@ Without JavaScript the calculator is a worked example for UGX 1,000,000.
 
 ## Placeholders
 
-Facts Finvest has not supplied yet are written as `[SQUARE BRACKETS]`: the regulator and licence number, the custodian bank, the office address, fees. Do not replace one with a guess. `pnpm placeholders` lists what is left.
+Facts Finvest has not supplied yet are written as `[SQUARE BRACKETS]`: the regulator and licence number, the custodian bank, the office address, fees, the terms of early withdrawal. Do not replace one with a guess. `pnpm placeholders` lists what is left.
+
+## Claims to sign off before launch
+
+Some statements are written out in full because the page needs them, but the owner and counsel must still confirm they are true: that Finvest is regulated, that bills are held in each client's name, that the books are checked daily, and the rest of `scripts/claims.json`. `pnpm placeholders` lists every claim that has no `confirmedBy`, and `--strict` fails while any is open. When you add a statement of this kind to a page, add it to that file.
+
+## Help centre, contact form and legal pages
+
+- The help centre's questions are in `src/data/help.ts`. The search box filters the questions on the page and needs no server.
+- The contact form sends nothing itself, because the site has no server and stores nothing. It opens the visitor's own email app with the message addressed to support, and says so under the button.
+- The legal pages are in `src/data/legal.ts`. They hold headings and a line on what each section will cover. The wording comes from Finvest's lawyers, and each page carries a notice saying so.
 
 ## Layout
 
@@ -63,7 +73,7 @@ Facts Finvest has not supplied yet are written as `[SQUARE BRACKETS]`: the regul
 | `src/styles/site.css` | All styles. Colours, spacing and weights come from `@finvest/tokens`. |
 | `src/lib/` | Pure TypeScript: the check on what the API sends, money and dates, the estimate |
 | `src/scripts/` | The two browser scripts: live rates and the calculator |
-| `src/data/fallback.ts` | The built-in rates |
+| `src/data/` | The built-in rates, the help centre's questions and the legal pages' structure |
 | `tests/` | Checks on the built pages |
 
 ## Hosting
