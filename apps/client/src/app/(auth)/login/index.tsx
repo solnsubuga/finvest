@@ -98,8 +98,8 @@ export default function LoginStart() {
               <Txt size={fontSizes.sm} weight="bold">
                 Two steps, every time.
               </Txt>{" "}
-              After your password we confirm it is you with your passkey, or a code if you have no
-              passkey yet.
+              After your password we confirm it is you with your passkey, your authenticator app
+              or a code by SMS.
             </Txt>
           </View>
         </Card>

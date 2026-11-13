@@ -46,6 +46,7 @@ const unavailableAuthClient: AuthClient = {
   completeSignup: refuse,
   startLogin: refuse,
   verifyWithPasskey: refuse,
+  verifyWithAuthenticator: refuse,
   sendLoginCode: refuse,
   verifyWithCode: refuse,
   signOut: async () => {},

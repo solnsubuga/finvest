@@ -2,6 +2,7 @@ import {
   AuthClient,
   AuthError,
   LoginChallenge,
+  SecondStep,
   Session,
   SignupChallenge,
   SignupStart,
@@ -15,17 +16,39 @@ import {
  * keeps it out of production builds.
  *
  * Demo values, not credentials for any real system:
- *   - any SMS code is accepted when it equals DEMO_CODE
- *   - one account exists already, DEMO_PHONE with DEMO_PASSWORD
+ *   - any SMS or authenticator code is accepted when it equals DEMO_CODE
+ *   - DEMO_PHONE with DEMO_PASSWORD has a passkey, an authenticator app and SMS
+ *   - DEMO_PHONE_AUTHENTICATOR with DEMO_PASSWORD has an authenticator app and
+ *     SMS, but no passkey
+ *   - an account created by signing up has SMS only
  */
 export const DEMO_CODE = "123456";
 export const DEMO_PHONE = "+256772123456";
+export const DEMO_PHONE_AUTHENTICATOR = "+256701000200";
 export const DEMO_PASSWORD = "correcthorse1";
 
 /** Stands in for the server's leaked password list. */
 const LEAKED = new Set(["password123", "1234567890", "qwertyuiop"]);
 
-type Account = { password: string; displayName: string | null; hasPasskey: boolean };
+type Account = {
+  password: string;
+  displayName: string | null;
+  hasPasskey: boolean;
+  hasAuthenticator: boolean;
+};
+
+/** Every account can receive an SMS code, so "code" is always last. */
+function methodsFor(account: Account): SecondStep[] {
+  const methods: SecondStep[] = [];
+  if (account.hasPasskey) {
+    methods.push("passkey");
+  }
+  if (account.hasAuthenticator) {
+    methods.push("authenticator");
+  }
+  methods.push("code");
+  return methods;
+}
 
 export type StubOptions = {
   /** Artificial delay so loading states are visible. Tests pass 0. */
@@ -35,7 +58,24 @@ export type StubOptions = {
 export function createStubAuthClient(options: StubOptions = {}): AuthClient {
   const delayMs = options.delayMs ?? 450;
   const accounts = new Map<string, Account>([
-    [DEMO_PHONE, { password: DEMO_PASSWORD, displayName: "Amara Nakato", hasPasskey: true }],
+    [
+      DEMO_PHONE,
+      {
+        password: DEMO_PASSWORD,
+        displayName: "Amara Nakato",
+        hasPasskey: true,
+        hasAuthenticator: true,
+      },
+    ],
+    [
+      DEMO_PHONE_AUTHENTICATOR,
+      {
+        password: DEMO_PASSWORD,
+        displayName: "Joseph Okello",
+        hasPasskey: false,
+        hasAuthenticator: true,
+      },
+    ],
   ]);
   const signups = new Map<string, SignupStart>();
   const tickets = new Map<string, SignupStart>();
@@ -90,7 +130,12 @@ export function createStubAuthClient(options: StubOptions = {}): AuthClient {
         throw new AuthError("leaked_password");
       }
       tickets.delete(ticket);
-      accounts.set(signup.phone, { password, displayName: null, hasPasskey: false });
+      accounts.set(signup.phone, {
+        password,
+        displayName: null,
+        hasPasskey: false,
+        hasAuthenticator: false,
+      });
       return sessionFor(signup.phone, false);
     },
 
@@ -102,11 +147,7 @@ export function createStubAuthClient(options: StubOptions = {}): AuthClient {
       }
       const loginId = nextId("login");
       logins.set(loginId, phone);
-      return {
-        loginId,
-        phone,
-        methods: account.hasPasskey ? ["passkey", "code"] : ["code"],
-      };
+      return { loginId, phone, methods: methodsFor(account) };
     },
 
     async verifyWithPasskey(loginId): Promise<Session> {
@@ -114,6 +155,19 @@ export function createStubAuthClient(options: StubOptions = {}): AuthClient {
       const phone = logins.get(loginId);
       if (!phone || !accounts.get(phone)?.hasPasskey) {
         throw new AuthError("expired");
+      }
+      logins.delete(loginId);
+      return sessionFor(phone, false);
+    },
+
+    async verifyWithAuthenticator(loginId, code): Promise<Session> {
+      await wait();
+      const phone = logins.get(loginId);
+      if (!phone || !accounts.get(phone)?.hasAuthenticator) {
+        throw new AuthError("expired");
+      }
+      if (code !== DEMO_CODE) {
+        throw new AuthError("invalid_code");
       }
       logins.delete(loginId);
       return sessionFor(phone, false);

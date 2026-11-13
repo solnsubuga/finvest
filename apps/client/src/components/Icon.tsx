@@ -17,6 +17,8 @@ const paths = {
   documents: ["M7 3h7l4 4v14H7zM14 3v4h4M10 12h5M10 16h5"],
   profile: ["M5 20c1-4 4-5.5 7-5.5s6 1.5 7 5.5"],
   help: ["M9.5 9.5a2.5 2.5 0 115 0c0 1.5-2.5 2-2.5 4M12 17.5v.01"],
+  phone: ["M8 3h8a1 1 0 011 1v16a1 1 0 01-1 1H8a1 1 0 01-1-1V4a1 1 0 011-1zM11 18h2"],
+  message: ["M4 5h16v11H9l-5 4z"],
   bell: ["M6 16V11a6 6 0 0112 0v5l2 2H4zM10 21h4"],
 } as const;
 

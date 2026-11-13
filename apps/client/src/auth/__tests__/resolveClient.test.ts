@@ -27,5 +27,8 @@ describe("resolveAuthClient", () => {
       AuthError,
     );
     await expect(client.verifyWithPasskey("login_1")).rejects.toBeInstanceOf(AuthError);
+    await expect(
+      client.verifyWithAuthenticator("login_1", stub.DEMO_CODE),
+    ).rejects.toBeInstanceOf(AuthError);
   });
 });
