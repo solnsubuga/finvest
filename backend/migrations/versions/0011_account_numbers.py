@@ -68,6 +68,13 @@ CREATE FUNCTION finvest_account_numbers_immutable() RETURNS trigger
     "FOR EACH STATEMENT EXECUTE FUNCTION finvest_account_numbers_immutable()",
     "REVOKE ALL ON account_numbers FROM PUBLIC",
     f"GRANT SELECT, INSERT ON account_numbers TO {APP_ROLE}, {WORKER_ROLE}",
+    # Numbers are issued when staff approve a client, or by the worker. Nobody else running as
+    # the API can list which numbers exist.
+    "ALTER TABLE account_numbers ENABLE ROW LEVEL SECURITY",
+    f"CREATE POLICY account_numbers_app ON account_numbers TO {APP_ROLE} "
+    "USING (finvest_actor_kind() = 'staff') WITH CHECK (finvest_actor_kind() = 'staff')",
+    f"CREATE POLICY account_numbers_worker ON account_numbers TO {WORKER_ROLE} "
+    "USING (true) WITH CHECK (true)",
 ]
 
 
@@ -76,7 +83,20 @@ def upgrade() -> None:
         op.execute(statement)
 
 
+EMPTY_GUARD = """
+DO $$
+BEGIN
+    IF EXISTS (SELECT FROM account_numbers) THEN
+        RAISE EXCEPTION 'refusing to drop the registry of issued account numbers';
+    END IF;
+END
+$$
+"""
+
+
 def downgrade() -> None:
+    # Dropping the registry would let issued numbers be issued again.
+    op.execute(EMPTY_GUARD)
     op.execute("DROP TABLE account_numbers")
     op.execute("DROP FUNCTION finvest_account_numbers_immutable()")
     op.execute("DROP FUNCTION finvest_luhn_valid(text)")

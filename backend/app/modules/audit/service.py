@@ -1,7 +1,8 @@
 """Recording audit events inside the caller's transaction, and reading them back.
 
 `record` writes into the caller's open transaction, so a business change and its audit event
-commit or roll back together. The table is append-only for every database role, and row
+commit or roll back together. `record_separately` is for a denied or failed action, whose
+event must outlive the rollback. The table is append-only for every database role, and row
 policies let a transaction record only its own actor (migration 0012).
 """
 
@@ -13,6 +14,7 @@ from typing import Any
 from sqlalchemy import Row, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.infrastructure.database import Database
 from app.modules.audit.domain.events import (
     ActorKind,
     AuditCategory,
@@ -22,6 +24,7 @@ from app.modules.audit.domain.events import (
     DetailValue,
     build_record,
 )
+from app.shared.actors import Actor
 from app.shared.clock import Clock
 from app.shared.push_ids import push_id
 
@@ -92,6 +95,21 @@ async def record(session: AsyncSession, event: AuditEvent, clock: Clock) -> Audi
         },
     )
     return entry
+
+
+async def record_separately(
+    database: Database, actor: Actor | None, event: AuditEvent, clock: Clock
+) -> AuditRecord:
+    """Record `event` in a transaction of its own, so it survives the caller's rollback.
+
+    For a denied or failed action. Those usually end with the business transaction rolling
+    back, which would take an event written by `record` with it. Call this after that
+    transaction has ended, never inside it. `actor` is who the request acts for, or None when
+    nobody is signed in; the event must name that same actor.
+    """
+    transaction = database.actor_transaction(actor) if actor else database.transaction()
+    async with transaction as session:
+        return await record(session, event, clock)
 
 
 async def events_for_resource(

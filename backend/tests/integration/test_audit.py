@@ -90,6 +90,38 @@ async def test_an_event_rolls_back_with_the_change_it_describes(
         assert await audit.events_for_resource(session, "product", product) == []
 
 
+async def test_a_denied_action_is_recorded_even_though_its_transaction_rolls_back(
+    app_database: Database, fake_clock: FakeClock
+) -> None:
+    actor, product = staff(), push_id()
+    denied = rate_change(as_audit(actor), product, outcome="denied", reason="Not a rates approver")
+    with pytest.raises(PermissionError):
+        try:
+            async with app_database.actor_transaction(actor) as session:
+                await session.execute(text("SELECT 1"))
+                raise PermissionError("not allowed")
+        except PermissionError:
+            await audit.record_separately(app_database, actor, denied, fake_clock)
+            raise
+    visitor = rate_change(
+        AuditActor.anonymous(),
+        product,
+        category="security",
+        action="auth.sign_in",
+        outcome="failed",
+    )
+    await audit.record_separately(app_database, None, visitor, fake_clock)
+    async with app_database.actor_transaction(staff()) as session:
+        events = await audit.events_for_resource(session, "product", product)
+    assert sorted((event.actor_kind, event.outcome) for event in events) == [
+        ("anonymous", "failed"),
+        ("staff", "denied"),
+    ]
+    # It still cannot be used to speak for someone else.
+    with pytest.raises(DBAPIError, match="row-level security"):
+        await audit.record_separately(app_database, staff(), denied, fake_clock)
+
+
 async def test_personal_data_never_reaches_the_table(
     app_database: Database, migrator_database: Database, fake_clock: FakeClock
 ) -> None:

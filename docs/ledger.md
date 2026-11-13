@@ -29,13 +29,20 @@ These hold even if application code is wrong, because PostgreSQL checks them.
 | Rule | How |
 | --- | --- |
 | Insert only | `finvest_app` and `finvest_worker` hold only SELECT and INSERT on accounts, entries and lines, and only SELECT on balances. Triggers refuse UPDATE, DELETE and TRUNCATE for every role, the table owner included. |
-| Every entry balances | A deferred constraint trigger checks at commit that the entry has at least two lines and that they sum to zero. |
+| Every entry balances | Deferred constraint triggers check at commit that the entry has at least two lines and that they sum to zero. The check is queued by the entry and again by every line, so forcing it to run early does not let a later line through. |
 | History is closed | Lines can be added only by the transaction that created their entry. |
 | No negative balances | Each line updates its account's balance in the same statement, under a row lock, and a CHECK constraint refuses a balance below zero. Two payouts racing for the same money cannot both succeed. |
 | One currency per entry | A line must match the currency of both its entry and its account. A currency exchange is two entries through exchange accounts. |
 | One use per idempotency key | The key is unique. The service returns the saved entry for the same request, and refuses the key for a different one. |
 | Reversals are exact | A reversing entry must mirror the original line for line. An entry is reversed at most once, and a reversal is not itself reversed. |
 | Clients are fenced | Row policies show a client transaction only that client's accounts, balances and lines. Staff transactions and the worker see everything. Any other API transaction sees nothing and cannot post. |
+
+### What the database does not enforce
+
+- **Which accounts a command may touch.** Any client or staff transaction can insert lines against any account. The database keeps every entry balanced, every balance at zero or above and every client's view fenced, but it does not stop a faulty command from debiting the wrong client's account. That is the job of the command, and of its tests.
+- **That a reversal is always possible.** A reversal is refused if it would take a balance below zero. A deposit credited by mistake and then invested cannot simply be reversed. The payments module needs a written process for that case before it is built.
+
+Migrations 0010 to 0012 refuse to downgrade while their tables hold any row, so `alembic downgrade` cannot delete the books, the issued numbers or the audit trail.
 
 There is no overdraft switch. If an account ever needs to run below zero, that is a change to the shape of the ledger and goes to the owner first.
 
@@ -63,6 +70,8 @@ async with worker_database.actor_transaction(SYSTEM) as session:
 ```
 
 - `open_account` returns the account for a code, currency, owner and reference, creating it once.
+- `system_account_id` gives the ID of one of Finvest's own accounts by its code. A client transaction cannot read or open those accounts, so a client command uses this to post against them. It returns the ID and nothing else. System accounts are opened by staff or by the worker before a client command needs them.
+- `get_entry` returns what the transaction may see. In a client transaction that is only the client's own lines, not the whole entry.
 - `post_entry` raises `InsufficientFunds`, `IdempotencyKeyReused` or `UnknownAccount`. After any of them the transaction is still usable and holds no part of the entry.
 - `reverse_entry` posts the mirror of an entry. Nothing is ever edited.
 - `find_balance_drift` lists accounts whose cached balance is not the sum of their lines. It must always be empty, and is meant for the daily close.
@@ -75,11 +84,13 @@ The chart of accounts is not seeded here. Each module that moves money opens the
 
 The format is in [account-numbers.md](account-numbers.md). `issue_account_number(session, account_type, clock)` draws seven digits from the operating system's secure random source, adds the type and the check digit, and claims the number in the `account_numbers` table inside the caller's transaction. If the number is taken it draws again.
 
-That table is insert only for every role, so a number can never be issued twice or freed when an account closes. The database checks the format and the check digit itself.
+That table is insert only for every role, so a number can never be issued twice or freed when an account closes. The database checks the format and the check digit itself. Only staff transactions and the worker can issue or look up numbers.
 
 ## Audit trail
 
 `audit.record(session, event, clock)` writes one row to `audit_events` inside the caller's transaction, so a change and its audit event are saved together or not at all.
+
+A denied or failed action usually ends with its transaction rolling back, which would take the event with it. For those, call `audit.record_separately(database, actor, event, clock)` after the transaction has ended. It writes the event in a transaction of its own.
 
 An event says who (`actor`), what (`action`, `resource_type`, `resource_id`), the outcome, why (`reason`), and which request or job (`correlation_id`). Approvals and operator controls must give a reason.
 
