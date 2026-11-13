@@ -192,6 +192,7 @@ In each of the `staging` and `production` GitHub environments, beside what Terra
 | `FINVEST_EMAIL_RESEND_API_KEY` | Secret | The Resend key, once email is set up |
 | `FINVEST_EMAIL_BACKEND`, `FINVEST_EMAIL_FROM` | Variables | `resend` and `Finvest <no-reply@finvestug.com>` |
 | `FINVEST_CLIENT_SIGNUP_OPEN` | Variable | `true` opens client sign-up on the API. Leave it unset in production until switch day ([docs/launch.md](../docs/launch.md)). In staging, set it only for the pen test weeks. Anything else keeps sign-up closed. |
+| `FINVEST_BANK_TRANSFER_ACCOUNTS` | Variable | The trust account clients pay bank transfers into, as JSON keyed by currency: `{"UGX": {"bank_name": "...", "account_name": "...", "account_number": "...", "branch": null}}`. It must be the account whose statements reconciliation imports. Not a secret. Until it is set, paying by bank transfer is unavailable and the app offers mobile money. |
 | `SITE_PUBLISHED` | Variable, production only | The owner's decision, nobody else's: `true` puts the public website live at the production address. Set it when the owner launches the website. |
 | `SITE_INDEXABLE` | Variable, production only | `true` lets search engines index the website. Leave it unset until launch. Staging, the API, the back office and the client app address always send `X-Robots-Tag: noindex`, whatever this says. |
 
