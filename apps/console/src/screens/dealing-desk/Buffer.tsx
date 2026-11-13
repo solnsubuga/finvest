@@ -177,7 +177,7 @@ export function BufferSection({ api, directory, me, currency = "UGX", canChange,
               </h3>
               <p className="m-0 text-[28px] font-extrabold tabular-nums">{formatExact(screen.finvestMoney)}</p>
               <p className="m-0 text-sm text-muted">
-                Buffer after this week {formatShort(screen.buffer)}. {bufferNote(screen.level, screen.inForce.target, screen.inForce.floor)}
+                Buffer after promised withdrawals {formatShort(screen.buffer)}. {bufferNote(screen.level, screen.inForce.target, screen.inForce.floor)}
               </p>
             </div>
             {canChange && form === null ? (

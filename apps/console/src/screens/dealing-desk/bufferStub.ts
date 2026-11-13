@@ -42,7 +42,7 @@ export function createStubBufferApi(
   const movements: Stored<Movement>[] = [];
   let clientMoneyShort = 0;
   if (sample === "sample") {
-    // The buffer after this week is UGX 118.5m, as on the desk's sample (stub.ts).
+    // The buffer after promised withdrawals is UGX 118.5m, as on the desk's sample (stub.ts).
     clientMoneyShort = 1_500_000;
     movements.push(
       {

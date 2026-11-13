@@ -33,7 +33,7 @@ describe("liquidity buffer", () => {
     renderBuffer();
     await movements();
     expect(within(money()).getByText("UGX 120,000,000")).toBeInTheDocument();
-    expect(screen.getByText(/Buffer after this week UGX 118.5m/)).toBeInTheDocument();
+    expect(screen.getByText(/Buffer after promised withdrawals UGX 118.5m/)).toBeInTheDocument();
     const waiting = await item("Paid in UGX 40,000,000");
     expect(within(waiting).getByText("Waiting for a second person")).toBeInTheDocument();
     expect(await within(waiting).findByText("Daniel Okello, 13 Nov 2026, 11:40")).toBeInTheDocument();
