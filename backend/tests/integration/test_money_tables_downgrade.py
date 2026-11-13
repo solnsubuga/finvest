@@ -97,6 +97,12 @@ ROWS = {
         "'-Nabc0000000000000B1', now(), '-Nabc0000000000000C1'); COMMIT",
         "refusing to drop the rollovers of goal savings",
     ),
+    "0112_goal_groups": (
+        "INSERT INTO goal_groups (id, owner_client_id, name, category, currency, target_minor, "
+        "created_at, updated_at) VALUES ('-Nabc0000000000000G1', '-Nabc0000000000000B1', "
+        "'Land', 'land_or_home', 'UGX', 10000000, now(), now())",
+        "refusing to drop group goals",
+    ),
     "0060_investment_products": (
         "BEGIN; SELECT set_config('finvest.actor_kind', 'staff', true); "
         "SELECT set_config('finvest.actor_id', '-Nabc0000000000000B1', true); "

@@ -21,6 +21,7 @@ from app.infrastructure.process import keep_heartbeat, stop_on_signals
 from app.infrastructure.settings import Settings
 from app.modules.dealing.jobs import MATURITIES_KIND
 from app.modules.documents.service import MONTHLY_KIND
+from app.modules.goals.jobs import REFRESH_GROUPS_KIND
 from app.modules.investments.jobs import ACCRUE_KIND, CANCEL_UNPAID_KIND, MATURE_KIND
 from app.modules.kyc.service import SWEEP_UNANSWERED
 from app.modules.notifications.service import PURGE_MESSAGES
@@ -75,6 +76,15 @@ def schedules() -> list[Schedule]:
             trigger=IntervalTrigger(hours=1),
             kind=MATURITIES_KIND,
             max_age=timedelta(hours=2),
+        ),
+        # What each group goal member's goal is worth, for the group to show, once interest and
+        # maturities are done for the day. One run covers every member, so a missed day needs
+        # no run of its own.
+        Schedule(
+            name="goals.refresh_groups",
+            trigger=CronTrigger(hour=1, minute=30, timezone=KAMPALA),
+            kind=REFRESH_GROUPS_KIND,
+            max_age=timedelta(days=1),
         ),
         # Last month's statement for every client. It runs every morning and asks for a month
         # only once the ledger is closed through its last day; each client is asked once.
