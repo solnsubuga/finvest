@@ -66,7 +66,9 @@ Limits are versioned by effective date. The version in force on the business day
 | Mobile money, one payout | UGX 5,000,000. No version may set it higher. |
 | Mobile money, per day | Not set |
 | Bank, one payout and per day | Not set |
-| Held for staff review above | Not set |
+| Held for staff review above | UGX 10,000,000. A working default until the owner confirms it. |
+
+A new version is inserted by the staff member who approves it, names a different staff member as proposer, and is never edited afterwards. The launch version is seeded by migration 0031. The console screen for proposing and approving a change arrives with Settings.
 
 An amount over the mobile money limit is refused with a code that tells the app to offer a bank account instead. Daily limits count every payout of the day that was not cancelled and did not fail. Amounts are never converted: a payout in another currency than the limits is refused.
 
@@ -100,3 +102,47 @@ Three rules are fixed in the transition table and tested for every combination o
 - A payout that is sent or uncertain is never sent again. Only reading its status back from the provider moves it.
 - If the provider has no record of a payout and cannot answer, two staff members may settle it from the statement as paid or failed. It takes two different people, a reason, and an audit event. While the provider can answer, its answer is the one that counts.
 - A finished payout never changes. A payout can be cancelled only while it is held.
+
+## Payouts in the database
+
+Migration 0031 adds `withdrawal_limits` and `payouts`. The commands are in `backend/app/modules/payouts/payouts.py`.
+
+### Creating a payout
+
+`create_payout` is called for a signed-in client, or by the worker on a client's behalf when an investment matures. Staff cannot create one. In one transaction it:
+
+1. Takes a lock on the client, so two requests cannot both fit under the same allowance or spend the same money.
+2. Returns the first payout if this `request_key` was already used for the same request, and refuses the key for a different one.
+3. Checks the destination is the client's, approved, past its 24 hours and allowed under a restricted session.
+4. Checks the limits in force on the business day against what already went that day.
+5. Inserts the payout and posts the reserve entry.
+
+A refusal leaves nothing behind. The codes are `destination_not_approved`, `destination_in_safety_wait`, `destination_not_known_yet`, `amount_not_positive`, `currency_not_supported`, `over_mobile_money_limit`, `over_bank_limit`, `over_daily_limit`, `source_not_found` and `insufficient_funds`.
+
+### The entries
+
+| Entry | Debit | Credit | Key |
+| --- | --- | --- | --- |
+| `payout.reserve` | Where the money was held | `client.payout_in_flight`, reference the payout | `payout:<id>:reserve` |
+| `payout.settle` | Payout in flight | `iotec.wallet` (reference the network) for mobile money, `bank.trust` for a bank account | `payout:<id>:settle` |
+| `payout.park` | Payout in flight | `client.payout_pending` | `payout:<id>:park` |
+| `payout.release` | Payout in flight | Where the money was held | `payout:<id>:release` |
+
+Every account but the wallet and the bank is a liability to the same client, so what Finvest owes the client does not change until the provider confirms. The fixed keys mean no step can post twice.
+
+Settle is refused by the ledger if the pot does not hold the money, because an asset account cannot go below zero. That is a reconciliation problem to be looked at, never something to force.
+
+### What the database enforces
+
+| Rule | How |
+| --- | --- |
+| Status follows the table above | A trigger repeats the transition table per actor: a client may only cancel a held payout, staff may only approve or decline one, the worker reports the provider |
+| A payout that may have left is never queued again | No actor has a step from sent or uncertain back to queued |
+| A finished payout never changes, and none is deleted | The same trigger, for every role including the table owner |
+| The terms never change | Client, destination, amount, currency, source and request key are fixed at creation |
+| A review is signed by who made it | `reviewed_by` must be the staff member of the transaction |
+| Mobile money carries at most UGX 5,000,000 | A CHECK on `payouts` and on `withdrawal_limits` |
+| A limits version takes two people | CHECK that proposer and approver differ, and a policy that the approver is the staff member inserting it |
+| Clients are fenced | Row policies show a client only their own payouts |
+
+Not built yet: sending a queued payout to the provider, and the two-person settlement of a stranded payout. Both follow.
