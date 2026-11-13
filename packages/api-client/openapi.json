@@ -325,7 +325,13 @@
               "rate_change",
               "migration_totals",
               "migration_sign_off",
-              "phone_change"
+              "phone_change",
+              "team_change",
+              "client_lock",
+              "suppression_lift",
+              "complaint_outcome",
+              "announcement",
+              "payout_account"
             ],
             "title": "Kind",
             "type": "string"
