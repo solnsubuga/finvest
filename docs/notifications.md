@@ -32,6 +32,7 @@ await notifications.notify(
 - **Text values come from Finvest, never from a request.** A text value is taken from a fixed list or from Finvest's own records: a product name, "MTN Mobile Money", "a new phone". Never pass something the caller of an API sent, such as a user agent or a typed name, because it would be written into a Finvest SMS. As a second fence, a link to anywhere but finvestug.com is removed from a text value, braces become brackets, and a long value is cut at 240 characters.
 - **It cannot fail your transaction over words.** Whatever the wording and the values, the texts are cut to what the table holds. Only a programming error raises: an unknown event, the wrong set of variables, a float or an empty value.
 - **Net figures only.** An amount shown to a client is after tax. No event carries a rate.
+- **No amounts in the words.** Push alerts and SMS show on a locked phone, and email sits in an inbox others may read, so no default title, body or SMS names the amount. Push and email send the in-app words, so the notification centre does not name it either. The amount is shown on the screen the notification links to. Events still carry `amount`, so the words can use it if the owner decides otherwise. A unit test holds every default to this.
 - **Link.** Optional. It names the screen the app opens when the notification is tapped, by kind and ID: `deposit`, `payout`, `investment`, `identity_check`, `payout_destination`, `statement`, `security`, `conversation`, `complaint`.
 - **Who may call.** The transaction must act for that client, for a member of staff, or for the system in the worker. The API is never trusted as the system, so a route with nobody signed in cannot notify.
 
@@ -49,6 +50,8 @@ Nothing personal goes into a job payload or a log. The words live in the `notifi
 | `investment_started` | Investments | `amount`, `product` | Investments |
 | `investment_maturing` | Investments | `product`, `date` | Investments |
 | `investment_matured` | Investments | `amount`, `product` | Investments |
+| `investment_withdrawal_requested` | Investments | `amount`, `product` | Investments |
+| `investment_withdrawal_paid` | Investments | `amount`, `product` | Investments |
 | `interest_earned` | Investments | `amount`, `count` | Daily earnings |
 | `kyc_approved` | Identity checks | none | Account |
 | `kyc_retake_requested` | Identity checks | none | Account |

@@ -7,14 +7,11 @@ unnoticed.
 Steps of the client journey with no code to test yet, and so no journey yet:
 
 - Early withdrawal of a running investment (investing thread; dealing's withdrawal funding).
-- Sending a payout to ioTec: payouts are created at maturity but no worker job disburses them
-  (payouts and reconciliation thread).
 - Money notifications: payments, investing and payouts never call `notifications.notify`, so
   no payment, interest, maturity or payout message is sent (notifications thread, and each
   module).
 - The monthly statement and receipt emails: documents builds and renders them, and no job
   sends them yet (statements thread).
-- A Finvest 1.0 client claiming their account (sign-in thread, PR #97).
 - Automatic investing asking for each run's investment and payment (automatic investing
   thread; documented as the next step in docs/automatic-investing.md).
 """
@@ -25,14 +22,10 @@ Steps of the client journey with no code to test yet, and so no journey yet:
 UNAUDITED: set[str] = set()
 
 # Movements on the trust bank account that the day close cannot pair with the statement by
-# reference, so staff pair them by hand with a reason:
-# - a confirmed bank transfer: the ledger movement carries the deposit's ID and is dated the
-#   day staff approved it, the statement line carries the bank's reference and the day the
-#   money arrived, although the payment review already recorded which line it is;
-# - a dealing settlement: the movement carries the order's ID, the bank shows the custodian's
-#   reference, which `dealing.holdings.expected_bank_movements` gives but the day close does
-#   not read.
-HAND_MATCHED = ("bank transfer", "dealing settlement")
+# itself, so staff pair them by hand with a reason. None now: a confirmed bank transfer pairs
+# with the line its approved review names, and a dealing settlement with the bank reference
+# `dealing.holdings.expected_bank_movements` gives.
+HAND_MATCHED: tuple[str, ...] = ()
 
 
 def expected_missing(*actions: str) -> list[str]:

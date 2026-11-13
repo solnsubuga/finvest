@@ -20,6 +20,22 @@ export const AuthenticatorState = z.object({
 });
 export type AuthenticatorState = z.infer<typeof AuthenticatorState>;
 
+export const MoneyView = z.object({
+  currency: z.enum(["UGX", "USD"]),
+  minor: z.number().int(),
+});
+export type MoneyView = z.infer<typeof MoneyView>;
+
+export const BankTransferDetails = z.object({
+  account_name: z.string(),
+  account_number: z.string(),
+  amount: MoneyView,
+  bank_name: z.string(),
+  branch: z.string().nullable(),
+  reference: z.string(),
+});
+export type BankTransferDetails = z.infer<typeof BankTransferDetails>;
+
 export const Put = z.object({
   photo: Upload,
 });
@@ -184,6 +200,8 @@ export type ClientLoginStart = z.infer<typeof ClientLoginStart>;
 
 export const ClientSessionView = z.object({
   client_id: z.string(),
+  email: z.string().nullable().optional(),
+  email_verified: z.boolean().optional(),
   phone: z.string(),
   restricted_until: z.string().nullable(),
 });
@@ -247,6 +265,16 @@ export const DocumentList = z.object({
   items: z.array(DocumentItem),
 });
 export type DocumentList = z.infer<typeof DocumentList>;
+
+export const EmailConfirm = z.object({
+  token: z.string(),
+});
+export type EmailConfirm = z.infer<typeof EmailConfirm>;
+
+export const EmailLinkSent = z.object({
+  sent: z.boolean(),
+});
+export type EmailLinkSent = z.infer<typeof EmailLinkSent>;
 
 export const Frequency = z.enum(["weekly", "monthly"]);
 export type Frequency = z.infer<typeof Frequency>;
@@ -347,6 +375,7 @@ export const MemberView = z.object({
   is_owner: z.boolean(),
   is_you: z.boolean(),
   joined_at: z.string(),
+  member_id: z.string().nullable(),
 });
 export type MemberView = z.infer<typeof MemberView>;
 
@@ -446,12 +475,6 @@ export const JoinGroup = z.object({
   own_target_minor: z.number().int(),
 });
 export type JoinGroup = z.infer<typeof JoinGroup>;
-
-export const MoneyView = z.object({
-  currency: z.enum(["UGX", "USD"]),
-  minor: z.number().int(),
-});
-export type MoneyView = z.infer<typeof MoneyView>;
 
 export const LimitsOut = z.object({
   bank_per_day: MoneyView.nullable(),
@@ -1027,6 +1050,28 @@ export const operations = {
     status: 200,
     response: null,
   },
+  "POST /client/email/verification": {
+    method: "POST",
+    path: "/client/email/verification",
+    params: z.object({}),
+    query: z.object({}),
+    body: null,
+    bodyKind: null,
+    idempotent: false,
+    status: 200,
+    response: EmailLinkSent,
+  },
+  "POST /client/email/verification/confirm": {
+    method: "POST",
+    path: "/client/email/verification/confirm",
+    params: z.object({}),
+    query: z.object({}),
+    body: EmailConfirm,
+    bodyKind: "json",
+    idempotent: false,
+    status: 204,
+    response: null,
+  },
   "GET /client/goal-groups": {
     method: "GET",
     path: "/client/goal-groups",
@@ -1162,12 +1207,12 @@ export const operations = {
     status: 200,
     response: GroupView,
   },
-  "POST /client/goal-groups/{group_id}/members/{goal_id}/remove": {
+  "POST /client/goal-groups/{group_id}/members/{member_id}/remove": {
     method: "POST",
-    path: "/client/goal-groups/{group_id}/members/{goal_id}/remove",
+    path: "/client/goal-groups/{group_id}/members/{member_id}/remove",
     params: z.object({
     group_id: z.string(),
-    goal_id: z.string(),
+    member_id: z.string(),
   }),
     query: z.object({}),
     body: null,
@@ -1383,6 +1428,19 @@ export const operations = {
     idempotent: false,
     status: 200,
     response: ClientInvestmentOut,
+  },
+  "GET /client/investments/{investment_id}/bank-transfer-details": {
+    method: "GET",
+    path: "/client/investments/{investment_id}/bank-transfer-details",
+    params: z.object({
+    investment_id: z.string(),
+  }),
+    query: z.object({}),
+    body: null,
+    bodyKind: null,
+    idempotent: false,
+    status: 200,
+    response: BankTransferDetails,
   },
   "POST /client/investments/{investment_id}/pay-out": {
     method: "POST",

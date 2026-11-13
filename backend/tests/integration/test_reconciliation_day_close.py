@@ -449,6 +449,10 @@ async def test_the_database_refuses_a_match_by_reference_that_is_not_one(
     for how, reason, refusal in (
         ("reference", None, "the same reference on both sides"),
         ("staff", None, "ck_reconciliation_matches_reason"),
+        # A match from what another module recorded says what that was.
+        ("recorded", None, "ck_reconciliation_matches_reason"),
+        ("recorded", " ", "ck_reconciliation_matches_reason"),
+        ("guessed", "Looks right", "ck_reconciliation_matches_how"),
     ):
         with pytest.raises(DBAPIError, match=refusal):
             async with app_database.actor_transaction(checker) as session:

@@ -42,6 +42,13 @@ Only a day that has ended in Kampala can be imported (`statement_day_not_over`).
 
 A statement line and a ledger movement match only when they carry the same reference, go the same way and are for the same amount. The reference is the deposit or payout ID we gave the provider.
 
+Two kinds of movement carry a reference the statement does not show, and another module already recorded how they pair. They are paired first, as `recorded` matches:
+
+- A confirmed bank transfer. The ledger carries the deposit's ID, and the bank shows its own reference on the day the money arrived. The transfer's approved review (one person matched it, a second approved) names the statement line, so the movement pairs with that line.
+- A dealing settlement or a bill's maturity. The ledger carries the order's ID, and the bank shows the custodian's reference, which `dealing.holdings.expected_bank_movements` gives. The movement pairs with the one open line under that reference.
+
+A recorded pair is made only for the same direction and amount, and only with a line still open. When two lines carry the same reference, a person decides.
+
 Nothing is matched on amount and date alone. For a line with no usable reference, staff are offered the movements with the same direction and amount within three days, and a person decides.
 
 Everything else is an exception:
@@ -58,13 +65,14 @@ Every line and every movement comes out exactly once, in a match or in an except
 
 ### How matches are kept
 
-`reconciliation.day_close.refresh` copies the ledger's movements on each pot into `reconciliation_movements`, read through `ledger.statements.account_movements`, and pairs what the references pair. A movement's reference is the `source_id` of its journal entry. Pairs are rows in `reconciliation_matches` (migration `0041_reconciliation_day_close`). Exceptions are not stored: an exception is whatever is still unpaired on either side, worked out each time, so it can never disagree with the matches.
+`reconciliation.day_close.refresh` copies the ledger's movements on each pot into `reconciliation_movements`, read through `ledger.statements.account_movements`, and pairs what was recorded, then what the references pair. A movement's reference is the `source_id` of its journal entry. Pairs are rows in `reconciliation_matches` (migration `0041_reconciliation_day_close`). Exceptions are not stored: an exception is whatever is still unpaired on either side, worked out each time, so it can never disagree with the matches.
 
 | Rule | How the database holds it |
 | --- | --- |
 | One line, one movement | A line is matched once and a movement is matched once |
 | Same money | A pair from different pots, for different amounts or going different ways is refused |
 | By reference means by reference | A match marked `reference` must carry the same reference on both sides |
+| A recorded match says why | A `recorded` match carries the reason it was made: the bank transfer's review, or the dealing desk's bank reference (migration 0043) |
 | A person gives a reason | Any other match is `staff`, in the name of the signed-in member of staff, with a reason |
 | Nothing changes afterwards | Movements and matches are insert only |
 
@@ -106,7 +114,7 @@ The ledger is closed before the figures are read at approval, so no entry can sl
 | Never reopened | A closed or sent back close never changes, and nothing is deleted |
 | Who | Only staff prepare and decide. The worker reads. Clients see nothing |
 
-The pots closed today are the two ioTec wallets and the trust bank account (`domain/pots.py`). The custodian joins when the dealing desk can report holdings. A bill's purchase and its maturity are posted to `bank.trust` without the bank's reference, which is not known when the entry is posted, so for now those lines are paired by hand. A maturity on a weekend or public holiday is paid on the next working day, so its bank line can come a day or more after the entry.
+The pots closed today are the two ioTec wallets and the trust bank account (`domain/pots.py`). The custodian joins when the dealing desk can report holdings. A bill's purchase and its maturity are posted to `bank.trust` without the bank's reference, which is not known when the entry is posted, so they pair by the reference the dealing desk gives for them. A maturity on a weekend or public holiday is paid on the next working day, so its bank line can come a day or more after the entry.
 
 ## Transfers between pots
 

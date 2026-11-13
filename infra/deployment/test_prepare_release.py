@@ -170,6 +170,20 @@ class PrepareRelease(unittest.TestCase):
             with self.assertRaises(pr.SettingError):
                 pr.prepare(self.out, settings(FINVEST_BANK_TRANSFER_ACCOUNTS=value))
 
+    def test_resend_hook_secret_reaches_the_api_only(self):
+        pr.prepare(self.out, settings(RESEND_HOOK_SECRET="whsec_" + "h" * 32))
+        self.assertIn("RESEND_HOOK_SECRET", read_env(self.out / "runtime" / "api.env"))
+        for service in ("worker", "scheduler", "migrate"):
+            self.assertNotIn("RESEND_HOOK_SECRET", read_env(self.out / "runtime" / f"{service}.env"))
+
+    def test_fidiba_environment_tag_reaches_the_worker_only(self):
+        pr.prepare(self.out, settings(FINVEST_EMAIL_FIDIBA_ENVIRONMENT="app_finvest_prod"))
+        self.assertEqual(
+            read_env(self.out / "runtime" / "worker.env")["FINVEST_EMAIL_FIDIBA_ENVIRONMENT"], "app_finvest_prod"
+        )
+        for service in ("api", "scheduler", "migrate"):
+            self.assertNotIn("FINVEST_EMAIL_FIDIBA_ENVIRONMENT", read_env(self.out / "runtime" / f"{service}.env"))
+
     def test_identity_data_key_reaches_the_api_and_worker_only(self):
         pr.prepare(self.out, settings(FINVEST_IDENTITY_DATA_KEY="d" * 43))
         for service in ("api", "worker"):
