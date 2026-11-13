@@ -197,6 +197,12 @@ export const ConversationItem = z.object({
 });
 export type ConversationItem = z.infer<typeof ConversationItem>;
 
+export const DecideLift = z.object({
+  decision: z.enum(["approved", "rejected", "withdrawn"]),
+  reason: z.string(),
+});
+export type DecideLift = z.infer<typeof DecideLift>;
+
 export const DecideWording = z.object({
   decision: z.enum(["approved", "rejected", "withdrawn"]),
   reason: z.string(),
@@ -299,6 +305,20 @@ export type InterestRunOut = z.infer<typeof InterestRunOut>;
 export const InvestmentStatus = z.enum(["awaiting_payment", "active", "cancelled", "matured"]);
 export type InvestmentStatus = z.infer<typeof InvestmentStatus>;
 
+export const LiftView = z.object({
+  address_hash: z.string(),
+  decided_at: z.string().nullable(),
+  decided_by: z.string().nullable(),
+  decision_reason: z.string().nullable(),
+  id: z.string(),
+  proposed_at: z.string(),
+  proposed_by: z.string(),
+  reason: z.string(),
+  status: z.enum(["proposed", "approved", "rejected", "withdrawn"]),
+  yours: z.boolean(),
+});
+export type LiftView = z.infer<typeof LiftView>;
+
 export const SupportApiAmount = z.object({
   currency: z.enum(["UGX", "USD"]),
   minor: z.number().int(),
@@ -339,6 +359,28 @@ export const LoginStarted = z.object({
   methods: z.array(z.enum(["passkey", "authenticator", "code", "signup"])),
 });
 export type LoginStarted = z.infer<typeof LoginStarted>;
+
+export const Lookup = z.object({
+  email: z.string(),
+});
+export type Lookup = z.infer<typeof Lookup>;
+
+export const SuppressionView = z.object({
+  address_hash: z.string(),
+  complained: z.boolean(),
+  created_at: z.string(),
+  last_event_at: z.string().nullable(),
+  lifted_at: z.string().nullable(),
+  open_lift: LiftView.nullable(),
+  reason: z.enum(["bounced", "complained"]),
+  suppressed: z.boolean(),
+});
+export type SuppressionView = z.infer<typeof SuppressionView>;
+
+export const LookupResult = z.object({
+  suppression: SuppressionView.nullable(),
+});
+export type LookupResult = z.infer<typeof LookupResult>;
 
 export const MessageItem = z.object({
   author: z.enum(["client", "staff"]),
@@ -499,6 +541,11 @@ export const ProposalView = z.object({
 });
 export type ProposalView = z.infer<typeof ProposalView>;
 
+export const ProposeLift = z.object({
+  reason: z.string(),
+});
+export type ProposeLift = z.infer<typeof ProposeLift>;
+
 export const ProposeWording = z.object({
   reason: z.string(),
   wording: WordingText,
@@ -640,11 +687,17 @@ export type StaffSendMessage = z.infer<typeof StaffSendMessage>;
 
 export const StaffSessionView = z.object({
   name: z.string(),
-  permissions: z.array(z.enum(["overview.view", "review_queue.view", "identity_checks.view", "maturities.view", "support.view", "support.reply", "complaints.view", "complaints.manage", "complaints.close", "clients.view", "money_movement.view", "reconciliation.view", "investments.view", "automatic_investing.view", "goals.view", "dealing_desk.view", "finance.view", "products.view", "rates.view", "compliance.view", "team.view", "reports.view", "settings.view", "wordings.change", "migration.view", "bank_transfers.change", "migration.import", "migration.sign_off"])),
+  permissions: z.array(z.enum(["overview.view", "review_queue.view", "identity_checks.view", "maturities.view", "support.view", "support.reply", "complaints.view", "complaints.manage", "complaints.close", "clients.view", "money_movement.view", "reconciliation.view", "investments.view", "automatic_investing.view", "goals.view", "dealing_desk.view", "finance.view", "products.view", "rates.view", "compliance.view", "team.view", "reports.view", "settings.view", "wordings.change", "email_suppressions.lift", "migration.view", "bank_transfers.change", "migration.import", "migration.sign_off"])),
   role: z.enum(["admin", "operations", "finance", "compliance", "support"]),
   staff_id: z.string(),
 });
 export type StaffSessionView = z.infer<typeof StaffSessionView>;
+
+export const SuppressionList = z.object({
+  can_lift: z.boolean(),
+  suppressions: z.array(SuppressionView),
+});
+export type SuppressionList = z.infer<typeof SuppressionList>;
 
 export const TrialSummaryView = z.object({
   as_of: z.string(),
@@ -781,6 +834,54 @@ export const operations = {
     idempotent: false,
     status: 200,
     response: StaffComplaint,
+  },
+  "GET /staff/email-suppressions": {
+    method: "GET",
+    path: "/staff/email-suppressions",
+    params: z.object({}),
+    query: z.object({}),
+    body: null,
+    bodyKind: null,
+    idempotent: false,
+    status: 200,
+    response: SuppressionList,
+  },
+  "POST /staff/email-suppressions/lifts/{lift_id}/decision": {
+    method: "POST",
+    path: "/staff/email-suppressions/lifts/{lift_id}/decision",
+    params: z.object({
+    lift_id: z.string(),
+  }),
+    query: z.object({}),
+    body: DecideLift,
+    bodyKind: "json",
+    idempotent: false,
+    status: 200,
+    response: LiftView,
+  },
+  "POST /staff/email-suppressions/lookup": {
+    method: "POST",
+    path: "/staff/email-suppressions/lookup",
+    params: z.object({}),
+    query: z.object({}),
+    body: Lookup,
+    bodyKind: "json",
+    idempotent: false,
+    status: 200,
+    response: LookupResult,
+  },
+  "POST /staff/email-suppressions/{address_hash}/lifts": {
+    method: "POST",
+    path: "/staff/email-suppressions/{address_hash}/lifts",
+    params: z.object({
+    address_hash: z.string(),
+  }),
+    query: z.object({}),
+    body: ProposeLift,
+    bodyKind: "json",
+    idempotent: false,
+    status: 201,
+    response: LiftView,
   },
   "POST /staff/enrolment": {
     method: "POST",
