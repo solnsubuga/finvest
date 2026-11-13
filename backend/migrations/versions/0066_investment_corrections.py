@@ -1,7 +1,7 @@
 """Undo an investment started by a mistaken deposit, and refund money that never started one.
 
 Revision ID: 0066_investment_corrections
-Revises: 0065_investment_carried_over
+Revises: 0087_dealing_buffer_capital
 
 Both are corrections staff make, so both take two people: one proposes, a different one
 approves, and the worker carries out what was approved. `investment_corrections` keeps them.
@@ -18,7 +18,7 @@ from collections.abc import Sequence
 from alembic import op
 
 revision: str = "0066_investment_corrections"
-down_revision: str | None = "0065_investment_carried_over"
+down_revision: str | None = "0087_dealing_buffer_capital"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 

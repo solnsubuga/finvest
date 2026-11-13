@@ -294,6 +294,9 @@ InvestmentsViewer = Annotated[StaffSession, Depends(require_permission("investme
 CorrectionsChanger = Annotated[
     StaffSession, Depends(require_permission("investment_corrections.change"))
 ]
+CorrectionsApprover = Annotated[
+    StaffSession, Depends(require_confirmed("investment_corrections.change"))
+]
 
 
 def _money(minor: int, currency: Currency) -> Money:
@@ -826,7 +829,7 @@ async def staff_propose_correction(
 @staff_router.post("/investment-corrections/{correction_id}/approve")
 async def staff_approve_correction(
     request: Request,
-    staff: CorrectionsChanger,
+    staff: CorrectionsApprover,
     clock: AppClock,
     key: IdempotencyKey,
     correction_id: PushId,
