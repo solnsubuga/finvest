@@ -1,0 +1,59 @@
+---
+import { loginUrl, signupUrl } from "../config.ts";
+import { mainNav } from "../lib/nav.ts";
+import Icon from "./Icon.astro";
+import Logo from "./Logo.astro";
+
+interface Props {
+  /** Black on every page with a black title band. Light on legal pages. */
+  tone?: "black" | "light";
+}
+
+const { tone = "black" } = Astro.props;
+const here = Astro.url.pathname.replace(/\/$/, "") || "/";
+const current = (href: string) => (here === href || here.startsWith(`${href}/`) ? "page" : undefined);
+---
+
+<header class:list={["header", tone === "light" && "header--light"]}>
+  <div class="header__bar">
+    <a class="brand" href="/" aria-label="Finvest home">
+      <Logo />
+      <span>finvest</span>
+    </a>
+    <nav class="header__nav" aria-label="Main">
+      {mainNav.map((item) => <a href={item.href} aria-current={current(item.href)}>{item.label}</a>)}
+    </nav>
+    <span class="header__spacer"></span>
+    <a class="header__login" href={loginUrl}>Log in</a>
+    <a
+      class:list={["button", "button--small", "header__open", tone === "black" && "button--lime"]}
+      href={signupUrl}>Open an account</a
+    >
+    <details class="menu">
+      <summary aria-label="Menu"><Icon name="menu" size={20} /></summary>
+      <nav class="menu__panel" aria-label="Menu">
+        <a href="/" aria-current={here === "/" ? "page" : undefined}>Home</a>
+        {mainNav.map((item) => <a href={item.href} aria-current={current(item.href)}>{item.label}</a>)}
+        <a class="button button--lime" href={signupUrl}>Open an account</a>
+      </nav>
+    </details>
+  </div>
+</header>
+
+<script>
+  // Close the phone menu on Escape or a tap outside it. It opens and closes without this.
+  const menu = document.querySelector<HTMLDetailsElement>("details.menu");
+  if (menu) {
+    document.addEventListener("keydown", (event) => {
+      if (event.key === "Escape" && menu.open) {
+        menu.open = false;
+        menu.querySelector("summary")?.focus();
+      }
+    });
+    document.addEventListener("click", (event) => {
+      if (menu.open && event.target instanceof Node && !menu.contains(event.target)) {
+        menu.open = false;
+      }
+    });
+  }
+</script>

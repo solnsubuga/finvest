@@ -1,0 +1,25 @@
+---
+import Icon from "./Icon.astro";
+
+interface Props {
+  questions: { question: string; answer: string }[];
+  /** Open the first answer, as on the canvas. */
+  openFirst?: boolean;
+}
+
+const { questions, openFirst = false } = Astro.props;
+---
+
+<div class="faq">
+  {
+    questions.map((item, index) => (
+      <details open={openFirst && index === 0}>
+        <summary>
+          <h3>{item.question}</h3>
+          <Icon name="plus" size={20} />
+        </summary>
+        <p>{item.answer}</p>
+      </details>
+    ))
+  }
+</div>

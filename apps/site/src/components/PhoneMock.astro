@@ -1,0 +1,40 @@
+---
+import Icon from "./Icon.astro";
+---
+
+<!-- A drawing of the app with sample figures. Decoration only. -->
+<div class="phone" aria-hidden="true">
+  <div class="phone__screen">
+    <div class="phone__top">
+      <span>Good evening, Amara</span>
+      <span class="phone__avatar">AN</span>
+    </div>
+    <div class="phone__total">
+      <small>Total invested</small>
+      <strong>UGX 10,724,760</strong>
+      <span class="chip">+3,104 today, after tax</span>
+      <svg viewBox="0 0 240 60" preserveAspectRatio="none">
+        <path
+          d="M0 52 C40 48 60 44 90 38 S150 26 180 18 S225 8 240 5"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="3"
+          stroke-linecap="round"></path>
+        <circle cx="236" cy="5" r="4" fill="currentColor"></circle>
+      </svg>
+    </div>
+    <div class="phone__row">
+      <div><span>91 Day Treasury Bill</span><span>UGX 5,049,486</span></div>
+      <small>Matures in 37 days</small>
+    </div>
+    <div class="phone__row">
+      <div><span>School fees goal</span><span>UGX 3,200,000</span></div>
+      <small>64% of the way there</small>
+    </div>
+    <div class="phone__paid">
+      <span class="phone__tick"><Icon name="tick" size={16} /></span>
+      <span><strong>Paid by MTN MoMo</strong>UGX 200,000 invested in seconds</span>
+    </div>
+    <div class="phone__invest">Invest</div>
+  </div>
+</div>
