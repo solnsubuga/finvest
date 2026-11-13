@@ -21,6 +21,15 @@ export const AmountView = z.object({
 });
 export type AmountView = z.infer<typeof AmountView>;
 
+export const PhotoKind = z.enum(["front", "back", "selfie"]);
+export type PhotoKind = z.infer<typeof PhotoKind>;
+
+export const AskForPhotosBody = z.object({
+  client_message: z.string(),
+  photos: z.array(PhotoKind),
+});
+export type AskForPhotosBody = z.infer<typeof AskForPhotosBody>;
+
 export const AssignComplaint = z.object({
   owner_id: z.string(),
 });
@@ -34,6 +43,9 @@ export const AuthenticatorSetupView = z.object({
   uri: z.string(),
 });
 export type AuthenticatorSetupView = z.infer<typeof AuthenticatorSetupView>;
+
+export const AutomaticCheck = z.enum(["document_genuine", "selfie_match", "screening"]);
+export type AutomaticCheck = z.infer<typeof AutomaticCheck>;
 
 export const MoneyView = z.object({
   currency: z.enum(["UGX", "USD"]),
@@ -106,6 +118,9 @@ export const BankTransferPage = z.object({
   next_before: z.string().nullable(),
 });
 export type BankTransferPage = z.infer<typeof BankTransferPage>;
+
+export const CheckStatus = z.enum(["draft", "submitted", "needs_review", "with_compliance", "awaiting_client", "approved", "rejected"]);
+export type CheckStatus = z.infer<typeof CheckStatus>;
 
 export const ClaimProgressView = z.object({
   cannot_be_invited: z.number().int(),
@@ -254,6 +269,14 @@ export const DifferenceView = z.object({
   sign_off: SignOffView.nullable(),
 });
 export type DifferenceView = z.infer<typeof DifferenceView>;
+
+export const DocumentNumber = z.object({
+  document_number: z.string(),
+});
+export type DocumentNumber = z.infer<typeof DocumentNumber>;
+
+export const DocumentType = z.enum(["national_id", "passport", "driving_permit", "refugee_id"]);
+export type DocumentType = z.infer<typeof DocumentType>;
 
 export const Enrol = z.object({
   credential: z.record(z.string(), z.unknown()),
@@ -470,6 +493,16 @@ export const NewSavedReply = z.object({
 });
 export type NewSavedReply = z.infer<typeof NewSavedReply>;
 
+export const Verdict = z.enum(["pass", "fail", "unsure"]);
+export type Verdict = z.infer<typeof Verdict>;
+
+export const Outcome = z.object({
+  check: AutomaticCheck,
+  score: z.number().int().nullable(),
+  verdict: Verdict,
+});
+export type Outcome = z.infer<typeof Outcome>;
+
 export const TotalLineView = z.object({
   agrees: z.boolean(),
   currency: Currency.nullable(),
@@ -537,6 +570,19 @@ export const PasskeyOptions = z.object({
   public_key: z.record(z.string(), z.unknown()),
 });
 export type PasskeyOptions = z.infer<typeof PasskeyOptions>;
+
+export const PhotoLink = z.object({
+  id: z.string(),
+  kind: PhotoKind,
+  url: z.string(),
+});
+export type PhotoLink = z.infer<typeof PhotoLink>;
+
+export const PhotoLinks = z.object({
+  expires_at: z.string(),
+  photos: z.array(PhotoLink),
+});
+export type PhotoLinks = z.infer<typeof PhotoLinks>;
 
 export const ProductKind = z.enum(["treasury_bill", "fixed_income"]);
 export type ProductKind = z.infer<typeof ProductKind>;
@@ -623,11 +669,37 @@ export const ProposeWording = z.object({
 });
 export type ProposeWording = z.infer<typeof ProposeWording>;
 
+export const QueueEntry = z.object({
+  document_type: DocumentType,
+  id: z.string(),
+  name: z.string().nullable(),
+  review_flags: z.array(z.string()),
+  status: CheckStatus,
+  submitted_at: z.string().nullable(),
+});
+export type QueueEntry = z.infer<typeof QueueEntry>;
+
+export const Queue = z.object({
+  items: z.array(QueueEntry),
+});
+export type Queue = z.infer<typeof Queue>;
+
+export const ReasonBody = z.object({
+  reason: z.string(),
+});
+export type ReasonBody = z.infer<typeof ReasonBody>;
+
 export const Register = z.object({
   complaints: z.array(StaffComplaint),
   summary: ComplaintSummary,
 });
 export type Register = z.infer<typeof Register>;
+
+export const RejectBody = z.object({
+  client_message: z.string().nullable().optional(),
+  reason: z.string(),
+});
+export type RejectBody = z.infer<typeof RejectBody>;
 
 export const SavedReplyItem = z.object({
   body: z.string(),
@@ -663,6 +735,36 @@ export const StaffChat = z.object({
   messages: z.array(MessageItem),
 });
 export type StaffChat = z.infer<typeof StaffChat>;
+
+export const StaffPhoto = z.object({
+  id: z.string(),
+  kind: PhotoKind,
+});
+export type StaffPhoto = z.infer<typeof StaffPhoto>;
+
+export const StaffCheck = z.object({
+  account_number: z.string().nullable(),
+  allowed: z.array(z.enum(["approve", "reject", "ask_for_photos", "escalate"])),
+  automatic_checks: z.array(Outcome),
+  client_id: z.string(),
+  client_message: z.string().nullable(),
+  date_of_birth: z.string().nullable(),
+  decided_at: z.string().nullable(),
+  document_country: z.string(),
+  document_expires_on: z.string().nullable(),
+  document_number_masked: z.string().nullable(),
+  document_type: DocumentType,
+  given_names: z.string().nullable(),
+  id: z.string(),
+  name: z.string().nullable(),
+  photos: z.array(StaffPhoto),
+  retake_photos: z.array(PhotoKind),
+  review_flags: z.array(z.string()),
+  status: CheckStatus,
+  submitted_at: z.string().nullable(),
+  surname: z.string().nullable(),
+});
+export type StaffCheck = z.infer<typeof StaffCheck>;
 
 export const StaffGoalView = z.object({
   category: GoalCategory,
@@ -795,7 +897,7 @@ export type StaffSendMessage = z.infer<typeof StaffSendMessage>;
 
 export const StaffSessionView = z.object({
   name: z.string(),
-  permissions: z.array(z.enum(["overview.view", "review_queue.view", "identity_checks.view", "maturities.view", "support.view", "support.reply", "complaints.view", "complaints.manage", "complaints.close", "clients.view", "money_movement.view", "reconciliation.view", "investments.view", "automatic_investing.view", "goals.view", "dealing_desk.view", "finance.view", "products.view", "rates.view", "rates.change", "compliance.view", "team.view", "reports.view", "audit.view", "settings.view", "wordings.change", "email_suppressions.lift", "migration.view", "bank_transfers.change", "migration.import", "migration.sign_off"])),
+  permissions: z.array(z.enum(["overview.view", "review_queue.view", "identity_checks.view", "identity_checks.review", "maturities.view", "support.view", "support.reply", "complaints.view", "complaints.manage", "complaints.close", "clients.view", "money_movement.view", "reconciliation.view", "investments.view", "automatic_investing.view", "goals.view", "dealing_desk.view", "finance.view", "products.view", "rates.view", "rates.change", "compliance.view", "team.view", "reports.view", "audit.view", "settings.view", "wordings.change", "email_suppressions.lift", "migration.view", "bank_transfers.change", "migration.import", "migration.sign_off"])),
   role: z.enum(["admin", "operations", "finance", "compliance", "support"]),
   staff_id: z.string(),
 });
@@ -1170,6 +1272,108 @@ export const operations = {
     idempotent: false,
     status: 200,
     response: StaffGoalDetail,
+  },
+  "GET /staff/identity-checks": {
+    method: "GET",
+    path: "/staff/identity-checks",
+    params: z.object({}),
+    query: z.object({}),
+    body: null,
+    bodyKind: null,
+    idempotent: false,
+    status: 200,
+    response: Queue,
+  },
+  "GET /staff/identity-checks/{check_id}": {
+    method: "GET",
+    path: "/staff/identity-checks/{check_id}",
+    params: z.object({
+    check_id: z.string(),
+  }),
+    query: z.object({}),
+    body: null,
+    bodyKind: null,
+    idempotent: false,
+    status: 200,
+    response: StaffCheck,
+  },
+  "POST /staff/identity-checks/{check_id}/approve": {
+    method: "POST",
+    path: "/staff/identity-checks/{check_id}/approve",
+    params: z.object({
+    check_id: z.string(),
+  }),
+    query: z.object({}),
+    body: ReasonBody,
+    bodyKind: "json",
+    idempotent: false,
+    status: 200,
+    response: StaffCheck,
+  },
+  "POST /staff/identity-checks/{check_id}/ask-for-photos": {
+    method: "POST",
+    path: "/staff/identity-checks/{check_id}/ask-for-photos",
+    params: z.object({
+    check_id: z.string(),
+  }),
+    query: z.object({}),
+    body: AskForPhotosBody,
+    bodyKind: "json",
+    idempotent: false,
+    status: 200,
+    response: StaffCheck,
+  },
+  "POST /staff/identity-checks/{check_id}/document-number": {
+    method: "POST",
+    path: "/staff/identity-checks/{check_id}/document-number",
+    params: z.object({
+    check_id: z.string(),
+  }),
+    query: z.object({}),
+    body: null,
+    bodyKind: null,
+    idempotent: false,
+    status: 200,
+    response: DocumentNumber,
+  },
+  "POST /staff/identity-checks/{check_id}/escalate": {
+    method: "POST",
+    path: "/staff/identity-checks/{check_id}/escalate",
+    params: z.object({
+    check_id: z.string(),
+  }),
+    query: z.object({}),
+    body: ReasonBody,
+    bodyKind: "json",
+    idempotent: false,
+    status: 200,
+    response: StaffCheck,
+  },
+  "POST /staff/identity-checks/{check_id}/photo-links": {
+    method: "POST",
+    path: "/staff/identity-checks/{check_id}/photo-links",
+    params: z.object({
+    check_id: z.string(),
+  }),
+    query: z.object({}),
+    body: null,
+    bodyKind: null,
+    idempotent: false,
+    status: 200,
+    response: PhotoLinks,
+  },
+  "POST /staff/identity-checks/{check_id}/reject": {
+    method: "POST",
+    path: "/staff/identity-checks/{check_id}/reject",
+    params: z.object({
+    check_id: z.string(),
+  }),
+    query: z.object({}),
+    body: RejectBody,
+    bodyKind: "json",
+    idempotent: false,
+    status: 200,
+    response: StaffCheck,
   },
   "GET /staff/interest-runs": {
     method: "GET",
