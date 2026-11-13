@@ -283,6 +283,10 @@ describe("complaints", () => {
     mockComplain.mockReturnValueOnce("made then lost");
     await fireEvent.press(screen.getByTestId("send-complaint"));
     await screen.findByText(/could not reach Finvest/);
+    // The words are fixed now: a retry can only be the same complaint.
+    expect(screen.getByText(/may already have reached us/)).toBeTruthy();
+    expect(screen.getByTestId("complaint-summary").props.editable).toBe(false);
+    expect(screen.getByTestId("complaint-details").props.editable).toBe(false);
 
     await fireEvent.press(screen.getByTestId("send-complaint"));
     await screen.findByText("C-1001");
@@ -299,9 +303,26 @@ describe("complaints", () => {
     mockComplain.mockReturnValueOnce("refused");
     await fireEvent.press(screen.getByTestId("send-complaint"));
     await screen.findByText(/could not be accepted/);
+    // Nothing was logged, so the client may still put it right.
+    expect(screen.queryByText(/may already have reached us/)).toBeNull();
+    expect(screen.getByTestId("complaint-summary").props.editable).not.toBe(false);
 
     await fireEvent.press(screen.getByTestId("send-complaint"));
     await screen.findByText("C-1001");
     expect(mockComplain.mock.calls[1]![0].key).not.toBe(mockComplain.mock.calls[0]![0].key);
+  });
+
+  it("unlocks the form when a retry after a lost answer is refused", async () => {
+    await fillComplaint();
+    mockComplain.mockReturnValueOnce("made then lost").mockReturnValueOnce("refused");
+    await fireEvent.press(screen.getByTestId("send-complaint"));
+    await screen.findByText(/may already have reached us/);
+
+    await fireEvent.press(screen.getByTestId("send-complaint"));
+    await screen.findByText(/could not be accepted/);
+    expect(screen.queryByText(/may already have reached us/)).toBeNull();
+    expect(screen.getByTestId("complaint-summary").props.editable).not.toBe(false);
+    expect(screen.getByTestId("complaint-details").props.editable).not.toBe(false);
+    expect(mockComplain.mock.calls[1]![0].key).toBe(mockComplain.mock.calls[0]![0].key);
   });
 });

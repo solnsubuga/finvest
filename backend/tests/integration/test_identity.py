@@ -14,6 +14,7 @@ from sqlalchemy.exc import DBAPIError
 
 from app.api.app import create_app
 from app.infrastructure.database import Database
+from app.modules.identity import team as team_changes
 from app.modules.identity.api import COOKIES, require_permission
 from app.modules.identity.hashing import PasswordHasher
 from app.modules.identity.service import (
@@ -491,10 +492,21 @@ async def test_a_disabled_staff_member_loses_access_at_once(
     )
     api.http.cookies.set(COOKIES["staff"], issued.token)
     assert (await api.http.get("/staff/session")).status_code == 200
-    async with api.database.transaction() as session:
-        await session.execute(
-            text("UPDATE identity_staff SET status = 'disabled' WHERE id = :id"), {"id": staff_id}
+    # Two admins: one proposes, the other approves, and access ends with the approval.
+    proposer = Actor("staff", (await a_staff_member(api))[1])
+    decider = Actor("staff", (await a_staff_member(api))[1])
+    async with api.database.actor_transaction(proposer) as session:
+        change = await team_changes.propose(
+            session,
+            proposer,
+            team_changes.Proposed(kind="deactivate", reason="Left Finvest", staff_id=staff_id),
+            api.clock,
         )
+    async with api.database.actor_transaction(decider) as session:
+        await team_changes.decide(
+            session, decider, change.id, "approved", "Confirmed", api.clock, console_origin=None
+        )
+    api.http.cookies.set(COOKIES["staff"], issued.token)
     assert (await api.http.get("/staff/session")).status_code == 401
 
 
@@ -602,7 +614,6 @@ async def test_the_api_can_change_only_the_account_columns_sign_in_needs(api: Ap
     _, staff_id = await a_staff_member(api, "support")
     _, client_id = await a_client(api)
     for statement, account in (
-        ("UPDATE identity_staff SET role = 'admin' WHERE id = :id", staff_id),
         ("UPDATE identity_staff SET email = 'other@example.com' WHERE id = :id", staff_id),
         ("UPDATE identity_clients SET email = 'other@example.com' WHERE id = :id", client_id),
         ("UPDATE identity_clients SET created_at = now() WHERE id = :id", client_id),
@@ -613,6 +624,13 @@ async def test_the_api_can_change_only_the_account_columns_sign_in_needs(api: Ap
                 await session.execute(text(statement), {"id": account})
     # A client's status changes only through the claim function, or through a lock or unlock
     # two people approved (migration 0152, and tests/integration/test_client_locks.py).
+    # A role may change, but only through a change two admins approved (migration 0150, and
+    # tests/integration/test_team.py).
+    with pytest.raises(DBAPIError, match="approved change"):
+        async with api.database.transaction() as session:
+            await session.execute(
+                text("UPDATE identity_staff SET role = 'admin' WHERE id = :id"), {"id": staff_id}
+            )
 
 
 async def test_nothing_personal_is_logged(api: Api, capsys: pytest.CaptureFixture[str]) -> None:

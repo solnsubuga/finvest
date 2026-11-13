@@ -19,7 +19,7 @@ from app.shared.errors import ApplicationError
 from tests.journeys.gaps import expected_missing
 from tests.journeys.money import balance, invest, investment, pay_by_mobile_money
 from tests.journeys.onboarding import onboarded
-from tests.journeys.payouts import add_number, check_name
+from tests.journeys.payouts import add_number, approve_check, check_name
 from tests.support.books import audit_for, missing
 from tests.support.journey import Person, World, a_phone
 
@@ -88,19 +88,25 @@ async def test_interest_is_paid_each_day_and_the_investment_rolls_over(world: Wo
 async def test_a_matured_investment_pays_out_to_a_number_in_the_clients_own_name(
     world: World, migrator_database: Database
 ) -> None:
-    checker = await world.staff("operations")
+    checker, approver = await world.staff("operations"), await world.staff("operations")
     client = await onboarded(world)
     # KYC verified the client as NAKATO Amara. A number registered to someone else is
     # refused, whoever checks it; the client's own is approved.
     other = await add_number(world, client, "0772" + a_phone()[-6:], "Okello Peter")
     with pytest.raises(DestinationError) as refused:
-        await check_name(world, checker, client, other, proof_name="OKELLO Peter")
+        await check_name(world, checker, other, proof_name="OKELLO Peter")
     assert refused.value.code == "name_different"
     spelt = await add_number(world, client, "0772" + a_phone()[-6:], "Nakate Amara")
     with pytest.raises(DestinationError):
-        await check_name(world, checker, client, spelt, proof_name="NAKATE Amara")
+        await check_name(world, checker, spelt, proof_name="NAKATE Amara")
     own = await add_number(world, client, "0772" + a_phone()[-6:], "Amara Nakato")
-    approved = await check_name(world, checker, client, own, proof_name="Nakato  amara")
+    checked = await check_name(world, checker, own, proof_name="Nakato  amara")
+    assert checked.status.value == "in_review"
+    # The person who checked it cannot approve it; a second person does.
+    with pytest.raises(DestinationError) as same:
+        await approve_check(world, checker, own)
+    assert same.value.code == "checked_by_you"
+    approved = await approve_check(world, approver, own)
     assert approved.status.value == "approved"
 
     investment_id = await running(world, client, 600_000, at_maturity=AtMaturity.PAY_OUT)
