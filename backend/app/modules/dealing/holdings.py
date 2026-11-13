@@ -109,6 +109,31 @@ _LEFT_OF_LOT = text(
     "LEFT JOIN dealing_lot_sales AS sale ON sale.lot_id = lot.id "
     "WHERE lot.id = :id GROUP BY lot.id"
 )
+# What each lot of a product still holds after every sale, for allocation: lots of settled
+# purchases that have not matured, oldest purchase first. The allocations trigger counts the
+# same way.
+_ALLOCATABLE = text(
+    "SELECT lot.id, lot.product_code, lot.currency, lot.settled_on, lot.matures_on, "
+    "lot.custodian_reference, "
+    "(lot.face_minor - coalesce(sum(sale.face_minor), 0))::bigint AS face_left, "
+    "(lot.cost_minor - coalesce(sum(sale.cost_minor), 0))::bigint AS cost_left "
+    "FROM dealing_lots AS lot JOIN dealing_orders AS bought ON bought.id = lot.order_id "
+    "LEFT JOIN dealing_lot_sales AS sale ON sale.lot_id = lot.id "
+    "WHERE lot.product_code = :product_code AND bought.status = 'settled' "
+    "AND NOT EXISTS (SELECT FROM dealing_lot_maturities AS matured WHERE matured.lot_id = lot.id) "
+    # A lot past its maturity date has been paid, even if the run has not posted it yet.
+    "AND lot.matures_on > :on "
+    "GROUP BY lot.id HAVING lot.face_minor - coalesce(sum(sale.face_minor), 0) > 0 "
+    "ORDER BY lot.settled_on, lot.id"
+)
+
+
+async def allocatable_lots(session: AsyncSession, product_code: str, *, on: date) -> list[HeldLot]:
+    """The lots of a product that can stand behind investments on `on`, oldest purchase first.
+
+    A lot that matures on or before `on` is left out, even before its maturity is posted."""
+    rows = await session.execute(_ALLOCATABLE, {"product_code": product_code, "on": on})
+    return [_held(row) for row in rows.all()]
 
 
 async def lots_of(
