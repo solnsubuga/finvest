@@ -1,6 +1,6 @@
 # Goals
 
-How a client saves towards something: school fees, land, an emergency fund. The code is in `backend/app/modules/goals`, and the database side is migration 0110.
+How a client saves towards something: school fees, land, an emergency fund. The code is in `backend/app/modules/goals`, and the database side is migrations 0110 to 0112.
 
 ## A goal holds no money
 
@@ -49,6 +49,28 @@ A saving that rolls over at maturity becomes a new investment for the proceeds, 
 
 A closed goal is not followed: its investments keep rolling over as the client's own. Following the same rollover again changes nothing.
 
+## Group goals
+
+One target that several clients save towards together, such as a family buying land. Decided for now by Solo (2026-11-13): a shared target, with each member saving into their own investments. Nothing is pooled, nothing needs an approval, and every member can leave with their own money. It is ordinary investing with a shared progress bar, so it stays clear of the open question of whether a pooled group is a collective investment scheme. The code is `groups.py` and `domain/groups.py`, and the database side is migration 0112.
+
+- **Setting up.** The client gives the group's name, what it is for, the shared target and date, the name the others will see them by, and their own part. Their part is a goal of their own, with the group's date and their part as its target. They save into it like any goal.
+- **Inviting.** The one who set the group up makes an invite code and sends the link by WhatsApp or SMS. It works for 7 days. A new code replaces the old one, which stops working, and the code can be withdrawn. Only its SHA-256 is stored, so it is shown once.
+- **Joining.** With the code, a client sees the group's name, target, date, how many are in it and the first member's name, and nothing else. Joining makes them a goal of their own named after the group, for their own part. A client is in a group once at a time, and a group has at most 10 members.
+- **What members see.** The names each member chose, when they joined, and the combined value against the target, with the same On track or Behind labels as any goal. Never another member's savings, amounts or investments one by one. With two members, each can work out the other's total from the combined value, and the app says so before joining.
+- **The combined value.** The member's own goal is counted as it is now. The others are counted as the worker last recorded them, once a day at 01:30 Kampala time, after interest and maturities (`goals.refresh_groups`). The app shows that day. A client never reads another client's investments, and never writes a figure the group is shown.
+- **Changing.** The one who set the group up changes its name, target and date. No member's own goal changes with it: each changes their own if they want to.
+- **Leaving.** A member leaves, or the one who set the group up removes them. Their goal and its savings carry on as their own. Closing their own goal also leaves the group. The one who set the group up cannot leave it or close their goal while it is open: they close the group.
+- **Closing.** Final. Every member's goal stays open as their own, and nobody's money moves.
+
+The database holds these, in migration 0112:
+
+- Only the one who set a group up changes it, invites, removes members or closes it. A closed group never changes, and nobody joins it.
+- A member joins with their own active goal in the group's currency, either as the one who set it up or with the group's current invite. Whether the invite is in date is checked by the application, against the injected clock. The count of 10 locks the group, so two joining at once cannot pass it.
+- Members, the one who set the group up and staff read a group. Nobody else does. Staff change nothing.
+- A member row keeps its group, goal, client and joining time. Only the member changes their name. Leaving happens once, for good.
+- Only the worker, as the system, writes the figure the group is shown.
+- Nobody deletes a group or a member, and a downgrade refuses to drop the tables while they hold rows.
+
 ## Limits
 
 - 20 open goals per client, checked under a per-client lock so two at once cannot pass it.
@@ -75,11 +97,22 @@ A closed goal is not followed: its investments keep rolling over as the client's
 | `POST /client/goals/{id}/close` | Close it |
 | `POST /client/goals/{id}/savings` | Confirm a saving: returns the new investment awaiting payment. Takes an `Idempotency-Key`. Pay for it with the investment's ID as the purpose. |
 | `GET /staff/goals`, `GET /staff/goals/{id}` | Staff with `goals.view` |
+| `POST /client/goal-groups` | Set up a group goal, with the client's own part. Takes an `Idempotency-Key`. |
+| `GET /client/goal-groups`, `GET /client/goal-groups/{id}` | The groups the client is in, with members' names and the combined value |
+| `PUT /client/goal-groups/{id}` | Change the group's name, target or date. Only for the one who set it up. |
+| `PUT /client/goal-groups/{id}/me` | Change the name the others see the client by |
+| `POST /client/goal-groups/{id}/invite`, `DELETE /client/goal-groups/{id}/invite` | Make a new invite code, shown once, or withdraw it |
+| `GET /client/goal-groups/invites/{code}` | What the invite is for, before joining |
+| `POST /client/goal-groups/invites/{code}/join` | Join, with the client's own part. Takes an `Idempotency-Key`. |
+| `POST /client/goal-groups/{id}/leave` | Leave. The client's own goal carries on. |
+| `POST /client/goal-groups/{id}/members/{goal_id}/remove` | Remove a member. Only for the one who set it up. |
+| `POST /client/goal-groups/{id}/close` | Close the group for good |
+| `GET /staff/goal-groups`, `GET /staff/goal-groups/{id}` | Staff with `goals.view`, with each member's figure as last recorded |
 
 Client responses carry net figures and the yearly rate after tax as a label. No tax rate, tax amount or figure before tax.
 
 ## Not built yet
 
 - Saving rules: a monthly saving collected on a set day, with a mobile money prompt sent by the worker.
-- Group goals: one target shared by several clients, each saving into their own investments.
+- Screens for group goals in the client app and the console.
 - Withdrawing from a goal before its date, which waits for early withdrawal.

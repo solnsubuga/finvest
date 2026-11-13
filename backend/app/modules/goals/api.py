@@ -7,12 +7,12 @@ responses carry figures after tax only, and never a tax rate.
 from datetime import date, datetime
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, Query, Request
+from fastapi import APIRouter, Depends, Path, Query, Request, Response
 from pydantic import Field
 
 from app.api.idempotency import IdempotencyKey
 from app.infrastructure.database import Database
-from app.modules.goals import service
+from app.modules.goals import groups, service
 from app.modules.goals.domain.goals import (
     MAX_NAME_LENGTH,
     GoalCategory,
@@ -20,6 +20,7 @@ from app.modules.goals.domain.goals import (
     Progress,
     Standing,
 )
+from app.modules.goals.domain.groups import MAX_DISPLAY_NAME_LENGTH, GroupProgress, GroupStatus
 from app.modules.identity.api import CurrentClient, require_permission
 from app.modules.identity.service import StaffSession
 from app.modules.investments import service as investments
@@ -38,6 +39,8 @@ _REFUSALS: dict[int | str, dict[str, object]] = {
 
 client_router = APIRouter(prefix="/client/goals", tags=["goals"], responses=_REFUSALS)
 staff_router = APIRouter(prefix="/staff/goals", tags=["goals"], responses=_REFUSALS)
+group_router = APIRouter(prefix="/client/goal-groups", tags=["goals"], responses=_REFUSALS)
+staff_group_router = APIRouter(prefix="/staff/goal-groups", tags=["goals"], responses=_REFUSALS)
 StaffWithView = Annotated[StaffSession, Depends(require_permission("goals.view"))]
 
 AmountMinor = Annotated[int, Field(gt=0, le=10**15)]
@@ -45,6 +48,9 @@ AmountMinor = Annotated[int, Field(gt=0, le=10**15)]
 Day = Annotated[date, Field(strict=False)]
 Category = Annotated[GoalCategory, Field(strict=False)]
 CurrencyCode = Annotated[Currency, Field(strict=False)]
+DisplayName = Annotated[str, Field(min_length=1, max_length=MAX_DISPLAY_NAME_LENGTH * 2)]
+# What `secrets.token_urlsafe(16)` makes: 22 characters of URL-safe base64.
+InviteCode = Annotated[str, Path(pattern=r"^[A-Za-z0-9_-]{22}$")]
 
 
 def _database(request: Request) -> Database:
@@ -420,4 +426,375 @@ async def staff_get_goal(
     )
 
 
-routers: list[APIRouter] = [client_router, staff_router]
+# Group goals -------------------------------------------------------------------------------------
+
+
+class NewGroup(GoalDetails):
+    # How the other members see the client, as they write it.
+    display_name: DisplayName
+    # The client's own part: the target of their own goal in the group.
+    own_target_minor: AmountMinor
+
+
+class JoinGroup(Contract):
+    display_name: DisplayName
+    own_target_minor: AmountMinor
+    currency: CurrencyCode = Currency.UGX
+
+
+class Rename(Contract):
+    display_name: DisplayName
+
+
+class GroupProgressView(Contract):
+    value_minor: int
+    percent: int
+    standing: Standing
+
+
+class MemberView(Contract):
+    """Another member: a name and when they joined. Never what they saved."""
+
+    display_name: str
+    joined_at: datetime
+    is_you: bool
+    is_owner: bool
+
+
+class GroupView(Contract):
+    group_id: PushId
+    name: str
+    category: GoalCategory
+    currency: Currency
+    target_minor: int
+    target_date: date | None
+    status: GroupStatus
+    created_at: datetime
+    is_owner: bool
+    own_goal_id: PushId
+    progress: GroupProgressView
+    # The client's own goal is counted as it is now; the others as of this day.
+    others_as_of: date | None
+    members: list[MemberView]
+    # Only for the one who set the group up, while an invite is open.
+    invite_expires_at: datetime | None
+
+
+class GroupList(Contract):
+    groups: list[GroupView]
+
+
+class InviteView(Contract):
+    """Shown once. Only its hash is kept, so it cannot be fetched again."""
+
+    code: str
+    expires_at: datetime
+
+
+class InvitePreview(Contract):
+    group_id: PushId
+    name: str
+    category: GoalCategory
+    currency: Currency
+    target_minor: int
+    target_date: date | None
+    owner_name: str
+    members: int
+    expires_at: datetime
+
+
+class StaffMemberView(Contract):
+    goal_id: PushId
+    client_id: PushId
+    display_name: str
+    joined_at: datetime
+    left_at: datetime | None
+    value_minor: int
+    value_on: date | None
+
+
+class StaffGroupView(Contract):
+    group_id: PushId
+    owner_client_id: PushId
+    name: str
+    category: GoalCategory
+    currency: Currency
+    target_minor: int
+    target_date: date | None
+    status: GroupStatus
+    created_at: datetime
+    closed_at: datetime | None
+
+
+class StaffGroupList(Contract):
+    groups: list[StaffGroupView]
+
+
+class StaffGroupDetail(Contract):
+    group: StaffGroupView
+    progress: GroupProgressView
+    members: list[StaffMemberView]
+
+
+def _group_progress_view(progress: GroupProgress) -> GroupProgressView:
+    return GroupProgressView(
+        value_minor=progress.value.minor, percent=progress.percent, standing=progress.standing
+    )
+
+
+def _group_view(group: groups.ClientGroup) -> GroupView:
+    return GroupView(
+        group_id=group.id,
+        name=group.name,
+        category=group.category,
+        currency=group.target.currency,
+        target_minor=group.target.minor,
+        target_date=group.target_date,
+        status=group.status,
+        created_at=group.created_at,
+        is_owner=group.is_owner,
+        own_goal_id=group.own_goal_id,
+        progress=_group_progress_view(group.progress),
+        others_as_of=group.others_as_of,
+        members=[
+            MemberView(
+                display_name=m.display_name,
+                joined_at=m.joined_at,
+                is_you=m.is_you,
+                is_owner=m.is_owner,
+            )
+            for m in group.members
+        ],
+        invite_expires_at=group.invite_expires_at,
+    )
+
+
+def _staff_group_view(group: groups.Group) -> StaffGroupView:
+    return StaffGroupView(
+        group_id=group.id,
+        owner_client_id=group.owner_client_id,
+        name=group.name,
+        category=group.category,
+        currency=group.target.currency,
+        target_minor=group.target.minor,
+        target_date=group.target_date,
+        status=group.status,
+        created_at=group.created_at,
+        closed_at=group.closed_at,
+    )
+
+
+@group_router.post("", status_code=201, responses={422: {"model": ErrorEnvelope}})
+async def create_group(
+    body: NewGroup,
+    client: CurrentClient,
+    database: DatabaseDep,
+    clock: ClockDep,
+    idempotency_key: IdempotencyKey,
+) -> GroupView:
+    """Set up a group goal. The client's own part is a goal of their own, with the group's date
+    and `own_target_minor` as its target, which they save into like any goal."""
+    async with database.actor_transaction(client.actor) as session:
+        group = await groups.create_group(
+            session,
+            client.actor,
+            idempotency_key=idempotency_key,
+            name=body.name,
+            category=body.category,
+            target=_money(body.target_minor, body.currency),
+            target_date=body.target_date,
+            display_name=body.display_name,
+            own_target=_money(body.own_target_minor, body.currency),
+            clock=clock,
+        )
+    return _group_view(group)
+
+
+@group_router.get("")
+async def list_groups(client: CurrentClient, database: DatabaseDep, clock: ClockDep) -> GroupList:
+    async with database.actor_transaction(client.actor) as session:
+        found = await groups.client_groups(session, client.actor, clock)
+    return GroupList(groups=[_group_view(g) for g in found])
+
+
+@group_router.get("/invites/{code}")
+async def preview_invite(
+    code: InviteCode, client: CurrentClient, database: DatabaseDep, clock: ClockDep
+) -> InvitePreview:
+    """The group an invite is for. Not found for a code that is wrong, replaced or expired."""
+    async with database.actor_transaction(client.actor) as session:
+        invite = await groups.preview_invite(session, client.actor, code, clock)
+    return InvitePreview(
+        group_id=invite.group_id,
+        name=invite.name,
+        category=invite.category,
+        currency=invite.target.currency,
+        target_minor=invite.target.minor,
+        target_date=invite.target_date,
+        owner_name=invite.owner_name,
+        members=invite.members,
+        expires_at=invite.expires_at,
+    )
+
+
+@group_router.post(
+    "/invites/{code}/join", status_code=201, responses={422: {"model": ErrorEnvelope}}
+)
+async def join_group(
+    code: InviteCode,
+    body: JoinGroup,
+    client: CurrentClient,
+    database: DatabaseDep,
+    clock: ClockDep,
+    idempotency_key: IdempotencyKey,
+) -> GroupView:
+    async with database.actor_transaction(client.actor) as session:
+        group = await groups.join_group(
+            session,
+            client.actor,
+            code,
+            idempotency_key=idempotency_key,
+            display_name=body.display_name,
+            own_target=_money(body.own_target_minor, body.currency),
+            clock=clock,
+        )
+    return _group_view(group)
+
+
+@group_router.get("/{group_id}")
+async def get_group(
+    group_id: PushId, client: CurrentClient, database: DatabaseDep, clock: ClockDep
+) -> GroupView:
+    async with database.actor_transaction(client.actor) as session:
+        group = await groups.client_group(session, client.actor, group_id, clock)
+    return _group_view(group)
+
+
+@group_router.put("/{group_id}", responses={422: {"model": ErrorEnvelope}})
+async def update_group(
+    group_id: PushId,
+    body: GoalDetails,
+    client: CurrentClient,
+    database: DatabaseDep,
+    clock: ClockDep,
+) -> GroupView:
+    """Change the group's name, target or date. For the one who set it up."""
+    async with database.actor_transaction(client.actor) as session:
+        group = await groups.update_group(
+            session,
+            client.actor,
+            group_id,
+            name=body.name,
+            category=body.category,
+            target=_money(body.target_minor, body.currency),
+            target_date=body.target_date,
+            clock=clock,
+        )
+    return _group_view(group)
+
+
+@group_router.put("/{group_id}/me", responses={422: {"model": ErrorEnvelope}})
+async def rename_self(
+    group_id: PushId,
+    body: Rename,
+    client: CurrentClient,
+    database: DatabaseDep,
+    clock: ClockDep,
+) -> GroupView:
+    """Change the name the other members see the client by."""
+    async with database.actor_transaction(client.actor) as session:
+        group = await groups.rename_self(
+            session, client.actor, group_id, display_name=body.display_name, clock=clock
+        )
+    return _group_view(group)
+
+
+@group_router.post("/{group_id}/invite", status_code=201)
+async def new_invite(
+    group_id: PushId, client: CurrentClient, database: DatabaseDep, clock: ClockDep
+) -> InviteView:
+    """A new invite code, replacing any earlier one. Shown once."""
+    async with database.actor_transaction(client.actor) as session:
+        invite = await groups.new_invite(session, client.actor, group_id, clock)
+    return InviteView(code=invite.code, expires_at=invite.expires_at)
+
+
+@group_router.delete("/{group_id}/invite")
+async def revoke_invite(
+    group_id: PushId, client: CurrentClient, database: DatabaseDep, clock: ClockDep
+) -> GroupView:
+    async with database.actor_transaction(client.actor) as session:
+        group = await groups.revoke_invite(session, client.actor, group_id, clock)
+    return _group_view(group)
+
+
+@group_router.post("/{group_id}/leave", status_code=204)
+async def leave_group(
+    group_id: PushId, client: CurrentClient, database: DatabaseDep, clock: ClockDep
+) -> Response:
+    """Leave the group. The client's own goal and its savings carry on as theirs."""
+    async with database.actor_transaction(client.actor) as session:
+        await groups.leave_group(session, client.actor, group_id, clock)
+    return Response(status_code=204)
+
+
+@group_router.post("/{group_id}/members/{goal_id}/remove")
+async def remove_member(
+    group_id: PushId,
+    goal_id: PushId,
+    client: CurrentClient,
+    database: DatabaseDep,
+    clock: ClockDep,
+) -> GroupView:
+    async with database.actor_transaction(client.actor) as session:
+        group = await groups.remove_member(session, client.actor, group_id, goal_id, clock)
+    return _group_view(group)
+
+
+@group_router.post("/{group_id}/close")
+async def close_group(
+    group_id: PushId, client: CurrentClient, database: DatabaseDep, clock: ClockDep
+) -> GroupView:
+    """Close the group for good. Every member's goal carries on as their own."""
+    async with database.actor_transaction(client.actor) as session:
+        group = await groups.close_group(session, client.actor, group_id, clock)
+    return _group_view(group)
+
+
+@staff_group_router.get("")
+async def staff_list_groups(
+    staff: StaffWithView,
+    database: DatabaseDep,
+    status: GroupStatus | None = None,
+    limit: Annotated[int, Query(ge=1, le=groups.MAX_PAGE_SIZE)] = groups.DEFAULT_PAGE_SIZE,
+) -> StaffGroupList:
+    async with database.actor_transaction(staff.actor) as session:
+        found = await groups.list_groups(session, staff.actor, status=status, limit=limit)
+    return StaffGroupList(groups=[_staff_group_view(g) for g in found])
+
+
+@staff_group_router.get("/{group_id}")
+async def staff_get_group(
+    group_id: PushId, staff: StaffWithView, database: DatabaseDep, clock: ClockDep
+) -> StaffGroupDetail:
+    async with database.actor_transaction(staff.actor) as session:
+        found = await groups.staff_group(session, staff.actor, group_id, clock)
+    return StaffGroupDetail(
+        group=_staff_group_view(found.group),
+        progress=_group_progress_view(found.progress),
+        members=[
+            StaffMemberView(
+                goal_id=m.goal_id,
+                client_id=m.client_id,
+                display_name=m.display_name,
+                joined_at=m.joined_at,
+                left_at=m.left_at,
+                value_minor=m.value.minor,
+                value_on=m.value_on,
+            )
+            for m in found.members
+        ],
+    )
+
+
+routers: list[APIRouter] = [client_router, staff_router, group_router, staff_group_router]
