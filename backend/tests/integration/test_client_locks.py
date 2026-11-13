@@ -15,6 +15,7 @@ from app.shared.actors import Actor
 from app.shared.errors import ApplicationError
 from tests.support.database import TestDatabase
 from tests.support.http import Api, running_api
+from tests.support.kyc import verify
 
 pytestmark = pytest.mark.integration
 
@@ -79,6 +80,31 @@ async def test_the_client_page_shows_what_each_role_may_see(api: Api) -> None:
     page = (await api.http.get(f"/staff/clients/{client.id}")).json()
     assert page["complaints"] is None and page["conversation"] is None
     assert (await api.http.get("/staff/clients/-Nabc0000000000000Z9")).status_code == 404
+
+
+async def test_client_cards_name_only_verified_clients_and_skip_unknown_ids(api: Api) -> None:
+    verified = await api.client()
+    await verify(api.database, verified, api.clock)
+    unverified = await api.client()
+    await api.staff("finance")
+    params = {"ids": [str(verified.id), str(unverified.id), "-Nabc0000000000000Z9"]}
+    response = await api.http.get("/staff/clients/cards", params=params)
+    assert response.status_code == 200, response.text
+    cards = {card["id"]: card for card in response.json()["cards"]}
+    assert set(cards) == {verified.id, unverified.id}
+    assert cards[verified.id]["verified_name"] and cards[verified.id]["account_number"]
+    assert cards[unverified.id]["verified_name"] is None
+    assert cards[unverified.id]["account_number"] is None
+    assert set(cards[unverified.id]) == {
+        "id",
+        "verified_name",
+        "account_number",
+        "status",
+        "created_at",
+    }
+    assert (await api.http.get("/staff/clients/cards")).status_code == 422
+    too_many = {"ids": [verified.id] * 101}
+    assert (await api.http.get("/staff/clients/cards", params=too_many)).status_code == 422
 
 
 async def test_a_lock_needs_a_second_person_and_ends_the_clients_sessions(api: Api) -> None:

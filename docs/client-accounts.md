@@ -9,6 +9,7 @@ The page is put together by `backend/app/modules/console`, which owns no tables.
 | Route | Who | Use |
 | --- | --- | --- |
 | `GET /staff/clients/search?q=` | `clients.view` | A client by ID, ten-digit account number, or mobile number written any usual way (`0772…`, `256772…`, `+256772…`). |
+| `GET /staff/clients/cards?ids=` | `clients.view` | Up to 100 clients by ID, each with their verified name (none until the identity check is approved), account number, status and when they joined. For screens that list clients by ID, such as support chats and complaints, so they need not read each client page. An ID with no client is left out. |
 | `GET /staff/clients/{id}` | `clients.view` | The client page: account status, second steps set up, last sign-in, the identity check and the verified name, what Finvest owes them at the end of today per ledger account, payout destinations (account numbers masked), every lock and unlock, and, for staff who may see them, the latest chat and the complaints. |
 | `POST /staff/clients/{id}/locks` | `clients.lock` | Propose `lock` or `unlock`, with a reason. |
 | `POST /staff/clients/locks/{id}/decision` | `clients.lock` | `approved` or `rejected` by someone else, or `withdrawn` by the proposer, with a reason. |
