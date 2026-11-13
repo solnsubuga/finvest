@@ -80,6 +80,15 @@ What the stub does not cover yet, each with a screen on the design canvas: the a
 
 Still outstanding on the sign up screen: "the terms" and "the privacy notice" are not links yet, because neither document exists. They must link to the real documents before launch.
 
+## Goals
+
+The goal screens live in `src/app/goals/` and talk to the `GoalsClient` interface in `src/goals/types.ts`. `src/goals/apiGoalsClient.ts` answers it from the API's `/client/goals` routes (docs/goals.md); the demo in `stubGoalsClient.ts` answers it in tests and with `EXPO_PUBLIC_DEMO_AUTH=1`.
+
+- A goal holds no money. Each saving is an investment of its own, and the goal screen sends the client to the pay screens with its ID.
+- Creating a goal and each saving carry an idempotency key made once per visit to the screen. When the answer to a saving is lost, being offline included, the amount is locked so a retry is the same saving under the same key.
+- Saving needs an approved ID check, because it makes an investment. The API refuses it before that, and the screen says to finish the ID check.
+- Every figure, the plan's rate included, arrives after tax from the API and is shown as sent.
+
 ## Paying
 
 The pay screens live in `src/app/pay/` and talk to the `PaymentsClient` interface in `src/payments/types.ts`. A payment always pays for one thing, an investment or a goal, and its amount comes from that thing. There is no wallet and no amount field.
