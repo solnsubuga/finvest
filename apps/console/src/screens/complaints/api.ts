@@ -1,10 +1,8 @@
 /**
  * The console's view of the complaints register.
  *
- * A stand-in for the generated client in packages/api-client, like AuthApi.
- * The shapes follow the staff routes in docs/support.md. When the backend
- * client is wired in, an implementation that calls them replaces the stub in
- * index.tsx and the screen does not change.
+ * The shapes follow the staff routes in docs/support.md. `http.ts` calls them;
+ * `stub.ts` is the sample for `pnpm dev` and previews.
  */
 
 import type { Amount } from "@/screens/dealing-desk/api.ts";
@@ -129,7 +127,15 @@ export interface ComplaintsApi {
   decideOutcome(complaintId: string, proposalId: string, decision: Decision, reason: string | null): Promise<ComplaintDetail>;
 }
 
-export type ComplaintsErrorCode = "invalid" | "not_found" | "conflict" | "forbidden" | "not_connected" | "unavailable";
+export type ComplaintsErrorCode =
+  | "invalid"
+  | "not_found"
+  | "conflict"
+  | "forbidden"
+  /** The change was saved but could not be read back. The screen reloads; it never asks for the change again. */
+  | "stale"
+  | "not_connected"
+  | "unavailable";
 
 export class ComplaintsError extends Error {
   constructor(readonly code: ComplaintsErrorCode) {
@@ -143,6 +149,7 @@ const MESSAGES: Record<ComplaintsErrorCode, string> = {
   not_found: "This complaint could not be found.",
   conflict: "This complaint has moved on. It is closed, or an outcome is already waiting. Open it again to see where it stands.",
   forbidden: "That needs a different person or a role you do not have. Ask compliance or an admin.",
+  stale: "Saved. Finvest could not show the result straight away, so it has been loaded again.",
   not_connected: "Complaints are not connected to the Finvest service yet.",
   unavailable: "We could not reach Finvest. Check your connection and try again.",
 };

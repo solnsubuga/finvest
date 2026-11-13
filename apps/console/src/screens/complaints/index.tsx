@@ -1,13 +1,16 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useAuth } from "@/auth/context.ts";
+import { apiBaseUrl, createHttp } from "@/api/http.ts";
 import { isStubAuth } from "@/auth/index.ts";
 import { can } from "@/auth/types.ts";
 import { Button } from "@/components/ui/button.tsx";
 import { emptyDirectory, type Directory, type StaffCard } from "@/directory/api.ts";
+import { createHttpDirectory } from "@/directory/http.ts";
 import { createStubDirectory } from "@/directory/stub.ts";
 import { cn } from "@/lib.ts";
 import { PageHeader } from "@/pages/PageHeader.tsx";
 import {
+  ComplaintsError,
   complaintsErrorMessage,
   notConnectedComplaintsApi,
   type ComplaintDetail,
@@ -19,6 +22,7 @@ import {
 import { DetailPanel, type Command } from "./Detail.tsx";
 import { LogForm } from "./LogForm.tsx";
 import { Figures, RegisterTable } from "./Register.tsx";
+import { createHttpComplaintsApi } from "./http.ts";
 import { createStubComplaintsApi } from "./stub.ts";
 
 const SUMMARY = "The formal register. Every complaint has an owner, a deadline and an outcome.";
@@ -196,6 +200,14 @@ export function ComplaintsScreen({
       return true;
     } catch (error) {
       setFailed({ on: complaintId, message: complaintsErrorMessage(error) });
+      if (error instanceof ComplaintsError && error.code === "stale") {
+        // It was saved: show what Finvest now holds, and let the form start again.
+        setRound((count) => count + 1);
+        await openDetail(complaintId);
+        const next = await fetchRegister(show);
+        if (next.state === "ready") setRegister(next);
+        return true;
+      }
       return false;
     } finally {
       setBusy(false);
@@ -219,6 +231,15 @@ export function ComplaintsScreen({
       }
       await afterChange(value);
     } catch (error) {
+      if (error instanceof ComplaintsError && error.code === "stale") {
+        // It was logged: the register, read again, shows it. The key is spent.
+        logKey.current = null;
+        setLogging(false);
+        setFailed({ on: "register", message: complaintsErrorMessage(error) });
+        const next = await fetchRegister(show);
+        if (next.state === "ready") setRegister(next);
+        return;
+      }
       setFailed({ on: "new", message: complaintsErrorMessage(error) });
     } finally {
       setBusy(false);
@@ -286,6 +307,11 @@ export function ComplaintsScreen({
                   </button>
                 ))}
               </div>
+              {failed?.on === "register" ? (
+                <p role="status" className="m-0 rounded-md bg-surface-sunken px-3.5 py-3 text-md leading-normal">
+                  {failed.message}
+                </p>
+              ) : null}
               {register.value.complaints.length === 0 ? (
                 <section className="flex flex-col gap-2 rounded-xl border border-border bg-surface p-5">
                   <h2 className="m-0 text-[17px] font-extrabold">
@@ -359,7 +385,7 @@ export function ComplaintsScreen({
 
 export default function ComplaintsPage() {
   const { session } = useAuth();
-  // A sample register under `pnpm dev` or a preview build, like sign-in. Otherwise nothing until the API client exists.
+  // A sample register under `pnpm dev` or a preview build, like sign-in. Otherwise the real API.
   const [{ api, directory }] = useState<{ api: ComplaintsApi; directory: Directory }>(() => {
     if (isStubAuth() && session) {
       const me = { id: session.staffId, name: session.name };
@@ -368,7 +394,10 @@ export default function ComplaintsPage() {
       if (sample === "offline") return { api: notConnectedComplaintsApi, directory: createStubDirectory(me) };
       return { api: createStubComplaintsApi(me, kampalaToday, Date.now, sample === "empty" ? "empty" : "sample"), directory: createStubDirectory(me) };
     }
-    return { api: notConnectedComplaintsApi, directory: emptyDirectory };
+    const base = apiBaseUrl();
+    if (!base) return { api: notConnectedComplaintsApi, directory: emptyDirectory };
+    const http = createHttp(base);
+    return { api: createHttpComplaintsApi(http), directory: createHttpDirectory(http) };
   });
   return (
     <ComplaintsScreen
