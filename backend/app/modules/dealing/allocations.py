@@ -17,6 +17,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.modules.dealing import holdings
 from app.modules.dealing.domain.allocation import Held, Waiting, allocate, to_release
+from app.modules.dealing.domain.allocation_report import Allocated
 from app.modules.investments import service as investments
 from app.shared.business_day import business_date
 from app.shared.clock import Clock
@@ -75,6 +76,15 @@ class _InForce:
     lot_id: str
     cost: Money
     allocated_at: datetime
+
+
+async def in_force(session: AsyncSession, product_code: str) -> list[Allocated]:
+    """The allocations of a product in force now, for the allocation report."""
+    rows = await session.execute(_IN_FORCE, {"product_code": product_code})
+    return [
+        Allocated(row.lot_id, row.investment_id, Money(row.cost_minor, Currency(row.currency)))
+        for row in rows.all()
+    ]
 
 
 async def bills_behind(session: AsyncSession, investment_id: str) -> list[InvestmentBills]:

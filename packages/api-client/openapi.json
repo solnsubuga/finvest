@@ -100,6 +100,33 @@
         "title": "Action",
         "type": "string"
       },
+      "AllocationReportOut": {
+        "additionalProperties": false,
+        "properties": {
+          "currency": {
+            "$ref": "#/components/schemas/Currency"
+          },
+          "on": {
+            "format": "date",
+            "title": "On",
+            "type": "string"
+          },
+          "products": {
+            "items": {
+              "$ref": "#/components/schemas/ProductAllocationOut"
+            },
+            "title": "Products",
+            "type": "array"
+          }
+        },
+        "required": [
+          "currency",
+          "on",
+          "products"
+        ],
+        "title": "AllocationReportOut",
+        "type": "object"
+      },
       "Amount-Output": {
         "additionalProperties": false,
         "description": "An amount in the smallest unit of its currency: whole shillings, or cents.",
@@ -633,6 +660,40 @@
           "next_before"
         ],
         "title": "BankTransferPage",
+        "type": "object"
+      },
+      "BillsOut": {
+        "additionalProperties": false,
+        "properties": {
+          "cost": {
+            "$ref": "#/components/schemas/AmountOut"
+          },
+          "custodian_reference": {
+            "title": "Custodian Reference",
+            "type": "string"
+          },
+          "lot_id": {
+            "title": "Lot Id",
+            "type": "string"
+          },
+          "matures_on": {
+            "format": "date",
+            "title": "Matures On",
+            "type": "string"
+          },
+          "product_code": {
+            "title": "Product Code",
+            "type": "string"
+          }
+        },
+        "required": [
+          "lot_id",
+          "product_code",
+          "matures_on",
+          "custodian_reference",
+          "cost"
+        ],
+        "title": "BillsOut",
         "type": "object"
       },
       "Body_add_photo_client_identity_check_photos__kind__put": {
@@ -4801,6 +4862,39 @@
         "title": "InterestRunOut",
         "type": "object"
       },
+      "InvestmentBillsOut": {
+        "additionalProperties": false,
+        "properties": {
+          "bills": {
+            "items": {
+              "$ref": "#/components/schemas/BillsOut"
+            },
+            "title": "Bills",
+            "type": "array"
+          },
+          "investment_id": {
+            "title": "Investment Id",
+            "type": "string"
+          },
+          "total": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/AmountOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "investment_id",
+          "bills",
+          "total"
+        ],
+        "title": "InvestmentBillsOut",
+        "type": "object"
+      },
       "InvestmentRequest": {
         "additionalProperties": false,
         "properties": {
@@ -5548,6 +5642,58 @@
           "suppression"
         ],
         "title": "LookupResult",
+        "type": "object"
+      },
+      "LotOut": {
+        "additionalProperties": false,
+        "properties": {
+          "allocated": {
+            "$ref": "#/components/schemas/AmountOut"
+          },
+          "cost": {
+            "$ref": "#/components/schemas/AmountOut"
+          },
+          "custodian_reference": {
+            "title": "Custodian Reference",
+            "type": "string"
+          },
+          "face": {
+            "$ref": "#/components/schemas/AmountOut"
+          },
+          "investments": {
+            "title": "Investments",
+            "type": "integer"
+          },
+          "lot_id": {
+            "title": "Lot Id",
+            "type": "string"
+          },
+          "matures_on": {
+            "format": "date",
+            "title": "Matures On",
+            "type": "string"
+          },
+          "settled_on": {
+            "format": "date",
+            "title": "Settled On",
+            "type": "string"
+          },
+          "unallocated": {
+            "$ref": "#/components/schemas/AmountOut"
+          }
+        },
+        "required": [
+          "lot_id",
+          "settled_on",
+          "matures_on",
+          "custodian_reference",
+          "face",
+          "cost",
+          "allocated",
+          "unallocated",
+          "investments"
+        ],
+        "title": "LotOut",
         "type": "object"
       },
       "MakeComplaint": {
@@ -7443,6 +7589,62 @@
           "severity"
         ],
         "title": "ProblemView",
+        "type": "object"
+      },
+      "ProductAllocationOut": {
+        "additionalProperties": false,
+        "properties": {
+          "allocated": {
+            "$ref": "#/components/schemas/AmountOut"
+          },
+          "cost_held": {
+            "$ref": "#/components/schemas/AmountOut"
+          },
+          "covered": {
+            "$ref": "#/components/schemas/AmountOut"
+          },
+          "investments": {
+            "title": "Investments",
+            "type": "integer"
+          },
+          "investments_waiting": {
+            "title": "Investments Waiting",
+            "type": "integer"
+          },
+          "lots": {
+            "items": {
+              "$ref": "#/components/schemas/LotOut"
+            },
+            "title": "Lots",
+            "type": "array"
+          },
+          "owed": {
+            "$ref": "#/components/schemas/AmountOut"
+          },
+          "product_code": {
+            "title": "Product Code",
+            "type": "string"
+          },
+          "unallocated": {
+            "$ref": "#/components/schemas/AmountOut"
+          },
+          "waiting": {
+            "$ref": "#/components/schemas/AmountOut"
+          }
+        },
+        "required": [
+          "product_code",
+          "lots",
+          "cost_held",
+          "allocated",
+          "unallocated",
+          "investments",
+          "owed",
+          "covered",
+          "investments_waiting",
+          "waiting"
+        ],
+        "title": "ProductAllocationOut",
         "type": "object"
       },
       "ProductKind": {
@@ -23712,6 +23914,132 @@
         "summary": "Move Complaint",
         "tags": [
           "staff support"
+        ]
+      }
+    },
+    "/staff/dealing/allocations": {
+      "get": {
+        "operationId": "get_allocation_report_staff_dealing_allocations_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "currency",
+            "required": false,
+            "schema": {
+              "$ref": "#/components/schemas/Currency",
+              "default": "UGX"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AllocationReportOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          }
+        },
+        "summary": "Get Allocation Report",
+        "tags": [
+          "dealing desk"
+        ]
+      }
+    },
+    "/staff/dealing/allocations/investments/{investment_id}": {
+      "get": {
+        "operationId": "get_bills_behind_staff_dealing_allocations_investments__investment_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "investment_id",
+            "required": true,
+            "schema": {
+              "maxLength": 64,
+              "minLength": 1,
+              "title": "Investment Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InvestmentBillsOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          }
+        },
+        "summary": "Get Bills Behind",
+        "tags": [
+          "dealing desk"
         ]
       }
     },
