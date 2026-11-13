@@ -495,7 +495,8 @@ async def remove_member(
     session: AsyncSession, client: Actor, group_id: str, member_goal_id: str, clock: Clock
 ) -> ClientGroup:
     """Take a member out of the group. Only the owner may, and never themselves. The member's
-    own goal and its savings carry on as theirs."""
+    own goal and its savings carry on as theirs. The current invite is withdrawn too, so the
+    member cannot rejoin with the link they had."""
     group = await _owned(session, client, group_id)
     members = {m.goal_id: m for m in await _members(session, group) if m.left_at is None}
     member = members.get(member_goal_id)
@@ -503,8 +504,11 @@ async def remove_member(
         raise ApplicationError("not_found")
     if member.client_id == group.owner_client_id:
         raise ApplicationError("conflict")
+    now = clock.now()
+    await session.execute(_LEAVE, {"goal_id": member.goal_id, "group_id": group.id, "now": now})
+    # The removed member may still hold the link, so it stops working.
     await session.execute(
-        _LEAVE, {"goal_id": member.goal_id, "group_id": group.id, "now": clock.now()}
+        _SET_INVITE, {"id": group.id, "hash": None, "expires_at": None, "now": now}
     )
     logger.info("goal_group_member_removed", group_id=group.id)
     return await client_group(session, client, group.id, clock)

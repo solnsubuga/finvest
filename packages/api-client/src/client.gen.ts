@@ -267,6 +267,47 @@ export const GoalList = z.object({
 });
 export type GoalList = z.infer<typeof GoalList>;
 
+export const GroupProgressView = z.object({
+  percent: z.number().int(),
+  standing: Standing,
+  value_minor: z.number().int(),
+});
+export type GroupProgressView = z.infer<typeof GroupProgressView>;
+
+export const GroupStatus = z.enum(["active", "closed"]);
+export type GroupStatus = z.infer<typeof GroupStatus>;
+
+export const MemberView = z.object({
+  display_name: z.string(),
+  is_owner: z.boolean(),
+  is_you: z.boolean(),
+  joined_at: z.string(),
+});
+export type MemberView = z.infer<typeof MemberView>;
+
+export const GroupView = z.object({
+  category: GoalCategory,
+  created_at: z.string(),
+  currency: Currency,
+  group_id: z.string(),
+  invite_expires_at: z.string().nullable(),
+  is_owner: z.boolean(),
+  members: z.array(MemberView),
+  name: z.string(),
+  others_as_of: z.string().nullable(),
+  own_goal_id: z.string(),
+  progress: GroupProgressView,
+  status: GroupStatus,
+  target_date: z.string().nullable(),
+  target_minor: z.number().int(),
+});
+export type GroupView = z.infer<typeof GroupView>;
+
+export const GroupList = z.object({
+  groups: z.array(GroupView),
+});
+export type GroupList = z.infer<typeof GroupList>;
+
 export const Health = z.object({
   status: z.literal("ok"),
 });
@@ -308,6 +349,38 @@ export const InvestmentRequest = z.object({
   product_code: z.string(),
 });
 export type InvestmentRequest = z.infer<typeof InvestmentRequest>;
+
+export const Invite = z.object({
+  code: z.string(),
+});
+export type Invite = z.infer<typeof Invite>;
+
+export const InvitePreview = z.object({
+  category: GoalCategory,
+  currency: Currency,
+  expires_at: z.string(),
+  group_id: z.string(),
+  members: z.number().int(),
+  name: z.string(),
+  owner_name: z.string(),
+  target_date: z.string().nullable(),
+  target_minor: z.number().int(),
+});
+export type InvitePreview = z.infer<typeof InvitePreview>;
+
+export const InviteView = z.object({
+  code: z.string(),
+  expires_at: z.string(),
+});
+export type InviteView = z.infer<typeof InviteView>;
+
+export const JoinGroup = z.object({
+  code: z.string(),
+  currency: Currency.optional(),
+  display_name: z.string(),
+  own_target_minor: z.number().int(),
+});
+export type JoinGroup = z.infer<typeof JoinGroup>;
 
 export const MoneyView = z.object({
   currency: z.enum(["UGX", "USD"]),
@@ -387,6 +460,17 @@ export const NewDestination = z.object({
   phone: z.string().nullable().optional(),
 });
 export type NewDestination = z.infer<typeof NewDestination>;
+
+export const NewGroup = z.object({
+  category: GoalCategory,
+  currency: Currency.optional(),
+  display_name: z.string(),
+  name: z.string(),
+  own_target_minor: z.number().int(),
+  target_date: z.string().nullable().optional(),
+  target_minor: z.number().int(),
+});
+export type NewGroup = z.infer<typeof NewGroup>;
 
 export const NewPasskey = z.object({
   credential: z.record(z.string(), z.unknown()),
@@ -576,6 +660,11 @@ export const QuoteOut = z.object({
   total_minor: z.number().int().nullable(),
 });
 export type QuoteOut = z.infer<typeof QuoteOut>;
+
+export const Rename = z.object({
+  display_name: z.string(),
+});
+export type Rename = z.infer<typeof Rename>;
 
 export const ResetComplete = z.object({
   challenge_id: z.string(),
@@ -866,6 +955,155 @@ export const operations = {
     idempotent: false,
     status: 200,
     response: null,
+  },
+  "GET /client/goal-groups": {
+    method: "GET",
+    path: "/client/goal-groups",
+    params: z.object({}),
+    query: z.object({}),
+    body: null,
+    bodyKind: null,
+    idempotent: false,
+    status: 200,
+    response: GroupList,
+  },
+  "POST /client/goal-groups": {
+    method: "POST",
+    path: "/client/goal-groups",
+    params: z.object({}),
+    query: z.object({}),
+    body: NewGroup,
+    bodyKind: "json",
+    idempotent: true,
+    status: 201,
+    response: GroupView,
+  },
+  "POST /client/goal-groups/invites/preview": {
+    method: "POST",
+    path: "/client/goal-groups/invites/preview",
+    params: z.object({}),
+    query: z.object({}),
+    body: Invite,
+    bodyKind: "json",
+    idempotent: false,
+    status: 200,
+    response: InvitePreview,
+  },
+  "POST /client/goal-groups/join": {
+    method: "POST",
+    path: "/client/goal-groups/join",
+    params: z.object({}),
+    query: z.object({}),
+    body: JoinGroup,
+    bodyKind: "json",
+    idempotent: true,
+    status: 201,
+    response: GroupView,
+  },
+  "GET /client/goal-groups/{group_id}": {
+    method: "GET",
+    path: "/client/goal-groups/{group_id}",
+    params: z.object({
+    group_id: z.string(),
+  }),
+    query: z.object({}),
+    body: null,
+    bodyKind: null,
+    idempotent: false,
+    status: 200,
+    response: GroupView,
+  },
+  "PUT /client/goal-groups/{group_id}": {
+    method: "PUT",
+    path: "/client/goal-groups/{group_id}",
+    params: z.object({
+    group_id: z.string(),
+  }),
+    query: z.object({}),
+    body: GoalDetails,
+    bodyKind: "json",
+    idempotent: false,
+    status: 200,
+    response: GroupView,
+  },
+  "POST /client/goal-groups/{group_id}/close": {
+    method: "POST",
+    path: "/client/goal-groups/{group_id}/close",
+    params: z.object({
+    group_id: z.string(),
+  }),
+    query: z.object({}),
+    body: null,
+    bodyKind: null,
+    idempotent: false,
+    status: 200,
+    response: GroupView,
+  },
+  "POST /client/goal-groups/{group_id}/invite": {
+    method: "POST",
+    path: "/client/goal-groups/{group_id}/invite",
+    params: z.object({
+    group_id: z.string(),
+  }),
+    query: z.object({}),
+    body: null,
+    bodyKind: null,
+    idempotent: false,
+    status: 201,
+    response: InviteView,
+  },
+  "DELETE /client/goal-groups/{group_id}/invite": {
+    method: "DELETE",
+    path: "/client/goal-groups/{group_id}/invite",
+    params: z.object({
+    group_id: z.string(),
+  }),
+    query: z.object({}),
+    body: null,
+    bodyKind: null,
+    idempotent: false,
+    status: 200,
+    response: GroupView,
+  },
+  "POST /client/goal-groups/{group_id}/leave": {
+    method: "POST",
+    path: "/client/goal-groups/{group_id}/leave",
+    params: z.object({
+    group_id: z.string(),
+  }),
+    query: z.object({}),
+    body: null,
+    bodyKind: null,
+    idempotent: false,
+    status: 204,
+    response: null,
+  },
+  "PUT /client/goal-groups/{group_id}/me": {
+    method: "PUT",
+    path: "/client/goal-groups/{group_id}/me",
+    params: z.object({
+    group_id: z.string(),
+  }),
+    query: z.object({}),
+    body: Rename,
+    bodyKind: "json",
+    idempotent: false,
+    status: 200,
+    response: GroupView,
+  },
+  "POST /client/goal-groups/{group_id}/members/{goal_id}/remove": {
+    method: "POST",
+    path: "/client/goal-groups/{group_id}/members/{goal_id}/remove",
+    params: z.object({
+    group_id: z.string(),
+    goal_id: z.string(),
+  }),
+    query: z.object({}),
+    body: null,
+    bodyKind: null,
+    idempotent: false,
+    status: 200,
+    response: GroupView,
   },
   "GET /client/goals": {
     method: "GET",

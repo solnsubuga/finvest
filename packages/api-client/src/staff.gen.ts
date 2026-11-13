@@ -307,6 +307,19 @@ export type GoalCategory = z.infer<typeof GoalCategory>;
 export const GoalStatus = z.enum(["active", "closed"]);
 export type GoalStatus = z.infer<typeof GoalStatus>;
 
+export const Standing = z.enum(["reached", "on_track", "behind", "no_date"]);
+export type Standing = z.infer<typeof Standing>;
+
+export const GroupProgressView = z.object({
+  percent: z.number().int(),
+  standing: Standing,
+  value_minor: z.number().int(),
+});
+export type GroupProgressView = z.infer<typeof GroupProgressView>;
+
+export const GroupStatus = z.enum(["active", "closed"]);
+export type GroupStatus = z.infer<typeof GroupStatus>;
+
 export const InboxRow = z.object({
   client_id: z.string(),
   conversation: ConversationItem,
@@ -477,9 +490,6 @@ export type ProductKind = z.infer<typeof ProductKind>;
 export const ProductStatus = z.enum(["draft", "live", "paused"]);
 export type ProductStatus = z.infer<typeof ProductStatus>;
 
-export const Standing = z.enum(["reached", "on_track", "behind", "no_date"]);
-export type Standing = z.infer<typeof Standing>;
-
 export const ProgressView = z.object({
   awaiting_payment_minor: z.number().int(),
   interest_minor: z.number().int(),
@@ -625,6 +635,43 @@ export const StaffGoalList = z.object({
   goals: z.array(StaffGoalView),
 });
 export type StaffGoalList = z.infer<typeof StaffGoalList>;
+
+export const StaffGroupView = z.object({
+  category: GoalCategory,
+  closed_at: z.string().nullable(),
+  created_at: z.string(),
+  currency: Currency,
+  group_id: z.string(),
+  name: z.string(),
+  owner_client_id: z.string(),
+  status: GroupStatus,
+  target_date: z.string().nullable(),
+  target_minor: z.number().int(),
+});
+export type StaffGroupView = z.infer<typeof StaffGroupView>;
+
+export const StaffMemberView = z.object({
+  client_id: z.string(),
+  display_name: z.string(),
+  goal_id: z.string(),
+  joined_at: z.string(),
+  left_at: z.string().nullable(),
+  value_minor: z.number().int(),
+  value_on: z.string().nullable(),
+});
+export type StaffMemberView = z.infer<typeof StaffMemberView>;
+
+export const StaffGroupDetail = z.object({
+  group: StaffGroupView,
+  members: z.array(StaffMemberView),
+  progress: GroupProgressView,
+});
+export type StaffGroupDetail = z.infer<typeof StaffGroupDetail>;
+
+export const StaffGroupList = z.object({
+  groups: z.array(StaffGroupView),
+});
+export type StaffGroupList = z.infer<typeof StaffGroupList>;
 
 export const StaffInvestmentOut = z.object({
   accrued_through: z.string().nullable(),
@@ -935,6 +982,33 @@ export const operations = {
     idempotent: false,
     status: 200,
     response: StaffSessionView,
+  },
+  "GET /staff/goal-groups": {
+    method: "GET",
+    path: "/staff/goal-groups",
+    params: z.object({}),
+    query: z.object({
+    status: GroupStatus.nullable().optional(),
+    limit: z.number().int().optional(),
+  }),
+    body: null,
+    bodyKind: null,
+    idempotent: false,
+    status: 200,
+    response: StaffGroupList,
+  },
+  "GET /staff/goal-groups/{group_id}": {
+    method: "GET",
+    path: "/staff/goal-groups/{group_id}",
+    params: z.object({
+    group_id: z.string(),
+  }),
+    query: z.object({}),
+    body: null,
+    bodyKind: null,
+    idempotent: false,
+    status: 200,
+    response: StaffGroupDetail,
   },
   "GET /staff/goals": {
     method: "GET",

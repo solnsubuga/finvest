@@ -7,7 +7,7 @@ responses carry figures after tax only, and never a tax rate.
 from datetime import date, datetime
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, Path, Query, Request, Response
+from fastapi import APIRouter, Depends, Query, Request, Response
 from pydantic import Field
 
 from app.api.idempotency import IdempotencyKey
@@ -49,8 +49,9 @@ Day = Annotated[date, Field(strict=False)]
 Category = Annotated[GoalCategory, Field(strict=False)]
 CurrencyCode = Annotated[Currency, Field(strict=False)]
 DisplayName = Annotated[str, Field(min_length=1, max_length=MAX_DISPLAY_NAME_LENGTH * 2)]
-# What `secrets.token_urlsafe(16)` makes: 22 characters of URL-safe base64.
-InviteCode = Annotated[str, Path(pattern=r"^[A-Za-z0-9_-]{22}$")]
+# What `secrets.token_urlsafe(16)` makes: 22 characters of URL-safe base64. Sent in the body,
+# never in the path, so it stays out of access logs.
+InviteCode = Annotated[str, Field(pattern=r"^[A-Za-z0-9_-]{22}$")]
 
 
 def _database(request: Request) -> Database:
@@ -436,7 +437,12 @@ class NewGroup(GoalDetails):
     own_target_minor: AmountMinor
 
 
+class Invite(Contract):
+    code: InviteCode
+
+
 class JoinGroup(Contract):
+    code: InviteCode
     display_name: DisplayName
     own_target_minor: AmountMinor
     currency: CurrencyCode = Currency.UGX
@@ -617,13 +623,15 @@ async def list_groups(client: CurrentClient, database: DatabaseDep, clock: Clock
     return GroupList(groups=[_group_view(g) for g in found])
 
 
-@group_router.get("/invites/{code}")
+@group_router.post("/invites/preview")
 async def preview_invite(
-    code: InviteCode, client: CurrentClient, database: DatabaseDep, clock: ClockDep
+    body: Invite, client: CurrentClient, database: DatabaseDep, clock: ClockDep
 ) -> InvitePreview:
-    """The group an invite is for. Not found for a code that is wrong, replaced or expired."""
+    """The group an invite is for. Not found for a code that is wrong, replaced or expired.
+
+    A POST so the code travels in the body: a path or query would put it in access logs."""
     async with database.actor_transaction(client.actor) as session:
-        invite = await groups.preview_invite(session, client.actor, code, clock)
+        invite = await groups.preview_invite(session, client.actor, body.code, clock)
     return InvitePreview(
         group_id=invite.group_id,
         name=invite.name,
@@ -637,11 +645,8 @@ async def preview_invite(
     )
 
 
-@group_router.post(
-    "/invites/{code}/join", status_code=201, responses={422: {"model": ErrorEnvelope}}
-)
+@group_router.post("/join", status_code=201, responses={422: {"model": ErrorEnvelope}})
 async def join_group(
-    code: InviteCode,
     body: JoinGroup,
     client: CurrentClient,
     database: DatabaseDep,
@@ -652,7 +657,7 @@ async def join_group(
         group = await groups.join_group(
             session,
             client.actor,
-            code,
+            body.code,
             idempotency_key=idempotency_key,
             display_name=body.display_name,
             own_target=_money(body.own_target_minor, body.currency),

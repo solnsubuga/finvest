@@ -182,12 +182,12 @@ async def test_a_group_goal_is_set_up_shared_and_joined_over_http(staff_api: Sta
     code = made.json()["code"]
 
     await staff_api.client()
-    preview = await staff_api.http.get(f"/client/goal-groups/invites/{code}")
+    preview = await staff_api.http.post("/client/goal-groups/invites/preview", json={"code": code})
     assert preview.status_code == 200
     assert (preview.json()["owner_name"], preview.json()["members"]) == ("Grace", 1)
     joined = await staff_api.http.post(
-        f"/client/goal-groups/invites/{code}/join",
-        json={"display_name": "Daniel", "own_target_minor": 5_000_000},
+        "/client/goal-groups/join",
+        json={"code": code, "display_name": "Daniel", "own_target_minor": 5_000_000},
         headers={"Idempotency-Key": key()},
     )
     assert joined.status_code == 201, joined.json()
@@ -204,7 +204,9 @@ async def test_a_group_goal_is_set_up_shared_and_joined_over_http(staff_api: Sta
 
 async def test_an_invite_code_of_the_wrong_shape_is_refused(staff_api: StaffApi) -> None:
     await staff_api.client()
-    response = await staff_api.http.get("/client/goal-groups/invites/short")
+    response = await staff_api.http.post(
+        "/client/goal-groups/invites/preview", json={"code": "short"}
+    )
     assert response.status_code == 422
 
 
