@@ -330,6 +330,23 @@ ROWS = {
         "ALTER TABLE investments ENABLE TRIGGER USER; COMMIT",
         "refusing to drop the record of investments carried over",
     ),
+    "0066_investment_corrections": (
+        "BEGIN; ALTER TABLE investments DISABLE TRIGGER USER; "
+        "ALTER TABLE investment_corrections DISABLE TRIGGER USER; "
+        "INSERT INTO investments (id, client_id, product_id, currency, principal_minor, "
+        "annual_rate_bps, tax_bps, term_days, at_maturity, created_at, pay_by, updated_at) "
+        "VALUES ('-Nabc0000000000000A1', '-Nabc0000000000000B1', 'FvProduct1TREA91_001', "
+        "'UGX', 1000000, 1250, 1500, 91, 'roll_over', now(), now() + interval '72 hours', "
+        "now()); "
+        "INSERT INTO investment_corrections (id, kind, investment_id, client_id, currency, "
+        "amount_minor, reason, proposed_by, proposed_at) "
+        "VALUES ('-Nabc0000000000000C1', 'unwind', '-Nabc0000000000000A1', "
+        "'-Nabc0000000000000B1', 'UGX', 1000000, 'Credited to the wrong client', "
+        "'-Nabc0000000000000E1', now()); "
+        "ALTER TABLE investment_corrections ENABLE TRIGGER USER; "
+        "ALTER TABLE investments ENABLE TRIGGER USER; COMMIT",
+        "refusing to drop the record of investment corrections",
+    ),
     "0034_payout_account_codes": (
         "INSERT INTO identity_codes (id, purpose, channel, phone, actor_id, bound_to, "
         "code_hash, created_at, expires_at) VALUES ('-Nabc0000000000000A1', 'payout_account', "
