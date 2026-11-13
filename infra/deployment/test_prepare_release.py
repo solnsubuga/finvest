@@ -138,6 +138,13 @@ class PrepareRelease(unittest.TestCase):
         for service in ("worker", "scheduler", "migrate"):
             self.assertNotIn("FINVEST_AUTHENTICATOR_KEY", read_env(self.out / "runtime" / f"{service}.env"))
 
+    def test_identity_data_key_reaches_the_api_and_worker_only(self):
+        pr.prepare(self.out, settings(FINVEST_IDENTITY_DATA_KEY="d" * 43))
+        for service in ("api", "worker"):
+            self.assertIn("FINVEST_IDENTITY_DATA_KEY", read_env(self.out / "runtime" / f"{service}.env"))
+        for service in ("scheduler", "migrate"):
+            self.assertNotIn("FINVEST_IDENTITY_DATA_KEY", read_env(self.out / "runtime" / f"{service}.env"))
+
     def test_www_redirects_to_the_apex(self):
         pr.prepare(self.out, settings())
         site = (self.out / "edge" / "site.caddy").read_text()

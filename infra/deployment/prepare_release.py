@@ -173,6 +173,10 @@ def prepare(output: Path, env: Mapping[str, str]) -> None:
         api["FINVEST_AUTHENTICATOR_KEY"] = optional(env, "FINVEST_AUTHENTICATOR_KEY")
 
     worker = {**database, "FINVEST_DATABASE_URL": urls["worker"], **storage}
+    # Encrypts clients' identity details. The API and the worker read it; nothing else gets it.
+    if optional(env, "FINVEST_IDENTITY_DATA_KEY"):
+        api["FINVEST_IDENTITY_DATA_KEY"] = optional(env, "FINVEST_IDENTITY_DATA_KEY")
+        worker["FINVEST_IDENTITY_DATA_KEY"] = optional(env, "FINVEST_IDENTITY_DATA_KEY")
     for name in ("FINVEST_EMAIL_BACKEND", "FINVEST_EMAIL_FROM", "FINVEST_EMAIL_RESEND_API_KEY"):
         if optional(env, name):
             worker[name] = optional(env, name)
