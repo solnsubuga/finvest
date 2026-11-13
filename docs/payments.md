@@ -69,6 +69,27 @@ Choices in this design:
 - **Only an exact amount is confirmed.** A transfer for any other amount is refused as `amount_differs` and the money is returned or matched by staff, as with a mobile money amount mismatch. No part payment is posted.
 - **The statement reference is not required to match.** Banks often cut or change the reference, so staff decide from the receipt, the amount, the date and the sender's name. A transfer from an account in another name is refused as `name_differs`.
 
+## Routes
+
+Client routes, signed in as the client. Each `POST` needs an `Idempotency-Key`.
+
+| Route | What it does |
+| --- | --- |
+| `POST /client/investments/{id}/payments/mobile-money` | `{"network": "mtn" or "airtel"}`. Prompts the number on the client's own account for exactly the investment's amount. The request cannot name a number or an amount. |
+| `GET /client/investments/{id}/payment` | The investment's payment that has not failed. A `409` from the `POST` means one exists: show this one instead of asking the client to pay again. |
+| `GET /client/payments/{id}` | One payment, the client's own only. |
+
+There is no route yet for a client to start a bank transfer. It will upload the receipt file itself, so it arrives with the shared file storage. Until then a receipt row could exist without its file, so the route stays closed.
+
+Staff routes need `reconciliation.view` (admin, operations and finance), because matching a transfer to a statement is reconciliation work.
+
+| Route | What it does |
+| --- | --- |
+| `GET /staff/payments/bank-transfers` | Transfers in review, newest first, 50 a page (`?before=`). |
+| `GET /staff/payments/bank-transfers/{id}` | The transfer, its receipt details, its review, and the statement lines that could be it. Once matched, `matched_line` is the chosen line (amount, value date, reference and narrative), so the second person checks it beside the receipt rather than approving blind. |
+| `POST /staff/payments/bank-transfers/{id}/review` | `{"outcome": "matched", "statement_line_id": …}` or `{"outcome": "not_matched", "reason": …}`. |
+| `POST /staff/payments/bank-transfers/{id}/approve` | A second member of staff approves a match. The matcher gets `403`. |
+
 ## Ledger entries
 
 | Event | Debit | Credit |
@@ -135,7 +156,6 @@ ioTec Pay is the chosen provider. Its API details are not confirmed, so the only
 ## Not built yet
 
 - The ioTec adapter, which needs ioTec's API details, callback signature scheme and sandbox access.
-- Client and staff HTTP routes, which need sign-in sessions.
-- Checking that the investment or goal exists and that the amount meets the product minimum, which needs the investments module.
+- Paying for a goal over HTTP. The routes take investments only.
 - Provider limits and fees.
-- Storing and serving receipt files, the bank details the client is shown, and the correction commands.
+- Storing and serving receipt files (the infra thread owns the shared storage adapter), the bank details the client is shown, and the correction commands.

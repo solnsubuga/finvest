@@ -482,6 +482,25 @@ async def get_review(session: AsyncSession, staff: Actor, deposit_id: str) -> Re
     )
 
 
+async def matched_line(
+    session: AsyncSession, staff: Actor, deposit_id: str
+) -> StatementLineView | None:
+    """The statement line a staff member matched the transfer to, for the second person to check
+    beside the receipt before approving. None if the transfer is not matched."""
+    review = await get_review(session, staff, deposit_id)
+    if review is None or review.statement_line_id is None:
+        return None
+    transfer = await get_bank_transfer(session, deposit_id)
+    return next(
+        (
+            found
+            for found in await _lines_for(session, transfer)
+            if found.id == review.statement_line_id
+        ),
+        None,
+    )
+
+
 class BankTransferJobs:
     """The worker's side: settle a reviewed transfer. Calls no provider."""
 
