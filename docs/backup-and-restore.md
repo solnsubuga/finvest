@@ -13,7 +13,7 @@ A backup counts only once it has been restored and checked. This page says what 
 
 The database is the only thing whose loss loses money records, so it is the one the drill rehearses.
 
-**Targets.** At most 5 minutes of data lost (point in time recovery) and the service back within 4 hours. These are proposals until Solo confirms them.
+**Targets (proposed, see Open in [decisions.md](decisions.md)).** At most 5 minutes of data lost (point in time recovery) and the service back within 4 hours.
 
 ## The drill
 
@@ -25,11 +25,11 @@ Staging is switched off to save cost, so the drill always forks production. Run 
 4. **Run the checks** as the fork's `doadmin` user:
 
    ```sh
-   psql "postgresql://doadmin:<password>@<fork-host>:25060/finvest?sslmode=verify-full&sslrootcert=<ca.crt>" \
+   psql "postgresql://doadmin@<fork-host>:25060/finvest?sslmode=verify-full&sslrootcert=<ca.crt>" \
      -v ON_ERROR_STOP=1 -f backend/db/restore-checks.sql
    ```
 
-   `backend/db/restore-checks.sql` is read only. It fails if any journal entry does not sum to zero, has fewer than two lines, or if any stored balance differs from the sum of its lines. Otherwise it prints the migration head, the last posting and row counts for the main tables. It prints no personal data and no amounts.
+   psql asks for the password, so it never appears in the command, the shell history or the process list. `backend/db/restore-checks.sql` is read only. It fails if any journal entry does not sum to zero, has fewer than two lines, or if any stored balance differs from the sum of its lines. Otherwise it prints the migration head, the last posting and row counts for the main tables. It prints no personal data and no amounts.
 5. **Compare** with the live output from step 1. The migration head must match. The last posting must not be later than the restore point. Every row count must be no higher than the live count, and close to it: a large gap means the fork is older than the point chosen.
 6. **Delete the fork** in DigitalOcean the same day. It bills by the hour and holds a full copy of client data.
 7. **Record the drill** in the table below: date, environment, restore point, how long the fork took, whether the checks passed, and who ran it.
