@@ -222,6 +222,13 @@ export function AboutClient({ card }: { card: ClientCard | null | undefined }) {
             {card.accountNumber ? `Account ${card.accountNumber}, ` : "No account number yet, "}
             {card.verified ? "verified" : "not verified yet"}, client since {longDate(card.clientSince)}
           </p>
+          {card.status === "locked" || card.status === "closed" ? (
+            <p className="m-0 rounded-md bg-danger-surface px-3 py-2.5 text-sm font-semibold text-danger">
+              {card.status === "locked"
+                ? "Their account is locked. They cannot sign in to read a reply, and Finvest sends them no messages."
+                : "Their account is closed. They cannot sign in to read a reply."}
+            </p>
+          ) : null}
           {card.verified ? null : (
             <p className="m-0 rounded-md bg-warning-surface px-3 py-2.5 text-sm font-semibold text-warning-text">
               Their identity check has not passed, so they cannot invest or withdraw yet.

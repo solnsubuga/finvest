@@ -129,6 +129,19 @@ Each migrated client has one claim in `migration_claims`, created by the switch.
 
 A link is a 32-byte random token sent once by SMS and email. Only its SHA-256 hash is stored in `migration_claim_links`. A link works once, for 72 hours. A fresh link cancels the one before it, and the database allows one live link per client. A visitor opening a link is not signed in, so the API looks it up through `finvest_migration_claim_link(hash)`, which returns only that link's claim. The visitor is told only that a link no longer works. Staff can see why: unknown, used, cancelled, expired or already claimed. Reminders go weekly to a client who has not used their link, up to eight. After that, staff call the client and can still send a link by hand.
 
+### Claim routes
+
+The routes are in `backend/app/modules/migration/claims_api.py`. The first two need no sign-in: the link is the proof.
+
+| Route | What it does |
+| --- | --- |
+| `POST /client/claim/start` | Opens the link and texts a code to the phone on file. It changes nothing. |
+| `POST /client/claim/complete` | Checks the link again, then the code. It sets the password, makes the account the client's, signs them in and moves the claim to signed in. |
+| `GET /client/claim` | The signed-in client's step and which identity check they need. |
+| `POST /client/claim/problem` | The client says something carried over is wrong. |
+
+A bad link, a spent one, an expired one and an account that is already claimed all get the same `not_found`, so a link tells a visitor nothing about anyone else. A link that expires between the two steps is refused before the code is checked. Signing in commits in the identity module's own transaction. If moving the claim fails after that, the client stays signed in and the claim stays at invited. The reminder run, which comes with the switch, will skip a client whose account is no longer unclaimed. The identity check and confirming the investments get their routes once the identity checks module offers the selfie check.
+
 ## What Finvest 1.0 was
 
 For reference when writing the import: a Django and Django REST Framework backend with Celery, and a React, Vite and shadcn frontend. The flow was KYC, pick a product, create an order with a bank slip upload or mobile money, an admin verifies the deposit, the order becomes an investment, interest accrues daily, and redemption and transfer need admin approval. Its code is no longer in this repository or its history, so the column names above come from this description and not from the old database. They must be checked against a real export before the first trial.

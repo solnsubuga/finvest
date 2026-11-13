@@ -62,6 +62,7 @@ export type SuppressionsErrorCode =
   | "forbidden"
   | "not_found"
   | "not_connected"
+  | "not_confirmed"
   | "unavailable";
 
 export class SuppressionsError extends Error {
@@ -92,6 +93,8 @@ export function suppressionsErrorMessage(error: unknown): string {
         return "That address or proposal is no longer there.";
       case "not_connected":
         return "This console is not connected to Finvest yet.";
+      case "not_confirmed":
+        return "Not done. Confirm it is you with your passkey or authenticator app, then try again.";
       case "unavailable":
         return "Finvest could not be reached. Check your connection and try again.";
     }
@@ -109,6 +112,8 @@ export function toSuppressionsError(error: unknown, deciding = false): Suppressi
       return new SuppressionsError(path[path.length - 1] === "email" ? "invalid_email" : "invalid");
     }
     if (error.code === "conflict") return new SuppressionsError("waiting");
+    // The person closed the "confirm it is you" dialog, so nothing was done.
+    if (error.code === "confirm_it_is_you") return new SuppressionsError("not_confirmed");
     if (error.code === "forbidden") return new SuppressionsError(deciding ? "same_person" : "forbidden");
     if (error.code === "not_found") return new SuppressionsError("not_found");
   }

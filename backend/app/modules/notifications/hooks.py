@@ -56,7 +56,9 @@ def create_router(verifier: WebhookVerifier | None) -> APIRouter:
             return Response(status_code=204)
         database: Database = request.app.state.database
         async with database.transaction() as session:
-            await email_delivery.record_event(session, svix_id, event, clock.now())
+            await email_delivery.record_event(
+                session, svix_id, event, clock.now(), request.app.state.email_hash_key
+            )
         return Response(status_code=204)
 
     return router

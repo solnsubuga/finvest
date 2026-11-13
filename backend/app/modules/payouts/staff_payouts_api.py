@@ -17,8 +17,9 @@ from typing import Annotated, Literal
 from fastapi import APIRouter, Depends, Request
 from pydantic import Field
 
+from app.api.idempotency import IdempotencyKey
 from app.infrastructure.database import Database
-from app.modules.identity.api import require_permission
+from app.modules.identity.api import require_confirmed, require_permission
 from app.modules.identity.service import StaffSession
 from app.modules.payouts import payouts, resolutions
 from app.modules.payouts.api import MoneyView
@@ -54,6 +55,8 @@ Db = Annotated[Database, Depends(_database)]
 Time = Annotated[Clock, Depends(_clock)]
 Viewer = Annotated[StaffSession, Depends(require_permission("money_movement.view"))]
 Settler = Annotated[StaffSession, Depends(require_permission("reconciliation.view"))]
+# Approving needs a passkey or app code from the last few minutes.
+Approver = Annotated[StaffSession, Depends(require_confirmed("reconciliation.view"))]
 Reason = Annotated[str, Field(min_length=1, max_length=500)]
 
 
@@ -180,7 +183,12 @@ async def stranded(staff: Settler, database: Db, clock: Time) -> list[StrandedPa
 
 @staff_router.post("/payouts/{payout_id}/resolutions", status_code=201)
 async def propose_resolution(
-    payout_id: PushId, body: ProposeIn, staff: Settler, database: Db, clock: Time
+    payout_id: PushId,
+    body: ProposeIn,
+    staff: Settler,
+    database: Db,
+    clock: Time,
+    idempotency_key: IdempotencyKey,
 ) -> ResolutionOut:
     """The first person proposes how the payout ended. A different person must approve it."""
     async with database.actor_transaction(staff.actor) as session:
@@ -192,6 +200,7 @@ async def propose_resolution(
             statement_line_id=body.statement_line_id,
             statement_id=body.statement_id,
             reason=body.reason,
+            idempotency_key=idempotency_key,
             clock=clock,
         )
     return _resolution(view)
@@ -199,12 +208,22 @@ async def propose_resolution(
 
 @staff_router.post("/payout-resolutions/{resolution_id}/approve")
 async def approve_resolution(
-    resolution_id: PushId, body: DecideIn, staff: Settler, database: Db, clock: Time
+    resolution_id: PushId,
+    body: DecideIn,
+    staff: Approver,
+    database: Db,
+    clock: Time,
+    idempotency_key: IdempotencyKey,
 ) -> SettledPayoutOut:
     """A different person approves. The payout moves to the outcome and its entry is posted."""
     async with database.actor_transaction(staff.actor) as session:
         moved = await resolutions.approve(
-            session, staff.actor, resolution_id, reason=body.reason, clock=clock
+            session,
+            staff.actor,
+            resolution_id,
+            reason=body.reason,
+            idempotency_key=idempotency_key,
+            clock=clock,
         )
     return SettledPayoutOut(id=moved.id, status=moved.status.value)  # type: ignore[arg-type]
 

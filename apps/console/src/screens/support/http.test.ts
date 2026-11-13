@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import { createHttp } from "@/api/http.ts";
-import { createHttpSupportApi } from "./http.ts";
+import { CHAT_PAGE, createHttpSupportApi } from "./http.ts";
 
 const CONVERSATION = {
   id: "-Nchat0000000000000A",
@@ -57,6 +57,29 @@ describe("support over HTTP", () => {
     });
   });
 
+  it("reads a long chat page by page, after the last message of each full page", async () => {
+    const messages = (from: number, count: number) =>
+      Array.from({ length: count }, (_, i) => ({ ...MESSAGE, id: `-Nmessage${String(from + i).padStart(11, "0")}` }));
+    const pages = [messages(0, CHAT_PAGE), messages(CHAT_PAGE, CHAT_PAGE), messages(2 * CHAT_PAGE, 3)];
+    const fetch = vi.fn<typeof globalThis.fetch>();
+    for (const page of pages) fetch.mockImplementationOnce(() => reply(200, { conversation: CONVERSATION, client_id: "c", messages: page }));
+    const chat = await createHttpSupportApi(createHttp("https://api.test", fetch)).chat(CONVERSATION.id);
+    expect(chat.messages).toHaveLength(2 * CHAT_PAGE + 3);
+    expect(chat.messages.at(-1)?.id).toBe(pages[2]!.at(-1)!.id);
+    const urls = fetch.mock.calls.map(([url]) => String(url));
+    expect(urls).toEqual([
+      `https://api.test/staff/support/conversations/${CONVERSATION.id}?limit=200`,
+      `https://api.test/staff/support/conversations/${CONVERSATION.id}?limit=200&after=${pages[0]!.at(-1)!.id}`,
+      `https://api.test/staff/support/conversations/${CONVERSATION.id}?limit=200&after=${pages[1]!.at(-1)!.id}`,
+    ]);
+  });
+
+  it("reads a short chat in one request", async () => {
+    const fetch = vi.fn<typeof globalThis.fetch>(() => reply(200, { conversation: CONVERSATION, client_id: "c", messages: [MESSAGE] }));
+    await createHttpSupportApi(createHttp("https://api.test", fetch)).chat(CONVERSATION.id);
+    expect(fetch).toHaveBeenCalledTimes(1);
+  });
+
   it("opens a chat, replies with the message's key, solves it and sets its topic", async () => {
     const fetch = vi
       .fn<typeof globalThis.fetch>()
@@ -72,7 +95,7 @@ describe("support over HTTP", () => {
     expect((await api.setTopic(CONVERSATION.id, "deposit")).topic).toBe("deposit");
     const calls = fetch.mock.calls.map((call) => [call[1]?.method, String(call[0]).replace("https://api.test/staff/support/conversations/", ""), call[1]?.body ?? null]);
     expect(calls).toEqual([
-      ["GET", CONVERSATION.id, null],
+      ["GET", `${CONVERSATION.id}?limit=200`, null],
       ["POST", `${CONVERSATION.id}/messages`, JSON.stringify({ body: "On it", key: "key-0001" })],
       ["POST", `${CONVERSATION.id}/solve`, null],
       ["PUT", `${CONVERSATION.id}/topic`, JSON.stringify({ topic: "deposit" })],

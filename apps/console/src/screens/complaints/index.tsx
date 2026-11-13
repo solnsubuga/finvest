@@ -4,7 +4,7 @@ import { apiBaseUrl, createHttp } from "@/api/http.ts";
 import { isStubAuth } from "@/auth/index.ts";
 import { can } from "@/auth/types.ts";
 import { Button } from "@/components/ui/button.tsx";
-import { emptyDirectory, type Directory, type StaffCard } from "@/directory/api.ts";
+import { emptyDirectory, type ClientCard, type ClientCardStatus, type Directory, type StaffCard } from "@/directory/api.ts";
 import { createHttpDirectory } from "@/directory/http.ts";
 import { createStubDirectory } from "@/directory/stub.ts";
 import { cn } from "@/lib.ts";
@@ -70,7 +70,7 @@ export function ComplaintsScreen({
   const logKey = useRef<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [failed, setFailed] = useState<{ on: string; message: string } | null>(null);
-  const [clients, setClients] = useState<Record<string, string | null>>({});
+  const [clients, setClients] = useState<Record<string, ClientCard | null>>({});
   const [staff, setStaff] = useState<Record<string, string | null>>({});
   const [team, setTeam] = useState<StaffCard[]>([]);
   // Bumped after each command, so the panel's half-filled forms are dropped once the complaint moves on.
@@ -85,7 +85,7 @@ export function ComplaintsScreen({
         if (asked.current.has(`client:${clientId}`)) continue;
         asked.current.add(`client:${clientId}`);
         void directory.client(clientId).then(
-          (card) => setClients((known) => ({ ...known, [clientId]: card?.name ?? null })),
+          (card) => setClients((known) => ({ ...known, [clientId]: card })),
           () => setClients((known) => ({ ...known, [clientId]: null })),
         );
       }
@@ -164,7 +164,8 @@ export function ComplaintsScreen({
     };
   }, [directory]);
 
-  const clientName = (clientId: string) => clients[clientId] ?? "Client";
+  const clientName = (clientId: string) => clients[clientId]?.name ?? "Client";
+  const clientStatus = (clientId: string): ClientCardStatus | null => clients[clientId]?.status ?? null;
   const staffName = (staffId: string | null) => (staffId ? (staff[staffId] ?? "Staff") : NOBODY);
 
   function select(complaintId: string) {
@@ -328,6 +329,7 @@ export function ComplaintsScreen({
                   selected={logging ? null : selected}
                   today={today()}
                   clientName={clientName}
+                  clientStatus={clientStatus}
                   // First names in the table, as on the canvas.
                   ownerName={(ownerId) => (ownerId ? (staffName(ownerId).split(" ")[0] ?? NOBODY) : NOBODY)}
                   onSelect={select}
@@ -365,6 +367,7 @@ export function ComplaintsScreen({
                   key={`${detail.value.complaint.id}:${round}`}
                   detail={detail.value}
                   clientName={clientName(detail.value.complaint.clientId)}
+                  clientStatus={clientStatus(detail.value.complaint.clientId)}
                   staffName={staffName}
                   team={team}
                   me={me}

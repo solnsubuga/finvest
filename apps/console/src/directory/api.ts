@@ -6,6 +6,9 @@
  * names up here: `http.ts` over the real API, `stub.ts` for samples.
  */
 
+/** The same states as the client page's account. */
+export type ClientCardStatus = "unclaimed" | "active" | "locked" | "closed";
+
 export interface ClientCard {
   clientId: string;
   name: string;
@@ -14,6 +17,8 @@ export interface ClientCard {
   verified: boolean;
   /** `YYYY-MM-DD`. */
   clientSince: string;
+  /** A locked client cannot sign in and is sent no messages. */
+  status: ClientCardStatus;
 }
 
 export interface StaffCard {

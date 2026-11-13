@@ -77,6 +77,7 @@ _ACCOUNT = (
 )
 _BY_ID = text(_ACCOUNT + "WHERE c.id = :id")
 _BY_PHONE = text(_ACCOUNT + "WHERE c.phone = :phone")
+_BY_IDS = text(_ACCOUNT + "WHERE c.id = ANY(CAST(:ids AS text[]))")
 _CHANGES = (
     "SELECT l.id, l.kind, l.client_id, l.reason, l.proposed_by, p.name AS proposed_by_name, "
     "l.proposed_at, l.status, l.decided_by, d.name AS decided_by_name, l.decided_at, "
@@ -96,6 +97,14 @@ _STATUS = text("SELECT status FROM identity_clients WHERE id = :id FOR UPDATE")
 async def client_account(session: AsyncSession, client_id: str) -> ClientAccount | None:
     row = (await session.execute(_BY_ID, {"id": client_id})).one_or_none()
     return _account(row) if row else None
+
+
+async def client_accounts(session: AsyncSession, client_ids: list[str]) -> dict[str, ClientAccount]:
+    """The accounts of these clients, in one query, by ID. An ID with no client is left out."""
+    if not client_ids:
+        return {}
+    rows = await session.execute(_BY_IDS, {"ids": list(dict.fromkeys(client_ids))})
+    return {row.id: _account(row) for row in rows}
 
 
 async def client_by_phone(session: AsyncSession, phone: str) -> ClientAccount | None:

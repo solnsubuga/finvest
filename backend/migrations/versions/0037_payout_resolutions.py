@@ -1,17 +1,18 @@
 """Settle by hand, with two people, a payout the provider never answered for.
 
 Revision ID: 0037_payout_resolutions
-Revises: 0086_dealing_sale_funding
+Revises: 0087_dealing_buffer_capital
 
 A sent or uncertain payout is read from the provider for three days. When the reads end with no
 answer, the ioTec statement is the only evidence left, and a person must say how it ended. From
 the owner's standing rule, that takes two people.
 
-* One member of staff proposes an outcome with a reason and the evidence: for `paid`, the
-  ioTec statement line that carries the payout's ID, going out, for its amount; for `failed`, an
-  ioTec statement for a day at least three days after the send, with the payout's ID on no ioTec
-  line at all. The database checks the evidence itself, and only once three days have passed
-  since the send.
+* One member of staff proposes an outcome with a reason and the evidence, from the statement of
+  the ioTec wallet the payout left from: for `paid`, the line that carries the payout's ID, going
+  out, for its amount; for `failed`, a statement for a day at least three days after the send,
+  with that wallet's statement imported for every day from the send to it, and the payout's ID
+  on no ioTec line at all. The database checks the evidence itself, and only once three days
+  have passed since the send.
 * A different member of staff approves it, in their own name, and in the same transaction the
   payout moves to that outcome and its ledger entry is posted. The evidence is checked again.
   They may instead decline it with a reason, and the proposer may withdraw it.
@@ -28,7 +29,7 @@ from collections.abc import Sequence
 from alembic import op
 
 revision: str = "0037_payout_resolutions"
-down_revision: str | None = "0086_dealing_sale_funding"
+down_revision: str | None = "0087_dealing_buffer_capital"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 
@@ -92,35 +93,52 @@ CREATE FUNCTION public.finvest_payout_resolution_evidence(
     AS $$
     DECLARE
         payout public.payouts;
+        wallet text;
         first_send timestamptz;
+        sent_on date;
+        cited public.reconciliation_statements;
     BEGIN
         SELECT * INTO payout FROM public.payouts WHERE id = resolution.payout_id;
         IF NOT FOUND OR payout.status NOT IN ('sent', 'uncertain') THEN
             RETURN false;
         END IF;
+        SELECT network INTO wallet FROM public.payout_destinations
+         WHERE id = payout.destination_id;
         SELECT min(started_at) INTO first_send FROM public.payout_send_attempts
          WHERE payout_id = payout.id AND (outcome IS NULL OR outcome <> 'deferred');
         -- The provider is read for three days. Until then its answer is the one that counts.
-        IF first_send IS NULL OR first_send > resolution.proposed_at - interval '3 days' THEN
+        IF wallet IS NULL OR first_send IS NULL
+           OR first_send > resolution.proposed_at - interval '3 days' THEN
             RETURN false;
         END IF;
+        sent_on := (first_send AT TIME ZONE 'Africa/Kampala')::date;
         IF resolution.outcome = 'paid' THEN
             RETURN EXISTS (
                 SELECT FROM public.reconciliation_statement_lines AS line
                   JOIN public.reconciliation_statements AS statement
                     ON statement.id = line.statement_id
                  WHERE line.id = resolution.statement_line_id AND statement.source = 'iotec'
+                   AND statement.account_reference = wallet
                    AND line.reference = payout.id AND line.direction = 'out'
                    AND line.amount_minor = payout.amount_minor
                    AND statement.currency = payout.currency
             );
         END IF;
-        RETURN EXISTS (
-                SELECT FROM public.reconciliation_statements
-                 WHERE id = resolution.statement_id AND source = 'iotec'
-                   AND business_date
-                       >= (first_send AT TIME ZONE 'Africa/Kampala')::date + 3
-            )
+        SELECT * INTO cited FROM public.reconciliation_statements
+         WHERE id = resolution.statement_id AND source = 'iotec'
+           AND account_reference = wallet AND currency = payout.currency
+           AND business_date >= sent_on + 3;
+        IF NOT FOUND THEN
+            RETURN false;
+        END IF;
+        -- Every day from the send to the cited one is imported, so no line can hide on a day
+        -- nobody looked at.
+        RETURN (
+                SELECT count(DISTINCT business_date) FROM public.reconciliation_statements
+                 WHERE source = 'iotec' AND account_reference = wallet
+                   AND currency = payout.currency
+                   AND business_date BETWEEN sent_on AND cited.business_date
+            ) = cited.business_date - sent_on + 1
             AND NOT EXISTS (
                 SELECT FROM public.reconciliation_statement_lines AS line
                   JOIN public.reconciliation_statements AS statement

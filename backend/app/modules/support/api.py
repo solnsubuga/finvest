@@ -7,7 +7,7 @@ from fastapi import APIRouter, Depends, Query, Request
 from pydantic import Field
 
 from app.infrastructure.database import Database
-from app.modules.identity.api import CurrentClient, require_permission
+from app.modules.identity.api import CurrentClient, require_confirmed, require_permission
 from app.modules.identity.service import StaffSession
 from app.modules.support import complaints, conversations
 from app.modules.support.domain.chat import MAX_MESSAGE, MAX_SAVED_TITLE, AuthorKind, Topic
@@ -46,6 +46,8 @@ ComplaintsStaff = Annotated[StaffSession, Depends(require_permission("complaints
 # Looking is the `.view` permissions. Every route that writes needs its own.
 SupportReplier = Annotated[StaffSession, Depends(require_permission("support.reply"))]
 ComplaintsManager = Annotated[StaffSession, Depends(require_permission("complaints.manage"))]
+# Deciding needs a passkey or app code from the last few minutes.
+OutcomeDecider = Annotated[StaffSession, Depends(require_confirmed("complaints.manage"))]
 
 
 def _database(request: Request) -> Database:
@@ -706,7 +708,7 @@ async def propose_outcome(
 
 @staff_router.post("/complaints/{complaint_id}/outcome/decision")
 async def decide_outcome(
-    complaint_id: PushId, body: DecideOutcome, staff: ComplaintsManager, database: Db, clock: Time
+    complaint_id: PushId, body: DecideOutcome, staff: OutcomeDecider, database: Db, clock: Time
 ) -> StaffComplaint:
     """Confirm or reject someone else's proposed outcome, or withdraw your own.
 

@@ -20,6 +20,7 @@ interface SessionBody {
   name: string;
   role: string;
   permissions: string[];
+  second_steps?: string[];
 }
 
 export function toSession(body: SessionBody): StaffSession {
@@ -31,6 +32,7 @@ export function toSession(body: SessionBody): StaffSession {
     role: body.role as Role,
     // The API may know permissions this build of the console does not show yet.
     permissions: body.permissions.filter((name): name is Permission => known.has(name)),
+    secondSteps: methods(body.second_steps ?? []),
   };
 }
 

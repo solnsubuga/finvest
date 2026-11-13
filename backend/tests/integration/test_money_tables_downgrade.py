@@ -4,7 +4,8 @@ destinations and their two-person checks, the withdrawal limits, the payouts, th
 attempts and their resolutions, the migration checks, the imported statements, the day closes
 and their recorded matches, the pot transfers, the help chat, the complaints register, the
 goals, the email delivery records, the unclaimed accounts, the complaint outcomes, the
-suppression lifts, the client locks, the announcements or the team changes."""
+suppression lifts, the client locks, the announcements, the team changes or Finvest's own
+money in the buffer."""
 
 import os
 from collections.abc import Iterator
@@ -203,6 +204,15 @@ ROWS = {
         "COMMIT",
         "refusing to drop allocations",
     ),
+    "0087_dealing_buffer_capital": (
+        "BEGIN; SELECT set_config('finvest.actor_kind', 'staff', true); "
+        "SELECT set_config('finvest.actor_id', '-Nabc0000000000000B1', true); "
+        "INSERT INTO dealing_buffer_capital (id, direction, currency, amount_minor, "
+        "bank_reference, value_date, reason, status, proposed_by, proposed_at) VALUES "
+        "('-Nabc0000000000000A1', 'in', 'UGX', 100000, 'FT1', DATE '2026-11-13', 'Test', "
+        "'proposed', '-Nabc0000000000000B1', now()); COMMIT",
+        "refusing to drop buffer capital movements",
+    ),
     # The owner turns the guards off: a real funding from a sale needs a settled sale.
     "0086_dealing_sale_funding": (
         "BEGIN; "
@@ -309,6 +319,17 @@ ROWS = {
         "now(), now(), '-Nabc0000000000000D1'); "
         "ALTER TABLE investments ENABLE TRIGGER USER; COMMIT",
         "refusing to drop the record of early withdrawals",
+    ),
+    "0065_investment_carried_over": (
+        "BEGIN; ALTER TABLE investments DISABLE TRIGGER USER; "
+        "INSERT INTO investments (id, client_id, product_id, currency, principal_minor, "
+        "annual_rate_bps, tax_bps, term_days, at_maturity, created_at, pay_by, updated_at, "
+        "legacy_reference) "
+        "VALUES ('-Nabc0000000000000A1', '-Nabc0000000000000B1', 'FvProduct1TREA91_001', "
+        "'UGX', 1000000, 1250, 1500, 91, 'roll_over', now(), now() + interval '72 hours', "
+        "now(), 'FV1-INV-0001'); "
+        "ALTER TABLE investments ENABLE TRIGGER USER; COMMIT",
+        "refusing to drop the record of investments carried over",
     ),
     "0034_payout_account_codes": (
         "INSERT INTO identity_codes (id, purpose, channel, phone, actor_id, bound_to, "
@@ -565,6 +586,17 @@ ROWS = {
         "decode(repeat('00', 32), 'hex'), 'passkey', 'token', now(), now(), now(), now(), "
         "'Chrome on Android')",
         "refusing to drop the devices sessions were opened on",
+    ),
+    "0165_identity_session_reverify": (
+        "INSERT INTO identity_staff (id, email, name, role, password_hash, status, created_at) "
+        "VALUES ('-Nabc0000000000000S1', 'admin@finvestug.com', 'Admin', 'admin', 'x', "
+        "'active', now()); "
+        "INSERT INTO identity_sessions (id, actor_kind, actor_id, token_hash, second_step, "
+        "transport, created_at, last_seen_at, idle_expires_at, absolute_expires_at, "
+        "reverified_at) VALUES ('-Nabc0000000000000A1', 'staff', '-Nabc0000000000000S1', "
+        "decode(repeat('00', 32), 'hex'), 'passkey', 'cookie', now(), now(), now(), now(), "
+        "now())",
+        "refusing to drop staff re-confirmations",
     ),
 }
 

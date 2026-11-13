@@ -13,10 +13,16 @@ from app.modules.identity.client_locks import (
     ClientAccount,
     LockChange,
     client_account,
+    client_accounts,
     client_by_phone,
     lock_history,
 )
-from app.modules.kyc.service import CheckSummary, check_summary, client_for_account_number
+from app.modules.kyc.service import (
+    CheckSummary,
+    check_summary,
+    client_for_account_number,
+    identities,
+)
 from app.modules.kyc.service import verified_name as kyc_verified_name
 from app.modules.ledger.statements import ClientOwed, client_owed_as_of
 from app.modules.payouts.destinations import DestinationView, destinations_for_client
@@ -55,17 +61,23 @@ class ClientCard:
 
 
 async def client_cards(session: AsyncSession, client_ids: list[str]) -> list[ClientCard]:
-    """A card for each of these clients. An ID with no client is left out."""
+    """A card for each of these clients, in the order asked. An ID with no client is left out.
+
+    Two queries whatever the number of IDs: the accounts, then their identity checks.
+    """
+    wanted = list(dict.fromkeys(client_ids))
+    accounts = await client_accounts(session, wanted)
+    checks = await identities(session, list(accounts))
     cards: list[ClientCard] = []
-    for client_id in dict.fromkeys(client_ids):
-        account = await client_account(session, client_id)
+    for client_id in wanted:
+        account = accounts.get(client_id)
         if account is None:
             continue
-        check = await check_summary(session, client_id)
+        check = checks.get(client_id)
         cards.append(
             ClientCard(
                 account=account,
-                verified_name=await kyc_verified_name(session, client_id),
+                verified_name=check.verified_name if check else None,
                 account_number=check.account_number if check else None,
             )
         )

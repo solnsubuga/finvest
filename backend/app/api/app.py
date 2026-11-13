@@ -22,6 +22,7 @@ from app.modules.audit import api as audit_api
 from app.modules.autoinvest import api as autoinvest_api
 from app.modules.console import api as console_api
 from app.modules.dealing import api as dealing_api
+from app.modules.dealing import buffer_api as dealing_buffer_api
 from app.modules.documents import api as documents_api
 from app.modules.goals import api as goals_api
 from app.modules.identity import api as identity_api
@@ -48,9 +49,11 @@ from app.modules.kyc import api as kyc_api
 from app.modules.kyc.domain.provider import IdentityProvider
 from app.modules.kyc.settings import KycSettings
 from app.modules.migration import api as migration_api
+from app.modules.migration import claims_api as migration_claims_api
 from app.modules.notifications import api as notifications_api
 from app.modules.notifications import hooks as notification_hooks
 from app.modules.notifications import suppressions_api
+from app.modules.notifications.settings import EmailHashSettings
 from app.modules.payments import api as payments_api
 from app.modules.payments import routes as payment_routes
 from app.modules.payments.domain.provider import CollectionsProvider
@@ -81,6 +84,7 @@ def create_app(
     email_hooks: WebhookVerifier | None = None,
     identity_sealer: Sealer | None = None,
     identity_provider: IdentityProvider | None = None,
+    email_hash: EmailHashSettings | None = None,
 ) -> FastAPI:
     owned = database is None
     database = database or Database(settings)
@@ -90,6 +94,8 @@ def create_app(
     if bank_accounts is None:
         bank_accounts = BankTransferSettings().accounts
     email_hooks = email_hooks or ResendHookSettings().verifier()
+    # Read at start-up, so production refuses to start without the key.
+    email_hash_key = (email_hash or EmailHashSettings()).key()
     identity_checks = KycSettings()
     if identity_sealer is None and identity_checks.identity_data_key is not None:
         identity_sealer = identity_checks.sealer()
@@ -113,6 +119,7 @@ def create_app(
     app.state.settings = settings
     app.state.database = database
     app.state.clock = clock
+    app.state.email_hash_key = email_hash_key
     app.state.storage = storage
     hasher = hasher or PasswordHasher(
         memory_kib=settings.password_memory_kib, time_cost=settings.password_time_cost
@@ -183,10 +190,12 @@ def create_app(
     app.include_router(payment_routes.create_client_router(collections, bank_accounts))
     app.include_router(payment_routes.staff_router)
     app.include_router(migration_api.router)
+    app.include_router(migration_claims_api.router)
     app.include_router(insights_api.router)
     for router in investments_api.routers:
         app.include_router(router)
     for router in kyc_api.create_routers(identity_sealer, identity_provider, storage):
         app.include_router(router)
     app.include_router(dealing_api.router)
+    app.include_router(dealing_buffer_api.router)
     return app

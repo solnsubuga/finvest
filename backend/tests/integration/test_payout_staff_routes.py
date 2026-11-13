@@ -11,6 +11,7 @@ from app.infrastructure.storage import MemoryStorage
 from app.modules.audit import service as audit
 from app.modules.payouts import destinations
 from app.shared.actors import Actor
+from app.shared.push_ids import push_id
 from tests.support.database import TestDatabase
 from tests.support.http import Api, running_api
 from tests.support.kyc import VERIFIED_NAME, verify
@@ -270,17 +271,20 @@ async def test_stranded_payouts_and_their_resolutions_need_reconciliation(api: A
     unknown = await api.http.post(
         "/staff/payouts/-Nabc0000000000000Z1/resolutions",
         json={"outcome": "failed", "statement_id": "-Nabc0000000000000Z2", "reason": "Checked"},
+        headers={"Idempotency-Key": push_id()},
     )
     assert unknown.status_code == 404, unknown.text
+    approve = "/staff/payout-resolutions/-Nabc0000000000000Z3/approve"
     missing = await api.http.post(
-        "/staff/payout-resolutions/-Nabc0000000000000Z3/approve", json={"reason": "Agree"}
+        approve, json={"reason": "Agree"}, headers={"Idempotency-Key": push_id()}
     )
     assert missing.status_code == 404, missing.text
     assert (
-        await api.http.post(
-            "/staff/payout-resolutions/-Nabc0000000000000Z3/approve", json={"reason": ""}
-        )
+        await api.http.post(approve, json={"reason": ""}, headers={"Idempotency-Key": push_id()})
     ).status_code == 422
+    # Settling money is never done twice on a retried request.
+    unkeyed = await api.http.post(approve, json={"reason": "Agree"})
+    assert unkeyed.json()["error"]["code"] == "idempotency_key_required", unkeyed.text
     await api.staff("support")
     assert (await api.http.get("/staff/payouts/stranded")).status_code == 403
     assert (

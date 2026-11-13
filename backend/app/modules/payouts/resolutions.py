@@ -23,9 +23,10 @@ from typing import Any
 from sqlalchemy import Row, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.infrastructure.idempotency import Receipt, run_once
 from app.modules.audit import service as audit
 from app.modules.audit.domain.events import AuditActor, AuditEvent
-from app.modules.payouts import jobs, payouts
+from app.modules.payouts import destinations, jobs, payouts
 from app.modules.payouts.domain.payouts import PayoutEvent, needs_status_read
 from app.modules.payouts.domain.sending import READ_WINDOW
 from app.modules.payouts.payouts import PayoutView
@@ -49,6 +50,9 @@ class ResolutionStatus(StrEnum):
     DECLINED = "declined"
     WITHDRAWN = "withdrawn"
 
+
+PROPOSE_OPERATION = "payouts.propose_resolution"
+APPROVE_OPERATION = "payouts.approve_resolution"
 
 _EVENTS = {
     Outcome.PAID: PayoutEvent.STAFF_RESOLVED_PAID,
@@ -134,12 +138,52 @@ async def propose(
     statement_line_id: str | None = None,
     statement_id: str | None = None,
     reason: str,
+    idempotency_key: str,
     clock: Clock,
 ) -> ResolutionView:
-    """The first person's word on how a stranded payout ended, with the statement as evidence."""
+    """The first person's word on how a stranded payout ended, with the statement as evidence.
+
+    The same key with the same request returns the first proposal, not a second one.
+    """
     _staff_only(staff)
     if not reason.strip():
         raise ResolutionRefused("reason_required", status="validation_failed", field="reason")
+    now = clock.now()
+
+    async def command() -> Receipt:
+        view = await _propose(
+            session, staff, payout_id, outcome, statement_line_id, statement_id, reason, clock
+        )
+        return Receipt(201, {"resolution_id": view.id})
+
+    outcome_of = await run_once(
+        session,
+        actor=staff,
+        operation=PROPOSE_OPERATION,
+        key=idempotency_key,
+        request={
+            "payout_id": payout_id,
+            "outcome": outcome.value,
+            "statement_line_id": statement_line_id,
+            "statement_id": statement_id,
+            "reason": reason.strip(),
+        },
+        now=now,
+        command=command,
+    )
+    return await get_resolution(session, str(outcome_of.receipt.response["resolution_id"]))
+
+
+async def _propose(
+    session: AsyncSession,
+    staff: Actor,
+    payout_id: str,
+    outcome: Outcome,
+    statement_line_id: str | None,
+    statement_id: str | None,
+    reason: str,
+    clock: Clock,
+) -> ResolutionView:
     now = clock.now()
     payout = await payouts.get_payout(session, payout_id)
     first_sent = await _stranded_since(session, payout, now)
@@ -165,9 +209,39 @@ async def propose(
 
 
 async def approve(
-    session: AsyncSession, staff: Actor, resolution_id: str, *, reason: str, clock: Clock
+    session: AsyncSession,
+    staff: Actor,
+    resolution_id: str,
+    *,
+    reason: str,
+    idempotency_key: str,
+    clock: Clock,
 ) -> PayoutView:
-    """A second person agrees. The payout moves to the outcome and its entry is posted."""
+    """A second person agrees. The payout moves to the outcome and its entry is posted.
+
+    The same key with the same request returns the payout as the first approval left it.
+    """
+    _staff_only(staff)
+
+    async def command() -> Receipt:
+        moved = await _approve(session, staff, resolution_id, reason, clock)
+        return Receipt(200, {"payout_id": moved.id})
+
+    done = await run_once(
+        session,
+        actor=staff,
+        operation=APPROVE_OPERATION,
+        key=idempotency_key,
+        request={"resolution_id": resolution_id, "reason": reason.strip()},
+        now=clock.now(),
+        command=command,
+    )
+    return await payouts.get_payout(session, str(done.receipt.response["payout_id"]))
+
+
+async def _approve(
+    session: AsyncSession, staff: Actor, resolution_id: str, reason: str, clock: Clock
+) -> PayoutView:
     resolution = await _decidable(session, staff, resolution_id, reason)
     if resolution.proposed_by == staff.id:
         raise ResolutionRefused("proposed_by_you", status="forbidden")
@@ -292,11 +366,18 @@ async def _check_evidence(
     statement_line_id: str | None,
     statement_id: str | None,
 ) -> None:
+    """What the ioTec statement for the wallet the payout left from shows.
+
+    `failed` needs that wallet's statement for every day from the send to the cited one: a
+    line on a day nobody imported would otherwise let a paid payout be settled as failed, and
+    the client paid twice.
+    """
     sent_on = business_date(first_sent)
+    wallet = (await destinations.get_destination(session, payout.destination_id)).network or ""
     on_statement = await statements.find_statement_lines(
         session,
         source=StatementSource.IOTEC,
-        date_from=sent_on - timedelta(days=1),
+        date_from=date.min,
         date_to=date.max,
         reference=payout.id,
     )
@@ -306,7 +387,12 @@ async def _check_evidence(
                 "statement_line_required", status="validation_failed", field="statement_line_id"
             )
         line = next((each for each in on_statement if each.id == statement_line_id), None)
-        if line is None or line.direction is not Direction.OUT or line.amount != payout.amount:
+        if (
+            line is None
+            or line.account_reference != wallet
+            or line.direction is not Direction.OUT
+            or line.amount != payout.amount
+        ):
             raise ResolutionRefused("statement_line_not_this_payout", field="statement_line_id")
         return
     if not statement_id or statement_line_id:
@@ -317,10 +403,25 @@ async def _check_evidence(
         # The payout's ID is on a statement, so it did not simply fail. A person looks at the line.
         raise ResolutionRefused("payout_on_statement", field="statement_id")
     statement = await statements.get_statement_by_id(session, statement_id)
-    if statement is None or statement.source is not StatementSource.IOTEC:
-        raise ResolutionRefused("statement_not_iotec", field="statement_id")
+    if (
+        statement is None
+        or statement.source is not StatementSource.IOTEC
+        or statement.account_reference != wallet
+        or statement.closing_balance.currency is not payout.amount.currency
+    ):
+        raise ResolutionRefused("statement_not_this_wallet", field="statement_id")
     if statement.business_date < sent_on + timedelta(days=READ_WINDOW.days):
         raise ResolutionRefused("statement_too_early", field="statement_id")
+    imported = await statements.statement_days(
+        session,
+        source=StatementSource.IOTEC,
+        account_reference=wallet,
+        currency=payout.amount.currency,
+        date_from=sent_on,
+        date_to=statement.business_date,
+    )
+    if len(imported) != (statement.business_date - sent_on).days + 1:
+        raise ResolutionRefused("statement_day_missing", field="statement_id")
 
 
 async def _decidable(

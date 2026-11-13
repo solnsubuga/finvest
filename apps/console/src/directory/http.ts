@@ -7,7 +7,7 @@
  */
 
 import type { Http } from "@/api/http.ts";
-import type { ClientCard, Directory, StaffCard } from "./api.ts";
+import type { ClientCard, ClientCardStatus, Directory, StaffCard } from "./api.ts";
 
 interface PeopleJson {
   people: { id: string; name: string }[];
@@ -21,8 +21,11 @@ interface CardJson {
   id: string;
   verified_name: string | null;
   account_number: string | null;
+  status: string;
   created_at: string;
 }
+
+const STATUSES: readonly string[] = ["unclaimed", "active", "locked", "closed"] satisfies ClientCardStatus[];
 
 /** A Kampala date, `YYYY-MM-DD`. */
 function kampalaDay(iso: string): string {
@@ -37,6 +40,8 @@ export function toClientCard(json: CardJson): ClientCard {
     // The name and the account number come only with an approved identity check.
     verified: json.verified_name !== null,
     clientSince: kampalaDay(json.created_at),
+    // A state this console does not know yet is shown as nothing special, never as locked.
+    status: STATUSES.includes(json.status) ? (json.status as ClientCardStatus) : "active",
   };
 }
 
