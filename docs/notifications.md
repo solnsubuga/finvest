@@ -140,7 +140,7 @@ An address is never stored in the suppression list, its lifts or the delivery ev
 The move takes three releases, so each deploy runs beside the release before it:
 
 1. **Both kept (migration `0093_email_keyed_hashes`).** `recipients_keyed`, `address_key` on suppressions and `address_key` on lifts sit next to the plain columns. Every new row fills both. Every read still uses the plain columns.
-2. **Keyed read.** A worker job, queued once, paged and safe to run again, fills the keyed columns of older rows from the plain ones. It fails loudly if the key is missing and never logs it. The migrator never holds the key. Reads and matches move to the keyed columns only after the job reports nothing left to fill.
+2. **Older rows keyed (migration `0094_email_keyed_backfill`, `keyed_backfill.py`), then keyed read.** The worker job `notifications.key_email_hashes` fills the keyed columns of older rows from the plain ones, 500 rows of each table per transaction, and queues the next page in the same transaction while any are left. The scheduler starts it hourly, at minute 41, and a run with nothing left does nothing. Each update fills only an empty column, and PostgreSQL refuses a change to a keyed hash once set, so a repeated page changes nothing. Rows are taken with `SKIP LOCKED`, so two runs share the work. The job fails with `email_hash_key_missing` if the key is not set, and never logs it. It logs `email_hashes_keyed` with counts only; `left=0` means every row is keyed. The migrator never holds the key. Reads and matches move to the keyed columns in a later release, after a run reports `left=0` in production.
 3. **Plain dropped.** A migration that says `zero_downtime` drops the plain columns.
 
 ### Lifting a suppression
