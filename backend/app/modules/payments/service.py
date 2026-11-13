@@ -133,6 +133,10 @@ _HAS_LIVE = text(
     "SELECT 1 FROM payment_deposits WHERE purpose_type = :purpose_type "
     "AND purpose_id = :purpose_id AND status <> 'failed' LIMIT 1"
 )
+_HAS_LIVE_ID = text(
+    "SELECT id FROM payment_deposits WHERE purpose_type = :purpose_type "
+    "AND purpose_id = :purpose_id AND status <> 'failed' ORDER BY id DESC LIMIT 1"
+)
 _SELECT_LIVE = text(
     "SELECT id, status FROM payment_deposits WHERE purpose_type = 'investment' "
     "AND purpose_id = :purpose_id AND status <> 'failed' LIMIT 1"
@@ -303,6 +307,21 @@ async def has_live_deposit(session: AsyncSession, *, purpose: Purpose, purpose_i
         _HAS_LIVE, {"purpose_type": purpose.value, "purpose_id": purpose_id}
     )
     return row.first() is not None
+
+
+async def live_deposit_for(
+    session: AsyncSession, *, purpose: Purpose, purpose_id: str
+) -> Deposit | None:
+    """The deposit for this investment that has not failed, if this transaction may see it.
+
+    For a client who was told a payment is already under way: this is the one to show them.
+    """
+    row = (
+        await session.execute(
+            _HAS_LIVE_ID, {"purpose_type": purpose.value, "purpose_id": purpose_id}
+        )
+    ).first()
+    return None if row is None else await find_deposit(session, row.id)
 
 
 async def get_deposit(session: AsyncSession, deposit_id: str) -> Deposit:

@@ -21,6 +21,7 @@ from app.modules.identity.passkeys import PasskeyService
 from app.modules.identity.service import IdentityService
 from app.modules.notifications import api as notifications_api
 from app.modules.payments import api as payments_api
+from app.modules.payments import routes as payment_routes
 from app.modules.payments.domain.provider import CollectionsProvider
 from app.modules.payments.settings import PaymentsSettings
 from app.modules.payments.wiring import collections_provider
@@ -94,4 +95,6 @@ def create_app(
     for router in (*identity_api.routers, *passkeys_api.routers, *notifications_api.routers):
         app.include_router(router)
     app.include_router(payments_api.create_router(collections))
+    app.include_router(payment_routes.create_client_router(collections))
+    app.include_router(payment_routes.staff_router)
     return app
