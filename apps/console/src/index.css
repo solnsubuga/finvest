@@ -75,6 +75,13 @@
     outline-offset: 2px;
   }
 
+  /* The menu can be taller than the window. Keep its scrollbar visible on black. */
+  .menu-scroll {
+    scrollbar-width: thin;
+    scrollbar-color: var(--color-on-black-border) transparent;
+    scrollbar-gutter: stable;
+  }
+
   .on-black :focus-visible {
     outline-color: var(--color-lime);
   }

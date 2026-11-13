@@ -1,5 +1,8 @@
 name: Console and tokens
 
+# Path filtered, so do not make this a required check as it stands: a PR that
+# touches none of these paths would wait on it forever.
+
 on:
   pull_request:
     paths:
@@ -31,9 +34,9 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+      - uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6.1.1
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6.5.0
         with:
           node-version: 22
           cache: pnpm
@@ -50,3 +53,13 @@ jobs:
           pnpm typecheck
           pnpm test
           pnpm build
+      - name: A production build refuses the sample sign-in
+        working-directory: apps/console
+        env:
+          VITE_STUB_API: "true"
+          VITE_DEPLOY_ENV: production
+        run: |
+          if pnpm build; then
+            echo "A production build with the sample sign-in must fail" >&2
+            exit 1
+          fi

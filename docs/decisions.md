@@ -36,4 +36,5 @@ A running log. Add a row when a decision is made, and move an open question up w
 | Identity check provider: Smile ID coverage and pricing for Uganda. | Provider |
 | Will passkeys become compulsory for clients? | Owner |
 | Is api.finvestug.com the backend address? | Owner |
+| Which console screens each staff role can open. The console shell ships a proposal in `apps/console/src/auth/stub.ts`, read from the role matrix on the canvas: Operations opens Money Movement, Reconciliation and Migration. Finance opens the Review Queue but not Complaints. Support opens Clients. Only Admin opens Team and Permissions and Settings. The backend permissions module should not adopt it until this is answered. | Owner |
 | Card payments. Stripe is not available to Ugandan businesses. A local card acquirer, capped, is a possible later addition. | Owner |

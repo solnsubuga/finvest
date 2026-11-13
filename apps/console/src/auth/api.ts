@@ -9,6 +9,10 @@ import type { StaffSession } from "./types.ts";
  * replaces the stub, and the screens do not change.
  *
  * Staff sign in with a password and then a passkey. There is no SMS option.
+ *
+ * The real implementation keeps the session in an HttpOnly cookie set by the
+ * backend. It must not put a session or token in web storage, which the stub
+ * does only because it has no backend.
  */
 export interface AuthApi {
   /** The current session, or null when nobody is signed in. */

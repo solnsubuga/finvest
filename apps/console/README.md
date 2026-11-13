@@ -34,6 +34,12 @@ The backend's sign-in is not built yet, so `pnpm dev` uses sample staff from `sr
 
 The stub is not security. It runs only under `pnpm dev`, or in a build made with `VITE_STUB_API=true`. A normal production build has no working sign-in until the real API client is wired in.
 
+Whenever the stub is active, a banner reading "Sample sign-in. Not connected to Finvest." stays on screen. A build fails if `VITE_STUB_API=true` is combined with `VITE_DEPLOY_ENV=production`, so the deploy must set `VITE_DEPLOY_ENV` for the production console.
+
+## Screenshots
+
+`docs/screenshots/` holds the current screenshots of this app for PR descriptions. Replace files in place when a screen changes, delete ones that no longer apply, and keep them compressed. Do not add a new set per PR.
+
 ## How it fits together
 
 | Path | Contents |

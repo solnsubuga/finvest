@@ -81,7 +81,8 @@ export function SignInPage() {
             For Finvest staff only. Everything done here is recorded with your name and a reason.
           </p>
         </div>
-        <p className="m-0 hidden text-xs text-on-black-muted lg:block">Opens only on approved office networks.</p>
+        {/* Keeps the logo at the top and the statement in the middle on wide screens. */}
+        <span aria-hidden="true" className="hidden lg:block" />
       </aside>
 
       <main className="flex flex-1 items-start justify-center px-6 py-10 lg:items-center">

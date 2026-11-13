@@ -27,7 +27,7 @@ export function Sidebar({ session, onNavigate, className }: SidebarProps) {
         <span className="text-xl font-extrabold">finvest ops</span>
       </div>
 
-      <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto">
+      <div className="menu-scroll -mr-2.5 flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto pr-2.5">
         {groups.map((group) => (
           <section key={group.title} aria-label={group.title} className="flex flex-col gap-0.5">
             <h2 className="px-3 pb-1.5 text-2xs font-bold tracking-[0.8px] text-on-black-muted uppercase">
