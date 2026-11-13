@@ -1,7 +1,7 @@
 """Let the worker fill the keyed hash of rows written before it existed.
 
 Revision ID: 0094_email_keyed_backfill
-Revises: 0065_investment_carried_over
+Revises: 0087_dealing_buffer_capital
 
 The second step of three (docs/notifications.md#how-addresses-are-hashed), first half. Rows saved
 before 0093 have no keyed hash. The worker, which alone holds the key with the API, works each one
@@ -17,7 +17,7 @@ from collections.abc import Sequence
 from alembic import op
 
 revision: str = "0094_email_keyed_backfill"
-down_revision: str | None = "0065_investment_carried_over"
+down_revision: str | None = "0087_dealing_buffer_capital"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 zero_downtime = True
