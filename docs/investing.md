@@ -230,7 +230,7 @@ Agreed with the payments and payouts threads on 13 November 2026. Starting and d
 
 ## Early withdrawal
 
-A client may withdraw a running investment early, once, up to the day before a fixed term matures. An open term can be withdrawn at any time. They name one of their approved payout destinations that is past its first day's safety wait, and send an idempotency key (`POST /client/investments/{id}/withdraw`).
+A client may withdraw a running investment early, once, up to the day before a fixed term matures. An open term can be withdrawn at any time. They name one of their approved payout destinations that is past its first day's safety wait, and send an idempotency key (`POST /client/investments/{id}/withdraw`). A destination that could never carry the amount in one payout is refused before anything is saved, with the payouts code (`over_mobile_money_limit`, `over_bank_limit`, `over_daily_limit` or `currency_not_supported`): the amount is final once interest stops, so the request checks it against the account kind's limits. What else the client withdraws the same day is counted when the payout is made.
 
 **Switched off until it is paid end to end.** `FINVEST_EARLY_WITHDRAWAL_OPEN` is false by default, everywhere. While it is off, `can_withdraw` is false on every investment and the route answers `conflict` before anything is saved. The withdrawn money is published to the dealing desk, which funds it, and the payout follows; a publish made before the consumer exists is never replayed. Both consumers are now wired and the journey `tests/journeys/test_06_early_withdrawal.py` pays a withdrawal end to end. It stays off in production until the owner says to turn it on.
 
