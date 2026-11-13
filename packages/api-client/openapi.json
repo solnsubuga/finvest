@@ -239,6 +239,31 @@
         "title": "Body_pay_by_bank_transfer_client_investments__investment_id__payments_bank_transfer_post",
         "type": "object"
       },
+      "Body_upload_proof_client_payout_destinations__destination_id__proof_post": {
+        "properties": {
+          "file": {
+            "contentMediaType": "application/octet-stream",
+            "description": "PDF, JPEG or PNG, at most 10 MiB",
+            "title": "File",
+            "type": "string"
+          },
+          "proof_kind": {
+            "enum": [
+              "bank_statement",
+              "bank_letter",
+              "bank_card"
+            ],
+            "title": "Proof Kind",
+            "type": "string"
+          }
+        },
+        "required": [
+          "proof_kind",
+          "file"
+        ],
+        "title": "Body_upload_proof_client_payout_destinations__destination_id__proof_post",
+        "type": "object"
+      },
       "CategoryChannels": {
         "additionalProperties": false,
         "properties": {
@@ -1163,6 +1188,153 @@
         "title": "DecisionRequest",
         "type": "object"
       },
+      "DestinationOut": {
+        "additionalProperties": false,
+        "description": "A payout account. A new one is `awaiting_code`, and stays there until the SMS code step\nexists (not built yet), so the app must not offer a code screen that cannot finish.",
+        "properties": {
+          "account": {
+            "title": "Account",
+            "type": "string"
+          },
+          "bank_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Bank Code"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "first_paid_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "First Paid At"
+          },
+          "holder_name": {
+            "title": "Holder Name",
+            "type": "string"
+          },
+          "id": {
+            "maxLength": 20,
+            "minLength": 20,
+            "pattern": "^[-0-9A-Z_a-z]{20}$",
+            "title": "Id",
+            "type": "string"
+          },
+          "kind": {
+            "enum": [
+              "mobile_money",
+              "bank"
+            ],
+            "title": "Kind",
+            "type": "string"
+          },
+          "network": {
+            "anyOf": [
+              {
+                "enum": [
+                  "mtn",
+                  "airtel"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Network"
+          },
+          "payable_from": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Payable From"
+          },
+          "proof_kind": {
+            "anyOf": [
+              {
+                "enum": [
+                  "bank_statement",
+                  "bank_letter",
+                  "bank_card",
+                  "network_registered_name"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Proof Kind"
+          },
+          "rejection_reason": {
+            "anyOf": [
+              {
+                "enum": [
+                  "name_different",
+                  "proof_unreadable",
+                  "proof_too_old",
+                  "proof_wrong_account",
+                  "proof_wrong_document",
+                  "suspected_fraud"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rejection Reason"
+          },
+          "status": {
+            "enum": [
+              "awaiting_code",
+              "awaiting_proof",
+              "in_review",
+              "approved",
+              "rejected"
+            ],
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "kind",
+          "network",
+          "bank_code",
+          "account",
+          "holder_name",
+          "status",
+          "proof_kind",
+          "rejection_reason",
+          "payable_from",
+          "first_paid_at",
+          "created_at"
+        ],
+        "title": "DestinationOut",
+        "type": "object"
+      },
       "DifferenceView": {
         "additionalProperties": false,
         "description": "Something that differs now. `figures` is exactly what a sign-off for it accepts.\n\n`sign_off` is the latest one for these figures. A rejected one stays until it is proposed\nagain, so its proposer can read why.",
@@ -1987,6 +2159,59 @@
         "title": "InvestmentStatus",
         "type": "string"
       },
+      "LimitsOut": {
+        "additionalProperties": false,
+        "description": "The withdrawal limits in force today. A limit that is None is not set.",
+        "properties": {
+          "bank_per_day": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/MoneyView"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "bank_per_payout": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/MoneyView"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "effective_from": {
+            "format": "date",
+            "title": "Effective From",
+            "type": "string"
+          },
+          "mobile_money_per_day": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/MoneyView"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "mobile_money_per_payout": {
+            "$ref": "#/components/schemas/MoneyView"
+          }
+        },
+        "required": [
+          "effective_from",
+          "mobile_money_per_payout",
+          "mobile_money_per_day",
+          "bank_per_payout",
+          "bank_per_day"
+        ],
+        "title": "LimitsOut",
+        "type": "object"
+      },
       "LinkView": {
         "additionalProperties": false,
         "properties": {
@@ -2485,6 +2710,65 @@
         "title": "Network",
         "type": "string"
       },
+      "NewDestination": {
+        "additionalProperties": false,
+        "description": "A mobile money number (`phone`) or a bank account (`bank_code` and `account_number`).\n\n`holder_name` is the name the client says the account is in. Staff compare the name on the\nproof with the name on the client's ID, never with this.",
+        "properties": {
+          "account_number": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Account Number"
+          },
+          "bank_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Bank Code"
+          },
+          "holder_name": {
+            "maxLength": 120,
+            "minLength": 1,
+            "title": "Holder Name",
+            "type": "string"
+          },
+          "kind": {
+            "enum": [
+              "mobile_money",
+              "bank"
+            ],
+            "title": "Kind",
+            "type": "string"
+          },
+          "phone": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Phone"
+          }
+        },
+        "required": [
+          "kind",
+          "holder_name"
+        ],
+        "title": "NewDestination",
+        "type": "object"
+      },
       "NewPasskey": {
         "additionalProperties": false,
         "properties": {
@@ -2941,6 +3225,69 @@
           "confirmed_at"
         ],
         "title": "PaymentView",
+        "type": "object"
+      },
+      "PayoutOut": {
+        "additionalProperties": false,
+        "description": "A payout as the client sees it. `processing` covers every step from queued to the\nprovider's answer; whether we are still finding out is for staff.",
+        "properties": {
+          "amount": {
+            "$ref": "#/components/schemas/MoneyView"
+          },
+          "business_date": {
+            "format": "date",
+            "title": "Business Date",
+            "type": "string"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "destination_id": {
+            "maxLength": 20,
+            "minLength": 20,
+            "pattern": "^[-0-9A-Z_a-z]{20}$",
+            "title": "Destination Id",
+            "type": "string"
+          },
+          "id": {
+            "maxLength": 20,
+            "minLength": 20,
+            "pattern": "^[-0-9A-Z_a-z]{20}$",
+            "title": "Id",
+            "type": "string"
+          },
+          "kind": {
+            "enum": [
+              "mobile_money",
+              "bank"
+            ],
+            "title": "Kind",
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "in_review",
+              "processing",
+              "paid",
+              "failed",
+              "cancelled"
+            ],
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "destination_id",
+          "kind",
+          "amount",
+          "status",
+          "business_date",
+          "created_at"
+        ],
+        "title": "PayoutOut",
         "type": "object"
       },
       "PlanDetails": {
@@ -10307,6 +10654,581 @@
         ]
       }
     },
+    "/client/payout-destinations": {
+      "get": {
+        "description": "The client's payout accounts that are not removed, newest first.",
+        "operationId": "list_destinations_client_payout_destinations_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/DestinationOut"
+                  },
+                  "title": "Response List Destinations Client Payout Destinations Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          }
+        },
+        "summary": "List Destinations",
+        "tags": [
+          "client payouts"
+        ]
+      },
+      "post": {
+        "description": "Add a mobile money number or bank account. It starts awaiting the SMS code.\n\n409 `conflict` if the client already has the same account saved.",
+        "operationId": "add_destination_client_payout_destinations_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NewDestination"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DestinationOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          }
+        },
+        "summary": "Add Destination",
+        "tags": [
+          "client payouts"
+        ]
+      }
+    },
+    "/client/payout-destinations/{destination_id}": {
+      "delete": {
+        "description": "Take the account out of use for good. A payout already on its way is not stopped.",
+        "operationId": "remove_destination_client_payout_destinations__destination_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "destination_id",
+            "required": true,
+            "schema": {
+              "maxLength": 20,
+              "minLength": 20,
+              "pattern": "^[-0-9A-Z_a-z]{20}$",
+              "title": "Destination Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          }
+        },
+        "summary": "Remove Destination",
+        "tags": [
+          "client payouts"
+        ]
+      },
+      "get": {
+        "operationId": "get_destination_client_payout_destinations__destination_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "destination_id",
+            "required": true,
+            "schema": {
+              "maxLength": 20,
+              "minLength": 20,
+              "pattern": "^[-0-9A-Z_a-z]{20}$",
+              "title": "Destination Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DestinationOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          }
+        },
+        "summary": "Get Destination",
+        "tags": [
+          "client payouts"
+        ]
+      }
+    },
+    "/client/payout-destinations/{destination_id}/proof": {
+      "post": {
+        "description": "Upload proof that a bank account is the client's, and send it to staff.\n\nA `multipart/form-data` body. A bank statement must be dated within the last three months.\nAfter a refusal the client may upload another. 409 if the account is not waiting for proof.",
+        "operationId": "upload_proof_client_payout_destinations__destination_id__proof_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "destination_id",
+            "required": true,
+            "schema": {
+              "maxLength": 20,
+              "minLength": 20,
+              "pattern": "^[-0-9A-Z_a-z]{20}$",
+              "title": "Destination Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_upload_proof_client_payout_destinations__destination_id__proof_post"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DestinationOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          }
+        },
+        "summary": "Upload Proof",
+        "tags": [
+          "client payouts"
+        ]
+      }
+    },
+    "/client/payouts": {
+      "get": {
+        "description": "The client's payouts, newest first, at most 50.",
+        "operationId": "list_payouts_client_payouts_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/PayoutOut"
+                  },
+                  "title": "Response List Payouts Client Payouts Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          }
+        },
+        "summary": "List Payouts",
+        "tags": [
+          "client payouts"
+        ]
+      }
+    },
+    "/client/payouts/{payout_id}": {
+      "get": {
+        "operationId": "get_payout_client_payouts__payout_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "payout_id",
+            "required": true,
+            "schema": {
+              "maxLength": 20,
+              "minLength": 20,
+              "pattern": "^[-0-9A-Z_a-z]{20}$",
+              "title": "Payout Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PayoutOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          }
+        },
+        "summary": "Get Payout",
+        "tags": [
+          "client payouts"
+        ]
+      }
+    },
     "/client/products": {
       "get": {
         "operationId": "client_products_client_products_get",
@@ -11299,6 +12221,77 @@
         "summary": "Client Read",
         "tags": [
           "client help"
+        ]
+      }
+    },
+    "/client/withdrawal-limits": {
+      "get": {
+        "operationId": "withdrawal_limits_client_withdrawal_limits_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LimitsOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          }
+        },
+        "summary": "Withdrawal Limits",
+        "tags": [
+          "client payouts"
         ]
       }
     },

@@ -29,6 +29,12 @@ export const PaymentsBankTransferPost = z.object({
 });
 export type PaymentsBankTransferPost = z.infer<typeof PaymentsBankTransferPost>;
 
+export const ProofPost = z.object({
+  file: Upload,
+  proof_kind: z.enum(["bank_statement", "bank_letter", "bank_card"]),
+});
+export type ProofPost = z.infer<typeof ProofPost>;
+
 export const CategoryChannels = z.object({
   always_on: z.boolean(),
   category: z.enum(["money", "investments", "earnings", "account", "security", "support", "news"]),
@@ -141,6 +147,22 @@ export const ConfirmCode = z.object({
   code: z.string(),
 });
 export type ConfirmCode = z.infer<typeof ConfirmCode>;
+
+export const DestinationOut = z.object({
+  account: z.string(),
+  bank_code: z.string().nullable(),
+  created_at: z.string(),
+  first_paid_at: z.string().nullable(),
+  holder_name: z.string(),
+  id: z.string(),
+  kind: z.enum(["mobile_money", "bank"]),
+  network: z.enum(["mtn", "airtel"]).nullable(),
+  payable_from: z.string().nullable(),
+  proof_kind: z.enum(["bank_statement", "bank_letter", "bank_card", "network_registered_name"]).nullable(),
+  rejection_reason: z.enum(["name_different", "proof_unreadable", "proof_too_old", "proof_wrong_account", "proof_wrong_document", "suspected_fraud"]).nullable(),
+  status: z.enum(["awaiting_code", "awaiting_proof", "in_review", "approved", "rejected"]),
+});
+export type DestinationOut = z.infer<typeof DestinationOut>;
 
 export const DocumentItem = z.object({
   byte_size: z.number().int().nullable(),
@@ -287,6 +309,21 @@ export const InvestmentRequest = z.object({
 });
 export type InvestmentRequest = z.infer<typeof InvestmentRequest>;
 
+export const MoneyView = z.object({
+  currency: z.enum(["UGX", "USD"]),
+  minor: z.number().int(),
+});
+export type MoneyView = z.infer<typeof MoneyView>;
+
+export const LimitsOut = z.object({
+  bank_per_day: MoneyView.nullable(),
+  bank_per_payout: MoneyView.nullable(),
+  effective_from: z.string(),
+  mobile_money_per_day: MoneyView.nullable(),
+  mobile_money_per_payout: MoneyView,
+});
+export type LimitsOut = z.infer<typeof LimitsOut>;
+
 export const LinkView = z.object({
   id: z.string(),
   kind: z.enum(["deposit", "payout", "investment", "identity_check", "payout_destination", "statement", "security", "conversation", "complaint"]),
@@ -339,14 +376,17 @@ export const MobileMoneyPayment = z.object({
 });
 export type MobileMoneyPayment = z.infer<typeof MobileMoneyPayment>;
 
-export const MoneyView = z.object({
-  currency: z.enum(["UGX", "USD"]),
-  minor: z.number().int(),
-});
-export type MoneyView = z.infer<typeof MoneyView>;
-
 export const Network = z.enum(["mtn", "airtel"]);
 export type Network = z.infer<typeof Network>;
+
+export const NewDestination = z.object({
+  account_number: z.string().nullable().optional(),
+  bank_code: z.string().nullable().optional(),
+  holder_name: z.string(),
+  kind: z.enum(["mobile_money", "bank"]),
+  phone: z.string().nullable().optional(),
+});
+export type NewDestination = z.infer<typeof NewDestination>;
 
 export const NewPasskey = z.object({
   credential: z.record(z.string(), z.unknown()),
@@ -419,6 +459,17 @@ export const PaymentView = z.object({
   status: z.enum(["created", "sending", "awaiting_approval", "uncertain", "in_review", "confirmed", "failed"]),
 });
 export type PaymentView = z.infer<typeof PaymentView>;
+
+export const PayoutOut = z.object({
+  amount: MoneyView,
+  business_date: z.string(),
+  created_at: z.string(),
+  destination_id: z.string(),
+  id: z.string(),
+  kind: z.enum(["mobile_money", "bank"]),
+  status: z.enum(["in_review", "processing", "paid", "failed", "cancelled"]),
+});
+export type PayoutOut = z.infer<typeof PayoutOut>;
 
 export const PlanDetails = z.object({
   amount_minor: z.number().int(),
@@ -1201,6 +1252,91 @@ export const operations = {
     status: 200,
     response: PaymentView,
   },
+  "GET /client/payout-destinations": {
+    method: "GET",
+    path: "/client/payout-destinations",
+    params: z.object({}),
+    query: z.object({}),
+    body: null,
+    bodyKind: null,
+    idempotent: false,
+    status: 200,
+    response: z.array(DestinationOut),
+  },
+  "POST /client/payout-destinations": {
+    method: "POST",
+    path: "/client/payout-destinations",
+    params: z.object({}),
+    query: z.object({}),
+    body: NewDestination,
+    bodyKind: "json",
+    idempotent: false,
+    status: 201,
+    response: DestinationOut,
+  },
+  "GET /client/payout-destinations/{destination_id}": {
+    method: "GET",
+    path: "/client/payout-destinations/{destination_id}",
+    params: z.object({
+    destination_id: z.string(),
+  }),
+    query: z.object({}),
+    body: null,
+    bodyKind: null,
+    idempotent: false,
+    status: 200,
+    response: DestinationOut,
+  },
+  "DELETE /client/payout-destinations/{destination_id}": {
+    method: "DELETE",
+    path: "/client/payout-destinations/{destination_id}",
+    params: z.object({
+    destination_id: z.string(),
+  }),
+    query: z.object({}),
+    body: null,
+    bodyKind: null,
+    idempotent: false,
+    status: 204,
+    response: null,
+  },
+  "POST /client/payout-destinations/{destination_id}/proof": {
+    method: "POST",
+    path: "/client/payout-destinations/{destination_id}/proof",
+    params: z.object({
+    destination_id: z.string(),
+  }),
+    query: z.object({}),
+    body: ProofPost,
+    bodyKind: "multipart",
+    idempotent: false,
+    status: 200,
+    response: DestinationOut,
+  },
+  "GET /client/payouts": {
+    method: "GET",
+    path: "/client/payouts",
+    params: z.object({}),
+    query: z.object({}),
+    body: null,
+    bodyKind: null,
+    idempotent: false,
+    status: 200,
+    response: z.array(PayoutOut),
+  },
+  "GET /client/payouts/{payout_id}": {
+    method: "GET",
+    path: "/client/payouts/{payout_id}",
+    params: z.object({
+    payout_id: z.string(),
+  }),
+    query: z.object({}),
+    body: null,
+    bodyKind: null,
+    idempotent: false,
+    status: 200,
+    response: PayoutOut,
+  },
   "GET /client/products": {
     method: "GET",
     path: "/client/products",
@@ -1339,6 +1475,17 @@ export const operations = {
     idempotent: false,
     status: 204,
     response: null,
+  },
+  "GET /client/withdrawal-limits": {
+    method: "GET",
+    path: "/client/withdrawal-limits",
+    params: z.object({}),
+    query: z.object({}),
+    body: null,
+    bodyKind: null,
+    idempotent: false,
+    status: 200,
+    response: LimitsOut,
   },
   "GET /health/live": {
     method: "GET",
