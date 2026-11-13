@@ -28,6 +28,8 @@ from app.modules.payments.bank_transfers import BankTransferJobs
 from app.modules.payments.jobs import DepositJobs
 from app.modules.payments.settings import PaymentsSettings
 from app.modules.payments.wiring import collections_provider
+from app.modules.payouts.jobs import PayoutJobs
+from app.modules.payouts.wiring import disbursements_provider
 from app.shared.clock import Clock, SystemClock
 
 
@@ -63,6 +65,9 @@ def handlers(
     collections = collections_provider(PaymentsSettings(), clock)
     if collections is not None:
         kinds.update(DepositJobs(database, collections, clock).handlers())
+    disbursements = disbursements_provider(PaymentsSettings(), clock)
+    if disbursements is not None:
+        kinds.update(PayoutJobs(database, disbursements, clock).handlers())
     kinds.update(
         notification_jobs.handlers(
             database,

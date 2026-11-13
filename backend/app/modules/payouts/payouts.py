@@ -2,7 +2,8 @@
 
 Creating a payout and reserving its money happen in one transaction, and so does every later
 change of status and the ledger entry that goes with it. Nothing here talks to a provider: a
-queued payout is picked up by the worker, which reports back through `apply_event`.
+queued mobile money payout gets a send job in the same transaction, and the worker in
+`payouts/jobs.py` sends it and reports back through `apply_event`.
 
 `create_payout` is called by the module that owns the money being withdrawn (an investment
 paying out at maturity, or an early withdrawal). That module first moves the money into the
@@ -11,12 +12,13 @@ The HTTP command that calls it carries the idempotency key.
 """
 
 from dataclasses import dataclass
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from typing import Any
 
 from sqlalchemy import Row, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.infrastructure.jobs import JobRequest, enqueue
 from app.modules.audit import service as audit
 from app.modules.audit.domain.events import AuditActor, AuditEvent
 from app.modules.ledger import service as ledger
@@ -32,12 +34,19 @@ from app.modules.payouts.domain.limits import (
 )
 from app.modules.payouts.domain.payouts import LedgerEffect, PayoutEvent, PayoutStatus
 from app.modules.payouts.domain.posting import PayoutTerms
+from app.modules.payouts.domain.sending import SEND_ATTEMPTS
 from app.shared.actors import Actor
 from app.shared.business_day import business_date
 from app.shared.clock import Clock
 from app.shared.errors import ApplicationError
 from app.shared.money import Currency, Money
 from app.shared.push_ids import push_id
+
+SEND_KIND = "payouts.send_payout"
+READ_KIND = "payouts.read_payout_status"
+SWEEP_KIND = "payouts.sweep_payouts"
+# A send job not started within this is left to the sweep, which queues a fresh one.
+SEND_MAX_AGE = timedelta(hours=1)
 
 
 class PayoutRefused(Exception):
@@ -250,6 +259,8 @@ async def create_payout(
             await ledger.post_entry(session, posting.reserve(terms, today), clock)
     except InsufficientFunds:
         raise PayoutRefused("insufficient_funds") from None
+    if status is PayoutStatus.QUEUED:
+        await queue_send(session, payout_id, destination.kind, now)
     await _audit(session, actor, "payouts.payout_requested", payout_id, clock)
     return await get_payout(session, payout_id)
 
@@ -306,6 +317,8 @@ async def apply_event(
             await ledger.post_entry(session, draft, clock)
     if transition.status is PayoutStatus.PAID:
         await destinations.record_first_payout(session, before.destination_id, now)
+    if before.status is PayoutStatus.HELD and transition.status is PayoutStatus.QUEUED:
+        await queue_send(session, payout_id, before.kind, now)
     if event in _PERSON_EVENTS:
         await _audit(
             session,
@@ -317,6 +330,34 @@ async def apply_event(
             reason=reason,
         )
     return await get_payout(session, payout_id)
+
+
+async def queue_send(
+    session: AsyncSession,
+    payout_id: str,
+    kind: DestinationKind,
+    now: datetime,
+    *,
+    key: str | None = None,
+) -> None:
+    """Ask the worker to send a queued payout. Queuing twice with the same key queues once.
+
+    Only mobile money is sent through the provider. A bank payout waits for staff to pay it
+    from the trust account, which is not built yet.
+    """
+    if kind is not DestinationKind.MOBILE_MONEY:
+        return
+    await enqueue(
+        session,
+        JobRequest(
+            kind=SEND_KIND,
+            idempotency_key=key or payout_id,
+            payload={"payout_id": payout_id},
+            max_attempts=SEND_ATTEMPTS,
+            max_age=SEND_MAX_AGE,
+        ),
+        now=now,
+    )
 
 
 async def get_payout(session: AsyncSession, payout_id: str) -> PayoutView:

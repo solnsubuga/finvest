@@ -26,6 +26,7 @@ from app.modules.notifications.service import PURGE_MESSAGES
 from app.modules.payments import service as payments
 from app.modules.payments.settings import PaymentsSettings
 from app.modules.payments.wiring import ensure_allowed
+from app.modules.payouts import payouts
 from app.shared.business_day import KAMPALA
 from app.shared.clock import SystemClock
 
@@ -86,6 +87,15 @@ def schedules() -> list[Schedule]:
                 name="payments.sweep_deposits",
                 trigger=IntervalTrigger(minutes=1),
                 kind=payments.SWEEP_KIND,
+                max_age=timedelta(minutes=5),
+            )
+        )
+        # Settles payout sends that were interrupted, and queues sends and reads that were lost.
+        runs.append(
+            Schedule(
+                name="payouts.sweep_payouts",
+                trigger=IntervalTrigger(minutes=1),
+                kind=payouts.SWEEP_KIND,
                 max_age=timedelta(minutes=5),
             )
         )

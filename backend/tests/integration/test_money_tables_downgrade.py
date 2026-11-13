@@ -1,8 +1,8 @@
 """A downgrade must never delete the books, the issued numbers, the audit trail, the job
 history, the receipts that stop a command running twice, the identity records, the payout
-destinations, the withdrawal limits, the payouts, the migration checks, the imported
-statements, the day closes, the pot transfers, the help chat, the complaints register, the
-goals or the email delivery records."""
+destinations, the withdrawal limits, the payouts and their send attempts, the migration
+checks, the imported statements, the day closes, the pot transfers, the help chat, the
+complaints register, the goals or the email delivery records."""
 
 import os
 from collections.abc import Iterator
@@ -180,6 +180,21 @@ ROWS = {
         "DATE '2030-01-01', 'UGX', 1000000, '-Nabc0000000000000B1', '-Nabc0000000000000C1', "
         "'Test', now())",
         "refusing to drop payouts or limits",
+    ),
+    "0033_payout_send_attempts": (
+        "INSERT INTO payout_destinations (id, client_id, kind, network, account_number, "
+        "holder_name, status, created_at, updated_at) VALUES ('-Nabc0000000000000D1', "
+        "'-Nabc0000000000000B1', 'mobile_money', 'mtn', '256772000000', 'Test', "
+        "'awaiting_code', now(), now()); "
+        "INSERT INTO payouts (id, client_id, destination_id, kind, amount_minor, currency, "
+        "status, business_date, source_account_id, source_reference, in_flight_account_id, "
+        "request_key, created_at, updated_at) VALUES ('-Nabc0000000000000A1', "
+        "'-Nabc0000000000000B1', '-Nabc0000000000000D1', 'mobile_money', 1000, 'UGX', 'queued', "
+        "DATE '2026-11-10', '-Nabc0000000000000E1', 'investment-1', '-Nabc0000000000000F1', "
+        "'request-key-1', now(), now()); "
+        "INSERT INTO payout_send_attempts (payout_id, attempt, provider, started_at) "
+        "VALUES ('-Nabc0000000000000A1', 1, 'sandbox', now())",
+        "refusing to drop payout send attempts",
     ),
     "0051_kyc_sealed_details": (
         "INSERT INTO kyc_checks (id, client_id, document_type, document_country, "
