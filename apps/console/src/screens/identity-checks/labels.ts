@@ -41,7 +41,7 @@ const FLAG_LABELS: Record<string, string> = {
   document_genuine_unsure: "ID could not be confirmed",
   document_genuine_not_run: "ID was not checked",
   selfie_match_fail: "Selfie did not match",
-  selfie_match_unsure: "Selfie did not match",
+  selfie_match_unsure: "Selfie could not be confirmed",
   selfie_match_not_run: "Selfie was not checked",
   screening_fail: "Screening match",
   screening_unsure: "Possible screening match",
