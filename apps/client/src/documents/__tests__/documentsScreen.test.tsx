@@ -1,4 +1,4 @@
-import { act, fireEvent, render, screen, within } from "@testing-library/react-native";
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react-native";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 
 import Documents from "@/app/(app)/documents";
@@ -41,7 +41,8 @@ describe("the Documents screen", () => {
     expect(screen.getByText("1 Aug 2026 to 13 Nov 2026")).toBeTruthy();
     expect(screen.getByText("Receipt RC-Pq30vNa2")).toBeTruthy();
     await fireEvent.press(screen.getByLabelText("Download October 2026"));
-    expect(client.downloaded).toEqual(["demo-monthly-1"]);
+    // The download finishes after the press returns, so wait for it.
+    await waitFor(() => expect(client.downloaded).toEqual(["demo-monthly-1"]));
   });
 
   it("asks for a statement, follows it and offers the PDF", async () => {
@@ -55,8 +56,8 @@ describe("the Documents screen", () => {
     expect(await screen.findByText("Your statement is ready")).toBeTruthy();
     expect(client.asked).toHaveLength(1);
     await fireEvent.press(screen.getByTestId("statement-download"));
-    expect(client.downloaded).toEqual(["demo-asked-1"]);
     expect(await screen.findByText("Downloaded")).toBeTruthy();
+    expect(client.downloaded).toEqual(["demo-asked-1"]);
   });
 
   it("says when a statement reaches days that are not final", async () => {
