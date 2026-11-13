@@ -1152,6 +1152,32 @@
         "title": "Currency",
         "type": "string"
       },
+      "DecideLift": {
+        "additionalProperties": false,
+        "properties": {
+          "decision": {
+            "enum": [
+              "approved",
+              "rejected",
+              "withdrawn"
+            ],
+            "title": "Decision",
+            "type": "string"
+          },
+          "reason": {
+            "maxLength": 500,
+            "minLength": 1,
+            "title": "Reason",
+            "type": "string"
+          }
+        },
+        "required": [
+          "decision",
+          "reason"
+        ],
+        "title": "DecideLift",
+        "type": "object"
+      },
       "DecideOutcome": {
         "additionalProperties": false,
         "properties": {
@@ -2697,6 +2723,103 @@
         "type": "object"
       },
       "JsonValue": {},
+      "LiftView": {
+        "additionalProperties": false,
+        "properties": {
+          "address_hash": {
+            "title": "Address Hash",
+            "type": "string"
+          },
+          "decided_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Decided At"
+          },
+          "decided_by": {
+            "anyOf": [
+              {
+                "maxLength": 20,
+                "minLength": 20,
+                "pattern": "^[-0-9A-Z_a-z]{20}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Decided By"
+          },
+          "decision_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Decision Reason"
+          },
+          "id": {
+            "maxLength": 20,
+            "minLength": 20,
+            "pattern": "^[-0-9A-Z_a-z]{20}$",
+            "title": "Id",
+            "type": "string"
+          },
+          "proposed_at": {
+            "format": "date-time",
+            "title": "Proposed At",
+            "type": "string"
+          },
+          "proposed_by": {
+            "maxLength": 20,
+            "minLength": 20,
+            "pattern": "^[-0-9A-Z_a-z]{20}$",
+            "title": "Proposed By",
+            "type": "string"
+          },
+          "reason": {
+            "title": "Reason",
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "proposed",
+              "approved",
+              "rejected",
+              "withdrawn"
+            ],
+            "title": "Status",
+            "type": "string"
+          },
+          "yours": {
+            "title": "Yours",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "id",
+          "address_hash",
+          "reason",
+          "proposed_by",
+          "proposed_at",
+          "status",
+          "decided_by",
+          "decided_at",
+          "decision_reason",
+          "yours"
+        ],
+        "title": "LiftView",
+        "type": "object"
+      },
       "LimitsOut": {
         "additionalProperties": false,
         "description": "The withdrawal limits in force today. A limit that is None is not set.",
@@ -2977,6 +3100,42 @@
           "methods"
         ],
         "title": "LoginStarted",
+        "type": "object"
+      },
+      "Lookup": {
+        "additionalProperties": false,
+        "properties": {
+          "email": {
+            "maxLength": 254,
+            "minLength": 3,
+            "title": "Email",
+            "type": "string"
+          }
+        },
+        "required": [
+          "email"
+        ],
+        "title": "Lookup",
+        "type": "object"
+      },
+      "LookupResult": {
+        "additionalProperties": false,
+        "properties": {
+          "suppression": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SuppressionView"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "suppression"
+        ],
+        "title": "LookupResult",
         "type": "object"
       },
       "MakeComplaint": {
@@ -4477,6 +4636,22 @@
           "yours"
         ],
         "title": "ProposalView",
+        "type": "object"
+      },
+      "ProposeLift": {
+        "additionalProperties": false,
+        "properties": {
+          "reason": {
+            "maxLength": 500,
+            "minLength": 1,
+            "title": "Reason",
+            "type": "string"
+          }
+        },
+        "required": [
+          "reason"
+        ],
+        "title": "ProposeLift",
         "type": "object"
       },
       "ProposeOutcome": {
@@ -6504,6 +6679,7 @@
                 "audit.view",
                 "settings.view",
                 "wordings.change",
+                "email_suppressions.lift",
                 "migration.view",
                 "bank_transfers.change",
                 "migration.import",
@@ -6614,6 +6790,104 @@
           "date_to"
         ],
         "title": "StatementRequest",
+        "type": "object"
+      },
+      "SuppressionList": {
+        "additionalProperties": false,
+        "properties": {
+          "can_lift": {
+            "title": "Can Lift",
+            "type": "boolean"
+          },
+          "suppressions": {
+            "items": {
+              "$ref": "#/components/schemas/SuppressionView"
+            },
+            "title": "Suppressions",
+            "type": "array"
+          }
+        },
+        "required": [
+          "suppressions",
+          "can_lift"
+        ],
+        "title": "SuppressionList",
+        "type": "object"
+      },
+      "SuppressionView": {
+        "additionalProperties": false,
+        "properties": {
+          "address_hash": {
+            "title": "Address Hash",
+            "type": "string"
+          },
+          "complained": {
+            "title": "Complained",
+            "type": "boolean"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "last_event_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Event At"
+          },
+          "lifted_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Lifted At"
+          },
+          "open_lift": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/LiftView"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "reason": {
+            "enum": [
+              "bounced",
+              "complained"
+            ],
+            "title": "Reason",
+            "type": "string"
+          },
+          "suppressed": {
+            "title": "Suppressed",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "address_hash",
+          "reason",
+          "created_at",
+          "last_event_at",
+          "suppressed",
+          "lifted_at",
+          "complained",
+          "open_lift"
+        ],
+        "title": "SuppressionView",
         "type": "object"
       },
       "TotalLineView": {
@@ -16079,6 +16353,350 @@
         "summary": "Move Complaint",
         "tags": [
           "staff support"
+        ]
+      }
+    },
+    "/staff/email-suppressions": {
+      "get": {
+        "description": "The newest 200 suppressions, whether each still applies, and any lift waiting.",
+        "operationId": "list_suppressions_staff_email_suppressions_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SuppressionList"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          }
+        },
+        "summary": "List Suppressions",
+        "tags": [
+          "staff email suppressions"
+        ]
+      }
+    },
+    "/staff/email-suppressions/lifts/{lift_id}/decision": {
+      "post": {
+        "description": "Approve or reject someone else's lift, or withdraw your own.",
+        "operationId": "decide_lift_staff_email_suppressions_lifts__lift_id__decision_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "lift_id",
+            "required": true,
+            "schema": {
+              "maxLength": 20,
+              "minLength": 20,
+              "pattern": "^[-0-9A-Z_a-z]{20}$",
+              "title": "Lift Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DecideLift"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LiftView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          }
+        },
+        "summary": "Decide Lift",
+        "tags": [
+          "staff email suppressions"
+        ]
+      }
+    },
+    "/staff/email-suppressions/lookup": {
+      "post": {
+        "description": "Whether one address is suppressed. The address is hashed and not kept. A POST, so the\naddress never appears in a URL or a log.",
+        "operationId": "lookup_staff_email_suppressions_lookup_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Lookup"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LookupResult"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          }
+        },
+        "summary": "Lookup",
+        "tags": [
+          "staff email suppressions"
+        ]
+      }
+    },
+    "/staff/email-suppressions/{address_hash}/lifts": {
+      "post": {
+        "description": "Ask to email the address again. A different member of staff decides.",
+        "operationId": "propose_lift_staff_email_suppressions__address_hash__lifts_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "address_hash",
+            "required": true,
+            "schema": {
+              "pattern": "^[0-9a-f]{64}$",
+              "title": "Address Hash",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ProposeLift"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LiftView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          }
+        },
+        "summary": "Propose Lift",
+        "tags": [
+          "staff email suppressions"
         ]
       }
     },

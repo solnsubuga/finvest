@@ -376,7 +376,12 @@ async def test_an_event_for_an_unknown_email_waits_then_is_kept_unmatched(
 
 
 async def test_the_api_cannot_read_events_or_suppressions(app_database: Database) -> None:
+    # Staff transactions may read the address hashes, for the console's suppression list
+    # (migration 0153). Nothing else about an event, and nothing at all without a staff actor.
+    with pytest.raises(Exception, match="permission denied"):
+        async with app_database.transaction() as session:
+            await session.execute(text("SELECT * FROM notification_email_events"))
     for table in ("notification_email_events", "notification_email_suppressions"):
-        with pytest.raises(Exception, match="permission denied"):
-            async with app_database.transaction() as session:
-                await session.execute(text(f"SELECT * FROM {table}"))  # noqa: S608
+        async with app_database.transaction() as session:
+            hidden = await session.scalar(text(f"SELECT count(*) FROM {table}"))  # noqa: S608
+        assert hidden == 0
