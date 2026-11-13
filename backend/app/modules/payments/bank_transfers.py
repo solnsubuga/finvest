@@ -286,6 +286,9 @@ async def submit_bank_receipt(
         await service.record_event(
             session, deposit_id, None, DepositStatus.IN_REVIEW, None, "request", now
         )
+        await service.record_requested(
+            session, actor, deposit_id, Method.BANK_TRANSFER.value, clock
+        )
         if not _file_stored:
             # A preflight: everything that could refuse this transfer has run.
             raise _WouldSave
