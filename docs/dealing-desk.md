@@ -79,6 +79,16 @@ Bills are bought for the pool. After a purchase settles, its cost is shared out 
 
 An allocation records which bills stand behind which investment. It never changes what a client is owed. That is the ledger's job.
 
+Every 15 minutes the worker runs `dealing.allocate` (`dealing.allocations`, migration 0085). For each product it:
+
+1. Releases what stands behind an investment that is no longer running, or beyond what the investment is owed, newest first.
+2. Releases what a lot no longer holds after a sale, newest first, so the oldest payments keep their bills.
+3. Shares out what each lot still holds, oldest purchase first, with the allocation rule above.
+
+A lot counts only once its purchase is settled, and until it matures. A run repeated, or two at once, ends with the same allocations. `allocations.bills_behind(session, investment_id)` lists the lots behind an investment, for the allocation report.
+
+The database holds that only the worker allocates, that a lot never has more allocated than the cost it still holds, and that an allocation is only ever released, once, and never removed.
+
 ## Bills held
 
 A lot is one purchase: face value, cost and maturity date. Nothing is revalued day to day.
