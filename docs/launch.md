@@ -18,6 +18,7 @@ Staging is set up but switched off to save cost (Solo, 2026-11-13), so productio
 | Payment and payout providers are live in production with real credentials, tested with a small real payment and payout | Solo, engineering | |
 | The regulator has been told of the change of system, if it must be | Solo | |
 | A real Finvest 1.0 export has been through the trial import with no errors | Operations | |
+| Every check in [Real device checks](#real-device-checks) has passed on an Android and an iPhone build of the release | Engineering | |
 
 ## 2. The parallel run
 
@@ -78,6 +79,18 @@ After that point there is no going back to 1.0, because money has moved in 2.0. 
 | Daily | Reconciliation of the trust account and provider wallets ([reconciliation.md](reconciliation.md)) | Finance |
 | After 1 week | First restore drill on production | Engineering |
 | After 4 weeks | Decide when Finvest 1.0 is archived. It stays read only until then, and its data is kept for as long as the law requires. | Solo |
+
+## Real device checks
+
+Things automated tests cannot cover, because they need a real phone's share sheet, files or hardware. Run each one on an Android and an iPhone build of the release being launched, signed in as a test client, and record the build, the phone and the result. A screen thread that ships something only a real device can prove adds a row here in the same pull request.
+
+| Screen | Check | Shipped in | Android | iPhone |
+| --- | --- | --- | --- | --- |
+| Documents | Tap download on a statement: the share sheet opens with a PDF that opens, and the file name is right | #149 (`apps/client/src/documents/savePdf.ts`) | | |
+| Documents | Tap download on a receipt: the same | #149 | | |
+| Documents | Ask for a statement, wait until it is ready, then download it: the same | #149 | | |
+
+The web download is covered by automated tests.
 
 ## What only Solo can provide
 
