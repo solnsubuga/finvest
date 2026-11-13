@@ -8,11 +8,11 @@ Each template lists the variables it needs. Every value is escaped before it goe
 so nothing a person typed can add markup or a link.
 
 This file owns only the messages that carry a secret or guard an account: sign-in, signup,
-reset and claim codes, the notice that a number changed, the link that proves an email
-address, and the staff set-up link. They are fixed in code so that nobody can edit them into
-a phishing message, and so that they work before anything else is set up. Every other client
-notice is worded in `domain/wording.py`, which staff edit with a second person approving.
-Neither file adds text of the other kind.
+reset and claim codes, the notices of a new sign-in and of a changed number, the link that
+proves an email address, and the staff set-up link. They are fixed in code so that nobody can
+edit them into a phishing message, and so that they work before anything else is set up. Every
+other client notice is worded in `domain/wording.py`, which staff edit with a second person
+approving. Neither file adds text of the other kind.
 """
 
 import html
@@ -28,6 +28,7 @@ Template = Literal[
     "payout_account_code",
     "phone_changed",
     "email_verification",
+    "new_sign_in",
     "staff_enrolment",
     "client_notice",
 ]
@@ -41,6 +42,7 @@ _VARIABLES: dict[Template, frozenset[str]] = {
     "payout_account_code": frozenset({"code", "minutes"}),
     "phone_changed": frozenset({"ending"}),
     "email_verification": frozenset({"link", "hours"}),
+    "new_sign_in": frozenset({"device", "when"}),
     "staff_enrolment": frozenset({"name", "link", "hours"}),
     # A notification's words, already filled in: the title and body for an email.
     "client_notice": frozenset({"title", "body"}),
@@ -89,6 +91,8 @@ _SMS: dict[str, str] = {
     "client_notice": "{sms}",
     "payout_account_code": "Your Finvest code to add a new account for your withdrawals is "
     "{code}. It works for {minutes} minutes. Never share it. If this was not you, call us.",
+    "new_sign_in": "Your Finvest account was signed in to on {device}, {when}. If this was "
+    "not you, change your password now.",
     "phone_changed": "The mobile number on your Finvest account was changed to one ending "
     "{ending}. If you did not ask for this, contact Finvest support now.",
 }
@@ -138,6 +142,15 @@ def render(
                 values["body"],
                 "Open the Finvest app to see it. You can choose how we reach you in Profile, "
                 "under Notifications.",
+            ],
+        )
+    if template == "new_sign_in":
+        return _message(
+            "A new sign-in to your Finvest account",
+            [
+                f"Your Finvest account was signed in to on {values['device']}, {values['when']}.",
+                "If this was you, there is nothing to do. If it was not, change your password "
+                "now and sign out the devices you do not know from the Security screen.",
             ],
         )
     if template == "email_verification":

@@ -31,10 +31,12 @@ from app.modules.identity import (
     passkeys_api,
     people_api,
     phone_changes_api,
+    sessions_api,
     team_api,
 )
 from app.modules.identity.authenticators import AuthenticatorService
 from app.modules.identity.codes import CodeService
+from app.modules.identity.devices import DeviceMiddleware
 from app.modules.identity.email_checks import EmailCheckService
 from app.modules.identity.hashing import PasswordHasher
 from app.modules.identity.passkeys import PasskeyService
@@ -140,6 +142,7 @@ def create_app(
             expose_headers=["X-Request-ID", "Retry-After"],
             max_age=600,
         )
+    app.add_middleware(DeviceMiddleware)
     app.add_middleware(BodyLimitMiddleware)
     app.add_middleware(UnexpectedErrorMiddleware)
     app.add_middleware(RequestLogMiddleware)
@@ -157,6 +160,7 @@ def create_app(
         *codes_api.routers,
         *phone_changes_api.routers,
         *email_checks_api.routers,
+        *sessions_api.routers,
         *team_api.routers,
         *people_api.routers,
         *notifications_api.routers,
