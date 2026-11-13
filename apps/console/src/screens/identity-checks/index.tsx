@@ -111,7 +111,7 @@ export function IdentityChecksScreen({ api = defaultApi, now = () => new Date() 
         </p>
       ) : queue.state === "failed" ? (
         <Failure message={queue.message} onRetry={() => void loadQueue()} />
-      ) : queue.value.length === 0 && !requestedId ? (
+      ) : queue.value.length === 0 && !requestedId && !kept ? (
         <section className="flex max-w-[640px] flex-col gap-2 rounded-xl border border-border bg-surface p-5">
           <h2 className="m-0 text-xl font-extrabold">Nothing to review</h2>
           <p className="m-0 text-md leading-normal text-muted">

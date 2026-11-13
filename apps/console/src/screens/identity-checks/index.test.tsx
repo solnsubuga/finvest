@@ -33,7 +33,7 @@ describe("identity checks screen", () => {
       expect.stringContaining("Grace Namara"),
       expect.stringContaining("Joseph Nakato"),
     ]);
-    expect(within(review).getByText("Selfie did not match")).toBeInTheDocument();
+    expect(within(review).getByText("Selfie could not be confirmed")).toBeInTheDocument();
     expect(within(review).getByText("Face match 62%")).toBeInTheDocument();
     expect(within(review).getByText("MUGISHA David")).toBeInTheDocument();
     expect(within(review).getByText("14 Mar 1990")).toBeInTheDocument();
@@ -77,6 +77,21 @@ describe("identity checks screen", () => {
     expect(within(review).queryByRole("form", { name: "Decision" })).not.toBeInTheDocument();
     expect(screen.getByText("One client is waiting for a decision.")).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /David Mugisha/ })).not.toBeInTheDocument();
+  });
+
+  it("keeps the approval on screen when it was the last check in the queue", async () => {
+    const stub = createStubKycApi(0);
+    const api: KycApi = { ...stub, listQueue: async () => (await stub.listQueue()).filter((item) => item.id === DAVID) };
+    const { user } = renderScreen(api);
+    const review = await openCheck("David Mugisha");
+    await user.type(within(review).getByLabelText("Reason for your decision"), "Photos match the ID");
+    await user.click(within(review).getByRole("button", { name: "Approve" }));
+    await user.click(within(review).getByRole("button", { name: "Yes, approve" }));
+
+    expect(await within(review).findByText(/Account number/)).toHaveTextContent(/was issued/);
+    expect(await screen.findByText("Nobody is waiting for a decision.")).toBeInTheDocument();
+    expect(screen.queryByText("Nothing to review")).not.toBeInTheDocument();
+    expect(screen.getByRole("article", { name: "Identity check for David Mugisha" })).toBeInTheDocument();
   });
 
   it("can back out of the confirmation", async () => {
