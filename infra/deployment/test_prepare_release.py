@@ -139,6 +139,18 @@ class PrepareRelease(unittest.TestCase):
         for service in ("worker", "scheduler", "migrate"):
             self.assertNotIn("FINVEST_AUTHENTICATOR_KEY", read_env(self.out / "runtime" / f"{service}.env"))
 
+    def test_client_signup_is_closed_unless_opened(self):
+        for value in (None, "", "false", "TRUE", "yes"):
+            extra = {} if value is None else {"FINVEST_CLIENT_SIGNUP_OPEN": value}
+            pr.prepare(self.out, settings(**extra))
+            self.assertEqual(read_env(self.out / "runtime" / "api.env")["FINVEST_CLIENT_SIGNUP_OPEN"], "false")
+
+    def test_client_signup_opens_on_the_api_only(self):
+        pr.prepare(self.out, settings(FINVEST_CLIENT_SIGNUP_OPEN="true"))
+        self.assertEqual(read_env(self.out / "runtime" / "api.env")["FINVEST_CLIENT_SIGNUP_OPEN"], "true")
+        for service in ("worker", "scheduler", "migrate"):
+            self.assertNotIn("FINVEST_CLIENT_SIGNUP_OPEN", read_env(self.out / "runtime" / f"{service}.env"))
+
     def test_identity_data_key_reaches_the_api_and_worker_only(self):
         pr.prepare(self.out, settings(FINVEST_IDENTITY_DATA_KEY="d" * 43))
         for service in ("api", "worker"):
