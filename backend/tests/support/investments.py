@@ -7,8 +7,6 @@ from app.infrastructure.database import Database
 from app.modules.investments import service as investments
 from app.modules.investments.domain.investments import AtMaturity
 from app.modules.investments.holdings import AWAITING_START
-from app.modules.kyc import service as kyc
-from app.modules.kyc.providers import ManualProvider
 from app.modules.ledger import service as ledger
 from app.modules.ledger.domain.entries import AccountKind, AccountSpec, EntryDraft, credit, debit
 from app.modules.payouts import destinations
@@ -18,10 +16,10 @@ from app.shared.business_day import business_date
 from app.shared.clock import Clock
 from app.shared.money import Money
 from tests.support.clock import FakeClock
-from tests.support.kyc import SEALER, ready_draft
+from tests.support.kyc import verify
 from tests.support.ledger import client as new_client
 from tests.support.ledger import key, ugx
-from tests.support.ledger import staff as new_staff
+from tests.support.payouts import approve_by_two
 
 
 class _Present(FakeClock):
@@ -52,12 +50,7 @@ def at(day: date, hour: int = 9) -> FakeClock:
 async def approved_client(database: Database, clock: Clock) -> Actor:
     """A client whose identity check a member of staff approved."""
     client = new_client()
-    async with database.actor_transaction(client) as session:
-        await ready_draft(session, client, clock)
-        check = await kyc.submit(session, SEALER, client, ManualProvider(), clock)
-    staff = new_staff()
-    async with database.actor_transaction(staff) as session:
-        await kyc.approve(session, SEALER, staff, check.id, "Documents match", clock)
+    await verify(database, client, clock)
     return client
 
 
@@ -176,16 +169,5 @@ async def approved_destination(
         await destinations.submit_proof(
             session, client, view.id, ProofKind.NETWORK_REGISTERED_NAME, "doc-1", clock
         )
-    checker = new_staff()
-    async with app_database.actor_transaction(checker) as session:
-        await destinations.approve(
-            session,
-            checker,
-            view.id,
-            id_name="Sarah Nakato",
-            proof_name="Nakato Sarah",
-            statement_date=None,
-            reason="Checked",
-            clock=clock,
-        )
+    await approve_by_two(app_database, view.id, clock)
     return view.id

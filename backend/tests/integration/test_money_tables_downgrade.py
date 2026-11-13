@@ -1,9 +1,10 @@
 """A downgrade must never delete the books, the issued numbers, the audit trail, the job
 history, the receipts that stop a command running twice, the identity records, the payout
-destinations, the withdrawal limits, the payouts and their send attempts, the migration
-checks, the imported statements, the day closes, the pot transfers, the help chat, the
-complaints register, the goals, the email delivery records, the unclaimed accounts, the
-complaint outcomes, the suppression lifts, the client locks or the announcements."""
+destinations and their two-person checks, the withdrawal limits, the payouts and their send
+attempts, the migration checks, the imported statements, the day closes, the pot transfers,
+the help chat, the complaints register, the goals, the email delivery records, the unclaimed
+accounts, the complaint outcomes, the suppression lifts, the client locks, the announcements
+or the team changes."""
 
 import os
 from collections.abc import Iterator
@@ -164,6 +165,15 @@ ROWS = {
         "COMMIT",
         "refusing to drop bill maturities",
     ),
+    "0083_dealing_buffer_rules": (
+        "BEGIN; SELECT set_config('finvest.actor_kind', 'staff', true); "
+        "SELECT set_config('finvest.actor_id', '-Nabc0000000000000B1', true); "
+        "INSERT INTO dealing_buffer_rule_proposals (id, currency, effective_from, target_minor, "
+        "floor_minor, from_buffer_up_to_minor, pay_within_working_days, reason, proposed_by, "
+        "proposed_at) VALUES ('-Nabc0000000000000A1', 'UGX', DATE '2027-01-01', 3, 2, 1, 2, "
+        "'Test', '-Nabc0000000000000B1', now()); COMMIT",
+        "refusing to drop buffer rules that staff proposed or approved",
+    ),
     "0050_kyc": (
         "INSERT INTO kyc_checks (id, client_id, document_type, document_country, created_at, "
         "updated_at) VALUES ('-Nabc0000000000000A1', '-Nabc0000000000000B1', 'passport', 'UG', "
@@ -245,6 +255,14 @@ ROWS = {
         "'sms', '+256772123456', '-Nabc0000000000000B1', '-Nabc0000000000000C1', "
         "decode(repeat('00', 32), 'hex'), now(), now())",
         "refusing to drop payout account codes",
+    ),
+    "0035_payout_account_two_people": (
+        "INSERT INTO payout_destinations (id, client_id, kind, network, account_number, "
+        "holder_name, status, proof_kind, proof_name, name_match, checked_by, checked_at, "
+        "created_at, updated_at) VALUES ('-Nabc0000000000000D1', '-Nabc0000000000000B1', "
+        "'mobile_money', 'mtn', '256772000000', 'Test', 'in_review', 'network_registered_name', "
+        "'Test', 'exact', '-Nabc0000000000000S1', now(), now(), now())",
+        "refusing to drop the checks and approvals of payout destinations",
     ),
     "0051_kyc_sealed_details": (
         "INSERT INTO kyc_checks (id, client_id, document_type, document_country, "
@@ -408,6 +426,18 @@ ROWS = {
         "'+256772123457', 'Lost SIM', '-Nabc0000000000000S1', now(), now() + interval '1 day'); "
         "COMMIT",
         "refusing to drop the record of number changes",
+    ),
+    "0150_staff_changes": (
+        "BEGIN; INSERT INTO identity_staff (id, email, name, role, password_hash, status, "
+        "created_at) VALUES ('-Nabc0000000000000S1', 'admin@finvestug.com', 'Admin', 'admin', "
+        "'x', 'active', now()); "
+        "SELECT set_config('finvest.actor_kind', 'staff', true); "
+        "SELECT set_config('finvest.actor_id', '-Nabc0000000000000S1', true); "
+        "INSERT INTO identity_staff_changes (id, kind, staff_id, email, name, role, reason, "
+        "proposed_by, proposed_at) VALUES ('-Nabc0000000000000A1', 'invite', "
+        "'-Nabc0000000000000S2', 'new@finvestug.com', 'New Person', 'support', 'Hire', "
+        "'-Nabc0000000000000S1', now()); COMMIT",
+        "refusing to drop identity_staff_changes",
     ),
 }
 

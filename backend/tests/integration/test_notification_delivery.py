@@ -169,11 +169,13 @@ async def messages(database: Database, notification_id: str) -> dict[str, str]:
     async with database.transaction() as session:
         rows = (
             await session.execute(
+                # Not LIKE: an ID may hold "_", which LIKE reads as any one character, so another
+                # notification's messages made in the same millisecond could match.
                 text(
                     "SELECT channel, status FROM notification_messages "
-                    "WHERE idempotency_key LIKE :key"
+                    "WHERE starts_with(idempotency_key, :key)"
                 ),
-                {"key": f"notice:{notification_id}:%"},
+                {"key": f"notice:{notification_id}:"},
             )
         ).all()
     return {row.channel: row.status for row in rows}

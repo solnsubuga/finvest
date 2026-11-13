@@ -4,9 +4,12 @@ Every function takes the caller's open transaction, so a step and its audit even
 roll back together. The caller must open that transaction for the right actor: the database
 refuses a client step in a staff transaction and the other way round (migration 0030).
 
-Two things are the caller's job, because other modules own them. The SMS code is spent by the
-identity module (`spend_payout_account_code`) in the same transaction as `confirm_code`. The
-name on the client's ID is read from the clients module and passed to `approve`.
+The SMS code is the caller's job, because the identity module owns it: it is spent
+(`spend_payout_account_code`) in the same transaction as `confirm_code`. The name on the
+client's ID is read here from the identity checks module, never taken from the caller.
+
+Approving an account takes two members of staff. One records a check with `check`; a
+different one approves it with `approve`. One person may refuse with `reject`.
 """
 
 from dataclasses import dataclass
@@ -19,6 +22,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.modules.audit import service as audit
 from app.modules.audit.domain.events import AuditActor, AuditEvent
+from app.modules.kyc import service as kyc
 from app.modules.payouts.domain import destinations as rules
 from app.modules.payouts.domain.destinations import (
     BankAccount,
@@ -56,6 +60,13 @@ class DestinationView:
     proof_document_id: str | None
     name_match: NameMatch | None
     rejection_reason: RejectionReason | None
+    # The check of the current proof: what was read on it, who recorded it and when, and who
+    # approved it. Staff only: the client routes never return these.
+    proof_name: str | None
+    statement_date: date | None
+    checked_by: str | None
+    checked_at: datetime | None
+    approved_by: str | None
     approved_at: datetime | None
     payable_from: datetime | None
     first_paid_at: datetime | None
@@ -69,12 +80,14 @@ class DestinationView:
             approved_at=self.approved_at,
             first_paid_at=self.first_paid_at,
             rejection_reason=self.rejection_reason,
+            checked_by=self.checked_by,
         )
 
 
 _COLUMNS = (
     "id, client_id, kind, network, bank_code, account_number, holder_name, status, proof_kind, "
-    "proof_document_id, name_match, rejection_reason, approved_at, first_paid_at, created_at"
+    "proof_document_id, proof_name, name_match, statement_date, rejection_reason, checked_by, "
+    "checked_at, approved_by, approved_at, first_paid_at, created_at"
 )
 _INSERT = text(
     "INSERT INTO payout_destinations (id, client_id, kind, network, bank_code, account_number, "
@@ -99,12 +112,13 @@ _QUEUE = text(
 _UPDATE = text(
     "UPDATE payout_destinations SET status = :status, proof_kind = :proof_kind, "
     "proof_document_id = :proof_document_id, proof_name = :proof_name, name_match = :name_match, "
-    "statement_date = :statement_date, checked_by = :checked_by, approved_at = :approved_at, "
+    "statement_date = :statement_date, checked_by = :checked_by, checked_at = :checked_at, "
+    "approved_by = :approved_by, approved_at = :approved_at, "
     "rejection_reason = :rejection_reason, updated_at = :now WHERE id = :id"
 )
 _KEEP = text(
-    "SELECT proof_kind, proof_document_id, proof_name, name_match, statement_date, checked_by "
-    "FROM payout_destinations WHERE id = :id"
+    "SELECT proof_kind, proof_document_id, proof_name, name_match, statement_date, checked_by, "
+    "checked_at, approved_by FROM payout_destinations WHERE id = :id"
 )
 _FIRST_PAID = text(
     "UPDATE payout_destinations SET first_paid_at = :paid_at, updated_at = :paid_at "
@@ -178,47 +192,101 @@ async def submit_proof(
     """Attach proof of ownership and send the destination to the staff queue."""
     view = await _locked(session, destination_id)
     after = rules.submit_proof(view.state, proof)
-    await _save(session, view, after, clock, proof_kind=proof, proof_document_id=document_id)
+    await _save(
+        session,
+        view,
+        after,
+        clock,
+        proof_kind=proof,
+        proof_document_id=document_id,
+        # New proof is checked afresh (migration 0035).
+        proof_name=None,
+        name_match=None,
+        statement_date=None,
+        checked_by=None,
+        checked_at=None,
+    )
     await _audit(session, client, "payouts.destination_proof_submitted", destination_id, clock)
     return await get_destination(session, destination_id)
 
 
-async def approve(
+async def check(
     session: AsyncSession,
     staff: Actor,
     destination_id: str,
     *,
-    id_name: str,
     proof_name: str,
     statement_date: date | None,
     reason: str,
     clock: Clock,
 ) -> DestinationView:
-    """Record a staff check that passed, and start the 24-hour safety wait.
+    """Record the first member of staff's check of the proof. The account stays in review.
 
-    `proof_name` is the name the staff member read on the proof. The comparison with the ID
-    name is made here, on the server, and is never taken from the request. A different name is
-    refused whoever asks.
+    `proof_name` is the name they read on the proof. It is compared here with the name on the
+    client's verified ID, read from the identity checks module, never from the request. A
+    different name is refused whoever asks; the account then waits for a refusal. A check made
+    again replaces the one before it.
     """
+    if staff.id is None:
+        raise ApplicationError("forbidden")
     view = await _locked(session, destination_id)
     if view.proof_kind is None:
         raise rules.DestinationError("destination_not_in_review")
-    match = rules.compare_names(id_name, proof_name)
-    check = ProofCheck(view.proof_kind, match, statement_date)
+    id_name = await kyc.verified_name(session, view.client_id)
+    if id_name is None:
+        raise rules.DestinationError("client_not_verified")
+    read = proof_name.strip()[:120]
+    match = rules.compare_names(id_name, read)
     now = clock.now()
-    after = rules.approve(view.state, check, now)
+    after = rules.record_check(
+        view.state, ProofCheck(view.proof_kind, match, statement_date), staff.id, now
+    )
+    await _save(
+        session,
+        view,
+        after,
+        clock,
+        proof_name=read,
+        name_match=match,
+        statement_date=statement_date,
+        checked_by=staff.id,
+        checked_at=now,
+    )
+    await _audit(
+        session,
+        staff,
+        "payouts.destination_checked",
+        destination_id,
+        clock,
+        category="approval",
+        reason=reason,
+        details={"name_match": match.value, "proof_kind": view.proof_kind.value},
+    )
+    return await get_destination(session, destination_id)
+
+
+async def approve(
+    session: AsyncSession, staff: Actor, destination_id: str, *, reason: str, clock: Clock
+) -> DestinationView:
+    """A second member of staff approves the recorded check, and the 24-hour wait starts.
+
+    Whoever recorded the check cannot approve it. The check is approved as it was recorded.
+    """
+    if staff.id is None:
+        raise ApplicationError("forbidden")
+    view = await _locked(session, destination_id)
+    if view.proof_kind is None or view.name_match is None:
+        raise rules.DestinationError(
+            "destination_not_in_review"
+            if view.status is not DestinationStatus.IN_REVIEW
+            else "destination_not_checked"
+        )
+    recorded = ProofCheck(view.proof_kind, view.name_match, view.statement_date)
+    now = clock.now()
+    after = rules.approve(view.state, recorded, staff.id, now)
     try:
         async with session.begin_nested():
-            await _save(
-                session,
-                view,
-                after,
-                clock,
-                proof_name=proof_name.strip()[:120],
-                name_match=match,
-                statement_date=statement_date,
-                checked_by=staff.id,
-            )
+            await _save(session, view, after, clock, approved_by=staff.id)
     except IntegrityError:
         # The same account is already approved for another client. One of them is not its
         # owner, so this one is not approved and a person must look at both.
@@ -231,7 +299,11 @@ async def approve(
         clock,
         category="approval",
         reason=reason,
-        details={"name_match": match.value, "proof_kind": view.proof_kind.value},
+        details={
+            "name_match": view.name_match.value,
+            "proof_kind": view.proof_kind.value,
+            "checked_by": view.checked_by,
+        },
     )
     return await get_destination(session, destination_id)
 
@@ -244,8 +316,12 @@ async def reject(
     reason: str,
     clock: Clock,
 ) -> DestinationView:
+    """Refuse the proof. One member of staff is enough, whoever checked it."""
+    if staff.id is None:
+        raise ApplicationError("forbidden")
     view = await _locked(session, destination_id)
-    await _save(session, view, rules.reject(view.state, rejection), clock, checked_by=staff.id)
+    after = rules.reject(view.state, rejection, staff.id)
+    await _save(session, view, after, clock, checked_by=staff.id)
     await _audit(
         session,
         staff,
@@ -407,7 +483,12 @@ def _view(row: Row[Any]) -> DestinationView:
     )
     rejection = RejectionReason(row.rejection_reason) if row.rejection_reason else None
     state = Destination(
-        kind, DestinationStatus(row.status), row.approved_at, row.first_paid_at, rejection
+        kind,
+        DestinationStatus(row.status),
+        row.approved_at,
+        row.first_paid_at,
+        rejection,
+        row.checked_by,
     )
     return DestinationView(
         id=row.id,
@@ -422,6 +503,11 @@ def _view(row: Row[Any]) -> DestinationView:
         proof_document_id=row.proof_document_id,
         name_match=NameMatch(row.name_match) if row.name_match else None,
         rejection_reason=rejection,
+        proof_name=row.proof_name,
+        statement_date=row.statement_date,
+        checked_by=row.checked_by,
+        checked_at=row.checked_at,
+        approved_by=row.approved_by,
         approved_at=row.approved_at,
         payable_from=rules.payable_from(state),
         first_paid_at=row.first_paid_at,

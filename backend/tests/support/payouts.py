@@ -3,12 +3,13 @@ past its wait, a funded pot for the provider to pay from) and a scripted provide
 
 import asyncio
 import secrets
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, date, datetime, timedelta
 
 import pytest
 
 from app.infrastructure.database import Database
 from app.infrastructure.jobs import RetryPolicy, Worker, WorkerConfig
+from app.modules.kyc import service as kyc
 from app.modules.ledger import service as ledger
 from app.modules.ledger.domain.entries import EntryDraft, credit, debit
 from app.modules.payments.domain.outcomes import (
@@ -36,6 +37,7 @@ from app.shared.clock import Clock
 from app.shared.money import Currency
 from app.shared.push_ids import push_id
 from tests.support.clock import FakeClock
+from tests.support.kyc import VERIFIED_NAME, verify
 from tests.support.ledger import key, staff, ugx
 
 # The events that take a payout out of the queue. The database allows them only through a
@@ -46,6 +48,42 @@ _SEND_OUTCOMES = {
     PayoutEvent.SEND_REJECTED: AttemptOutcome.REJECTED,
     PayoutEvent.SEND_UNCERTAIN: AttemptOutcome.UNCERTAIN,
 }
+
+
+async def approve_by_two(
+    database: Database,
+    destination_id: str,
+    clock: Clock,
+    *,
+    proof_name: str = VERIFIED_NAME,
+    statement_date: date | None = None,
+) -> destinations.DestinationView:
+    """One member of staff checks the destination's proof and a different one approves it.
+
+    The client is taken through an identity check first if they have not passed one, because
+    the check compares the proof with the verified ID name. Pass a clock at or near the real
+    time: the database stamps both steps against its own.
+    """
+    checker, approver = staff(), staff()
+    async with database.actor_transaction(checker) as session:
+        client_id = (await destinations.get_destination(session, destination_id)).client_id
+        name = await kyc.verified_name(session, client_id)
+    if name is None:
+        await verify(database, Actor("client", client_id), clock)
+    async with database.actor_transaction(checker) as session:
+        await destinations.check(
+            session,
+            checker,
+            destination_id,
+            proof_name=proof_name,
+            statement_date=statement_date,
+            reason="Checked",
+            clock=clock,
+        )
+    async with database.actor_transaction(approver) as session:
+        return await destinations.approve(
+            session, approver, destination_id, reason="Approved", clock=clock
+        )
 
 
 class World:
@@ -112,18 +150,7 @@ class World:
             )
         # An approval is stamped against the database clock, whatever time the test is at.
         approved_at = FakeClock(datetime.now(UTC))
-        checker = staff()
-        async with self.app.actor_transaction(checker) as session:
-            await destinations.approve(
-                session,
-                checker,
-                view.id,
-                id_name="Sarah Nakato",
-                proof_name="Nakato Sarah",
-                statement_date=None,
-                reason="Checked",
-                clock=approved_at,
-            )
+        await approve_by_two(self.app, view.id, approved_at)
         self.destination_id = view.id
         self.clock.current = approved_at.now() + timedelta(hours=24)
         return self
