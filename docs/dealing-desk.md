@@ -180,6 +180,19 @@ The buffer is read from the ledger with `ledger.statements.total_balance`:
 
 The database holds these rules whatever the code does. Only the worker records a funding and funds one from the buffer. A withdrawal waiting for a sale is funded by the person signed in, from a settled sale in its currency, and the withdrawals funded from one sale never add up to more than it raised. A funding is never removed, and once funded never changes.
 
+### Finvest's own money in the buffer
+
+The owner decided on 2026-11-13 that the buffer's cash is Finvest's own money. Without it, every shilling in the trust account is client money waiting for bills, the buffer is zero, and every early withdrawal waits for a sale. The money sits in the trust account and is booked to `dealing.buffer_capital`, an equity account no client owns, so the buffer counts it as cash that nobody is owed. `dealing.capital` (migration 0087) records each movement, and each one takes two people.
+
+| Movement | First person | Second person |
+| --- | --- | --- |
+| Pay in | Records it once the money is on the trust account, with the bank's reference, the day it arrived and a reason | Checks it against the statement and approves, which posts `bank.trust` up and `dealing.buffer_capital` up on that day, or declines with a reason |
+| Take out | Proposes it before any money leaves, with a reason | Approves, which posts `dealing.buffer_capital` down and `bank.trust` down on the day of approval, or declines with a reason. The transfer is then made from the trust account quoting the movement's ID. |
+
+Taking out is refused, both when proposed and again when approved, for more than Finvest paid in or more than the buffer holds, so money leaving for Finvest never takes client money with it. The check takes the same lock as funding a withdrawal, so the two never read the buffer at the same time. The ledger also refuses to take `dealing.buffer_capital` below zero. Both kinds of movement are in `dealing.holdings.expected_bank_movements`, by the bank's reference or by the movement's ID, so the day close matches them on the statement.
+
+The database holds these rules whatever the code does: staff only, the second person is never the first, what was proposed never changes, a movement is decided once, nothing is removed, and an approved movement names exactly the ledger entry it posted, from that movement, on its value date, with the trust account and Finvest's money moving together by its amount.
+
 ### The rules
 
 | Rule | Starting value |
