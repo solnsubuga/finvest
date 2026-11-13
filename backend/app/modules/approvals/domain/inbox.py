@@ -59,7 +59,7 @@ SOURCES: dict[Kind, Source] = {
     "complaint_outcome": Source("complaints.view", "complaints.close"),
     "announcement": Source("settings.view", "announcements.send"),
     # Checking a payout account is part of the review queue, so approving the check is too.
-    "payout_account": Source("review_queue.view", "review_queue.view"),
+    "payout_account": Source("review_queue.view", "payout_accounts.change"),
 }
 
 
