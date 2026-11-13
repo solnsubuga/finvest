@@ -57,6 +57,10 @@ _PROPOSALS = text(
     f"SELECT {_PROPOSAL_COLUMNS} FROM dealing_buffer_rule_proposals "  # noqa: S608
     "WHERE currency = :currency ORDER BY proposed_at DESC, id DESC LIMIT :limit"
 )
+_WAITING = text(
+    f"SELECT {_PROPOSAL_COLUMNS} FROM dealing_buffer_rule_proposals "  # noqa: S608
+    "WHERE status = 'proposed' ORDER BY proposed_at, id LIMIT :limit"
+)
 _INSERT_PROPOSAL = text(
     f"INSERT INTO dealing_buffer_rule_proposals (id, {_RULE_COLUMNS}, reason, "  # noqa: S608
     "proposed_by, proposed_at) VALUES (:id, :currency, :effective_from, :target, :floor, "
@@ -116,6 +120,12 @@ async def proposals(
 ) -> list[RulesProposalView]:
     """Changes to the rules of a currency, newest first."""
     rows = await session.execute(_PROPOSALS, {"currency": currency.value, "limit": limit})
+    return [_proposal(row) for row in rows.all()]
+
+
+async def waiting_proposals(session: AsyncSession, *, limit: int = 100) -> list[RulesProposalView]:
+    """Changes to the rules of every currency waiting for a second person, oldest first."""
+    rows = await session.execute(_WAITING, {"limit": limit})
     return [_proposal(row) for row in rows.all()]
 
 

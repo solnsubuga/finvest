@@ -18,6 +18,8 @@ Kind = Literal[
     "day_close",
     "dealing_order",
     "dealing_result",
+    "buffer_rules",
+    "buffer_capital",
     "rate_change",
     "migration_totals",
     "migration_sign_off",
@@ -50,6 +52,9 @@ SOURCES: dict[Kind, Source] = {
     "day_close": Source("reconciliation.view", "reconciliation.view"),
     "dealing_order": Source("dealing_desk.view", "dealing_orders.change"),
     "dealing_result": Source("dealing_desk.view", "dealing_orders.change"),
+    # The buffer's rules and Finvest's own money in it, decided as the buffer routes decide them.
+    "buffer_rules": Source("dealing_desk.view", "dealing_orders.change"),
+    "buffer_capital": Source("dealing_desk.view", "dealing_orders.change"),
     "rate_change": Source("rates.view", "rates.view"),
     "migration_totals": Source("migration.view", "migration.sign_off"),
     "migration_sign_off": Source("migration.view", "migration.sign_off"),

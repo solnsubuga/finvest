@@ -9,7 +9,9 @@ from datetime import datetime
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.modules.approvals.domain.inbox import InboxItem, Kind, Waiting, inbox, visible_kinds
+from app.modules.dealing import buffer, capital
 from app.modules.dealing import orders as dealing
+from app.modules.dealing.domain.capital import Direction
 from app.modules.dealing.domain.orders import OrderStatus
 from app.modules.identity import client_locks, phone_changes, team
 from app.modules.identity.service import StaffSession
@@ -39,6 +41,10 @@ async def waiting_for(session: AsyncSession, staff: StaffSession, now: datetime)
         found += await _day_closes(session)
     if kinds & {"dealing_order", "dealing_result"}:
         found += await _dealing(session)
+    if "buffer_rules" in kinds:
+        found += await _buffer_rules(session)
+    if "buffer_capital" in kinds:
+        found += await _buffer_capital(session)
     if "rate_change" in kinds:
         found += await _rates(session, staff)
     if kinds & {"migration_totals", "migration_sign_off"}:
@@ -126,6 +132,37 @@ async def _dealing(session: AsyncSession) -> list[Waiting]:
                 )
             )
     return found
+
+
+async def _buffer_rules(session: AsyncSession) -> list[Waiting]:
+    # "UGX from 2026-12-01": the currency and the day the new rules would start.
+    return [
+        Waiting(
+            "buffer_rules",
+            p.id,
+            f"{p.rules.currency.value} from {p.rules.effective_from.isoformat()}",
+            p.proposed_by,
+            p.proposed_at,
+        )
+        for p in await buffer.waiting_proposals(session)
+    ]
+
+
+_MOVED = {Direction.IN: "paid in", Direction.OUT: "taken out"}
+
+
+async def _buffer_capital(session: AsyncSession) -> list[Waiting]:
+    # "UGX paid in" or "UGX taken out". The amount is on the buffer screen, not in the inbox.
+    return [
+        Waiting(
+            "buffer_capital",
+            m.id,
+            f"{m.amount.currency.value} {_MOVED[m.direction]}",
+            m.proposed_by,
+            m.proposed_at,
+        )
+        for m in await capital.waiting(session)
+    ]
 
 
 async def _rates(session: AsyncSession, staff: StaffSession) -> list[Waiting]:

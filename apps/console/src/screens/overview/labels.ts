@@ -17,6 +17,9 @@ export const KIND_INFO: Record<Kind, KindInfo> = {
   day_close: { label: "Closing the day", path: at("/reconciliation") },
   dealing_order: { label: "Dealing order", path: at("/dealing-desk") },
   dealing_result: { label: "Dealing result", path: at("/dealing-desk") },
+  // The subject is "UGX from 2026-12-01", or "UGX paid in" or "UGX taken out".
+  buffer_rules: { label: "Buffer rules change", path: at("/dealing-desk") },
+  buffer_capital: { label: "Finvest's money in the buffer", path: at("/dealing-desk") },
   rate_change: { label: "Rate change", path: at("/rates") },
   migration_totals: { label: "Migration totals", path: at("/migration") },
   migration_sign_off: { label: "Migration sign-off", path: at("/migration") },

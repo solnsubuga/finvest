@@ -14,6 +14,8 @@ const SOURCES: Record<Kind, { view: Permission; decide: Permission }> = {
   day_close: { view: "reconciliation.view", decide: "reconciliation.view" },
   dealing_order: { view: "dealing_desk.view", decide: "dealing_desk.view" },
   dealing_result: { view: "dealing_desk.view", decide: "dealing_desk.view" },
+  buffer_rules: { view: "dealing_desk.view", decide: "dealing_orders.change" },
+  buffer_capital: { view: "dealing_desk.view", decide: "dealing_orders.change" },
   rate_change: { view: "rates.view", decide: "rates.view" },
   migration_totals: { view: "migration.view", decide: "migration.sign_off" },
   migration_sign_off: { view: "migration.view", decide: "migration.sign_off" },
@@ -44,6 +46,8 @@ export function createStubApprovalsApi(reader: Reader, now: () => number = Date.
     ["complaint_outcome", "-NstubOutcome0000004", "C-1042", "Amina Kintu", 300],
     ["announcement", "-NstubAnnounce000002", "Christmas opening hours", reader.name, 25],
     ["dealing_order", "-NstubOrder000000021", "TB182", "Ruth Namata", 15],
+    ["buffer_capital", "-NstubMove0000000002", "UGX paid in", "Daniel Okello", 45],
+    ["buffer_rules", "-NstubRules000000001", "UGX from 2026-12-01", "Daniel Okello", 1190],
     ["day_close", "-NstubClose000000012", "2026-11-12", "Daniel Kato", 600],
     ["payout_account", "-NstubDest0000000088", "bank", "Peter Okello", 2900],
   ];
