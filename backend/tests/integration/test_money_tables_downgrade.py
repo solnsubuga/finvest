@@ -101,6 +101,13 @@ ROWS = {
         "VALUES ('-Nabc0000000000000A1', 'sandbox', 'notice-1', now())",
         "refusing to drop payments",
     ),
+    "0022_bank_transfer_deposits": (
+        "INSERT INTO payment_deposits (id, client_id, purpose_type, purpose_id, method, provider, "
+        "currency, amount_minor, status, created_at, updated_at) VALUES ('-Nabc0000000000000A1', "
+        "'-Nabc0000000000000B1', 'investment', '-Nabc0000000000000C1', 'bank_transfer', 'bank', "
+        "'UGX', 1000, 'in_review', now(), now())",
+        "refusing to drop bank transfers",
+    ),
     "0030_payout_destinations": (
         "INSERT INTO payout_destinations (id, client_id, kind, network, account_number, "
         "holder_name, status, created_at, updated_at) VALUES ('-Nabc0000000000000A1', "
