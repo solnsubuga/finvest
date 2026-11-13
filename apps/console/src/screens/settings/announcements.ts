@@ -43,7 +43,9 @@ export type AnnouncementProblemCode =
   | "invalid_characters"
   | "stray_brace"
   | "outside_link"
-  | "no_rates";
+  | "no_rates"
+  /** Refused for a reason this console does not know yet. */
+  | "not_accepted";
 
 export interface AnnouncementProblem {
   field: AnnouncementField;
@@ -140,5 +142,7 @@ export function announcementProblemText(code: AnnouncementProblemCode, field: An
       return "Link only to finvestug.com.";
     case "no_rates":
       return "Remove the percent sign. Clients see net amounts, never a rate.";
+    case "not_accepted":
+      return "Finvest did not accept this. Change it and try again.";
   }
 }

@@ -52,7 +52,9 @@ export type ProblemCode =
   | "repeated_placeholder"
   | "stray_brace"
   | "outside_link"
-  | "no_rates";
+  | "no_rates"
+  /** Refused for a reason this console does not know yet. */
+  | "not_accepted";
 
 export interface Problem {
   field: Field;
@@ -67,7 +69,16 @@ export interface WordingsApi {
   decide(proposalId: string, decision: Decision, reason: string): Promise<Wording>;
 }
 
-export type WordingsErrorCode = "invalid" | "conflict" | "same_person" | "forbidden" | "not_found" | "not_connected" | "unavailable";
+export type WordingsErrorCode =
+  | "invalid"
+  | "conflict"
+  | "same_person"
+  | "forbidden"
+  | "not_found"
+  /** The change went through but the message could not be read back. The list is reloaded. */
+  | "stale"
+  | "not_connected"
+  | "unavailable";
 
 export class WordingsError extends Error {
   constructor(
@@ -86,6 +97,7 @@ const MESSAGES: Record<WordingsErrorCode, string> = {
   same_person: "A change needs a second person. Someone other than you must decide it.",
   forbidden: "Your role can read these messages but not change them.",
   not_found: "This change has already been decided.",
+  stale: "Your change went through. Here is the list as it now stands.",
   not_connected: "Client messages are not connected to the Finvest service yet.",
   unavailable: "We could not reach Finvest. Check your connection and try again.",
 };

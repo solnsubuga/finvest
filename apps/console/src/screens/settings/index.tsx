@@ -106,7 +106,7 @@ export function SettingsScreen({ api, announcements, directory, canChange, canSe
       return true;
     } catch (error) {
       setFailed({ on: event, message: wordingsErrorMessage(error), problems: error instanceof WordingsError ? error.problems : [] });
-      if (error instanceof WordingsError && (error.code === "conflict" || error.code === "not_found")) {
+      if (error instanceof WordingsError && (error.code === "conflict" || error.code === "not_found" || error.code === "stale")) {
         const fresh = await fetchList();
         if (fresh.state === "ready") setLoad(fresh);
         setRound((count) => count + 1);
