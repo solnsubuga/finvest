@@ -101,8 +101,6 @@ def site_caddy(site_domains: list[str]) -> str:
 def prepare(output: Path, env: Mapping[str, str]) -> None:
     environment = setting(env, "DEPLOY_ENVIRONMENT", pattern="|".join(ENVIRONMENTS))
     rehearsal = optional(env, "FINVEST_REHEARSAL") == "true"
-    if rehearsal and env.get("GITHUB_ACTIONS") == "true":
-        raise SettingError("FINVEST_REHEARSAL is for a local rehearsal only")
 
     api_domain = setting(env, "API_DOMAIN", pattern=HOSTNAME)
     admin_domain = setting(env, "ADMIN_DOMAIN", pattern=HOSTNAME)
@@ -118,6 +116,10 @@ def prepare(output: Path, env: Mapping[str, str]) -> None:
     backend_image = setting(env, "BACKEND_IMAGE", pattern=IMAGE)
     console_image = setting(env, "CONSOLE_IMAGE", pattern=IMAGE)
     project = f"finvest-{environment}"
+    # A rehearsal turns database TLS off, so it is accepted only with images from the throwaway
+    # registry on the same machine, which a real deployment never uses.
+    if rehearsal and not (backend_image.startswith("localhost:") and console_image.startswith("localhost:")):
+        raise SettingError("FINVEST_REHEARSAL is for a local rehearsal only")
 
     origin_cert = setting(env, "ORIGIN_TLS_CERT")
     origin_key = setting(env, "ORIGIN_TLS_KEY")
