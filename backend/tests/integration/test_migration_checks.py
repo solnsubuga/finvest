@@ -125,7 +125,9 @@ async def test_a_trial_keeps_its_result_and_nothing_from_the_spreadsheet(
                 {"id": view.id},
             )
         ).scalar_one()
-    for personal in ("Nakato", "772", "example.com", "CM0000000001"):
+    # The sample phone is +256772000001. Seven of its digits, because the row also holds a
+    # SHA-256 in hex, where a short run of digits such as "772" turns up by chance.
+    for personal in ("Nakato", "7720000", "example.com", "CM0000000001"):
         assert personal not in stored
 
     async with app_database.actor_transaction(staff) as session:
