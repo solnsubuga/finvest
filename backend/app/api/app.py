@@ -13,7 +13,10 @@ from app.api.request_id import RequestIdMiddleware
 from app.infrastructure.database import Database
 from app.infrastructure.settings import Settings
 from app.modules.identity import api as identity_api
+from app.modules.identity import passkeys_api
+from app.modules.identity.authenticators import AuthenticatorService
 from app.modules.identity.hashing import PasswordHasher
+from app.modules.identity.passkeys import PasskeyService
 from app.modules.identity.service import IdentityService
 from app.modules.payments import api as payments_api
 from app.modules.payments.domain.provider import CollectionsProvider
@@ -54,15 +57,14 @@ def create_app(
     app.state.settings = settings
     app.state.database = database
     app.state.clock = clock
-    app.state.identity = IdentityService(
-        database,
-        clock,
-        settings,
-        hasher
-        or PasswordHasher(
-            memory_kib=settings.password_memory_kib, time_cost=settings.password_time_cost
-        ),
+    hasher = hasher or PasswordHasher(
+        memory_kib=settings.password_memory_kib, time_cost=settings.password_time_cost
     )
+    identity = IdentityService(database, clock, settings, hasher)
+    app.state.identity = identity
+    passkeys = PasskeyService(database, clock, settings, identity, hasher)
+    app.state.passkeys = passkeys
+    app.state.authenticators = AuthenticatorService(database, clock, settings, identity, passkeys)
     install_error_handlers(app)
     # The last middleware added is the outermost, so the request ID exists before anything runs.
     origins = sorted({*settings.client_allowed_origins, *settings.staff_allowed_origins})
@@ -85,7 +87,7 @@ def create_app(
         ProxyHeadersMiddleware, trusted_hosts=settings.trusted_proxies or ["127.0.0.1"]
     )
     app.include_router(health.router)
-    for router in identity_api.routers:
+    for router in (*identity_api.routers, *passkeys_api.routers):
         app.include_router(router)
     app.include_router(payments_api.create_router(collections))
     return app

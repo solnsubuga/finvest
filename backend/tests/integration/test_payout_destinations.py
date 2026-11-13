@@ -1,7 +1,8 @@
 """Payout destinations: the steps, who may take them, and what the database refuses."""
 
 import asyncio
-from datetime import date, timedelta
+import secrets
+from datetime import UTC, date, datetime, timedelta
 
 import pytest
 from sqlalchemy import text
@@ -31,6 +32,12 @@ pytestmark = pytest.mark.integration
 ID_NAME = "Nakato Sarah Grace"
 
 
+@pytest.fixture
+def fake_clock() -> FakeClock:
+    # An approval is stamped against the database clock, so these tests start at the real time.
+    return FakeClock(datetime.now(UTC))
+
+
 def client() -> Actor:
     return Actor("client", push_id())
 
@@ -44,20 +51,30 @@ def cid(actor: Actor) -> str:
     return actor.id
 
 
-def bank_account() -> BankAccount:
-    return BankAccount("stanbic", "9030012345678")
+def bank_account(number: str = "9030012345678") -> BankAccount:
+    return BankAccount("stanbic", number)
 
 
-async def in_review(database: Database, owner: Actor, clock: FakeClock) -> str:
+def fresh_number() -> str:
+    return str(secrets.randbelow(10**12) + 10**12)
+
+
+async def in_review(
+    database: Database, owner: Actor, clock: FakeClock, account: BankAccount | None = None
+) -> str:
+    # A fresh account each time: an account can be approved for one client only.
+    account = account or bank_account(fresh_number())
     async with database.actor_transaction(owner) as session:
-        view = await service.add_destination(session, owner, bank_account(), "Sarah Nakato", clock)
+        view = await service.add_destination(session, owner, account, "Sarah Nakato", clock)
         await service.confirm_code(session, owner, view.id, clock)
         await service.submit_proof(session, owner, view.id, ProofKind.BANK_LETTER, "doc-1", clock)
     return view.id
 
 
-async def approved(database: Database, owner: Actor, clock: FakeClock) -> str:
-    destination_id = await in_review(database, owner, clock)
+async def approved(
+    database: Database, owner: Actor, clock: FakeClock, account: BankAccount | None = None
+) -> str:
+    destination_id = await in_review(database, owner, clock, account)
     checker = staff()
     async with database.actor_transaction(checker) as session:
         await service.approve(
@@ -387,13 +404,14 @@ async def test_a_removed_account_can_be_added_again_from_the_first_step(
     app_database: Database, fake_clock: FakeClock
 ) -> None:
     owner = client()
-    first = await approved(app_database, owner, fake_clock)
+    account = bank_account(fresh_number())
+    first = await approved(app_database, owner, fake_clock, account)
     async with app_database.actor_transaction(owner) as session:
         with pytest.raises(ApplicationError) as duplicate:
-            await service.add_destination(session, owner, bank_account(), "Sarah", fake_clock)
+            await service.add_destination(session, owner, account, "Sarah", fake_clock)
         assert duplicate.value.code == "conflict"
         await service.remove(session, owner, first, fake_clock)
-        again = await service.add_destination(session, owner, bank_account(), "Sarah", fake_clock)
+        again = await service.add_destination(session, owner, account, "Sarah", fake_clock)
     assert again.id != first
     assert again.status is DestinationStatus.AWAITING_CODE
 
@@ -493,3 +511,109 @@ async def test_adding_the_same_account_twice_at_once_saves_it_once(
     assert sorted(results) == ["added", "conflict", "conflict", "conflict", "conflict"]
     async with app_database.actor_transaction(owner) as session:
         assert len(await service.destinations_for_client(session, cid(owner))) == 1
+
+
+# --- Guards added after review ----------------------------------------------------------------
+
+
+async def test_an_account_approved_for_one_client_is_not_approved_for_another(
+    app_database: Database, fake_clock: FakeClock
+) -> None:
+    first, second = client(), client()
+    account = bank_account(fresh_number())
+    await approved(app_database, first, fake_clock, account)
+    # The second client can add it and is told nothing about the first.
+    contested = await in_review(app_database, second, fake_clock, account)
+    checker = staff()
+    with pytest.raises(DestinationError) as refused:
+        async with app_database.actor_transaction(checker) as session:
+            await service.approve(
+                session,
+                checker,
+                contested,
+                id_name=ID_NAME,
+                proof_name=ID_NAME,
+                statement_date=None,
+                reason="Checked",
+                clock=fake_clock,
+            )
+    assert refused.value.code == "account_in_use"
+    async with app_database.actor_transaction(checker) as session:
+        assert (await service.get_destination(session, contested)).status is (
+            DestinationStatus.IN_REVIEW
+        )
+
+
+async def test_a_rejection_for_suspected_fraud_is_final(
+    app_database: Database, fake_clock: FakeClock
+) -> None:
+    owner, checker = client(), staff()
+    destination_id = await in_review(app_database, owner, fake_clock)
+    async with app_database.actor_transaction(checker) as session:
+        await service.reject(
+            session,
+            checker,
+            destination_id,
+            RejectionReason.SUSPECTED_FRAUD,
+            "Edited statement",
+            fake_clock,
+        )
+    with pytest.raises(DestinationError) as refused:
+        async with app_database.actor_transaction(owner) as session:
+            await service.submit_proof(
+                session, owner, destination_id, ProofKind.BANK_CARD, "doc-2", fake_clock
+            )
+    assert refused.value.code == "destination_rejected_final"
+    with pytest.raises(DBAPIError):
+        async with app_database.actor_transaction(owner) as session:
+            await session.execute(
+                text(
+                    "UPDATE payout_destinations SET status = 'in_review', "
+                    "rejection_reason = NULL WHERE id = :id"
+                ),
+                {"id": destination_id},
+            )
+    async with app_database.actor_transaction(owner) as session:
+        await service.remove(session, owner, destination_id, fake_clock)
+
+
+@pytest.mark.parametrize("skew", [timedelta(hours=-25), timedelta(hours=25), timedelta(minutes=6)])
+async def test_an_approval_is_stamped_with_the_current_time(
+    app_database: Database, fake_clock: FakeClock, skew: timedelta
+) -> None:
+    owner, checker = client(), staff()
+    destination_id = await in_review(app_database, owner, fake_clock)
+    wrong = FakeClock(fake_clock.now() + skew)
+    with pytest.raises(DBAPIError):
+        async with app_database.actor_transaction(checker) as session:
+            await service.approve(
+                session,
+                checker,
+                destination_id,
+                id_name=ID_NAME,
+                proof_name=ID_NAME,
+                statement_date=None,
+                reason="Checked",
+                clock=wrong,
+            )
+
+
+async def test_staff_must_say_why_they_remove_a_destination(
+    app_database: Database, fake_clock: FakeClock
+) -> None:
+    owner, checker = client(), staff()
+    destination_id = await approved(app_database, owner, fake_clock)
+    async with app_database.actor_transaction(checker) as session:
+        for reason in (None, "", "   "):
+            with pytest.raises(ApplicationError) as refused:
+                await service.remove(session, checker, destination_id, fake_clock, reason=reason)
+            assert refused.value.code == "validation_failed"
+        await service.remove(
+            session, checker, destination_id, fake_clock, reason="Client reported a lost phone"
+        )
+        events = await audit.events_for_resource(session, "payout_destination", destination_id)
+    assert (events[0].action, events[0].category, events[0].reason) == (
+        "payouts.destination_removed",
+        "operator_control",
+        "Client reported a lost phone",
+    )

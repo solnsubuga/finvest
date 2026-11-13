@@ -13,7 +13,7 @@ A client is paid only to their own mobile money number or bank account. A new de
 | Check the proof against the name on the ID | Staff | Approved, or rejected with a reason |
 | Wait 24 hours from the approval | Nobody | Payable |
 
-A rejected destination can be proved again with a better document. A removed one is never used again.
+A rejected destination can be proved again with a better document, unless it was rejected for suspected fraud, which is final. A removed one is never used again. Staff who remove a destination must give a reason, which is recorded as an operator control.
 
 ### Proof
 
@@ -29,7 +29,7 @@ The name on the proof is compared with the name on the client's ID. Case, accent
 | Result | Meaning | Can staff approve? |
 | --- | --- | --- |
 | Exact | The same names | Yes |
-| Partial | One has a name the other lacks and at least two names agree, or one name is spelt slightly differently (Mohammed and Muhammad) and every other name agrees | Yes, if they judge it is the same person |
+| Partial | One has a name the other lacks, such as a middle name, and at least two names agree | Yes, if they judge it is the same person |
 | Different | Anything else | Never |
 
 The comparison is made on the server from the ID name and the name the staff member read on the proof. It is never taken from the request, and it never approves a destination by itself. A different name is refused outright, for a bank account and for a mobile money number alike. No member of staff and no pair of staff can override it.
@@ -46,6 +46,9 @@ Migration 0030 adds `payout_destinations`. These hold even if application code i
 | A check is signed by who made it | `checked_by` must be the staff member of the transaction |
 | The account never changes | Owner, kind, number and holder name are fixed at creation |
 | Nothing is deleted, and removed is final | Triggers refuse DELETE and TRUNCATE for every role, and any change to a removed row |
+| One account, one client | An account approved for one client cannot be approved for another (migration 0032). The check is made at approval, so a client learns nothing about anyone else's accounts. Staff see `account_in_use` and look at both. |
+| The approval time is real | An approval must be stamped within five minutes of the database clock, so the 24 hour wait cannot be shortened by a wrong time |
+| Suspected fraud is final | A destination rejected for suspected fraud cannot be proved again, only removed |
 | Clients are fenced | Row policies show a client only their own destinations |
 
 Every step writes an audit event in the same transaction. Account numbers never enter the audit trail.
@@ -142,6 +145,7 @@ Settle is refused by the ledger if the pot does not hold the money, because an a
 | A payout that may have left is never queued again | No actor has a step from sent or uncertain back to queued |
 | A finished payout never changes, and none is deleted | The same trigger, for every role including the table owner |
 | The terms never change | Client, destination, amount, currency, source and request key are fixed at creation |
+| A large payout starts held | A new payout above the review threshold in force cannot be inserted as queued |
 | A review is signed by who made it | `reviewed_by` must be the staff member of the transaction |
 | Mobile money carries at most UGX 5,000,000 | A CHECK on `payouts` and on `withdrawal_limits` |
 | A limits version takes two people | CHECK that proposer and approver differ, and a policy that the approver is the staff member inserting it |

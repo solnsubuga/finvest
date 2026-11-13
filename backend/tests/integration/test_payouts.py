@@ -1,7 +1,8 @@
 """Payouts: limits, the safety wait, and the ledger entry that goes with every step."""
 
 import asyncio
-from datetime import date
+import secrets
+from datetime import UTC, date, datetime, timedelta
 
 import pytest
 from sqlalchemy import text
@@ -30,6 +31,12 @@ from tests.support.ledger import key, staff, ugx
 
 pytestmark = pytest.mark.integration
 
+
+@pytest.fixture
+def fake_clock() -> FakeClock:
+    return FakeClock(datetime.now(UTC))
+
+
 E, S = PayoutEvent, PayoutStatus
 
 
@@ -53,7 +60,9 @@ class World:
 
     async def build(self, funds: int, *, mobile: bool = True) -> "World":
         account: MobileMoneyNumber | BankAccount = (
-            MobileMoneyNumber.parse("0772123456") if mobile else BankAccount("stanbic", "90300123")
+            MobileMoneyNumber(f"25677{secrets.randbelow(10**7):07d}")
+            if mobile
+            else BankAccount("stanbic", str(secrets.randbelow(10**12) + 10**12))
         )
         proof = ProofKind.NETWORK_REGISTERED_NAME if mobile else ProofKind.BANK_LETTER
         async with self.worker.actor_transaction(SYSTEM) as session:
@@ -90,6 +99,8 @@ class World:
             await destinations.submit_proof(
                 session, self.client, view.id, proof, "doc-1", self.clock
             )
+        # An approval is stamped against the database clock, whatever time the test is at.
+        approved_at = FakeClock(datetime.now(UTC))
         checker = staff()
         async with self.app.actor_transaction(checker) as session:
             await destinations.approve(
@@ -100,10 +111,10 @@ class World:
                 proof_name="Nakato Sarah",
                 statement_date=None,
                 reason="Checked",
-                clock=self.clock,
+                clock=approved_at,
             )
         self.destination_id = view.id
-        self.clock.advance(hours=24)
+        self.clock.current = approved_at.now() + timedelta(hours=24)
         return self
 
     async def request(self, amount: int, **options: object) -> PayoutView:
@@ -445,7 +456,7 @@ async def test_the_database_refuses_a_payout_whose_source_is_its_own_in_flight_a
     world: World,
 ) -> None:
     payout = await world.request(1_000)
-    with pytest.raises(DBAPIError):
+    with pytest.raises(DBAPIError, match="ck_payouts_accounts"):
         async with world.app.actor_transaction(world.client) as session:
             await session.execute(
                 text(
@@ -453,11 +464,51 @@ async def test_the_database_refuses_a_payout_whose_source_is_its_own_in_flight_a
                     "currency, status, business_date, source_account_id, source_reference, "
                     "in_flight_account_id, request_key, created_at, updated_at) SELECT :id, "
                     "client_id, destination_id, kind, 5, currency, 'queued', business_date, "
-                    "in_flight_account_id, source_reference, in_flight_account_id, :id, now(), "
+                    "in_flight_account_id, source_reference, in_flight_account_id, :key, now(), "
                     "now() FROM payouts WHERE id = :source"
                 ),
-                {"id": push_id(), "source": payout.id},
+                {"id": push_id(), "key": key(), "source": payout.id},
             )
+
+
+async def test_the_database_refuses_a_new_payout_queued_above_the_review_threshold(
+    world: World,
+) -> None:
+    payout = await world.request(1_000)
+    with pytest.raises(DBAPIError, match="starts held"):
+        async with world.app.actor_transaction(world.client) as session:
+            await session.execute(
+                text(
+                    "INSERT INTO payouts (id, client_id, destination_id, kind, amount_minor, "
+                    "currency, status, business_date, source_account_id, source_reference, "
+                    "in_flight_account_id, request_key, created_at, updated_at) SELECT :id, "
+                    "client_id, destination_id, kind, 10000001, currency, 'queued', "
+                    "business_date, source_account_id, source_reference, in_flight_account_id, "
+                    ":key, now(), now() FROM payouts WHERE id = :source"
+                ),
+                {"id": push_id(), "key": key(), "source": payout.id},
+            )
+
+
+async def test_a_step_the_ledger_refuses_leaves_the_payout_as_it_was(
+    world: World, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    payout = await world.request(1_000_000)
+    await world.worker_event(payout.id, E.SEND_ACCEPTED)
+
+    async def refuse(*_: object, **__: object) -> None:
+        raise RuntimeError("the ledger refused")
+
+    # The caller swallows the error and commits; the status change must not survive alone.
+    async with world.worker.actor_transaction(SYSTEM) as session:
+        with monkeypatch.context() as patched:
+            patched.setattr(ledger, "post_entry", refuse)
+            with pytest.raises(RuntimeError):
+                await payouts.apply_event(session, SYSTEM, payout.id, E.STATUS_PAID, world.clock)
+
+    async with world.worker.actor_transaction(SYSTEM) as session:
+        assert (await payouts.get_payout(session, payout.id)).status is S.SENT
+    assert (await world.worker_event(payout.id, E.STATUS_PAID)).status is S.PAID
 
 
 # --- One request, one payout ------------------------------------------------------------------
@@ -628,10 +679,10 @@ async def test_only_the_right_actor_takes_each_step(world: World) -> None:
                     "currency, status, business_date, source_account_id, source_reference, "
                     "in_flight_account_id, request_key, created_at, updated_at) SELECT :id, "
                     "client_id, destination_id, kind, 5, currency, 'paid', business_date, "
-                    "source_account_id, source_reference, in_flight_account_id, :id, now(), "
+                    "source_account_id, source_reference, in_flight_account_id, :key, now(), "
                     "now() FROM payouts WHERE id = :source"
                 ),
-                {"id": push_id(), "source": payout.id},
+                {"id": push_id(), "key": key(), "source": payout.id},
             )
 
 
