@@ -1,0 +1,77 @@
+name: Terraform checks
+
+# Runs on pull requests with no credentials at all: format, validate, terraform test, shellcheck and
+# the plan hash script. Plans and applies happen only in the Provision workflow.
+
+on:
+  pull_request:
+    paths:
+      - "infra/**"
+      - ".github/workflows/terraform-checks.yml"
+      - ".github/workflows/provision.yml"
+
+permissions:
+  contents: read
+
+env:
+  TF_VERSION: "1.13.4"
+  TF_IN_AUTOMATION: "true"
+  TF_INPUT: "false"
+
+jobs:
+  check:
+    name: Format, validate and test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+        with:
+          persist-credentials: false
+      - uses: hashicorp/setup-terraform@b9cd54a3c349d3f38e8881555d616ced269862dd # v3.1.2
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+          terraform_wrapper: false
+      - name: Format
+        run: terraform -chdir=infra/terraform fmt -check -recursive
+      - name: Validate
+        run: |
+          for dir in infra/terraform infra/terraform/shared; do
+            terraform -chdir=$dir init -backend=false -lockfile=readonly
+            terraform -chdir=$dir validate
+          done
+      - name: Test
+        run: terraform -chdir=infra/terraform test
+      - name: Check the shell scripts
+        run: shellcheck infra/deployment/*.sh infra/terraform/scripts/*.sh
+      - name: Test the plan hash script
+        run: |
+          # Same plan twice gives the same hash, and a different plan gives a different one.
+          dir=$(mktemp -d)
+          script="$PWD/infra/terraform/scripts/plan-hash.sh"
+          cd "$dir"
+          echo 'resource "terraform_data" "t" { input = "a" }' > main.tf
+          terraform init -input=false >/dev/null
+          terraform plan -input=false -out=one >/dev/null
+          terraform plan -input=false -out=two >/dev/null
+          first=$(bash "$script" one)
+          [ "$first" = "$(bash "$script" two)" ]
+          echo 'resource "terraform_data" "t" { input = "b" }' > main.tf
+          terraform plan -input=false -out=three >/dev/null
+          [ "$first" != "$(bash "$script" three)" ]
+          echo "plan hash script ok"
+
+  print-lock:
+    # Temporary: prints provider lock files so they can be committed. Removed before merge.
+    name: Print provider lock files
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+      - uses: hashicorp/setup-terraform@b9cd54a3c349d3f38e8881555d616ced269862dd # v3.1.2
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+      - run: |
+          for dir in infra/terraform infra/terraform/shared; do
+            rm -f $dir/.terraform.lock.hcl
+            terraform -chdir=$dir init -backend=false >/dev/null
+            terraform -chdir=$dir providers lock -platform=linux_amd64 -platform=darwin_arm64 -platform=darwin_amd64 -platform=windows_amd64 >/dev/null
+            echo "=====BEGIN $dir"; cat $dir/.terraform.lock.hcl; echo "=====END $dir"
+          done

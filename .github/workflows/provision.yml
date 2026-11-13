@@ -1,0 +1,232 @@
+name: Provision
+
+# Manual only, from main. Creates or updates DigitalOcean and Cloudflare resources from
+# infra/terraform, writes the deployment settings into the GitHub environment, installs Docker on
+# the host and creates the database roles. Follows Fidiba's Provision workflow, with these changes:
+#   - "Plan" runs in <env>-plan with read-only tokens. "Apply" runs in <env>, which holds the write
+#     tokens and waits for approval, then refuses to apply a plan that differs from the reviewed one.
+#   - Roles are created from the host, inside the VPC. The database is never opened to the runner.
+#     The runner is admitted to SSH only for the host step and removed again.
+#   - "shared" (the finvest project and Cloudflare zone settings) uses the production environments.
+# Every environment must be limited to the main branch, so no other branch can read its secrets.
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: What to provision. Provision shared first.
+        required: true
+        type: choice
+        options: [shared, staging, production]
+      action:
+        description: plan shows the changes; apply plans, waits for approval, then applies
+        required: true
+        default: plan
+        type: choice
+        options: [plan, apply]
+
+permissions:
+  contents: read
+
+concurrency:
+  # Terraform state has no lock in Spaces; one run per environment at a time.
+  group: provision-${{ inputs.environment }}
+  cancel-in-progress: false
+
+env:
+  TF_VERSION: "1.13.4"
+  TF_IN_AUTOMATION: "true"
+  TF_INPUT: "false"
+  TARGET: ${{ inputs.environment }}
+  # shared has no GitHub environments of its own.
+  GH_ENVIRONMENT: ${{ inputs.environment == 'shared' && 'production' || inputs.environment }}
+  TF_DIR: ${{ inputs.environment == 'shared' && 'infra/terraform/shared' || 'infra/terraform' }}
+  TERRAFORM_STATE_BUCKET: ${{ vars.TERRAFORM_STATE_BUCKET }}
+  SSH_SOURCE_ADDRESSES: ${{ vars.SSH_SOURCE_ADDRESSES }}
+  DEPLOY_SSH_PUBLIC_KEY: ${{ vars.DEPLOY_SSH_PUBLIC_KEY }}
+  ADMIN_ACCESS_EMAILS: ${{ vars.ADMIN_ACCESS_EMAILS }}
+  ALERT_EMAILS: ${{ vars.ALERT_EMAILS }}
+  CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+  TF_VAR_github_owner: ${{ github.repository_owner }}
+  TF_VAR_github_repository: ${{ github.event.repository.name }}
+
+jobs:
+  plan:
+    name: Plan
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    environment: ${{ (inputs.environment == 'shared' && 'production' || inputs.environment) }}-plan
+    timeout-minutes: 20
+    outputs:
+      plan_hash: ${{ steps.plan.outputs.plan_hash }}
+    env:
+      DIGITALOCEAN_TOKEN: ${{ secrets.DIGITALOCEAN_TOKEN }}
+      SPACES_ACCESS_KEY_ID: ${{ secrets.SPACES_ACCESS_KEY_ID }}
+      SPACES_SECRET_ACCESS_KEY: ${{ secrets.SPACES_SECRET_ACCESS_KEY }}
+      AWS_ACCESS_KEY_ID: ${{ secrets.SPACES_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.SPACES_SECRET_ACCESS_KEY }}
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      GITHUB_TOKEN: ${{ secrets.TERRAFORM_GITHUB_TOKEN }}
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+        with:
+          persist-credentials: false
+      - uses: hashicorp/setup-terraform@b9cd54a3c349d3f38e8881555d616ced269862dd # v3.1.2
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+          terraform_wrapper: false
+      - name: Check settings
+        run: bash infra/terraform/scripts/provision-settings.sh check
+      - name: Prepare variables
+        run: bash infra/terraform/scripts/provision-settings.sh write "$RUNNER_TEMP/settings.tfvars.json"
+      - name: Plan
+        id: plan
+        working-directory: ${{ env.TF_DIR }}
+        run: |
+          set -euo pipefail
+          terraform init -lockfile=readonly \
+            -backend-config="bucket=$TERRAFORM_STATE_BUCKET" \
+            -backend-config="key=finvest/$TARGET.tfstate"
+          args=()
+          if [[ $TARGET != shared ]]; then
+            args=(-var-file="environments/$TARGET.tfvars" -var-file="$RUNNER_TEMP/settings.tfvars.json")
+          fi
+          terraform plan -no-color -lock=false -out="$RUNNER_TEMP/tfplan" "${args[@]}"
+          {
+            echo "### Terraform plan: $TARGET"
+            echo
+            echo "Approve the apply only if this is what you expect. Apply stops if its own plan differs."
+            echo
+            echo '```'
+            terraform show -no-color "$RUNNER_TEMP/tfplan"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+          echo "plan_hash=$(bash "$GITHUB_WORKSPACE/infra/terraform/scripts/plan-hash.sh" "$RUNNER_TEMP/tfplan")" >> "$GITHUB_OUTPUT"
+      - name: Remove private files
+        if: always()
+        run: rm -f "$RUNNER_TEMP/settings.tfvars.json" "$RUNNER_TEMP/tfplan"
+
+  apply:
+    name: Apply
+    needs: plan
+    if: github.ref == 'refs/heads/main' && inputs.action == 'apply'
+    runs-on: ubuntu-latest
+    # Required reviewers on this environment make every apply wait for approval.
+    environment: ${{ inputs.environment == 'shared' && 'production' || inputs.environment }}
+    timeout-minutes: 45
+    env:
+      DIGITALOCEAN_TOKEN: ${{ secrets.DIGITALOCEAN_TOKEN }}
+      SPACES_ACCESS_KEY_ID: ${{ secrets.SPACES_ACCESS_KEY_ID }}
+      SPACES_SECRET_ACCESS_KEY: ${{ secrets.SPACES_SECRET_ACCESS_KEY }}
+      AWS_ACCESS_KEY_ID: ${{ secrets.SPACES_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.SPACES_SECRET_ACCESS_KEY }}
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      GITHUB_TOKEN: ${{ secrets.TERRAFORM_GITHUB_TOKEN }}
+      DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+      REVIEWED_PLAN_HASH: ${{ needs.plan.outputs.plan_hash }}
+    defaults:
+      run:
+        working-directory: ${{ env.TF_DIR }}
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+        with:
+          persist-credentials: false
+      - uses: hashicorp/setup-terraform@b9cd54a3c349d3f38e8881555d616ced269862dd # v3.1.2
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+          terraform_wrapper: false
+      - name: Prepare variables
+        working-directory: .
+        run: |
+          bash infra/terraform/scripts/provision-settings.sh check
+          bash infra/terraform/scripts/provision-settings.sh write "$RUNNER_TEMP/settings.tfvars.json"
+      - name: Apply the reviewed plan
+        run: |
+          set -euo pipefail
+          terraform init -lockfile=readonly \
+            -backend-config="bucket=$TERRAFORM_STATE_BUCKET" \
+            -backend-config="key=finvest/$TARGET.tfstate"
+          args=()
+          if [[ $TARGET != shared ]]; then
+            args=(-var-file="environments/$TARGET.tfvars" -var-file="$RUNNER_TEMP/settings.tfvars.json")
+          fi
+          terraform plan -no-color -out="$RUNNER_TEMP/tfplan" "${args[@]}"
+          hash=$(bash "$GITHUB_WORKSPACE/infra/terraform/scripts/plan-hash.sh" "$RUNNER_TEMP/tfplan")
+          if [[ $hash != "$REVIEWED_PLAN_HASH" ]]; then
+            echo "The plan changed since it was reviewed. Run Provision again and review the new plan." | tee -a "$GITHUB_STEP_SUMMARY"
+            exit 1
+          fi
+          terraform apply -no-color "$RUNNER_TEMP/tfplan"
+      - name: Admit this run to SSH
+        if: env.TARGET != 'shared'
+        run: |
+          set -euo pipefail
+          address=$(curl -fsS --retry 3 https://api.ipify.org)
+          [[ $address =~ ^[0-9]+(\.[0-9]+){3}$ ]]
+          echo "PROVISIONER_ADDRESS=$address" >> "$GITHUB_ENV"
+          terraform apply -no-color -auto-approve -target=digitalocean_firewall.app \
+            -var-file="environments/$TARGET.tfvars" -var-file="$RUNNER_TEMP/settings.tfvars.json" \
+            -var="provisioner_address=$address"
+      - name: Prepare the host and create database roles
+        if: env.TARGET != 'shared'
+        run: |
+          set -euo pipefail
+          umask 077
+          host=$(terraform output -raw deploy_host)
+          key="$RUNNER_TEMP/deploy_key"
+          printf '%s\n' "$DEPLOY_SSH_KEY" > "$key"
+          # A new host has a new key; the reserved IP is ours, so the first key seen is trusted.
+          ssh_opts=(-i "$key" -o BatchMode=yes -o ConnectTimeout=10
+            -o StrictHostKeyChecking=accept-new -o UserKnownHostsFile="$RUNNER_TEMP/known_hosts")
+          target="deploy@$host"
+          for attempt in $(seq 1 30); do
+            ssh "${ssh_opts[@]}" "$target" true && break
+            [[ $attempt == 30 ]] && { echo "Host $host never accepted SSH" >&2; exit 1; }
+            sleep 10
+          done
+          ssh "${ssh_opts[@]}" "$target" 'cloud-init status --wait >/dev/null || true; mkdir -p ~/provision'
+          scp "${ssh_opts[@]}" "$GITHUB_WORKSPACE/infra/deployment/prepare-host.sh" \
+            "$GITHUB_WORKSPACE/infra/deployment/create-roles.sh" "$target:provision/"
+          ssh "${ssh_opts[@]}" "$target" 'bash ~/provision/prepare-host.sh /opt/finvest'
+
+          sql="$GITHUB_WORKSPACE/backend/db/init-roles.sql"
+          if [[ ! -f $sql ]]; then
+            echo "backend/db/init-roles.sql is not on main yet, so no database roles were created. Run Provision apply again once it is." | tee -a "$GITHUB_STEP_SUMMARY"
+          else
+            scp "${ssh_opts[@]}" "$sql" "$target:provision/init-roles.sql"
+            admin_uri=$(terraform output -raw database_admin_uri)
+            echo "::add-mask::$admin_uri"
+            passwords=$(terraform output -json database_role_passwords)
+            settings="ADMIN_URI=$admin_uri"
+            for role in migrator app worker; do
+              password=$(jq -r --arg role "$role" '.[$role]' <<< "$passwords")
+              echo "::add-mask::$password"
+              settings+=$'\n'"FINVEST_${role^^}_PASSWORD=$password"
+            done
+            # A new SSH session, so the deploy user's new docker group applies. Secrets go over stdin.
+            printf '%s\n' "$settings" | ssh "${ssh_opts[@]}" "$target" 'bash ~/provision/create-roles.sh ~/provision/init-roles.sql'
+          fi
+          ssh "${ssh_opts[@]}" "$target" 'rm -rf ~/provision'
+      - name: Close SSH to this run
+        if: always() && env.TARGET != 'shared'
+        run: |
+          terraform apply -no-color -auto-approve -target=digitalocean_firewall.app \
+            -var-file="environments/$TARGET.tfvars" -var-file="$RUNNER_TEMP/settings.tfvars.json"
+      - name: Summarise
+        if: env.TARGET != 'shared'
+        run: |
+          set -euo pipefail
+          {
+            echo "## $TARGET is provisioned"
+            echo
+            echo "Deployment settings and secrets were written to the \`$TARGET\` GitHub environment."
+            echo "Host address: \`$(terraform output -raw deploy_host)\`. DNS for these names points at it through Cloudflare:"
+            echo
+            echo '```json'
+            terraform output -json hostnames
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+      - name: Remove private files
+        if: always()
+        working-directory: .
+        run: rm -f "$RUNNER_TEMP/settings.tfvars.json" "$RUNNER_TEMP/tfplan" "$RUNNER_TEMP/deploy_key"

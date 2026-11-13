@@ -22,6 +22,8 @@ A running log. Add a row when a decision is made, and move an open question up w
 | 2026-11-13 | Clients save their own payout bank accounts and mobile money numbers, with proof of ownership. |
 | 2026-11-13 | Domains: finvestug.com for the website, app.finvestug.com for the client app, admin.finvestug.com for the back office. |
 | 2026-11-13 | Infrastructure is Terraform on DigitalOcean and Cloudflare. |
+| 2026-11-13 | Provisioning and deployment follow Fidiba. Terraform creates every DigitalOcean resource inside one project named `finvest`, generates the database role passwords and bucket key, and writes the deployment settings into the GitHub environments. See [infra/README.md](../infra/README.md). |
+| 2026-11-13 | Terraform state may hold the credentials Terraform generates (database admin connection, role passwords, bucket key, origin certificate key). It is the one exception to keeping secrets out of Terraform state. The state bucket is private and only the Provision workflow on `main` can read it. |
 | 2026-11-13 | Brand is black and lime with Plus Jakarta Sans. See [design.md](design.md). |
 | 2026-11-13 | All work reaches `main` through pull requests. UI work includes screenshots. Commits on `main` carry no AI attribution. |
 

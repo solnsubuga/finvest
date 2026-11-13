@@ -1,0 +1,19 @@
+#cloud-config
+# First boot only. The Provision run then installs Docker over SSH with
+# infra/deployment/prepare-host.sh, which needs the passwordless sudo below. The deploy user is
+# root equivalent either way, because the docker group is.
+users:
+  - name: ${deploy_user}
+    shell: /bin/bash
+    groups: [sudo]
+    sudo: "ALL=(ALL) NOPASSWD:ALL"
+    lock_passwd: true
+    ssh_authorized_keys:
+      - ${ssh_public_key}
+disable_root: true
+ssh_pwauth: false
+swap:
+  filename: /swapfile
+  size: ${swap_size}
+package_update: true
+packages: [unattended-upgrades, fail2ban, curl, util-linux]
