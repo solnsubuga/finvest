@@ -1,0 +1,82 @@
+import { FailureReason, Money, Network } from "./types";
+
+/** "UGX 1,000,000". Works on the integer, so no amount ever passes through a fraction. */
+export function formatMoney(money: Money): string {
+  if (!Number.isSafeInteger(money.minor)) {
+    throw new Error("An amount must be a whole number of the smallest unit");
+  }
+  const digits = String(Math.abs(money.minor)).replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+  return `${money.currency} ${money.minor < 0 ? "-" : ""}${digits}`;
+}
+
+export const networkName: Record<Network, string> = { mtn: "MTN", airtel: "Airtel" };
+export const networkProduct: Record<Network, string> = {
+  mtn: "MTN Mobile Money",
+  airtel: "Airtel Money",
+};
+/** The code a client dials to find a prompt that did not pop up. */
+export const pendingApprovalsCode: Record<Network, string> = { mtn: "*165#", airtel: "*185#" };
+
+const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+
+/** Uganda keeps UTC+3 all year, so the offset is fixed. */
+const KAMPALA_OFFSET_MS = 3 * 60 * 60 * 1000;
+
+function kampalaParts(iso: string) {
+  const shifted = new Date(new Date(iso).getTime() + KAMPALA_OFFSET_MS);
+  const two = (value: number) => String(value).padStart(2, "0");
+  return {
+    day: shifted.getUTCDate(),
+    month: MONTHS[shifted.getUTCMonth()],
+    year: shifted.getUTCFullYear(),
+    time: `${two(shifted.getUTCHours())}:${two(shifted.getUTCMinutes())}`,
+  };
+}
+
+/** "15:31", Kampala time, whatever the phone's own time zone is. */
+export function formatTime(iso: string): string {
+  return kampalaParts(iso).time;
+}
+
+/** "13 Nov 2026, 15:32", Kampala time. */
+export function formatDateTime(iso: string): string {
+  const parts = kampalaParts(iso);
+  return `${parts.day} ${parts.month} ${parts.year}, ${parts.time}`;
+}
+
+type FailureCopy = {
+  /** "MTN says there was not enough money on +256 772 123 456." */
+  sentence: (network: string, payer: string) => string;
+  /** The short version for the details list. */
+  label: string;
+};
+
+export const failureCopy: Record<FailureReason, FailureCopy> = {
+  declined: {
+    sentence: (network, payer) => `${network} says the payment was declined on ${payer}.`,
+    label: "Declined",
+  },
+  insufficient_funds: {
+    sentence: (network, payer) => `${network} says there was not enough money on ${payer}.`,
+    label: "Insufficient balance",
+  },
+  approval_timed_out: {
+    sentence: (network, payer) =>
+      `${network} says the prompt on ${payer} was not approved in time.`,
+    label: "Not approved in time",
+  },
+  account_not_found: {
+    sentence: (network, payer) =>
+      `${network} says ${payer} is not registered for mobile money with them.`,
+    label: "Number not registered",
+  },
+  limit_exceeded: {
+    sentence: (network, payer) =>
+      `${network} says this payment is over the limit for ${payer}.`,
+    label: "Over the limit",
+  },
+  other: {
+    sentence: (network) => `${network} could not complete the payment.`,
+    label: "Could not complete",
+  },
+};
