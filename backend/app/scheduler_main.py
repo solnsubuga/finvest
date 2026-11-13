@@ -18,6 +18,7 @@ from app.infrastructure.jobs.worker import default_worker_id
 from app.infrastructure.logging import configure_logging
 from app.infrastructure.process import keep_heartbeat, stop_on_signals
 from app.infrastructure.settings import Settings
+from app.modules.kyc.service import SWEEP_UNANSWERED
 from app.modules.payments import service as payments
 from app.modules.payments.settings import PaymentsSettings
 from app.shared.clock import SystemClock
@@ -28,7 +29,15 @@ def schedules() -> list[Schedule]:
 
     A run that must happen for each day it missed, such as daily interest, sets `catch_up="all"`.
     """
-    runs: list[Schedule] = []
+    runs: list[Schedule] = [
+        # Identity checks the provider never answered go to a person.
+        Schedule(
+            name="kyc.sweep_unanswered",
+            trigger=IntervalTrigger(minutes=5),
+            kind=SWEEP_UNANSWERED,
+            max_age=timedelta(minutes=5),
+        ),
+    ]
     if PaymentsSettings().provider != "disabled":
         # Picks up deposits whose own job was lost. One run covers any it missed.
         runs.append(

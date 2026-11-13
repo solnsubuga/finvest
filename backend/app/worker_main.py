@@ -14,6 +14,9 @@ from app.infrastructure.jobs.settings import JobProcessSettings
 from app.infrastructure.logging import configure_logging
 from app.infrastructure.process import keep_heartbeat, stop_on_signals
 from app.infrastructure.settings import Settings
+from app.modules.kyc.jobs import ProviderJobs, sweep_unanswered
+from app.modules.kyc.service import SWEEP_UNANSWERED
+from app.modules.kyc.settings import KycSettings
 from app.modules.payments.jobs import DepositJobs
 from app.modules.payments.settings import PaymentsSettings
 from app.modules.payments.wiring import collections_provider
@@ -26,7 +29,19 @@ def handlers(database: Database, clock: Clock) -> dict[str, JobHandler | Handler
     A handler that calls a provider is registered with `external_effect(handler)`, so a crash
     or an unsorted exception stops the job for reconciliation and it is never run twice.
     """
-    kinds: dict[str, JobHandler | Handler] = {}
+    kinds: dict[str, JobHandler | Handler] = {SWEEP_UNANSWERED: sweep_unanswered(clock)}
+    identity = KycSettings()
+    if identity.identity_provider != "manual":
+        # The manual provider sends every client to a person and queues no provider jobs.
+        kinds.update(
+            ProviderJobs(
+                database,
+                identity.sealer(),
+                identity.provider(),
+                clock,
+                automatic_approval=identity.identity_automatic_approval,
+            ).handlers()
+        )
     collections = collections_provider(PaymentsSettings(), clock)
     if collections is not None:
         kinds.update(DepositJobs(database, collections, clock).handlers())

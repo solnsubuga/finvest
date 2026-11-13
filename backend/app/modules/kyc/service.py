@@ -10,13 +10,14 @@ hands the answer to `record_provider_result`.
 
 import json
 from dataclasses import dataclass
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from typing import Any
 
 from sqlalchemy import Row, text
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.infrastructure.jobs import JobRequest, enqueue
 from app.infrastructure.sealing import Sealer, associated_data
 from app.modules.account_numbers.domain.numbers import AccountType
 from app.modules.account_numbers.service import issue_account_number
@@ -41,6 +42,7 @@ from app.modules.kyc.domain.provider import (
     AutomaticCheck,
     CheckOutcome,
     IdentityProvider,
+    ProviderRequest,
     Verdict,
     decide,
 )
@@ -50,6 +52,14 @@ from app.shared.errors import ApplicationError, FieldProblem
 from app.shared.push_ids import push_id
 
 RESOURCE = "kyc_check"
+# The worker's jobs (app/modules/kyc/jobs.py). One send per submission, whatever is retried.
+SEND_CHECK = "kyc.send_check"
+READ_RESULT = "kyc.read_result"
+SWEEP_UNANSWERED = "kyc.sweep_unanswered"
+SEND_WITHIN = timedelta(minutes=5)
+READ_WITHIN = timedelta(minutes=20)
+# Longer than a send and a read can take together, so the sweep never races a live job.
+UNANSWERED_AFTER = timedelta(minutes=30)
 MAX_PHOTO_BYTES = 10 * 1024 * 1024
 PHOTO_CONTENT_TYPES = frozenset({"image/jpeg", "image/png", "image/webp"})
 MAX_CLIENT_MESSAGE = 300
@@ -176,6 +186,18 @@ _ASK_FOR_PHOTOS = text(
 )
 _ESCALATE = text(
     "UPDATE kyc_checks SET status = 'with_compliance', updated_at = :now WHERE id = :id"
+)
+_NOTE_REFERENCE = text(
+    "UPDATE kyc_checks SET provider_reference = :provider_reference, updated_at = :now "
+    "WHERE id = :id"
+)
+_GIVE_TO_PERSON = text(
+    "UPDATE kyc_checks SET status = 'needs_review', review_flags = :review_flags, "
+    "updated_at = :now WHERE id = :id"
+)
+_UNANSWERED = text(
+    "SELECT id, submission FROM kyc_checks WHERE status = 'submitted' AND submitted_at < :before "
+    "ORDER BY submitted_at, id LIMIT :limit FOR UPDATE SKIP LOCKED"
 )
 _DOCUMENT_TAKEN = text(
     "SELECT EXISTS (SELECT FROM kyc_checks WHERE status = 'approved' "
@@ -347,6 +369,7 @@ async def submit(
     flags: list[str] = []
     if target is CheckStatus.NEEDS_REVIEW:
         flags = ["no_automatic_checks" if not provider.automatic else "document_needs_person"]
+    now = clock.now()
     await session.execute(
         _SUBMIT,
         {
@@ -354,9 +377,21 @@ async def submit(
             "status": target.value,
             "provider": provider.name,
             "review_flags": flags,
-            "now": clock.now(),
+            "now": now,
         },
     )
+    if target is CheckStatus.SUBMITTED:
+        # Saved with the submission, so the check cannot be handed in and never sent.
+        await enqueue(
+            session,
+            JobRequest(
+                kind=SEND_CHECK,
+                idempotency_key=submission_key(row.id, row.submission + 1),
+                payload={"check_id": row.id, "submission": row.submission + 1},
+                max_age=SEND_WITHIN,
+            ),
+            now=now,
+        )
     await _audit(session, client, "change", "kyc.check.submitted", row.id, clock)
     return await _view_by_id(session, sealer, row.id)
 
@@ -370,7 +405,98 @@ async def check_for_client(
     return None if row is None else await _view(session, sealer, row)
 
 
-# The worker, after the provider answered ----------------------------------------------------
+# The worker, around the provider -----------------------------------------------------------
+
+
+def submission_key(check_id: str, submission: int) -> str:
+    """The idempotency key of one submission, at the provider and in the job queue."""
+    return f"{check_id}:{submission}"
+
+
+async def provider_request(
+    session: AsyncSession, sealer: Sealer, check_id: str, submission: int
+) -> ProviderRequest | None:
+    """What to send to the provider, or None when this submission no longer waits for one."""
+    row = (await session.execute(_BY_ID, {"id": check_id})).one_or_none()
+    if row is None or row.status != CheckStatus.SUBMITTED or row.submission != submission:
+        return None
+    view = await _view(session, sealer, row)
+    if view.details is None:  # the database refuses a submitted check without details
+        return None
+    return ProviderRequest(
+        idempotency_key=submission_key(check_id, submission),
+        document_type=view.document_type,
+        document_country=view.document_country,
+        details=view.details,
+        photos={photo.kind: photo.storage_key for photo in view.photos},
+    )
+
+
+async def awaited_reference(session: AsyncSession, check_id: str, submission: int) -> str | None:
+    """The provider's reference for a submission that still waits for its result."""
+    row = (await session.execute(_BY_ID, {"id": check_id})).one_or_none()
+    if row is None or row.status != CheckStatus.SUBMITTED or row.submission != submission:
+        return None
+    reference: str | None = row.provider_reference
+    return reference
+
+
+async def note_provider_reference(
+    session: AsyncSession, check_id: str, submission: int, provider_reference: str, clock: Clock
+) -> bool:
+    """Save the reference the provider gave. False when the submission already moved on."""
+    row = await _awaiting_provider(session, check_id, submission)
+    if row is None:
+        return False
+    await session.execute(
+        _NOTE_REFERENCE,
+        {"id": row.id, "provider_reference": provider_reference, "now": clock.now()},
+    )
+    return True
+
+
+async def give_to_person(
+    session: AsyncSession, check_id: str, submission: int, flag: str, clock: Clock
+) -> bool:
+    """Send a submission the provider did not check to staff, with the reason as its flag."""
+    row = await _awaiting_provider(session, check_id, submission)
+    if row is None:
+        return False
+    await session.execute(
+        _GIVE_TO_PERSON, {"id": row.id, "review_flags": [flag], "now": clock.now()}
+    )
+    await _audit(
+        session,
+        Actor("system"),
+        "change",
+        "kyc.check.sent_to_review",
+        row.id,
+        clock,
+        details={"flags": [flag]},
+    )
+    return True
+
+
+async def give_unanswered_to_people(
+    session: AsyncSession, clock: Clock, *, limit: int = MAX_PAGE_SIZE
+) -> int:
+    """Checks the provider never answered go to staff, so no client waits on a lost job."""
+    rows = await session.execute(
+        _UNANSWERED, {"before": clock.now() - UNANSWERED_AFTER, "limit": limit}
+    )
+    moved = 0
+    for row in rows.all():
+        moved += await give_to_person(session, row.id, row.submission, "provider_no_answer", clock)
+    return moved
+
+
+async def _awaiting_provider(
+    session: AsyncSession, check_id: str, submission: int
+) -> Row[Any] | None:
+    row = (await session.execute(_BY_ID_LOCKED, {"id": check_id})).one_or_none()
+    if row is None or row.status != CheckStatus.SUBMITTED or row.submission != submission:
+        return None
+    return row
 
 
 async def record_provider_result(

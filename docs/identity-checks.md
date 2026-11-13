@@ -75,16 +75,35 @@ No identity provider is chosen yet. The module talks to an `IdentityProvider` po
 | Provider | Status |
 | --- | --- |
 | `manual` | Built, and the default. It checks nothing, so every client goes to a person. Nobody is approved by a check that did not happen. |
-| Development stub | Next pull request, with the provider jobs. For local use and tests only. |
+| `development-stub` | Built, for a developer's own machine. It checks nothing: everyone "passes", except a document number ending in 0, whose selfie comes back unsure. Its answers go to a person, and the settings refuse to combine it with automatic approval, so it can never approve a client. |
 | Smile ID | Candidate. Coverage and pricing for Uganda to confirm. |
 | ioTec Verify | Candidate. Decided for phone number verification. Whether it can check identity documents is to confirm with ioTec. |
+
+## Talking to the provider
+
+The API never calls the provider. Submitting a check saves a job in the same transaction, and the worker does the rest (`app/modules/kyc/jobs.py`).
+
+| Job | What it does |
+| --- | --- |
+| `kyc.send_check` | Sends one submission, keyed `<check>:<submission>`. Accepted: saves the reference and queues the read. Refused: the check goes to a person (`provider_refused`). |
+| `kyc.read_result` | Reads the result and applies it. Not ready yet: asked again with a growing delay, for up to 20 minutes. |
+| `kyc.sweep_unanswered` | Every 5 minutes. A check still waiting 30 minutes after it was submitted goes to a person (`provider_no_answer`). |
+
+How a send can end:
+
+- **It did not arrive.** Tried again, for up to 5 minutes.
+- **It may have arrived.** Never sent again on a guess. The worker asks the provider what it holds for that key. If the provider holds it, the result is read as usual. If it does not, the check goes to a person (`provider_unreachable`).
+- **Nobody can tell.** The job stops as an uncertain outcome and is never run again. The sweep gives the check to a person.
+
+A result that arrives after the check moved on changes nothing.
+
+Settings, all optional while the provider is `manual`: `FINVEST_IDENTITY_PROVIDER` (`manual` or `development-stub`), `FINVEST_IDENTITY_AUTOMATIC_APPROVAL` (off; the owner's decision), and `FINVEST_IDENTITY_DATA_KEY`, which any provider other than `manual` requires in the worker.
 
 ## Not built yet
 
 - HTTP routes for the client app and the console.
 - Upload and signed download links for object storage.
-- The jobs that send a check to the provider and read the result, and the sweep for checks the provider never answered.
-- Reading `FINVEST_IDENTITY_DATA_KEY` in the API and worker (`KycSettings` is ready; nothing calls the module over HTTP yet).
+- Reading `FINVEST_IDENTITY_DATA_KEY` in the API (nothing calls the module over HTTP yet).
 - The console route that returns the ID number masked, and a separate route that returns it in full and writes an audit event.
 - Key rotation for sealed details.
 - Notifications when a check is approved or needs a new photo.
