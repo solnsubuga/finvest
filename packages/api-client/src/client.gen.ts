@@ -144,13 +144,14 @@ export type ClientComplaints = z.infer<typeof ClientComplaints>;
 export const Currency = z.enum(["UGX", "USD"]);
 export type Currency = z.infer<typeof Currency>;
 
-export const InvestmentStatus = z.enum(["awaiting_payment", "active", "cancelled", "matured"]);
+export const InvestmentStatus = z.enum(["awaiting_payment", "active", "cancelled", "matured", "withdrawn"]);
 export type InvestmentStatus = z.infer<typeof InvestmentStatus>;
 
 export const ClientInvestmentOut = z.object({
   amount_minor: z.number().int(),
   at_maturity: AtMaturity.nullable(),
   can_change_maturity: z.boolean(),
+  can_withdraw: z.boolean(),
   client_rate_percent: z.string(),
   currency: Currency,
   days_earned: z.number().int(),
@@ -171,6 +172,7 @@ export const ClientInvestmentOut = z.object({
   total_at_maturity_minor: z.number().int().nullable(),
   value_minor: z.number().int(),
   waiting_for_destination: z.boolean(),
+  withdrawal_requested_at: z.string().nullable(),
 });
 export type ClientInvestmentOut = z.infer<typeof ClientInvestmentOut>;
 
@@ -811,6 +813,11 @@ export const Unread = z.object({
 });
 export type Unread = z.infer<typeof Unread>;
 
+export const WithdrawalRequest = z.object({
+  destination_id: z.string(),
+});
+export type WithdrawalRequest = z.infer<typeof WithdrawalRequest>;
+
 /** Every route, by method and path, with what it takes and what it answers. */
 export const operations = {
   "GET /client/authenticator": {
@@ -1427,6 +1434,19 @@ export const operations = {
     idempotent: true,
     status: 201,
     response: PaymentView,
+  },
+  "POST /client/investments/{investment_id}/withdraw": {
+    method: "POST",
+    path: "/client/investments/{investment_id}/withdraw",
+    params: z.object({
+    investment_id: z.string(),
+  }),
+    query: z.object({}),
+    body: WithdrawalRequest,
+    bodyKind: "json",
+    idempotent: true,
+    status: 200,
+    response: ClientInvestmentOut,
   },
   "POST /client/login/authenticator/verify": {
     method: "POST",

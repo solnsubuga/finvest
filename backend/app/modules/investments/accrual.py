@@ -77,7 +77,8 @@ class InterestRun:
 # An investment is due on a run date if it started before that day and has not been paid up to
 # it, or up to its maturity if that comes first.
 _IS_DUE = (
-    "i.status = 'active' AND i.start_date < :run_date AND (i.accrued_through IS NULL OR "
+    "i.status = 'active' AND i.withdrawal_requested_at IS NULL "
+    "AND i.start_date < :run_date AND (i.accrued_through IS NULL OR "
     "(i.accrued_through < :run_date "
     "AND (i.maturity_date IS NULL OR i.accrued_through < i.maturity_date)))"
 )
@@ -258,6 +259,9 @@ async def accrue_locked(
 ) -> Accrual | None:
     """Post what `investment`, already locked, is due for `run_date`."""
     if investment.start_date is None or investment.status.value != "active":
+        return None
+    if investment.withdrawal_requested_at is not None:
+        # Interest stops when the client asks to withdraw early.
         return None
     posting = posting_due(
         investment.terms,

@@ -35,6 +35,7 @@ from app.modules.investments.domain.investments import (
     can_be_cancelled,
     can_be_paid,
     can_choose_maturity,
+    can_withdraw_early,
     check_start,
     pay_by,
     start,
@@ -92,6 +93,12 @@ class Investment:
     payout_id: str | None = None
     # Why the money is waiting in payouts instead of on its way. None when it is not waiting.
     payout_refusal: str | None = None
+    # An early withdrawal: when the client asked and where to, when the money moved to
+    # payouts, and the payout that carries it once the dealing desk has funded it.
+    withdrawal_requested_at: datetime | None = None
+    withdrawal_destination_id: str | None = None
+    withdrawn_at: datetime | None = None
+    withdrawal_payout_id: str | None = None
 
     @property
     def amount(self) -> Money:
@@ -144,6 +151,9 @@ class ClientInvestment:
     payout_id: str | None
     # Matured, and the money is waiting for the client to say where to send it.
     waiting_for_destination: bool
+    # Whether the client may ask to withdraw it early now, and when they did.
+    can_withdraw: bool = False
+    withdrawal_requested_at: datetime | None = None
 
 
 _COLUMNS = (
@@ -151,7 +161,9 @@ _COLUMNS = (
     "i.principal_minor, i.annual_rate_bps, i.tax_bps, i.term_days, i.at_maturity, i.status, "
     "i.created_at, i.pay_by, i.start_date, i.maturity_date, i.accrued_through, "
     "i.accrued_gross_minor, i.accrued_tax_minor, i.payout_destination_id, i.matured_at, "
-    "i.rolled_into_id, i.rolled_from_id, i.payout_id, i.payout_refusal"
+    "i.rolled_into_id, i.rolled_from_id, i.payout_id, i.payout_refusal, "
+    "i.withdrawal_requested_at, i.withdrawal_destination_id, i.withdrawn_at, "
+    "i.withdrawal_payout_id"
 )
 _FROM = "FROM investments i JOIN investment_products p ON p.id = i.product_id"
 
@@ -562,6 +574,10 @@ def investment_from_row(row: Row[Any]) -> Investment:
         rolled_from_id=row.rolled_from_id,
         payout_id=row.payout_id,
         payout_refusal=row.payout_refusal,
+        withdrawal_requested_at=row.withdrawal_requested_at,
+        withdrawal_destination_id=row.withdrawal_destination_id,
+        withdrawn_at=row.withdrawn_at,
+        withdrawal_payout_id=row.withdrawal_payout_id,
     )
 
 
@@ -597,7 +613,8 @@ def _client_view(investment: Investment, today: date) -> ClientInvestment:
         if investment.term_days is None
         else client_returns(terms, investment.term_days),
         payout_destination_id=investment.payout_destination_id,
-        can_change_maturity=can_choose_maturity(
+        can_change_maturity=investment.withdrawal_requested_at is None
+        and can_choose_maturity(
             investment.status, investment.term_days, investment.maturity_date, today
         ),
         rolled_into_id=investment.rolled_into_id,
@@ -605,4 +622,11 @@ def _client_view(investment: Investment, today: date) -> ClientInvestment:
         waiting_for_destination=investment.status is InvestmentStatus.MATURED
         and investment.payout_id is None
         and investment.rolled_into_id is None,
+        can_withdraw=can_withdraw_early(
+            investment.status,
+            investment.maturity_date,
+            today,
+            requested=investment.withdrawal_requested_at is not None,
+        ),
+        withdrawal_requested_at=investment.withdrawal_requested_at,
     )
