@@ -25,6 +25,7 @@ from app.modules.payments import routes as payment_routes
 from app.modules.payments.domain.provider import CollectionsProvider
 from app.modules.payments.settings import PaymentsSettings
 from app.modules.payments.wiring import collections_provider
+from app.modules.support import api as support_api
 from app.shared.clock import Clock, SystemClock
 from app.shared.errors import ErrorEnvelope
 
@@ -92,7 +93,12 @@ def create_app(
         ProxyHeadersMiddleware, trusted_hosts=settings.trusted_proxies or ["127.0.0.1"]
     )
     app.include_router(health.router)
-    for router in (*identity_api.routers, *passkeys_api.routers, *notifications_api.routers):
+    for router in (
+        *identity_api.routers,
+        *passkeys_api.routers,
+        *notifications_api.routers,
+        *support_api.routers,
+    ):
         app.include_router(router)
     app.include_router(payments_api.create_router(collections))
     app.include_router(payment_routes.create_client_router(collections))
