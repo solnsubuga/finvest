@@ -5,6 +5,7 @@ returns a login challenge. It never opens a session. A second step, a passkey or
 code, turns the challenge into a session with `open_session`.
 """
 
+from collections.abc import Collection
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from typing import Literal
@@ -452,6 +453,21 @@ async def client_contact(session: AsyncSession, client_id: str) -> ClientContact
         )
     ).one_or_none()
     return ClientContact(row.phone, row.email) if row is not None else None
+
+
+async def staff_names(session: AsyncSession, staff_ids: Collection[str]) -> dict[str, str]:
+    """The names of these members of staff, for screens that show who did something.
+
+    Other modules call this instead of reading identity tables. An ID with no account is
+    left out.
+    """
+    if not staff_ids:
+        return {}
+    rows = await session.execute(
+        text("SELECT id, name FROM identity_staff WHERE id = ANY(:ids)"),
+        {"ids": sorted(set(staff_ids))},
+    )
+    return {row.id: row.name for row in rows.all()}
 
 
 def _invalid(field: str, code: str) -> ApplicationError:

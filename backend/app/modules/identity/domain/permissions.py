@@ -34,6 +34,9 @@ Permission = Literal[
     "compliance.view",
     "team.view",
     "reports.view",
+    # Reading and exporting the audit trail: who did what, when and why, across the product.
+    # A section of the Reports and audit screen, not a screen of its own.
+    "audit.view",
     "settings.view",
     # Proposing or deciding a change to the words of a client message. Seeing them is
     # `settings.view`. Not a screen: the console's own list gains it with the wordings screen.
@@ -106,6 +109,7 @@ ROLE_PERMISSIONS: dict[Role, frozenset[Permission]] = {
             "clients.view",
             "compliance.view",
             "reports.view",
+            "audit.view",
         }
     ),
     # Support answers clients and logs and works complaints. Closing one is for operations and
