@@ -17,7 +17,7 @@ from app.infrastructure.jobs import JobRequest, Worker, WorkerConfig, enqueue
 from app.modules.investments import accrual
 from app.modules.investments import service as investments
 from app.modules.investments.domain.interest import Accrual, accrued
-from app.modules.investments.jobs import ACCRUE_KIND, InvestmentJobs
+from app.modules.investments.jobs import ACCRUE_KIND, TELL_EARNINGS_KIND, InvestmentJobs
 from app.modules.ledger import service as ledger
 from app.modules.ledger.domain.errors import UnknownAccount
 from app.shared.actors import SYSTEM, Actor
@@ -297,15 +297,22 @@ async def test_one_investment_that_cannot_be_paid_does_not_stop_the_rest(
 # The scheduled job ------------------------------------------------------------------------------
 
 
-async def run_job(worker_database: Database, scheduled_for: str, clock: FakeClock) -> str:
+async def run_job(
+    worker_database: Database,
+    scheduled_for: str,
+    clock: FakeClock,
+    *,
+    kind: str = ACCRUE_KIND,
+    payload: dict[str, object] | None = None,
+) -> str:
     queue = "inv" + "".join(c for c in push_id().lower() if c.isalnum())
     async with worker_database.actor_transaction(SYSTEM) as session:
         job_id = await enqueue(
             session,
             JobRequest(
-                kind=ACCRUE_KIND,
-                idempotency_key=f"investments.accrue_interest@{push_id()}",
-                payload={"scheduled_for": scheduled_for, "data": {}},
+                kind=kind,
+                idempotency_key=f"{kind}@{push_id()}",
+                payload=payload or {"scheduled_for": scheduled_for, "data": {}},
                 queue=queue,
             ),
             now=clock.now(),
@@ -442,6 +449,28 @@ async def earnings_told(app_database: Database, client: Actor) -> list[tuple[str
         return [(row.title, row.body) for row in rows.all()]
 
 
+async def telling_queued(worker_database: Database, run_date: date) -> int:
+    async with worker_database.actor_transaction(SYSTEM) as session:
+        return int(
+            (
+                await session.execute(
+                    text(
+                        "SELECT count(*) FROM jobs WHERE kind = :kind "
+                        "AND payload->>'run_date' = :run_date"
+                    ),
+                    {"kind": TELL_EARNINGS_KIND, "run_date": run_date.isoformat()},
+                )
+            ).scalar_one()
+        )
+
+
+async def test_a_telling_job_without_its_day_fails_for_good(worker_database: Database) -> None:
+    outcome = await run_job(
+        worker_database, "", at(day(1), 12), kind=TELL_EARNINGS_KIND, payload={"run_date": "x"}
+    )
+    assert outcome == "failed:run_date_invalid"
+
+
 async def test_the_run_tells_each_client_once_what_the_day_earned_after_tax(
     app_database: Database, worker_database: Database
 ) -> None:
@@ -462,6 +491,17 @@ async def test_the_run_tells_each_client_once_what_the_day_earned_after_tax(
     outcome = await run_job(worker_database, f"{DAY.isoformat()}T21:30:00+00:00", at(day(1), 12))
 
     assert outcome == "succeeded:None"
+    # The run tells nobody itself: recording it queues the telling as a job of its own.
+    assert await earnings_told(app_database, client) == []
+    assert await telling_queued(worker_database, day(1)) == 1
+    told = await run_job(
+        worker_database,
+        "",
+        at(day(1), 12),
+        kind=TELL_EARNINGS_KIND,
+        payload={"run_date": day(1).isoformat()},
+    )
+    assert told == "succeeded:None"
     # One message for both investments, with no amount in it: the app shows the figure.
     assert await earnings_told(app_database, client) == [
         (
