@@ -20,6 +20,7 @@ from app.infrastructure.jobs import JobRequest, Worker, enqueue
 from app.infrastructure.jobs import queue as job_queue
 from app.modules.ledger import service as ledger
 from app.modules.ledger.domain.entries import AccountKind, AccountSpec
+from app.modules.payments import jobs as deposit_jobs
 from app.modules.payments import service
 from app.modules.payments.domain.deposits import (
     APPROVAL_WINDOW,
@@ -480,6 +481,39 @@ async def test_sweeps_do_not_pile_up_reads_of_an_uncertain_deposit(
     fake_clock.advance(minutes=10)
     await drain(worker)
     assert provider.reads_for(deposit) == before + 1
+
+
+async def test_a_sweep_reaches_every_uncertain_deposit_however_many_there_are(
+    app_database: Database,
+    worker_database: Database,
+    provider: FakeCollections,
+    worker: Worker,
+    fake_clock: FakeClock,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # Pages of two, so five deposits take three pages. Older ones must not wait behind newer.
+    monkeypatch.setattr(deposit_jobs, "SWEEP_BATCH", 2)
+    deposits = []
+    for _ in range(5):
+        msisdn = phone()
+        provider.on_send(msisdn, Uncertain(UncertainReason.TIMED_OUT))
+        provider.on_status(msisdn, NotFound())
+        deposits.append(await start_deposit(app_database, fake_clock, msisdn=msisdn))
+        await drain(worker)
+        fake_clock.advance(minutes=1)
+    fake_clock.advance(minutes=30)
+    await sweep(worker, worker_database, fake_clock)
+    for deposit in deposits:
+        assert (
+            await count(
+                worker_database,
+                "SELECT count(*) FROM jobs WHERE kind = :kind AND idempotency_key LIKE :key "
+                "AND status = 'pending'",
+                kind=service.VERIFY_KIND,
+                key=f"{deposit.id}:uncertain:%",
+            )
+            == 1
+        )
 
 
 async def test_status_reads_of_an_uncertain_deposit_stop_after_a_day(
