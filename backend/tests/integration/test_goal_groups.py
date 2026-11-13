@@ -289,7 +289,8 @@ async def test_a_member_renames_themself_and_leaves_and_keeps_their_goal(
 async def test_the_owner_removes_a_member_but_never_leaves(app_database: Database) -> None:
     owner, member = new_client(), new_client()
     group = await new_group(app_database, owner)
-    joined = await join(app_database, member, await invite(app_database, owner, group.id))
+    code = await invite(app_database, owner, group.id)
+    joined = await join(app_database, member, code)
     async with app_database.actor_transaction(owner) as session:
         assert await refused(groups.leave_group(session, owner, group.id, NOW)) == "conflict"
     async with app_database.actor_transaction(owner) as session:
@@ -300,7 +301,10 @@ async def test_the_owner_removes_a_member_but_never_leaves(app_database: Databas
     async with app_database.actor_transaction(owner) as session:
         removed = await groups.remove_member(session, owner, group.id, joined.own_goal_id, NOW)
     assert len(removed.members) == 1
+    assert removed.invite_expires_at is None
     assert await refused(read(app_database, member, group.id)) == "not_found"
+    # The link they had no longer works.
+    assert await refused(join(app_database, member, code)) == "not_found"
 
 
 async def test_closing_a_members_goal_leaves_the_group_and_the_owners_is_refused(

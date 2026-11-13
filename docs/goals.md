@@ -59,7 +59,7 @@ One target that several clients save towards together, such as a family buying l
 - **What members see.** The names each member chose, when they joined, and the combined value against the target, with the same On track or Behind labels as any goal. Never another member's savings, amounts or investments one by one. With two members, each can work out the other's total from the combined value, and the app says so before joining.
 - **The combined value.** The member's own goal is counted as it is now. The others are counted as the worker last recorded them, once a day at 01:30 Kampala time, after interest and maturities (`goals.refresh_groups`). The app shows that day. A client never reads another client's investments, and never writes a figure the group is shown.
 - **Changing.** The one who set the group up changes its name, target and date. No member's own goal changes with it: each changes their own if they want to.
-- **Leaving.** A member leaves, or the one who set the group up removes them. Their goal and its savings carry on as their own. Closing their own goal also leaves the group. The one who set the group up cannot leave it or close their goal while it is open: they close the group.
+- **Leaving.** A member leaves, or the one who set the group up removes them. Removing someone also withdraws the current invite, so they cannot rejoin with the link they had: the one who set the group up makes a new one for the others. Their goal and its savings carry on as their own. Closing their own goal also leaves the group. The one who set the group up cannot leave it or close their goal while it is open: they close the group.
 - **Closing.** Final. Every member's goal stays open as their own, and nobody's money moves.
 
 The database holds these, in migration 0112:
@@ -102,8 +102,8 @@ The database holds these, in migration 0112:
 | `PUT /client/goal-groups/{id}` | Change the group's name, target or date. Only for the one who set it up. |
 | `PUT /client/goal-groups/{id}/me` | Change the name the others see the client by |
 | `POST /client/goal-groups/{id}/invite`, `DELETE /client/goal-groups/{id}/invite` | Make a new invite code, shown once, or withdraw it |
-| `GET /client/goal-groups/invites/{code}` | What the invite is for, before joining |
-| `POST /client/goal-groups/invites/{code}/join` | Join, with the client's own part. Takes an `Idempotency-Key`. |
+| `POST /client/goal-groups/invites/preview` | What the invite is for, before joining. The code is in the body, never the path, so it stays out of access logs. |
+| `POST /client/goal-groups/join` | Join with the code and the client's own part. Takes an `Idempotency-Key`. |
 | `POST /client/goal-groups/{id}/leave` | Leave. The client's own goal carries on. |
 | `POST /client/goal-groups/{id}/members/{goal_id}/remove` | Remove a member. Only for the one who set it up. |
 | `POST /client/goal-groups/{id}/close` | Close the group for good |
