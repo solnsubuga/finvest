@@ -96,11 +96,13 @@ A running log. Add a row when a decision is made, and move an open question up w
 | 2026-11-13 | Decided for now, by the automatic investing thread. A plan runs weekly or monthly, from the first due day after the day it is set up. Each run is one ordinary investment paid by its own mobile money prompt, at most UGX 5,000,000. A run more than a day late is missed and never collected late, a failed payment is tried once more the next day, and a client keeps at most ten plans. Prompts are sent only between 08:00 and 20:00 in Kampala. See [automatic-investing.md](automatic-investing.md). |
 | 2026-11-13 | Decided for now, by the payouts and reconciliation thread: a fee the provider keeps on a sweep between pots is booked, when a second person approves the transfer, to an expense account named per provider, `fees.provider.iotec` for ioTec. A transfer that leaves the trust bank account cannot carry a fee yet, because no bank charges account is agreed. See [reconciliation.md](reconciliation.md#transfers-between-pots). |
 | 2026-11-13 | The external penetration test runs on staging, switched on for the test weeks only and off again afterwards, so the testers' accounts, payments and ledger entries never land in production's ledger. Owner's choice on a decision card in the launch readiness thread, over testing production before any client data. See [security.md](security.md). |
+| 2026-11-13 | Decided for now, by the console admin thread: locking or unlocking a client's account needs two people, like every staff operation, and a new permission, `clients.lock`, held by admin, operations and compliance. A lock waits for the second person, so there is no instant emergency lock for now. A locked client is not told by message. See [client-accounts.md](client-accounts.md). |
 
 ## Open
 
 | Question | Who answers |
 | --- | --- |
+| Client locks: should one member of staff be able to lock an account at once in an emergency (a stolen phone, fraud in progress), with a second person confirming afterwards? Built: two people before the lock takes effect. Should the client be told their account was locked, and how? Built: no message. | Owner |
 | Is money in transit through the trust account covered by the current licence? | Counsel |
 | Recovery targets for the database: at most 5 minutes of data lost and the service back within 4 hours. Proposed by the launch readiness thread ([backup-and-restore.md](backup-and-restore.md)). | Owner |
 | The parallel run against Finvest 1.0 passes after 5 clean business days in a row, the last no more than one business day before the switch. Proposed by the launch readiness thread with the migration thread ([launch.md](launch.md)). | Owner |

@@ -19,6 +19,7 @@
 | [support.md](support.md) | Help chat between clients and staff, and the complaints register: routes, rules and who sees what |
 | [automatic-investing.md](automatic-investing.md) | Plans that invest the same amount on a schedule, the daily run that asks for each payment, and what the database enforces |
 | [insights.md](insights.md) | What a client invested, earned and was paid each month, what comes next, and where each figure is read from in the ledger |
+| [client-accounts.md](client-accounts.md) | Finding a client in the console, the client page, and locking or unlocking an account with two people |
 | [account-numbers.md](account-numbers.md) | Format, generation and lifetime of client account numbers |
 | [roadmap.md](roadmap.md) | Build phases and the feature checklist for the client app and back office |
 | [migration.md](migration.md) | Moving Finvest 1.0 clients onto the new system |
