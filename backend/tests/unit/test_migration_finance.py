@@ -13,8 +13,11 @@ from app.modules.migration.domain.finance import (
     InvalidFinanceCheck,
     SignOff,
     check_finances,
+    check_investments,
+    new_totals,
     opening_for,
     switch_blockers,
+    total_lines,
 )
 from app.modules.migration.domain.trial import TrialReport, run_trial
 from app.shared.money import Currency, Money
@@ -304,3 +307,41 @@ def test_a_sign_off_needs_a_second_member_of_staff_and_its_figures() -> None:
         SignOff("total:clients", (), "Explained", proposed_by="staff-1", approved_by="staff-2")
     with pytest.raises(InvalidFinanceCheck):
         SignOff("total:clients", (3, 2), "Explained", proposed_by="staff-1", approved_by="")
+
+
+def test_the_investments_are_checked_without_the_old_totals() -> None:
+    report = trial(interest_before_tax="29,200")
+    checked = check_investments(report, PRODUCTS, TAX)
+
+    assert [opening.legacy_investment_ref for opening in checked.openings] == ["A", "B", "C"]
+    assert checked.differing == {"investment:B": (29_200, 29_109, 4_366, 4_366)}
+    # The new side of the interest line is what will be opened, not what the sheet states.
+    assert new_totals(report, checked) == {
+        "total:clients": 2,
+        "total:verified_identities": 2,
+        "total:running_investments": 3,
+        "total:pending_orders": 1,
+        "total:invested:UGX": 3_500_000,
+        "total:invested:USD": 600_00,
+        "total:interest_before_tax:UGX": 40_752,
+        "total:interest_before_tax:USD": 405,
+    }
+
+
+def test_a_product_with_no_tax_rate_yet_is_compared_with_nothing() -> None:
+    assert check_investments(trial(), PRODUCTS, {}).tax_rate_differences == ()
+
+
+def test_stored_totals_give_the_same_lines_as_the_trial_itself() -> None:
+    report = trial()
+    checked = check_investments(report, PRODUCTS, TAX)
+
+    assert total_lines(OLD, new_totals(report, checked)) == (
+        check_finances(report, OLD, PRODUCTS, TAX).lines
+    )
+    # A currency only one side has still gets a line.
+    lines = total_lines(replace(OLD, invested=(ugx(3_500_000),)), {"total:invested:USD": 5})
+    assert [(line.key, line.old, line.new) for line in lines if line.new or "USD" in line.key] == [
+        ("total:invested:USD", 0, 5),
+        ("total:interest_before_tax:USD", 405, 0),
+    ]

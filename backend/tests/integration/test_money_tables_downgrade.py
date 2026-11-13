@@ -1,6 +1,6 @@
 """A downgrade must never delete the books, the issued numbers, the audit trail, the job
 history, the receipts that stop a command running twice, the identity records, the payout
-destinations, the withdrawal limits or the payouts."""
+destinations, the withdrawal limits, the payouts or the migration checks."""
 
 import os
 from collections.abc import Iterator
@@ -131,6 +131,11 @@ ROWS = {
         "variables, created_at) VALUES ('-Nabc0000000000000A1', 'test:1', 'email', "
         "'ada@example.com', 'sign_in_code', '{}', now())",
         "refusing to drop messages",
+    ),
+    "0070_migration_checks": (
+        "INSERT INTO migration_control_totals (id, as_of, totals, entered_by, entered_at) "
+        "VALUES ('-Nabc0000000000000A1', DATE '2026-11-13', '{}', '-Nabc0000000000000S1', now())",
+        "refusing to drop migration checks",
     ),
 }
 
