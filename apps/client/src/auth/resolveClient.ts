@@ -1,29 +1,39 @@
-import { createStubAuthClient } from "./stubAuthClient";
 import { AuthClient, AuthError } from "./types";
 
-export type ResolvedClient = { client: AuthClient; demo: boolean };
+type StubModule = typeof import("./stubAuthClient");
 
-type Environment = { development: boolean; demoFlag: string | undefined };
+export type ResolvedClient = {
+  client: AuthClient;
+  /** True while the in-memory demo is answering. Every screen says so. */
+  demo: boolean;
+  /** The SMS code the demo accepts, shown on screen so it can be tried. */
+  demoCode: string | null;
+};
 
 /**
- * Chooses what the screens talk to.
+ * The in-memory demo accepts a fixed code, so it must never be what a real
+ * client reaches. It is loaded in development, and in a production build only
+ * when EXPO_PUBLIC_DEMO_AUTH=1 was set on purpose at build time (for previews
+ * and screenshots).
  *
- * The in-memory stub accepts a fixed code, so it must never be what a real
- * client reaches. It runs in development, and in a production build only when
- * EXPO_PUBLIC_DEMO_AUTH=1 was set on purpose at build time (for previews and
- * screenshots). Otherwise every call fails closed until the real API client
- * exists.
+ * The condition is written inline, and the stub is required inside it, so the
+ * bundler can see it is false in a normal production build and leave the stub
+ * out of the bundle altogether. CI checks that it did.
  */
-export function resolveAuthClient(
-  environment: Environment = {
-    development: __DEV__,
-    demoFlag: process.env.EXPO_PUBLIC_DEMO_AUTH,
-  },
-): ResolvedClient {
-  if (environment.development || environment.demoFlag === "1") {
-    return { client: createStubAuthClient(), demo: true };
+function loadStub(): StubModule | null {
+  if (__DEV__ || process.env.EXPO_PUBLIC_DEMO_AUTH === "1") {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    return require("./stubAuthClient") as StubModule;
   }
-  return { client: unavailableAuthClient, demo: false };
+  return null;
+}
+
+/** Chooses what the screens talk to. Without the stub, every sign-in is refused. */
+export function resolveAuthClient(stub: StubModule | null = loadStub()): ResolvedClient {
+  if (stub) {
+    return { client: stub.createStubAuthClient(), demo: true, demoCode: stub.DEMO_CODE };
+  }
+  return { client: unavailableAuthClient, demo: false, demoCode: null };
 }
 
 const refuse = async (): Promise<never> => {

@@ -55,9 +55,8 @@ export function createStubAuthClient(options: StubOptions = {}): AuthClient {
   return {
     async startSignup(input): Promise<SignupChallenge> {
       await wait();
-      if (accounts.has(input.phone)) {
-        throw new AuthError("phone_taken");
-      }
+      // Says nothing about whether the number has an account. That is only
+      // revealed after the code proves the caller owns the number.
       const challengeId = nextId("signup");
       signups.set(challengeId, input);
       return { challengeId, phone: input.phone };
@@ -73,6 +72,9 @@ export function createStubAuthClient(options: StubOptions = {}): AuthClient {
         throw new AuthError("invalid_code");
       }
       signups.delete(challengeId);
+      if (accounts.has(signup.phone)) {
+        throw new AuthError("phone_taken");
+      }
       const ticket = nextId("ticket");
       tickets.set(ticket, signup);
       return { ticket, phone: signup.phone };

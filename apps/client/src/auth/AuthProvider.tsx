@@ -20,6 +20,7 @@ type AuthState = {
   client: AuthClient;
   /** True while the in-memory stub is answering. Screens say so. */
   demo: boolean;
+  demoCode: string | null;
   session: Session | null;
   setSession: (session: Session | null) => void;
   signup: SignupChallenge | null;
@@ -40,7 +41,7 @@ export function AuthProvider({
   /** Tests can pass their own client. */
   client?: AuthClient;
 }) {
-  const [resolved] = useState(() => (client ? { client, demo: false } : resolveAuthClient()));
+  const [resolved] = useState(() => (client ? { client, demo: false, demoCode: null } : resolveAuthClient()));
   const [session, setSession] = useState<Session | null>(null);
   const [signup, setSignup] = useState<SignupChallenge | null>(null);
   const [ticket, setTicket] = useState<SignupTicket | null>(null);
@@ -50,6 +51,7 @@ export function AuthProvider({
     () => ({
       client: resolved.client,
       demo: resolved.demo,
+      demoCode: resolved.demoCode,
       session,
       setSession,
       signup,
