@@ -60,6 +60,11 @@ export function createStubSupportApi(
     chat("sample-client-peter", "deposit", [["client", "I sent 2m by bank this morning, not showing.", 12]]),
     chat("sample-client-david", "identity", [["client", "Why was my selfie not accepted?", 31]]),
     chat("sample-client-joan", "account", [["client", "Can I change my payout bank account?", 60]]),
+    // Ivan's account is locked in the samples, so the screen shows what that means for a reply.
+    chat("sample-client-ivan", "account", [
+      ["client", "The app keeps asking for a code I never receive.", 1500],
+      ["staff", "Hello Ivan, please visit the office with your ID and we will move your account to your new number.", 1440],
+    ]),
     chat("sample-client-sarah", "investment", [
       ["client", "When does my 91 day bill mature?", 300],
       ["staff", "Hello Sarah, it matures on Wednesday 18 November and is paid to your MTN number.", 290],

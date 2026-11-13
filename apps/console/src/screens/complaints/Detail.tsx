@@ -1,6 +1,6 @@
 import { useState, type ReactNode } from "react";
 import { Button } from "@/components/ui/button.tsx";
-import type { StaffCard } from "@/directory/api.ts";
+import type { ClientCardStatus, StaffCard } from "@/directory/api.ts";
 import { formatExact } from "@/screens/dealing-desk/format.ts";
 import { MAX_NOTE, MAX_RESOLUTION, type Closing, type ComplaintDetail, type Decision, type MoveTo, type Outcome, type PendingOutcome } from "./api.ts";
 import {
@@ -28,6 +28,7 @@ export type Command =
 interface DetailPanelProps {
   detail: ComplaintDetail;
   clientName: string;
+  clientStatus: ClientCardStatus | null;
   staffName: (staffId: string | null) => string;
   team: readonly StaffCard[];
   /** The signed-in member of staff, to tell their own proposal and their own complaint apart. */
@@ -46,7 +47,7 @@ type Form = "move" | "note" | "propose" | "reject" | null;
 
 const FIELD = "w-full rounded-lg border border-border-strong bg-surface px-3.5 py-3 text-md font-medium text-ink";
 
-export function DetailPanel({ detail, clientName, staffName, team, me, canManage, canClose, busy, error, onCommand }: DetailPanelProps) {
+export function DetailPanel({ detail, clientName, clientStatus, staffName, team, me, canManage, canClose, busy, error, onCommand }: DetailPanelProps) {
   const { complaint, history, pendingOutcome: pending } = detail;
   const open = complaint.status !== "closed";
   const logged = history.find((item) => item.action === "logged");
@@ -89,6 +90,13 @@ export function DetailPanel({ detail, clientName, staffName, team, me, canManage
         </h2>
         <StatusChip complaint={complaint} />
       </div>
+      {clientStatus === "locked" || clientStatus === "closed" ? (
+        <p className="m-0 rounded-md bg-danger-surface px-3 py-2.5 text-sm font-semibold text-danger">
+          {clientStatus === "locked"
+            ? "Their account is locked, so Finvest sends them no messages, the outcome included. Reach them another way."
+            : "Their account is closed. Reach them another way about the outcome."}
+        </p>
+      ) : null}
       <p className="m-0 text-md font-bold">{complaint.summary}</p>
       <p className="m-0 whitespace-pre-wrap text-sm leading-normal text-muted">{complaint.details}</p>
       <dl className="m-0 flex flex-col text-sm">
