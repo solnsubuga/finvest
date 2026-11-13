@@ -15,10 +15,9 @@ from app.shared.business_day import business_date
 from app.shared.clock import Clock
 from app.shared.money import Money
 from tests.support.clock import FakeClock
-from tests.support.kyc import SEALER, ready_draft
+from tests.support.kyc import SEALER, decide, ready_draft
 from tests.support.ledger import client as new_client
 from tests.support.ledger import key, ugx
-from tests.support.ledger import staff as new_staff
 
 
 class _Present(FakeClock):
@@ -52,9 +51,7 @@ async def approved_client(database: Database, clock: Clock) -> Actor:
     async with database.actor_transaction(client) as session:
         await ready_draft(session, client, clock)
         check = await kyc.submit(session, SEALER, client, ManualProvider(), clock)
-    staff = new_staff()
-    async with database.actor_transaction(staff) as session:
-        await kyc.approve(session, SEALER, staff, check.id, "Documents match", clock)
+    await decide(database, check.id, "approve", clock)
     return client
 
 

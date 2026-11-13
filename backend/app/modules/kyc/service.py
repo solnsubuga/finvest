@@ -11,7 +11,7 @@ hands the answer to `record_provider_result`.
 import json
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta
-from typing import Any
+from typing import Any, Literal
 
 from sqlalchemy import Row, text
 from sqlalchemy.exc import IntegrityError
@@ -63,6 +63,7 @@ UNANSWERED_AFTER = timedelta(minutes=30)
 MAX_PHOTO_BYTES = 10 * 1024 * 1024
 PHOTO_CONTENT_TYPES = frozenset({"image/jpeg", "image/png", "image/webp"})
 MAX_CLIENT_MESSAGE = 300
+MAX_PROPOSAL_REASON = 500
 DEFAULT_PAGE_SIZE = 50
 MAX_PAGE_SIZE = 200
 # What staff work through, oldest first. `awaiting_client` is listed so they can see who was asked.
@@ -82,6 +83,26 @@ class PhotoView:
     content_type: str
     byte_size: int
     created_at: datetime
+
+
+FinalDecision = Literal["approve", "reject"]
+# Where a proposal may wait for its second person (ck_kyc_checks_proposal_status).
+_PROPOSABLE = frozenset({CheckStatus.NEEDS_REVIEW, CheckStatus.WITH_COMPLIANCE})
+_FINAL_STATUS: dict[str, CheckStatus] = {
+    "approve": CheckStatus.APPROVED,
+    "reject": CheckStatus.REJECTED,
+}
+
+
+@dataclass(frozen=True, slots=True)
+class Proposal:
+    """An approval or rejection one member of staff proposed, waiting for a second."""
+
+    decision: FinalDecision
+    proposed_by: str
+    proposed_at: datetime
+    reason: str
+    client_message: str | None
 
 
 @dataclass(frozen=True, slots=True)
@@ -105,6 +126,8 @@ class CheckView:
     decided_by: str | None
     account_number: str | None
     photos: tuple[PhotoView, ...]
+    # Kept after the decision, so an approved or rejected check names both people.
+    proposal: Proposal | None = None
 
     @property
     def missing(self) -> list[str]:
@@ -127,6 +150,9 @@ class QueueItem:
     given_names: str | None
     submitted_at: datetime | None
     review_flags: tuple[str, ...]
+    # Set when one person proposed a decision that waits for a second.
+    proposed_decision: FinalDecision | None = None
+    proposed_by: str | None = None
 
 
 _COLUMNS = (
@@ -134,7 +160,8 @@ _COLUMNS = (
     "document_number_sealed, date_of_birth_sealed, document_expires_on, tin_sealed, "
     "document_fingerprint, details_confirmed_at, submission, "
     "submitted_at, provider, provider_reference, automatic_checks, review_flags, retake_photos, "
-    "retake_requested_at, client_message, decided_at, decided_by, account_number"
+    "retake_requested_at, client_message, decided_at, decided_by, account_number, "
+    "proposed_decision, proposed_by, proposed_at, proposed_reason, proposed_client_message"
 )
 _BY_CLIENT = text(f"SELECT {_COLUMNS} FROM kyc_checks WHERE client_id = :client_id")  # noqa: S608
 _BY_CLIENT_LOCKED = text(
@@ -187,6 +214,15 @@ _ASK_FOR_PHOTOS = text(
 _ESCALATE = text(
     "UPDATE kyc_checks SET status = 'with_compliance', updated_at = :now WHERE id = :id"
 )
+_PROPOSE = text(
+    "UPDATE kyc_checks SET proposed_decision = :decision, proposed_by = :proposed_by, "
+    "proposed_at = :now, proposed_reason = :reason, proposed_client_message = :client_message, "
+    "updated_at = :now WHERE id = :id"
+)
+_DECLINE = text(
+    "UPDATE kyc_checks SET proposed_decision = NULL, proposed_by = NULL, proposed_at = NULL, "
+    "proposed_reason = NULL, proposed_client_message = NULL, updated_at = :now WHERE id = :id"
+)
 _NOTE_REFERENCE = text(
     "UPDATE kyc_checks SET provider_reference = :provider_reference, updated_at = :now "
     "WHERE id = :id"
@@ -217,7 +253,8 @@ _INSERT_PHOTO = text(
     ":sha256, :now)"
 )
 _QUEUE = text(
-    "SELECT id, status, document_type, surname, given_names, submitted_at, review_flags "
+    "SELECT id, status, document_type, surname, given_names, submitted_at, review_flags, "
+    "proposed_decision, proposed_by "
     "FROM kyc_checks WHERE status = ANY(:statuses) "
     "ORDER BY array_position(:statuses, status::text), submitted_at, id LIMIT :limit"
 )
@@ -582,6 +619,8 @@ async def review_queue(session: AsyncSession, *, limit: int = DEFAULT_PAGE_SIZE)
             given_names=row.given_names,
             submitted_at=row.submitted_at,
             review_flags=tuple(row.review_flags),
+            proposed_decision=row.proposed_decision,
+            proposed_by=row.proposed_by,
         )
         for row in rows.all()
     ]
@@ -607,50 +646,110 @@ async def verified_name(session: AsyncSession, client_id: str) -> str | None:
     return None if row is None else f"{row.surname} {row.given_names}"
 
 
-async def approve(
-    session: AsyncSession, sealer: Sealer, staff: Actor, check_id: str, reason: str, clock: Clock
-) -> CheckView:
-    """Approve the client and issue their account number in this same transaction."""
-    row = await _for_decision(session, staff, check_id, CheckStatus.APPROVED)
-    # The document was valid when the client confirmed it. It must still be valid today.
-    if row.document_expires_on < clock.now().date():
-        raise _invalid("document_expires_on", "document_expired")
-    approved = await _approve(
-        session,
-        row,
-        decided_by=staff.id,
-        provider_reference=None,
-        automatic_checks=None,
-        clock=clock,
-    )
-    if not approved:
-        # Another approved client already holds this identity document.
-        raise ApplicationError("conflict")
-    await _audit(session, staff, "approval", "kyc.check.approved", row.id, clock, reason=reason)
-    return await _view_by_id(session, sealer, row.id)
-
-
-async def reject(
+async def propose(
     session: AsyncSession,
     sealer: Sealer,
     staff: Actor,
     check_id: str,
+    decision: FinalDecision,
     reason: str,
     clock: Clock,
     *,
     client_message: str | None = None,
 ) -> CheckView:
-    row = await _for_decision(session, staff, check_id, CheckStatus.REJECTED)
+    """Propose approving or rejecting a check. A second member of staff must confirm it.
+
+    The decision, its reason and any message to the client are fixed here, so the person who
+    confirms approves exactly what they read.
+    """
+    row = await _for_decision(session, staff, check_id, _FINAL_STATUS[decision])
+    if row.proposed_by is not None:
+        raise ApplicationError("conflict")
+    cleaned_reason = " ".join(reason.split()) if reason else ""
+    if not cleaned_reason:
+        raise _invalid("reason", "missing")
+    if len(cleaned_reason) > MAX_PROPOSAL_REASON:
+        raise _invalid("reason", "too_long")
+    if decision == "approve":
+        if client_message is not None:
+            raise _invalid("client_message", "not_allowed")
+        _require_valid_document(row, clock)
     await session.execute(
-        _REJECT,
+        _PROPOSE,
         {
             "id": row.id,
+            "decision": decision,
+            "proposed_by": staff.id,
+            "reason": cleaned_reason,
             "client_message": _message(client_message, required=False),
-            "decided_by": staff.id,
             "now": clock.now(),
         },
     )
-    await _audit(session, staff, "approval", "kyc.check.rejected", row.id, clock, reason=reason)
+    action = (
+        "kyc.check.approval_proposed" if decision == "approve" else "kyc.check.rejection_proposed"
+    )
+    await _audit(session, staff, "approval", action, row.id, clock, reason=reason)
+    return await _view_by_id(session, sealer, row.id)
+
+
+async def confirm(
+    session: AsyncSession, sealer: Sealer, staff: Actor, check_id: str, reason: str, clock: Clock
+) -> CheckView:
+    """Carry out the proposed decision as the second person. Approving issues the account number
+    in this same transaction."""
+    row = await _proposed(session, staff, check_id)
+    if row.proposed_by == staff.id:
+        # The database refuses this too (ck_kyc_checks_two_people and the trigger).
+        raise ApplicationError("forbidden")
+    decision: FinalDecision = row.proposed_decision
+    _require_move("staff", CheckStatus(row.status), _FINAL_STATUS[decision])
+    details = {"proposed_by": row.proposed_by}
+    if decision == "approve":
+        # The document may have expired since it was proposed.
+        _require_valid_document(row, clock)
+        approved = await _approve(
+            session,
+            row,
+            decided_by=staff.id,
+            provider_reference=None,
+            automatic_checks=None,
+            clock=clock,
+        )
+        if not approved:
+            # Another approved client already holds this identity document.
+            raise ApplicationError("conflict")
+        action = "kyc.check.approved"
+    else:
+        await session.execute(
+            _REJECT,
+            {
+                "id": row.id,
+                "client_message": row.proposed_client_message,
+                "decided_by": staff.id,
+                "now": clock.now(),
+            },
+        )
+        action = "kyc.check.rejected"
+    await _audit(session, staff, "approval", action, row.id, clock, reason=reason, details=details)
+    return await _view_by_id(session, sealer, row.id)
+
+
+async def decline(
+    session: AsyncSession, sealer: Sealer, staff: Actor, check_id: str, reason: str, clock: Clock
+) -> CheckView:
+    """Turn down a proposal, or withdraw one's own. The check stays where it was, undecided."""
+    row = await _proposed(session, staff, check_id)
+    await session.execute(_DECLINE, {"id": row.id, "now": clock.now()})
+    await _audit(
+        session,
+        staff,
+        "approval",
+        "kyc.check.proposal_declined",
+        row.id,
+        clock,
+        reason=reason,
+        details={"proposed_by": row.proposed_by, "decision": row.proposed_decision},
+    )
     return await _view_by_id(session, sealer, row.id)
 
 
@@ -665,6 +764,7 @@ async def ask_for_photos(
 ) -> CheckView:
     """Ask the client to take named photos again. Everything else they handed in is kept."""
     row = await _for_decision(session, staff, check_id, CheckStatus.AWAITING_CLIENT)
+    _require_no_proposal(row)
     problem = retake_problem(DocumentType(row.document_type), photos)
     if problem is not None:
         raise _invalid("photos", problem)
@@ -696,6 +796,7 @@ async def escalate(
     session: AsyncSession, sealer: Sealer, staff: Actor, check_id: str, reason: str, clock: Clock
 ) -> CheckView:
     row = await _for_decision(session, staff, check_id, CheckStatus.WITH_COMPLIANCE)
+    _require_no_proposal(row)
     await session.execute(_ESCALATE, {"id": row.id, "now": clock.now()})
     await _audit(session, staff, "approval", "kyc.check.escalated", row.id, clock, reason=reason)
     return await _view_by_id(session, sealer, row.id)
@@ -764,6 +865,28 @@ async def _for_decision(
         raise ApplicationError("not_found")
     _require_move("staff", CheckStatus(row.status), target)
     return row
+
+
+async def _proposed(session: AsyncSession, staff: Actor, check_id: str) -> Row[Any]:
+    _person(staff, "staff")
+    row = (await session.execute(_BY_ID_LOCKED, {"id": check_id})).one_or_none()
+    if row is None:
+        raise ApplicationError("not_found")
+    if row.proposed_by is None or CheckStatus(row.status) not in _PROPOSABLE:
+        raise ApplicationError("conflict")
+    return row
+
+
+def _require_no_proposal(row: Row[Any]) -> None:
+    # A proposal is settled first, so nobody changes what a second person is about to confirm.
+    if row.proposed_by is not None:
+        raise ApplicationError("conflict")
+
+
+def _require_valid_document(row: Row[Any], clock: Clock) -> None:
+    # The document was valid when the client confirmed it. It must still be valid today.
+    if row.document_expires_on < clock.now().date():
+        raise _invalid("document_expires_on", "document_expired")
 
 
 async def _document_taken(session: AsyncSession, row: Row[Any]) -> bool:
@@ -885,6 +1008,15 @@ async def _view(session: AsyncSession, sealer: Sealer, row: Row[Any]) -> CheckVi
         decided_at=row.decided_at,
         decided_by=row.decided_by,
         account_number=row.account_number,
+        proposal=None
+        if row.proposed_by is None
+        else Proposal(
+            decision=row.proposed_decision,
+            proposed_by=row.proposed_by,
+            proposed_at=row.proposed_at,
+            reason=row.proposed_reason,
+            client_message=row.proposed_client_message,
+        ),
         photos=tuple(
             PhotoView(
                 id=photo.id,

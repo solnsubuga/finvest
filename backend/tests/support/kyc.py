@@ -1,4 +1,5 @@
-"""Identity check fixtures: a provider that answers as told, and a client's finished draft."""
+"""Identity check fixtures: a provider that answers as told, a client's finished draft, and a
+decision made by two members of staff."""
 
 import os
 import uuid
@@ -7,6 +8,7 @@ from datetime import date
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.infrastructure.database import Database
 from app.infrastructure.sealing import KEY_BYTES, Sealer
 from app.modules.kyc import service as kyc
 from app.modules.kyc.domain.checks import DocumentType, IdentityDetails, PhotoKind, required_photos
@@ -22,6 +24,7 @@ from app.modules.kyc.domain.provider import (
 )
 from app.shared.actors import Actor
 from app.shared.clock import Clock
+from app.shared.push_ids import push_id
 
 SHA256 = "ab" * 32
 # A fresh key for every test run. No key is ever written into the repository.
@@ -100,3 +103,31 @@ async def ready_draft(
     await kyc.choose_document(session, SEALER, client, document_type, "UG", clock)
     await add_photos(session, client, clock, *sorted(required_photos(document_type)))
     return await kyc.confirm_details(session, SEALER, client, details(document_number), clock)
+
+
+async def decide(
+    database: Database,
+    check_id: str,
+    decision: kyc.FinalDecision,
+    clock: Clock,
+    *,
+    client_message: str | None = None,
+    proposer: Actor | None = None,
+    checker: Actor | None = None,
+) -> kyc.CheckView:
+    """One member of staff proposes and another confirms, each in their own transaction."""
+    proposer = proposer or Actor("staff", push_id())
+    checker = checker or Actor("staff", push_id())
+    async with database.actor_transaction(proposer) as session:
+        await kyc.propose(
+            session,
+            SEALER,
+            proposer,
+            check_id,
+            decision,
+            "Documents checked",
+            clock,
+            client_message=client_message,
+        )
+    async with database.actor_transaction(checker) as session:
+        return await kyc.confirm(session, SEALER, checker, check_id, "Agreed", clock)

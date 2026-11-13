@@ -20,7 +20,15 @@ from app.shared.actors import SYSTEM, Actor
 from app.shared.errors import ApplicationError
 from app.shared.push_ids import push_id
 from tests.support.clock import AsyncBarrier, FakeClock
-from tests.support.kyc import SEALER, FakeProvider, add_photos, all_passed, details, ready_draft
+from tests.support.kyc import (
+    SEALER,
+    FakeProvider,
+    add_photos,
+    all_passed,
+    decide,
+    details,
+    ready_draft,
+)
 from tests.support.ledger import client as new_client
 from tests.support.ledger import staff as new_staff
 
@@ -160,22 +168,37 @@ async def test_bad_details_are_refused_field_by_field(
     )
 
 
-async def test_without_a_provider_staff_approve_and_the_account_number_is_issued(
+async def test_without_a_provider_two_staff_approve_and_the_account_number_is_issued(
     app_database: Database, fake_clock: FakeClock
 ) -> None:
     client, check_id = await in_review(app_database, fake_clock)
-    staff = new_staff()
+    staff, checker = new_staff(), new_staff()
     async with app_database.actor_transaction(staff) as session:
-        queue = await kyc.review_queue(session, limit=200)
         waiting = await kyc.check_for_staff(session, SEALER, check_id)
-        approved = await kyc.approve(
-            session, SEALER, staff, check_id, "Photos match the ID", fake_clock
+        proposed = await kyc.propose(
+            session, SEALER, staff, check_id, "approve", "Photos match the ID", fake_clock
         )
-    assert check_id in [item.id for item in queue]
     assert waiting.review_flags == ("no_automatic_checks",)
     assert waiting.provider == "manual"
+    assert waiting.proposal is None
+    # Proposing decides nothing: the check still waits, now for a second person.
+    assert proposed.status is CheckStatus.NEEDS_REVIEW
+    assert proposed.account_number is None
+    assert proposed.proposal == kyc.Proposal(
+        decision="approve",
+        proposed_by=staff.id or "",
+        proposed_at=fake_clock.now(),
+        reason="Photos match the ID",
+        client_message=None,
+    )
+    async with app_database.actor_transaction(checker) as session:
+        queue = await kyc.review_queue(session, limit=200)
+        approved = await kyc.confirm(session, SEALER, checker, check_id, "Agreed", fake_clock)
+    [item] = [item for item in queue if item.id == check_id]
+    assert (item.proposed_decision, item.proposed_by) == ("approve", staff.id)
     assert approved.status is CheckStatus.APPROVED
-    assert approved.decided_by == staff.id
+    assert approved.decided_by == checker.id
+    assert approved.proposal == proposed.proposal
     assert approved.decided_at == fake_clock.now()
     assert approved.account_number is not None
     number = AccountNumber(approved.account_number)
@@ -186,23 +209,149 @@ async def test_without_a_provider_staff_approve_and_the_account_number_is_issued
         seen = await kyc.check_for_client(session, SEALER, client)
     assert seen is not None
     assert seen.account_number == number.value
-    assert await actions(app_database, check_id) == ["kyc.check.submitted", "kyc.check.approved"]
+    assert await actions(app_database, check_id) == [
+        "kyc.check.submitted",
+        "kyc.check.approval_proposed",
+        "kyc.check.approved",
+    ]
 
 
-async def test_a_staff_decision_needs_a_reason(
+async def test_a_staff_decision_needs_a_reason_from_both_people(
     app_database: Database, fake_clock: FakeClock
 ) -> None:
     _, check_id = await in_review(app_database, fake_clock)
-    staff = new_staff()
+    staff, checker = new_staff(), new_staff()
+    for reason, code in (("  ", "missing"), ("x" * 501, "too_long")):
+        with pytest.raises(ApplicationError) as error:
+            async with app_database.actor_transaction(staff) as session:
+                await kyc.propose(session, SEALER, staff, check_id, "approve", reason, fake_clock)
+        assert refused(error) == ("validation_failed", [("reason", code)])
+    async with app_database.actor_transaction(staff) as session:
+        await kyc.propose(session, SEALER, staff, check_id, "approve", "Checked", fake_clock)
     with pytest.raises(ApplicationError) as error:
-        async with app_database.actor_transaction(staff) as session:
-            await kyc.approve(session, SEALER, staff, check_id, "  ", fake_clock)
+        async with app_database.actor_transaction(checker) as session:
+            await kyc.confirm(session, SEALER, checker, check_id, "  ", fake_clock)
     assert refused(error) == ("validation_failed", [("reason", "missing")])
     # The refusal rolled the approval and its account number back.
     async with app_database.actor_transaction(staff) as session:
         view = await kyc.check_for_staff(session, SEALER, check_id)
     assert view.status is CheckStatus.NEEDS_REVIEW
     assert view.account_number is None
+    assert view.proposal is not None
+
+
+async def test_the_person_who_proposed_cannot_confirm(
+    app_database: Database, fake_clock: FakeClock
+) -> None:
+    _, check_id = await in_review(app_database, fake_clock)
+    staff = new_staff()
+    async with app_database.actor_transaction(staff) as session:
+        await kyc.propose(session, SEALER, staff, check_id, "approve", "Checked", fake_clock)
+    with pytest.raises(ApplicationError) as error:
+        async with app_database.actor_transaction(staff) as session:
+            await kyc.confirm(session, SEALER, staff, check_id, "Me again", fake_clock)
+    assert error.value.code == "forbidden"
+    checker = new_staff()
+    async with app_database.actor_transaction(checker) as session:
+        approved = await kyc.confirm(session, SEALER, checker, check_id, "Agreed", fake_clock)
+    assert approved.status is CheckStatus.APPROVED
+
+
+async def test_nothing_is_confirmed_without_a_proposal_and_one_proposal_waits_at_a_time(
+    app_database: Database, fake_clock: FakeClock
+) -> None:
+    _, check_id = await in_review(app_database, fake_clock)
+    staff, other = new_staff(), new_staff()
+    for step in (kyc.confirm, kyc.decline):
+        with pytest.raises(ApplicationError) as error:
+            async with app_database.actor_transaction(staff) as session:
+                await step(session, SEALER, staff, check_id, "Checked", fake_clock)
+        assert error.value.code == "conflict"
+    async with app_database.actor_transaction(staff) as session:
+        await kyc.propose(session, SEALER, staff, check_id, "approve", "Checked", fake_clock)
+    with pytest.raises(ApplicationError) as error:
+        async with app_database.actor_transaction(other) as session:
+            await kyc.propose(session, SEALER, other, check_id, "reject", "No", fake_clock)
+    assert error.value.code == "conflict"
+    # While a decision waits for its second person, nobody changes the check under it.
+    with pytest.raises(ApplicationError) as error:
+        async with app_database.actor_transaction(other) as session:
+            await kyc.escalate(session, SEALER, other, check_id, "Unsure", fake_clock)
+    assert error.value.code == "conflict"
+    with pytest.raises(ApplicationError) as error:
+        async with app_database.actor_transaction(other) as session:
+            await kyc.ask_for_photos(
+                session,
+                SEALER,
+                other,
+                check_id,
+                frozenset({PhotoKind.SELFIE}),
+                "Please take a clearer selfie.",
+                fake_clock,
+            )
+    assert error.value.code == "conflict"
+
+
+async def test_a_declined_proposal_leaves_the_check_undecided(
+    app_database: Database, fake_clock: FakeClock
+) -> None:
+    _, check_id = await in_review(app_database, fake_clock)
+    staff, checker = new_staff(), new_staff()
+    async with app_database.actor_transaction(staff) as session:
+        await kyc.propose(
+            session,
+            SEALER,
+            staff,
+            check_id,
+            "reject",
+            "Looks edited",
+            fake_clock,
+            client_message="We cannot open an account for you.",
+        )
+    async with app_database.actor_transaction(checker) as session:
+        declined = await kyc.decline(
+            session, SEALER, checker, check_id, "The photo is only blurred", fake_clock
+        )
+    assert declined.status is CheckStatus.NEEDS_REVIEW
+    assert declined.proposal is None
+    assert declined.client_message is None
+    # The check is open again: the one who declined may ask for photos.
+    async with app_database.actor_transaction(checker) as session:
+        asked = await kyc.ask_for_photos(
+            session,
+            SEALER,
+            checker,
+            check_id,
+            frozenset({PhotoKind.FRONT}),
+            "Please take the front of your ID again.",
+            fake_clock,
+        )
+    assert asked.status is CheckStatus.AWAITING_CLIENT
+    assert (await actions(app_database, check_id))[1:] == [
+        "kyc.check.rejection_proposed",
+        "kyc.check.proposal_declined",
+        "kyc.check.photos_requested",
+    ]
+
+
+async def test_an_approval_proposal_carries_no_message_to_the_client(
+    app_database: Database, fake_clock: FakeClock
+) -> None:
+    _, check_id = await in_review(app_database, fake_clock)
+    staff = new_staff()
+    with pytest.raises(ApplicationError) as error:
+        async with app_database.actor_transaction(staff) as session:
+            await kyc.propose(
+                session,
+                SEALER,
+                staff,
+                check_id,
+                "approve",
+                "Checked",
+                fake_clock,
+                client_message="Welcome",
+            )
+    assert refused(error) == ("validation_failed", [("client_message", "not_allowed")])
 
 
 async def test_the_worker_approves_a_clean_result_when_that_is_switched_on(
@@ -241,23 +390,29 @@ async def test_a_clean_result_goes_to_a_person_unless_approval_is_switched_on(
     assert view.review_flags == ("automatic_checks_passed",)
     assert view.automatic_checks == all_passed()
     assert view.account_number is None
-    staff = new_staff()
-    async with app_database.actor_transaction(staff) as session:
-        approved = await kyc.approve(session, SEALER, staff, check_id, "Confirmed", fake_clock)
-    assert approved.decided_by == staff.id
+    checker = new_staff()
+    approved = await decide(app_database, check_id, "approve", fake_clock, checker=checker)
+    assert approved.decided_by == checker.id
 
 
 async def test_a_document_that_expired_while_waiting_is_not_approved(
     app_database: Database, worker_database: Database, fake_clock: FakeClock
 ) -> None:
     _, waiting = await in_review(app_database, fake_clock)
+    _, late = await in_review(app_database, fake_clock)
     _, automatic = await submitted(app_database, fake_clock)
+    staff, checker = new_staff(), new_staff()
+    async with app_database.actor_transaction(staff) as session:
+        await kyc.propose(session, SEALER, staff, waiting, "approve", "Checked", fake_clock)
     # The sample document expires on 18 September 2030.
     fake_clock.current = datetime(2030, 9, 19, tzinfo=UTC)
-    staff = new_staff()
+    with pytest.raises(ApplicationError) as error:
+        async with app_database.actor_transaction(checker) as session:
+            await kyc.confirm(session, SEALER, checker, waiting, "Agreed", fake_clock)
+    assert refused(error) == ("validation_failed", [("document_expires_on", "document_expired")])
     with pytest.raises(ApplicationError) as error:
         async with app_database.actor_transaction(staff) as session:
-            await kyc.approve(session, SEALER, staff, waiting, "Checked", fake_clock)
+            await kyc.propose(session, SEALER, staff, late, "approve", "Checked", fake_clock)
     assert refused(error) == ("validation_failed", [("document_expires_on", "document_expired")])
     async with worker_database.actor_transaction(SYSTEM) as session:
         view = await kyc.record_provider_result(
@@ -274,7 +429,8 @@ async def test_the_verified_name_exists_only_once_the_client_is_approved(
     staff = new_staff()
     async with app_database.actor_transaction(staff) as session:
         assert await kyc.verified_name(session, client.id or "") is None
-        await kyc.approve(session, SEALER, staff, check_id, "Checked", fake_clock)
+    await decide(app_database, check_id, "approve", fake_clock)
+    async with app_database.actor_transaction(staff) as session:
         assert await kyc.verified_name(session, client.id or "") == "NAKATO Amara"
         assert await kyc.verified_name(session, new_client().id or "") is None
 
@@ -393,21 +549,21 @@ async def test_compliance_decides_an_escalated_check_and_a_rejection_is_final(
         with pytest.raises(ApplicationError) as error:
             await kyc.escalate(session, SEALER, staff, check_id, "Again", fake_clock)
         assert error.value.code == "conflict"
-        rejected = await kyc.reject(
-            session,
-            SEALER,
-            staff,
-            check_id,
-            "Confirmed match",
-            fake_clock,
-            client_message="We cannot open an account for you.",
-        )
+    rejected = await decide(
+        app_database,
+        check_id,
+        "reject",
+        fake_clock,
+        client_message="We cannot open an account for you.",
+    )
     assert rejected.status is CheckStatus.REJECTED
     assert rejected.account_number is None
     assert rejected.client_message == "We cannot open an account for you."
     with pytest.raises(ApplicationError) as error:
         async with app_database.actor_transaction(staff) as session:
-            await kyc.approve(session, SEALER, staff, check_id, "Changed my mind", fake_clock)
+            await kyc.propose(
+                session, SEALER, staff, check_id, "approve", "Changed my mind", fake_clock
+            )
     assert error.value.code == "conflict"
     with pytest.raises(ApplicationError) as error:
         async with app_database.actor_transaction(client) as session:
@@ -423,9 +579,16 @@ async def test_only_the_right_kind_of_actor_runs_each_step(
     client, check_id = await in_review(app_database, fake_clock)
     with pytest.raises(ApplicationError) as error:
         async with app_database.actor_transaction(client) as session:
-            await kyc.approve(session, SEALER, client, check_id, "Me", fake_clock)
+            await kyc.propose(session, SEALER, client, check_id, "approve", "Me", fake_clock)
     assert error.value.code == "forbidden"
     staff = new_staff()
+    async with app_database.actor_transaction(staff) as session:
+        await kyc.propose(session, SEALER, staff, check_id, "approve", "Checked", fake_clock)
+    for step in (kyc.confirm, kyc.decline):
+        with pytest.raises(ApplicationError) as error:
+            async with app_database.actor_transaction(client) as session:
+                await step(session, SEALER, client, check_id, "Me", fake_clock)
+        assert error.value.code == "forbidden"
     with pytest.raises(ApplicationError) as error:
         async with app_database.actor_transaction(staff) as session:
             await kyc.submit(session, SEALER, staff, MANUAL, fake_clock)
@@ -442,12 +605,9 @@ async def test_an_identity_document_opens_only_one_account(
     _, first = await in_review(app_database, fake_clock, document_number=number)
     _, second = await in_review(app_database, fake_clock, document_number=number)
     _, third = await submitted(app_database, fake_clock, document_number=number)
-    staff = new_staff()
-    async with app_database.actor_transaction(staff) as session:
-        await kyc.approve(session, SEALER, staff, first, "Checked", fake_clock)
+    await decide(app_database, first, "approve", fake_clock)
     with pytest.raises(ApplicationError) as error:
-        async with app_database.actor_transaction(staff) as session:
-            await kyc.approve(session, SEALER, staff, second, "Checked", fake_clock)
+        await decide(app_database, second, "approve", fake_clock)
     assert error.value.code == "conflict"
     async with worker_database.actor_transaction(SYSTEM) as session:
         view = await kyc.record_provider_result(
@@ -464,6 +624,10 @@ async def test_two_approvals_racing_for_one_document_issue_one_account_number(
     checks = [
         (await in_review(app_database, fake_clock, document_number=number))[1] for _ in range(2)
     ]
+    proposer = new_staff()
+    async with app_database.actor_transaction(proposer) as session:
+        for check_id in checks:
+            await kyc.propose(session, SEALER, proposer, check_id, "approve", "Ok", fake_clock)
     barrier = AsyncBarrier(2)
 
     async def approve(check_id: str) -> str | None:
@@ -473,7 +637,7 @@ async def test_two_approvals_racing_for_one_document_issue_one_account_number(
                 await session.execute(text("SELECT 1"))
                 await barrier.wait()
                 return (
-                    await kyc.approve(session, SEALER, staff, check_id, "Checked", fake_clock)
+                    await kyc.confirm(session, SEALER, staff, check_id, "Agreed", fake_clock)
                 ).account_number
         except ApplicationError as error:
             assert error.code == "conflict"
@@ -489,10 +653,13 @@ async def test_two_approvals_racing_for_one_document_issue_one_account_number(
         assert sorted(held.scalars(), key=str) == sorted([winners[0], None], key=str)
 
 
-async def test_two_staff_approving_the_same_check_issue_one_account_number(
+async def test_two_staff_confirming_the_same_approval_issue_one_account_number(
     app_database: Database, fake_clock: FakeClock
 ) -> None:
     _, check_id = await in_review(app_database, fake_clock)
+    proposer = new_staff()
+    async with app_database.actor_transaction(proposer) as session:
+        await kyc.propose(session, SEALER, proposer, check_id, "approve", "Ok", fake_clock)
     barrier = AsyncBarrier(2)
 
     async def approve() -> str | None:
@@ -502,7 +669,7 @@ async def test_two_staff_approving_the_same_check_issue_one_account_number(
                 await session.execute(text("SELECT 1"))
                 await barrier.wait()
                 return (
-                    await kyc.approve(session, SEALER, staff, check_id, "Checked", fake_clock)
+                    await kyc.confirm(session, SEALER, staff, check_id, "Agreed", fake_clock)
                 ).account_number
         except ApplicationError as error:
             assert error.code == "conflict"
@@ -680,6 +847,115 @@ async def test_staff_decide_but_never_edit_a_check(
             )
 
 
+REJECTION = "We cannot open an account for you."
+CONFIRM_SQL = (
+    "UPDATE kyc_checks SET status = '{status}', decided_at = now(), "
+    "decided_by = {decider}{extra} WHERE id = :id"
+)
+
+
+@pytest.mark.parametrize(
+    ("proposal", "same_person", "status", "extra"),
+    [
+        # Nobody proposed it.
+        (None, False, "rejected", ""),
+        # The proposer confirms their own proposal.
+        ("reject", True, "rejected", ""),
+        # The second person decides something other than what was proposed.
+        ("approve", False, "rejected", ""),
+        # The second person rewrites the message the first one wrote.
+        ("reject", False, "rejected", ", client_message = 'Something else'"),
+        # The second person rewrites the proposal while confirming it.
+        ("reject", False, "rejected", ", proposed_reason = 'Other'"),
+        # The second person names someone else as the decider.
+        ("reject", False, "rejected", "-Nabc0000000000000Z9"),
+    ],
+)
+async def test_the_database_lets_staff_decide_only_what_someone_else_proposed(
+    app_database: Database,
+    fake_clock: FakeClock,
+    proposal: kyc.FinalDecision | None,
+    same_person: bool,
+    status: str,
+    extra: str,
+) -> None:
+    _, check_id = await in_review(app_database, fake_clock)
+    proposer = new_staff()
+    if proposal is not None:
+        async with app_database.actor_transaction(proposer) as session:
+            await kyc.propose(
+                session,
+                SEALER,
+                proposer,
+                check_id,
+                proposal,
+                "Checked",
+                fake_clock,
+                client_message="We cannot open an account for you."
+                if proposal == "reject"
+                else None,
+            )
+    checker = proposer if same_person else new_staff()
+    with pytest.raises(DBAPIError, match="identity check cannot go from needs_review to rejected"):
+        async with app_database.actor_transaction(checker) as session:
+            await session.execute(
+                text(
+                    CONFIRM_SQL.format(status=status, decider="finvest_actor_id()", extra=extra)
+                    if not extra.startswith("-")
+                    else CONFIRM_SQL.format(status=status, decider=f"'{extra}'", extra="")
+                ),
+                {"id": check_id},
+            )
+
+
+@pytest.mark.parametrize(
+    "change",
+    [
+        # A proposal in someone else's name.
+        "proposed_decision = 'approve', proposed_by = '-Nabc0000000000000Z9', "
+        "proposed_at = now(), proposed_reason = 'Checked'",
+        # A proposal that also edits the check.
+        "proposed_decision = 'approve', proposed_by = finvest_actor_id(), proposed_at = now(), "
+        "proposed_reason = 'Checked', surname = 'OTHER'",
+    ],
+)
+async def test_staff_propose_only_in_their_own_name(
+    app_database: Database, fake_clock: FakeClock, change: str
+) -> None:
+    _, check_id = await in_review(app_database, fake_clock)
+    with pytest.raises(DBAPIError, match="this change to an identity check is not allowed"):
+        async with app_database.actor_transaction(new_staff()) as session:
+            await session.execute(
+                text(f"UPDATE kyc_checks SET {change} WHERE id = :id"),  # noqa: S608
+                {"id": check_id},
+            )
+
+
+async def test_a_proposal_cannot_be_swapped_for_another(
+    app_database: Database, fake_clock: FakeClock
+) -> None:
+    _, check_id = await in_review(app_database, fake_clock)
+    proposer, other = new_staff(), new_staff()
+    async with app_database.actor_transaction(proposer) as session:
+        await kyc.propose(session, SEALER, proposer, check_id, "approve", "Checked", fake_clock)
+    with pytest.raises(DBAPIError, match="this change to an identity check is not allowed"):
+        async with app_database.actor_transaction(other) as session:
+            await session.execute(
+                text(
+                    "UPDATE kyc_checks SET proposed_decision = 'reject', "
+                    "proposed_by = finvest_actor_id() WHERE id = :id"
+                ),
+                {"id": check_id},
+            )
+    # Escalating under an open proposal is refused by the database too.
+    with pytest.raises(DBAPIError, match="identity check cannot go from"):
+        async with app_database.actor_transaction(other) as session:
+            await session.execute(
+                text("UPDATE kyc_checks SET status = 'with_compliance' WHERE id = :id"),
+                {"id": check_id},
+            )
+
+
 async def test_the_worker_notes_the_provider_reference_and_nothing_else(
     app_database: Database, worker_database: Database, fake_clock: FakeClock
 ) -> None:
@@ -713,13 +989,16 @@ async def test_an_identity_check_opens_only_a_personal_account(
     app_database: Database, fake_clock: FakeClock
 ) -> None:
     _, check_id = await in_review(app_database, fake_clock)
+    proposer = new_staff()
+    async with app_database.actor_transaction(proposer) as session:
+        await kyc.propose(session, SEALER, proposer, check_id, "approve", "Ok", fake_clock)
     with pytest.raises(DBAPIError, match="ck_kyc_checks_account_number_type"):
         async with app_database.actor_transaction(new_staff()) as session:
             number = await issue_account_number(session, AccountType.COMPANY, fake_clock)
             await session.execute(
                 text(
                     "UPDATE kyc_checks SET status = 'approved', decided_at = now(), "
-                    "account_number = :number WHERE id = :id"
+                    "decided_by = finvest_actor_id(), account_number = :number WHERE id = :id"
                 ),
                 {"id": check_id, "number": number.value},
             )
@@ -785,8 +1064,7 @@ async def test_a_decided_check_never_changes_and_nothing_is_deleted(
 ) -> None:
     _, check_id = await in_review(app_database, fake_clock)
     staff = new_staff()
-    async with app_database.actor_transaction(staff) as session:
-        await kyc.reject(session, SEALER, staff, check_id, "Forged document", fake_clock)
+    await decide(app_database, check_id, "reject", fake_clock)
     actor = SYSTEM if application_database.engine.url.username == "finvest_worker" else staff
     with pytest.raises(DBAPIError, match="a decided identity check never changes"):
         async with application_database.actor_transaction(actor) as session:
@@ -803,6 +1081,9 @@ async def test_an_approval_must_carry_a_number_from_the_registry(
     app_database: Database, fake_clock: FakeClock
 ) -> None:
     _, check_id = await in_review(app_database, fake_clock)
+    proposer = new_staff()
+    async with app_database.actor_transaction(proposer) as session:
+        await kyc.propose(session, SEALER, proposer, check_id, "approve", "Ok", fake_clock)
     for number, refusal in (
         (None, "ck_kyc_checks_account_number"),
         ("1001004819", "fk_kyc_checks"),
@@ -812,7 +1093,7 @@ async def test_an_approval_must_carry_a_number_from_the_registry(
                 await session.execute(
                     text(
                         "UPDATE kyc_checks SET status = 'approved', decided_at = now(), "
-                        "account_number = :number WHERE id = :id"
+                        "decided_by = finvest_actor_id(), account_number = :number WHERE id = :id"
                     ),
                     {"id": check_id, "number": number},
                 )
@@ -851,9 +1132,7 @@ async def test_a_client_cannot_swap_photos_once_the_check_is_with_staff(
 ) -> None:
     owner, check_id = await in_review(app_database, fake_clock)
     if decided:
-        staff = new_staff()
-        async with app_database.actor_transaction(staff) as session:
-            await kyc.approve(session, SEALER, staff, check_id, "Checked", fake_clock)
+        await decide(app_database, check_id, "approve", fake_clock)
     with pytest.raises(DBAPIError, match="identity photos cannot change"):
         async with app_database.actor_transaction(owner) as session:
             if change == "retire":

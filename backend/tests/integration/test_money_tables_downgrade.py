@@ -136,6 +136,17 @@ ROWS = {
         "'-Nabc0000000000000B1', 'passport', 'UG', decode(repeat('00', 40), 'hex'), now(), now())",
         "refusing to drop sealed identity details",
     ),
+    "0052_kyc_two_person_decisions": (
+        "INSERT INTO kyc_checks (id, client_id, status, document_type, document_country, "
+        "surname, given_names, document_number_sealed, date_of_birth_sealed, "
+        "document_fingerprint, document_expires_on, details_confirmed_at, submitted_at, "
+        "submission, proposed_decision, proposed_by, proposed_at, proposed_reason, created_at, "
+        "updated_at) VALUES ('-Nabc0000000000000A1', '-Nabc0000000000000B1', 'needs_review', "
+        "'passport', 'UG', 'NAKATO', 'Amara', decode(repeat('00', 40), 'hex'), "
+        "decode(repeat('00', 40), 'hex'), repeat('0', 64), DATE '2030-09-18', now(), now(), 1, "
+        "'approve', '-Nabc0000000000000S1', now(), 'Checked', now(), now())",
+        "refusing to drop the proposals behind identity decisions",
+    ),
     "0006_passkeys": (
         "INSERT INTO identity_passkeys (id, actor_kind, actor_id, credential_id, public_key, "
         "sign_count, transports, name, created_at) VALUES ('-Nabc0000000000000A1', 'staff', "

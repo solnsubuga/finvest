@@ -33,6 +33,18 @@ Each client has one check. It moves through these states.
 
 Staff can approve, reject, ask for photos again or escalate. Every staff decision needs a reason and is written to the audit trail in the same transaction. A client who is asked for a photo retakes only that photo and does not start again.
 
+### Two people approve or reject
+
+Approving and rejecting take two members of staff (the owner's standing rule: staff operations that can have a maker and a checker do).
+
+1. One person proposes (`propose`): approve or reject, with a reason, and for a rejection an optional message to the client. The check stays in `needs_review` or `with_compliance`, and the queue shows the proposal and who made it.
+2. A different person confirms it (`confirm`) with their own reason. The decision is carried out exactly as proposed, message included. Approving issues the account number in that same transaction, and the expiry date is checked again then.
+3. Anyone can decline a proposal instead (`decline`), the proposer included to withdraw it. The check goes back to waiting with no proposal.
+
+One proposal waits at a time. While it waits, nobody asks for photos or escalates, so the second person confirms what the first one saw. Asking for photos and escalating stay one person's call: neither decides anything. The proposal stays on the approved or rejected check, so it names both people. The audit trail has `kyc.check.approval_proposed`, `kyc.check.rejection_proposed`, `kyc.check.proposal_declined`, and on `kyc.check.approved` or `kyc.check.rejected` the proposer in `details`.
+
+Automatic approval by the worker (switched off, see below) involves no person and is not affected.
+
 ## Automatic checks
 
 A provider is asked for three things: that the document is genuine and not expired, that the selfie is a live person who matches the document, and sanctions and politically exposed person screening.
@@ -63,6 +75,7 @@ The document number, date of birth and TIN are encrypted before they are saved (
 
 - The transition table above is repeated in a trigger. A client's transaction cannot approve or reject, and cannot change a check that is with staff. The system's transitions also need the worker's database role, so the API cannot approve by naming itself the system.
 - An approved or rejected check never changes.
+- Staff approve or reject only a proposal of that kind that someone else made, in their own name as `decided_by`, without changing the proposal or its message. A proposal is made only in the proposer's own name and changes nothing else. A constraint repeats it: a check a person decided always has a proposer who is not the decider.
 - The trigger also names the columns each actor may change. A client writes the document and details of their own draft and nothing else, and hands in a check only with no provider answer on it. Staff move a check from one state to the next and never edit it in place or alter what the client confirmed. The worker writes the provider's reference and answer, never the details.
 - A client's transaction sees only that client's check and photos. Staff transactions see every check. Which staff may review is a permission checked in the application.
 - Only the client adds or replaces photos, and only while the check is a draft or staff asked for that photo again. A replaced photo stays replaced, so what staff saw during a review cannot be swapped afterwards.
