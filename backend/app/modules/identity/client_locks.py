@@ -196,10 +196,12 @@ async def decide(
         clock,
     )
     if decision == "approved":
-        await session.execute(
-            text("UPDATE identity_clients SET status = :status WHERE id = :id"),
-            {"status": "locked" if change.kind == "lock" else "active", "id": change.client_id},
+        applied = await session.scalar(
+            text("SELECT identity_apply_client_lock(:id)"), {"id": change_id}
         )
+        if not applied:
+            # The account moved since the proposal (closed, or already in that state).
+            raise ApplicationError("conflict")
         if change.kind == "lock":
             await session.execute(
                 text(

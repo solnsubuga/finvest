@@ -1,6 +1,6 @@
 SHELL := /bin/sh
 .DEFAULT_GOAL := help
-.PHONY: help bootstrap dev dev-stop dev-down dev-logs dev-status check-backend test-integration audit test-stack
+.PHONY: help bootstrap api-contract dev dev-stop dev-down dev-logs dev-status check-backend test-integration audit test-stack
 
 # A PostgreSQL administrator URL for integration tests. Left unset, `make test-integration`
 # starts the Compose database and uses it.
@@ -10,10 +10,16 @@ FINVEST_DB_PORT ?= 5432
 help:
 	@printf '%s\n' \
 	  'Run:    make dev, dev-stop, dev-down, dev-logs, dev-status' \
-	  'Checks: make bootstrap, check-backend, test-integration, test-stack, audit'
+	  'Checks: make bootstrap, check-backend, test-integration, test-stack, audit' \
+	  'API:    make api-contract (after changing a route or a model)'
 
 bootstrap:
 	uv sync --project backend --locked
+
+# Write the API's OpenAPI description and the apps' generated types from it. Commit both.
+api-contract:
+	cd backend && uv run --locked python -m app.api.contract
+	pnpm --filter @finvest/api-client generate
 
 dev:
 	docker compose up --build

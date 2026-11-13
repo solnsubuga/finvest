@@ -3,11 +3,11 @@
 Each template lists the variables it needs. Every value is escaped before it goes into HTML,
 so nothing a person typed can add markup or a link.
 
-This file owns only the messages that carry a secret or open an account: sign-in, signup and
-reset codes and the staff set-up link. They are fixed in code so that nobody can edit them into
-a phishing message, and so that they work before anything else is set up. Every other client
-notice is worded in `domain/wording.py`, which staff edit with a second person approving.
-Neither file adds text of the other kind.
+This file owns only the messages that carry a secret or open an account: sign-in, signup,
+reset and claim codes and the staff set-up link. They are fixed in code so that nobody can edit
+them into a phishing message, and so that they work before anything else is set up. Every
+other client notice is worded in `domain/wording.py`, which staff edit with a second person
+approving. Neither file adds text of the other kind.
 """
 
 import html
@@ -15,13 +15,16 @@ from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from typing import Literal, get_args
 
-Template = Literal["signup_code", "sign_in_code", "password_reset_code", "staff_enrolment"]
+Template = Literal[
+    "signup_code", "sign_in_code", "password_reset_code", "claim_code", "staff_enrolment"
+]
 TEMPLATES: tuple[Template, ...] = get_args(Template)
 
 _VARIABLES: dict[Template, frozenset[str]] = {
     "signup_code": frozenset({"code", "minutes"}),
     "sign_in_code": frozenset({"code", "minutes"}),
     "password_reset_code": frozenset({"code", "minutes"}),
+    "claim_code": frozenset({"code", "minutes"}),
     "staff_enrolment": frozenset({"name", "link", "hours"}),
 }
 MAX_VALUE = 2000
@@ -57,6 +60,8 @@ _SMS: dict[str, str] = {
     "Never share it. If this was not you, change your password.",
     "password_reset_code": "Your Finvest password reset code is {code}. It works for "
     "{minutes} minutes. Never share it.",
+    "claim_code": "Your code to claim your Finvest account is {code}. It works for {minutes} "
+    "minutes. Never share it. Finvest staff will never ask for it.",
 }
 
 
@@ -85,7 +90,7 @@ def render(
         and not any(link.startswith(f"{origin}/") for origin in link_origins)
     ):
         raise InvalidTemplate("The link does not point to a Finvest site")
-    if template == "signup_code":
+    if template in ("signup_code", "claim_code"):
         raise InvalidTemplate("This template is not sent by email")
     if template == "sign_in_code":
         return _message(

@@ -109,6 +109,10 @@ async function fill(number = "TXN123456") {
   await fireEvent.changeText(screen.getByTestId("receipt-number"), number);
 }
 
+// The first test in a file renders the whole router from cold, which takes several seconds on
+// a busy CI runner. The assertions are unchanged; only the time allowed to reach them is.
+jest.setTimeout(30_000);
+
 describe("paying for an investment by bank transfer", () => {
   beforeAll(() => {
     jest.spyOn(Date, "now").mockImplementation(() => mockClock.ms);

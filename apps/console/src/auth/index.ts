@@ -1,19 +1,25 @@
+import { apiBaseUrl, createHttp } from "@/api/http.ts";
 import { notConnectedAuthApi, type AuthApi } from "./api.ts";
+import { createHttpAuthApi } from "./http.ts";
 import { createStubAuthApi } from "./stub.ts";
 
 /**
- * True when sign-in is the sample one. It is used under `pnpm dev`, or when a
- * build sets VITE_STUB_API=true (for a preview). The build refuses that
- * setting for a production deploy: see vite.config.ts.
+ * True when sign-in is the sample one. It is used under `pnpm dev` unless
+ * VITE_API_URL points at a running API, or when a build sets
+ * VITE_STUB_API=true (for a preview). The build refuses that setting for a
+ * production deploy: see vite.config.ts.
  */
 export function isStubAuth(): boolean {
-  return import.meta.env.DEV || import.meta.env.VITE_STUB_API === "true";
+  if (import.meta.env.VITE_STUB_API === "true") return true;
+  return Boolean(import.meta.env.DEV) && !import.meta.env.VITE_API_URL;
 }
 
 /**
- * A normal production build gets no sign-in at all until the generated API
- * client is wired in here.
+ * The sample sign-in, the real API at VITE_API_URL, or, in a build with
+ * neither, no sign-in at all.
  */
 export function createAuthApi(): AuthApi {
-  return isStubAuth() ? createStubAuthApi() : notConnectedAuthApi;
+  if (isStubAuth()) return createStubAuthApi();
+  const base = apiBaseUrl();
+  return base ? createHttpAuthApi(createHttp(base)) : notConnectedAuthApi;
 }

@@ -25,6 +25,9 @@ pytestmark = pytest.mark.integration
 ORIGIN = {"Origin": STAFF_ORIGIN}
 # The same moment the service tests use, so the newest trial is always the one just run.
 NOW = datetime(2026, 11, 13, 9, tzinfo=UTC)
+# An "as of" day of its own: the service tests enter Finvest 1.0 totals for 2026-11-13, and
+# these tests must not depend on running before them.
+AS_OF = "2026-09-01"
 
 
 @dataclass
@@ -74,15 +77,21 @@ def code(response: httpx.Response) -> tuple[int, str]:
 
 
 def sheets(stated_interest: int) -> dict[str, Any]:
-    """One client with one investment. The formula gives 11,643 before tax."""
+    """One client with one investment. Over 34 days the formula gives 11,643 before tax."""
     ref = f"INV-{push_id()[-8:].replace('_', 'x').replace('-', 'x')}"
     return {
         "ref": ref.upper(),
         "body": {
-            "as_of": "2026-11-13",
+            "as_of": AS_OF,
             "clients_csv": clients(client("1")),
             "investments_csv": investments(
-                investment(ref, "1", interest_before_tax=str(stated_interest))
+                investment(
+                    ref,
+                    "1",
+                    start_date="2026-07-29",
+                    maturity_date="2026-10-28",
+                    interest_before_tax=str(stated_interest),
+                )
             ),
         },
     }
@@ -90,7 +99,7 @@ def sheets(stated_interest: int) -> dict[str, Any]:
 
 def totals(interest: int, **changes: Any) -> dict[str, Any]:
     return {
-        "as_of": "2026-11-13",
+        "as_of": AS_OF,
         "clients": 1,
         "verified_identities": 1,
         "running_investments": 1,
@@ -159,11 +168,12 @@ async def test_the_checks_run_from_a_trial_to_a_sign_off_by_two_people(console: 
     approved = await console.post(f"/sign-offs/{sign_off['id']}/decision", {"approve": True})
     assert approved.status_code == 200
     assert (approved.json()["state"], approved.json()["decided_by"]) == ("approved", admin)
+    assert approved.json()["decision_reason"] is None
     again = await console.post(f"/sign-offs/{sign_off['id']}/decision", {"approve": True})
     assert code(again) == (409, "conflict")
 
     history = await console.http.get(
-        "/staff/migration/trials", params={"date_from": "2026-11-13", "date_to": "2026-11-13"}
+        "/staff/migration/trials", params={"date_from": AS_OF, "date_to": AS_OF}
     )
     assert history.status_code == 200
     assert history.json()["trials"][-1]["investments_differing"] == 1

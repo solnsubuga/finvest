@@ -169,16 +169,61 @@ async def test_two_approvals_of_one_lock_at_once_apply_it_once(api: Api) -> None
     assert await status_of(api, client) == "locked"
 
 
-async def test_the_database_refuses_a_status_change_without_an_approval(api: Api) -> None:
+async def test_the_api_cannot_write_a_clients_status_in_any_direction(api: Api) -> None:
     client = await api.client()
     staff = await api.staff("admin")
-    for status in ("locked", "closed"):
-        with pytest.raises(DBAPIError, match="approved change"):
+    for status in ("locked", "closed", "active", "unclaimed"):
+        with pytest.raises(DBAPIError, match="permission denied"):
             async with api.database.actor_transaction(staff) as session:
                 await session.execute(
                     text("UPDATE identity_clients SET status = :status WHERE id = :id"),
                     {"status": status, "id": client.id},
                 )
+    # Applying a change that was never approved in this transaction does nothing.
+    async with api.database.actor_transaction(staff) as session:
+        assert not await session.scalar(
+            text("SELECT identity_apply_client_lock(:id)"), {"id": "-Nabc0000000000000Z9"}
+        )
+    assert await status_of(api, client) == "active"
+
+
+async def test_the_guard_refuses_any_other_status_move_even_for_the_owner(
+    api: Api, migrator_database: Database
+) -> None:
+    client = await api.client()
+    for status in ("locked", "closed"):
+        with pytest.raises(DBAPIError, match="approved change"):
+            async with migrator_database.transaction() as session:
+                await session.execute(
+                    text("UPDATE identity_clients SET status = :status WHERE id = :id"),
+                    {"status": status, "id": client.id},
+                )
+    assert await status_of(api, client) == "active"
+
+
+async def test_an_approved_lock_cannot_be_applied_in_a_later_transaction(api: Api) -> None:
+    client = await api.client()
+    maker, checker = await api.staff("operations"), await api.staff("compliance")
+    async with api.database.actor_transaction(maker) as session:
+        lock = await client_locks.propose(
+            session, maker, str(client.id), "lock", "Fraud alert", api.clock
+        )
+    async with api.database.actor_transaction(checker) as session:
+        await client_locks.decide(session, checker, lock.id, "approved", "Checked", api.clock)
+    unlock_maker = await api.staff("operations")
+    async with api.database.actor_transaction(unlock_maker) as session:
+        unlock = await client_locks.propose(
+            session, unlock_maker, str(client.id), "unlock", "Resolved", api.clock
+        )
+    # Replaying the old lock's approval in a new transaction changes nothing.
+    async with api.database.actor_transaction(checker) as session:
+        assert not await session.scalar(
+            text("SELECT identity_apply_client_lock(:id)"), {"id": lock.id}
+        )
+    assert await status_of(api, client) == "locked"
+    async with api.database.actor_transaction(checker) as session:
+        await client_locks.decide(session, checker, unlock.id, "approved", "Checked", api.clock)
+    assert await status_of(api, client) == "active"
 
 
 async def test_the_database_refuses_one_person_deciding_their_own_lock(api: Api) -> None:

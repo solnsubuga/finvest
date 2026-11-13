@@ -6,9 +6,12 @@ Revises: 0111_goal_rollovers
 * `identity_client_locks` holds every proposal to lock or unlock a client's account. One member
   of staff proposes with a reason and a different one approves, and PostgreSQL enforces that.
 * `identity_clients` gains a guard. Its status moves between `active` and `locked` only through
-  a lock or unlock approved in the same transaction, and never to or from `closed`, which
-  account closure will own. Migration 0008 gave the API no UPDATE on a client's status; this
-  grants it, behind the guard.
+  a lock or unlock approved in the same transaction. `unclaimed` to `active` is left to the
+  claim function (migration 0009), and nothing else moves, so never to or from `closed`, which
+  account closure will own.
+* The API still holds no UPDATE on a client's status (migration 0008). It applies an approved
+  change through `identity_apply_client_lock`, a SECURITY DEFINER function that checks the
+  approval was made in the same transaction.
 """
 
 from alembic import op
@@ -67,15 +70,16 @@ CREATE INDEX ix_identity_client_locks_client
 # The actor settings are a fence against bugs, not a credential (see migration 0001).
 LOCKS_GUARD = """
 CREATE FUNCTION finvest_identity_client_locks_guard() RETURNS trigger
-    LANGUAGE plpgsql SET search_path = pg_catalog, public, pg_temp
+    LANGUAGE plpgsql SET search_path = pg_catalog, pg_temp
     AS $$
     BEGIN
-        IF finvest_actor_kind() IS DISTINCT FROM 'staff' OR NOT EXISTS (
-            SELECT FROM identity_staff WHERE id = finvest_actor_id() AND status = 'active') THEN
+        IF public.finvest_actor_kind() IS DISTINCT FROM 'staff' OR NOT EXISTS (
+            SELECT FROM public.identity_staff
+             WHERE id = public.finvest_actor_id() AND status = 'active') THEN
             RAISE EXCEPTION 'only active staff lock or unlock a client' USING ERRCODE = '42501';
         END IF;
         IF TG_OP = 'INSERT' THEN
-            IF NEW.status <> 'proposed' OR NEW.proposed_by <> finvest_actor_id() THEN
+            IF NEW.status <> 'proposed' OR NEW.proposed_by <> public.finvest_actor_id() THEN
                 RAISE EXCEPTION 'a lock starts as a proposal by the acting member of staff'
                     USING ERRCODE = '42501';
             END IF;
@@ -84,7 +88,7 @@ CREATE FUNCTION finvest_identity_client_locks_guard() RETURNS trigger
         IF OLD.status <> 'proposed' THEN
             RAISE EXCEPTION 'a decided lock never changes' USING ERRCODE = '42501';
         END IF;
-        IF NEW.status = 'proposed' OR NEW.decided_by IS DISTINCT FROM finvest_actor_id()
+        IF NEW.status = 'proposed' OR NEW.decided_by IS DISTINCT FROM public.finvest_actor_id()
             OR (NEW.status = 'approved') <> (NEW.decided_in = pg_current_xact_id())
             OR (to_jsonb(NEW) - ARRAY['status', 'decided_by', 'decided_at', 'decision_reason',
                                       'decided_in'])
@@ -100,23 +104,50 @@ CREATE FUNCTION finvest_identity_client_locks_guard() RETURNS trigger
 
 CLIENTS_GUARD = """
 CREATE FUNCTION finvest_identity_clients_status_guard() RETURNS trigger
-    LANGUAGE plpgsql SET search_path = pg_catalog, public, pg_temp
+    LANGUAGE plpgsql SET search_path = pg_catalog, pg_temp
     AS $$
     BEGIN
         IF NEW.status IS NOT DISTINCT FROM OLD.status THEN
             RETURN NEW;
         END IF;
-        IF NOT EXISTS (
-            SELECT FROM identity_client_locks
-             WHERE client_id = NEW.id AND status = 'approved'
-               AND decided_in = pg_current_xact_id()
-               AND ((kind = 'lock' AND OLD.status = 'active' AND NEW.status = 'locked')
-                 OR (kind = 'unlock' AND OLD.status = 'locked' AND NEW.status = 'active'))) THEN
-            RAISE EXCEPTION 'a client is locked or unlocked only by an approved change'
-                USING ERRCODE = '42501';
+        -- A claim, made only by identity_claim_client (migration 0009). The API holds no
+        -- UPDATE on status, so nothing else can make this move.
+        IF OLD.status = 'unclaimed' AND NEW.status = 'active' THEN
+            RETURN NEW;
         END IF;
-        RETURN NEW;
+        IF ((OLD.status = 'active' AND NEW.status = 'locked')
+             OR (OLD.status = 'locked' AND NEW.status = 'active'))
+           AND EXISTS (
+            SELECT FROM public.identity_client_locks AS l
+             WHERE l.client_id = NEW.id AND l.status = 'approved'
+               AND l.decided_in = pg_current_xact_id()
+               AND l.kind = CASE WHEN NEW.status = 'locked' THEN 'lock' ELSE 'unlock' END) THEN
+            RETURN NEW;
+        END IF;
+        RAISE EXCEPTION 'a client is locked or unlocked only by an approved change'
+            USING ERRCODE = '42501';
     END;
+    $$
+"""
+
+# The only way the API changes a client's status: apply a lock or unlock approved in this
+# same transaction. It runs as the migrator, so the API itself never writes `status`.
+APPLY = """
+CREATE FUNCTION identity_apply_client_lock(p_change_id text) RETURNS boolean
+    LANGUAGE sql SECURITY DEFINER SET search_path = pg_catalog, pg_temp
+    AS $$
+    WITH change AS (
+        SELECT client_id, kind FROM public.identity_client_locks
+        WHERE id = p_change_id AND status = 'approved' AND decided_in = pg_current_xact_id()
+    ), applied AS (
+        UPDATE public.identity_clients AS c
+        SET status = CASE WHEN change.kind = 'lock' THEN 'locked' ELSE 'active' END
+        FROM change
+        WHERE c.id = change.client_id
+          AND c.status = CASE WHEN change.kind = 'lock' THEN 'active' ELSE 'locked' END
+        RETURNING 1
+    )
+    SELECT EXISTS (SELECT FROM applied)
     $$
 """
 
@@ -132,7 +163,8 @@ RULES = [
     "GRANT SELECT, INSERT ON identity_client_locks TO finvest_app",
     "GRANT UPDATE (status, decided_by, decided_at, decision_reason, decided_in) "
     "ON identity_client_locks TO finvest_app",
-    "GRANT UPDATE (status) ON identity_clients TO finvest_app",
+    "REVOKE ALL ON FUNCTION identity_apply_client_lock(text) FROM PUBLIC",
+    "GRANT EXECUTE ON FUNCTION identity_apply_client_lock(text) TO finvest_app",
 ]
 
 
@@ -142,6 +174,7 @@ def upgrade() -> None:
             op.execute(statement.strip())
     op.execute(LOCKS_GUARD)
     op.execute(CLIENTS_GUARD)
+    op.execute(APPLY)
     for statement in RULES:
         op.execute(statement)
 
@@ -159,7 +192,7 @@ $$
 
 def downgrade() -> None:
     op.execute(EMPTY_GUARD)
-    op.execute("REVOKE UPDATE (status) ON identity_clients FROM finvest_app")
+    op.execute("DROP FUNCTION identity_apply_client_lock(text)")
     op.execute("DROP TRIGGER identity_clients_status_guard ON identity_clients")
     op.execute("DROP TABLE identity_client_locks")
     op.execute("DROP FUNCTION finvest_identity_clients_status_guard()")

@@ -47,6 +47,7 @@ env:
   ADMIN_ACCESS_EMAILS: ${{ vars.ADMIN_ACCESS_EMAILS }}
   ALERT_EMAILS: ${{ vars.ALERT_EMAILS }}
   CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+  CLIENT_APP_PUBLIC: ${{ vars.CLIENT_APP_PUBLIC }}
   TF_VAR_github_owner: ${{ github.repository_owner }}
   TF_VAR_github_repository: ${{ github.event.repository.name }}
 

@@ -576,7 +576,7 @@ async def test_the_worker_can_read_how_to_reach_a_client_and_nothing_more(
     phone, client_id = await a_client(api)
     async with worker_database.transaction() as session:
         contact = await client_contact(session, client_id)
-        assert contact == ClientContact(phone, None)
+        assert contact == ClientContact(phone, None, claimed=True)
         assert await client_contact(session, "-Nabc0000000000000Z9") is None
     for column in ("password_hash", "restricted_until", "created_at"):
         with pytest.raises(DBAPIError, match="permission denied"):
@@ -603,19 +603,15 @@ async def test_the_api_can_change_only_the_account_columns_sign_in_needs(api: Ap
     for statement, account in (
         ("UPDATE identity_staff SET role = 'admin' WHERE id = :id", staff_id),
         ("UPDATE identity_staff SET email = 'other@example.com' WHERE id = :id", staff_id),
-        ("UPDATE identity_clients SET phone = '+256772000001' WHERE id = :id", client_id),
+        ("UPDATE identity_clients SET email = 'other@example.com' WHERE id = :id", client_id),
+        ("UPDATE identity_clients SET created_at = now() WHERE id = :id", client_id),
+        ("UPDATE identity_clients SET status = 'closed' WHERE id = :id", client_id),
     ):
         with pytest.raises(DBAPIError, match="permission denied"):
             async with api.database.transaction() as session:
                 await session.execute(text(statement), {"id": account})
-    # A client's status may change, but only through a lock or unlock two people approved
-    # (migration 0152, and tests/integration/test_client_locks.py).
-    with pytest.raises(DBAPIError, match="approved change"):
-        async with api.database.transaction() as session:
-            await session.execute(
-                text("UPDATE identity_clients SET status = 'closed' WHERE id = :id"),
-                {"id": client_id},
-            )
+    # A client's status changes only through the claim function, or through a lock or unlock
+    # two people approved (migration 0152, and tests/integration/test_client_locks.py).
 
 
 async def test_nothing_personal_is_logged(api: Api, capsys: pytest.CaptureFixture[str]) -> None:

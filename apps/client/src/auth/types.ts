@@ -1,10 +1,8 @@
 /**
  * The contract between the screens and whatever signs a client in.
  *
- * Today the only implementation is the in-memory stub in `stubAuthClient.ts`.
- * When the backend sign-in API is merged, a second implementation backed by
- * the generated `packages/api-client` types replaces it, and the screens do
- * not change.
+ * `apiAuthClient.ts` answers it from the real API. The in-memory stub in
+ * `stubAuthClient.ts` answers it in tests and in demo builds.
  */
 
 export type Session = {
@@ -27,6 +25,11 @@ export type AuthErrorCode =
   | "expired"
   | "cancelled"
   | "sign_in_again"
+  | "passkey_failed"
+  | "passkey_unsupported"
+  | "rate_limited"
+  | "not_accepted"
+  | "offline"
   | "unavailable";
 
 export class AuthError extends Error {
@@ -70,6 +73,12 @@ export type AuthenticatorSetup = {
 };
 
 export interface AuthClient {
+  /**
+   * The session this device already holds, if it is still open: the API's
+   * cookie on the web, the stored token on a phone. Null when there is none.
+   */
+  restoreSession(): Promise<Session | null>;
+
   /**
    * Sign up, step 1: sends a code by SMS to prove the number. It answers the
    * same way whether or not the number already has an account, so it cannot
@@ -133,6 +142,12 @@ const messages: Record<AuthErrorCode, string> = {
     "For your safety, log in again before you change how you sign in. We will bring you straight back here.",
   cancelled: "Nothing was added. You can try again when you are ready.",
   expired: "That took too long, so we stopped for your safety. Please start again.",
+  passkey_failed: "We could not confirm your passkey. Try again, or use another way to log in.",
+  passkey_unsupported:
+    "Passkeys are not available in this app yet. Use an authenticator app or an SMS code for now.",
+  rate_limited: "Too many tries. Wait a few minutes and try again.",
+  not_accepted: "Something in that was not accepted. Check what you entered and try again.",
+  offline: "You seem to be offline. Check your connection and try again.",
   unavailable: "We could not reach Finvest. Check your connection and try again.",
 };
 
