@@ -26,6 +26,7 @@ from app.modules.identity.hashing import PasswordHasher
 from app.modules.identity.passkeys import PasskeyService
 from app.modules.identity.service import IdentityService
 from app.modules.insights import api as insights_api
+from app.modules.investments import api as investments_api
 from app.modules.migration import api as migration_api
 from app.modules.notifications import api as notifications_api
 from app.modules.notifications import hooks as notification_hooks
@@ -126,4 +127,6 @@ def create_app(
     app.include_router(payment_routes.staff_router)
     app.include_router(migration_api.router)
     app.include_router(insights_api.router)
+    for router in investments_api.routers:
+        app.include_router(router)
     return app
