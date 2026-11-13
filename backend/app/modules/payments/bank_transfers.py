@@ -54,12 +54,14 @@ from app.modules.payments.domain.bank_transfers import (
 )
 from app.modules.payments.domain.deposits import DepositStatus, Method, Move, Purpose
 from app.modules.payments.service import Deposit
+from app.modules.reconciliation.domain.pots import CASH_POTS
 from app.modules.reconciliation.domain.statements import Direction, StatementSource
 from app.modules.reconciliation.statements import StatementLineView, find_statement_lines
 from app.shared.actors import SYSTEM, Actor
 from app.shared.business_day import business_date
 from app.shared.clock import Clock
 from app.shared.errors import ApplicationError, FieldProblem
+from app.shared.money import Currency
 from app.shared.push_ids import push_id, validate_push_id
 
 BANK_PROVIDER = "bank"
@@ -609,13 +611,7 @@ class BankTransferJobs:
                     Move(DepositStatus.CONFIRMED, post=deposit.amount),
                     self._clock,
                     cause="staff_review",
-                    paid_into=AccountSpec(
-                        BANK_ACCOUNT_CODE,
-                        AccountKind.ASSET,
-                        deposit.amount.currency,
-                        f"Bank account ({row.account_reference})",
-                        reference=row.account_reference,
-                    ),
+                    paid_into=bank_account(deposit.amount.currency, row.account_reference),
                 )
             else:
                 await service.apply_move(
@@ -625,6 +621,25 @@ class BankTransferJobs:
                     self._clock,
                     cause="staff_review",
                 )
+
+
+def bank_account(currency: Currency, account_reference: str) -> AccountSpec:
+    """The ledger account for the bank account a transfer arrived in.
+
+    For a cash pot reconciled each day, such as the trust account, it is the pot's own ledger
+    account: the one the day close compares with the bank statement and dealing pays from.
+    Any other bank account gets an account of its own, named by its statement reference.
+    """
+    for pot in CASH_POTS:
+        if pot.key == (StatementSource.BANK, account_reference) and pot.currency is currency:
+            return pot.ledger_account
+    return AccountSpec(
+        BANK_ACCOUNT_CODE,
+        AccountKind.ASSET,
+        currency,
+        f"Bank account ({account_reference})",
+        reference=account_reference,
+    )
 
 
 async def _queue_settle(session: AsyncSession, deposit_id: str, now: datetime) -> None:

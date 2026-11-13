@@ -27,6 +27,7 @@ export const SCREEN_PERMISSIONS = [
   "reconciliation.view",
   "investments.view",
   "automatic_investing.view",
+  "goals.view",
   "dealing_desk.view",
   "finance.view",
   "products.view",
@@ -38,12 +39,27 @@ export const SCREEN_PERMISSIONS = [
   "migration.view",
 ] as const;
 
-/** What a member of staff may do on a screen they can open, beyond looking. */
-export const ACTION_PERMISSIONS = ["migration.import", "migration.sign_off"] as const;
+/**
+ * What a member of staff may do on a screen they can open. Looking is the
+ * screen's `.view` permission. Each action that changes something has its own,
+ * the same names as the backend's catalogue.
+ */
+export const ACTION_PERMISSIONS = [
+  // Running a trial import, and proposing or approving a sign-off for the switch.
+  "migration.import",
+  "migration.sign_off",
+  // Writing to a client in the help chat, solving or filing a chat, keeping saved replies.
+  "support.reply",
+  // Logging a complaint for a client, assigning it, moving it and adding notes.
+  "complaints.manage",
+  // Recording the outcome and closing a complaint.
+  "complaints.close",
+  // Proposing or deciding a change to the words of a client message.
+  "wordings.change",
+] as const;
 
-/** Every permission the console uses. The backend may send others, for screens not built yet. */
 export const PERMISSIONS = [...SCREEN_PERMISSIONS, ...ACTION_PERMISSIONS] as const;
-
+export type ScreenPermission = (typeof SCREEN_PERMISSIONS)[number];
 export type Permission = (typeof PERMISSIONS)[number];
 
 export interface StaffSession {

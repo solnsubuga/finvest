@@ -18,12 +18,12 @@ Infrastructure as code for Finvest, modelled on Fidiba's provisioning. Terraform
 | Droplet | Ubuntu 24.04, `s-1vcpu-2gb` | `s-2vcpu-4gb`, weekly backups | Runs the Compose stack: Caddy, API, worker, scheduler, frontends. 2 GB swap. |
 | Reserved IP | Assigned to the droplet | Same | Stable address for DNS and `DEPLOY_HOST`, kept if the droplet is rebuilt |
 | Cloud firewall | Same rules | Same rules | 80 and 443 only from Cloudflare's ranges, so nobody can skip the edge. SSH only from `SSH_SOURCE_ADDRESSES`, plus the Provision run while it prepares the host. |
-| Managed PostgreSQL 17 | `db-s-1vcpu-1gb` | `db-s-1vcpu-2gb` | One node, database `finvest`, daily backups and point in time recovery. Only the droplet may connect. |
+| Managed PostgreSQL 17 | `db-s-1vcpu-1gb` | `db-s-1vcpu-2gb` | One node, database `finvest`, daily backups and point in time recovery, rehearsed by the drill in [docs/backup-and-restore.md](../docs/backup-and-restore.md). Only the droplet may connect. |
 | Database roles | Same | Same | `finvest_migrator`, `finvest_app`, `finvest_worker`, created from the host with `backend/db/init-roles.sql` and generated passwords |
 | Spaces bucket and key | `finvest-staging-documents` | `finvest-production-documents` | Private, versioned, read by the console through short-lived links (no browser uploads), and a key limited to the bucket |
 | Cloudflare | Proxied records, Origin CA certificate | Same, plus Access on the back office | Full (strict) TLS from the edge to the host |
 | GitHub settings | Written into the `staging` environment | Written into `production` | See below |
-| Alerts | When `ALERT_EMAILS` is set | Same | Uptime on `https://<api>/health/ready`, host CPU and disk |
+| Alerts | When `ALERT_EMAILS` is set | Same | Uptime on `https://<api>/health/ready`, host CPU and disk. What each alert means: [docs/observability.md](../docs/observability.md) |
 | Tag | `finvest-staging` | `finvest-production` | Tells the environments apart inside the one project |
 
 The droplet, database cluster, bucket and project have `prevent_destroy`: Terraform refuses any plan that would delete them. Changing the droplet's SSH key or image later does not rebuild it, because cloud-init runs only on first boot.

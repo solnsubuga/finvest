@@ -5,6 +5,7 @@ from typing import Annotated, Literal
 from fastapi import APIRouter, Depends, Request, Response
 from pydantic import Field
 
+from app.infrastructure.settings import Settings
 from app.modules.identity.api import _REFUSALS, Identity, Password, caller_address, check_origin
 from app.modules.identity.codes import CodeService
 from app.modules.identity.passkeys_api import (
@@ -15,7 +16,7 @@ from app.modules.identity.passkeys_api import (
     client_transport,
 )
 from app.shared.contracts import Contract, PushId
-from app.shared.errors import ErrorEnvelope
+from app.shared.errors import ApplicationError, ErrorEnvelope
 
 router = APIRouter(
     prefix="/client",
@@ -84,9 +85,17 @@ class ResetComplete(Contract):
     password: Password
 
 
+def require_signup_open(request: Request) -> None:
+    """Refuse sign-up before any other work while it is closed (`client_signup_open`)."""
+    settings: Settings = request.app.state.settings
+    if not settings.signup_open():
+        raise ApplicationError("unavailable")
+
+
 @router.post("/signup/start")
 async def signup_start(body: SignupStart, request: Request, codes: Codes) -> SignupStarted:
     """Sign up, step 1: text a code to prove the number."""
+    require_signup_open(request)
     check_origin(request, "client", required=False)
     challenge_id, phone = await codes.signup_start(
         body.phone, body.email, address=caller_address(request)
@@ -97,6 +106,7 @@ async def signup_start(body: SignupStart, request: Request, codes: Codes) -> Sig
 @router.post("/signup/confirm")
 async def signup_confirm(body: SignupConfirm, request: Request, codes: Codes) -> SignupTicketView:
     """Sign up, step 2: the texted code. `phone_taken` is said only after a right code."""
+    require_signup_open(request)
     check_origin(request, "client", required=False)
     ticket = await codes.signup_confirm(body.challenge_id, body.code)
     return SignupTicketView(ticket=ticket.ticket, phone=ticket.phone)
@@ -107,6 +117,7 @@ async def signup_complete(
     body: SignupComplete, request: Request, response: Response, codes: Codes, identity: Identity
 ) -> ClientSignedIn:
     """Sign up, step 3: set the password. Creates the account and opens its first session."""
+    require_signup_open(request)
     issued = await codes.signup_complete(body.ticket, body.password, client_transport(request))
     return await client_signed_in(request, response, identity, issued)
 

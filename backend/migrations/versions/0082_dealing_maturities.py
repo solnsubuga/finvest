@@ -1,7 +1,7 @@
 """Record bills the issuer has paid at maturity.
 
 Revision ID: 0082_dealing_maturities
-Revises: 0042_pot_transfers
+Revises: 0111_goal_rollovers
 
 On a lot's maturity date the worker posts the face value still held into the trust bank account
 and records the maturity. The database checks the record and its ledger entry agree with what
@@ -14,7 +14,7 @@ from collections.abc import Sequence
 from alembic import op
 
 revision: str = "0082_dealing_maturities"
-down_revision: str | None = "0042_pot_transfers"
+down_revision: str | None = "0111_goal_rollovers"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 
