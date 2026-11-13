@@ -10,7 +10,6 @@ import {
   flagLabel,
   formatAccountNumber,
   formatDay,
-  maskDocumentNumber,
   PHOTO_NAMES,
   photoLabel,
   STATUS_LABELS,
@@ -30,6 +29,8 @@ interface ReviewProps {
   /** Why the last decision did not go through. */
   error: string | null;
   onDecide: (input: DecisionInput) => void;
+  /** Reads the whole document number. Each call is an audit event. */
+  onShowNumber: () => Promise<string>;
 }
 
 const MAX_MESSAGE = 300;
@@ -64,18 +65,33 @@ function problems(input: DecisionInput): FieldErrors {
   return errors;
 }
 
-export function Review({ check, busy, error, onDecide }: ReviewProps) {
-  const fullName = `${check.surname} ${check.givenNames}`;
+const NOT_GIVEN = "Not given yet";
+
+export function Review({ check, busy, error, onDecide, onShowNumber }: ReviewProps) {
+  const fullName = check.surname && check.givenNames ? `${check.surname} ${check.givenNames}` : null;
   const flag = flagLabel(check.reviewFlags);
-  const [showNumber, setShowNumber] = useState(false);
+  // The whole number, once asked for. It is kept only while this check is open.
+  const [number, setNumber] = useState<{ state: "hidden" | "loading" | "failed" } | { state: "shown"; value: string }>({ state: "hidden" });
+
+  function toggleNumber() {
+    if (number.state === "shown") {
+      setNumber({ state: "hidden" });
+      return;
+    }
+    setNumber({ state: "loading" });
+    onShowNumber().then(
+      (value) => setNumber({ state: "shown", value }),
+      () => setNumber({ state: "failed" }),
+    );
+  }
 
   return (
     <article
-      aria-label={`Identity check for ${check.name ?? fullName}`}
+      aria-label={`Identity check for ${check.name ?? fullName ?? "a client"}`}
       className="flex min-w-0 flex-col gap-4 rounded-xl border border-border bg-surface p-5"
     >
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <h2 className="m-0 text-2xl font-extrabold">{check.name ?? fullName}</h2>
+        <h2 className="m-0 text-2xl font-extrabold">{check.name ?? fullName ?? "Details not confirmed yet"}</h2>
         <StatusPill check={check} flag={flag} />
       </div>
 
@@ -112,24 +128,29 @@ export function Review({ check, busy, error, onDecide }: ReviewProps) {
       <div className="flex flex-wrap gap-5">
         <Section title="Read from the ID">
           <dl className="m-0">
-            <Row name="Full name" value={fullName} />
+            <Row name="Full name" value={fullName ?? NOT_GIVEN} />
             <Row
               name="ID number"
               value={
-                <span className="inline-flex items-center gap-2">
-                  <span className="tabular-nums">{showNumber ? check.documentNumber : maskDocumentNumber(check.documentNumber)}</span>
-                  <button
-                    type="button"
-                    onClick={() => setShowNumber((shown) => !shown)}
-                    className="cursor-pointer text-xs font-bold text-muted underline"
-                  >
-                    {showNumber ? "Hide" : "Show"}
-                  </button>
-                </span>
+                check.documentNumberMasked ? (
+                  <span className="inline-flex items-center gap-2">
+                    <span className="tabular-nums">{number.state === "shown" ? number.value : check.documentNumberMasked}</span>
+                    <button
+                      type="button"
+                      onClick={toggleNumber}
+                      disabled={number.state === "loading"}
+                      className="cursor-pointer text-xs font-bold text-muted underline"
+                    >
+                      {number.state === "shown" ? "Hide" : number.state === "failed" ? "Try again" : "Show"}
+                    </button>
+                  </span>
+                ) : (
+                  NOT_GIVEN
+                )
               }
             />
-            <Row name="Date of birth" value={formatDay(check.dateOfBirth)} />
-            <Row name="Expires" value={formatDay(check.documentExpiresOn)} />
+            <Row name="Date of birth" value={check.dateOfBirth ? formatDay(check.dateOfBirth) : NOT_GIVEN} />
+            <Row name="Expires" value={check.documentExpiresOn ? formatDay(check.documentExpiresOn) : NOT_GIVEN} />
             <Row name="Country of issue" value={countryName(check.documentCountry)} />
           </dl>
         </Section>
@@ -226,7 +247,7 @@ function Outcome({ check }: { check: CheckDetail }) {
   );
 }
 
-function DecisionForm({ check, busy, error, onDecide }: ReviewProps) {
+function DecisionForm({ check, busy, error, onDecide }: Omit<ReviewProps, "onShowNumber">) {
   const ids = useId();
   const [reason, setReason] = useState("");
   const [clientMessage, setClientMessage] = useState("");
