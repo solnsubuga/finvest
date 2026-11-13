@@ -1,10 +1,8 @@
 /**
  * The contract between the pay screens and whatever takes a payment.
  *
- * Today the only implementation is the in-memory stub in
- * `stubPaymentsClient.ts`. When the backend publishes its client routes, an
- * implementation backed by the generated `packages/api-client` types replaces
- * it, and the screens do not change.
+ * `apiPaymentsClient.ts` answers it from the real API. The in-memory demo in
+ * `stubPaymentsClient.ts` answers it in tests and in a demo build.
  *
  * There is no wallet. A payment always pays for one thing, an investment or a
  * goal, and that thing is the `Payable`.
@@ -50,7 +48,10 @@ export type Deposit = {
   payable: Payable;
   amount: Money;
   network: Network;
-  /** The paying number in E.164 form: the number on the client's own Finvest account. */
+  /**
+   * The paying number as the client may see it again, masked: "+256 77• ••• •56".
+   * It is always the number on the client's own Finvest account.
+   */
   payer: string;
   status: DepositStatus;
   failure: FailureReason | null;
@@ -148,8 +149,14 @@ export type PaymentErrorCode =
   | "not_payable"
   /** A payment for this is already under way. */
   | "already_paying"
-  /** The network does not allow this amount in one payment. */
+  /** Mobile money cannot take this amount: too large for one payment, or not in shillings. */
   | "amount_not_allowed"
+  /** The amount on a bank receipt is not the investment's amount. */
+  | "amount_differs"
+  /** A detail was refused for a reason the screen does not name. Nothing was saved. */
+  | "not_accepted"
+  /** The app cannot show where to send a bank transfer yet. */
+  | "bank_details_missing"
   /** The receipt is not a JPG, PNG or PDF, or is too large. */
   | "receipt_not_accepted"
   /** The same key was sent with different details. The screens prevent it, so it means a bug. */
@@ -157,14 +164,29 @@ export type PaymentErrorCode =
   | "not_found"
   | "unavailable";
 
+/** The payment already under way for the same thing, so the client can be taken to it. */
+export type OpenPayment = { id: string; method: "mobile_money" | "bank_transfer" };
+
 export class PaymentError extends Error {
   readonly code: PaymentErrorCode;
+  /** With `already_paying`, when it is known: the payment to show instead of paying again. */
+  readonly openPayment: OpenPayment | null;
 
-  constructor(code: PaymentErrorCode) {
+  constructor(code: PaymentErrorCode, openPayment: OpenPayment | null = null) {
     super(code);
     this.name = "PaymentError";
     this.code = code;
+    this.openPayment = openPayment;
   }
+}
+
+/** Where a payment already under way can be followed, or null when it is not known. */
+export function openPaymentHref(error: unknown): string | null {
+  if (!(error instanceof PaymentError) || error.code !== "already_paying" || !error.openPayment) {
+    return null;
+  }
+  const { id, method } = error.openPayment;
+  return method === "bank_transfer" ? `/pay/bank/transfer/${id}` : `/pay/deposit/${id}`;
 }
 
 export interface PaymentsClient {
@@ -191,8 +213,12 @@ const messages: Record<PaymentErrorCode, string> = {
   not_payable: "This can no longer be paid for. Go back and check your investment.",
   already_paying:
     "A payment for this is already under way. Wait for it to finish before you try again.",
-  amount_not_allowed:
-    "This amount is more than mobile money allows in one payment. Pay by bank transfer instead.",
+  amount_not_allowed: "Mobile money cannot take this payment. Pay by bank transfer instead.",
+  amount_differs:
+    "The amount sent must be exactly the amount of your investment. Check it against your receipt.",
+  not_accepted: "We could not accept that payment. Go back, check the details and try again.",
+  bank_details_missing:
+    "Our bank details are not in the app yet. Pay by mobile money, or ask us for them in Help.",
   key_reused: "Something changed since your last try. Go back and start the payment again.",
   receipt_not_accepted: "We could not accept that file. Use a JPG, PNG or PDF of up to 10 MB.",
   not_found: "We could not find this payment.",

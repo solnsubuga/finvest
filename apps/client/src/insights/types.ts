@@ -6,6 +6,9 @@
 
 import { Money } from "@/payments/types";
 
+/** Insights cover one currency at a time. The two are never added together. */
+export type Currency = Money["currency"];
+
 export type InsightsMonth = {
   /** YYYY-MM-01. */
   month: string;
@@ -28,6 +31,8 @@ export type Upcoming = {
 };
 
 export type Insights = {
+  /** Every amount below is in this currency. */
+  currency: Currency;
   /** Oldest first. The last is this month, which is still under way. */
   months: InsightsMonth[];
   investedNow: Money;
@@ -44,5 +49,10 @@ export class InsightsError extends Error {
 }
 
 export interface InsightsClient {
-  getInsights(months: number): Promise<Insights>;
+  getInsights(months: number, currency: Currency): Promise<Insights>;
+  /**
+   * The currencies the client has invested in, shillings first. Shillings are always
+   * listed, so a client with no investments yet still sees their (empty) insights.
+   */
+  heldCurrencies(): Promise<Currency[]>;
 }

@@ -55,7 +55,7 @@ describe("goals screen", () => {
     renderScreen();
     await screen.findByText("Open goals");
     const labels = screen.getAllByRole("button").map((button) => button.textContent);
-    expect(labels).toEqual(["All", "Open", "Closed", ...sampleGoals(TODAY).map((detail) => detail.goal.name)]);
+    expect(labels).toEqual(["Goals", "Group goals", "All", "Open", "Closed", ...sampleGoals(TODAY).map((detail) => detail.goal.name)]);
   });
 
   it("shows an empty list", async () => {

@@ -1,7 +1,9 @@
 import { act, fireEvent, screen } from "@testing-library/react-native";
+import { router } from "expo-router";
 import { renderRouter } from "expo-router/testing-library";
 
 import { DEMO_PASSWORD } from "@/auth/stubAuthClient";
+import { DEMO_PAYABLE_ID } from "@/payments/stubPaymentsClient";
 import { PaymentError } from "@/payments/types";
 import { WARM_ROUTER_MS, warmRouter } from "@/testing/warmRouter";
 
@@ -95,7 +97,7 @@ describe("paying for an investment by mobile money", () => {
 
     await screen.findByText("Approve on your phone");
     await advance(2_000);
-    await screen.findByText(/MTN has sent a prompt to \+256 772 123 456/);
+    await screen.findByText(/MTN has sent a prompt to \+256 77• ••• •56/);
     expect(screen.getByText("Waiting for your PIN")).toBeTruthy();
     expect(screen.getByText(/Dial \*165#/)).toBeTruthy();
 
@@ -104,7 +106,7 @@ describe("paying for an investment by mobile money", () => {
     expect(screen.getByText("Paid into 91 Day Treasury Bill")).toBeTruthy();
     expect(screen.getByText("13 Nov 2026, 15:31")).toBeTruthy();
     expect(screen.getByText("MTN Mobile Money")).toBeTruthy();
-    expect(screen.getByText("+256 772 123 456")).toBeTruthy();
+    expect(screen.getByText("+256 77• ••• •56")).toBeTruthy();
 
     await fireEvent.press(screen.getByTestId("receipt-done"));
     await screen.findByText("Welcome, Amara");
@@ -141,13 +143,30 @@ describe("paying for an investment by mobile money", () => {
     expect(screen.getByTestId("network-airtel").props.accessibilityState.checked).toBe(true);
   });
 
+  it("takes the client to the payment already under way instead of paying again", async () => {
+    await openPayScreen();
+    await fireEvent.press(screen.getByTestId("pay-submit"));
+    await screen.findByText("Approve on your phone");
+
+    // A new visit to the pay screen makes a new key, so only the open payment can stop it.
+    await act(async () => {
+      router.push(`/pay/${DEMO_PAYABLE_ID}`);
+    });
+    await screen.findByText("Pay UGX 1,000,000");
+    await fireEvent.press(screen.getByTestId("pay-submit"));
+    await screen.findByText("Approve on your phone");
+    expect(screen.queryByText(/already under way/)).toBeNull();
+    expect(mockPay).toHaveBeenCalledTimes(2);
+    expect(mockPay.mock.calls[1][0].idempotencyKey).not.toBe(mockPay.mock.calls[0][0].idempotencyKey);
+  });
+
   it("pays from Airtel when the client chooses it, with Airtel's own instructions", async () => {
     await openPayScreen();
     await fireEvent.press(screen.getByTestId("network-airtel"));
     await fireEvent.press(screen.getByTestId("pay-submit"));
     await screen.findByText("Approve on your phone");
     await advance(2_000);
-    await screen.findByText(/Airtel has sent a prompt to \+256 772 123 456/);
+    await screen.findByText(/Airtel has sent a prompt to \+256 77• ••• •56/);
     expect(screen.getByText(/Dial \*185#/)).toBeTruthy();
     expect(mockPay.mock.calls[0][0]).toMatchObject({ network: "airtel", payer: "+256772123456" });
   });
@@ -161,7 +180,7 @@ describe("paying for an investment by mobile money", () => {
     await advance(8_000);
     await screen.findByText("Your payment did not go through");
     expect(
-      screen.getByText("MTN says there was not enough money on +256 772 123 456."),
+      screen.getByText("MTN says there was not enough money on +256 77• ••• •56."),
     ).toBeTruthy();
     expect(screen.getByText("Nothing was taken")).toBeTruthy();
     expect(screen.getByText("Insufficient balance")).toBeTruthy();

@@ -74,3 +74,32 @@ def allocate(available: Money, waiting: Iterable[Waiting]) -> Allocated:
         allocations.append(Allocation(item.investment_id, share))
         left -= share
     return Allocated(tuple(allocations), left)
+
+
+@dataclass(frozen=True, slots=True)
+class Held:
+    """An allocation in force: some of a lot's cost standing behind one investment."""
+
+    allocation_id: str
+    allocated_at: datetime
+    amount: Money
+
+
+def to_release(held: Iterable[Held], limit: Money) -> list[str]:
+    """Which allocations to release so that what is left is no more than `limit`.
+
+    Used when a lot holds less than is allocated from it, after a sale, and when an investment
+    is owed less than is allocated to it. The newest allocations go first, so the oldest
+    payments keep their bills, the same order as `allocate`.
+    """
+    if limit.is_negative:
+        raise InvalidAllocation("The limit cannot be negative")
+    newest_first = sorted(held, key=lambda item: (item.allocated_at, item.allocation_id))[::-1]
+    total = sum((item.amount for item in newest_first), Money.zero(limit.currency))
+    released: list[str] = []
+    for item in newest_first:
+        if total <= limit:
+            break
+        released.append(item.allocation_id)
+        total -= item.amount
+    return released

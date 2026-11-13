@@ -60,8 +60,18 @@ export const ACTION_PERMISSIONS = [
   "announcements.send",
   // Matching a bank transfer to a statement line, refusing it, and approving someone else's match.
   "bank_transfers.change",
+  // Checking a client's proof of a payout account, approving someone else's check, refusing it, or removing the account.
+  "payout_accounts.change",
   // Proposing a rate change, approving or sending back someone else's, and withdrawing your own.
   "rates.change",
+  // Inviting staff, changing a role, deactivating or reactivating, resetting sign-in. Two admins.
+  "team.change",
+  // Reading the audit trail and exporting it.
+  "audit.view",
+  // Locking or unlocking a client's account, with a second person.
+  "clients.lock",
+  // Lifting an email suppression, with a second person.
+  "email_suppressions.lift",
 ] as const;
 
 export const PERMISSIONS = [...SCREEN_PERMISSIONS, ...ACTION_PERMISSIONS] as const;

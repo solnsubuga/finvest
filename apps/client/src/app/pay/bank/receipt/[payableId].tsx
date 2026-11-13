@@ -20,7 +20,7 @@ import {
   receiptProblemCopy,
 } from "@/payments/receipt";
 import { usePayments } from "@/payments/PaymentsProvider";
-import { describePaymentError, PaymentError, ReceiptFile } from "@/payments/types";
+import { describePaymentError, openPaymentHref, PaymentError, ReceiptFile } from "@/payments/types";
 import { colors, fontSizes, radii } from "@/theme";
 
 /**
@@ -117,6 +117,12 @@ export default function UploadReceipt() {
       });
       router.replace(`/pay/bank/transfer/${transfer.id}`);
     } catch (caught) {
+      // Already paying: show that payment instead of a form that cannot pay again.
+      const open = openPaymentHref(caught);
+      if (open) {
+        router.replace(open);
+        return;
+      }
       if (!(caught instanceof PaymentError) || caught.code === "unavailable") {
         setLocked(true);
       }

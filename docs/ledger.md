@@ -148,6 +148,8 @@ The list changes only by migration: the module that needs a new way for staff to
 - `account_owner(session, account_id)` is the client the account belongs to, or nothing for one of Finvest's own accounts.
 - `client_month_totals(session, client_id=..., code=..., currency=..., date_from=..., date_to=..., entry_type=...)` sums debits and credits by calendar month of effective date, across every account of one client with one code. Insights uses it. With `entry_type` set, it counts entries of that type and the exact reversals of them (an entry whose `reverses_entry_id` points at one), in the reversal's own month. That covers both `reverse_entry` and two-person corrections that reverse. A forward correction, such as a deposit correction to a receivable, has its own entry type and does not count against the original. It is not a balance, and it ignores closed days.
 
+- `total_balance(session, code, currency)` adds up the balances of every account with that code in the currency, each in its normal direction, and is zero when there is none. It refuses a code whose accounts are of more than one kind. It is for staff and the worker: a client transaction would add up only that client's own accounts. The dealing desk reads the buffer with it.
+
 Row policies apply as everywhere else. A client transaction can read only that client's accounts. The first three raise `UnknownAccount` for an account the transaction cannot see, and `client_month_totals` returns nothing for another client.
 
 ### Closing a day

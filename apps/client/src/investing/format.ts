@@ -73,4 +73,5 @@ export const statusLabel: Record<InvestmentStatus, string> = {
   active: "Running",
   matured: "Matured",
   cancelled: "Not paid in time",
+  withdrawn: "Withdrawn early",
 };

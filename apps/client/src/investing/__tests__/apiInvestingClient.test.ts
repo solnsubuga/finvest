@@ -61,6 +61,8 @@ const investment = {
   payout_id: null,
   payout_destination_id: null,
   waiting_for_destination: false,
+  can_withdraw: false,
+  withdrawal_requested_at: null,
 };
 
 type Seen = { method: string; path: string; key: string | undefined; body: unknown };
@@ -216,6 +218,10 @@ describe("the investing client for the real API", () => {
 
     serve(422, refusal("validation_failed", [{ field_path: ["amount"], code: "product_not_open" }]));
     await expect(client.requestInvestment(request)).rejects.toEqual(new InvestingError("product_not_open"));
+
+    // Any other field problem is still a definite refusal, never "could not reach Finvest".
+    serve(422, refusal("validation_failed", [{ field_path: ["at_maturity"], code: "open_term_has_no_maturity" }]));
+    await expect(client.requestInvestment(request)).rejects.toEqual(new InvestingError("invalid"));
 
     serve(403, refusal("forbidden"));
     await expect(client.requestInvestment(request)).rejects.toEqual(new InvestingError("not_verified"));

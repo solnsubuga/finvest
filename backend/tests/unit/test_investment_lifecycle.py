@@ -15,6 +15,7 @@ from app.modules.investments.domain.investments import (
     can_be_cancelled,
     can_be_paid,
     can_choose_maturity,
+    can_withdraw_early,
     check_start,
     is_due_to_mature,
     pay_by,
@@ -178,3 +179,24 @@ def test_money_at_maturity_follows_the_clients_choice_or_waits(
     choice: AtMaturity, has_destination: bool, product_open: bool, plan: MaturityPlan
 ) -> None:
     assert plan_maturity(choice, has_destination=has_destination, product_open=product_open) == plan
+
+
+@pytest.mark.parametrize(
+    ("status", "maturity", "requested", "allowed"),
+    [
+        (InvestmentStatus.ACTIVE, date(2027, 2, 12), False, True),
+        (InvestmentStatus.ACTIVE, None, False, True),  # an open term
+        (InvestmentStatus.ACTIVE, date(2026, 11, 14), False, True),  # the day before
+        (InvestmentStatus.ACTIVE, date(2026, 11, 13), False, False),  # the day itself
+        (InvestmentStatus.ACTIVE, date(2027, 2, 12), True, False),  # asked already
+        (InvestmentStatus.AWAITING_PAYMENT, None, False, False),
+        (InvestmentStatus.CANCELLED, None, False, False),
+        (InvestmentStatus.MATURED, date(2026, 11, 1), False, False),
+        (InvestmentStatus.WITHDRAWN, date(2027, 2, 12), True, False),
+    ],
+)
+def test_early_withdrawal_is_asked_once_while_running_and_before_maturity(
+    status: InvestmentStatus, maturity: date | None, requested: bool, allowed: bool
+) -> None:
+    today = date(2026, 11, 13)
+    assert can_withdraw_early(status, maturity, today, requested=requested) is allowed
