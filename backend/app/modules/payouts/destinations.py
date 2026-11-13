@@ -4,9 +4,9 @@ Every function takes the caller's open transaction, so a step and its audit even
 roll back together. The caller must open that transaction for the right actor: the database
 refuses a client step in a staff transaction and the other way round (migration 0030).
 
-Two things are the caller's job, because other modules own them. The SMS code is checked by
-the identity module before `confirm_code` is called. The name on the client's ID is read from
-the clients module and passed to `approve`.
+Two things are the caller's job, because other modules own them. The SMS code is spent by the
+identity module (`spend_payout_account_code`) in the same transaction as `confirm_code`. The
+name on the client's ID is read from the clients module and passed to `approve`.
 """
 
 from dataclasses import dataclass
@@ -33,10 +33,13 @@ from app.modules.payouts.domain.destinations import (
 )
 from app.shared.actors import Actor
 from app.shared.clock import Clock
-from app.shared.errors import ApplicationError
+from app.shared.errors import ApplicationError, FieldProblem
 from app.shared.push_ids import push_id
 
 MAX_QUEUE_PAGE = 100
+# Accounts one client may hold while still waiting for their code. Each can be texted, so this
+# bounds the texts a client can cause, beside the limits on the codes themselves.
+MAX_AWAITING_CODE = 5
 
 
 @dataclass(frozen=True, slots=True)
@@ -78,6 +81,11 @@ _INSERT = text(
     "holder_name, status, created_at, updated_at) VALUES (:id, :client_id, :kind, :network, "
     ":bank_code, :account_number, :holder_name, 'awaiting_code', :now, :now)"
 )
+_LOCK_CLIENT = text("SELECT pg_advisory_xact_lock(hashtextextended(:key, 0))")
+_AWAITING_CODE = text(
+    "SELECT count(*) FROM payout_destinations "
+    "WHERE client_id = :client_id AND status = 'awaiting_code'"
+)
 _LOCK = text(f"SELECT {_COLUMNS} FROM payout_destinations WHERE id = :id FOR UPDATE")  # noqa: S608
 _GET = text(f"SELECT {_COLUMNS} FROM payout_destinations WHERE id = :id")  # noqa: S608
 _FOR_CLIENT = text(
@@ -116,6 +124,14 @@ async def add_destination(
     if not name or len(name) > 120:
         raise ApplicationError("validation_failed")
     is_mobile = isinstance(account, MobileMoneyNumber)
+    # One client's adds wait on each other, so two at once cannot both pass the cap.
+    await session.execute(_LOCK_CLIENT, {"key": f"payouts.destinations:{client.id}"})
+    waiting = await session.scalar(_AWAITING_CODE, {"client_id": client.id})
+    if (waiting or 0) >= MAX_AWAITING_CODE:
+        raise ApplicationError(
+            "conflict",
+            fields=[FieldProblem(field_path=["body"], code="too_many_unconfirmed_accounts")],
+        )
     destination_id = push_id()
     try:
         async with session.begin_nested():
@@ -293,10 +309,11 @@ _SEND_TO = text(
 
 
 async def mobile_money_number(session: AsyncSession, destination_id: str) -> tuple[str, str]:
-    """The network and full number a mobile money payout is sent to. For the worker only.
+    """The network and full number of a mobile money destination: for the worker sending a
+    payout, and for texting the code that proves the client holds it.
 
-    The number is personal data: it goes to the provider and nowhere else, never into a log,
-    a job payload or a message.
+    The number is personal data: it goes to the provider or the SMS and nowhere else, never
+    into a log or a job payload.
     """
     row = (await session.execute(_SEND_TO, {"id": destination_id})).one_or_none()
     if row is None or row.network is None:

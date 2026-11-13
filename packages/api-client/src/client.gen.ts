@@ -195,6 +195,11 @@ export const ClientSignedIn = z.object({
 });
 export type ClientSignedIn = z.infer<typeof ClientSignedIn>;
 
+export const CodeAnswer = z.object({
+  code: z.string(),
+});
+export type CodeAnswer = z.infer<typeof CodeAnswer>;
+
 export const ConfirmCode = z.object({
   code: z.string(),
 });
@@ -1664,6 +1669,32 @@ export const operations = {
     idempotent: false,
     status: 204,
     response: null,
+  },
+  "POST /client/payout-destinations/{destination_id}/code": {
+    method: "POST",
+    path: "/client/payout-destinations/{destination_id}/code",
+    params: z.object({
+    destination_id: z.string(),
+  }),
+    query: z.object({}),
+    body: null,
+    bodyKind: null,
+    idempotent: false,
+    status: 204,
+    response: null,
+  },
+  "POST /client/payout-destinations/{destination_id}/code/verify": {
+    method: "POST",
+    path: "/client/payout-destinations/{destination_id}/code/verify",
+    params: z.object({
+    destination_id: z.string(),
+  }),
+    query: z.object({}),
+    body: CodeAnswer,
+    bodyKind: "json",
+    idempotent: false,
+    status: 200,
+    response: DestinationOut,
   },
   "POST /client/payout-destinations/{destination_id}/proof": {
     method: "POST",

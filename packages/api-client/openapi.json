@@ -1187,6 +1187,22 @@
         "title": "ClientSignedIn",
         "type": "object"
       },
+      "CodeAnswer": {
+        "additionalProperties": false,
+        "properties": {
+          "code": {
+            "maxLength": 12,
+            "minLength": 4,
+            "title": "Code",
+            "type": "string"
+          }
+        },
+        "required": [
+          "code"
+        ],
+        "title": "CodeAnswer",
+        "type": "object"
+      },
       "ComplaintDetail": {
         "additionalProperties": false,
         "properties": {
@@ -1682,6 +1698,7 @@
       },
       "DestinationOut": {
         "additionalProperties": false,
+        "description": "A payout account. A new one is `awaiting_code` until the client enters the code texted\nfor it, then `awaiting_proof`.",
         "properties": {
           "account": {
             "title": "Account",
@@ -15115,6 +15132,181 @@
           }
         },
         "summary": "Get Destination",
+        "tags": [
+          "client payouts"
+        ]
+      }
+    },
+    "/client/payout-destinations/{destination_id}/code": {
+      "post": {
+        "description": "Text a code that proves the client holds the account.\n\nFor a mobile money number the code goes to that number. For a bank account it goes to the\nclient's own number. A new code replaces the one before it; 429 after three in 15 minutes.\n409 if the account is not waiting for its code.",
+        "operationId": "send_code_client_payout_destinations__destination_id__code_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "destination_id",
+            "required": true,
+            "schema": {
+              "maxLength": 20,
+              "minLength": 20,
+              "pattern": "^[-0-9A-Z_a-z]{20}$",
+              "title": "Destination Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          }
+        },
+        "summary": "Send Code",
+        "tags": [
+          "client payouts"
+        ]
+      }
+    },
+    "/client/payout-destinations/{destination_id}/code/verify": {
+      "post": {
+        "description": "Enter the texted code. The account moves on to `awaiting_proof` in the same transaction\nthat spends the code. 401 `invalid_code` for a wrong code, which still counts as a try;\n410 `expired` when no live code is left, after five tries or ten minutes.",
+        "operationId": "verify_code_client_payout_destinations__destination_id__code_verify_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "destination_id",
+            "required": true,
+            "schema": {
+              "maxLength": 20,
+              "minLength": 20,
+              "pattern": "^[-0-9A-Z_a-z]{20}$",
+              "title": "Destination Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CodeAnswer"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DestinationOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          }
+        },
+        "summary": "Verify Code",
         "tags": [
           "client payouts"
         ]

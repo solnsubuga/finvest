@@ -239,6 +239,13 @@ ROWS = {
         "VALUES ('-Nabc0000000000000A1', 1, 'sandbox', now())",
         "refusing to drop payout send attempts",
     ),
+    "0034_payout_account_codes": (
+        "INSERT INTO identity_codes (id, purpose, channel, phone, actor_id, bound_to, "
+        "code_hash, created_at, expires_at) VALUES ('-Nabc0000000000000A1', 'payout_account', "
+        "'sms', '+256772123456', '-Nabc0000000000000B1', '-Nabc0000000000000C1', "
+        "decode(repeat('00', 32), 'hex'), now(), now())",
+        "refusing to drop payout account codes",
+    ),
     "0051_kyc_sealed_details": (
         "INSERT INTO kyc_checks (id, client_id, document_type, document_country, "
         "document_number_sealed, created_at, updated_at) VALUES ('-Nabc0000000000000A1', "

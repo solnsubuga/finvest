@@ -24,6 +24,7 @@ Template = Literal[
     "sign_in_code",
     "password_reset_code",
     "claim_code",
+    "payout_account_code",
     "staff_enrolment",
     "client_notice",
 ]
@@ -34,6 +35,7 @@ _VARIABLES: dict[Template, frozenset[str]] = {
     "sign_in_code": frozenset({"code", "minutes"}),
     "password_reset_code": frozenset({"code", "minutes"}),
     "claim_code": frozenset({"code", "minutes"}),
+    "payout_account_code": frozenset({"code", "minutes"}),
     "staff_enrolment": frozenset({"name", "link", "hours"}),
     # A notification's words, already filled in: the title and body for an email.
     "client_notice": frozenset({"title", "body"}),
@@ -80,6 +82,8 @@ _SMS: dict[str, str] = {
     "minutes. Never share it. Finvest staff will never ask for it.",
     # The SMS words of the notification, which already start with "Finvest:".
     "client_notice": "{sms}",
+    "payout_account_code": "Your Finvest code to add a new account for your withdrawals is "
+    "{code}. It works for {minutes} minutes. Never share it. If this was not you, call us.",
 }
 
 
@@ -108,7 +112,7 @@ def render(
         and not any(link.startswith(f"{origin}/") for origin in link_origins)
     ):
         raise InvalidTemplate("The link does not point to a Finvest site")
-    if template in ("signup_code", "claim_code"):
+    if template in ("signup_code", "claim_code", "payout_account_code"):
         raise InvalidTemplate("This template is not sent by email")
     if template == "sign_in_code":
         return _message(
