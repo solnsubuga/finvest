@@ -57,7 +57,7 @@ MESSAGES: dict[ErrorCode, str] = {
     "passkey_failed": "The passkey could not be confirmed.",
     "expired": "That took too long. Start again.",
     "phone_taken": "This number already has an account.",
-    "leaked_password": "This password is too easy to guess or has appeared in a leak.",
+    "leaked_password": "This password is too common or too easy to guess.",
     "forbidden": "You are not allowed to do this.",
     "conflict": "The request conflicts with the current state.",
     "idempotency_key_required": "This request needs an Idempotency-Key header.",

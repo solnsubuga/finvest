@@ -107,6 +107,12 @@ ROWS = {
         "'-Nabc0000000000000B1', 'passport', 'UG', decode(repeat('00', 40), 'hex'), now(), now())",
         "refusing to drop sealed identity details",
     ),
+    "0006_passkeys": (
+        "INSERT INTO identity_passkeys (id, actor_kind, actor_id, credential_id, public_key, "
+        "sign_count, transports, name, created_at) VALUES ('-Nabc0000000000000A1', 'staff', "
+        "'-Nabc0000000000000S1', '\\x01', '\\x02', 0, '{}', 'Laptop', now())",
+        "refusing to drop second steps",
+    ),
 }
 
 

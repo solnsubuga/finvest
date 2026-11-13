@@ -60,7 +60,7 @@ def _allowed_origins(request: Request, kind: AccountKind) -> list[str]:
     return settings.client_allowed_origins if kind == "client" else settings.staff_allowed_origins
 
 
-def _check_origin(request: Request, kind: AccountKind, *, required: bool) -> None:
+def check_origin(request: Request, kind: AccountKind, *, required: bool) -> None:
     """Refuse a browser calling from anywhere but this audience's own site.
 
     A browser always sends `Origin` on a cross-site or unsafe request, and a page cannot forge
@@ -79,13 +79,13 @@ def _credentials(request: Request, kind: AccountKind) -> str | None:
     """The session token on this request, after the origin rules for how it arrived."""
     authorization = request.headers.get("authorization", "")
     if kind == "client" and authorization[: len(_BEARER)].lower() == _BEARER:
-        _check_origin(request, kind, required=False)
+        check_origin(request, kind, required=False)
         return authorization[len(_BEARER) :].strip() or None
     token = request.cookies.get(COOKIES[kind])
     if token is None:
         return None
     # The cookie is sent by the browser on its own, so an unsafe request must prove its origin.
-    _check_origin(request, kind, required=request.method not in SAFE_METHODS)
+    check_origin(request, kind, required=request.method not in SAFE_METHODS)
     return token
 
 
@@ -186,7 +186,7 @@ async def client_login_start(
     body: ClientLoginStart, request: Request, identity: Identity
 ) -> LoginStarted:
     """Check the mobile number and password. Never opens a session by itself."""
-    _check_origin(request, "client", required=False)
+    check_origin(request, "client", required=False)
     challenge = await identity.start_login(
         "client", body.phone, body.password, address=caller_address(request)
     )
@@ -223,7 +223,7 @@ async def staff_login_start(
 
     Staff have no texted or emailed code option.
     """
-    _check_origin(request, "staff", required=True)
+    check_origin(request, "staff", required=True)
     challenge = await identity.start_login(
         "staff", body.email, body.password, address=caller_address(request)
     )

@@ -101,3 +101,17 @@ def test_origins_are_read_from_the_environment(monkeypatch: pytest.MonkeyPatch) 
     monkeypatch.setenv("FINVEST_DATABASE_URL", URL)
     monkeypatch.setenv("FINVEST_STAFF_ALLOWED_ORIGINS", '["https://admin.finvestug.com"]')
     assert Settings().staff_allowed_origins == ["https://admin.finvestug.com"]
+
+
+def test_the_authenticator_key_must_be_32_bytes_and_is_never_shown() -> None:
+    import secrets
+
+    key = secrets.token_urlsafe(32)
+    value = Settings(database_url=URL, authenticator_key=key)
+    assert value.authenticator_key is not None
+    assert key not in repr(value)
+    assert Settings(database_url=URL, authenticator_key="").authenticator_key is None
+    for bad in ["short", secrets.token_urlsafe(16), "not base64 !!" * 4]:
+        with pytest.raises(ValidationError) as raised:
+            Settings(database_url=URL, authenticator_key=bad)
+        assert bad not in str(raised.value)
