@@ -43,6 +43,20 @@ export function describeActor(event: AuditEvent): string {
   return ACTOR_KIND_LABELS[event.actorKind];
 }
 
+/** The label for an event's actor ID. Only clients and staff carry one today; the rest are named for safety. */
+export function actorIdLabel(kind: ActorKind): string {
+  if (kind === "client") return "Client ID";
+  if (kind === "staff") return "Staff ID";
+  return "Actor ID";
+}
+
+/** Who "Everything by …" narrows to. */
+export function narrowByActorLabel(event: AuditEvent): string {
+  if (event.actorKind === "staff") return describeActor(event);
+  if (event.actorKind === "client") return "this client";
+  return "this actor";
+}
+
 /** A detail's value on one line. */
 export function formatDetail(value: JsonValue): string {
   return typeof value === "string" ? value : JSON.stringify(value);
