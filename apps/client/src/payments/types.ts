@@ -151,6 +151,10 @@ export type PaymentErrorCode =
   | "already_paying"
   /** Mobile money cannot take this amount: too large for one payment, or not in shillings. */
   | "amount_not_allowed"
+  /** The amount on a bank receipt is not the investment's amount. */
+  | "amount_differs"
+  /** A detail was refused for a reason the screen does not name. Nothing was saved. */
+  | "not_accepted"
   /** The app cannot show where to send a bank transfer yet. */
   | "bank_details_missing"
   /** The receipt is not a JPG, PNG or PDF, or is too large. */
@@ -160,14 +164,29 @@ export type PaymentErrorCode =
   | "not_found"
   | "unavailable";
 
+/** The payment already under way for the same thing, so the client can be taken to it. */
+export type OpenPayment = { id: string; method: "mobile_money" | "bank_transfer" };
+
 export class PaymentError extends Error {
   readonly code: PaymentErrorCode;
+  /** With `already_paying`, when it is known: the payment to show instead of paying again. */
+  readonly openPayment: OpenPayment | null;
 
-  constructor(code: PaymentErrorCode) {
+  constructor(code: PaymentErrorCode, openPayment: OpenPayment | null = null) {
     super(code);
     this.name = "PaymentError";
     this.code = code;
+    this.openPayment = openPayment;
   }
+}
+
+/** Where a payment already under way can be followed, or null when it is not known. */
+export function openPaymentHref(error: unknown): string | null {
+  if (!(error instanceof PaymentError) || error.code !== "already_paying" || !error.openPayment) {
+    return null;
+  }
+  const { id, method } = error.openPayment;
+  return method === "bank_transfer" ? `/pay/bank/transfer/${id}` : `/pay/deposit/${id}`;
 }
 
 export interface PaymentsClient {
@@ -195,6 +214,9 @@ const messages: Record<PaymentErrorCode, string> = {
   already_paying:
     "A payment for this is already under way. Wait for it to finish before you try again.",
   amount_not_allowed: "Mobile money cannot take this payment. Pay by bank transfer instead.",
+  amount_differs:
+    "The amount sent must be exactly the amount of your investment. Check it against your receipt.",
+  not_accepted: "We could not accept that payment. Go back, check the details and try again.",
   bank_details_missing:
     "Our bank details are not in the app yet. Pay by mobile money, or ask us for them in Help.",
   key_reused: "Something changed since your last try. Go back and start the payment again.",

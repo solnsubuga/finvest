@@ -200,7 +200,7 @@ export function createStubPaymentsClient(options: StubOptions = {}): PaymentsCli
         throw new PaymentError("not_payable");
       }
       if (status !== "failed") {
-        throw new PaymentError("already_paying");
+        throw new PaymentError("already_paying", { id: stored.id, method: "mobile_money" });
       }
     }
     for (const stored of transfers.values()) {
@@ -212,7 +212,7 @@ export function createStubPaymentsClient(options: StubOptions = {}): PaymentsCli
         throw new PaymentError("not_payable");
       }
       if (status === "checking") {
-        throw new PaymentError("already_paying");
+        throw new PaymentError("already_paying", { id: stored.id, method: "bank_transfer" });
       }
     }
   }

@@ -1,7 +1,9 @@
 import { act, fireEvent, screen } from "@testing-library/react-native";
+import { router } from "expo-router";
 import { renderRouter } from "expo-router/testing-library";
 
 import { DEMO_PASSWORD } from "@/auth/stubAuthClient";
+import { DEMO_PAYABLE_ID } from "@/payments/stubPaymentsClient";
 import { PaymentError } from "@/payments/types";
 import { WARM_ROUTER_MS, warmRouter } from "@/testing/warmRouter";
 
@@ -139,6 +141,23 @@ describe("paying for an investment by mobile money", () => {
     await screen.findByText(/A payment for this is already under way/);
     await fireEvent.press(screen.getByTestId("network-airtel"));
     expect(screen.getByTestId("network-airtel").props.accessibilityState.checked).toBe(true);
+  });
+
+  it("takes the client to the payment already under way instead of paying again", async () => {
+    await openPayScreen();
+    await fireEvent.press(screen.getByTestId("pay-submit"));
+    await screen.findByText("Approve on your phone");
+
+    // A new visit to the pay screen makes a new key, so only the open payment can stop it.
+    await act(async () => {
+      router.push(`/pay/${DEMO_PAYABLE_ID}`);
+    });
+    await screen.findByText("Pay UGX 1,000,000");
+    await fireEvent.press(screen.getByTestId("pay-submit"));
+    await screen.findByText("Approve on your phone");
+    expect(screen.queryByText(/already under way/)).toBeNull();
+    expect(mockPay).toHaveBeenCalledTimes(2);
+    expect(mockPay.mock.calls[1][0].idempotencyKey).not.toBe(mockPay.mock.calls[0][0].idempotencyKey);
   });
 
   it("pays from Airtel when the client chooses it, with Airtel's own instructions", async () => {
