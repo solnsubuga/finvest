@@ -19,6 +19,7 @@ from app.infrastructure.jobs import (
     Handler,
     JobContext,
     JobHandler,
+    JobRequest,
     PermanentJobError,
 )
 from app.infrastructure.jobs import queue as job_queue
@@ -33,6 +34,7 @@ from app.shared.errors import ApplicationError
 CANCEL_UNPAID_KIND = "investments.cancel_unpaid"
 ACCRUE_KIND = "investments.accrue_interest"
 MATURE_KIND = "investments.mature"
+TELL_EARNINGS_KIND = "investments.tell_earnings"
 logger = structlog.get_logger()
 
 
@@ -47,6 +49,7 @@ class InvestmentJobs:
             CANCEL_UNPAID_KIND: self.cancel_unpaid,
             ACCRUE_KIND: self.accrue_interest,
             MATURE_KIND: self.mature,
+            TELL_EARNINGS_KIND: self.tell_earnings,
             WITHDRAW_KIND: self.withdraw_early,
             PAY_EARLY_WITHDRAWAL_KIND: self.pay_early_withdrawal,
         }
@@ -154,8 +157,39 @@ class InvestmentJobs:
                 posted += batch.posted
                 failed += batch.failed
 
-        # Then tell each client what the day earned them. Every message is keyed by the day,
-        # so a retry carries on without telling anyone twice.
+        async def effect(session: AsyncSession) -> Mapping[str, object]:
+            behind = await accrual.finish_run(session, run_date, self._clock)
+            # Telling clients is its own job, queued with the run's record, so a notice that
+            # fails can never leave a day's money run unrecorded.
+            await job_queue.enqueue(
+                session,
+                JobRequest(
+                    kind=TELL_EARNINGS_KIND,
+                    idempotency_key=run_date.isoformat(),
+                    payload={"run_date": run_date.isoformat()},
+                ),
+                now=self._clock.now(),
+            )
+            return {"run_date": run_date.isoformat(), "behind": sum(behind.values())}
+
+        result = await context.apply(effect)
+        log = logger.error if failed or result.get("behind") else logger.info
+        log(
+            "interest_run_finished",
+            run_date=run_date.isoformat(),
+            posted=posted,
+            failed=failed,
+            behind=result.get("behind"),
+        )
+
+    async def tell_earnings(self, job: ClaimedJob, context: JobContext) -> None:
+        """Tell each client what the run's day earned them, after the run has been recorded.
+
+        A page of clients per transaction only the current holder of the job can commit. Every
+        message is keyed by the day and the currency, so a retry carries on without telling
+        anyone twice.
+        """
+        run_date = _told_date(job.payload)
         told = 0
         after = ""
         async with context.kept_alive():
@@ -168,20 +202,11 @@ class InvestmentJobs:
                 after = page.last_client
                 told += page.told
 
-        async def effect(session: AsyncSession) -> Mapping[str, object]:
-            behind = await accrual.finish_run(session, run_date, self._clock)
-            return {"run_date": run_date.isoformat(), "behind": sum(behind.values())}
+        async def effect(_: AsyncSession) -> Mapping[str, object]:
+            return {"run_date": run_date.isoformat(), "told": told}
 
-        result = await context.apply(effect)
-        log = logger.error if failed or result.get("behind") else logger.info
-        log(
-            "interest_run_finished",
-            run_date=run_date.isoformat(),
-            posted=posted,
-            failed=failed,
-            told=told,
-            behind=result.get("behind"),
-        )
+        await context.apply(effect)
+        logger.info("interest_earnings_told", run_date=run_date.isoformat(), told=told)
 
     async def mature(self, job: ClaimedJob, context: JobContext) -> None:
         """Close every investment whose term ended on or before the day this run is for.
@@ -241,3 +266,14 @@ def _run_date(payload: Mapping[str, object]) -> date:
         return business_date(datetime.fromisoformat(scheduled_for))
     except ValueError as error:
         raise PermanentJobError(code="scheduled_for_invalid") from error
+
+
+def _told_date(payload: Mapping[str, object]) -> date:
+    """The business day whose earnings a telling job is for."""
+    value = payload.get("run_date")
+    if not isinstance(value, str):
+        raise PermanentJobError(code="run_date_missing")
+    try:
+        return date.fromisoformat(value)
+    except ValueError as error:
+        raise PermanentJobError(code="run_date_invalid") from error
