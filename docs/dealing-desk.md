@@ -247,11 +247,15 @@ Agreed with the investing, and the payouts and reconciliation, threads on 13 Nov
 | `POST /staff/dealing/buffer/capital` | Record Finvest's money paid in, or propose taking some out |
 | `POST /staff/dealing/buffer/capital/{id}/approve` | Approve it, as the second person, which posts it |
 | `POST /staff/dealing/buffer/capital/{id}/decline` | Decline it with a reason |
+| `GET /staff/dealing/allocations?currency=UGX` | The allocation report: for each product, the lots held (face, cost, the part of the cost allocated and the part not, how many investments it stands behind) and the running investments (how many, what they are owed, what is covered and what still waits) |
+| `GET /staff/dealing/allocations/investments/{id}` | The bills behind one investment, with their total, or none |
 
 The buffer commands take `dealing_orders.change` too, and both approvals ask for a recent passkey or app code. Every command takes an `Idempotency-Key` and answers with the buffer screen. A pay-in whose day closes between recording and approval is refused with `day_closed_decline_and_record_again`: the second person declines it, and it is recorded again on an open day. Reasons and notes are staff free text and never reach the logs.
+
+The allocation routes only read, with `dealing_desk.view` (`allocations_api.py`, rules in `domain/allocation_report.py`). They show allocations as they stand, so for up to 15 minutes after a purchase settles or an investment ends the report shows cost not shared out, or investments waiting, that the next run settles. An allocation the next run will release, behind an investment no longer running or a lot no longer held, counts in neither total, and an investment is never shown covered beyond what it is owed. No client is named: investments appear by ID and as counts.
 
 The audit event for a recorded result carries its figures, so a result later rejected can still be read.
 
 ## Not built yet
 
-HTTP routes for allocations, the custodian statement comparison and the allocation report. The console's buffer section, under the desk, calls the buffer routes. The console screen runs on sample data until the routes exist.
+The custodian statement comparison, and the console screen for the allocation report.
