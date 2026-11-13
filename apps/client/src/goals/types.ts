@@ -1,10 +1,9 @@
 /**
  * The contract between the goal screens and the goals API.
  *
- * It follows the backend's `/client/goals` routes (docs/goals.md). Today the
- * only implementation is the in-memory stub in `stubGoalsClient.ts`. When the
- * generated `packages/api-client` types exist, a client backed by them
- * replaces it and the screens do not change.
+ * It follows the backend's `/client/goals` routes (docs/goals.md).
+ * `apiGoalsClient.ts` answers it from the real API, and the in-memory stub in
+ * `stubGoalsClient.ts` answers it in tests and in demo builds.
  *
  * A goal holds no money. Each saving is an investment of its own, paid for on
  * the pay screens. Every figure here is after tax, and no tax rate is ever sent.
@@ -52,7 +51,7 @@ export type Progress = {
   standing: Standing;
 };
 
-export type SavingStatus = "awaiting_payment" | "active" | "cancelled";
+export type SavingStatus = "awaiting_payment" | "active" | "matured" | "cancelled";
 
 /** One investment made for the goal. */
 export type Saving = {
@@ -97,6 +96,8 @@ export type GoalErrorCode =
   | "below_minimum"
   | "invalid"
   | "key_reused"
+  | "not_verified"
+  | "offline"
   | "unavailable";
 
 export class GoalError extends Error {
@@ -129,12 +130,17 @@ const errorCopy: Record<GoalErrorCode, string> = {
   below_minimum: "Each saving must be at least the product's minimum.",
   invalid: "Something in this goal is not right. Check it and try again.",
   key_reused: "This was already sent with other details. Go back and start again.",
+  not_verified: "Finish your ID check first. Each saving is an investment, and investing opens once your ID is approved.",
+  offline: "You seem to be offline. Check your connection and try again.",
   unavailable: "Goals are not available right now. Try again in a moment.",
 };
 
-/** A refusal means nothing was made. Anything else may have reached us before the answer was lost. */
+/**
+ * A refusal means nothing was made. Anything else, being offline included,
+ * may have reached us before the answer was lost.
+ */
 export function outcomeUnknown(error: unknown): boolean {
-  return !(error instanceof GoalError) || error.code === "unavailable";
+  return !(error instanceof GoalError) || error.code === "unavailable" || error.code === "offline";
 }
 
 export function describeGoalError(error: unknown): string {
