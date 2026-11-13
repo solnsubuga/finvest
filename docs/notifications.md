@@ -133,6 +133,16 @@ The router posts each event, unchanged, to `POST /webhooks/resend` on the API (`
 
 Only facts are kept. Each address is stored as the sha256 of its lower-cased form, never in the clear, and the subject and the rest of the body are dropped on arrival. The API can record an event and cannot read one back.
 
+### How addresses are hashed
+
+An address is never stored in the suppression list, its lifts or the delivery events. Each keeps a hash of the lower-cased address, so an address can be matched and never read. A plain sha256 of an address can be undone by hashing a list of likely addresses, so the hash is moving to a keyed one: HMAC-SHA256 under `FINVEST_EMAIL_HASH_KEY`, taken over the plain hash (`domain/email_events.keyed_hash`). Because it is taken over the plain hash, every hash already stored can be keyed without the address it came from, so no suppression is lost on the way. The key is held by the API and the worker only, comes only from the environment, and the API and worker refuse to start in production without it. Changing it would orphan every stored hash.
+
+The move takes three releases, so each deploy runs beside the release before it:
+
+1. **Both kept (migration `0093_email_keyed_hashes`).** `recipients_keyed`, `address_key` on suppressions and `address_key` on lifts sit next to the plain columns. Every new row fills both. Every read still uses the plain columns.
+2. **Keyed read.** A worker job, queued once, paged and safe to run again, fills the keyed columns of older rows from the plain ones. It fails loudly if the key is missing and never logs it. The migrator never holds the key. Reads and matches move to the keyed columns only after the job reports nothing left to fill.
+3. **Plain dropped.** A migration that says `zero_downtime` drops the plain columns.
+
 ### Lifting a suppression
 
 An address on the suppression list gets no email. When a client whose address bounced has fixed their inbox, staff can send to it again, with two people (`suppression_lifts.py`, migration `0153_email_suppression_lifts`):
