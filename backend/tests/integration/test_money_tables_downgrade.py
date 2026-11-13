@@ -144,6 +144,15 @@ ROWS = {
         "COMMIT",
         "refusing to drop bill maturities",
     ),
+    "0083_dealing_buffer_rules": (
+        "BEGIN; SELECT set_config('finvest.actor_kind', 'staff', true); "
+        "SELECT set_config('finvest.actor_id', '-Nabc0000000000000B1', true); "
+        "INSERT INTO dealing_buffer_rule_proposals (id, currency, effective_from, target_minor, "
+        "floor_minor, from_buffer_up_to_minor, pay_within_working_days, reason, proposed_by, "
+        "proposed_at) VALUES ('-Nabc0000000000000A1', 'UGX', DATE '2027-01-01', 3, 2, 1, 2, "
+        "'Test', '-Nabc0000000000000B1', now()); COMMIT",
+        "refusing to drop buffer rules that staff proposed or approved",
+    ),
     "0050_kyc": (
         "INSERT INTO kyc_checks (id, client_id, document_type, document_country, created_at, "
         "updated_at) VALUES ('-Nabc0000000000000A1', '-Nabc0000000000000B1', 'passport', 'UG', "
