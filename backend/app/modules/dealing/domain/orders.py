@@ -22,10 +22,18 @@ from dataclasses import dataclass
 from datetime import date
 from enum import StrEnum
 
-from app.shared.money import Money
+from app.shared.money import Currency, Money
 
 MAX_NOTE_LENGTH = 500
 MAX_REFERENCE_LENGTH = 64
+
+
+# The smallest step an order accepts, by currency. A working value until the primary dealer
+# confirms it (docs/decisions.md). Changing it never touches an order already prepared.
+LOT_SIZES: dict[Currency, Money] = {
+    Currency.UGX: Money(100_000, Currency.UGX),
+    Currency.USD: Money(1_000_00, Currency.USD),
+}
 
 
 class InvalidOrder(ValueError):
@@ -135,6 +143,8 @@ class Refusal(StrEnum):
     ABOVE_FACE = "above_face"
     # The result settles on a day that has not come yet.
     SETTLES_IN_THE_FUTURE = "settles_in_the_future"
+    # A bill bought for a product runs no longer than the product's term.
+    LONGER_THAN_TERM = "longer_than_term"
 
 
 def check_new_order(order: Order, lot_size: Money, face_held: Money) -> Refusal | None:
@@ -179,26 +189,45 @@ def check_withdrawal(order: Order, by: str) -> Refusal | None:
 
 
 def check_result(
-    order: Order, fill: Fill | None, today: date, *, discount_only: bool
+    order: Order,
+    fill: Fill | None,
+    today: date,
+    *,
+    discount_only: bool,
+    term_days: int | None,
+    face_held: Money,
 ) -> Refusal | None:
     """Whether a result may be recorded against an approved order.
 
     `fill` of `None` means nothing was dealt, which ends the order as unsuccessful. A bid may be
     filled in part. `discount_only` is true for Treasury bills, which never trade above their
-    face value. A bond may.
+    face value. A bond may. `term_days` is the product's term, or `None` for an open term: a
+    182 day bill must never stand behind 91 day investments. `face_held` is the face value held
+    in the product now, which may have changed since the order was prepared. It matters only
+    for a sale.
     """
     if order.status is not OrderStatus.APPROVED:
         return Refusal.WRONG_STATUS
     if fill is None:
         return None
-    if fill.face.currency is not order.face.currency:
+    if fill.face.currency is not order.face.currency or (
+        face_held.currency is not order.face.currency
+    ):
         return Refusal.CURRENCY_MISMATCH
     if fill.face > order.face:
         return Refusal.OVER_THE_ORDER
+    if not order.kind.buys and fill.face > face_held:
+        return Refusal.MORE_THAN_HELD
     if discount_only and fill.amount > fill.face:
         return Refusal.ABOVE_FACE
     if fill.settled_on > today:
         return Refusal.SETTLES_IN_THE_FUTURE
+    if (
+        order.kind.buys
+        and term_days is not None
+        and (fill.matures_on - fill.settled_on).days > term_days
+    ):
+        return Refusal.LONGER_THAN_TERM
     return None
 
 

@@ -410,8 +410,9 @@ def receipt_pdf(receipt: Receipt) -> bytes:
         ("Received from", receipt.client_name),
         ("Account number", formatting.account_number(receipt.account_number)),
         ("Paid by", receipt.method),
-        ("Paid from", receipt.paid_from),
     ]
+    if receipt.paid_from:
+        facts.append(("Paid from", receipt.paid_from))
     if receipt.provider_reference:
         facts.append((f"{receipt.method} reference", receipt.provider_reference))
     facts += [

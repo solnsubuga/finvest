@@ -30,6 +30,7 @@ from app.modules.ledger.domain.errors import (
     DayClosed,
     IdempotencyKeyReused,
     InsufficientFunds,
+    StaffSourceNotAllowed,
     UnknownAccount,
     UnknownEntry,
 )
@@ -191,7 +192,8 @@ async def post_entry(
     Posting the same draft again with the same idempotency key returns the first entry with
     `replayed=True` and posts nothing. The same key with a different draft raises
     `IdempotencyKeyReused`. An entry that would overdraw an account raises `InsufficientFunds`,
-    and one dated in a closed day raises `DayClosed`.
+    one dated in a closed day raises `DayClosed`, and a staff transaction
+    posting a source type it may not raises `StaffSourceNotAllowed`.
     After any of these errors the caller's transaction is still usable and holds no part of
     the entry.
 
@@ -380,6 +382,8 @@ def _constraint(error: IntegrityError) -> str | None:
 
 def _translate(constraint: str | None, error: IntegrityError) -> Exception:
     """Map a constraint the database refused onto a ledger error."""
+    if constraint == "ledger_staff_source_type":
+        return StaffSourceNotAllowed("Staff cannot post a ledger entry of this kind")
     if constraint == "ledger_closed_day":
         return DayClosed("The entry is dated in a day that is closed")
     if constraint == "ck_ledger_balances_non_negative":

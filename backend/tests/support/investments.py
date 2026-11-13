@@ -1,6 +1,6 @@
 """Investment fixtures: a client who passed the identity check, and a payment for an investment."""
 
-from datetime import UTC, date, datetime
+from datetime import UTC, date, datetime, timedelta
 
 from app.infrastructure.database import Database
 from app.modules.investments import service as investments
@@ -11,6 +11,7 @@ from app.modules.kyc.providers import ManualProvider
 from app.modules.ledger import service as ledger
 from app.modules.ledger.domain.entries import AccountKind, AccountSpec, EntryDraft, credit, debit
 from app.shared.actors import SYSTEM, Actor
+from app.shared.business_day import business_date
 from app.shared.clock import Clock
 from app.shared.money import Money
 from tests.support.clock import FakeClock
@@ -18,6 +19,26 @@ from tests.support.kyc import SEALER, ready_draft
 from tests.support.ledger import client as new_client
 from tests.support.ledger import key, ugx
 from tests.support.ledger import staff as new_staff
+
+
+class _Present(FakeClock):
+    """The real time. The database refuses an investment that is not created now, so tests
+    create them now and move later clocks forward from there."""
+
+    def now(self) -> datetime:
+        return datetime.now(UTC)
+
+
+PRESENT: FakeClock = _Present()
+
+
+def today() -> date:
+    return business_date(datetime.now(UTC))
+
+
+def after(**duration: float) -> FakeClock:
+    """A clock that far ahead of the real time."""
+    return FakeClock(datetime.now(UTC) + timedelta(**duration))
 
 
 def at(day: date, hour: int = 9) -> FakeClock:
@@ -86,7 +107,7 @@ async def pay(
             session,
             EntryDraft(
                 entry_type="test.deposit_confirmed",
-                effective_date=date(2026, 11, 13),
+                effective_date=business_date(clock.now()),
                 lines=(debit(cash.id, amount), credit(awaiting.id, amount)),
                 idempotency_key=key(),
             ),
@@ -113,7 +134,7 @@ async def started(
         return await investments.start_investment(
             session,
             investment.id,
-            confirmed_on=confirmed_on or date(2026, 11, 13),
+            confirmed_on=confirmed_on or today(),
             clock=clock,
         )
 

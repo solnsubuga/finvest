@@ -78,7 +78,7 @@ def test_anything_else_that_changes_what_the_client_is_owed_is_a_correction() ->
 def test_ways_of_paying_have_names_a_client_knows() -> None:
     assert method_name("mtn") == "MTN Mobile Money"
     assert method_name("airtel") == "Airtel Money"
-    assert method_name("bank") == "Bank transfer"
+    assert method_name("bank_transfer") == "Bank transfer"
 
 
 def test_every_investment_status_has_a_label() -> None:

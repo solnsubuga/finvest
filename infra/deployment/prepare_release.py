@@ -184,6 +184,19 @@ def prepare(output: Path, env: Mapping[str, str]) -> None:
         )
         if optional(env, name)
     }
+    # Files go to the private bucket (backend app/infrastructure/storage) only when the whole
+    # bucket setting is there. Anything less leaves storage off, and uploads fail closed.
+    storage_origin = ""
+    if len(storage) == 5:
+        bucket = storage["FINVEST_OBJECT_STORAGE_BUCKET"]
+        endpoint = storage["FINVEST_OBJECT_STORAGE_ENDPOINT"]
+        if not re.fullmatch(r"[a-z0-9][a-z0-9-]{1,61}[a-z0-9]", bucket):
+            raise SettingError("FINVEST_OBJECT_STORAGE_BUCKET is not valid")
+        if not re.fullmatch(rf"https://{HOSTNAME}", endpoint):
+            raise SettingError("FINVEST_OBJECT_STORAGE_ENDPOINT is not valid")
+        storage["FINVEST_OBJECT_STORAGE_BACKEND"] = "s3"
+        # Staff open files through short-lived read links on the bucket's own address.
+        storage_origin = f"https://{bucket}.{endpoint.removeprefix('https://')}"
 
     # Sign-in settings (backend identity module). The client passkey site is the zone in
     # production, so passkeys work on the web and in the phone apps; staging keeps its own.
@@ -227,6 +240,7 @@ def prepare(output: Path, env: Mapping[str, str]) -> None:
         "FINVEST_ADMIN_DOMAIN": admin_domain,
         "FINVEST_APP_DOMAIN": app_domain,
         "FINVEST_EDGE_SUBNET": EDGE_SUBNET,
+        "FINVEST_STORAGE_ORIGIN": storage_origin,
         "FINVEST_STOP_BEFORE_MIGRATE": "true" if optional(env, "STOP_BEFORE_MIGRATE") == "true" else "false",
     }
     if site_published:

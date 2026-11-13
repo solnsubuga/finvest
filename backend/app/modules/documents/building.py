@@ -5,6 +5,7 @@ from the ledger; the other modules give names: the product of an investment, how
 was made, where a payout went, and whose account it is.
 """
 
+import contextlib
 from collections import defaultdict
 from dataclasses import dataclass
 from datetime import date, timedelta
@@ -120,7 +121,9 @@ async def receipt(
     account = await holder(session, deposit.client_id)
     paid_for = "your investment"
     if deposit.purpose.value == "investment":
-        paid_for = (await investments.get_investment(session, deposit.purpose_id)).product_name
+        # A name that cannot be found leaves a plain description, never a wrong one.
+        with contextlib.suppress(ApplicationError):
+            paid_for = (await investments.get_investment(session, deposit.purpose_id)).product_name
     return (
         Receipt(
             reference=reference,
@@ -128,8 +131,8 @@ async def receipt(
             account_number=account.account_number,
             amount=deposit.amount,
             received_at=deposit.settled_at,
-            method=building.method_name(deposit.network.value),
-            paid_from=masked(deposit.payer_msisdn),
+            method=building.method_name(deposit.method.value),
+            paid_from=masked(deposit.payer_msisdn) if deposit.payer_msisdn else None,
             provider_reference=deposit.provider_reference,
             payment_reference=deposit.id,
             paid_for=paid_for,
@@ -189,7 +192,7 @@ async def _names(session: AsyncSession, changes: list[EntryChange], held: set[st
             if change.entry_type == building.DEPOSIT_CONFIRMED and change.source_id not in methods:
                 methods[change.source_id] = (
                     await payments.get_deposit(session, change.source_id)
-                ).network.value
+                ).method.value
             if (
                 change.entry_type.startswith(building.PAYOUT_PREFIX)
                 and change.source_id not in kinds

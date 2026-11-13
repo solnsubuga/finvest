@@ -20,7 +20,7 @@ from app.infrastructure.logging import configure_logging
 from app.infrastructure.process import keep_heartbeat, stop_on_signals
 from app.infrastructure.settings import Settings
 from app.modules.documents.service import MONTHLY_KIND
-from app.modules.investments.jobs import CANCEL_UNPAID_KIND
+from app.modules.investments.jobs import ACCRUE_KIND, CANCEL_UNPAID_KIND
 from app.modules.kyc.service import SWEEP_UNANSWERED
 from app.modules.notifications.service import PURGE_MESSAGES
 from app.modules.payments import service as payments
@@ -50,11 +50,20 @@ def schedules() -> list[Schedule]:
             kind=CANCEL_UNPAID_KIND,
             max_age=timedelta(minutes=30),
         ),
-        # Last month's statement for every client, at 06:00 in Kampala on the first. A run
-        # missed while the scheduler was down is made up once; each client is asked once.
+        # Pays each running investment its interest for the day, shortly after the day begins
+        # in Kampala. Every missed day gets its own run, and a run still counts days later.
+        Schedule(
+            name="investments.accrue_interest",
+            trigger=CronTrigger(hour=0, minute=30, timezone=KAMPALA),
+            kind=ACCRUE_KIND,
+            catch_up="all",
+            max_catch_up=31,
+            max_age=timedelta(days=7),
+        ),
+        # Last month's statement for every client. It runs every morning and asks for a month
+        # only once the ledger is closed through its last day; each client is asked once.
         Schedule(
             name="documents.monthly_statements",
-            # Every morning: the run asks for last month only once the ledger has closed it.
             trigger=CronTrigger(hour=6, minute=0, timezone=KAMPALA),
             kind=MONTHLY_KIND,
             max_age=timedelta(hours=20),

@@ -4,6 +4,7 @@ client, finished once, and the monthly run."""
 import asyncio
 from collections.abc import AsyncIterator, Awaitable, Callable, Iterator
 from datetime import date, timedelta
+from urllib.parse import quote
 
 import httpx
 import pytest
@@ -15,7 +16,15 @@ from app.api.app import create_app
 from app.infrastructure.database import Database
 from app.infrastructure.jobs import JobRequest, Worker, WorkerConfig, enqueue
 from app.modules.documents import building, pdf, service
-from app.modules.documents.domain.statements import ActivityKind, Period, Statement, StatementKind
+from app.modules.documents.domain.emails import receipt_email
+from app.modules.documents.domain.statements import (
+    ActivityKind,
+    Period,
+    Statement,
+    StatementKind,
+    month_end,
+    previous_month,
+)
 from app.modules.documents.jobs import DocumentJobs
 from app.modules.documents.service import DocumentKind, DocumentStatus
 from app.modules.identity.hashing import PasswordHasher
@@ -26,13 +35,15 @@ from app.modules.kyc import service as kyc
 from app.modules.kyc.providers import ManualProvider
 from app.modules.ledger import service as ledger
 from app.modules.ledger.domain.entries import AccountKind, AccountSpec, EntryDraft, credit, debit
+from app.modules.payments import bank_transfers as bank
 from app.shared.actors import SYSTEM, Actor
 from app.shared.errors import ApplicationError
 from app.shared.money import Money
 from app.shared.push_ids import push_id
+from tests.integration import test_bank_transfers as bank_tests
 from tests.support.clock import FakeClock
 from tests.support.database import TestDatabase
-from tests.support.investments import approved_client, at, request
+from tests.support.investments import PRESENT, approved_client, at, request, today
 from tests.support.kyc import SEALER, ready_draft
 from tests.support.ledger import client as new_client
 from tests.support.ledger import key, ugx
@@ -40,9 +51,17 @@ from tests.support.ledger import staff as new_staff
 
 pytestmark = pytest.mark.integration
 
-STARTED = date(2026, 11, 13)
-NOVEMBER = Period(date(2026, 11, 1), date(2026, 11, 30))
-LATER = at(date(2026, 12, 2))
+# The database refuses an investment that is not created at the current time, so these tests
+# start from today and set every other date from it.
+STARTED = today()
+# A statement a client asks for, around the investment's first days.
+PERIOD = Period(STARTED - timedelta(days=3), STARTED + timedelta(days=20))
+ISSUED = PERIOD.end + timedelta(days=1)
+LATER = at(ISSUED)
+# The calendar month the investment was paid in, and the month before.
+MONTH = Period(STARTED.replace(day=1), month_end(STARTED))
+PREVIOUS = previous_month(STARTED)
+LABEL, PREVIOUS_LABEL = f"{MONTH.start:%Y-%m}", f"{PREVIOUS.start:%Y-%m}"
 
 
 @pytest.fixture(autouse=True)
@@ -85,7 +104,7 @@ async def invested(
 ) -> tuple[Actor, investments.Investment]:
     """An approved client's running 91 day bill, paid on STARTED, with daily interest after."""
     client = await approved_client(app_database, at(STARTED))
-    investment = await request(app_database, client, at(STARTED))
+    investment = await request(app_database, client, PRESENT)
     amount = investment.amount
     awaiting = AccountSpec(
         AWAITING_START,
@@ -126,14 +145,14 @@ async def invested(
                 reference=investment.id,
             ),
             amount=ugx(earned),
-            on=date(2026, 11, 13 + day),
+            on=STARTED + timedelta(days=day),
         )
     return client, investment
 
 
 # Closing a day is one fact for the whole shared test database and is never undone, so these
-# tests tell the jobs which day the ledger is closed through instead of closing November.
-ALL_CLOSED = date(2026, 12, 31)
+# tests tell the jobs which day the ledger is closed through instead of closing real days.
+ALL_CLOSED = ISSUED + timedelta(days=60)
 
 
 def closed(day: date | None) -> Callable[[AsyncSession], Awaitable[date | None]]:
@@ -159,7 +178,7 @@ async def run_jobs(
 
 
 async def ask(
-    app_database: Database, client: Actor, period: Period = NOVEMBER, idempotency_key: str = ""
+    app_database: Database, client: Actor, period: Period = PERIOD, idempotency_key: str = ""
 ) -> service.DocumentView:
     async with app_database.actor_transaction(client) as session:
         return await service.request_statement(
@@ -185,9 +204,9 @@ async def test_a_statement_is_read_from_the_clients_own_ledger_accounts(
             session,
             client_id=client.id,
             kind=StatementKind.REQUESTED,
-            period=NOVEMBER,
+            period=PERIOD,
             reference="ST-1",
-            issued_on=date(2026, 12, 2),
+            issued_on=ISSUED,
         )
     (summary,) = drawn.summaries
     assert (summary.opening, summary.paid_in, summary.earned, summary.paid_out) == (
@@ -198,12 +217,18 @@ async def test_a_statement_is_read_from_the_clients_own_ledger_accounts(
     )
     assert summary.closing == ugx(1_000_200)
     # The start moved money between the client's own accounts, so it is not a line.
-    assert [(line.kind, line.amount, line.on) for line in drawn.activity] == [
-        (ActivityKind.PAID_IN, ugx(1_000_000), STARTED),
-        (ActivityKind.EARNED, ugx(200), date(2026, 11, 15)),
-    ]
-    assert drawn.activity[0].description == "Payment received"
-    assert drawn.activity[1].description == f"Interest, {investment.product_name}"
+    paid_in, *earned = drawn.activity
+    assert (paid_in.kind, paid_in.amount, paid_in.on) == (
+        ActivityKind.PAID_IN,
+        ugx(1_000_000),
+        STARTED,
+    )
+    assert paid_in.description == "Payment received"
+    # Interest is folded into one line a calendar month, so two if the days span a month end.
+    assert sum((line.amount for line in earned), ugx(0)) == ugx(200)
+    assert {(line.kind, line.description) for line in earned} == {
+        (ActivityKind.EARNED, f"Interest, {investment.product_name}")
+    }
     (holding,) = drawn.holdings
     assert (holding.reference, holding.status, holding.value_at_end, holding.earned_in_period) == (
         investment.id,
@@ -224,9 +249,9 @@ async def test_a_later_period_opens_with_what_the_last_one_closed_on(
             session,
             client_id=client.id,
             kind=StatementKind.REQUESTED,
-            period=Period(date(2026, 11, 15), date(2026, 11, 16)),
+            period=Period(STARTED + timedelta(days=2), STARTED + timedelta(days=3)),
             reference="ST-1",
-            issued_on=date(2026, 12, 2),
+            issued_on=ISSUED,
         )
     (summary,) = drawn.summaries
     assert (summary.opening, summary.earned, summary.closing) == (
@@ -243,9 +268,9 @@ async def test_a_client_who_is_not_approved_has_no_statement(worker_database: Da
                 session,
                 client_id=push_id(),
                 kind=StatementKind.MONTHLY,
-                period=NOVEMBER,
+                period=PERIOD,
                 reference="ST-1",
-                issued_on=date(2026, 12, 1),
+                issued_on=ISSUED,
             )
 
 
@@ -272,12 +297,12 @@ async def test_a_requested_statement_is_built_stored_and_announced(
             )
         ).all()
     assert ready.status is DocumentStatus.READY
-    assert ready.file_name == "Finvest statement November 2026.pdf"
+    assert ready.file_name == f"Finvest statement {PERIOD.label}.pdf"
     assert found.content.startswith(b"%PDF-")
     assert ready.byte_size == len(found.content)
     assert ready.not_final_from is None
     assert [(row.title, row.link_kind, row.link_id) for row in told] == [
-        ("November 2026 statement is ready", "statement", asked.id)
+        (f"{PERIOD.label} statement is ready", "statement", asked.id)
     ]
     # Run again: nothing more to do, and nothing changes.
     assert await run_jobs(worker_database) == 0
@@ -328,9 +353,9 @@ async def test_two_requests_racing_with_one_key_make_one_statement(
 @pytest.mark.parametrize(
     ("start", "end", "field", "code"),
     [
-        (date(2026, 11, 30), date(2026, 11, 1), "date_from", "period_backwards"),
-        (date(2026, 11, 1), date(2026, 12, 3), "date_to", "period_in_future"),
-        (date(2025, 1, 1), date(2026, 11, 30), "date_from", "period_too_long"),
+        (PERIOD.end, PERIOD.start, "date_from", "period_backwards"),
+        (PERIOD.start, ISSUED + timedelta(days=1), "date_to", "period_in_future"),
+        (ISSUED - timedelta(days=400), ISSUED, "date_from", "period_too_long"),
     ],
 )
 async def test_a_period_that_cannot_be_a_statement_is_refused_on_its_field(
@@ -448,16 +473,22 @@ async def test_the_monthly_run_asks_once_for_each_client_and_skips_an_empty_mont
     app_database: Database, worker_database: Database, own_queue: str
 ) -> None:
     client, _ = await invested(app_database, worker_database)
-    december = at(date(2026, 12, 1), hour=3)
+    first = at(MONTH.end + timedelta(days=1), hour=3)
+    scheduled = first.now().isoformat()
+    runs: list[tuple[str, dict[str, object]]] = [
+        ("documents.monthly_statements@" + scheduled, {"scheduled_for": scheduled, "data": {}}),
+        # The same fire time again is the same job.
+        ("documents.monthly_statements@" + scheduled, {"scheduled_for": scheduled, "data": {}}),
+        # Each month's first page, as the morning run queues them. Other tests share the
+        # database and may have started these months already, so they are queued here too.
+        (f"documents.monthly:{LABEL}:start", {"data": {"month": LABEL, "after": ""}}),
+        # A month in which this client held nothing.
+        (
+            f"documents.monthly:{PREVIOUS_LABEL}:start",
+            {"data": {"month": PREVIOUS_LABEL, "after": ""}},
+        ),
+    ]
     async with worker_database.actor_transaction(SYSTEM) as session:
-        scheduled = "2026-12-01T03:00:00+00:00"
-        runs: list[tuple[str, dict[str, object]]] = [
-            ("documents.monthly_statements@" + scheduled, {"scheduled_for": scheduled, "data": {}}),
-            # The same fire time again is the same job.
-            ("documents.monthly_statements@" + scheduled, {"scheduled_for": scheduled, "data": {}}),
-            # A month in which this client held nothing.
-            ("documents.monthly:2026-10", {"data": {"month": "2026-10"}}),
-        ]
         for job_key, payload in runs:
             await enqueue(
                 session,
@@ -467,27 +498,20 @@ async def test_the_monthly_run_asks_once_for_each_client_and_skips_an_empty_mont
                     payload=payload,
                     queue=own_queue,
                 ),
-                now=december.now(),
+                now=first.now(),
             )
-    await run_jobs(worker_database, december)
+    await run_jobs(worker_database, first)
     async with app_database.actor_transaction(client) as session:
         mine = await service.client_documents(session, client)
     monthly = [view for view in mine if view.kind is DocumentKind.MONTHLY_STATEMENT]
     assert [(view.period, view.status, view.idempotency_key) for view in monthly] == [
-        (NOVEMBER, DocumentStatus.READY, "2026-11")
+        (MONTH, DocumentStatus.READY, LABEL)
     ]
-    async with worker_database.actor_transaction(SYSTEM) as session:
-        statuses = (
-            await session.execute(
-                text(
-                    "SELECT idempotency_key, status FROM documents WHERE client_id = :client "
-                    "AND kind = 'monthly_statement' ORDER BY idempotency_key"
-                ),
-                {"client": client.id},
-            )
-        ).all()
-    # October had nothing in it, so it is recorded as empty and never shown or sent.
-    assert [tuple(row) for row in statuses] == [("2026-10", "empty"), ("2026-11", "ready")]
+    # The month before had nothing in it, so it is recorded as empty and never shown or sent.
+    assert await monthly_of(worker_database, client) == [
+        (PREVIOUS_LABEL, "empty"),
+        (LABEL, "ready"),
+    ]
 
 
 async def schedule_run(worker_database: Database, queue: str, clock: FakeClock) -> None:
@@ -621,16 +645,16 @@ async def test_a_monthly_statement_is_never_built_over_a_day_that_is_not_closed(
             session,
             client_id=client.id,
             kind=DocumentKind.MONTHLY_STATEMENT,
-            key="2026-11",
-            period=NOVEMBER,
+            key=LABEL,
+            period=MONTH,
             now=LATER.now(),
         )
-    await run_jobs(worker_database, through=date(2026, 11, 29))
-    assert await monthly_of(worker_database, client) == [("2026-11", "pending")]
+    await run_jobs(worker_database, through=MONTH.end - timedelta(days=1))
+    assert await monthly_of(worker_database, client) == [(LABEL, "pending")]
     # It comes back later, and builds once the month is closed.
     later = FakeClock(LATER.now() + timedelta(minutes=5))
-    await run_jobs(worker_database, later, through=date(2026, 11, 30))
-    assert await monthly_of(worker_database, client) == [("2026-11", "ready")]
+    await run_jobs(worker_database, later, through=MONTH.end)
+    assert await monthly_of(worker_database, client) == [(LABEL, "ready")]
 
 
 async def test_a_requested_statement_over_open_days_says_from_which_day_it_is_not_final(
@@ -639,12 +663,12 @@ async def test_a_requested_statement_over_open_days_says_from_which_day_it_is_no
     client, _ = await invested(app_database, worker_database)
     drawn = drawn_statements(monkeypatch)
     asked = await ask(app_database, client)
-    await run_jobs(worker_database, through=date(2026, 11, 14))
+    await run_jobs(worker_database, through=STARTED + timedelta(days=1))
     async with app_database.actor_transaction(client) as session:
         ready = await service.client_document(session, client, asked.id)
     assert ready.status is DocumentStatus.READY
-    assert ready.not_final_from == date(2026, 11, 15)
-    assert drawn[f"ST-{asked.id}"].not_final_from == date(2026, 11, 15)
+    assert ready.not_final_from == STARTED + timedelta(days=2)
+    assert drawn[f"ST-{asked.id}"].not_final_from == STARTED + timedelta(days=2)
     # The database holds the same rule: a monthly statement is never marked not final.
     with pytest.raises(DBAPIError, match="ck_documents_not_final"):
         async with worker_database.actor_transaction(SYSTEM) as session:
@@ -657,6 +681,47 @@ async def test_a_requested_statement_over_open_days_says_from_which_day_it_is_no
                 ),
                 {"id": push_id(), "client": client.id},
             )
+
+
+# Receipts ----------------------------------------------------------------------------------------
+
+
+async def test_a_bank_transfer_receipt_names_the_method_and_shows_no_payer_number(
+    app_database: Database, worker_database: Database
+) -> None:
+    client = await approved_client(app_database, LATER)
+    clock = FakeClock(bank_tests.NOW)
+    minor = bank_tests.amount()
+    transfer = await bank_tests.submit(app_database, clock, minor, actor=client)
+    pot = await bank_tests.statement(app_database, clock, ((date(2026, 11, 18), minor, 0),))
+    reviewer = bank_tests.staff()
+    async with app_database.actor_transaction(reviewer) as session:
+        candidates = await bank.candidate_lines(session, reviewer, transfer.deposit.id)
+    line = next(found for found in candidates if found.account_reference == pot)
+    await bank_tests.review(app_database, clock, transfer, bank.Matched(line.id), reviewer=reviewer)
+    await bank_tests.approve(app_database, clock, transfer)
+    payments_worker = Worker(
+        worker_database, bank.BankTransferJobs(worker_database, clock).handlers(), clock=clock
+    )
+    for _ in range(2):
+        while await payments_worker.run_once():
+            pass
+
+    async with worker_database.actor_transaction(SYSTEM) as session:
+        receipt, holder = await building.receipt(
+            session, deposit_id=transfer.deposit.id, reference="RC-1"
+        )
+    assert (receipt.method, receipt.paid_from, receipt.amount) == (
+        "Bank transfer",
+        None,
+        ugx(minor),
+    )
+    # The investment it names is not one this module can find, so it says so plainly.
+    assert receipt.paid_for == "your investment"
+    assert pdf.receipt_pdf(receipt).startswith(b"%PDF-")
+    email = receipt_email(first_name=holder.first_name, receipt=receipt, file_name="r.pdf")
+    assert "Bank transfer" in email.text
+    assert "Paid from" not in email.text
 
 
 # Routes ---------------------------------------------------------------------------------------
@@ -695,7 +760,7 @@ async def test_a_client_asks_for_and_downloads_a_statement_over_http(
     async with app_database.actor_transaction(staff) as session:
         await kyc.approve(session, SEALER, staff, check.id, "Documents match", LATER)
 
-    body = {"date_from": "2026-11-01", "date_to": "2026-11-30"}
+    body = {"date_from": PERIOD.start.isoformat(), "date_to": PERIOD.end.isoformat()}
     assert (await api.post("/client/statements", json=body)).status_code == 428
     asked = await api.post(
         "/client/statements", json=body, headers={"Idempotency-Key": "statement-http-1"}
@@ -705,13 +770,13 @@ async def test_a_client_asks_for_and_downloads_a_statement_over_http(
     assert (item["status"], item["kind"], item["date_from"], item["file_name"]) == (
         "pending",
         "requested_statement",
-        "2026-11-01",
+        PERIOD.start.isoformat(),
         None,
     )
     assert (await api.get(f"/client/documents/{item['id']}/file")).status_code == 404
     refused = await api.post(
         "/client/statements",
-        json={"date_from": "2026-11-30", "date_to": "2026-11-01"},
+        json={"date_from": PERIOD.end.isoformat(), "date_to": PERIOD.start.isoformat()},
         headers={"Idempotency-Key": "statement-http-2"},
     )
     assert refused.status_code == 422
@@ -727,7 +792,7 @@ async def test_a_client_asks_for_and_downloads_a_statement_over_http(
     assert download.headers["content-type"] == "application/pdf"
     assert download.headers["cache-control"] == "no-store"
     assert download.headers["content-disposition"] == (
-        "attachment; filename*=UTF-8''Finvest%20statement%20November%202026.pdf"
+        "attachment; filename*=UTF-8''" + quote(f"Finvest statement {PERIOD.label}.pdf")
     )
     assert download.content.startswith(b"%PDF-")
     assert len(download.content) == listed[0]["byte_size"]

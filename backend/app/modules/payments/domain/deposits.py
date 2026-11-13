@@ -20,6 +20,10 @@ through these states:
 * `uncertain`: we cannot tell. Only a status read from the provider, or reconciliation, moves
   it on. It is never sent again.
 
+A bank transfer has a shorter path of its own, `in_review` to `confirmed` or `failed`, described
+in `bank_transfers.py`. A mobile money deposit is never `in_review`, and a bank transfer is never
+in any of the mobile money states. The database holds both to that.
+
 The functions here decide the next state from what a provider said. They never look at a
 callback: a callback only causes a status read.
 """
@@ -74,6 +78,7 @@ class DepositStatus(StrEnum):
     CONFIRMED = "confirmed"
     FAILED = "failed"
     UNCERTAIN = "uncertain"
+    IN_REVIEW = "in_review"  # a bank transfer waiting for staff to find it on the statement
 
     @property
     def is_final(self) -> bool:
@@ -83,6 +88,18 @@ class DepositStatus(StrEnum):
 class Network(StrEnum):
     MTN = "mtn"
     AIRTEL = "airtel"
+
+
+class Method(StrEnum):
+    """How a deposit is paid. Stored as the deposit's `method`."""
+
+    MTN = "mtn"
+    AIRTEL = "airtel"
+    BANK_TRANSFER = "bank_transfer"
+
+    @property
+    def network(self) -> Network | None:
+        return None if self is Method.BANK_TRANSFER else Network(self.value)
 
 
 class Purpose(StrEnum):
@@ -119,6 +136,7 @@ TRANSITIONS: dict[DepositStatus, frozenset[DepositStatus]] = {
     DepositStatus.UNCERTAIN: frozenset(
         {DepositStatus.AWAITING_APPROVAL, DepositStatus.CONFIRMED, DepositStatus.FAILED}
     ),
+    DepositStatus.IN_REVIEW: frozenset({DepositStatus.CONFIRMED, DepositStatus.FAILED}),
     DepositStatus.CONFIRMED: frozenset(),
     DepositStatus.FAILED: frozenset(),
 }

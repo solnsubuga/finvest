@@ -19,7 +19,7 @@ DEPOSIT_CONFIRMED = "payment.deposit_confirmed"
 INTEREST_ACCRUED = "investment.interest_accrued"
 PAYOUT_PREFIX = "payout."
 
-_METHODS = {"mtn": "MTN Mobile Money", "airtel": "Airtel Money", "bank": "Bank transfer"}
+_METHODS = {"mtn": "MTN Mobile Money", "airtel": "Airtel Money", "bank_transfer": "Bank transfer"}
 _DESTINATIONS = {"mobile_money": "your mobile money", "bank": "your bank account"}
 
 

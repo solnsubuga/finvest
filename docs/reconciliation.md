@@ -1,6 +1,6 @@
 # Reconciliation
 
-How Finvest proves each day that the ledger agrees with the money that really moved. The pure rules are in `backend/app/modules/reconciliation/domain`. The tables, the import commands, the scheduled run and the console screens arrive in later pull requests, and this document grows with them.
+How Finvest proves each day that the ledger agrees with the money that really moved. The pure rules are in `backend/app/modules/reconciliation/domain`. The matching and day close tables, the scheduled run and the console screens arrive in later pull requests, and this document grows with them.
 
 ## Pots
 
@@ -21,6 +21,22 @@ A statement is an opening balance, lines, and a closing balance for one pot on o
 - Amounts are read from text straight into integer money. `1,500,000.00` is accepted for shillings. Half a shilling, a sign, an exponent or stray text is refused, and the refusal names the row, never its contents.
 - Each provider export has a `CsvFormat` that says which column holds what. Adding a bank is adding a format.
 - Every line has a fingerprint, so importing the same file twice adds nothing. Two identical honest lines on one day keep separate fingerprints.
+
+### Importing
+
+`reconciliation.statements.import_statement` saves a parsed statement in a staff member's transaction (migration `0040_reconciliation_statements`). Importing never moves money. The database repeats the rules, so a mistake in the service cannot save a bad statement:
+
+| Rule | How the database holds it |
+| --- | --- |
+| One statement per pot and day | A second import of a day is refused: `statement_already_imported` |
+| Days join up | A pot's next statement must be for the next day (`statement_day_out_of_order`) and open at the last closing balance (`statement_opening_balance_differs`) |
+| A statement adds up | At commit, the opening balance plus the lines must equal the closing balance, and the line count must be the one declared |
+| Nothing changes afterwards | Statements and lines are insert only, and a line can join a statement only in the transaction that imported it |
+| Who | Only staff import, in their own name. Staff and the worker read. Clients see nothing |
+
+Only a day that has ended in Kampala can be imported (`statement_day_not_over`). A line's narrative is personal data: bank narratives carry names and phone numbers. It is stored for staff to read, handed out only as `counterparty_hint`, and never written to logs or audit details. The SHA-256 of the uploaded file is kept with the statement, and each import is in the audit trail.
+
+`reconciliation.statements.find_statement_lines(session, *, source, date_from, date_to, reference=None, amount=None)` lets another module see whether money it expects has reached a statement, such as a bank transfer waiting for its receipt.
 
 ## Matching
 

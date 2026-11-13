@@ -111,6 +111,28 @@ def migrate(
     )
 
 
+TEST_SOURCE = "test.fixture"
+
+
+def allow_test_entries_for_staff(database: TestDatabase) -> None:
+    """Let a staff transaction post the throwaway entries tests set up their books with.
+
+    Only the test database gets this row. Production staff can post only the source types the
+    migrations list, and the tests of that list check that `test.other` is still refused.
+    """
+    migrator = database.admin.set(
+        username="finvest_migrator",
+        password=PASSWORDS["finvest_migrator"],
+        database=database.name,
+    )
+    psql(
+        migrator,
+        "-c",
+        "INSERT INTO ledger_staff_source_types (source_type, purpose) "
+        "VALUES ('test.fixture', 'tests: fixtures only, never in production')",
+    )
+
+
 def alembic(database: TestDatabase, *arguments: str) -> subprocess.CompletedProcess[str]:
     return subprocess.run(
         [sys.executable, "-m", "alembic", *arguments],

@@ -1,10 +1,10 @@
 # Payments in
 
-How a client pays for an investment or a goal. The code is in `backend/app/modules/payments`, and the database side is migrations 0020 and 0021. Payouts are in `backend/app/modules/payouts`.
+How a client pays for an investment or a goal. The code is in `backend/app/modules/payments`, and the database side is migrations 0020 to 0022. Payouts are in `backend/app/modules/payouts`.
 
 There is no wallet. Every deposit names the investment or goal it pays for, and the money it brings sits in a ledger account for that purpose until the investment starts.
 
-**Status:** mobile money deposits work end to end against a sandbox provider. Bank transfer with a receipt, the client and console routes, and the correction commands arrive in their own pull requests.
+**Status:** mobile money deposits work end to end against a sandbox provider. Bank transfers work end to end in the service layer: receipt, staff check against an imported bank statement, and posting. The client and console routes, receipt file storage and the correction commands arrive in their own pull requests.
 
 ## A mobile money deposit, step by step
 
@@ -55,11 +55,47 @@ A sweep runs every minute and picks up deposits whose own job was lost:
 | `awaiting_approval` and quiet for two minutes | A status read is queued. After fifteen minutes with no result it becomes `uncertain` with `approval_overdue`. |
 | `uncertain`, for up to 24 hours | The next status read is queued: every minute for the first fifteen minutes, every ten minutes for two hours, then hourly. Each read is numbered and due at a fixed time, so repeated sweeps queue it once. The sweep pages through every uncertain deposit in the window, oldest first, so none waits behind newer ones. A read only asks the provider. It never sends. After 24 hours the reads stop and the deposit waits for reconciliation. A deposit held for `amount_mismatch` is not read again, because it needs staff. |
 
+## A bank transfer, step by step
+
+The client sends money from their own bank account, then tells us about it. The code is in `bank_transfers.py` and `domain/bank_transfers.py`.
+
+1. **Receipt.** The client sends the receipt file's type, size and SHA-256, the amount, the day they sent it, their bank and the bank's transaction number (`submit_bank_receipt`, with an idempotency key). The deposit is saved as `in_review` in the same table as mobile money deposits, with method `bank_transfer`, provider `bank` and no payer number, so the one live deposit per investment rule covers both ways to pay. The file goes to private storage under `payments/receipts/<deposit ID>`. The database keeps only its type, size and digest. Nothing the client says moves money.
+2. **Staff check.** A staff member compares the receipt with the bank statement that reconciliation imported (`reconciliation.statements`). `candidate_lines` lists the lines that could be this transfer: money in, for exactly the amount owed, valued from the day the client gave to seven days later, and not already used. The staff member records either the line (`Matched`) or a reason (`NotMatched`: `amount_differs`, `not_on_statement`, `unreadable`, `name_differs`, `other`). The review is checked again against the statement when it is saved, is audited, and changes no deposit and no balance. A refusal queues the job that settles it. A match waits for a second member of staff, who approves it (`approve_bank_match`). The line is checked again, the person who matched it cannot approve it, and the approval is audited and queues the job.
+3. **Settling.** The worker confirms an approved match and posts it, or fails an unmatched one with the review's reason. A failed transfer frees the investment, so the client can send a new receipt as a new deposit.
+
+Choices in this design:
+
+- **Two people confirm a transfer, one can refuse it.** Sensitive actions need two people (`docs/rules.md`). One person alone could match a transfer to another client's payment of the same amount, so a match needs a second member of staff. Refusing moves no money and needs one. The owner decided this (see [decisions.md](decisions.md)).
+- **Only an exact amount is confirmed.** A transfer for any other amount is refused as `amount_differs` and the money is returned or matched by staff, as with a mobile money amount mismatch. No part payment is posted.
+- **The statement reference is not required to match.** Banks often cut or change the reference, so staff decide from the receipt, the amount, the date and the sender's name. A transfer from an account in another name is refused as `name_differs`.
+
+## Routes
+
+Client routes, signed in as the client. Each `POST` needs an `Idempotency-Key`.
+
+| Route | What it does |
+| --- | --- |
+| `POST /client/investments/{id}/payments/mobile-money` | `{"network": "mtn" or "airtel"}`. Prompts the number on the client's own account for exactly the investment's amount. The request cannot name a number or an amount. |
+| `GET /client/investments/{id}/payment` | The investment's payment that has not failed. A `409` from the `POST` means one exists: show this one instead of asking the client to pay again. |
+| `GET /client/payments/{id}` | One payment, the client's own only. |
+
+There is no route yet for a client to start a bank transfer. It will upload the receipt file itself, so it arrives with the shared file storage. Until then a receipt row could exist without its file, so the route stays closed.
+
+Seeing transfers needs `reconciliation.view`. Matching, refusing and approving need `bank_transfers.change`, because they confirm money. Admin, operations and finance hold both for now. Opening a transfer writes a `payments.bank_transfer_opened` access event to the audit trail, because the receipt and the bank's narrative can name the client and the sender.
+
+| Route | What it does |
+| --- | --- |
+| `GET /staff/payments/bank-transfers` | Transfers in review, newest first, 50 a page (`?before=`). |
+| `GET /staff/payments/bank-transfers/{id}` | The transfer, its receipt details, its review, and the statement lines that could be it. Once matched, `matched_line` is the chosen line (amount, value date, reference and narrative), so the second person checks it beside the receipt rather than approving blind. |
+| `POST /staff/payments/bank-transfers/{id}/review` (`bank_transfers.change`) | `{"outcome": "matched", "statement_line_id": …}` or `{"outcome": "not_matched", "reason": …}`. |
+| `POST /staff/payments/bank-transfers/{id}/approve` (`bank_transfers.change`) | A second member of staff approves a match. The matcher gets `403`. |
+
 ## Ledger entries
 
 | Event | Debit | Credit |
 | --- | --- | --- |
 | Deposit confirmed (`payment.deposit_confirmed`) | Asset `<provider>.wallet`, reference `mtn` or `airtel`. With ioTec this is `iotec.wallet`. | Liability `client.awaiting_start`, owned by the client, reference the investment or goal ID |
+| Bank transfer confirmed (`payment.deposit_confirmed`) | Asset `bank.trust`, reference the account reference of the bank statement the line came from | Liability `client.awaiting_start`, as above |
 
 The entry's idempotency key is `deposit:<deposit ID>` and its source is the deposit, so a deposit can only ever be posted once. Payouts leave from the same wallet account, which lets reconciliation tie one ledger account to one provider statement.
 
@@ -73,6 +109,11 @@ If the provider confirms a different amount from the one asked for, nothing is p
 - A deposit is `confirmed` exactly when it points at its ledger entry.
 - The status history (`payment_deposit_events`) and the callback record (`payment_provider_notices`) are insert only for every role.
 - A client transaction sees and creates only that client's deposits. The API cannot change a deposit. Only the worker can, and only its status fields.
+- A bank transfer starts `in_review` and moves only to `confirmed` or `failed`. A mobile money deposit is never `in_review`. A bank transfer has no payer number and its provider is `bank`; every other deposit has a payer number (migration 0022).
+- A bank transfer's receipt and its staff review are insert only for every role, one of each per deposit. A client adds a receipt only to their own transfer in review. Only staff add a review, in their own name, of a transfer in review.
+- A statement line is used by one review at most.
+- A match is approved once, by staff other than the person who matched it, and the approval is insert only.
+- The worker confirms a bank transfer only when its review matched it to a statement line and a second person approved it, and fails one only with the review's reason. No path confirms a transfer on a reason alone.
 
 ## Correcting a mistaken credit
 
@@ -115,7 +156,6 @@ ioTec Pay is the chosen provider. Its API details are not confirmed, so the only
 ## Not built yet
 
 - The ioTec adapter, which needs ioTec's API details, callback signature scheme and sandbox access.
-- Client and staff HTTP routes, which need sign-in sessions.
-- Checking that the investment or goal exists and that the amount meets the product minimum, which needs the investments module.
+- Paying for a goal over HTTP. The routes take investments only.
 - Provider limits and fees.
-- Bank transfer with a receipt, and the correction commands.
+- Storing and serving receipt files (the infra thread owns the shared storage adapter), the bank details the client is shown, and the correction commands.

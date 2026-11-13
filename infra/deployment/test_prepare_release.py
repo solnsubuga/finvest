@@ -167,6 +167,29 @@ class PrepareRelease(unittest.TestCase):
         self.assertNotIn("unlisted", site)
         self.assertEqual(read_env(self.out / "release.env")["FINVEST_SITE_DOMAIN"], "finvestug.com")
 
+    def test_file_storage_reaches_the_api_and_worker_when_complete(self):
+        bucket = {
+            "FINVEST_OBJECT_STORAGE_BUCKET": "finvest-production-documents",
+            "FINVEST_OBJECT_STORAGE_ENDPOINT": "https://lon1.digitaloceanspaces.com",
+            "FINVEST_OBJECT_STORAGE_REGION": "lon1",
+            "FINVEST_OBJECT_STORAGE_ACCESS_KEY_ID": "key-id",
+            "FINVEST_OBJECT_STORAGE_SECRET_ACCESS_KEY": "key-secret",
+        }
+        pr.prepare(self.out, settings(**bucket))
+        for service in ("api", "worker"):
+            self.assertEqual(read_env(self.out / "runtime" / f"{service}.env")["FINVEST_OBJECT_STORAGE_BACKEND"], "s3")
+        for service in ("scheduler", "migrate"):
+            self.assertNotIn("OBJECT_STORAGE", (self.out / "runtime" / f"{service}.env").read_text())
+        self.assertEqual(
+            read_env(self.out / "release.env")["FINVEST_STORAGE_ORIGIN"],
+            "https://finvest-production-documents.lon1.digitaloceanspaces.com",
+        )
+
+    def test_partial_file_storage_stays_off(self):
+        pr.prepare(self.out, settings(FINVEST_OBJECT_STORAGE_BUCKET="finvest-production-documents"))
+        self.assertNotIn("FINVEST_OBJECT_STORAGE_BACKEND", read_env(self.out / "runtime" / "api.env"))
+        self.assertEqual(read_env(self.out / "release.env")["FINVEST_STORAGE_ORIGIN"], "")
+
     def test_www_redirects_to_the_apex(self):
         pr.prepare(self.out, settings())
         site = (self.out / "edge" / "site.caddy").read_text()
