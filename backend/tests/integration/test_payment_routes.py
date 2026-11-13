@@ -4,27 +4,36 @@ import secrets
 from collections.abc import AsyncIterator
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
+from typing import Any
 
 import httpx
 import pytest
 from sqlalchemy import text
+from structlog.testing import capture_logs
 
 from app.api.app import create_app
 from app.infrastructure.database import Database
 from app.infrastructure.jobs import Worker
-from app.infrastructure.storage import DisabledStorage, MemoryStorage, sha256_hex
+from app.infrastructure.storage import (
+    DisabledStorage,
+    MemoryStorage,
+    StorageUnavailable,
+    sha256_hex,
+)
 from app.modules.identity.api import COOKIES
 from app.modules.identity.domain.permissions import ROLE_PERMISSIONS
 from app.modules.identity.hashing import PasswordHasher
 from app.modules.identity.service import IdentityService
 from app.modules.kyc import service as kyc
 from app.modules.kyc.providers import ManualProvider
+from app.modules.payments import bank_transfers as bank
 from app.modules.payments.bank_transfers import BankTransferJobs
 from app.modules.payments.domain.outcomes import Accepted, Pending
 from app.modules.reconciliation import statements
 from app.modules.reconciliation.domain.statements import CsvFormat, StatementSource, parse_csv
 from app.shared.actors import Actor
 from app.shared.business_day import business_date
+from app.shared.errors import ApplicationError
 from app.shared.push_ids import push_id
 from tests.support.clock import FakeClock
 from tests.support.database import TestDatabase
@@ -439,9 +448,50 @@ async def test_a_receipt_is_checked_before_it_is_stored(api: Api) -> None:
         again = await send_transfer(client_http, investment.id, owed, headers=headers)
         assert first.status_code == 201 and again.status_code == 201
         assert again.json()["id"] == first.json()["id"]
-        # A second transfer for an investment already being paid is refused.
+        # The replay stored nothing: one file, the first transfer's.
+        assert list(api.storage.files) == [f"payments/receipts/{first.json()['id']}"]
+        # A second transfer for an investment already being paid is refused, and stores nothing.
         other = await send_transfer(client_http, investment.id, owed)
         assert other.status_code == 409
+        assert len(api.storage.files) == 1
+
+
+class UnreachableOnDelete(MemoryStorage):
+    async def delete(self, key: str) -> None:
+        raise StorageUnavailable("down")
+
+
+@pytest.mark.parametrize("delete_works", [True, False])
+async def test_a_receipt_stored_for_a_transfer_that_is_not_saved_is_deleted(
+    api: Api, monkeypatch: pytest.MonkeyPatch, delete_works: bool
+) -> None:
+    if not delete_works:
+        api.storage = UnreachableOnDelete()
+        api.app.state.storage = api.storage  # type: ignore[attr-defined]
+    real = bank.submit_bank_receipt
+
+    async def fails_once_stored(*args: Any, **kwargs: Any) -> bank.BankTransfer:
+        # The preflight passes; the transaction that would record the stored file fails.
+        if kwargs.get("_file_stored", True):
+            raise ApplicationError("unavailable")
+        return await real(*args, **kwargs)
+
+    monkeypatch.setattr(bank, "submit_bank_receipt", fails_once_stored)
+    async with api.http() as client_http:
+        client, _ = await api.client(client_http)
+        investment = await request_investment(api.database, client, api.clock)
+        with capture_logs() as logs:
+            failed = await send_transfer(client_http, investment.id, investment.amount.minor)
+        assert failed.status_code == 503
+        missing = await client_http.get(f"/client/investments/{investment.id}/payment")
+        assert missing.status_code == 404
+    orphaned = [entry for entry in logs if entry["event"] == "receipt_orphaned"]
+    if delete_works:
+        assert api.storage.files == {} and orphaned == []
+    else:
+        # The store could not be reached to delete it: the log names the deposit, never the key.
+        assert len(api.storage.files) == 1 and len(orphaned) == 1
+        assert set(orphaned[0]) == {"event", "log_level", "deposit_id"}
 
 
 async def test_without_storage_no_transfer_is_saved(

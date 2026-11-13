@@ -168,14 +168,37 @@ _LINE_KEY = "uq_payment_bank_reviews_statement_line_id"
 _INSUFFICIENT_PRIVILEGE = "42501"
 
 
-def check_submission(file: ReceiptFile, details: ReceiptDetails, clock: Clock) -> None:
-    """Refuse a receipt `submit_bank_receipt` would refuse, so the route can check it before
-    storing the file."""
+class _WouldSave(Exception):
+    """Raised inside a preflight's savepoint once a new transfer would be saved."""
+
+
+async def preflight_bank_receipt(
+    session: AsyncSession,
+    actor: Actor,
+    request: BankTransferRequest,
+    *,
+    idempotency_key: str,
+    clock: Clock,
+) -> BankTransfer | None:
+    """Run `submit_bank_receipt` without keeping anything, before the receipt file is stored.
+
+    Raises whatever it would raise: a refused detail, `DepositExists` for an investment already
+    being paid, or a key reused with other details. Returns the earlier transfer if this key
+    already saved one, so the file need not be stored again, and None if a new transfer would
+    be saved. Nothing is written either way.
+    """
     try:
-        check_receipt_file(file)
-        check_receipt_details(details, today=business_date(clock.now()))
-    except InvalidReceipt as error:
-        raise _invalid(error.field, error.code) from None
+        async with session.begin_nested():
+            return await submit_bank_receipt(
+                session,
+                actor,
+                request,
+                idempotency_key=idempotency_key,
+                clock=clock,
+                _file_stored=False,
+            )
+    except _WouldSave:
+        return None
 
 
 def receipt_key(deposit_id: str) -> str:
@@ -197,6 +220,7 @@ async def submit_bank_receipt(
     idempotency_key: str,
     clock: Clock,
     deposit_id: str | None = None,
+    _file_stored: bool = True,
 ) -> BankTransfer:
     """Save a client's bank transfer for one investment or goal, waiting for staff to check it.
 
@@ -262,6 +286,9 @@ async def submit_bank_receipt(
         await service.record_event(
             session, deposit_id, None, DepositStatus.IN_REVIEW, None, "request", now
         )
+        if not _file_stored:
+            # A preflight: everything that could refuse this transfer has run.
+            raise _WouldSave
         return Receipt(201, {"deposit_id": deposit_id})
 
     outcome = await run_once(
