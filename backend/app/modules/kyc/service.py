@@ -1,0 +1,728 @@
+"""Identity check commands and queries. Every function works inside the caller's transaction.
+
+The caller opens `Database.actor_transaction(actor)` for the same actor it passes here; the row
+policies and the transition trigger of migration 0050 then hold whatever this code does. A staff
+decision, the account number it issues and its audit event commit together or not at all.
+
+No provider is called from here. The worker calls the provider with no transaction open and
+hands the answer to `record_provider_result`.
+"""
+
+import json
+from dataclasses import dataclass
+from datetime import datetime
+from typing import Any
+
+from sqlalchemy import Row, text
+from sqlalchemy.exc import IntegrityError
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.modules.account_numbers.domain.numbers import AccountType
+from app.modules.account_numbers.service import issue_account_number
+from app.modules.audit import service as audit
+from app.modules.audit.domain.events import AuditActor, AuditCategory, AuditEvent
+from app.modules.kyc.domain.checks import (
+    CLIENT_EDITABLE,
+    COUNTRY,
+    ActorKind,
+    CheckStatus,
+    DocumentType,
+    IdentityDetails,
+    PhotoKind,
+    can_move,
+    detail_problems,
+    missing_for_submission,
+    required_photos,
+    retake_problem,
+    status_on_submit,
+)
+from app.modules.kyc.domain.provider import (
+    AutomaticCheck,
+    CheckOutcome,
+    IdentityProvider,
+    Verdict,
+    decide,
+)
+from app.shared.actors import Actor
+from app.shared.clock import Clock
+from app.shared.errors import ApplicationError, FieldProblem
+from app.shared.push_ids import push_id
+
+RESOURCE = "kyc_check"
+MAX_PHOTO_BYTES = 10 * 1024 * 1024
+PHOTO_CONTENT_TYPES = frozenset({"image/jpeg", "image/png", "image/webp"})
+MAX_CLIENT_MESSAGE = 300
+DEFAULT_PAGE_SIZE = 50
+MAX_PAGE_SIZE = 200
+# What staff work through, oldest first. `awaiting_client` is listed so they can see who was asked.
+QUEUE = (
+    CheckStatus.NEEDS_REVIEW,
+    CheckStatus.WITH_COMPLIANCE,
+    CheckStatus.AWAITING_CLIENT,
+    CheckStatus.SUBMITTED,
+)
+
+
+@dataclass(frozen=True, slots=True)
+class PhotoView:
+    id: str
+    kind: PhotoKind
+    storage_key: str
+    content_type: str
+    byte_size: int
+    created_at: datetime
+
+
+@dataclass(frozen=True, slots=True)
+class CheckView:
+    id: str
+    client_id: str
+    status: CheckStatus
+    document_type: DocumentType
+    document_country: str
+    details: IdentityDetails | None
+    details_confirmed: bool
+    submission: int
+    submitted_at: datetime | None
+    provider: str | None
+    provider_reference: str | None
+    automatic_checks: tuple[CheckOutcome, ...]
+    review_flags: tuple[str, ...]
+    retake_photos: frozenset[PhotoKind]
+    client_message: str | None
+    decided_at: datetime | None
+    decided_by: str | None
+    account_number: str | None
+    photos: tuple[PhotoView, ...]
+
+    @property
+    def missing(self) -> list[str]:
+        """What the client still has to do before submitting."""
+        return missing_for_submission(
+            self.document_type,
+            frozenset(photo.kind for photo in self.photos),
+            details_confirmed=self.details_confirmed,
+        )
+
+
+@dataclass(frozen=True, slots=True)
+class QueueItem:
+    """A row of the review queue. Names are shown to staff, so this never goes into a log."""
+
+    id: str
+    status: CheckStatus
+    document_type: DocumentType
+    surname: str | None
+    given_names: str | None
+    submitted_at: datetime | None
+    review_flags: tuple[str, ...]
+
+
+_COLUMNS = (
+    "id, client_id, status, document_type, document_country, surname, given_names, "
+    "document_number, date_of_birth, document_expires_on, tin, details_confirmed_at, submission, "
+    "submitted_at, provider, provider_reference, automatic_checks, review_flags, retake_photos, "
+    "retake_requested_at, client_message, decided_at, decided_by, account_number"
+)
+_BY_CLIENT = text(f"SELECT {_COLUMNS} FROM kyc_checks WHERE client_id = :client_id")  # noqa: S608
+_BY_CLIENT_LOCKED = text(
+    f"SELECT {_COLUMNS} FROM kyc_checks WHERE client_id = :client_id FOR UPDATE"  # noqa: S608
+)
+_BY_ID = text(f"SELECT {_COLUMNS} FROM kyc_checks WHERE id = :id")  # noqa: S608
+_BY_ID_LOCKED = text(f"SELECT {_COLUMNS} FROM kyc_checks WHERE id = :id FOR UPDATE")  # noqa: S608
+_INSERT = text(
+    "INSERT INTO kyc_checks (id, client_id, document_type, document_country, created_at, "
+    "updated_at) VALUES (:id, :client_id, :document_type, :document_country, :now, :now) "
+    "ON CONFLICT ON CONSTRAINT uq_kyc_checks_client DO NOTHING"
+)
+_CHANGE_DOCUMENT = text(
+    "UPDATE kyc_checks SET document_type = :document_type, document_country = :document_country, "
+    "details_confirmed_at = NULL, updated_at = :now WHERE id = :id"
+)
+_SAVE_DETAILS = text(
+    "UPDATE kyc_checks SET surname = :surname, given_names = :given_names, "
+    "document_number = :document_number, date_of_birth = :date_of_birth, "
+    "document_expires_on = :document_expires_on, tin = :tin, details_confirmed_at = :now, "
+    "updated_at = :now WHERE id = :id"
+)
+_SUBMIT = text(
+    "UPDATE kyc_checks SET status = :status, submission = submission + 1, submitted_at = :now, "
+    "provider = :provider, provider_reference = NULL, automatic_checks = '[]'::jsonb, "
+    "review_flags = :review_flags, retake_photos = '{}', retake_requested_at = NULL, "
+    "client_message = NULL, updated_at = :now WHERE id = :id"
+)
+_TO_REVIEW = text(
+    "UPDATE kyc_checks SET status = 'needs_review', provider_reference = :provider_reference, "
+    "automatic_checks = CAST(:automatic_checks AS jsonb), review_flags = :review_flags, "
+    "updated_at = :now WHERE id = :id"
+)
+_APPROVE = text(
+    "UPDATE kyc_checks SET status = 'approved', account_number = :account_number, "
+    "provider_reference = coalesce(:provider_reference, provider_reference), "
+    "automatic_checks = coalesce(CAST(:automatic_checks AS jsonb), automatic_checks), "
+    "decided_at = :now, decided_by = :decided_by, updated_at = :now WHERE id = :id"
+)
+_REJECT = text(
+    "UPDATE kyc_checks SET status = 'rejected', client_message = :client_message, "
+    "decided_at = :now, decided_by = :decided_by, updated_at = :now WHERE id = :id"
+)
+_ASK_FOR_PHOTOS = text(
+    "UPDATE kyc_checks SET status = 'awaiting_client', retake_photos = :retake_photos, "
+    "retake_requested_at = :now, client_message = :client_message, updated_at = :now "
+    "WHERE id = :id"
+)
+_ESCALATE = text(
+    "UPDATE kyc_checks SET status = 'with_compliance', updated_at = :now WHERE id = :id"
+)
+_DOCUMENT_TAKEN = text(
+    "SELECT EXISTS (SELECT FROM kyc_checks WHERE status = 'approved' "
+    "AND document_country = :document_country AND document_type = :document_type "
+    "AND document_number = :document_number)"
+)
+_PHOTOS = text(
+    "SELECT id, kind, storage_key, content_type, byte_size, created_at FROM kyc_photos "
+    "WHERE check_id = :check_id AND replaced_at IS NULL ORDER BY kind"
+)
+_REPLACE_PHOTO = text(
+    "UPDATE kyc_photos SET replaced_at = :now "
+    "WHERE check_id = :check_id AND kind = :kind AND replaced_at IS NULL"
+)
+_INSERT_PHOTO = text(
+    "INSERT INTO kyc_photos (id, check_id, kind, storage_key, content_type, byte_size, sha256, "
+    "created_at) VALUES (:id, :check_id, :kind, :storage_key, :content_type, :byte_size, "
+    ":sha256, :now)"
+)
+_QUEUE = text(
+    "SELECT id, status, document_type, surname, given_names, submitted_at, review_flags "
+    "FROM kyc_checks WHERE status = ANY(:statuses) "
+    "ORDER BY array_position(:statuses, status::text), submitted_at, id LIMIT :limit"
+)
+
+
+# Client steps ---------------------------------------------------------------------------------
+
+
+async def choose_document(
+    session: AsyncSession,
+    client: Actor,
+    document_type: DocumentType,
+    document_country: str,
+    clock: Clock,
+) -> CheckView:
+    """Start the client's check, or change the document while it is still a draft."""
+    client_id = _person(client, "client")
+    if COUNTRY.fullmatch(document_country) is None:
+        raise _invalid("document_country", "invalid_country")
+    now = clock.now()
+    await session.execute(
+        _INSERT,
+        {
+            "id": push_id(),
+            "client_id": client_id,
+            "document_type": document_type.value,
+            "document_country": document_country,
+            "now": now,
+        },
+    )
+    row = (await session.execute(_BY_CLIENT_LOCKED, {"client_id": client_id})).one()
+    if (row.document_type, row.document_country) != (document_type.value, document_country):
+        if row.status != CheckStatus.DRAFT:
+            raise ApplicationError("conflict")
+        # Details were read from the other document, so they must be confirmed again.
+        await session.execute(
+            _CHANGE_DOCUMENT,
+            {
+                "id": row.id,
+                "document_type": document_type.value,
+                "document_country": document_country,
+                "now": now,
+            },
+        )
+    return await _view_by_id(session, row.id)
+
+
+async def add_photo(
+    session: AsyncSession,
+    client: Actor,
+    kind: PhotoKind,
+    *,
+    content_type: str,
+    byte_size: int,
+    sha256: str,
+    clock: Clock,
+) -> PhotoView:
+    """Record a photo the client uploaded, replacing the current one of the same kind.
+
+    The file itself goes to private storage under the returned key. The earlier photo row is
+    kept, marked as replaced.
+    """
+    row = await _editable(session, client)
+    if kind not in _required(row):
+        raise _invalid("kind", "photo_not_part_of_document")
+    if row.status == CheckStatus.AWAITING_CLIENT and kind.value not in row.retake_photos:
+        raise ApplicationError("conflict")
+    if content_type not in PHOTO_CONTENT_TYPES:
+        raise _invalid("content_type", "unsupported_content_type")
+    if type(byte_size) is not int or not 0 < byte_size <= MAX_PHOTO_BYTES:
+        raise _invalid("byte_size", "invalid_size")
+    now = clock.now()
+    photo_id = push_id()
+    storage_key = f"kyc/{row.id}/{photo_id}"
+    await session.execute(_REPLACE_PHOTO, {"check_id": row.id, "kind": kind.value, "now": now})
+    await session.execute(
+        _INSERT_PHOTO,
+        {
+            "id": photo_id,
+            "check_id": row.id,
+            "kind": kind.value,
+            "storage_key": storage_key,
+            "content_type": content_type,
+            "byte_size": byte_size,
+            "sha256": sha256,
+            "now": now,
+        },
+    )
+    return PhotoView(photo_id, kind, storage_key, content_type, byte_size, now)
+
+
+async def confirm_details(
+    session: AsyncSession, client: Actor, details: IdentityDetails, clock: Clock
+) -> CheckView:
+    """Save the details the client confirmed. Only while the check is a draft."""
+    row = await _editable(session, client)
+    if row.status != CheckStatus.DRAFT:
+        raise ApplicationError("conflict")
+    details = details.normalised()
+    now = clock.now()
+    problems = detail_problems(details, now.date())
+    if problems:
+        raise ApplicationError(
+            "validation_failed",
+            fields=[FieldProblem(field_path=[p.field], code=p.code) for p in problems],
+        )
+    await session.execute(
+        _SAVE_DETAILS,
+        {
+            "id": row.id,
+            "surname": details.surname,
+            "given_names": details.given_names,
+            "document_number": details.document_number,
+            "date_of_birth": details.date_of_birth,
+            "document_expires_on": details.document_expires_on,
+            "tin": details.tin,
+            "now": now,
+        },
+    )
+    return await _view_by_id(session, row.id)
+
+
+async def submit(
+    session: AsyncSession, client: Actor, provider: IdentityProvider, clock: Clock
+) -> CheckView:
+    """Hand the check in. It goes to the provider, or to a person when nothing automatic applies."""
+    row = await _editable(session, client)
+    view = await _view(session, row)
+    missing = view.missing
+    if row.status == CheckStatus.AWAITING_CLIENT:
+        # Strictly later: a photo from the same instant as the request is the one staff saw.
+        fresh = {p.kind for p in view.photos if p.created_at > row.retake_requested_at}
+        missing += [kind.value for kind in PhotoKind if kind in view.retake_photos - fresh]
+    if missing:
+        raise ApplicationError(
+            "validation_failed",
+            fields=[FieldProblem(field_path=[name], code="missing") for name in missing],
+        )
+    target = status_on_submit(view.document_type, automatic_checks=provider.automatic)
+    _require_move("client", view.status, target)
+    flags: list[str] = []
+    if target is CheckStatus.NEEDS_REVIEW:
+        flags = ["no_automatic_checks" if not provider.automatic else "document_needs_person"]
+    await session.execute(
+        _SUBMIT,
+        {
+            "id": row.id,
+            "status": target.value,
+            "provider": provider.name,
+            "review_flags": flags,
+            "now": clock.now(),
+        },
+    )
+    await _audit(session, client, "change", "kyc.check.submitted", row.id, clock)
+    return await _view_by_id(session, row.id)
+
+
+async def check_for_client(session: AsyncSession, client: Actor) -> CheckView | None:
+    row = (
+        await session.execute(_BY_CLIENT, {"client_id": _person(client, "client")})
+    ).one_or_none()
+    return None if row is None else await _view(session, row)
+
+
+# The worker, after the provider answered ----------------------------------------------------
+
+
+async def record_provider_result(
+    session: AsyncSession,
+    check_id: str,
+    submission: int,
+    provider_reference: str,
+    outcomes: tuple[CheckOutcome, ...],
+    clock: Clock,
+) -> CheckView:
+    """Apply the provider's answer: approve when every check passed, otherwise ask a person.
+
+    An answer for an earlier submission, or for a check that already moved on, changes nothing.
+    """
+    row = (await session.execute(_BY_ID_LOCKED, {"id": check_id})).one_or_none()
+    if row is None:
+        raise ApplicationError("not_found")
+    if row.status != CheckStatus.SUBMITTED or row.submission != submission:
+        return await _view(session, row)
+    decision = decide(outcomes)
+    flags = list(decision.flags)
+    if decision.approve and await _document_taken(session, row):
+        flags = ["duplicate_document"]
+    checks = json.dumps([_outcome_json(outcome) for outcome in outcomes], separators=(",", ":"))
+    system = Actor("system")
+    if not flags:
+        approved = await _approve(
+            session,
+            row,
+            decided_by=None,
+            provider_reference=provider_reference,
+            automatic_checks=checks,
+            clock=clock,
+        )
+        if approved:
+            await _audit(session, system, "change", "kyc.check.approved", row.id, clock)
+            return await _view_by_id(session, row.id)
+        flags = ["duplicate_document"]
+    await session.execute(
+        _TO_REVIEW,
+        {
+            "id": row.id,
+            "provider_reference": provider_reference,
+            "automatic_checks": checks,
+            "review_flags": flags,
+            "now": clock.now(),
+        },
+    )
+    await _audit(
+        session,
+        system,
+        "change",
+        "kyc.check.sent_to_review",
+        row.id,
+        clock,
+        details={"flags": flags},
+    )
+    return await _view_by_id(session, row.id)
+
+
+# Staff ----------------------------------------------------------------------------------------
+
+
+async def review_queue(session: AsyncSession, *, limit: int = DEFAULT_PAGE_SIZE) -> list[QueueItem]:
+    """Checks that are not decided, the ones needing a person first. Staff transactions only."""
+    rows = await session.execute(
+        _QUEUE,
+        {"statuses": [s.value for s in QUEUE], "limit": max(1, min(limit, MAX_PAGE_SIZE))},
+    )
+    return [
+        QueueItem(
+            id=row.id,
+            status=CheckStatus(row.status),
+            document_type=DocumentType(row.document_type),
+            surname=row.surname,
+            given_names=row.given_names,
+            submitted_at=row.submitted_at,
+            review_flags=tuple(row.review_flags),
+        )
+        for row in rows.all()
+    ]
+
+
+async def check_for_staff(session: AsyncSession, check_id: str) -> CheckView:
+    return await _view_by_id(session, check_id)
+
+
+async def approve(
+    session: AsyncSession, staff: Actor, check_id: str, reason: str, clock: Clock
+) -> CheckView:
+    """Approve the client and issue their account number in this same transaction."""
+    row = await _for_decision(session, staff, check_id, CheckStatus.APPROVED)
+    approved = await _approve(
+        session,
+        row,
+        decided_by=staff.id,
+        provider_reference=None,
+        automatic_checks=None,
+        clock=clock,
+    )
+    if not approved:
+        # Another approved client already holds this identity document.
+        raise ApplicationError("conflict")
+    await _audit(session, staff, "approval", "kyc.check.approved", row.id, clock, reason=reason)
+    return await _view_by_id(session, row.id)
+
+
+async def reject(
+    session: AsyncSession,
+    staff: Actor,
+    check_id: str,
+    reason: str,
+    clock: Clock,
+    *,
+    client_message: str | None = None,
+) -> CheckView:
+    row = await _for_decision(session, staff, check_id, CheckStatus.REJECTED)
+    await session.execute(
+        _REJECT,
+        {
+            "id": row.id,
+            "client_message": _message(client_message, required=False),
+            "decided_by": staff.id,
+            "now": clock.now(),
+        },
+    )
+    await _audit(session, staff, "approval", "kyc.check.rejected", row.id, clock, reason=reason)
+    return await _view_by_id(session, row.id)
+
+
+async def ask_for_photos(
+    session: AsyncSession,
+    staff: Actor,
+    check_id: str,
+    photos: frozenset[PhotoKind],
+    client_message: str,
+    clock: Clock,
+) -> CheckView:
+    """Ask the client to take named photos again. Everything else they handed in is kept."""
+    row = await _for_decision(session, staff, check_id, CheckStatus.AWAITING_CLIENT)
+    problem = retake_problem(DocumentType(row.document_type), photos)
+    if problem is not None:
+        raise _invalid("photos", problem)
+    kinds = sorted(kind.value for kind in photos)
+    await session.execute(
+        _ASK_FOR_PHOTOS,
+        {
+            "id": row.id,
+            "retake_photos": kinds,
+            "client_message": _message(client_message, required=True),
+            "now": clock.now(),
+        },
+    )
+    # The message to the client can name them, so only the photo kinds reach the trail.
+    await _audit(
+        session,
+        staff,
+        "approval",
+        "kyc.check.photos_requested",
+        row.id,
+        clock,
+        reason="Asked the client for new photos",
+        details={"photos": kinds},
+    )
+    return await _view_by_id(session, row.id)
+
+
+async def escalate(
+    session: AsyncSession, staff: Actor, check_id: str, reason: str, clock: Clock
+) -> CheckView:
+    row = await _for_decision(session, staff, check_id, CheckStatus.WITH_COMPLIANCE)
+    await session.execute(_ESCALATE, {"id": row.id, "now": clock.now()})
+    await _audit(session, staff, "approval", "kyc.check.escalated", row.id, clock, reason=reason)
+    return await _view_by_id(session, row.id)
+
+
+# Internals ------------------------------------------------------------------------------------
+
+
+def _person(actor: Actor, kind: ActorKind) -> str:
+    if actor.kind != kind or actor.id is None:
+        raise ApplicationError("forbidden")
+    return actor.id
+
+
+def _invalid(field: str, code: str) -> ApplicationError:
+    return ApplicationError(
+        "validation_failed", fields=[FieldProblem(field_path=[field], code=code)]
+    )
+
+
+def _message(value: str | None, *, required: bool) -> str | None:
+    cleaned = " ".join(value.split()) if value else ""
+    if not cleaned:
+        if required:
+            raise _invalid("client_message", "missing")
+        return None
+    if len(cleaned) > MAX_CLIENT_MESSAGE:
+        raise _invalid("client_message", "too_long")
+    return cleaned
+
+
+def _require_move(actor: ActorKind, current: CheckStatus, target: CheckStatus) -> None:
+    if not can_move(actor, current, target):
+        raise ApplicationError("conflict")
+
+
+def _required(row: Row[Any]) -> frozenset[PhotoKind]:
+    return required_photos(DocumentType(row.document_type))
+
+
+async def _editable(session: AsyncSession, client: Actor) -> Row[Any]:
+    row = (
+        await session.execute(_BY_CLIENT_LOCKED, {"client_id": _person(client, "client")})
+    ).one_or_none()
+    if row is None:
+        raise ApplicationError("not_found")
+    if CheckStatus(row.status) not in CLIENT_EDITABLE:
+        raise ApplicationError("conflict")
+    return row
+
+
+async def _for_decision(
+    session: AsyncSession, staff: Actor, check_id: str, target: CheckStatus
+) -> Row[Any]:
+    _person(staff, "staff")
+    row = (await session.execute(_BY_ID_LOCKED, {"id": check_id})).one_or_none()
+    if row is None:
+        raise ApplicationError("not_found")
+    _require_move("staff", CheckStatus(row.status), target)
+    return row
+
+
+async def _document_taken(session: AsyncSession, row: Row[Any]) -> bool:
+    taken = await session.execute(
+        _DOCUMENT_TAKEN,
+        {
+            "document_country": row.document_country,
+            "document_type": row.document_type,
+            "document_number": row.document_number,
+        },
+    )
+    return bool(taken.scalar_one())
+
+
+async def _approve(
+    session: AsyncSession,
+    row: Row[Any],
+    *,
+    decided_by: str | None,
+    provider_reference: str | None,
+    automatic_checks: str | None,
+    clock: Clock,
+) -> bool:
+    """Issue the account number and approve. False when the identity document is already taken.
+
+    The unique index decides, inside a savepoint, so two approvals racing for one document
+    cannot both win and the loser's account number is not kept.
+    """
+    if await _document_taken(session, row):
+        return False
+    try:
+        async with session.begin_nested():
+            number = await issue_account_number(session, AccountType.PERSONAL, clock)
+            await session.execute(
+                _APPROVE,
+                {
+                    "id": row.id,
+                    "account_number": number.value,
+                    "provider_reference": provider_reference,
+                    "automatic_checks": automatic_checks,
+                    "decided_by": decided_by,
+                    "now": clock.now(),
+                },
+            )
+    except IntegrityError as error:
+        if "uq_kyc_checks_approved_document" not in str(error.orig):
+            raise
+        return False
+    return True
+
+
+async def _audit(
+    session: AsyncSession,
+    actor: Actor,
+    category: AuditCategory,
+    action: str,
+    check_id: str,
+    clock: Clock,
+    *,
+    reason: str | None = None,
+    details: dict[str, object] | None = None,
+) -> None:
+    if category == "approval" and not (reason and reason.strip()):
+        raise _invalid("reason", "missing")
+    await audit.record(
+        session,
+        AuditEvent(
+            category=category,
+            action=action,
+            resource_type=RESOURCE,
+            resource_id=check_id,
+            actor=AuditActor(actor.kind, actor.id),
+            reason=reason,
+            details=details or {},
+        ),
+        clock,
+    )
+
+
+def _outcome_json(outcome: CheckOutcome) -> dict[str, str | int | None]:
+    return {"check": outcome.check.value, "verdict": outcome.verdict.value, "score": outcome.score}
+
+
+async def _view_by_id(session: AsyncSession, check_id: str) -> CheckView:
+    row = (await session.execute(_BY_ID, {"id": check_id})).one_or_none()
+    if row is None:
+        raise ApplicationError("not_found")
+    return await _view(session, row)
+
+
+async def _view(session: AsyncSession, row: Row[Any]) -> CheckView:
+    photos = await session.execute(_PHOTOS, {"check_id": row.id})
+    details = None
+    if row.surname is not None:
+        details = IdentityDetails(
+            surname=row.surname,
+            given_names=row.given_names,
+            document_number=row.document_number,
+            date_of_birth=row.date_of_birth,
+            document_expires_on=row.document_expires_on,
+            tin=row.tin,
+        )
+    return CheckView(
+        id=row.id,
+        client_id=row.client_id,
+        status=CheckStatus(row.status),
+        document_type=DocumentType(row.document_type),
+        document_country=row.document_country,
+        details=details,
+        details_confirmed=row.details_confirmed_at is not None,
+        submission=row.submission,
+        submitted_at=row.submitted_at,
+        provider=row.provider,
+        provider_reference=row.provider_reference,
+        automatic_checks=tuple(
+            CheckOutcome(AutomaticCheck(item["check"]), Verdict(item["verdict"]), item["score"])
+            for item in row.automatic_checks
+        ),
+        review_flags=tuple(row.review_flags),
+        retake_photos=frozenset(PhotoKind(kind) for kind in row.retake_photos),
+        client_message=row.client_message,
+        decided_at=row.decided_at,
+        decided_by=row.decided_by,
+        account_number=row.account_number,
+        photos=tuple(
+            PhotoView(
+                id=photo.id,
+                kind=PhotoKind(photo.kind),
+                storage_key=photo.storage_key,
+                content_type=photo.content_type,
+                byte_size=photo.byte_size,
+                created_at=photo.created_at,
+            )
+            for photo in photos.all()
+        ),
+    )
