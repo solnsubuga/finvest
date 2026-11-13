@@ -26,6 +26,7 @@ export const PERMISSIONS = [
   "money_movement.view",
   "reconciliation.view",
   "investments.view",
+  "automatic_investing.view",
   "dealing_desk.view",
   "finance.view",
   "products.view",
