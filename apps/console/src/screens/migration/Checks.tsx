@@ -3,7 +3,6 @@ import { cn } from "@/lib.ts";
 import type { Overview, TotalLine } from "./api.ts";
 import {
   difference,
-  differenceSummary,
   formatAmount,
   formatWithCurrency,
   lineLabel,
@@ -15,6 +14,7 @@ import {
 const TONES: Record<LineResult, string> = {
   agrees: "bg-success-surface text-success",
   look_into: "bg-warning-surface text-warning-text",
+  waiting: "bg-warning-surface text-warning-text",
   signed_off: "bg-surface-sunken text-ink",
   not_entered: "bg-surface-sunken text-muted",
 };
@@ -141,39 +141,5 @@ export function PanelRow({ name, value }: { name: string; value: ReactNode }) {
       <span className="text-muted">{name}</span>
       <span className="text-right font-bold tabular-nums">{value}</span>
     </div>
-  );
-}
-
-/** Investments whose interest or tax rate the new system works out differently. */
-export function Differences({ overview }: { overview: Overview }) {
-  const open = overview.differences.filter((item) => !item.signedOff);
-  const signed = overview.differences.length - open.length;
-  return (
-    <Panel title="What differs">
-      {overview.differences.length === 0 ? (
-        <p className="m-0 text-sm leading-normal text-muted">
-          Every investment&apos;s interest and tax rate match what Finvest 2.0 works out from its start date and rate.
-        </p>
-      ) : (
-        <>
-          <ul aria-label="Investments that differ" className="m-0 flex list-none flex-col gap-0 p-0">
-            {open.map((item) => (
-              <li key={item.key} className="flex flex-col border-t border-divider py-2.5 text-md">
-                <span className="font-bold">
-                  {item.legacyInvestmentRef} <span className="font-medium text-muted">row {item.row}</span>
-                </span>
-                <span className="text-sm text-muted">{differenceSummary(item)}</span>
-              </li>
-            ))}
-          </ul>
-          <PanelRow name="Waiting for finance" value={open.length} />
-          <PanelRow name="Signed off with a reason" value={signed} />
-        </>
-      )}
-      <p className="m-0 text-sm leading-normal text-muted">
-        Each investment is opened with the interest Finvest 2.0 works out. A difference is never posted. The switch cannot be
-        scheduled until every check agrees or a difference is signed off with a reason.
-      </p>
-    </Panel>
   );
 }

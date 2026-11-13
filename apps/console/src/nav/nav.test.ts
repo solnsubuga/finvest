@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { STUB_ROLE_PERMISSIONS } from "@/auth/stub.ts";
-import { PERMISSIONS, ROLES, type Role, type StaffSession } from "@/auth/types.ts";
+import { ROLES, SCREEN_PERMISSIONS, type Role, type StaffSession } from "@/auth/types.ts";
 import { homePath, NAV_GROUPS, NAV_ITEMS, visibleNav } from "./nav.ts";
 
 function sessionFor(role: Role): StaffSession {
@@ -22,7 +22,7 @@ describe("console menu", () => {
 
   it("gives every screen its own path and its own permission", () => {
     expect(new Set(NAV_ITEMS.map((item) => item.path)).size).toBe(NAV_ITEMS.length);
-    expect(NAV_ITEMS.map((item) => item.permission).sort()).toEqual([...PERMISSIONS].sort());
+    expect(NAV_ITEMS.map((item) => item.permission).sort()).toEqual([...SCREEN_PERMISSIONS].sort());
   });
 
   it("shows an admin every screen", () => {

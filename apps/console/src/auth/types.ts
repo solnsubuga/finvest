@@ -15,7 +15,7 @@ export const ROLE_LABELS: Record<Role, string> = {
  * sends them with the session. The console only uses them to choose what to
  * show: the API checks every request again.
  */
-export const PERMISSIONS = [
+export const SCREEN_PERMISSIONS = [
   "overview.view",
   "review_queue.view",
   "identity_checks.view",
@@ -37,6 +37,13 @@ export const PERMISSIONS = [
   "settings.view",
   "migration.view",
 ] as const;
+
+/** What a member of staff may do on a screen they can open, beyond looking. */
+export const ACTION_PERMISSIONS = ["migration.import", "migration.sign_off"] as const;
+
+/** Every permission the console uses. The backend may send others, for screens not built yet. */
+export const PERMISSIONS = [...SCREEN_PERMISSIONS, ...ACTION_PERMISSIONS] as const;
+
 export type Permission = (typeof PERMISSIONS)[number];
 
 export interface StaffSession {

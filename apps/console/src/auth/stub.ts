@@ -39,6 +39,7 @@ export const STUB_ROLE_PERMISSIONS: Record<Role, readonly Permission[]> = {
     "automatic_investing.view",
     "reports.view",
     "migration.view",
+    "migration.import",
   ],
   finance: [
     "overview.view",
@@ -54,6 +55,8 @@ export const STUB_ROLE_PERMISSIONS: Record<Role, readonly Permission[]> = {
     "products.view",
     "rates.view",
     "reports.view",
+    "migration.view",
+    "migration.sign_off",
   ],
   compliance: [
     "overview.view",

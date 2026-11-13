@@ -2,9 +2,9 @@ import { useId, useState, type FormEvent } from "react";
 import { Button } from "@/components/ui/button.tsx";
 import { Input } from "@/components/ui/input.tsx";
 import { Label } from "@/components/ui/label.tsx";
-import type { Problem, Severity, Trial, TrialInput } from "./api.ts";
+import { MAX_SHEET_BYTES, type Problem, type Severity, type Trial, type TrialInput } from "./api.ts";
 import { Pill } from "./Checks.tsx";
-import { formatDay, formatMoment, problemLabel, SHEET_LABELS } from "./labels.ts";
+import { formatDay, formatMegabytes, formatMoment, problemLabel, SHEET_LABELS } from "./labels.ts";
 
 interface TrialFormProps {
   busy: boolean;
@@ -14,9 +14,17 @@ interface TrialFormProps {
   onCancel: () => void;
 }
 
-type Errors = Partial<Record<"clients" | "investments" | "asOf", string>>;
+type Errors = Partial<Record<"clients" | "investments" | "asOf", string | undefined>>;
 
 const FILE = "block w-full rounded-lg border border-border-strong bg-surface p-3 text-sm font-semibold text-ink file:mr-3 file:rounded-pill file:border-0 file:bg-surface-sunken file:px-3 file:py-1.5 file:font-bold";
+
+/** Checked before anything is uploaded, so a wrong or huge file costs nothing. */
+function sheetProblem(file: File | null, missing: string): string | undefined {
+  if (!file) return missing;
+  if (!file.name.toLowerCase().endsWith(".csv")) return "Save the sheet as CSV first.";
+  if (file.size > MAX_SHEET_BYTES) return `This sheet is larger than ${formatMegabytes(MAX_SHEET_BYTES)}. Split the export or remove columns that are not in the format.`;
+  return undefined;
+}
 
 /** Two CSV files and the day the old system's figures were taken. */
 export function TrialForm({ busy, error, today, onRun, onCancel }: TrialFormProps) {
@@ -29,14 +37,12 @@ export function TrialForm({ busy, error, today, onRun, onCancel }: TrialFormProp
   function submit(event: FormEvent) {
     event.preventDefault();
     const found: Errors = {};
-    if (!clients) found.clients = "Choose the clients sheet.";
-    else if (!clients.name.toLowerCase().endsWith(".csv")) found.clients = "Save the sheet as CSV first.";
-    if (!investments) found.investments = "Choose the investments sheet.";
-    else if (!investments.name.toLowerCase().endsWith(".csv")) found.investments = "Save the sheet as CSV first.";
+    found.clients = sheetProblem(clients, "Choose the clients sheet.");
+    found.investments = sheetProblem(investments, "Choose the investments sheet.");
     if (!asOf) found.asOf = "Give the day the Finvest 1.0 figures were taken.";
     else if (asOf > today) found.asOf = "This day has not happened yet.";
     setErrors(found);
-    if (clients && investments && Object.keys(found).length === 0) onRun({ clients, investments, asOf });
+    if (clients && investments && Object.values(found).every((problem) => !problem)) onRun({ clients, investments, asOf });
   }
 
   const field = (name: keyof Errors) => ({
