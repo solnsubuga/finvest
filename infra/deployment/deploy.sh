@@ -10,8 +10,10 @@
 #   bash deploy.sh [force_recreate: true|false]
 #
 # Migrations must be safe to run beside the previous release (expand, then contract in a later
-# release). release.env may set FINVEST_STOP_BEFORE_MIGRATE=true for a release that cannot,
-# which stops the previous colour first and serves "being updated" until the new one is up.
+# release). One that is not says `zero_downtime = False`, and the release preflight
+# (backend app/release_preflight.py) then asks for the previous colour to be stopped first, which
+# serves "being updated" until the new one is up. release.env may also set
+# FINVEST_STOP_BEFORE_MIGRATE=true to force that for one release.
 set -euo pipefail
 umask 077
 
@@ -89,6 +91,12 @@ for pair in 'migrate finvest_migrator' 'api finvest_app' 'worker finvest_worker'
   read -r service role <<< "$pair"
   colour "$next" run --rm --no-deps -T "$service" python -m app.infrastructure.database.roles "$role"
 done
+# Refuse an image that does not know the database's revision: a newer release migrated it.
+preflight=$(colour "$next" run --rm --no-deps -T migrate python -m app.release_preflight)
+printf '%s\n' "$preflight"
+if grep -qxF 'Migrations need the previous release stopped first.' <<< "$preflight"; then
+  stop_before_migrate=true
+fi
 
 state=starting
 restore() {

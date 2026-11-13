@@ -12,6 +12,9 @@ revision = "0004_claim_external_effects"
 down_revision = "0003_idempotency"
 branch_labels = None
 depends_on = None
+# It replaces finvest_claim_jobs, but it merged before the first deployment, so no earlier
+# release can be running beside it (app/release_preflight.py).
+zero_downtime = True
 
 OLD_SIGNATURE = "finvest_claim_jobs(text, text[], text, timestamptz, interval, integer)"
 NEW_SIGNATURE = "finvest_claim_jobs(text, text[], text[], text, timestamptz, interval, integer)"
