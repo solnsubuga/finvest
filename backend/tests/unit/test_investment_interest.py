@@ -5,12 +5,15 @@ import pytest
 from app.modules.investments.domain.interest import (
     Accrual,
     ClientReturns,
+    DayEarnings,
     InvalidTerms,
     Terms,
     accrued,
     client_returns,
     day_accrual,
+    day_earnings,
     days_earned,
+    earned_on,
     maturity_date,
     posting_due,
 )
@@ -284,3 +287,41 @@ def test_interest_is_never_taken_back() -> None:
     too_much = Accrual(ugx(5_000), ugx(750))
     with pytest.raises(InvalidTerms):
         due(START + timedelta(days=2), posted=too_much, posted_through=date(2026, 11, 14))
+
+
+# One day's earnings, as the daily notice counts them ---------------------------------------------
+
+START = date(2026, 11, 13)
+
+
+def test_a_day_earns_what_the_app_shows_for_that_day() -> None:
+    # 1,000,000 x 12.5% / 365 = 342 before tax, 291 after.
+    assert earned_on(BILL_91, START, START + timedelta(days=1), 91) == ugx(291)
+    assert all(
+        earned_on(BILL_91, START, START + timedelta(days=n), 91) == day_accrual(BILL_91, n).net
+        for n in range(1, 92)
+    )
+
+
+def test_nothing_is_earned_on_the_start_date_before_it_or_after_maturity() -> None:
+    for on in (START - timedelta(days=1), START, START + timedelta(days=92)):
+        assert earned_on(BILL_91, START, on, 91) == ugx(0)
+    assert earned_on(BILL_91, START, START + timedelta(days=500), None) > ugx(0)
+
+
+def test_the_days_add_up_to_the_interest_at_maturity() -> None:
+    days = [earned_on(BILL_91, START, START + timedelta(days=n), 91) for n in range(0, 100)]
+    assert sum((d.minor for d in days), 0) == client_returns(BILL_91, 91).interest.minor
+
+
+def test_a_client_is_told_the_sum_across_investments_that_earned() -> None:
+    two_bills = [(BILL_91, START, 91), (BILL_91, START, 91)]
+    assert day_earnings(two_bills, START + timedelta(days=1), Currency.UGX) == DayEarnings(
+        count=2, net=ugx(582)
+    )
+    # One that has matured, or starts today, earned nothing and is not counted.
+    mixed = [(BILL_91, START, 91), (BILL_91, START - timedelta(days=91), 91)]
+    assert day_earnings(mixed, START + timedelta(days=1), Currency.UGX) == DayEarnings(
+        count=1, net=ugx(291)
+    )
+    assert day_earnings([], START, Currency.UGX) == DayEarnings(count=0, net=ugx(0))

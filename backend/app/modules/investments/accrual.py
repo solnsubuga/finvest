@@ -22,7 +22,12 @@ import structlog
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.modules.investments.domain.interest import Accrual, day_accrual, days_earned, posting_due
+from app.modules.investments.domain.interest import (
+    Accrual,
+    Terms,
+    day_earnings,
+    posting_due,
+)
 from app.modules.investments.holdings import (
     MAX_PAGE_SIZE,
     Investment,
@@ -247,31 +252,29 @@ async def tell_earnings(
     ]
     if not clients:
         return Told(last_client=None, told=0)
-    earned: dict[tuple[str, Currency], tuple[int, Money]] = {}
+    holdings: dict[tuple[str, Currency], list[tuple[Terms, date, int | None]]] = {}
     for row in (
         await session.execute(_EARNINGS_OF, {"run_date": run_date, "clients": clients})
     ).all():
         investment = investment_from_row(row)
         if investment.start_date is None:
             continue
-        days = days_earned(investment.start_date, run_date, investment.term_days)
-        if days <= 0:
-            continue
-        net = day_accrual(investment.terms, days).net
         key = (investment.client_id, investment.amount.currency)
-        count, total = earned.get(key, (0, Money.zero(investment.amount.currency)))
-        earned[key] = (count + 1, total + net)
+        holdings.setdefault(key, []).append(
+            (investment.terms, investment.start_date, investment.term_days)
+        )
     told = 0
     now = clock.now()
-    for (client_id, currency), (count, total) in sorted(earned.items()):
-        if total.minor <= 0:
+    for (client_id, currency), held in sorted(holdings.items()):
+        earned = day_earnings(held, run_date, currency)
+        if earned.net.minor <= 0:
             continue
         if await notifications.notify(
             session,
             event_name="interest_earned",
             client_id=client_id,
             idempotency_key=f"{run_date.isoformat()}:{currency.value}",
-            variables={"amount": total, "count": count},
+            variables={"amount": earned.net, "count": earned.count},
             now=now,
         ):
             told += 1

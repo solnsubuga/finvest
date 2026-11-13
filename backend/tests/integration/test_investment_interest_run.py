@@ -462,9 +462,12 @@ async def test_the_run_tells_each_client_once_what_the_day_earned_after_tax(
     outcome = await run_job(worker_database, f"{DAY.isoformat()}T21:30:00+00:00", at(day(1), 12))
 
     assert outcome == "succeeded:None"
-    # 291 a day each after tax, as the app shows it.
+    # One message for both investments, with no amount in it: the app shows the figure.
     assert await earnings_told(app_database, client) == [
-        ("You earned UGX 582 today", "Interest across 2 investments, after tax."),
+        (
+            "Interest earned today",
+            "You earned interest today, after tax. See the amount in the app.",
+        ),
     ]
     # Asked again for the same day, nobody is told twice.
     async with worker_database.actor_transaction(SYSTEM) as session:
