@@ -651,6 +651,27 @@ async def identities(session: AsyncSession, client_ids: list[str]) -> dict[str, 
     }
 
 
+_TAX_NUMBERS = text(
+    "SELECT id, client_id, tin_sealed FROM kyc_checks "
+    "WHERE client_id = ANY(CAST(:ids AS text[])) AND status = 'approved' "
+    "AND tin_sealed IS NOT NULL"
+)
+
+
+async def tax_numbers(
+    session: AsyncSession, sealer: Sealer, client_ids: list[str]
+) -> dict[str, str]:
+    """The tax identification number each of these approved clients gave, in one query.
+
+    A client who gave none is left out. For staff and the worker, such as the tax module's report
+    for URA and the yearly tax certificate. The caller records the access on the audit trail.
+    """
+    if not client_ids:
+        return {}
+    rows = await session.execute(_TAX_NUMBERS, {"ids": list(dict.fromkeys(client_ids))})
+    return {row.client_id: _open(sealer, row.id, "tin", row.tin_sealed) for row in rows}
+
+
 @dataclass(frozen=True, slots=True)
 class AccountHolder:
     """Who an approved account belongs to, as printed on a statement or a receipt."""

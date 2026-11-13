@@ -67,6 +67,7 @@ from app.modules.payouts import api as payouts_api
 from app.modules.payouts import staff_api as payouts_staff_api
 from app.modules.payouts import staff_payouts_api
 from app.modules.support import api as support_api
+from app.modules.tax import api as tax_api
 from app.shared.clock import Clock, SystemClock
 from app.shared.errors import ErrorEnvelope
 from app.shared.money import Currency
@@ -198,4 +199,5 @@ def create_app(
         app.include_router(router)
     app.include_router(dealing_api.router)
     app.include_router(dealing_buffer_api.router)
+    app.include_router(tax_api.create_router(identity_sealer))
     return app
