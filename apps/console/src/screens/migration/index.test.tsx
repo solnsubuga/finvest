@@ -183,9 +183,28 @@ describe("migration screen", () => {
 
 describe("finance checks on the migration screen", () => {
   async function openTotals(user: ReturnType<typeof userEvent.setup>) {
+    // The sample totals are confirmed, so the screen first says what entering them again sets aside.
     await user.click(await screen.findByRole("button", { name: "Enter them again" }));
+    await user.click(within(screen.getByRole("group", { name: "Enter the totals again" })).getByRole("button", { name: "Enter new totals" }));
     return within(screen.getByRole("form", { name: "Enter the Finvest 1.0 totals" }));
   }
+
+  it("says what entering confirmed totals again sets aside, before the form opens", async () => {
+    const { user } = renderScreen(createStubMigrationApi(0));
+    await user.click(await screen.findByRole("button", { name: "Enter them again" }));
+    const warning = within(screen.getByRole("group", { name: "Enter the totals again" }));
+    expect(warning.getByText(/These totals are confirmed/)).toHaveTextContent("nothing is compared until someone else confirms the new figures");
+    expect(screen.queryByRole("form", { name: "Enter the Finvest 1.0 totals" })).not.toBeInTheDocument();
+    await user.click(warning.getByRole("button", { name: "Keep these" }));
+    expect(screen.queryByRole("group", { name: "Enter the totals again" })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Enter them again" })).toBeInTheDocument();
+  });
+
+  it("opens the form straight away for totals nobody has confirmed", async () => {
+    const { user } = renderScreen(createStubMigrationApi(0, "unconfirmed"));
+    await user.click(await screen.findByRole("button", { name: "Enter them again" }));
+    expect(screen.getByRole("form", { name: "Enter the Finvest 1.0 totals" })).toBeInTheDocument();
+  });
 
   async function fillTotals(form: ReturnType<typeof within>, user: ReturnType<typeof userEvent.setup>) {
     await user.type(form.getByLabelText("Number of clients"), "1,909");
@@ -290,6 +309,30 @@ describe("finance checks on the migration screen", () => {
     expect(screen.getByText("Signed off by two people").nextSibling).toHaveTextContent("3");
   });
 
+  it("keeps a rejected sign-off on the row with the reason, and it can be proposed again", async () => {
+    const api = createStubMigrationApi(0);
+    const decide = vi.spyOn(api, "decideSignOff");
+    const { user } = renderScreen(api);
+    const list = within(await screen.findByRole("list", { name: "Differences to sign off" }));
+    const row = () => within(list.getByText("INV-20977").closest("li")!);
+    await user.click(row().getByRole("button", { name: "Reject" }));
+    await user.type(row().getByLabelText("Why reject the sign-off for INV-20977"), "The start date in 1.0 is wrong for this one.");
+    await user.click(row().getByRole("button", { name: "Reject" }));
+
+    expect(decide).toHaveBeenCalledWith("sign-off-20977", false, "The start date in 1.0 is wrong for this one.");
+    expect(await row().findByText("Rejected by You:")).toBeInTheDocument();
+    expect(row().getByText("The start date in 1.0 is wrong for this one.")).toBeInTheDocument();
+    expect(row().getByText("Proposed by Grace Finance:")).toBeInTheDocument();
+    expect(row().queryByRole("button", { name: "Approve" })).not.toBeInTheDocument();
+    expect(screen.getByText("Waiting for approval").nextSibling).toHaveTextContent("0");
+
+    await user.click(row().getByRole("button", { name: "Propose again" }));
+    await user.type(row().getByLabelText("Why the difference on INV-20977 is right"), "Checked the contract: 1.0 is right.");
+    await user.click(row().getByRole("button", { name: "Propose the sign-off" }));
+    expect(await row().findByText("Someone else approves it.")).toBeInTheDocument();
+    expect(row().queryByText("Rejected by You:")).not.toBeInTheDocument();
+  });
+
   it("shows the latest figures when someone else changed them first", async () => {
     const api = createStubMigrationApi(0);
     vi.spyOn(api, "decideSignOff").mockRejectedValue(new MigrationError("conflict"));
@@ -354,9 +397,10 @@ describe("migration labels", () => {
     const base = { key: "k", figure: "clients" as const, currency: null, signedOff: null };
     expect(lineResult({ ...base, old: "0100", new: "100" })).toBe("agrees");
     expect(lineResult({ ...base, old: "9007199254740993", new: "9007199254740992" })).toBe("look_into");
-    const proposed = { id: "s", reason: "r", state: "proposed" as const, proposedBy: "A", approvedBy: null, mine: false };
+    const proposed = { id: "s", reason: "r", state: "proposed" as const, proposedBy: "A", decidedBy: null, decisionReason: null, mine: false };
     expect(lineResult({ ...base, old: "2", new: "1", signedOff: proposed })).toBe("waiting");
-    expect(lineResult({ ...base, old: "2", new: "1", signedOff: { ...proposed, state: "approved", approvedBy: "B" } })).toBe("signed_off");
+    expect(lineResult({ ...base, old: "2", new: "1", signedOff: { ...proposed, state: "approved", decidedBy: "B" } })).toBe("signed_off");
+    expect(lineResult({ ...base, old: "2", new: "1", signedOff: { ...proposed, state: "rejected", decidedBy: "B", decisionReason: "No" } })).toBe("look_into");
     expect(lineResult({ ...base, old: null, new: "1" })).toBe("not_entered");
   });
 
