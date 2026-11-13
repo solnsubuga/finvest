@@ -23,6 +23,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.infrastructure.idempotency import Receipt, run_once
 from app.infrastructure.jobs import JobRequest, enqueue, publish
+from app.modules.audit import service as audit
+from app.modules.audit.domain.events import AuditActor, AuditEvent
 from app.modules.investments.events import START_ON_DEPOSIT
 from app.modules.ledger import service as ledger
 from app.modules.ledger.domain.entries import AccountKind, AccountSpec, EntryDraft, credit, debit
@@ -65,6 +67,7 @@ _NOTICE_FIELD = re.compile(r"[A-Za-z0-9._:-]{1,128}")
 
 Cause = Literal["request", "send", "status_read", "sweep", "reconciliation", "staff_review"]
 logger = structlog.get_logger()
+DEPOSIT_RESOURCE = "payment_deposit"
 
 
 class DepositExists(ApplicationError):
@@ -235,6 +238,7 @@ async def request_deposit(
             },
         )
         await record_event(session, deposit_id, None, DepositStatus.CREATED, None, "request", now)
+        await record_requested(session, actor, deposit_id, request.network.value, clock)
         await enqueue(
             session,
             JobRequest(
@@ -446,6 +450,53 @@ async def settle_deposit(
     return await apply_move(session, deposit, move, clock, cause=cause)
 
 
+async def record_requested(
+    session: AsyncSession, client: Actor, deposit_id: str, method: str, clock: Clock
+) -> None:
+    """Write to the audit trail that a client asked to pay, in their own transaction.
+
+    The method only: never the amount, the number or the bank details, which the deposit holds.
+    """
+    if client.kind != "client" or client.id is None:
+        raise ApplicationError("forbidden")
+    await audit.record(
+        session,
+        AuditEvent(
+            category="change",
+            action="payments.deposit_requested",
+            resource_type=DEPOSIT_RESOURCE,
+            resource_id=deposit_id,
+            actor=AuditActor(client.kind, client.id),
+            details={"method": method},
+        ),
+        clock,
+    )
+
+
+async def _record_settled(
+    session: AsyncSession, deposit: Deposit, move: Move, cause: Cause, clock: Clock
+) -> None:
+    """Write to the audit trail that a deposit was confirmed or failed. Deposits settle only in
+    the worker, which acts for Finvest itself."""
+    confirmed = move.status is DepositStatus.CONFIRMED
+    details: dict[str, object] = {"method": deposit.method.value, "cause": cause}
+    if not confirmed and move.code:
+        details["failure"] = move.code
+    await audit.record(
+        session,
+        AuditEvent(
+            category="change",
+            action="payments.deposit_confirmed" if confirmed else "payments.deposit_failed",
+            resource_type=DEPOSIT_RESOURCE,
+            resource_id=deposit.id,
+            actor=AuditActor("system", None),
+            outcome="succeeded" if confirmed else "failed",
+            details=details,
+        ),
+        clock,
+    )
+
+
 async def apply_move(
     session: AsyncSession,
     deposit: Deposit,
@@ -482,6 +533,8 @@ async def apply_move(
         },
     )
     await record_event(session, deposit.id, deposit.status, move.status, move.code, cause, now)
+    if move.status.is_final:
+        await _record_settled(session, deposit, move, cause, clock)
     if move.status is DepositStatus.CONFIRMED:
         # Investments and goals start from this event. It is published once per deposit.
         await publish(

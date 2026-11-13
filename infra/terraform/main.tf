@@ -255,6 +255,32 @@ resource "digitalocean_uptime_alert" "api_down" {
   }
 }
 
+# Background work: 503 while a job is overdue, stalled or recently failed, or a recurring run is
+# late (docs/observability.md). Without this an API that answers but moves no money looks healthy.
+resource "digitalocean_uptime_check" "operations" {
+  count = length(var.alert_emails) > 0 ? 1 : 0
+
+  name    = "${local.name}-operations"
+  target  = "https://${var.api_domain}/health/operations"
+  type    = "https"
+  regions = ["eu_west", "us_east"]
+}
+
+resource "digitalocean_uptime_alert" "operations_stopped" {
+  count = length(var.alert_emails) > 0 ? 1 : 0
+
+  name       = "${local.name}-background-work-stopped"
+  check_id   = digitalocean_uptime_check.operations[0].id
+  type       = "down"
+  period     = "2m"
+  comparison = "less_than"
+  threshold  = 1
+
+  notifications {
+    email = var.alert_emails
+  }
+}
+
 resource "digitalocean_monitor_alert" "cpu" {
   count = length(var.alert_emails) > 0 ? 1 : 0
 
@@ -280,6 +306,31 @@ resource "digitalocean_monitor_alert" "disk" {
   value       = 80
   window      = "10m"
   entities    = [digitalocean_droplet.app.id]
+  enabled     = true
+
+  alerts {
+    email = var.alert_emails
+  }
+}
+
+# The managed database's own resources. The host alerts above do not see them.
+locals {
+  database_alerts = {
+    cpu    = { type = "v1/dbaas/alerts/cpu_alerts", value = 85, what = "CPU" }
+    memory = { type = "v1/dbaas/alerts/memory_utilization_alerts", value = 90, what = "memory" }
+    disk   = { type = "v1/dbaas/alerts/disk_utilization_alerts", value = 80, what = "disk" }
+  }
+}
+
+resource "digitalocean_monitor_alert" "database" {
+  for_each = { for name, alert in local.database_alerts : name => alert if length(var.alert_emails) > 0 }
+
+  description = "${local.name} database ${each.value.what} above ${each.value.value}%"
+  type        = each.value.type
+  compare     = "GreaterThan"
+  value       = each.value.value
+  window      = "10m"
+  entities    = [digitalocean_database_cluster.postgres.id]
   enabled     = true
 
   alerts {

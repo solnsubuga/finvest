@@ -1,12 +1,21 @@
 import { FailureReason, MismatchReason, Money, Network } from "./types";
 
-/** "UGX 1,000,000". Works on the integer, so no amount ever passes through a fraction. */
+/** Digits after the decimal point in each currency's smallest unit: whole shillings, US cents. */
+export const MINOR_DIGITS: Record<Money["currency"], number> = { UGX: 0, USD: 2 };
+
+/**
+ * "UGX 1,000,000" or "USD 500.00". The point is placed by moving digits of the
+ * integer, never by dividing, so no amount passes through a fraction.
+ */
 export function formatMoney(money: Money): string {
   if (!Number.isSafeInteger(money.minor)) {
     throw new Error("An amount must be a whole number of the smallest unit");
   }
-  const digits = String(Math.abs(money.minor)).replace(/\B(?=(\d{3})+(?!\d))/g, ",");
-  return `${money.currency} ${money.minor < 0 ? "-" : ""}${digits}`;
+  const places = MINOR_DIGITS[money.currency];
+  const digits = String(Math.abs(money.minor)).padStart(places + 1, "0");
+  const whole = digits.slice(0, digits.length - places).replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+  const fraction = places > 0 ? `.${digits.slice(digits.length - places)}` : "";
+  return `${money.currency} ${money.minor < 0 ? "-" : ""}${whole}${fraction}`;
 }
 
 export const networkName: Record<Network, string> = { mtn: "MTN", airtel: "Airtel" };

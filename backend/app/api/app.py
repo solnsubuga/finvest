@@ -16,6 +16,8 @@ from app.infrastructure.database import Database
 from app.infrastructure.email.webhooks import ResendHookSettings, WebhookVerifier
 from app.infrastructure.settings import Settings
 from app.infrastructure.storage import FileStorage, StorageSettings
+from app.modules.audit import api as audit_api
+from app.modules.autoinvest import api as autoinvest_api
 from app.modules.documents import api as documents_api
 from app.modules.goals import api as goals_api
 from app.modules.identity import api as identity_api
@@ -26,14 +28,17 @@ from app.modules.identity.hashing import PasswordHasher
 from app.modules.identity.passkeys import PasskeyService
 from app.modules.identity.service import IdentityService
 from app.modules.insights import api as insights_api
+from app.modules.investments import api as investments_api
 from app.modules.migration import api as migration_api
 from app.modules.notifications import api as notifications_api
 from app.modules.notifications import hooks as notification_hooks
+from app.modules.notifications import suppressions_api
 from app.modules.payments import api as payments_api
 from app.modules.payments import routes as payment_routes
 from app.modules.payments.domain.provider import CollectionsProvider
 from app.modules.payments.settings import PaymentsSettings
 from app.modules.payments.wiring import collections_provider
+from app.modules.payouts import api as payouts_api
 from app.modules.support import api as support_api
 from app.shared.clock import Clock, SystemClock
 from app.shared.errors import ErrorEnvelope
@@ -115,16 +120,21 @@ def create_app(
         *codes_api.routers,
         *team_api.routers,
         *notifications_api.routers,
+        *suppressions_api.routers,
         *support_api.routers,
         *documents_api.routers,
+        *audit_api.routers,
+        *payouts_api.routers,
     ):
         app.include_router(router)
     app.include_router(payments_api.create_router(collections))
-    for router in goals_api.routers:
+    for router in (*goals_api.routers, *autoinvest_api.routers):
         app.include_router(router)
     app.include_router(notification_hooks.create_router(email_hooks))
     app.include_router(payment_routes.create_client_router(collections))
     app.include_router(payment_routes.staff_router)
     app.include_router(migration_api.router)
     app.include_router(insights_api.router)
+    for router in investments_api.routers:
+        app.include_router(router)
     return app

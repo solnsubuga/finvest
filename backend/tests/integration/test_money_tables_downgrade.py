@@ -1,8 +1,9 @@
 """A downgrade must never delete the books, the issued numbers, the audit trail, the job
 history, the receipts that stop a command running twice, the identity records, the payout
-destinations, the withdrawal limits, the payouts, the migration checks, the imported
-statements, the day closes, the pot transfers, the help chat, the complaints register, the
-goals or the email delivery records."""
+destinations, the withdrawal limits, the payouts and their send attempts, the migration
+checks, the imported statements, the day closes, the pot transfers, the help chat, the
+complaints register, the goals, the email delivery records, the unclaimed accounts, the
+complaint outcomes or the suppression lifts."""
 
 import os
 from collections.abc import Iterator
@@ -97,6 +98,12 @@ ROWS = {
         "'-Nabc0000000000000B1', now(), '-Nabc0000000000000C1'); COMMIT",
         "refusing to drop the rollovers of goal savings",
     ),
+    "0112_goal_groups": (
+        "INSERT INTO goal_groups (id, owner_client_id, name, category, currency, target_minor, "
+        "created_at, updated_at) VALUES ('-Nabc0000000000000G1', '-Nabc0000000000000B1', "
+        "'Land', 'land_or_home', 'UGX', 10000000, now(), now())",
+        "refusing to drop group goals",
+    ),
     "0060_investment_products": (
         "BEGIN; SELECT set_config('finvest.actor_kind', 'staff', true); "
         "SELECT set_config('finvest.actor_id', '-Nabc0000000000000B1', true); "
@@ -133,6 +140,29 @@ ROWS = {
         "'-Nabc0000000000000A1', 'TREA-91', 'UGX', 100000, 97000, DATE '2026-11-19', "
         "DATE '2027-02-18', 'CSD-1'); COMMIT",
         "refusing to drop bills held or settled orders",
+    ),
+    # The owner turns the guards off for this one transaction: a real maturity needs a settled
+    # purchase and its ledger entries, which is more than this test is about.
+    "0082_dealing_maturities": (
+        "BEGIN; "
+        "ALTER TABLE dealing_orders DISABLE TRIGGER dealing_orders_guard; "
+        "ALTER TABLE dealing_lots DISABLE TRIGGER dealing_lots_guard; "
+        "ALTER TABLE dealing_lot_maturities DISABLE TRIGGER dealing_lot_maturities_guard; "
+        "INSERT INTO dealing_orders (id, kind, product_code, currency, face_minor, prepared_by, "
+        "prepared_at) VALUES ('-Nabc0000000000000A1', 'auction_bid', 'TREA-91', 'UGX', 100000, "
+        "'-Nabc0000000000000B1', now()); "
+        "INSERT INTO dealing_lots (id, order_id, product_code, currency, face_minor, cost_minor, "
+        "settled_on, matures_on, custodian_reference) VALUES ('-Nabc0000000000000L1', "
+        "'-Nabc0000000000000A1', 'TREA-91', 'UGX', 100000, 97000, DATE '2026-11-19', "
+        "DATE '2027-02-18', 'CSD-1'); "
+        "INSERT INTO dealing_lot_maturities (lot_id, matured_on, face_minor, cost_minor, "
+        "ledger_entry_id, recorded_at) VALUES ('-Nabc0000000000000L1', DATE '2027-02-18', "
+        "100000, 97000, '-Nabc0000000000000E1', now()); "
+        "ALTER TABLE dealing_orders ENABLE TRIGGER dealing_orders_guard; "
+        "ALTER TABLE dealing_lots ENABLE TRIGGER dealing_lots_guard; "
+        "ALTER TABLE dealing_lot_maturities ENABLE TRIGGER dealing_lot_maturities_guard; "
+        "COMMIT",
+        "refusing to drop bill maturities",
     ),
     "0050_kyc": (
         "INSERT INTO kyc_checks (id, client_id, document_type, document_country, created_at, "
@@ -194,6 +224,21 @@ ROWS = {
         "'Test', now())",
         "refusing to drop payouts or limits",
     ),
+    "0033_payout_send_attempts": (
+        "INSERT INTO payout_destinations (id, client_id, kind, network, account_number, "
+        "holder_name, status, created_at, updated_at) VALUES ('-Nabc0000000000000D1', "
+        "'-Nabc0000000000000B1', 'mobile_money', 'mtn', '256772000000', 'Test', "
+        "'awaiting_code', now(), now()); "
+        "INSERT INTO payouts (id, client_id, destination_id, kind, amount_minor, currency, "
+        "status, business_date, source_account_id, source_reference, in_flight_account_id, "
+        "request_key, created_at, updated_at) VALUES ('-Nabc0000000000000A1', "
+        "'-Nabc0000000000000B1', '-Nabc0000000000000D1', 'mobile_money', 1000, 'UGX', 'queued', "
+        "DATE '2026-11-10', '-Nabc0000000000000E1', 'investment-1', '-Nabc0000000000000F1', "
+        "'request-key-1', now(), now()); "
+        "INSERT INTO payout_send_attempts (payout_id, attempt, provider, started_at) "
+        "VALUES ('-Nabc0000000000000A1', 1, 'sandbox', now())",
+        "refusing to drop payout send attempts",
+    ),
     "0051_kyc_sealed_details": (
         "INSERT INTO kyc_checks (id, client_id, document_type, document_country, "
         "document_number_sealed, created_at, updated_at) VALUES ('-Nabc0000000000000A1', "
@@ -234,6 +279,13 @@ ROWS = {
         "'UGX', 100, 100, 0, repeat('0', 64), '-Nabc0000000000000B1', now())",
         "refusing to drop imported statements",
     ),
+    "0101_complaint_outcomes": (
+        "INSERT INTO complaints (id, client_id, category, received_via, summary, details, "
+        "received_at, due_on, logged_by_kind, logged_by, client_key, updated_at) VALUES "
+        "('-Nabc0000000000000A1', '-Nabc0000000000000B1', 'other', 'app', 'S', 'D', now(), "
+        "current_date, 'client', '-Nabc0000000000000B1', 'complaint-key-1', now())",
+        "refusing to drop complaint outcomes or keys",
+    ),
     "0100_support": (
         "INSERT INTO support_conversations (id, client_id, created_at, last_message_at) "
         "VALUES ('-Nabc0000000000000A1', '-Nabc0000000000000B1', now(), now())",
@@ -272,6 +324,30 @@ ROWS = {
         "'mtn', 'bank', 'trust', 'UGX', 5, 5, DATE '2026-11-10', 'IOT-1', 'proposed', "
         "'-Nabc0000000000000B1', now(), 'Sweep')",
         "refusing to drop pot transfers",
+    ),
+    "0153_email_suppression_lifts": (
+        "BEGIN; SELECT set_config('finvest.actor_kind', 'staff', true); "
+        "SELECT set_config('finvest.actor_id', '-Nabc0000000000000S1', true); "
+        "INSERT INTO notification_email_events (svix_id, delivery, email_id, recipients, "
+        "permanent, received_at) VALUES ('msg_lift1', 'bounced', 'email-1', "
+        "ARRAY[repeat('a', 64)], true, now()); "
+        "INSERT INTO notification_email_suppressions (address_hash, reason, svix_id, created_at) "
+        "VALUES (repeat('a', 64), 'bounced', 'msg_lift1', now()); "
+        "INSERT INTO notification_email_suppression_lifts (id, address_hash, reason, "
+        "proposed_by, proposed_at) VALUES ('-Nabc0000000000000A1', repeat('a', 64), "
+        "'Fixed their inbox', '-Nabc0000000000000S1', now()); COMMIT",
+        "refusing to drop suppression lifts",
+    ),
+    "0009_claims": (
+        "INSERT INTO identity_clients (id, phone, status, created_at) VALUES "
+        "('-Nabc0000000000000A1', '+256772123456', 'unclaimed', now())",
+        "refusing to drop unclaimed accounts or claim codes",
+    ),
+    "0072_migration_claims": (
+        "INSERT INTO migration_claims (client_id, legacy_client_ref, needs_id_check, status, "
+        "created_at, updated_at) VALUES ('-Nabc0000000000000A1', 'CL-1', false, 'not_invited', "
+        "now(), now())",
+        "refusing to drop migration claims",
     ),
 }
 

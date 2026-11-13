@@ -3,7 +3,7 @@
 `notify` runs inside the transaction of the thing it reports, so a client is told about a
 payment exactly when the payment is recorded, and never about one that rolled back. The words
 are fixed when the notification is written: a later change of wording does not rewrite what a
-client was already told.
+client was already told. Sending it by push, SMS or email is queued with it (see delivery.py).
 """
 
 from collections.abc import Mapping, Sequence
@@ -14,6 +14,7 @@ from typing import Any, Literal, get_args
 from sqlalchemy import CursorResult, Row, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.modules.notifications.delivery import queue_fan_out
 from app.modules.notifications.domain.events import Category, event
 from app.modules.notifications.domain.wording import Value, render
 from app.modules.notifications.wording_store import active_wording
@@ -144,7 +145,12 @@ async def notify(
             "now": now,
         },
     )
-    return notification_id if result.rowcount == 1 else None
+    if result.rowcount != 1:
+        return None
+    # Push, SMS and email follow from the worker, as the client chose. Only a new
+    # notification is sent, so calling again never sends anything twice.
+    await queue_fan_out(session, notification_id, now)
+    return notification_id
 
 
 async def page_for_client(

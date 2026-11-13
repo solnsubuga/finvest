@@ -1,4 +1,4 @@
-"""One-time codes by SMS or email: client signup, the sign-in fallback and password reset.
+"""One-time codes by SMS or email: signup, the sign-in fallback, password reset and claims.
 
 A code is six digits, lasts ten minutes, allows five tries and works once. Only its digest is
 stored here. The code itself travels through the notifications queue, which empties it once
@@ -45,11 +45,14 @@ MAX_TRIES = 5
 SENDS_PER_NUMBER = 3
 SENDS_PER_ADDRESS = 20
 SENDS_PER_LOGIN = 3
-Purpose = Literal["signup", "login", "password_reset"]
+# Tries at finishing one claim in fifteen minutes, counting weak passwords as well as codes.
+CLAIM_COMPLETIONS = 10
+Purpose = Literal["signup", "login", "password_reset", "claim"]
 _TEMPLATES: dict[Purpose, Template] = {
     "signup": "signup_code",
     "login": "sign_in_code",
     "password_reset": "password_reset_code",
+    "claim": "claim_code",
 }
 
 logger = structlog.get_logger()
@@ -59,6 +62,14 @@ logger = structlog.get_logger()
 class SignupTicket:
     ticket: str
     phone: str
+
+
+@dataclass(frozen=True, slots=True)
+class Claimed:
+    """The account a claim made active, and its first session."""
+
+    client_id: str
+    session: IssuedSession
 
 
 def _code_digest(code_id: str, code: str) -> bytes:
@@ -425,3 +436,107 @@ class CodeService:
         if row is None or row.actor_id is None:
             raise self._wrong("password_reset")
         logger.info("password_reset", client_id=row.actor_id)
+
+    # Claiming an account carried over from Finvest 1.0
+
+    async def claim_start(self, client_id: str, *, address: str | None) -> str:
+        """Text a code to the number of an unclaimed account. Returns the challenge ID.
+
+        The caller has checked the claim link, so it may learn whether the account is still
+        unclaimed: `not_found` means it was claimed, closed or never existed.
+        """
+        await reserve_attempts(
+            self.database,
+            self.clock,
+            [
+                (throttle_key("claim-client", client_id), SENDS_PER_NUMBER),
+                *(
+                    [(throttle_key("code-address", address), SENDS_PER_ADDRESS)]
+                    if address is not None
+                    else []
+                ),
+            ],
+        )
+        async with self.database.transaction() as session:
+            phone = await session.scalar(
+                text("SELECT phone FROM identity_clients WHERE id = :id AND status = 'unclaimed'"),
+                {"id": client_id},
+            )
+            if phone is None:
+                raise ApplicationError("not_found")
+            code_id = await self._issue(
+                session, "claim", "sms", recipient=phone, actor_id=client_id, bound_to=client_id
+            )
+        logger.info("claim_started", challenge_id=code_id)
+        return code_id
+
+    async def claim_complete(
+        self, challenge_id: str, code: str, password: str, transport: Transport
+    ) -> Claimed:
+        """Check the code, set the password and open the first session, all at once.
+
+        The account becomes active. A code proves only the number, so, as with a code sign-in,
+        withdrawals are limited to known accounts for 24 hours.
+        """
+        async with self.database.transaction() as session:
+            account = (
+                await session.execute(
+                    text(
+                        "SELECT c.id, c.phone, c.email FROM identity_codes k "
+                        "JOIN identity_clients c ON c.id = k.actor_id "
+                        "WHERE k.id = :id AND k.purpose = 'claim'"
+                    ),
+                    {"id": challenge_id},
+                )
+            ).one_or_none()
+        if account is None:
+            raise ApplicationError("expired")
+        # Hashing is slow on purpose. Limit how often one claim can make us do it.
+        await reserve_attempts(
+            self.database,
+            self.clock,
+            [(throttle_key("claim-complete", challenge_id), CLAIM_COMPLETIONS)],
+        )
+        # A weak password leaves the code unspent, so the person only picks another.
+        problem = password_problem(password, (account.phone, account.email))
+        if problem is not None:
+            raise _field("password", problem)
+        hashed = await self.hasher.hash(password)
+        now = self.clock.now()
+        client = Actor("client", account.id)
+        async with self.database.transaction() as session:
+            row = await self._spend(
+                session, "id = :id AND purpose = 'claim'", {"id": challenge_id}, code
+            )
+            claimed = False
+            if row is not None:
+                # The API cannot change a status, so the claim goes through this function.
+                claimed = bool(
+                    await session.scalar(
+                        text("SELECT identity_claim_client(:id, :code, :hash, :now, :until)"),
+                        {
+                            "id": client.id,
+                            "code": row.id,
+                            "hash": hashed,
+                            "now": now,
+                            "until": now + RESTRICTION,
+                        },
+                    )
+                )
+            if claimed:
+                await trail.note(
+                    session,
+                    self.clock,
+                    client,
+                    "identity.client.claimed",
+                    resource_type="client",
+                    resource_id=client.id,
+                )
+                issued = await self.identity.issue_in(session, client, "code", transport, now)
+        # Raised after the transaction, so the counted try and the spent code are kept.
+        if row is None:
+            raise self._wrong("claim")
+        if not claimed:
+            raise ApplicationError("expired")
+        logger.info("client_claimed", client_id=client.id)
+        return Claimed(account.id, issued)

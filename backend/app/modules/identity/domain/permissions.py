@@ -27,6 +27,7 @@ Permission = Literal[
     "reconciliation.view",
     "investments.view",
     "automatic_investing.view",
+    "goals.view",
     "dealing_desk.view",
     "finance.view",
     "products.view",
@@ -37,10 +38,16 @@ Permission = Literal[
     # reactivating someone, or a new set-up link. Seeing the team is `team.view`. Admin only.
     "team.change",
     "reports.view",
+    # Reading and exporting the audit trail: who did what, when and why, across the product.
+    # A section of the Reports and audit screen, not a screen of its own.
+    "audit.view",
     "settings.view",
     # Proposing or deciding a change to the words of a client message. Seeing them is
     # `settings.view`. Not a screen: the console's own list gains it with the wordings screen.
     "wordings.change",
+    # Proposing or deciding to email again an address that bounced for good or complained.
+    # Seeing the suppression list is `clients.view`. Not a screen.
+    "email_suppressions.lift",
     "migration.view",
     # Matching a client's bank transfer to the statement, refusing it, or approving someone
     # else's match: this confirms money. Seeing the transfers is `reconciliation.view`. Not a
@@ -68,10 +75,12 @@ ROLE_PERMISSIONS: dict[Role, frozenset[Permission]] = {
             "complaints.manage",
             "complaints.close",
             "clients.view",
+            "email_suppressions.lift",
             "money_movement.view",
             "reconciliation.view",
             "investments.view",
             "automatic_investing.view",
+            "goals.view",
             "reports.view",
             "migration.view",
             "bank_transfers.change",
@@ -88,6 +97,7 @@ ROLE_PERMISSIONS: dict[Role, frozenset[Permission]] = {
             "reconciliation.view",
             "investments.view",
             "automatic_investing.view",
+            "goals.view",
             "dealing_desk.view",
             "finance.view",
             "products.view",
@@ -109,6 +119,7 @@ ROLE_PERMISSIONS: dict[Role, frozenset[Permission]] = {
             "clients.view",
             "compliance.view",
             "reports.view",
+            "audit.view",
         }
     ),
     # Support answers clients and logs and works complaints. Closing one is for operations and
@@ -121,6 +132,7 @@ ROLE_PERMISSIONS: dict[Role, frozenset[Permission]] = {
             "complaints.view",
             "complaints.manage",
             "clients.view",
+            "email_suppressions.lift",
         }
     ),
 }

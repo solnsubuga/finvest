@@ -201,4 +201,16 @@ An event says who (`actor`), what (`action`, `resource_type`, `resource_id`), th
 | Only staff read it | A row policy shows the trail to staff transactions only. Which staff may read it is a permission, checked in the application. |
 | No personal data | The trail stores identifiers. Before saving, sensitive keys are masked and phone numbers, account numbers, email addresses and credentials inside text are replaced. |
 
+### Reading it in the console
+
+The Reports and audit screen reads the trail through `backend/app/modules/audit/api.py`. Both routes need `audit.view`, which admin and compliance hold.
+
+| Route | Use |
+| --- | --- |
+| `GET /staff/audit/events` | Newest first, 50 to a page (at most 200), continued with `cursor` from `next_cursor`. Filters, all optional and combined: `category`, `action` (a whole action, or a prefix ending in a dot such as `identity.team.`), `outcome`, `actor_kind`, `actor_id`, `resource_type`, `resource_id`, `correlation_id`, and `since` (inclusive) to `until` (exclusive), each with a time zone. A staff actor comes with their name; a client is shown by ID only. |
+| `GET /staff/audit/events.csv` | The same filters as a CSV file, newest first. More than 10,000 events is refused with `too_many_events`: narrow the dates. A cell that a spreadsheet would run as a formula is written with a leading `'`. Every export is itself an `audit.trail_exported` event that records the filters and how many events it held. |
+| `GET /staff/audit/facets` | Every action and record type on the trail, for the filter lists. |
+
+Each filter is a fixed condition with a bound value, so nothing the console sends becomes SQL. Migration `0151_audit_search` indexes the trail by action.
+
 Record retention is not built yet. Removing old events will need a deliberate migration once the regulator's period is confirmed.

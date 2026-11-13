@@ -114,7 +114,20 @@ What the database holds for bills:
 | A sale takes bills of the instrument it recorded, and never more than a lot still holds | The same trigger, under a two-key advisory lock on the lot, so two sales at once are checked one after the other |
 | Nothing about bills held is changed or removed | The trigger refuses UPDATE, DELETE and TRUNCATE for every role |
 
-`dealing.holdings` answers what is held: `lots_of` for one instrument, `face_held`, `holdings_on(session, on)` for each instrument at the end of a day, and `expected_bank_movements(session, date_from=, date_to=)` for the day close. A lot counts from its settlement date until the day before it matures. The worker can read all of these.
+### Bills paid at maturity
+
+Every hour the worker runs `dealing.record_maturities`. For each lot whose maturity date has come and that still holds bills, it posts the face value left into the trust bank account and records the maturity in `dealing_lot_maturities` (migration 0082).
+
+| Debit | Credit |
+| --- | --- |
+| `bank.trust`, the face value left | `dealing.bills`, the cost left |
+| `dealing.maturity_losses`, for a bond bought above face | `dealing.bill_income`, face value above cost |
+
+The entry is dated on the maturity date even when the run is late, and points back at the lot (`dealing.lot`). It is posted by the worker, as Finvest itself, and never by staff. Reconciliation then expects the money on that day's bank statement, so a payment that never came shows up there. A maturity date in a closed day fails the run, and staff see it among the failed jobs.
+
+The database holds that only the worker records a maturity, that it is exactly what the lot still held on its maturity date with a matching ledger entry, that a sale never takes bills that have matured, and that a maturity is never changed or removed.
+
+`dealing.holdings` answers what is held: `lots_of` for one instrument, `face_held`, `holdings_on(session, on)` for each instrument at the end of a day, and `expected_bank_movements(session, date_from=, date_to=)` for the day close, which covers purchases, sales and maturities. A lot counts from its settlement date until the day before it matures. The worker can read all of these.
 
 ## The liquidity buffer
 
@@ -156,4 +169,4 @@ Agreed with the investing, and the payouts and reconciliation, threads on 13 Nov
 
 ## Not built yet
 
-HTTP routes for the order commands, allocations, the maturity of bills and its ledger entry, the two-person change to the buffer rules, the custodian statement comparison and the allocation report. The console screen runs on sample data until the routes exist.
+HTTP routes for the order commands, allocations, the two-person change to the buffer rules, the custodian statement comparison and the allocation report. The console screen runs on sample data until the routes exist.

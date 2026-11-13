@@ -21,6 +21,7 @@ Run these from the repository root. They need [uv](https://docs.astral.sh/uv/), 
 | `make dev-stop`, `make dev-down`, `make dev-logs`, `make dev-status` | Control the local stack. Data is kept. |
 | `make check-backend` | Ruff format and lint, mypy, import-linter, and the tests that need no database |
 | `make test-integration` | The integration tests against real PostgreSQL. Starts the Compose database, or uses `FINVEST_TEST_ADMIN_URL` if it is set. |
+| `make test-journeys` | The end-to-end journeys (below), in a database of their own. Same database rules as `test-integration`. |
 | `make test-stack` | Builds the image, starts all four processes and waits for every health check |
 | `make audit` | pip-audit over the locked dependencies |
 
@@ -58,10 +59,19 @@ migrations/versions/ Alembic revisions, hand-written SQL, named NNNN_description
 tests/
   unit/              No database
   integration/       Real PostgreSQL. Every test here carries the `integration` marker.
+  journeys/          End-to-end client journeys. Every test here carries the `journey` marker.
   support/           Shared fixtures: fake clock, barrier, database harness
 ```
 
 import-linter enforces the purity of `app/shared` and of every `app/modules/*/domain`, and keeps `app/infrastructure` free of modules and HTTP. A module never writes to another module's tables.
+
+## End-to-end journeys
+
+`tests/journeys/` follows clients through the whole product: signing up, an authenticator app, KYC, paying by mobile money and by bank transfer, daily interest, maturity with a rollover or a payout, goals, an automatic investing plan, dealing, and the day close. Each journey runs the real API application over HTTP, the real worker with every handler `worker_main.handlers` registers, and the scheduler's own schedules, on one fake clock that starts at the real time. Only the outside world is replaced: ioTec by the sandbox collections provider, Resend and the SMS provider by transports that record what they were given, and file storage by memory. Steps that have no route yet call their module's service as the client or member of staff the route will act for.
+
+After every journey the whole ledger must balance (each entry, and each currency overall), no account may be below zero, every kept balance must equal its lines, and every entry of a kind staff can post must have an audit event. Each journey checks its own audit trail too.
+
+The journeys use a database of their own, migrated as production is and without the integration suite's test-only ledger source, because the day close signs off real days on the real cash pots and that can never be undone. The journeys that close a day carry `closes_a_day` and run after all the others. Steps not built yet, and gaps the journeys found, are listed in `tests/journeys/gaps.py`.
 
 ## Building on the scaffold
 
@@ -94,8 +104,10 @@ The identity module (`app/modules/identity`) owns client and staff accounts, ses
 - **Sessions.** A browser gets an HttpOnly, SameSite=Strict cookie. The phone app gets a token and sends `Authorization: Bearer`. Only a SHA-256 digest of the token is stored. Every session has an idle limit and an absolute limit, set per audience in the settings.
 - **Knowing the caller.** Depend on `CurrentClient`, `CurrentStaff` or `require_permission("clients.view")` from `app.modules.identity.api`. Every staff route declares a permission. Pass `session.actor` to `Database.actor_transaction`.
 - **Origins.** Browsers may call only from `FINVEST_CLIENT_ALLOWED_ORIGINS` and `FINVEST_STAFF_ALLOWED_ORIGINS` (JSON lists of exact origins). A cookie on an unsafe request is honoured only with one of those origins.
+- **Client sign-up.** Open on a developer's machine and closed anywhere `FINVEST_ENVIRONMENT` is set (staging, production), until `FINVEST_CLIENT_SIGNUP_OPEN=true`. While closed, the three `/client/signup` routes answer `unavailable` before any other work. Sign-in, the code fallback, password reset and migrated clients' claims are not affected. Production opens it on switch day ([docs/launch.md](../docs/launch.md)).
 - **Attempt limits.** Wrong guesses are counted in PostgreSQL per account, per account and address, and per address, over 15 minutes. The caller's address is read from `X-Forwarded-For` only when the request comes from a proxy listed in `FINVEST_TRUSTED_PROXIES`.
 - **Passwords.** Argon2id, at least 10 characters, refused when common or built from the account's own number or address. Every sign-in failure is the same `invalid_credentials` after the same work.
+- **Accounts carried over from Finvest 1.0.** `create_unclaimed_client(session, clock, staff, phone=..., email=...)` in `identity.service` adds an account with status `unclaimed` and no password, in the caller's transaction. Nothing signs in as it and no reset is sent to it. The client claims it through the migration module, which checks the claim link and then calls `CodeService.claim_start(client_id, address=...)` (texts a code) and `claim_complete(challenge_id, code, password, transport)`. That sets the first password, makes the account active, opens a session and returns `Claimed(client_id, session)`. A code proves only the number, so a claimed account is restricted for 24 hours. The API cannot change a status itself: the claim goes through the `identity_claim_client` database function, and an account never becomes unclaimed again. Changing a client's number is not built yet: it will need a second member of staff to approve it.
 - **Roles.** `domain/permissions.py` is the one catalogue of roles and permissions. The mapping is a default that the owner has not confirmed yet.
 
 ## Email and text messages

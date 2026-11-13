@@ -24,6 +24,7 @@ from app.modules.audit.domain.events import (
     DetailValue,
     build_record,
 )
+from app.modules.audit.domain.search import AuditFilter, Cursor
 from app.shared.actors import Actor
 from app.shared.clock import Clock
 from app.shared.push_ids import push_id
@@ -129,6 +130,69 @@ async def recent_events(
     """The newest events of any kind. Only a staff transaction sees any rows."""
     rows = await session.execute(_RECENT, {"limit": _bounded(limit)})
     return [_view(row) for row in rows.all()]
+
+
+async def search_events(
+    session: AsyncSession,
+    filters: AuditFilter,
+    *,
+    after: Cursor | None = None,
+    limit: int = DEFAULT_PAGE_SIZE,
+    max_limit: int = MAX_PAGE_SIZE,
+) -> list[AuditEventView]:
+    """Events that match every filter given, newest first, continuing after `after`.
+
+    Only a staff transaction sees any rows. Each filter is a fixed condition with a bound
+    value, so nothing a caller sends becomes SQL.
+    """
+    conditions: list[str] = []
+    values: dict[str, object] = {"limit": max(1, min(limit, max_limit))}
+    for column in (
+        "category",
+        "outcome",
+        "actor_kind",
+        "actor_id",
+        "resource_type",
+        "resource_id",
+        "correlation_id",
+    ):
+        value = getattr(filters, column)
+        if value is not None:
+            conditions.append(f"{column} = :{column}")
+            values[column] = value
+    if filters.action is not None:
+        if filters.is_prefix:
+            # The prefix is checked against a strict pattern, so it holds no LIKE wildcards.
+            conditions.append("starts_with(action, :action)")
+        else:
+            conditions.append("action = :action")
+        values["action"] = filters.action
+    if filters.since is not None:
+        conditions.append("occurred_at >= :since")
+        values["since"] = filters.since
+    if filters.until is not None:
+        conditions.append("occurred_at < :until")
+        values["until"] = filters.until
+    if after is not None:
+        conditions.append("(occurred_at, id) < (:after_at, :after_id)")
+        values["after_at"] = after.occurred_at
+        values["after_id"] = after.id
+    where = f"WHERE {' AND '.join(conditions)} " if conditions else ""
+    query = text(
+        f"SELECT {_COLUMNS} FROM audit_events {where}"  # noqa: S608 - fixed conditions only
+        "ORDER BY occurred_at DESC, id DESC LIMIT :limit"
+    )
+    rows = await session.execute(query, values)
+    return [_view(row) for row in rows.all()]
+
+
+async def known_names(session: AsyncSession) -> tuple[list[str], list[str]]:
+    """Every action and resource type on record, for the console's filter lists."""
+    actions = await session.scalars(text("SELECT DISTINCT action FROM audit_events ORDER BY 1"))
+    kinds = await session.scalars(
+        text("SELECT DISTINCT resource_type FROM audit_events ORDER BY 1")
+    )
+    return list(actions.all()), list(kinds.all())
 
 
 def _bounded(limit: int) -> int:

@@ -20,20 +20,25 @@ from app.infrastructure.storage import (
     StorageUnavailable,
     sha256_hex,
 )
+from app.modules.dealing.domain.settlement import BANK_TRUST
+from app.modules.dealing.domain.settlement import accounts as settlement_accounts
 from app.modules.identity.api import COOKIES
 from app.modules.identity.domain.permissions import ROLE_PERMISSIONS
 from app.modules.identity.hashing import PasswordHasher
 from app.modules.identity.service import IdentityService
 from app.modules.kyc import service as kyc
 from app.modules.kyc.providers import ManualProvider
+from app.modules.ledger import service as ledger
 from app.modules.payments import bank_transfers as bank
 from app.modules.payments.bank_transfers import BankTransferJobs
 from app.modules.payments.domain.outcomes import Accepted, Pending
 from app.modules.reconciliation import statements
+from app.modules.reconciliation.domain.pots import CASH_POTS
 from app.modules.reconciliation.domain.statements import CsvFormat, StatementSource, parse_csv
-from app.shared.actors import Actor
+from app.shared.actors import SYSTEM, Actor
 from app.shared.business_day import business_date
 from app.shared.errors import ApplicationError
+from app.shared.money import Currency
 from app.shared.push_ids import push_id
 from tests.support.clock import FakeClock
 from tests.support.database import TestDatabase
@@ -247,8 +252,8 @@ async def submit_transfer(http: httpx.AsyncClient, investment_id: str, minor: in
     return str(sent.json()["id"])
 
 
-async def import_statement(api: Api, minor: int) -> str:
-    pot = f"trust-{secrets.token_hex(4)}"
+async def import_statement(api: Api, minor: int, pot: str | None = None) -> str:
+    pot = pot or f"trust-{secrets.token_hex(4)}"
     parsed = parse_csv(
         f"Date,Details,Reference,In,Out\n{SENT_ON.isoformat()},Transfer,REF1,{minor},\n",
         FORMAT,
@@ -320,6 +325,53 @@ async def test_a_bank_transfer_is_checked_by_one_person_and_approved_by_another(
         await drain(worker)
         done = (await client_http.get(f"/client/payments/{payment['id']}")).json()
         assert done["status"] == "confirmed" and done["confirmed_at"] is not None
+
+
+async def test_a_transfer_into_the_trust_account_is_the_money_dealing_and_the_day_close_see(
+    api: Api, worker_database: Database
+) -> None:
+    """The trust account has one ledger account. A transfer matched to its statement adds to
+    it, so the day close finds it there and the dealing desk can spend it."""
+    minor = 3_000_000 + secrets.randbelow(10**6) * 1000
+    trust = next(pot for pot in CASH_POTS if pot.account_reference == "trust")
+    async with api.http() as client_http, api.http() as first, api.http() as second:
+        client, _ = await api.client(client_http)
+        investment = await request_investment(api.database, client, api.clock, amount=ugx(minor))
+        payment_id = await submit_transfer(client_http, investment.id, minor)
+        await import_statement(api, minor, pot="trust")
+        await api.staff(first)
+        await api.staff(second)
+        detail = (await first.get(f"/staff/payments/bank-transfers/{payment_id}")).json()
+        line = next(line for line in detail["candidates"] if line["account_reference"] == "trust")
+        matched = await first.post(
+            f"/staff/payments/bank-transfers/{payment_id}/review",
+            json={"outcome": "matched", "statement_line_id": line["id"]},
+            headers=key(),
+        )
+        assert matched.status_code == 200, matched.text
+        async with worker_database.actor_transaction(SYSTEM) as session:
+            account = await ledger.open_account(session, trust.ledger_account, api.clock)
+            before = (await ledger.get_balance(session, account.id)).minor
+        approved = await second.post(
+            f"/staff/payments/bank-transfers/{payment_id}/approve", headers=key()
+        )
+        assert approved.status_code == 200, approved.text
+        worker = Worker(
+            worker_database,
+            BankTransferJobs(worker_database, api.clock).handlers(),
+            clock=api.clock,
+        )
+        await drain(worker)
+        assert (await client_http.get(f"/client/payments/{payment_id}")).json()["status"] == (
+            "confirmed"
+        )
+        async with worker_database.actor_transaction(SYSTEM) as session:
+            assert (await ledger.get_balance(session, account.id)).minor == before + minor
+            # The account dealing settles purchases from is the same one.
+            dealing_trust = await ledger.open_account(
+                session, settlement_accounts(Currency.UGX)[BANK_TRUST], api.clock
+            )
+            assert dealing_trust.id == account.id
 
 
 async def test_a_refused_transfer_says_why_and_staff_without_the_permission_are_refused(
