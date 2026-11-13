@@ -140,8 +140,8 @@ def prepare(output: Path, env: Mapping[str, str]) -> None:
     backend_image = setting(env, "BACKEND_IMAGE", pattern=IMAGE)
     console_image = setting(env, "CONSOLE_IMAGE", pattern=IMAGE)
     site_image = setting(env, "SITE_IMAGE", pattern=IMAGE)
-    # Staging always serves the website. Production serves it only once the owner says it is
-    # ready (SITE_PUBLISHED=true), because the pages still carry placeholder facts.
+    # Staging always serves the website. Production serves it only once the owner launches it
+    # (SITE_PUBLISHED=true).
     site_published = environment != "production" or optional(env, "SITE_PUBLISHED") == "true"
     project = f"finvest-{environment}"
     # A rehearsal turns database TLS off, so it is accepted only with images from the throwaway
