@@ -184,6 +184,13 @@ class PrepareRelease(unittest.TestCase):
         for service in ("api", "scheduler", "migrate"):
             self.assertNotIn("FINVEST_EMAIL_FIDIBA_ENVIRONMENT", read_env(self.out / "runtime" / f"{service}.env"))
 
+    def test_email_hash_key_reaches_the_api_and_worker_only(self):
+        pr.prepare(self.out, settings(FINVEST_EMAIL_HASH_KEY="e" * 43))
+        for service in ("api", "worker"):
+            self.assertEqual(read_env(self.out / "runtime" / f"{service}.env")["FINVEST_EMAIL_HASH_KEY"], "e" * 43)
+        for service in ("scheduler", "migrate"):
+            self.assertNotIn("FINVEST_EMAIL_HASH_KEY", read_env(self.out / "runtime" / f"{service}.env"))
+
     def test_identity_data_key_reaches_the_api_and_worker_only(self):
         pr.prepare(self.out, settings(FINVEST_IDENTITY_DATA_KEY="d" * 43))
         for service in ("api", "worker"):
