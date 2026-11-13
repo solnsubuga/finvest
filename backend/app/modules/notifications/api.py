@@ -7,7 +7,7 @@ from fastapi import APIRouter, Depends, Query, Request
 from pydantic import Field
 
 from app.infrastructure.database import Database
-from app.modules.identity.api import CurrentClient, require_permission
+from app.modules.identity.api import CurrentClient, require_confirmed, require_permission
 from app.modules.identity.service import StaffSession
 from app.modules.notifications import (
     announcements,
@@ -43,8 +43,12 @@ routers = [client_router, staff_router]
 # be one of the two people a change needs.
 SettingsStaff = Annotated[StaffSession, Depends(require_permission("settings.view"))]
 WordingStaff = Annotated[StaffSession, Depends(require_permission("wordings.change"))]
+# Deciding needs a passkey or app code from the last few minutes.
+WordingDecider = Annotated[StaffSession, Depends(require_confirmed("wordings.change"))]
 # Telling every client at once is a permission of its own, apart from changing a wording.
 AnnouncementStaff = Annotated[StaffSession, Depends(require_permission("announcements.send"))]
+# Deciding needs a passkey or app code from the last few minutes.
+AnnouncementDecider = Annotated[StaffSession, Depends(require_confirmed("announcements.send"))]
 Reason = Annotated[str, Field(min_length=1, max_length=500)]
 # The wire names. Contracts are strict, so a name arrives as text and is checked against these.
 CategoryName = Literal["money", "investments", "earnings", "account", "security", "support", "news"]
@@ -324,7 +328,7 @@ async def propose_wording(
 
 @staff_router.post("/notification-wordings/proposals/{proposal_id}/decision")
 async def decide_wording(
-    proposal_id: PushId, body: DecideWording, staff: WordingStaff, database: Db, clock: Time
+    proposal_id: PushId, body: DecideWording, staff: WordingDecider, database: Db, clock: Time
 ) -> ProposalView:
     """Approve or reject another person's proposal, or withdraw your own."""
     async with database.actor_transaction(staff.actor) as session:
@@ -412,7 +416,7 @@ async def propose_announcement(
 async def decide_announcement(
     announcement_id: PushId,
     body: DecideAnnouncement,
-    staff: AnnouncementStaff,
+    staff: AnnouncementDecider,
     database: Db,
     clock: Time,
 ) -> AnnouncementView:

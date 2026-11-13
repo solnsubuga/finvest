@@ -555,6 +555,17 @@ ROWS = {
         "'Chrome on Android')",
         "refusing to drop the devices sessions were opened on",
     ),
+    "0165_identity_session_reverify": (
+        "INSERT INTO identity_staff (id, email, name, role, password_hash, status, created_at) "
+        "VALUES ('-Nabc0000000000000S1', 'admin@finvestug.com', 'Admin', 'admin', 'x', "
+        "'active', now()); "
+        "INSERT INTO identity_sessions (id, actor_kind, actor_id, token_hash, second_step, "
+        "transport, created_at, last_seen_at, idle_expires_at, absolute_expires_at, "
+        "reverified_at) VALUES ('-Nabc0000000000000A1', 'staff', '-Nabc0000000000000S1', "
+        "decode(repeat('00', 32), 'hex'), 'passkey', 'cookie', now(), now(), now(), now(), "
+        "now())",
+        "refusing to drop staff re-confirmations",
+    ),
 }
 
 

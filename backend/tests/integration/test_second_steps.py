@@ -6,6 +6,7 @@ import itertools
 import secrets
 from collections.abc import AsyncIterator
 from dataclasses import dataclass
+from datetime import timedelta
 from typing import Any
 
 import httpx
@@ -855,3 +856,109 @@ async def test_changes_to_how_someone_signs_in_are_on_the_audit_trail(api: Api) 
     links = [row.details for row in rows if row.action.endswith("enrolment_link_issued")]
     assert ["true" in details for details in links] == [False, True]
     assert all("secret" not in row.details and "otpauth" not in row.details for row in rows)
+
+
+# Confirming it is you again before an approval
+
+APPROVAL = "/staff/phone-changes/-Nabc0000000000000Z9/approval"
+
+
+def ten_minutes_on(api: Api) -> str:
+    """When a confirmation made now stops counting, as the API writes it."""
+    return (api.clock.now() + timedelta(minutes=10)).isoformat().replace("+00:00", "Z")
+
+
+async def test_an_approval_needs_a_fresh_passkey_signature(api: Api) -> None:
+    _, staff_id, token = await invited(api)
+    device = Device(STAFF_SITE, STAFF_ORIGIN)
+    signed_in = await enrol_with_passkey(api, token, device)
+    # Signing in counts for ten minutes.
+    assert signed_in.json()["confirmed_until"] == ten_minutes_on(api)
+    fresh = await api.http.post(APPROVAL, headers=STAFF)
+    assert (fresh.status_code, code(fresh)) == (404, "not_found")
+
+    api.clock.advance(minutes=10, seconds=1)
+    stale = await api.http.post(APPROVAL, headers=STAFF)
+    assert (stale.status_code, code(stale)) == (403, "confirm_it_is_you")
+    options = await api.http.post("/staff/session/confirmation/passkey/options", headers=STAFF)
+    assert options.status_code == 200, options.text
+    answer = device.get(options.json()["public_key"])
+    confirmed = await api.http.post(
+        "/staff/session/confirmation/passkey", json={"credential": answer}, headers=STAFF
+    )
+    assert confirmed.status_code == 200, confirmed.text
+    assert confirmed.json() == {"confirmed_until": ten_minutes_on(api)}
+    assert (await api.http.post(APPROVAL, headers=STAFF)).status_code == 404
+    session = (await api.http.get("/staff/session")).json()
+    assert session["confirmed_until"] == confirmed.json()["confirmed_until"]
+    assert session["second_steps"] == ["passkey"]
+
+    # The same answer does not work twice.
+    again = await api.http.post(
+        "/staff/session/confirmation/passkey", json={"credential": answer}, headers=STAFF
+    )
+    assert (again.status_code, code(again)) == (410, "expired")
+    async with api.database.actor_transaction(Actor("staff", staff_id)) as db:
+        actions = list(
+            await db.scalars(
+                text("SELECT action FROM audit_events WHERE actor_id = :id"), {"id": staff_id}
+            )
+        )
+    assert "identity.session.reconfirmed" in actions
+
+
+async def test_another_persons_passkey_does_not_confirm_a_session(api: Api) -> None:
+    _, _, token = await invited(api)
+    await enrol_with_passkey(api, token, Device(STAFF_SITE, STAFF_ORIGIN))
+    api.clock.advance(minutes=11)
+    stranger = Device(STAFF_SITE, STAFF_ORIGIN)
+    options = await api.http.post("/staff/session/confirmation/passkey/options", headers=STAFF)
+    refused = await api.http.post(
+        "/staff/session/confirmation/passkey",
+        json={"credential": stranger.get(options.json()["public_key"])},
+        headers=STAFF,
+    )
+    assert (refused.status_code, code(refused)) == (401, "passkey_failed")
+    stale = await api.http.post(APPROVAL, headers=STAFF)
+    assert code(stale) == "confirm_it_is_you"
+
+
+async def test_an_approval_can_be_confirmed_with_an_app_code(api: Api) -> None:
+    _, _, token = await invited(api)
+    secret = await enrol_with_app(api, token)
+    assert (await api.http.get("/staff/session")).json()["second_steps"] == ["authenticator"]
+    api.clock.advance(minutes=11)
+    assert code(await api.http.post(APPROVAL, headers=STAFF)) == "confirm_it_is_you"
+    wrong = await api.http.post(
+        "/staff/session/confirmation/authenticator", json={"code": "000000"}, headers=STAFF
+    )
+    assert (wrong.status_code, code(wrong)) == (401, "invalid_code")
+    right = await api.http.post(
+        "/staff/session/confirmation/authenticator",
+        json={"code": app_code(api, secret)},
+        headers=STAFF,
+    )
+    assert right.status_code == 200, right.text
+    assert (await api.http.post(APPROVAL, headers=STAFF)).status_code == 404
+    # A code is spent once, here as at sign-in.
+    reused = await api.http.post(
+        "/staff/session/confirmation/authenticator",
+        json={"code": app_code(api, secret)},
+        headers=STAFF,
+    )
+    assert code(reused) == "invalid_code"
+
+
+async def test_confirming_needs_a_signed_in_member_of_staff_on_the_console(api: Api) -> None:
+    signed_out = await api.http.post(
+        "/staff/session/confirmation/authenticator", json={"code": "123456"}, headers=STAFF
+    )
+    assert (signed_out.status_code, code(signed_out)) == (401, "unauthorized")
+    _, _, token = await invited(api)
+    await enrol_with_app(api, token)
+    elsewhere = await api.http.post(
+        "/staff/session/confirmation/authenticator",
+        json={"code": "123456"},
+        headers={"Origin": "https://evil.example"},
+    )
+    assert (elsewhere.status_code, code(elsewhere)) == (403, "forbidden")

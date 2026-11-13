@@ -43,6 +43,8 @@ Status is **Met** (checked in the code or configuration named), **Fixed** (a gap
 | Idle and absolute timeouts per audience | Met | `Settings`: client web 15 minutes and 12 hours, staff 30 minutes and 12 hours |
 | Sign out ends the session on the server | Met | `/sign-out` |
 | A new session on every sign in | Met | `session_opened` |
+| People can see their signed-in devices and sign the others out, and are told of a sign-in from a new device | Met | `/client/sessions`, `/staff/sessions`, the `new_sign_in` message |
+| Staff confirm it is them again, with a passkey or app code from the last 10 minutes, before deciding another person's change | Met | `require_confirmed` in `identity/api.py`, checked for every decision route by `tests/unit/test_confirmed_approvals.py` |
 
 ### V4 Access control
 

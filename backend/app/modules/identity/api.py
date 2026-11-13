@@ -16,6 +16,7 @@ from app.infrastructure.settings import Settings
 from app.modules.identity.domain.permissions import Permission, Role
 from app.modules.identity.domain.sessions import SecondStep
 from app.modules.identity.service import (
+    CONFIRMATION_WINDOW,
     AccountKind,
     ClientSession,
     IdentityService,
@@ -123,6 +124,24 @@ def require_permission(permission: Permission) -> Callable[..., Awaitable[StaffS
     return check
 
 
+def require_confirmed(permission: Permission) -> Callable[..., Awaitable[StaffSession]]:
+    """`require_permission`, and the person used their second step in the last ten minutes.
+
+    Declare it on a route that approves or decides another person's change. A refusal is
+    `confirm_it_is_you`: the console asks for the passkey or app code, then sends it again.
+    """
+
+    async def check(request: Request, staff: CurrentStaff) -> StaffSession:
+        if permission not in staff.permissions:
+            raise ApplicationError("forbidden")
+        now = request.app.state.clock.now()
+        if now - staff.confirmed_at > CONFIRMATION_WINDOW:
+            raise ApplicationError("confirm_it_is_you")
+        return staff
+
+    return check
+
+
 def set_session_cookie(
     request: Request, response: Response, kind: AccountKind, issued: IssuedSession, now: datetime
 ) -> None:
@@ -182,6 +201,21 @@ class StaffSessionView(Contract):
     name: str
     role: Role
     permissions: list[Permission]
+    # Approving another person's change works without asking again until then.
+    confirmed_until: datetime
+    # What this person can confirm it is them with, passkey first.
+    second_steps: list[SecondStep]
+
+
+async def staff_view(identity: IdentityService, staff: StaffSession) -> StaffSessionView:
+    return StaffSessionView(
+        staff_id=staff.staff_id,
+        name=staff.name,
+        role=staff.role,
+        permissions=staff.permissions,
+        confirmed_until=staff.confirmed_at + CONFIRMATION_WINDOW,
+        second_steps=await identity.staff_second_steps(staff),
+    )
 
 
 @client_router.post("/login/start")
@@ -238,10 +272,8 @@ async def staff_login_start(
 
 
 @staff_router.get("/session")
-async def staff_session(staff: CurrentStaff) -> StaffSessionView:
-    return StaffSessionView(
-        staff_id=staff.staff_id, name=staff.name, role=staff.role, permissions=staff.permissions
-    )
+async def staff_session(staff: CurrentStaff, identity: Identity) -> StaffSessionView:
+    return await staff_view(identity, staff)
 
 
 @staff_router.post("/sign-out", status_code=204)
