@@ -43,7 +43,8 @@ const policy = [
   `connect-src 'self' ${api} https://cloudflareinsights.com`,
   "object-src 'none'",
   "base-uri 'self'",
-  "form-action 'self'",
+  // The contact form falls back to the visitor's own mail program.
+  "form-action 'self' mailto:",
   "frame-ancestors 'none'",
 ].join("; ");
 console.log(`header Content-Security-Policy "${policy}"`);
