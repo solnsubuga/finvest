@@ -1,6 +1,6 @@
 """Build the one FastAPI application. Modules add their routers here."""
 
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Mapping
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
@@ -43,12 +43,17 @@ from app.modules.notifications import suppressions_api
 from app.modules.payments import api as payments_api
 from app.modules.payments import routes as payment_routes
 from app.modules.payments.domain.provider import CollectionsProvider
-from app.modules.payments.settings import PaymentsSettings
+from app.modules.payments.settings import (
+    BankAccountDetails,
+    BankTransferSettings,
+    PaymentsSettings,
+)
 from app.modules.payments.wiring import collections_provider
 from app.modules.payouts import api as payouts_api
 from app.modules.support import api as support_api
 from app.shared.clock import Clock, SystemClock
 from app.shared.errors import ErrorEnvelope
+from app.shared.money import Currency
 
 
 def create_app(
@@ -59,6 +64,7 @@ def create_app(
     *,
     collections: CollectionsProvider | None = None,
     storage: FileStorage | None = None,
+    bank_accounts: Mapping[Currency, BankAccountDetails] | None = None,
     email_hooks: WebhookVerifier | None = None,
     identity_sealer: Sealer | None = None,
     identity_provider: IdentityProvider | None = None,
@@ -68,6 +74,8 @@ def create_app(
     clock = clock or SystemClock()
     collections = collections or collections_provider(PaymentsSettings(), clock)
     storage = storage or StorageSettings().storage()
+    if bank_accounts is None:
+        bank_accounts = BankTransferSettings().accounts
     email_hooks = email_hooks or ResendHookSettings().verifier()
     identity_checks = KycSettings()
     if identity_sealer is None and identity_checks.identity_data_key is not None:
@@ -148,7 +156,7 @@ def create_app(
     for router in (*goals_api.routers, *autoinvest_api.routers):
         app.include_router(router)
     app.include_router(notification_hooks.create_router(email_hooks))
-    app.include_router(payment_routes.create_client_router(collections))
+    app.include_router(payment_routes.create_client_router(collections, bank_accounts))
     app.include_router(payment_routes.staff_router)
     app.include_router(migration_api.router)
     app.include_router(insights_api.router)
