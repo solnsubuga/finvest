@@ -68,8 +68,11 @@ export function toGoal(view: GoalView): Goal {
   };
 }
 
+/** Which call failed, where the same refusal means different things. */
+type Call = "create" | "save" | "other";
+
 /** Turns what the API or the network said into a reason a goal screen can show. */
-export function toGoalError(error: unknown, { creating = false }: { creating?: boolean } = {}): GoalError {
+export function toGoalError(error: unknown, call: Call = "other"): GoalError {
   if (error instanceof GoalError) return error;
   if (!(error instanceof ApiError)) return new GoalError("unavailable");
   switch (error.code) {
@@ -79,10 +82,11 @@ export function toGoalError(error: unknown, { creating = false }: { creating?: b
       return new GoalError("key_reused");
     case "forbidden":
       // Saving makes an investment, and nobody invests before their ID check is approved.
-      return new GoalError("not_verified");
+      // Anywhere else the app cannot say why, so it does not guess.
+      return new GoalError(call === "save" ? "not_verified" : "not_allowed");
     case "conflict":
       // Creating: the most open goals at once. Anything else: the goal is closed.
-      return new GoalError(creating ? "too_many_goals" : "closed");
+      return new GoalError(call === "create" ? "too_many_goals" : "closed");
     case "validation_failed": {
       const codes = error.fields.map((field) => field.code);
       if (codes.includes("sooner_than_every_term")) return new GoalError("sooner_than_every_term");
@@ -96,11 +100,11 @@ export function toGoalError(error: unknown, { creating = false }: { creating?: b
   }
 }
 
-async function wrap<T>(work: () => Promise<T>, options?: { creating?: boolean }): Promise<T> {
+async function wrap<T>(work: () => Promise<T>, call: Call = "other"): Promise<T> {
   try {
     return await work();
   } catch (error) {
-    throw toGoalError(error, options);
+    throw toGoalError(error, call);
   }
 }
 
@@ -129,7 +133,7 @@ export function createApiGoalsClient(): GoalsClient {
               idempotencyKey,
             }),
           ),
-        { creating: true },
+        "create",
       ),
 
     listGoals: () => wrap(async () => (await api("GET /client/goals", {})).goals.map(toGoal)),
@@ -137,7 +141,20 @@ export function createApiGoalsClient(): GoalsClient {
     getGoal: (goalId) => wrap(async () => toGoal(await api("GET /client/goals/{goal_id}", { params: { goal_id: goalId } }))),
 
     closeGoal: (goalId) =>
-      wrap(async () => toGoal(await api("POST /client/goals/{goal_id}/close", { params: { goal_id: goalId } }))),
+      wrap(async () => {
+        try {
+          return toGoal(await api("POST /client/goals/{goal_id}/close", { params: { goal_id: goalId } }));
+        } catch (error) {
+          // Closing moves no money, but a lost answer may still have closed it. Look before
+          // saying it failed.
+          if (!(error instanceof ApiError) || !error.uncertain) throw error;
+          const goal = await api("GET /client/goals/{goal_id}", { params: { goal_id: goalId } }).catch(() => {
+            throw error;
+          });
+          if (goal.status !== "active") return toGoal(goal);
+          throw error;
+        }
+      }),
 
     saveToGoal: (goalId, amount, idempotencyKey) =>
       wrap(async () =>
@@ -149,6 +166,7 @@ export function createApiGoalsClient(): GoalsClient {
           }),
           amount.currency,
         ),
+        "save",
       ),
   };
 }

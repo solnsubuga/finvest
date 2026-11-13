@@ -145,6 +145,9 @@ describe("the goals client for the real API", () => {
 
     serve(403, refusal(403, "forbidden"));
     await expect(client.saveToGoal(ID, money, "k")).rejects.toEqual(new GoalError("not_verified"));
+    // Only a saving is an investment, so only a saving blames the ID check.
+    await expect(client.createGoal(details, "k")).rejects.toEqual(new GoalError("not_allowed"));
+    await expect(client.closeGoal(ID)).rejects.toEqual(new GoalError("not_allowed"));
 
     serve(422, refusal(422, "idempotency_key_reused"));
     await expect(client.saveToGoal(ID, money, "k")).rejects.toEqual(new GoalError("key_reused"));
@@ -163,5 +166,36 @@ describe("the goals client for the real API", () => {
     expect(error).toEqual(new GoalError("offline"));
     expect(outcomeUnknown(error)).toBe(true);
     expect(outcomeUnknown(new GoalError("closed"))).toBe(false);
+  });
+
+  it("reads the goal again when the answer to closing it is lost", async () => {
+    const closed = { ...goal, status: "closed" };
+    const seen: string[] = [];
+    let answers = 0;
+    setFetch(async (url, init) => {
+      seen.push(`${String(init?.method)} ${String(url).replace(API_URL, "")}`);
+      answers += 1;
+      if (answers === 1) throw new TypeError("Network request failed");
+      return new Response(JSON.stringify(closed), { status: 200 });
+    });
+    await expect(createApiGoalsClient().closeGoal(ID)).resolves.toMatchObject({ status: "closed" });
+    expect(seen).toEqual([`POST /client/goals/${ID}/close`, `GET /client/goals/${ID}`]);
+  });
+
+  it("still says closing failed when the goal reads as open", async () => {
+    let answers = 0;
+    setFetch(async () => {
+      answers += 1;
+      if (answers === 1) throw new TypeError("Network request failed");
+      return new Response(JSON.stringify(goal), { status: 200 });
+    });
+    await expect(createApiGoalsClient().closeGoal(ID)).rejects.toEqual(new GoalError("offline"));
+  });
+
+  it("says closing failed, as it was, when the goal cannot be read either", async () => {
+    setFetch(async () => {
+      throw new TypeError("Network request failed");
+    });
+    await expect(createApiGoalsClient().closeGoal(ID)).rejects.toEqual(new GoalError("offline"));
   });
 });

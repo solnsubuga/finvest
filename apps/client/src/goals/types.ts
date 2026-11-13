@@ -97,6 +97,7 @@ export type GoalErrorCode =
   | "invalid"
   | "key_reused"
   | "not_verified"
+  | "not_allowed"
   | "offline"
   | "unavailable";
 
@@ -131,6 +132,7 @@ const errorCopy: Record<GoalErrorCode, string> = {
   invalid: "Something in this goal is not right. Check it and try again.",
   key_reused: "This was already sent with other details. Go back and start again.",
   not_verified: "Finish your ID check first. Each saving is an investment, and investing opens once your ID is approved.",
+  not_allowed: "Your account cannot do this right now. Write to us in Help if you think it should.",
   offline: "You seem to be offline. Check your connection and try again.",
   unavailable: "Goals are not available right now. Try again in a moment.",
 };
