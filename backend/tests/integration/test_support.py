@@ -994,6 +994,11 @@ async def test_complaints_over_http(api: Api) -> None:
     complaint = made.json()
     # The same request again, after a lost answer, gives the same complaint.
     assert (await api.http.post("/client/complaints", json=making)).json() == complaint
+    # The same key with other words is a different complaint, and is refused, not dropped.
+    for changed in ({"category": "fees"}, {"summary": "Other"}, {"details": "Since Monday."}):
+        reused = await api.http.post("/client/complaints", json={**making, **changed})
+        assert reused.status_code == 422
+        assert reused.json()["error"]["code"] == "idempotency_key_reused"
     keyless = {key: value for key, value in making.items() if key != "client_key"}
     assert (await api.http.post("/client/complaints", json=keyless)).status_code == 422
     assert complaint["status"] == "new" and complaint["due_on"] == "2026-11-20"
