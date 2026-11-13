@@ -34,7 +34,7 @@ A statement is an opening balance, lines, and a closing balance for one pot on o
 | Nothing changes afterwards | Statements and lines are insert only, and a line can join a statement only in the transaction that imported it |
 | Who | Only staff import, in their own name. Staff and the worker read. Clients see nothing |
 
-Only a day that has ended in Kampala can be imported (`statement_day_not_over`). The SHA-256 of the uploaded file is kept with the statement, and each import is in the audit trail.
+Only a day that has ended in Kampala can be imported (`statement_day_not_over`). A line's narrative is personal data: bank narratives carry names and phone numbers. It is stored for staff to read, handed out only as `counterparty_hint`, and never written to logs or audit details. The SHA-256 of the uploaded file is kept with the statement, and each import is in the audit trail.
 
 `reconciliation.statements.find_statement_lines(session, *, source, date_from, date_to, reference=None, amount=None)` lets another module see whether money it expects has reached a statement, such as a bank transfer waiting for its receipt.
 
