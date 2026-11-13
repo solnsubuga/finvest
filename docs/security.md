@@ -96,16 +96,18 @@ Status is **Met** (checked in the code or configuration named), **Fixed** (a gap
 
 ### Scope
 
-- `api.finvestug.com`, `app.finvestug.com`, `admin.finvestug.com` and `finvestug.com`, tested on the staging hosts (`api-staging.` and the others) with staging data only.
-- The Android and iPhone apps from a staging build.
-- Grey box: the testers get the API contract (`/openapi.json` turned on in staging only), one client account per state (new, verified, invested, restricted after a code sign-in) and one staff account per role.
+- `api.finvestug.com`, `app.finvestug.com`, `admin.finvestug.com` and `finvestug.com`.
+- The Android and iPhone apps, built against the environment under test.
+- Grey box: the testers get the API contract (`/openapi.json` turned on in the environment under test only), one client account per state (new, verified, invested, restricted after a code sign-in) and one staff account per role.
+- **Where.** On staging, switched on for the test weeks only and off again afterwards (Solo, 2026-11-13), so the testers' accounts, payments and ledger entries never land in production, whose ledger cannot be cleaned.
 - Priorities: one client reaching another's records, a staff role doing another role's work, getting round a two-person step, replaying or racing a payment, payout or idempotency key, and the sign-in and recovery flows.
 - Out of scope: denial of service, Cloudflare and DigitalOcean themselves, the payment provider's own systems, social engineering.
 
 ### Before it starts
 
 - Every **Open** finding above is closed or accepted in writing.
-- Staging runs the same release as production will.
+- The environment under test runs the same release as production will.
+- Staging is switched on a few days ahead: the infrastructure thread turns on the API docs for staging only, and Solo sets `STAGING_ENABLED` and runs Provision. Taking staging down afterwards is an infrastructure pull request and a run, so allow a day for it.
 - Alerts are on, so the test's traffic is visible and the team learns what an attack looks like in the logs.
 
 ### What only Solo can provide

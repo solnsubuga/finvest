@@ -9,6 +9,7 @@ import { AutoinvestProvider } from "@/autoinvest/AutoinvestProvider";
 import { GoalsProvider } from "@/goals/GoalsProvider";
 import { InsightsProvider } from "@/insights/InsightsProvider";
 import { PaymentsProvider } from "@/payments/PaymentsProvider";
+import { SupportProvider } from "@/support/SupportProvider";
 import { colors, fontAssets } from "@/theme";
 
 void SplashScreen.preventAutoHideAsync();
@@ -31,18 +32,20 @@ export default function RootLayout() {
     <SafeAreaProvider>
       <AuthProvider>
         <PaymentsProvider>
-          <AutoinvestProvider>
-            <InsightsProvider>
-              <GoalsProvider>
-                <Stack
-                  screenOptions={{
-                    headerShown: false,
-                    contentStyle: { backgroundColor: colors.paper },
-                  }}
-                />
-              </GoalsProvider>
-            </InsightsProvider>
-          </AutoinvestProvider>
+          <SupportProvider>
+            <AutoinvestProvider>
+              <InsightsProvider>
+                <GoalsProvider>
+                  <Stack
+                    screenOptions={{
+                      headerShown: false,
+                      contentStyle: { backgroundColor: colors.paper },
+                    }}
+                  />
+                </GoalsProvider>
+              </InsightsProvider>
+            </AutoinvestProvider>
+          </SupportProvider>
         </PaymentsProvider>
       </AuthProvider>
     </SafeAreaProvider>

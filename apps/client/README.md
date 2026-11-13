@@ -2,7 +2,7 @@
 
 The Finvest client app. One codebase for Android, iPhone and the web at app.finvestug.com.
 
-**Status:** app shell. Navigation, theme, the welcome, sign up and log in screens, Sign in and security (add a passkey, set up an authenticator app), and paying for an investment by mobile money or bank transfer, all running against in-memory demos. No investing screens yet.
+**Status:** app shell. Navigation, theme, the welcome, sign up and log in screens, Sign in and security (add a passkey, set up an authenticator app), paying for an investment by mobile money or bank transfer, and notifications, help chat and complaints, all running against in-memory demos. No investing screens yet.
 
 ## Stack
 
@@ -35,6 +35,7 @@ Add Expo packages with `npx expo install <package>` so the version matches the S
 | `src/payments/` | The payments contract, the demo stub, money and time formatting, and the status polling |
 | `src/autoinvest/` | The automatic investing contract, the demo stub, and the schedule rules shown on screen |
 | `src/insights/` | The insights contract, the demo stub, and the chart helpers |
+| `src/support/` | The notifications, help chat and complaints contract, the demo stub, quick answers, and the chat polling |
 | `docs/screenshots/` | Screenshots of every screen and state in this app |
 
 ## Navigation
@@ -117,3 +118,16 @@ Not built yet: sending an investment to another client, changing a plan's amount
 - `docs/screenshots/sheets/` holds contact sheets of the same screenshots, for PR descriptions.
 - Screenshots in `docs/screenshots/` keep stable file names. Replace them in place when a screen changes.
 - Build to the [design canvas](../../docs/design.md). Every PR that adds or changes a screen includes screenshots.
+
+## Notifications, help and complaints
+
+The screens talk to the `SupportClient` interface in `src/support/types.ts`, whose shapes follow the backend routes in [docs/notifications.md](../../docs/notifications.md) and [docs/support.md](../../docs/support.md). Until those routes are live, the only implementation is the demo in `src/support/stubSupportClient.ts`, kept out of production builds the same way as the payments demo. CI checks that it is.
+
+- **Notifications.** The bell on Home shows the unread count and opens `/notifications`, the canvas screen. Tapping one marks it read and opens the screen it names. A notification carries a kind and an ID, never an address, so `src/support/links.ts` decides where it goes and a kind without a screen yet opens nothing.
+- **Notification settings.** `/notifications/settings` has push, SMS and email for each kind of alert, saved as each one is tapped. Security alerts keep SMS or email: the screen says so instead of sending a change the server would refuse.
+- **Help.** `/help` is the canvas screen: quick answers above, one chat with the Finvest team below. The chat asks for new messages every 4 seconds while it is in front and not at all otherwise. A message shows as "Sending" at once and keeps its key, so trying again after a lost answer never posts it twice. "Call us" appears only when `EXPO_PUBLIC_SUPPORT_PHONE` is set at build time, because Finvest has not published a support line yet.
+- **Quick answers** are in `src/support/answers.ts`. They say only what `docs/` establishes and show no tax rate. "Still stuck?" opens the chat filed under the answer's topic.
+- **Complaints.** `/support/complaints` lists the client's complaints, `/support/complaints/new` makes one, and each has a page with its reference, status, the date Finvest will answer by (5 working days) and the outcome once closed. Staff notes are never shown.
+- In the demo each signed-in account has its own memory. The two ready-made accounts start with the canvas's notifications and one closed complaint. An account made by signing up starts empty. A chat message gets one canned reply a few seconds later, which says it is the demo.
+
+Not built: push notifications on the device (they come with the backend's sending work), attachments in chat, and the screens behind payout, payout account and identity check notifications.

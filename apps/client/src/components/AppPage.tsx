@@ -10,10 +10,16 @@ import { Notice } from "./Blocks";
 import { DemoLabel } from "./DemoLabel";
 import { Txt } from "./Txt";
 
-type Props = { title: string; subtitle?: string; children?: ReactNode };
+type Props = {
+  title: string;
+  subtitle?: string;
+  /** A control at the end of the heading row, such as the notifications bell. */
+  action?: ReactNode;
+  children?: ReactNode;
+};
 
 /** The frame for a signed-in page: heading, then content, with room for the wide layout. */
-export function AppPage({ title, subtitle, children }: Props) {
+export function AppPage({ title, subtitle, action, children }: Props) {
   const insets = useSafeAreaInsets();
   const wide = useIsWide();
   return (
@@ -26,21 +32,24 @@ export function AppPage({ title, subtitle, children }: Props) {
     >
       <StatusBar style="dark" />
       <DemoLabel signedIn />
-      <View style={{ gap: 4 }}>
-        <Txt
-          accessibilityRole="header"
-          size={26}
-          weight="extrabold"
-          lineHeight={32}
-          style={{ letterSpacing: -0.5 }}
-        >
-          {title}
-        </Txt>
-        {subtitle ? (
-          <Txt size={14} color={colors.muted}>
-            {subtitle}
+      <View style={styles.heading}>
+        <View style={{ flex: 1, gap: 4 }}>
+          <Txt
+            accessibilityRole="header"
+            size={26}
+            weight="extrabold"
+            lineHeight={32}
+            style={{ letterSpacing: -0.5 }}
+          >
+            {title}
           </Txt>
-        ) : null}
+          {subtitle ? (
+            <Txt size={14} color={colors.muted}>
+              {subtitle}
+            </Txt>
+          ) : null}
+        </View>
+        {action}
       </View>
       {children}
     </ScrollView>
@@ -61,5 +70,6 @@ export function ComingLater({ title, what }: { title: string; what: string }) {
 
 const styles = StyleSheet.create({
   content: { flexGrow: 1, paddingHorizontal: 20, paddingBottom: spacing[6], gap: spacing[4] },
+  heading: { flexDirection: "row", alignItems: "flex-start", gap: 12 },
   wide: { paddingTop: 28, paddingHorizontal: 32, maxWidth: 960 },
 });
