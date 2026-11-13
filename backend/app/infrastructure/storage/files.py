@@ -25,7 +25,9 @@ from datetime import UTC, datetime, timedelta
 from typing import Protocol
 
 KEY = re.compile(r"^[a-z][a-z0-9-]{0,30}(/[A-Za-z0-9_-]{1,64}){1,6}$")
-CONTENT_TYPE = re.compile(r"^[a-z]+/[a-z0-9.+-]{1,100}$")
+# The only kinds of file modules keep. Nothing a browser would run as a page (HTML, SVG) can be
+# stored, so a read link can never open one from the bucket's address inside the console.
+CONTENT_TYPES = frozenset({"application/pdf", "image/jpeg", "image/png", "image/webp", "text/csv"})
 SHA256 = re.compile(r"^[a-f0-9]{64}$")
 # Long enough to open a file in the console, short enough that a copied link soon stops working.
 MAX_LINK_LIFETIME = timedelta(minutes=15)
@@ -66,6 +68,12 @@ class FileMismatch(StorageError):
     code = "file_mismatch"
 
 
+def check_content_type(content_type: str) -> str:
+    if content_type not in CONTENT_TYPES:
+        raise InvalidFile("Only PDF, JPEG, PNG, WebP and CSV files can be stored")
+    return content_type
+
+
 def check_key(key: str) -> str:
     if not KEY.fullmatch(key):
         raise InvalidFile("A storage key is not valid")
@@ -86,8 +94,7 @@ class NewFile:
 
     def __post_init__(self) -> None:
         check_key(self.key)
-        if not CONTENT_TYPE.fullmatch(self.content_type):
-            raise InvalidFile("A content type is not valid")
+        check_content_type(self.content_type)
         if not 0 < len(self.data) <= MAX_FILE_BYTES:
             raise InvalidFile(f"A file must hold 1 byte to {MAX_FILE_BYTES} bytes")
 
@@ -202,6 +209,7 @@ class MemoryStorage:
         self, key: str, *, content_type: str, lifetime: timedelta, now: datetime
     ) -> ReadLink:
         check_key(key)
+        check_content_type(content_type)
         seconds = check_lifetime(lifetime)
         expires_at = now.astimezone(UTC) + timedelta(seconds=seconds)
         return ReadLink(f"memory://{key}?expires={int(expires_at.timestamp())}", expires_at)

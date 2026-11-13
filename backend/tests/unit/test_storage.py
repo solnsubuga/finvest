@@ -106,9 +106,21 @@ def test_a_key_that_could_escape_or_confuse_is_refused(key: str) -> None:
         NewFile(key, PNG, "image/png")
 
 
-def test_a_file_needs_a_type_and_some_bytes() -> None:
+@pytest.mark.parametrize(
+    "content_type", ["image/png; charset=x", "text/html", "image/svg+xml", "application/xhtml+xml"]
+)
+def test_only_files_a_browser_cannot_run_are_stored(content_type: str) -> None:
     with pytest.raises(InvalidFile):
-        NewFile(KEY, PNG, "image/png; charset=x")
+        NewFile(KEY, PNG, content_type)
+
+
+def test_read_links_refuse_a_type_a_browser_could_run() -> None:
+    for storage in (MemoryStorage(), spaces(httpx.MockTransport(lambda r: httpx.Response(200)))):
+        with pytest.raises(InvalidFile):
+            storage.read_link(KEY, content_type="text/html", lifetime=timedelta(minutes=5), now=NOW)
+
+
+def test_a_file_needs_some_bytes() -> None:
     with pytest.raises(InvalidFile):
         NewFile(KEY, b"", "image/png")
 
