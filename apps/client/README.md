@@ -145,7 +145,7 @@ Not built yet: sending an investment to another client, changing a plan's amount
 
 `/documents` is where a client asks for a statement of any period up to a year, follows it while it is made, and downloads statements and receipts. On a phone it is not in the bottom bar: it is reached from Profile (the Home card "Your details, documents and help", then Documents). On a wide screen it is in the sidebar. The screen shows no amounts: every figure is in the PDF, after tax.
 
-`src/documents/apiDocumentsClient.ts` answers from the API routes in [docs/documents.md](../../docs/documents.md). The PDF is fetched with the session by `src/documents/savePdf.ts`: on the web as a browser download, and on a phone into the cache, then the share sheet, then the cached copy is removed. Development and demo builds use `src/documents/stubDocumentsClient.ts`, which CI checks is left out of production builds. In the demo a statement asked for from before 2020 fails, to show that state.
+`src/documents/apiDocumentsClient.ts` answers from the API routes in [docs/documents.md](../../docs/documents.md). The PDF is fetched with the session by `src/documents/savePdf.ts`: on the web as a browser download, and on a phone into the cache, then the share sheet, then the cached copy is removed. Tests and demo builds (`EXPO_PUBLIC_DEMO_AUTH=1`) use `src/documents/stubDocumentsClient.ts`, and a development build talks to the real API, which CI checks is left out of production builds. In the demo a statement asked for from before 2020 fails, to show that state.
 
 ## Notes
 

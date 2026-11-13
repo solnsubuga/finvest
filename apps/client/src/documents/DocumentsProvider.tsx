@@ -7,9 +7,12 @@ import { DocumentsClient } from "./types";
 
 type StubModule = typeof import("./stubDocumentsClient");
 
-/** The demo follows the payments demo: development, or EXPO_PUBLIC_DEMO_AUTH=1 on purpose. */
+/**
+ * The demo loads only in a demo build (EXPO_PUBLIC_DEMO_AUTH=1) or under tests, like every
+ * other area, so a development build against a local backend talks to the real API.
+ */
 function loadStub(): StubModule | null {
-  if (__DEV__ || process.env.EXPO_PUBLIC_DEMO_AUTH === "1") {
+  if (process.env.EXPO_PUBLIC_DEMO_AUTH === "1" || process.env.NODE_ENV === "test") {
     // eslint-disable-next-line @typescript-eslint/no-require-imports
     return require("./stubDocumentsClient") as StubModule;
   }
