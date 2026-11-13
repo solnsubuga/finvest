@@ -15,6 +15,10 @@ from app.infrastructure.settings import Settings
 from app.modules.identity import api as identity_api
 from app.modules.identity.hashing import PasswordHasher
 from app.modules.identity.service import IdentityService
+from app.modules.payments import api as payments_api
+from app.modules.payments.domain.provider import CollectionsProvider
+from app.modules.payments.settings import PaymentsSettings
+from app.modules.payments.wiring import collections_provider
 from app.shared.clock import Clock, SystemClock
 from app.shared.errors import ErrorEnvelope
 
@@ -24,10 +28,13 @@ def create_app(
     database: Database | None = None,
     clock: Clock | None = None,
     hasher: PasswordHasher | None = None,
+    *,
+    collections: CollectionsProvider | None = None,
 ) -> FastAPI:
     owned = database is None
     database = database or Database(settings)
     clock = clock or SystemClock()
+    collections = collections or collections_provider(PaymentsSettings(), clock)
 
     @asynccontextmanager
     async def lifespan(_: FastAPI) -> AsyncIterator[None]:
@@ -80,4 +87,5 @@ def create_app(
     app.include_router(health.router)
     for router in identity_api.routers:
         app.include_router(router)
+    app.include_router(payments_api.create_router(collections))
     return app

@@ -546,7 +546,10 @@ async def test_retries_back_off_then_fail_and_an_operator_can_requeue(
     ]
 
     async with worker_database.transaction() as session:
-        assert next(job.id for job in await job_queue.failed_jobs(session)) == job_id
+        # The failed-job queue is shared by every test in this database, so look at this
+        # test's own queue.
+        failed = await job_queue.failed_jobs(session, limit=500)
+        assert next(job.id for job in failed if job.queue == names.queue) == job_id
         assert await job_queue.requeue_failed(session, job_id, now=fake_clock.now())
         assert not await job_queue.requeue_failed(session, job_id, now=fake_clock.now())
     healthy = True

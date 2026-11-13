@@ -67,6 +67,11 @@ ROWS = {
         "VALUES ('-Nabc0000000000000A1', 'ada@example.com', 'Ada Nakato', 'admin', now())",
         "refusing to drop sign-in tables",
     ),
+    "0020_payment_deposits": (
+        "INSERT INTO payment_provider_notices (id, provider, notice_key, received_at) "
+        "VALUES ('-Nabc0000000000000A1', 'sandbox', 'notice-1', now())",
+        "refusing to drop payments",
+    ),
 }
 
 
