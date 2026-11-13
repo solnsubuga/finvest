@@ -9,7 +9,7 @@ from sqlalchemy.exc import DBAPIError
 
 from app.infrastructure.database import Database
 from app.modules.ledger import service as ledger
-from app.modules.ledger.domain.entries import AccountKind, AccountSpec, EntryDraft, credit, debit
+from app.modules.ledger.domain.entries import EntryDraft, credit, debit
 from app.modules.payouts import destinations, payouts
 from app.modules.payouts.domain import posting
 from app.modules.payouts.domain.destinations import (
@@ -34,13 +34,14 @@ E, S = PayoutEvent, PayoutStatus
 
 
 class World:
-    """One client with money in a holding, an approved destination past its wait, and a
-    funded pot for the provider to pay from."""
+    """One client with money handed over for paying out, an approved destination past its
+    wait, and a funded pot for the provider to pay from."""
 
     def __init__(self, app: Database, worker: Database, clock: FakeClock) -> None:
         self.app, self.worker, self.clock = app, worker, clock
         self.client = Actor("client", push_id())
         self.holding = ""
+        self.handover = f"investment-{push_id()}"
         self.pot = ""
         self.destination_id = ""
         self.pot_before = 0
@@ -65,14 +66,7 @@ class World:
             )
             holding = await ledger.open_account(
                 session,
-                AccountSpec(
-                    "test.client_holding",
-                    AccountKind.LIABILITY,
-                    Currency.UGX,
-                    "Test holding",
-                    owner_client_id=self.client_id,
-                    reference=push_id(),
-                ),
+                posting.funding_account(self.client_id, self.handover, Currency.UGX),
                 self.clock,
             )
             self.pot, self.holding = pot.id, holding.id
@@ -120,7 +114,7 @@ class World:
                 destination_id=self.destination_id,
                 amount=ugx(amount),
                 client_id=self.client_id,
-                source_account_id=self.holding,
+                source_reference=self.handover,
                 request_key=key(),
                 clock=self.clock,
                 **options,  # type: ignore[arg-type]
@@ -280,7 +274,7 @@ async def test_refusals_leave_nothing_behind(world: World) -> None:
                 client_id=world.client_id,
                 destination_id=world.destination_id,
                 amount=Money(100, Currency.USD),
-                source_account_id=world.holding,
+                source_reference=world.handover,
                 request_key=key(),
                 clock=world.clock,
             )
@@ -301,7 +295,7 @@ async def test_more_than_the_client_holds_is_refused_and_leaves_nothing(
                 client_id=world.client_id,
                 destination_id=world.destination_id,
                 amount=ugx(500_001),
-                source_account_id=world.holding,
+                source_reference=world.handover,
                 request_key=key(),
                 clock=world.clock,
             )
@@ -348,7 +342,7 @@ async def test_a_client_cannot_use_another_clients_destination_or_money(
                 client_id=thief.client_id,
                 destination_id=world.destination_id,
                 amount=ugx(1_000),
-                source_account_id=thief.holding,
+                source_reference=thief.handover,
                 request_key=key(),
                 clock=fake_clock,
             )
@@ -361,16 +355,109 @@ async def test_a_client_cannot_use_another_clients_destination_or_money(
                 client_id=thief.client_id,
                 destination_id=thief.destination_id,
                 amount=ugx(1_000),
-                source_account_id=world.holding,
+                source_reference=world.handover,
                 request_key=key(),
                 clock=fake_clock,
             )
-        assert refusal.value.code == "source_not_found"
+        # The reference names the thief's own, empty, handover account. Never the victim's.
+        assert refusal.value.code == "insufficient_funds"
     assert await world.balance(world.holding) == 8_000_000
     mine = await world.request(1_000)
     async with app_database.actor_transaction(thief.client) as session:
         with pytest.raises(ApplicationError):
             await payouts.get_payout(session, mine.id)
+
+
+# --- Where the money may come from ------------------------------------------------------------
+
+
+async def test_a_payout_cannot_be_funded_from_another_payouts_money_in_flight(
+    world: World,
+) -> None:
+    first = await world.request(1_000_000)
+    # The only handle a caller has is a reference. Naming the first payout by its ID, or by
+    # its in-flight account's ID, finds an empty handover account and nothing else.
+    for reference in (first.id, first.in_flight_account_id, first.source_account_id):
+        for database, actor in ((world.app, world.client), (world.worker, SYSTEM)):
+            async with database.actor_transaction(actor) as session:
+                with pytest.raises(PayoutRefused) as refusal:
+                    await payouts.create_payout(
+                        session,
+                        actor,
+                        client_id=world.client_id,
+                        destination_id=world.destination_id,
+                        amount=ugx(1_000_000),
+                        source_reference=reference,
+                        request_key=key(),
+                        clock=world.clock,
+                    )
+                assert refusal.value.code == "insufficient_funds"
+    assert await world.balance(first.in_flight_account_id) == 1_000_000
+    assert (await world.worker_event(first.id, E.SEND_CONFIRMED)).status is S.PAID
+    assert await world.pot_change() == 7_000_000
+    await world.no_drift()
+
+
+@pytest.mark.parametrize("reference", ["", " ", "has space", "x" * 65, "naïve"])
+async def test_a_payout_cannot_be_funded_from_the_failed_payout_pot_or_a_bad_reference(
+    world: World, reference: str
+) -> None:
+    failed = await world.request(1_000_000)
+    await world.worker_event(failed.id, E.SEND_REJECTED, failure_code="recipient_barred")
+    assert await world.pending() == 1_000_000
+    async with world.app.actor_transaction(world.client) as session:
+        with pytest.raises(PayoutRefused) as refusal:
+            await payouts.create_payout(
+                session,
+                world.client,
+                client_id=world.client_id,
+                destination_id=world.destination_id,
+                amount=ugx(1_000),
+                source_reference=reference,
+                request_key=key(),
+                clock=world.clock,
+            )
+        assert refusal.value.code == "source_not_allowed"
+    assert await world.pending() == 1_000_000
+
+
+async def test_the_worker_cannot_fund_one_clients_payout_from_anothers_money(
+    world: World, app_database: Database, worker_database: Database, fake_clock: FakeClock
+) -> None:
+    other = await World(app_database, worker_database, fake_clock).build(0)
+    async with worker_database.actor_transaction(SYSTEM) as session:
+        with pytest.raises(PayoutRefused) as refusal:
+            await payouts.create_payout(
+                session,
+                SYSTEM,
+                client_id=other.client_id,
+                destination_id=other.destination_id,
+                amount=ugx(1_000),
+                source_reference=world.handover,
+                request_key=key(),
+                clock=fake_clock,
+            )
+        assert refusal.value.code == "insufficient_funds"
+    assert await world.balance(world.holding) == 8_000_000
+
+
+async def test_the_database_refuses_a_payout_whose_source_is_its_own_in_flight_account(
+    world: World,
+) -> None:
+    payout = await world.request(1_000)
+    with pytest.raises(DBAPIError):
+        async with world.app.actor_transaction(world.client) as session:
+            await session.execute(
+                text(
+                    "INSERT INTO payouts (id, client_id, destination_id, kind, amount_minor, "
+                    "currency, status, business_date, source_account_id, source_reference, "
+                    "in_flight_account_id, request_key, created_at, updated_at) SELECT :id, "
+                    "client_id, destination_id, kind, 5, currency, 'queued', business_date, "
+                    "in_flight_account_id, source_reference, in_flight_account_id, :id, now(), "
+                    "now() FROM payouts WHERE id = :source"
+                ),
+                {"id": push_id(), "source": payout.id},
+            )
 
 
 # --- One request, one payout ------------------------------------------------------------------
@@ -387,7 +474,7 @@ async def test_the_same_request_key_gives_the_same_payout_and_reserves_once(worl
                 client_id=world.client_id,
                 destination_id=world.destination_id,
                 amount=ugx(amount),
-                source_account_id=world.holding,
+                source_reference=world.handover,
                 request_key=request_key,
                 clock=world.clock,
             )
@@ -414,7 +501,7 @@ async def test_the_worker_can_request_a_payout_for_a_client_but_staff_cannot(
             client_id=world.client_id,
             destination_id=world.destination_id,
             amount=ugx(250_000),
-            source_account_id=world.holding,
+            source_reference=world.handover,
             request_key=f"maturity:{push_id()}",
             clock=world.clock,
         )
@@ -430,7 +517,7 @@ async def test_the_worker_can_request_a_payout_for_a_client_but_staff_cannot(
                     client_id=client_id,
                     destination_id=world.destination_id,
                     amount=ugx(1_000),
-                    source_account_id=world.holding,
+                    source_reference=world.handover,
                     request_key=key(),
                     clock=world.clock,
                 )
@@ -538,10 +625,11 @@ async def test_only_the_right_actor_takes_each_step(world: World) -> None:
             await session.execute(
                 text(
                     "INSERT INTO payouts (id, client_id, destination_id, kind, amount_minor, "
-                    "currency, status, business_date, source_account_id, in_flight_account_id, "
-                    "request_key, created_at, updated_at) SELECT :id, client_id, destination_id, "
-                    "kind, 5, currency, 'paid', business_date, source_account_id, "
-                    "in_flight_account_id, :id, now(), now() FROM payouts WHERE id = :source"
+                    "currency, status, business_date, source_account_id, source_reference, "
+                    "in_flight_account_id, request_key, created_at, updated_at) SELECT :id, "
+                    "client_id, destination_id, kind, 5, currency, 'paid', business_date, "
+                    "source_account_id, source_reference, in_flight_account_id, :id, now(), "
+                    "now() FROM payouts WHERE id = :source"
                 ),
                 {"id": push_id(), "source": payout.id},
             )

@@ -1,5 +1,6 @@
 """A downgrade must never delete the books, the issued numbers, the audit trail, the job
-history, the receipts that stop a command running twice or the identity records."""
+history, the receipts that stop a command running twice, the identity records, the payout
+destinations, the withdrawal limits or the payouts."""
 
 import os
 from collections.abc import Iterator
@@ -80,6 +81,20 @@ ROWS = {
         "INSERT INTO payment_provider_notices (id, provider, notice_key, received_at) "
         "VALUES ('-Nabc0000000000000A1', 'sandbox', 'notice-1', now())",
         "refusing to drop payments",
+    ),
+    "0030_payout_destinations": (
+        "INSERT INTO payout_destinations (id, client_id, kind, network, account_number, "
+        "holder_name, status, created_at, updated_at) VALUES ('-Nabc0000000000000A1', "
+        "'-Nabc0000000000000B1', 'mobile_money', 'mtn', '256772000000', 'Test', "
+        "'awaiting_code', now(), now())",
+        "refusing to drop payout destinations",
+    ),
+    "0031_payouts": (
+        "INSERT INTO withdrawal_limits (id, effective_from, currency, mobile_money_per_payout, "
+        "proposed_by, approved_by, reason, created_at) VALUES ('-Nabc0000000000000A1', "
+        "DATE '2030-01-01', 'UGX', 1000000, '-Nabc0000000000000B1', '-Nabc0000000000000C1', "
+        "'Test', now())",
+        "refusing to drop payouts or limits",
     ),
 }
 

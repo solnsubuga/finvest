@@ -8,6 +8,7 @@ from app.modules.payouts.domain.payouts import LedgerEffect
 from app.modules.payouts.domain.posting import (
     PayoutTerms,
     finish,
+    funding_account,
     in_flight_account,
     paid_from_account,
     pending_account,
@@ -86,6 +87,15 @@ def test_the_accounts_are_the_agreed_chart() -> None:
         "client-1",
         None,
     )
+    funding = funding_account("client-1", "investment-9", Currency.UGX)
+    assert (funding.code, funding.kind, funding.owner_client_id, funding.reference) == (
+        "client.payout_pending",
+        AccountKind.LIABILITY,
+        "client-1",
+        "investment-9",
+    )
+    with pytest.raises(ValueError):
+        funding_account("client-1", "", Currency.UGX)
     wallet = paid_from_account(DestinationKind.MOBILE_MONEY, "mtn", Currency.UGX)
     assert (wallet.code, wallet.kind, wallet.owner_client_id, wallet.reference) == (
         "iotec.wallet",

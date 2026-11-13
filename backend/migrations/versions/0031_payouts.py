@@ -1,7 +1,7 @@
 """Add withdrawal limits and payouts.
 
 Revision ID: 0031_payouts
-Revises: 0030_payout_destinations
+Revises: 0060_investment_products
 
 * Limits are versions, insert only. Each has an effective date, a proposer and a different
   approver. The launch version is seeded here with no people, and is the only row that may be.
@@ -17,7 +17,7 @@ from collections.abc import Sequence
 from alembic import op
 
 revision: str = "0031_payouts"
-down_revision: str | None = "0030_payout_destinations"
+down_revision: str | None = "0060_investment_products"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 
@@ -67,6 +67,7 @@ CREATE TABLE payouts (
     status varchar(16) NOT NULL,
     business_date date NOT NULL,
     source_account_id push_id NOT NULL,
+    source_reference varchar(64) NOT NULL,
     in_flight_account_id push_id NOT NULL,
     request_key varchar(128) NOT NULL,
     provider_reference varchar(100),
@@ -79,6 +80,8 @@ CREATE TABLE payouts (
         FOREIGN KEY (destination_id) REFERENCES payout_destinations (id),
     CONSTRAINT uq_payouts_request_key UNIQUE (client_id, request_key),
     CONSTRAINT ck_payouts_request_key CHECK (request_key ~ '^[A-Za-z0-9._:-]{8,128}$'),
+    CONSTRAINT ck_payouts_source_reference CHECK (source_reference ~ '^[A-Za-z0-9._:-]{1,64}$'),
+    CONSTRAINT ck_payouts_accounts CHECK (source_account_id <> in_flight_account_id),
     CONSTRAINT ck_payouts_kind CHECK (kind IN ('mobile_money', 'bank')),
     CONSTRAINT ck_payouts_amount CHECK (amount_minor > 0),
     CONSTRAINT ck_payouts_currency CHECK (currency IN ('UGX', 'USD')),
@@ -128,11 +131,11 @@ CREATE FUNCTION finvest_payouts_guard() RETURNS trigger
         END IF;
         IF (NEW.id, NEW.client_id, NEW.destination_id, NEW.kind, NEW.amount_minor, NEW.currency,
             NEW.business_date, NEW.source_account_id, NEW.in_flight_account_id, NEW.request_key,
-            NEW.created_at)
+            NEW.source_reference, NEW.created_at)
                IS DISTINCT FROM
            (OLD.id, OLD.client_id, OLD.destination_id, OLD.kind, OLD.amount_minor, OLD.currency,
             OLD.business_date, OLD.source_account_id, OLD.in_flight_account_id, OLD.request_key,
-            OLD.created_at)
+            OLD.source_reference, OLD.created_at)
         THEN
             RAISE EXCEPTION 'the terms of a payout never change' USING ERRCODE = '42501';
         END IF;
