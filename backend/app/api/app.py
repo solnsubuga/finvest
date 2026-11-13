@@ -21,6 +21,7 @@ from app.modules.approvals import api as approvals_api
 from app.modules.audit import api as audit_api
 from app.modules.autoinvest import api as autoinvest_api
 from app.modules.console import api as console_api
+from app.modules.dealing import api as dealing_api
 from app.modules.documents import api as documents_api
 from app.modules.goals import api as goals_api
 from app.modules.identity import api as identity_api
@@ -179,4 +180,5 @@ def create_app(
         app.include_router(router)
     for router in kyc_api.create_routers(identity_sealer, identity_provider, storage):
         app.include_router(router)
+    app.include_router(dealing_api.router)
     return app
