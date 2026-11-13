@@ -38,6 +38,18 @@ check_local=$(value FINVEST_CHECK_LOCAL)
 [[ -z $site_domain || $site_domain =~ ^[a-z0-9][a-z0-9.-]*$ ]] || exit 1
 [[ $edge_subnet =~ ^[0-9./]+$ ]] || exit 1
 
+# Every process must be told which environment this is, and it must be this project's. Payments,
+# identity checks and SMS refuse their sandbox and stub providers in production by that value, so
+# a release that leaves it out or names another environment is refused before anything starts.
+environment=${project#finvest-}
+[[ $environment == staging || $environment == production ]] || { echo 'Not a Finvest environment' >&2; exit 1; }
+for service in migrate api worker scheduler; do
+  if [[ $(sed -n 's/^FINVEST_ENVIRONMENT=//p' "runtime/$service.env") != "$environment" ]]; then
+    echo "runtime/$service.env does not say FINVEST_ENVIRONMENT=$environment" >&2
+    exit 1
+  fi
+done
+
 compose=(docker compose --env-file release.env -f compose.yaml)
 "${compose[@]}" config --quiet
 if ! docker network inspect "$project-edge" >/dev/null 2>&1; then
