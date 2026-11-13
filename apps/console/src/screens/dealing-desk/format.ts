@@ -52,9 +52,25 @@ export function formatAuctionDay(isoDate: string): string {
   return DAY.format(new Date(`${isoDate}T00:00:00Z`)).replace(",", "");
 }
 
+/**
+ * The whole major units in an amount, as a form's starting text: "150000000", or "" when the
+ * amount has a fraction, since forms take whole amounts only. Integers throughout.
+ */
+export function majorText(minor: number, currency: Currency): string {
+  const unit = 10 ** MINOR_DIGITS[currency];
+  return minor % unit === 0 ? String(minor / unit) : "";
+}
+
 /** "18 Feb 2027" */
 export function formatDay(isoDate: string): string {
   return DAY_WITH_YEAR.format(new Date(`${isoDate}T00:00:00Z`));
+}
+
+const WHEN = new Intl.DateTimeFormat("en-GB", { day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit", timeZone: "Africa/Kampala" });
+
+/** The Kampala day and time, for lists that keep history: "6 Nov 2026, 12:05" */
+export function formatWhen(iso: string): string {
+  return WHEN.format(new Date(iso));
 }
 
 /** The Kampala time of day: "14:20" */
