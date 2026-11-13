@@ -126,6 +126,12 @@ async def list_suppressions(session: AsyncSession) -> list[Suppression]:
     return [_suppression(row, open_lifts.get(row.address_hash)) for row in rows]
 
 
+async def open_lifts(session: AsyncSession) -> list[Lift]:
+    """Every lift waiting for a second person, oldest first."""
+    rows = (await session.execute(_OPEN)).all()
+    return sorted((_lift(row) for row in rows), key=lambda lift: (lift.proposed_at, lift.id))
+
+
 async def suppression_for_address(session: AsyncSession, address: str) -> Suppression | None:
     """The suppression for an address typed into the console, or None if it was never on
     the list. The address itself is only hashed."""

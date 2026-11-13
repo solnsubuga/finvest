@@ -11,15 +11,17 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.modules.approvals.domain.inbox import InboxItem, Kind, Waiting, inbox, visible_kinds
 from app.modules.dealing import orders as dealing
 from app.modules.dealing.domain.orders import OrderStatus
-from app.modules.identity import phone_changes
+from app.modules.identity import client_locks, phone_changes, team
 from app.modules.identity.service import StaffSession
 from app.modules.investments import service as investments
 from app.modules.investments.domain.rates import ProposalStatus
 from app.modules.ledger import corrections
 from app.modules.migration import service as migration
-from app.modules.notifications import wording_store
+from app.modules.notifications import announcements, suppression_lifts, wording_store
 from app.modules.payments import bank_transfers
+from app.modules.payouts import destinations
 from app.modules.reconciliation import day_close, transfers
+from app.modules.support import complaints
 
 
 async def waiting_for(session: AsyncSession, staff: StaffSession, now: datetime) -> list[InboxItem]:
@@ -43,6 +45,18 @@ async def waiting_for(session: AsyncSession, staff: StaffSession, now: datetime)
         found += await _migration(session)
     if "phone_change" in kinds:
         found += await _phone_changes(session, now)
+    if "team_change" in kinds:
+        found += await _team_changes(session)
+    if "client_lock" in kinds:
+        found += await _client_locks(session)
+    if "suppression_lift" in kinds:
+        found += await _suppression_lifts(session)
+    if "complaint_outcome" in kinds:
+        found += await _complaint_outcomes(session)
+    if "announcement" in kinds:
+        found += await _announcements(session)
+    if "payout_account" in kinds:
+        found += await _payout_accounts(session)
     return inbox(found, staff.staff_id, staff.permissions)
 
 
@@ -145,4 +159,52 @@ async def _phone_changes(session: AsyncSession, now: datetime) -> list[Waiting]:
     return [
         Waiting("phone_change", c.id, c.client_id, c.proposed_by, c.proposed_at)
         for c in await phone_changes.waiting(session, now)
+    ]
+
+
+async def _team_changes(session: AsyncSession) -> list[Waiting]:
+    # The subject is the kind of change. The person it changes never decides it.
+    return [
+        Waiting("team_change", c.id, c.kind, c.proposed_by, c.proposed_at, about_staff=c.staff_id)
+        for c in await team.open_changes(session)
+    ]
+
+
+async def _client_locks(session: AsyncSession) -> list[Waiting]:
+    return [
+        Waiting("client_lock", c.id, f"{c.kind} {c.client_id}", c.proposed_by, c.proposed_at)
+        for c in await client_locks.open_locks(session)
+    ]
+
+
+async def _suppression_lifts(session: AsyncSession) -> list[Waiting]:
+    # The subject is the start of the address's hash, never the address.
+    return [
+        Waiting(
+            "suppression_lift", lift.id, lift.address_hash[:12], lift.proposed_by, lift.proposed_at
+        )
+        for lift in await suppression_lifts.open_lifts(session)
+    ]
+
+
+async def _complaint_outcomes(session: AsyncSession) -> list[Waiting]:
+    return [
+        Waiting("complaint_outcome", p.id, reference, p.proposed_by, p.proposed_at)
+        for reference, p in await complaints.pending_outcomes(session)
+    ]
+
+
+async def _announcements(session: AsyncSession) -> list[Waiting]:
+    return [
+        Waiting("announcement", a.id, a.title, a.proposed_by, a.proposed_at)
+        for a in await announcements.list_announcements(session)
+        if a.status == "proposed"
+    ]
+
+
+async def _payout_accounts(session: AsyncSession) -> list[Waiting]:
+    return [
+        Waiting("payout_account", d.id, d.kind.value, d.checked_by, d.checked_at)
+        for d in await destinations.checks_awaiting_approval(session)
+        if d.checked_by is not None and d.checked_at is not None
     ]

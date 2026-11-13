@@ -348,6 +348,18 @@ async def add_note(
     return await _reload(session, row.id, clock)
 
 
+_ALL_PENDING = text(
+    "SELECT c.reference, p.id, p.outcome, p.resolution, p.client_accepted, p.proposed_by, "
+    "p.proposed_at FROM complaint_outcome_proposals p JOIN complaints c ON c.id = p.complaint_id "
+    "WHERE p.status = 'pending' ORDER BY p.proposed_at, p.id"
+)
+
+
+async def pending_outcomes(session: AsyncSession) -> list[tuple[str, OutcomeProposal]]:
+    """Every outcome waiting for a second person, with its complaint's reference, oldest first."""
+    return [(row.reference, _proposal(row)) for row in (await session.execute(_ALL_PENDING)).all()]
+
+
 async def pending_outcome(session: AsyncSession, complaint_id: str) -> OutcomeProposal | None:
     row = (await session.execute(_PENDING, {"id": complaint_id})).one_or_none()
     return _proposal(row) if row is not None else None
