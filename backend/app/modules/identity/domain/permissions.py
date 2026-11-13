@@ -40,6 +40,9 @@ Permission = Literal[
     # is `dealing_desk.view`. Every step still takes a second person.
     "dealing_orders.change",
     "finance.view",
+    # Recording a payment of withholding tax to URA, approving someone else's, or declining it.
+    # Approving posts it to the ledger. Seeing the tax screen is `finance.view`. Not a screen.
+    "tax_remittances.change",
     "products.view",
     "rates.view",
     # Proposing a rate change, approving or sending back someone else's, and withdrawing your
@@ -134,6 +137,7 @@ ROLE_PERMISSIONS: dict[Role, frozenset[Permission]] = {
             "dealing_desk.view",
             "dealing_orders.change",
             "finance.view",
+            "tax_remittances.change",
             "products.view",
             "rates.view",
             "rates.change",
