@@ -91,9 +91,19 @@ variable "documents_bucket_name" {
 }
 
 variable "admin_access_emails" {
-  description = "Staff email addresses allowed through Cloudflare Access to the back office. Empty leaves Access off."
+  description = "Staff email addresses allowed through Cloudflare Access to the back office. Required in production. Empty leaves Access off in staging."
   type        = list(string)
   default     = []
+
+  validation {
+    condition     = var.environment != "production" || length(var.admin_access_emails) > 0
+    error_message = "Production needs at least one admin_access_emails entry, so the back office is never public."
+  }
+
+  validation {
+    condition     = length(var.admin_access_emails) == 0 || var.cloudflare_account_id != ""
+    error_message = "cloudflare_account_id is needed when admin_access_emails is set."
+  }
 }
 
 variable "alert_emails" {
