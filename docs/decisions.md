@@ -1,0 +1,39 @@
+# Decisions and open questions
+
+A running log. Add a row when a decision is made, and move an open question up when it is answered. Do not rewrite history: if a decision is reversed, add a new row that says so.
+
+## Decided
+
+| Date | Decision |
+| --- | --- |
+| 2026-11-13 | Backend is Python with FastAPI, Pydantic, SQLAlchemy 2, Alembic and PostgreSQL. |
+| 2026-11-13 | Background jobs live in PostgreSQL, following the Fidiba backend. No Celery and no Redis. |
+| 2026-11-13 | Client app is React Native with Expo, one codebase for Android, iPhone and web. |
+| 2026-11-13 | Clients get a web version at launch, built from the same Expo code. |
+| 2026-11-13 | Back office console is React. |
+| 2026-11-13 | The ledger is double-entry and is the only place money moves. |
+| 2026-11-13 | No wallet for now. Every payment in is for a specific investment or goal, and every payment out goes straight to mobile money or bank. |
+| 2026-11-13 | ioTec for payments (ioTec Pay), SMS (Messaging) and phone number verification (Verify) for now, each behind its own adapter. |
+| 2026-11-13 | Email provider is Resend. |
+| 2026-11-13 | No bank partner yet. The bank sits behind an adapter that works with uploaded statements today and can take a bank API later. |
+| 2026-11-13 | Early withdrawals are funded from a liquidity buffer first, then by secondary market sales. |
+| 2026-11-13 | Account numbers are 10 digits: 2 for type, 7 random, 1 Luhn check digit. See [account-numbers.md](account-numbers.md). |
+| 2026-11-13 | An SMS code alone never signs a client in. Password plus a second step, passkey first. Staff use password and passkey with no SMS option. |
+| 2026-11-13 | Clients save their own payout bank accounts and mobile money numbers, with proof of ownership. |
+| 2026-11-13 | Domains: finvestug.com for the website, app.finvestug.com for the client app, admin.finvestug.com for the back office. |
+| 2026-11-13 | Infrastructure is Terraform on DigitalOcean and Cloudflare. |
+| 2026-11-13 | Brand is black and lime with Plus Jakarta Sans. See [design.md](design.md). |
+| 2026-11-13 | All work reaches `main` through pull requests. UI work includes screenshots. Commits on `main` carry no AI attribution. |
+
+## Open
+
+| Question | Who answers |
+| --- | --- |
+| Is money in transit through the trust account covered by the current licence? | Counsel |
+| Data protection: registration, consent wording, and whether personal data may be stored outside Uganda. This decides the hosting region. | Counsel |
+| Do group goals with two approvals count as a collective scheme? | Counsel |
+| ioTec: fees, sandbox, settlement speed from the ioTec wallet to our bank, payout limits, and whether Verify sends its own code. | ioTec |
+| Identity check provider: Smile ID coverage and pricing for Uganda. | Provider |
+| Will passkeys become compulsory for clients? | Owner |
+| Is api.finvestug.com the backend address? | Owner |
+| Card payments. Stripe is not available to Ugandan businesses. A local card acquirer, capped, is a possible later addition. | Owner |
