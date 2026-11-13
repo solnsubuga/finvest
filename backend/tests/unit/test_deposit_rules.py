@@ -9,6 +9,7 @@ import pytest
 from app.modules.payments.domain.deposits import (
     APPROVAL_WINDOW,
     TRANSITIONS,
+    UNCERTAIN_READ_WINDOW,
     Code,
     DepositStatus,
     InvalidDeposit,
@@ -18,6 +19,7 @@ from app.modules.payments.domain.deposits import (
     can_move,
     check_mobile_money_amount,
     mask_msisdn,
+    next_uncertain_read,
     normalise_msisdn,
 )
 from app.modules.payments.domain.outcomes import (
@@ -244,3 +246,47 @@ def test_outcomes_refuse_values_an_adapter_must_not_pass_on() -> None:
     for build in builds:
         with pytest.raises(InvalidOutcome):
             build()
+
+
+# Reading an uncertain deposit again
+
+
+@pytest.mark.parametrize(
+    ("age", "number", "due"),
+    [
+        (timedelta(0), 1, timedelta(minutes=1)),
+        (timedelta(seconds=59), 1, timedelta(minutes=1)),
+        (timedelta(minutes=1), 2, timedelta(minutes=2)),
+        (timedelta(minutes=14, seconds=30), 15, timedelta(minutes=15)),
+        (timedelta(minutes=15), 16, timedelta(minutes=25)),
+        (timedelta(minutes=24), 16, timedelta(minutes=25)),
+        (timedelta(hours=1, minutes=54), 25, timedelta(hours=1, minutes=55)),
+        (timedelta(hours=1, minutes=55), 26, timedelta(hours=2, minutes=55)),
+        (timedelta(hours=2, minutes=55), 27, timedelta(hours=3, minutes=55)),
+        (timedelta(hours=23, minutes=54), 47, timedelta(hours=23, minutes=55)),
+    ],
+)
+def test_an_uncertain_deposit_is_read_less_often_as_it_ages(
+    age: timedelta, number: int, due: timedelta
+) -> None:
+    assert next_uncertain_read(SENT, SENT + age) == (number, SENT + due)
+
+
+def test_every_read_of_an_uncertain_deposit_has_its_own_number_and_a_later_time() -> None:
+    now, seen = SENT, []
+    while (upcoming := next_uncertain_read(SENT, now)) is not None:
+        seen.append(upcoming)
+        now = upcoming[1]
+    numbers = [number for number, _ in seen]
+    times = [due for _, due in seen]
+    assert numbers == list(range(1, len(seen) + 1))
+    assert times == sorted(set(times))
+    assert times[-1] <= SENT + UNCERTAIN_READ_WINDOW
+    assert len(seen) < 60
+
+
+@pytest.mark.parametrize(
+    "age", [timedelta(hours=23, minutes=55), UNCERTAIN_READ_WINDOW, timedelta(days=3)]
+)
+def test_status_reads_stop_after_a_day_and_leave_it_to_reconciliation(age: timedelta) -> None:
+    assert next_uncertain_read(SENT, SENT + age) is None

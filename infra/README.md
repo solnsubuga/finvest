@@ -177,8 +177,8 @@ In each of the `staging` and `production` GitHub environments, beside what Terra
 | `FINVEST_EMAIL_RESEND_API_KEY` | Secret | The Resend key, once email is set up |
 | `FINVEST_EMAIL_BACKEND`, `FINVEST_EMAIL_FROM` | Variables | `resend` and `Finvest <no-reply@finvestug.com>` |
 
-| `SITE_PUBLISHED` | Variable, production only | `true` puts the public website live at the production address. Leave it unset while the pages still carry placeholder facts (`pnpm placeholders` in `apps/site`). |
-| `SITE_INDEXABLE` | Variable | `true` lets search engines index the website. Leave it unset until launch. Never set it on staging. |
+| `SITE_PUBLISHED` | Variable, production only | The owner's decision, nobody else's: `true` puts the public website live at the production address. Leave it unset while the pages still carry placeholder facts (`pnpm placeholders` in `apps/site`). |
+| `SITE_INDEXABLE` | Variable, production only | `true` lets search engines index the website. Leave it unset until launch. Staging, the API, the back office and the client app address always send `X-Robots-Tag: noindex`, whatever this says. |
 
 `DEPLOY_SSH_KEY` is already there from provisioning, and Provision records `DEPLOY_HOST_KEY` itself.
 

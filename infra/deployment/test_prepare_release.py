@@ -148,7 +148,9 @@ class PrepareRelease(unittest.TestCase):
 
     def test_staging_serves_the_website(self):
         pr.prepare(self.out, settings(DEPLOY_ENVIRONMENT="staging"))
-        self.assertIn("import site_upstream", (self.out / "edge" / "site.caddy").read_text())
+        site = (self.out / "edge" / "site.caddy").read_text()
+        self.assertIn("import site_upstream", site)
+        self.assertIn("import unlisted", site)
         self.assertEqual(read_env(self.out / "release.env")["FINVEST_SITE_DOMAIN"], "finvestug.com")
 
     def test_production_holds_the_website_back_until_published(self):
@@ -160,7 +162,9 @@ class PrepareRelease(unittest.TestCase):
 
     def test_production_serves_the_website_once_published(self):
         pr.prepare(self.out, settings(SITE_PUBLISHED="true"))
-        self.assertIn("import site_upstream", (self.out / "edge" / "site.caddy").read_text())
+        site = (self.out / "edge" / "site.caddy").read_text()
+        self.assertIn("import site_upstream", site)
+        self.assertNotIn("unlisted", site)
         self.assertEqual(read_env(self.out / "release.env")["FINVEST_SITE_DOMAIN"], "finvestug.com")
 
     def test_www_redirects_to_the_apex(self):

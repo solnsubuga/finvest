@@ -25,6 +25,7 @@ from app.modules.payments.domain.deposits import (
     APPROVAL_WINDOW,
     SENDING_GRACE,
     TRANSITIONS,
+    UNCERTAIN_READ_WINDOW,
     UNSENT_EXPIRY,
     DepositStatus,
     Move,
@@ -39,6 +40,8 @@ from app.modules.payments.domain.outcomes import (
     Pending,
     Rejected,
     RejectionCode,
+    SendResult,
+    StatusReading,
     Uncertain,
     UncertainReason,
 )
@@ -368,6 +371,161 @@ async def test_a_request_that_times_out_is_never_sent_again(
     ]
 
 
+async def test_an_uncertain_deposit_is_read_again_until_a_late_answer_settles_it(
+    app_database: Database,
+    worker_database: Database,
+    provider: FakeCollections,
+    worker: Worker,
+    fake_clock: FakeClock,
+) -> None:
+    msisdn, ref = phone(), reference()
+    provider.on_send(msisdn, Uncertain(UncertainReason.TIMED_OUT))
+    provider.on_status(msisdn, NotFound())
+    deposit = await start_deposit(app_database, fake_clock, msisdn=msisdn)
+    await drain(worker)
+    fake_clock.advance(seconds=5)
+    await drain(worker)
+    assert provider.reads_for(deposit) == 1
+
+    # The first read found nothing. The sweep keeps asking, about once a minute at first.
+    for _ in range(5):
+        fake_clock.advance(minutes=2)
+        await sweep(worker, worker_database, fake_clock)
+    early = provider.reads_for(deposit)
+    assert early >= 3
+    assert (await reload(worker_database, deposit)).status is S.UNCERTAIN
+
+    # Forty minutes on, the provider's record catches up. The next read settles it.
+    provider.on_status(msisdn, Confirmed(ref, ugx(50_000)))
+    for _ in range(4):
+        fake_clock.advance(minutes=10)
+        await sweep(worker, worker_database, fake_clock)
+    settled = await reload(worker_database, deposit)
+    assert (settled.status, settled.provider_reference) == (S.CONFIRMED, ref)
+    assert await entries(worker_database, deposit) == 1
+    assert provider.sends_for(deposit) == 1
+
+    # Settled deposits are left alone.
+    reads = provider.reads_for(deposit)
+    fake_clock.advance(minutes=30)
+    await sweep(worker, worker_database, fake_clock)
+    assert provider.reads_for(deposit) == reads
+
+
+async def test_a_deposit_uncertain_for_the_second_time_is_still_read_and_settled(
+    app_database: Database,
+    worker_database: Database,
+    provider: FakeCollections,
+    worker: Worker,
+    fake_clock: FakeClock,
+) -> None:
+    msisdn, ref = phone(), reference()
+    provider.on_send(msisdn, Uncertain(UncertainReason.TIMED_OUT))
+    provider.on_status(msisdn, NotFound())
+    deposit = await start_deposit(app_database, fake_clock, msisdn=msisdn)
+    await drain(worker)
+    # First period: two numbered reads run and find nothing.
+    for _ in range(2):
+        fake_clock.advance(minutes=3)
+        await sweep(worker, worker_database, fake_clock)
+    assert (await reload(worker_database, deposit)).status is S.UNCERTAIN
+
+    # The provider has it after all, the prompt goes unanswered, and it is uncertain again.
+    provider.on_status(msisdn, Pending(ref))
+    for _ in range(8):
+        fake_clock.advance(minutes=3)
+        await sweep(worker, worker_database, fake_clock)
+    again = await reload(worker_database, deposit)
+    assert (again.status, again.code) == (S.UNCERTAIN, "approval_overdue")
+    assert [status for status, _ in await history(worker_database, deposit)].count("uncertain") == 2
+
+    # Second period: its reads start from number one again and must still take effect.
+    provider.on_status(msisdn, Confirmed(ref, ugx(50_000)))
+    for _ in range(2):
+        fake_clock.advance(minutes=10)
+        await sweep(worker, worker_database, fake_clock)
+    settled = await reload(worker_database, deposit)
+    assert settled.status is S.CONFIRMED
+    assert await entries(worker_database, deposit) == 1
+
+
+async def test_sweeps_do_not_pile_up_reads_of_an_uncertain_deposit(
+    app_database: Database,
+    worker_database: Database,
+    provider: FakeCollections,
+    worker: Worker,
+    fake_clock: FakeClock,
+) -> None:
+    msisdn = phone()
+    provider.on_send(msisdn, Uncertain(UncertainReason.TIMED_OUT))
+    provider.on_status(msisdn, NotFound())
+    deposit = await start_deposit(app_database, fake_clock, msisdn=msisdn)
+    await drain(worker)
+    fake_clock.advance(minutes=30)
+    # Ten sweeps in the same minute queue one read, due in ten minutes, and nothing runs yet.
+    before = provider.reads_for(deposit)
+    for _ in range(10):
+        await sweep(worker, worker_database, fake_clock)
+    assert provider.reads_for(deposit) == before
+    assert (
+        await count(
+            worker_database,
+            "SELECT count(*) FROM jobs WHERE kind = :kind AND idempotency_key LIKE :key "
+            "AND status = 'pending'",
+            kind=service.VERIFY_KIND,
+            key=f"{deposit.id}:uncertain:%",
+        )
+        == 1
+    )
+    fake_clock.advance(minutes=10)
+    await drain(worker)
+    assert provider.reads_for(deposit) == before + 1
+
+
+async def test_status_reads_of_an_uncertain_deposit_stop_after_a_day(
+    app_database: Database,
+    worker_database: Database,
+    provider: FakeCollections,
+    worker: Worker,
+    fake_clock: FakeClock,
+) -> None:
+    msisdn = phone()
+    provider.on_send(msisdn, Uncertain(UncertainReason.TIMED_OUT))
+    provider.on_status(msisdn, NotFound())
+    deposit = await start_deposit(app_database, fake_clock, msisdn=msisdn)
+    await drain(worker)
+    fake_clock.advance(seconds=UNCERTAIN_READ_WINDOW.total_seconds() + 3600)
+    await drain(worker)  # anything queued earlier is past its age by now
+    reads = provider.reads_for(deposit)
+    for _ in range(3):
+        await sweep(worker, worker_database, fake_clock)
+        fake_clock.advance(hours=2)
+        await drain(worker)
+    assert provider.reads_for(deposit) == reads
+    # Still uncertain, and still there for reconciliation to settle.
+    assert (await reload(worker_database, deposit)).status is S.UNCERTAIN
+
+
+async def test_a_different_confirmed_amount_is_not_read_again(
+    app_database: Database,
+    worker_database: Database,
+    provider: FakeCollections,
+    worker: Worker,
+    fake_clock: FakeClock,
+) -> None:
+    deposit, msisdn, ref = await awaiting_deposit(app_database, provider, worker, fake_clock)
+    provider.on_status(msisdn, Confirmed(ref, ugx(49_000)))
+    fake_clock.advance(seconds=30)
+    await drain(worker)
+    held = await reload(worker_database, deposit)
+    assert (held.status, held.code) == (S.UNCERTAIN, "amount_mismatch")
+    reads = provider.reads_for(deposit)
+    for _ in range(3):
+        fake_clock.advance(minutes=5)
+        await sweep(worker, worker_database, fake_clock)
+    assert provider.reads_for(deposit) == reads
+
+
 async def test_an_uncertain_deposit_the_provider_did_take_is_picked_up_by_a_status_read(
     app_database: Database,
     worker_database: Database,
@@ -651,6 +809,184 @@ async def test_a_double_tap_makes_one_deposit_and_one_prompt(
     )
 
 
+async def test_an_investment_with_an_open_deposit_refuses_a_second_one(
+    app_database: Database,
+    worker_database: Database,
+    provider: FakeCollections,
+    worker: Worker,
+    fake_clock: FakeClock,
+) -> None:
+    actor, msisdn, purpose = client(), phone(), push_id()
+    provider.on_send(msisdn, Accepted(reference()))
+    provider.on_status(msisdn, Pending(reference()))
+    first = await start_deposit(
+        app_database, fake_clock, actor=actor, msisdn=msisdn, purpose_id=purpose
+    )
+    # The answer was lost, the client reopened the pay screen, and the app made a new key.
+    with pytest.raises(service.DepositExists) as refused:
+        await start_deposit(
+            app_database, fake_clock, actor=actor, msisdn=msisdn, purpose_id=purpose
+        )
+    assert refused.value.code == "conflict"
+    assert (refused.value.deposit_id, refused.value.status) == (first.id, S.CREATED)
+
+    await drain(worker)
+    with pytest.raises(service.DepositExists) as waiting:
+        await start_deposit(
+            app_database, fake_clock, actor=actor, msisdn=msisdn, purpose_id=purpose
+        )
+    assert (waiting.value.deposit_id, waiting.value.status) == (first.id, S.AWAITING_APPROVAL)
+    # One deposit, one prompt.
+    assert len([r for r in provider.requests if r.msisdn == msisdn]) == 1
+
+
+@pytest.mark.parametrize(
+    ("send", "reading", "status"),
+    [
+        (Uncertain(UncertainReason.TIMED_OUT), NotFound(), S.UNCERTAIN),
+        (Accepted("ref-paid"), None, S.CONFIRMED),
+    ],
+)
+async def test_an_uncertain_or_paid_investment_refuses_another_deposit(
+    app_database: Database,
+    worker_database: Database,
+    provider: FakeCollections,
+    worker: Worker,
+    fake_clock: FakeClock,
+    send: SendResult,
+    reading: StatusReading | None,
+    status: DepositStatus,
+) -> None:
+    actor, msisdn, purpose, ref = client(), phone(), push_id(), reference()
+    provider.on_send(msisdn, Accepted(ref) if isinstance(send, Accepted) else send)
+    provider.on_status(msisdn, reading or Confirmed(ref, ugx(50_000)))
+    first = await start_deposit(
+        app_database, fake_clock, actor=actor, msisdn=msisdn, purpose_id=purpose
+    )
+    await drain(worker)
+    fake_clock.advance(seconds=30)
+    await drain(worker)
+    assert (await reload(worker_database, first)).status is status
+    with pytest.raises(service.DepositExists) as refused:
+        await start_deposit(
+            app_database, fake_clock, actor=actor, msisdn=msisdn, purpose_id=purpose
+        )
+    assert (refused.value.deposit_id, refused.value.status) == (first.id, status)
+
+
+async def test_a_failed_deposit_frees_the_investment_for_another_try(
+    app_database: Database,
+    worker_database: Database,
+    provider: FakeCollections,
+    worker: Worker,
+    fake_clock: FakeClock,
+) -> None:
+    actor, msisdn, purpose = client(), phone(), push_id()
+    provider.on_send(msisdn, Rejected(RejectionCode.INSUFFICIENT_FUNDS), Accepted(reference()))
+    first = await start_deposit(
+        app_database, fake_clock, actor=actor, msisdn=msisdn, purpose_id=purpose
+    )
+    await drain(worker)
+    assert (await reload(worker_database, first)).status is S.FAILED
+    second = await start_deposit(
+        app_database, fake_clock, actor=actor, msisdn=msisdn, purpose_id=purpose
+    )
+    assert second.id != first.id
+    await drain(worker)
+    assert (await reload(worker_database, second)).status is S.AWAITING_APPROVAL
+
+
+async def test_other_modules_can_ask_whether_money_may_still_arrive(
+    app_database: Database,
+    worker_database: Database,
+    provider: FakeCollections,
+    worker: Worker,
+    fake_clock: FakeClock,
+) -> None:
+    async def live(purpose_id: str, purpose: Purpose = Purpose.INVESTMENT) -> bool:
+        async with worker_database.actor_transaction(SYSTEM) as session:
+            return await service.has_live_deposit(session, purpose=purpose, purpose_id=purpose_id)
+
+    actor, msisdn, purpose = client(), phone(), push_id()
+    assert not await live(purpose)
+
+    # Uncertain: the money may still arrive, so the investment must not be cancelled.
+    provider.on_send(msisdn, Uncertain(UncertainReason.TIMED_OUT))
+    provider.on_status(msisdn, NotFound())
+    deposit = await start_deposit(
+        app_database, fake_clock, actor=actor, msisdn=msisdn, purpose_id=purpose
+    )
+    assert await live(purpose)
+    assert not await live(purpose, Purpose.GOAL)
+    await drain(worker)
+    assert (await reload(worker_database, deposit)).status is S.UNCERTAIN
+    assert await live(purpose)
+
+    # Reconciliation finds it was never taken. Nothing is on its way any more.
+    async with worker_database.actor_transaction(SYSTEM) as session:
+        await service.settle_deposit(
+            session,
+            deposit.id,
+            Rejected(RejectionCode.DECLINED),
+            fake_clock,
+            cause="reconciliation",
+        )
+    assert not await live(purpose)
+
+
+async def test_two_new_keys_at_once_make_one_deposit_for_an_investment(
+    worker_database: Database,
+    provider: FakeCollections,
+    worker: Worker,
+    fake_clock: FakeClock,
+    pools: dict[str, list[Database]],
+) -> None:
+    actor, msisdn, purpose = client(), phone(), push_id()
+    provider.on_send(msisdn, Accepted(reference()))
+    # Two devices, two keys, two transactions that cannot see each other's insert.
+    results = await asyncio.gather(
+        *(
+            start_deposit(database, fake_clock, actor=actor, msisdn=msisdn, purpose_id=purpose)
+            for database in pools["finvest_app"]
+        ),
+        return_exceptions=True,
+    )
+    made = [result for result in results if isinstance(result, Deposit)]
+    refused = [result for result in results if isinstance(result, service.DepositExists)]
+    assert (len(made), len(refused)) == (1, len(results) - 1)
+    # The loser is told which deposit won, so the app can take the client to it.
+    assert {refusal.deposit_id for refusal in refused} == {made[0].id}
+    await drain(worker)
+    assert len([r for r in provider.requests if r.msisdn == msisdn]) == 1
+    assert (
+        await count(
+            worker_database,
+            "SELECT count(*) FROM payment_deposits WHERE purpose_id = :id",
+            id=purpose,
+        )
+        == 1
+    )
+
+
+async def test_the_database_itself_refuses_a_second_live_deposit_for_an_investment(
+    app_database: Database, fake_clock: FakeClock
+) -> None:
+    actor = client()
+    first = await start_deposit(app_database, fake_clock, actor=actor)
+    with pytest.raises(DBAPIError, match="uq_payment_deposits_live_investment"):
+        async with app_database.actor_transaction(actor) as session:
+            await session.execute(
+                text(
+                    "INSERT INTO payment_deposits (id, client_id, purpose_type, purpose_id, "
+                    "method, provider, currency, amount_minor, payer_msisdn, created_at, "
+                    "updated_at) SELECT :id, client_id, purpose_type, purpose_id, method, "
+                    "provider, currency, amount_minor, payer_msisdn, created_at, updated_at "
+                    "FROM payment_deposits WHERE id = :first"
+                ),
+                {"id": push_id(), "first": first.id},
+            )
+
+
 # Requests
 
 
@@ -697,6 +1033,7 @@ async def test_a_bad_request_saves_nothing_and_does_not_echo_what_was_sent(
                 actor,
                 DepositRequest(**values),  # type: ignore[arg-type]
                 idempotency_key=f"key-{push_id()}",
+                account_phone=str(values["phone"]) if "phone" not in changes else phone(),
                 provider=PROVIDER,
                 clock=fake_clock,
             )
@@ -711,6 +1048,37 @@ async def test_a_bad_request_saves_nothing_and_does_not_echo_what_was_sent(
         )
         == 0
     )
+
+
+async def test_a_payment_from_a_number_that_is_not_the_accounts_is_refused(
+    app_database: Database, worker_database: Database, fake_clock: FakeClock
+) -> None:
+    actor, other = client(), phone()
+    with pytest.raises(ApplicationError) as refused:
+        await start_deposit(
+            app_database, fake_clock, actor=actor, msisdn=other, account_phone="+256772000111"
+        )
+    assert refused.value.code == "validation_failed"
+    assert [(f.field_path, f.code) for f in refused.value.fields] == [
+        (["phone"], "not_account_phone")
+    ]
+    assert (
+        await count(
+            worker_database,
+            "SELECT count(*) FROM payment_deposits WHERE client_id = :id",
+            id=actor.id,
+        )
+        == 0
+    )
+
+
+async def test_the_accounts_number_may_be_written_in_any_usual_form(
+    app_database: Database, fake_clock: FakeClock
+) -> None:
+    deposit = await start_deposit(
+        app_database, fake_clock, msisdn="0772000222", account_phone="+256772000222"
+    )
+    assert deposit.payer_msisdn == "+256772000222"
 
 
 async def test_only_a_client_starts_a_deposit(

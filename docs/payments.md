@@ -1,6 +1,6 @@
 # Payments in
 
-How a client pays for an investment or a goal. The code is in `backend/app/modules/payments`, and the database side is migration 0020. Payouts are in `backend/app/modules/payouts`.
+How a client pays for an investment or a goal. The code is in `backend/app/modules/payments`, and the database side is migrations 0020 and 0021. Payouts are in `backend/app/modules/payouts`.
 
 There is no wallet. Every deposit names the investment or goal it pays for, and the money it brings sits in a ledger account for that purpose until the investment starts.
 
@@ -13,6 +13,13 @@ There is no wallet. Every deposit names the investment or goal it pays for, and 
 3. The provider accepts, and the deposit is `awaiting_approval`. The payer approves on their phone.
 4. The worker reads the status back from the provider. When the provider's own record says the money arrived, for exactly the amount asked, the deposit becomes `confirmed` and the ledger entry is posted in the same transaction.
 5. A `payments.deposit_confirmed` event is published once. Investments and goals will start from it.
+
+Two things are refused before anything is saved:
+
+- **A payer that is not the account's own number.** `request_deposit` is given the number on the client's account, taken from their session and never from the request, and the payer must equal it. A payment from a number registered to someone else is refused (`not_account_phone`). This is the owner's rule.
+- **A second deposit for the same investment.** An investment takes one deposit. While one is being sent, awaiting approval, uncertain or confirmed, a request with a new idempotency key raises `DepositExists`, which carries the existing deposit's ID and status so the app can take the client to it. No second prompt reaches the phone. A failed deposit moved no money and frees the investment for another try. Goals are not covered, because a goal takes many deposits over its life.
+
+Other modules ask `has_live_deposit(session, purpose=..., purpose_id=...)` from the worker before they give up on a payment. It is true while a deposit for that purpose has not failed, so an unpaid investment is not cancelled while a mobile money payment is still pending or uncertain.
 
 | Status | Meaning |
 | --- | --- |
@@ -29,7 +36,7 @@ There is no wallet. Every deposit names the investment or goal it pays for, and 
 | --- | --- | --- |
 | Rejected | The provider refused. No money moved. | The deposit fails with the provider's reason. |
 | Deferred | The request certainly did not reach the provider's books. | It is sent again later, up to five times within eight minutes, then fails with `provider_unavailable`. |
-| Uncertain | It may or may not have been taken: a timeout, a dropped connection, a provider error, or our own worker dying mid-call. | The deposit becomes `uncertain`. **It is never sent again.** The status is read back from the provider. If that does not settle it, reconciliation does, by calling `settle_deposit` with what the provider's record shows. |
+| Uncertain | It may or may not have been taken: a timeout, a dropped connection, a provider error, or our own worker dying mid-call. | The deposit becomes `uncertain`. **It is never sent again.** The status is read back from the provider, again and again for a day (see the sweep below). If that does not settle it, reconciliation does, by calling `settle_deposit` with what the provider's record shows. |
 
 Two things make this safe. The `sending` mark is committed before the call, and only a deposit that is still `created` is ever sent. And the send job is registered with the queue as having an external effect, so the queue never runs it again after a crash or a lost lease. A deposit left with the mark is found by the sweep below.
 
@@ -46,6 +53,7 @@ A sweep runs every minute and picks up deposits whose own job was lost:
 | `created` for ten minutes | Fails with `provider_unavailable`. It was never marked `sending`, so it was never sent. |
 | `sending` for two minutes | Becomes `uncertain`, and a status read is queued. |
 | `awaiting_approval` and quiet for two minutes | A status read is queued. After fifteen minutes with no result it becomes `uncertain` with `approval_overdue`. |
+| `uncertain`, for up to 24 hours | The next status read is queued: every minute for the first fifteen minutes, every ten minutes for two hours, then hourly. Each read is numbered and due at a fixed time, so repeated sweeps queue it once. A read only asks the provider. It never sends. After 24 hours the reads stop and the deposit waits for reconciliation. A deposit held for `amount_mismatch` is not read again, because it needs staff. |
 
 ## Ledger entries
 
@@ -59,6 +67,7 @@ If the provider confirms a different amount from the one asked for, nothing is p
 
 ## What the database enforces
 
+- An investment has at most one deposit that has not failed (a partial unique index, migration 0021). The service checks first, and the index is what holds when two requests race.
 - A deposit's client, purpose, method, amount and payer never change.
 - A deposit moves only along the allowed path. `confirmed` and `failed` are final. A test tries every pair of states against the trigger and compares the result with the rules in `domain/deposits.py`.
 - A deposit is `confirmed` exactly when it points at its ledger entry.
@@ -91,7 +100,7 @@ An open receivable is reported by the daily close until it is zero.
 
 ioTec Pay is the chosen provider. Its API details are not confirmed, so the only adapter today is a sandbox that moves no money. Any adapter implements `CollectionsProvider` in `domain/provider.py`: request a collection, read its status, and check and parse a callback. An adapter sorts every failure into rejected, deferred or uncertain and never raises. If one does raise, the deposit is treated as uncertain.
 
-`FINVEST_PAYMENTS_PROVIDER` chooses the adapter. The default is `disabled`: no deposit can be sent and the callback address answers 404. `sandbox` is set by the local Compose stack and must never be set in production. In the sandbox, the last two digits of the payer's number choose the result:
+`FINVEST_PAYMENTS_PROVIDER` chooses the adapter. The default is `disabled`: no deposit can be sent and the callback address answers 404. `sandbox` is set by the local Compose stack. The sandbox confirms payments that never happened, so the API, the worker and the scheduler refuse to start with it unless `FINVEST_ENVIRONMENT` is unset (local development and tests), `local` or `staging`. Any other value, including a name we do not know, is treated as production. In the sandbox, the last two digits of the payer's number choose the result:
 
 | Number ends in | Result |
 | --- | --- |
