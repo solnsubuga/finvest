@@ -1,8 +1,10 @@
 """Process configuration from the environment. Secrets arrive here and nowhere else."""
 
-from typing import Literal
+import ssl
+from pathlib import Path
+from typing import Literal, Self
 
-from pydantic import AliasChoices, Field, SecretStr, field_validator
+from pydantic import AliasChoices, Field, SecretStr, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from sqlalchemy.engine import make_url
 from sqlalchemy.exc import ArgumentError
@@ -19,6 +21,9 @@ class Settings(BaseSettings):
         validation_alias=AliasChoices("FINVEST_DATABASE_URL", "DATABASE_URL")
     )
     database_ssl_mode: Literal["disable", "verify-full"] = "disable"
+    # PEM bundle of the CA that signs the database certificate, for a managed provider with its
+    # own CA. Without it, verification uses the system trust store.
+    database_ssl_root_cert: Path | None = None
     database_timeout_seconds: float = Field(default=5.0, gt=0, le=30)
     database_pool_size: int = Field(default=5, ge=1, le=20)
 
@@ -44,9 +49,14 @@ class Settings(BaseSettings):
             raise ValueError("Configure TLS with FINVEST_DATABASE_SSL_MODE")
         return SecretStr(url.render_as_string(hide_password=False))
 
+    @model_validator(mode="after")
+    def root_cert_needs_tls(self) -> Self:
+        if self.database_ssl_root_cert is not None and self.database_ssl_mode != "verify-full":
+            raise ValueError("A database root certificate requires verify-full TLS")
+        return self
+
     def database_connect_args(self) -> dict[str, object]:
+        """The same certificate and host name verification in every process and in migrations."""
         if self.database_ssl_mode == "disable":
             return {"ssl": False}
-        import ssl
-
-        return {"ssl": ssl.create_default_context()}
+        return {"ssl": ssl.create_default_context(cafile=self.database_ssl_root_cert)}
