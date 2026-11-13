@@ -1,7 +1,6 @@
 ---
 import Logo from "./Logo.astro";
 
-// Each group lists only pages and sections that exist. Add a link when its page is built.
 const groups = [
   {
     title: "Invest",
@@ -9,18 +8,33 @@ const groups = [
       { href: "/products", label: "Treasury bills" },
       { href: "/products", label: "Dollar fixed income" },
       { href: "/#goals", label: "Goals" },
+      { href: "/how-it-works#accounts", label: "Group and company accounts" },
     ],
   },
   {
     title: "Finvest",
     links: [
-      { href: "/", label: "Home" },
-      { href: "/#safety", label: "Safety" },
+      { href: "/about", label: "About us" },
+      { href: "/safety", label: "Safety" },
+      { href: "/about#contact", label: "Contact" },
     ],
   },
   {
     title: "Help",
-    links: [{ href: "/#questions", label: "Questions" }],
+    links: [
+      { href: "/help", label: "Help centre" },
+      { href: "/help#complaints", label: "Make a complaint" },
+      { href: "/help#existing-clients", label: "Already a client? Claim your account" },
+    ],
+  },
+  {
+    title: "Legal",
+    links: [
+      { href: "/legal/terms", label: "Terms" },
+      { href: "/legal/privacy", label: "Privacy" },
+      { href: "/legal/risk", label: "Risk disclosure" },
+      { href: "/legal/cookies", label: "Cookies" },
+    ],
   },
 ];
 const year = new Date().getUTCFullYear();

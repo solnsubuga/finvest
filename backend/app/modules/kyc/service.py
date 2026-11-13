@@ -10,13 +10,14 @@ hands the answer to `record_provider_result`.
 
 import json
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import date, datetime
 from typing import Any
 
 from sqlalchemy import Row, text
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.infrastructure.sealing import Sealer, associated_data
 from app.modules.account_numbers.domain.numbers import AccountType
 from app.modules.account_numbers.service import issue_account_number
 from app.modules.audit import service as audit
@@ -120,7 +121,8 @@ class QueueItem:
 
 _COLUMNS = (
     "id, client_id, status, document_type, document_country, surname, given_names, "
-    "document_number, date_of_birth, document_expires_on, tin, details_confirmed_at, submission, "
+    "document_number_sealed, date_of_birth_sealed, document_expires_on, tin_sealed, "
+    "document_fingerprint, details_confirmed_at, submission, "
     "submitted_at, provider, provider_reference, automatic_checks, review_flags, retake_photos, "
     "retake_requested_at, client_message, decided_at, decided_by, account_number"
 )
@@ -137,12 +139,13 @@ _INSERT = text(
 )
 _CHANGE_DOCUMENT = text(
     "UPDATE kyc_checks SET document_type = :document_type, document_country = :document_country, "
-    "details_confirmed_at = NULL, updated_at = :now WHERE id = :id"
+    "details_confirmed_at = NULL, document_fingerprint = NULL, updated_at = :now WHERE id = :id"
 )
 _SAVE_DETAILS = text(
     "UPDATE kyc_checks SET surname = :surname, given_names = :given_names, "
-    "document_number = :document_number, date_of_birth = :date_of_birth, "
-    "document_expires_on = :document_expires_on, tin = :tin, details_confirmed_at = :now, "
+    "document_number_sealed = :document_number, date_of_birth_sealed = :date_of_birth, "
+    "document_expires_on = :document_expires_on, tin_sealed = :tin, "
+    "document_fingerprint = :document_fingerprint, details_confirmed_at = :now, "
     "updated_at = :now WHERE id = :id"
 )
 _SUBMIT = text(
@@ -176,8 +179,7 @@ _ESCALATE = text(
 )
 _DOCUMENT_TAKEN = text(
     "SELECT EXISTS (SELECT FROM kyc_checks WHERE status = 'approved' "
-    "AND document_country = :document_country AND document_type = :document_type "
-    "AND document_number = :document_number)"
+    "AND document_fingerprint = :document_fingerprint)"
 )
 _PHOTOS = text(
     "SELECT id, kind, storage_key, content_type, byte_size, created_at FROM kyc_photos "
@@ -204,6 +206,7 @@ _QUEUE = text(
 
 async def choose_document(
     session: AsyncSession,
+    sealer: Sealer,
     client: Actor,
     document_type: DocumentType,
     document_country: str,
@@ -238,7 +241,7 @@ async def choose_document(
                 "now": now,
             },
         )
-    return await _view_by_id(session, row.id)
+    return await _view_by_id(session, sealer, row.id)
 
 
 async def add_photo(
@@ -286,7 +289,7 @@ async def add_photo(
 
 
 async def confirm_details(
-    session: AsyncSession, client: Actor, details: IdentityDetails, clock: Clock
+    session: AsyncSession, sealer: Sealer, client: Actor, details: IdentityDetails, clock: Clock
 ) -> CheckView:
     """Save the details the client confirmed. Only while the check is a draft."""
     row = await _editable(session, client)
@@ -306,22 +309,29 @@ async def confirm_details(
             "id": row.id,
             "surname": details.surname,
             "given_names": details.given_names,
-            "document_number": details.document_number,
-            "date_of_birth": details.date_of_birth,
+            "document_number": _seal(sealer, row.id, "document_number", details.document_number),
+            "date_of_birth": _seal(
+                sealer, row.id, "date_of_birth", details.date_of_birth.isoformat()
+            ),
             "document_expires_on": details.document_expires_on,
-            "tin": details.tin,
+            "tin": _seal(sealer, row.id, "tin", details.tin) if details.tin else None,
+            # The country and type are part of it: the same digits on another kind of document
+            # are a different document.
+            "document_fingerprint": sealer.fingerprint(
+                f"{row.document_country}|{row.document_type}|{details.document_number}"
+            ),
             "now": now,
         },
     )
-    return await _view_by_id(session, row.id)
+    return await _view_by_id(session, sealer, row.id)
 
 
 async def submit(
-    session: AsyncSession, client: Actor, provider: IdentityProvider, clock: Clock
+    session: AsyncSession, sealer: Sealer, client: Actor, provider: IdentityProvider, clock: Clock
 ) -> CheckView:
     """Hand the check in. It goes to the provider, or to a person when nothing automatic applies."""
     row = await _editable(session, client)
-    view = await _view(session, row)
+    view = await _view(session, sealer, row)
     missing = view.missing
     if row.status == CheckStatus.AWAITING_CLIENT:
         # Strictly later: a photo from the same instant as the request is the one staff saw.
@@ -348,14 +358,16 @@ async def submit(
         },
     )
     await _audit(session, client, "change", "kyc.check.submitted", row.id, clock)
-    return await _view_by_id(session, row.id)
+    return await _view_by_id(session, sealer, row.id)
 
 
-async def check_for_client(session: AsyncSession, client: Actor) -> CheckView | None:
+async def check_for_client(
+    session: AsyncSession, sealer: Sealer, client: Actor
+) -> CheckView | None:
     row = (
         await session.execute(_BY_CLIENT, {"client_id": _person(client, "client")})
     ).one_or_none()
-    return None if row is None else await _view(session, row)
+    return None if row is None else await _view(session, sealer, row)
 
 
 # The worker, after the provider answered ----------------------------------------------------
@@ -363,13 +375,18 @@ async def check_for_client(session: AsyncSession, client: Actor) -> CheckView | 
 
 async def record_provider_result(
     session: AsyncSession,
+    sealer: Sealer,
     check_id: str,
     submission: int,
     provider_reference: str,
     outcomes: tuple[CheckOutcome, ...],
     clock: Clock,
+    *,
+    automatic_approval: bool = False,
 ) -> CheckView:
-    """Apply the provider's answer: approve when every check passed, otherwise ask a person.
+    """Apply the provider's answer. Unless `automatic_approval` is on, a person always decides.
+
+    With it on, a client is approved when every check passed and their document is still valid.
 
     An answer for an earlier submission, or for a check that already moved on, changes nothing.
     """
@@ -377,10 +394,12 @@ async def record_provider_result(
     if row is None:
         raise ApplicationError("not_found")
     if row.status != CheckStatus.SUBMITTED or row.submission != submission:
-        return await _view(session, row)
-    decision = decide(outcomes)
+        return await _view(session, sealer, row)
+    decision = decide(outcomes, automatic_approval=automatic_approval)
     flags = list(decision.flags)
-    if decision.approve and await _document_taken(session, row):
+    if decision.approve and row.document_expires_on < clock.now().date():
+        flags = ["document_expired"]
+    elif decision.approve and await _document_taken(session, row):
         flags = ["duplicate_document"]
     checks = json.dumps([_outcome_json(outcome) for outcome in outcomes], separators=(",", ":"))
     system = Actor("system")
@@ -395,7 +414,7 @@ async def record_provider_result(
         )
         if approved:
             await _audit(session, system, "change", "kyc.check.approved", row.id, clock)
-            return await _view_by_id(session, row.id)
+            return await _view_by_id(session, sealer, row.id)
         flags = ["duplicate_document"]
     await session.execute(
         _TO_REVIEW,
@@ -416,7 +435,7 @@ async def record_provider_result(
         clock,
         details={"flags": flags},
     )
-    return await _view_by_id(session, row.id)
+    return await _view_by_id(session, sealer, row.id)
 
 
 # Staff ----------------------------------------------------------------------------------------
@@ -442,15 +461,34 @@ async def review_queue(session: AsyncSession, *, limit: int = DEFAULT_PAGE_SIZE)
     ]
 
 
-async def check_for_staff(session: AsyncSession, check_id: str) -> CheckView:
-    return await _view_by_id(session, check_id)
+async def check_for_staff(session: AsyncSession, sealer: Sealer, check_id: str) -> CheckView:
+    return await _view_by_id(session, sealer, check_id)
+
+
+_VERIFIED_NAME = text(
+    "SELECT surname, given_names FROM kyc_checks "
+    "WHERE client_id = :client_id AND status = 'approved'"
+)
+
+
+async def verified_name(session: AsyncSession, client_id: str) -> str | None:
+    """The name on an approved client's identity document, as "SURNAME Given names".
+
+    None until the client is approved. For staff transactions, such as checking that a payout
+    destination is in the client's own name.
+    """
+    row = (await session.execute(_VERIFIED_NAME, {"client_id": client_id})).one_or_none()
+    return None if row is None else f"{row.surname} {row.given_names}"
 
 
 async def approve(
-    session: AsyncSession, staff: Actor, check_id: str, reason: str, clock: Clock
+    session: AsyncSession, sealer: Sealer, staff: Actor, check_id: str, reason: str, clock: Clock
 ) -> CheckView:
     """Approve the client and issue their account number in this same transaction."""
     row = await _for_decision(session, staff, check_id, CheckStatus.APPROVED)
+    # The document was valid when the client confirmed it. It must still be valid today.
+    if row.document_expires_on < clock.now().date():
+        raise _invalid("document_expires_on", "document_expired")
     approved = await _approve(
         session,
         row,
@@ -463,11 +501,12 @@ async def approve(
         # Another approved client already holds this identity document.
         raise ApplicationError("conflict")
     await _audit(session, staff, "approval", "kyc.check.approved", row.id, clock, reason=reason)
-    return await _view_by_id(session, row.id)
+    return await _view_by_id(session, sealer, row.id)
 
 
 async def reject(
     session: AsyncSession,
+    sealer: Sealer,
     staff: Actor,
     check_id: str,
     reason: str,
@@ -486,11 +525,12 @@ async def reject(
         },
     )
     await _audit(session, staff, "approval", "kyc.check.rejected", row.id, clock, reason=reason)
-    return await _view_by_id(session, row.id)
+    return await _view_by_id(session, sealer, row.id)
 
 
 async def ask_for_photos(
     session: AsyncSession,
+    sealer: Sealer,
     staff: Actor,
     check_id: str,
     photos: frozenset[PhotoKind],
@@ -523,19 +563,27 @@ async def ask_for_photos(
         reason="Asked the client for new photos",
         details={"photos": kinds},
     )
-    return await _view_by_id(session, row.id)
+    return await _view_by_id(session, sealer, row.id)
 
 
 async def escalate(
-    session: AsyncSession, staff: Actor, check_id: str, reason: str, clock: Clock
+    session: AsyncSession, sealer: Sealer, staff: Actor, check_id: str, reason: str, clock: Clock
 ) -> CheckView:
     row = await _for_decision(session, staff, check_id, CheckStatus.WITH_COMPLIANCE)
     await session.execute(_ESCALATE, {"id": row.id, "now": clock.now()})
     await _audit(session, staff, "approval", "kyc.check.escalated", row.id, clock, reason=reason)
-    return await _view_by_id(session, row.id)
+    return await _view_by_id(session, sealer, row.id)
 
 
 # Internals ------------------------------------------------------------------------------------
+
+
+def _seal(sealer: Sealer, check_id: str, column: str, value: str) -> bytes:
+    return sealer.seal(value, associated_data("kyc_checks", column, check_id))
+
+
+def _open(sealer: Sealer, check_id: str, column: str, sealed: bytes) -> str:
+    return sealer.open(sealed, associated_data("kyc_checks", column, check_id))
 
 
 def _person(actor: Actor, kind: ActorKind) -> str:
@@ -594,12 +642,7 @@ async def _for_decision(
 
 async def _document_taken(session: AsyncSession, row: Row[Any]) -> bool:
     taken = await session.execute(
-        _DOCUMENT_TAKEN,
-        {
-            "document_country": row.document_country,
-            "document_type": row.document_type,
-            "document_number": row.document_number,
-        },
+        _DOCUMENT_TAKEN, {"document_fingerprint": row.document_fingerprint}
     )
     return bool(taken.scalar_one())
 
@@ -673,24 +716,26 @@ def _outcome_json(outcome: CheckOutcome) -> dict[str, str | int | None]:
     return {"check": outcome.check.value, "verdict": outcome.verdict.value, "score": outcome.score}
 
 
-async def _view_by_id(session: AsyncSession, check_id: str) -> CheckView:
+async def _view_by_id(session: AsyncSession, sealer: Sealer, check_id: str) -> CheckView:
     row = (await session.execute(_BY_ID, {"id": check_id})).one_or_none()
     if row is None:
         raise ApplicationError("not_found")
-    return await _view(session, row)
+    return await _view(session, sealer, row)
 
 
-async def _view(session: AsyncSession, row: Row[Any]) -> CheckView:
+async def _view(session: AsyncSession, sealer: Sealer, row: Row[Any]) -> CheckView:
     photos = await session.execute(_PHOTOS, {"check_id": row.id})
     details = None
     if row.surname is not None:
         details = IdentityDetails(
             surname=row.surname,
             given_names=row.given_names,
-            document_number=row.document_number,
-            date_of_birth=row.date_of_birth,
+            document_number=_open(sealer, row.id, "document_number", row.document_number_sealed),
+            date_of_birth=date.fromisoformat(
+                _open(sealer, row.id, "date_of_birth", row.date_of_birth_sealed)
+            ),
             document_expires_on=row.document_expires_on,
-            tin=row.tin,
+            tin=_open(sealer, row.id, "tin", row.tin_sealed) if row.tin_sealed else None,
         )
     return CheckView(
         id=row.id,

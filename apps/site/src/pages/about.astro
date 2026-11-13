@@ -1,0 +1,134 @@
+---
+import ContactForm from "../components/ContactForm.astro";
+import Icon from "../components/Icon.astro";
+import IconCard from "../components/IconCard.astro";
+import PageTitle from "../components/PageTitle.astro";
+import { supportEmail } from "../config.ts";
+import Base from "../layouts/Base.astro";
+
+const figures = [
+  { figure: "[YEAR]", label: "Founded in Kampala" },
+  { figure: "[NUMBER]", label: "Clients investing" },
+  { figure: "[UGX]", label: "Invested for clients" },
+  { figure: "[NUMBER]", label: "Auctions taken part in" },
+];
+
+const beliefs = [
+  {
+    icon: "eye",
+    title: "Show the real number",
+    text: "Returns after tax, fees up front, and the exact amount you get back before you pay.",
+  },
+  {
+    icon: "bolt",
+    title: "Respect people's time",
+    text: "No branch visits and no forms to print. Staff step in only when something needs a person.",
+  },
+  {
+    icon: "shield",
+    title: "Boring where it matters",
+    text: "Government bills, a licensed custodian, and books that are checked every single day.",
+  },
+] as const;
+
+const team = ["Chief Executive", "Head of Investments", "Head of Operations", "Head of Compliance"];
+---
+
+<Base
+  title="About and contact"
+  description="About Finvest: why we make Uganda government treasury bills easy to buy in small amounts from any phone, the rules we work by, and how to contact us."
+>
+  <PageTitle
+    eyebrow="About"
+    title="Government bills used to be for banks and big investors. Not any more."
+    lead="Finvest makes Uganda's safest investments easy to buy in small amounts, from any phone."
+  />
+
+  <section class="band" id="story">
+    <div class="wrap pair pair--loose">
+      <div>
+        <p class="eyebrow">Our story</p>
+        <h2 class="h2 h2--small">Why we built Finvest</h2>
+        <p class="lead">
+          [STORY: two or three short paragraphs in the founders' own words. When Finvest started,
+          what problem you saw, and what has changed for clients since.]
+        </p>
+      </div>
+      <dl class="figures">
+        {
+          figures.map((item) => (
+            <div>
+              <dd>{item.figure}</dd>
+              <dt>{item.label}</dt>
+            </div>
+          ))
+        }
+      </dl>
+    </div>
+  </section>
+
+  <section class="band band--white" id="beliefs">
+    <div class="wrap">
+      <p class="eyebrow">What we believe</p>
+      <h2 class="h2 h2--small">Three rules we work by.</h2>
+      <div class="grid grid--3">
+        {beliefs.map((belief) => <IconCard {...belief} />)}
+      </div>
+    </div>
+  </section>
+
+  <section class="band" id="team">
+    <div class="wrap">
+      <p class="eyebrow">Team</p>
+      <h2 class="h2 h2--small">The people responsible for your money.</h2>
+      <ul class="team">
+        {
+          team.map((role) => (
+            <li>
+              <span class="team__photo" aria-hidden="true">
+                Photo
+              </span>
+              <strong>[NAME]</strong>
+              <span>{role}</span>
+            </li>
+          ))
+        }
+      </ul>
+    </div>
+  </section>
+
+  <section class="band band--black" id="contact">
+    <div class="wrap split split--form">
+      <div>
+        <p class="eyebrow">Contact</p>
+        <h2 class="h2">Talk to us.</h2>
+        <p class="lead">
+          Already a client? The fastest way is the chat inside the app, because we can see your
+          account there.
+        </p>
+        <ul class="contacts">
+          <li>
+            <Icon name="chat" />
+            <span><strong>Chat in the app</strong><small>Every day, 8am to 8pm</small></span>
+          </li>
+          <li>
+            <Icon name="phone" />
+            <span><strong>[PHONE NUMBER]</strong><small>Monday to Friday, 8am to 6pm</small></span>
+          </li>
+          <li>
+            <Icon name="document" />
+            <span>
+              <strong><a href={`mailto:${supportEmail}`}>{supportEmail}</a></strong>
+              <small>We reply within one working day</small>
+            </span>
+          </li>
+          <li>
+            <Icon name="pin" />
+            <span><strong>[OFFICE ADDRESS], Kampala</strong><small>Visits by appointment</small></span>
+          </li>
+        </ul>
+      </div>
+      <ContactForm />
+    </div>
+  </section>
+</Base>

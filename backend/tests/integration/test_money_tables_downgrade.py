@@ -101,6 +101,12 @@ ROWS = {
         "'Test', now())",
         "refusing to drop payouts or limits",
     ),
+    "0051_kyc_sealed_details": (
+        "INSERT INTO kyc_checks (id, client_id, document_type, document_country, "
+        "document_number_sealed, created_at, updated_at) VALUES ('-Nabc0000000000000A1', "
+        "'-Nabc0000000000000B1', 'passport', 'UG', decode(repeat('00', 40), 'hex'), now(), now())",
+        "refusing to drop sealed identity details",
+    ),
 }
 
 

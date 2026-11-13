@@ -1,0 +1,143 @@
+---
+import Faq from "../components/Faq.astro";
+import Icon from "../components/Icon.astro";
+import IconCard from "../components/IconCard.astro";
+import PageTitle from "../components/PageTitle.astro";
+import { helpTopics } from "../data/help.ts";
+import Base from "../layouts/Base.astro";
+
+const count = (n: number) => `${n} ${n === 1 ? "question" : "questions"}`;
+---
+
+<Base
+  title="Help centre"
+  description="Answers to the questions people ask Finvest most: opening an account, paying in, interest and tax, withdrawals, goals, and keeping your account safe."
+>
+  <PageTitle
+    eyebrow="Help centre"
+    title="How can we help?"
+    lead="Answers to the things people ask most. If yours is not here, talk to us."
+  >
+    <form class="search" role="search" data-help-search hidden>
+      <Icon name="search" />
+      <label class="visually-hidden" for="help-search">Search help</label>
+      <input
+        id="help-search"
+        type="search"
+        autocomplete="off"
+        placeholder="Search, for example early withdrawal"
+      />
+    </form>
+  </PageTitle>
+
+  <section class="band band--tight" data-help-topics>
+    <div class="wrap">
+      <h2 class="eyebrow">Browse by topic</h2>
+      <div class="grid grid--3 grid--close">
+        {
+          helpTopics.map((topic) => (
+            <a class="card topic" href={`#${topic.id}`}>
+              <span class="tile tile--large">
+                <Icon name={topic.icon} />
+              </span>
+              <span>
+                <strong>{topic.title}</strong>
+                <span>{topic.summary}</span>
+                <small>{count(topic.questions.length)}</small>
+              </span>
+            </a>
+          ))
+        }
+      </div>
+    </div>
+  </section>
+
+  <section class="band band--flush-top" data-help-answers>
+    <div class="wrap">
+      <p class="search-status" data-help-status role="status" hidden></p>
+      {
+        helpTopics.map((topic) => (
+          <div class="help-topic" id={topic.id} data-help-topic>
+            <h2 class="h3">{topic.title}</h2>
+            <Faq questions={topic.questions} />
+          </div>
+        ))
+      }
+      <p class="search-empty" data-help-empty hidden>
+        Nothing matches that. Try other words, or <a href="#contact">talk to us</a>.
+      </p>
+    </div>
+  </section>
+
+  <section class="band band--white" id="contact">
+    <div class="wrap">
+      <h2 class="visually-hidden">Talk to us</h2>
+      <div class="grid grid--3" style="margin-top: 0">
+        <IconCard
+          icon="chat"
+          title="Chat with us"
+          text="In the app, every day from 8am to 8pm. Fastest for anything about your account."
+        />
+        <IconCard
+          icon="phone"
+          title="Call [PHONE NUMBER]"
+          text="Monday to Friday, 8am to 6pm. We will never ask for your password or PIN."
+        />
+        <IconCard
+          id="complaints"
+          icon="document"
+          title="Make a complaint"
+          text="Tell us what went wrong. We acknowledge within one working day and aim to resolve within [NUMBER] days. If you are not satisfied you can go to [REGULATOR]."
+        />
+      </div>
+    </div>
+  </section>
+</Base>
+
+<script>
+  import { matches } from "../lib/search.ts";
+
+  // The search box filters the questions on this page. Without JavaScript it stays hidden
+  // and every question is listed.
+  const form = document.querySelector<HTMLFormElement>("[data-help-search]");
+  const input = form?.querySelector<HTMLInputElement>("input");
+  const status = document.querySelector<HTMLElement>("[data-help-status]");
+  const empty = document.querySelector<HTMLElement>("[data-help-empty]");
+  const topics = document.querySelector<HTMLElement>("[data-help-topics]");
+  const answers = document.querySelector<HTMLElement>("[data-help-answers]");
+
+  if (form && input && status && empty && topics && answers) {
+    form.hidden = false;
+    form.addEventListener("submit", (event) => event.preventDefault());
+    input.addEventListener("input", () => {
+      const query = input.value;
+      const searching = query.trim() !== "";
+      let found = 0;
+      document.querySelectorAll<HTMLElement>("[data-help-topic]").forEach((topic) => {
+        let shown = 0;
+        topic.querySelectorAll<HTMLDetailsElement>("details").forEach((item) => {
+          const hit = matches(item.textContent ?? "", query);
+          item.hidden = !hit;
+          item.open = searching && hit;
+          if (hit) shown += 1;
+        });
+        topic.hidden = shown === 0;
+        found += shown;
+      });
+      topics.hidden = searching;
+      answers.classList.toggle("band--flush-top", !searching);
+      empty.hidden = found > 0;
+      status.hidden = !searching;
+      status.textContent = found === 1 ? "1 answer" : `${found} answers`;
+    });
+  }
+
+  // A link straight to one answer, such as /help#existing-clients, opens it.
+  const openTarget = () => {
+    const id = window.location.hash.slice(1);
+    const target = id ? document.getElementById(id) : null;
+    if (target instanceof HTMLDetailsElement) target.open = true;
+  };
+  window.addEventListener("hashchange", openTarget);
+  openTarget();
+</script>

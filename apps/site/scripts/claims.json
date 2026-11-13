@@ -1,0 +1,52 @@
+[
+  {
+    "claim": "Finvest is regulated, and by whom",
+    "where": "Home (\"Regulated\"), Safety (\"Licensed and supervised\"), footer",
+    "confirmedBy": null
+  },
+  {
+    "claim": "Treasury bills are recorded against each client's own account at a custodian (\"Held in your name\", \"Your bills, your name\")",
+    "where": "Home, Safety",
+    "confirmedBy": null
+  },
+  {
+    "claim": "Client money lands in a collection account kept apart from Finvest's own money",
+    "where": "Safety",
+    "confirmedBy": null
+  },
+  {
+    "claim": "Finvest's records are checked against mobile money, bank and custodian statements every day, and a second person signs off",
+    "where": "Home, Safety, About",
+    "confirmedBy": null
+  },
+  {
+    "claim": "Interest is earned every day and shown daily, after tax",
+    "where": "Home, How it works, Help",
+    "confirmedBy": null
+  },
+  {
+    "claim": "A treasury bill held to maturity pays the amount shown when the client invests",
+    "where": "Products",
+    "confirmedBy": null
+  },
+  {
+    "claim": "Finvest does not lend client money out",
+    "where": "Home",
+    "confirmedBy": null
+  },
+  {
+    "claim": "Accounts are audited each year, and personal data is handled under the Data Protection and Privacy Act, 2019",
+    "where": "Safety",
+    "confirmedBy": null
+  },
+  {
+    "claim": "Support hours, reply within one working day, complaints acknowledged within one working day",
+    "where": "About, Help",
+    "confirmedBy": null
+  },
+  {
+    "claim": "Joint, group, SACCO and company accounts, and goals, are offered",
+    "where": "Home, How it works, Help",
+    "confirmedBy": null
+  }
+]

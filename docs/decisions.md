@@ -46,6 +46,9 @@ A running log. Add a row when a decision is made, and move an open question up w
 | 2026-11-13 | Decided for now. The website's calculator shows an estimate worked out from the rate on the page, labelled as one, and replaces it with the exact figure from `GET /public/quote` when the API answers. The site never works out a figure it presents as exact. |
 | 2026-11-13 | Decided for now. The website tells search engines to stay out until every `[BRACKETED]` placeholder is filled in. The build setting `PUBLIC_INDEXABLE=true` opens it, and that is the owner's call at launch. |
 | 2026-11-13 | Decided for now. A paused product is listed on the website as "Coming soon" with no button to invest. The dollar product shows this way today. |
+| 2026-11-13 | Decided for now. The website's "Send a message" form sends nothing itself, because the site has no server and stores nothing. It opens the visitor's own email app with the message addressed to support@finvestug.com. A form that posts to the backend can replace it once a public contact endpoint exists. |
+| 2026-11-13 | Decided for now. The website's legal pages hold structure only: headings and a line on what each section will cover, under a notice that the wording comes from Finvest's lawyers. |
+| 2026-11-13 | Decided for now. The website is not opened to search engines until every placeholder is filled in and every claim in `apps/site/scripts/claims.json` is signed off by the owner and counsel. `pnpm placeholders --strict` checks both. |
 | 2026-11-13 | Brand is black and lime with Plus Jakarta Sans. See [design.md](design.md). |
 | 2026-11-13 | Decided for now: money credited by mistake that has already moved on is not clawed back out of the client's investment. It is corrected by a new ledger entry that records a receivable against the client who got it, and the receivable is then recovered or written off (the owner chose "receivable, then recover" on a decision card in the payments thread). Every manual ledger correction, including a plain reversal, needs two different members of staff: one proposes with a reason and another approves. The database enforces this. See [ledger.md](ledger.md#corrections). The owner can revisit it once counsel or the regulator has a view. |
 | 2026-11-13 | Decided for now, by the migration thread. The import spreadsheet is two CSV sheets with fixed columns, one for clients and one for investments, for Finvest 1.0 exports and hand-kept records alike. Dates are `YYYY-MM-DD` only. See [migration.md](migration.md). |
@@ -56,6 +59,7 @@ A running log. Add a row when a decision is made, and move an open question up w
 | 2026-11-13 | All work reaches `main` through pull requests. UI work includes screenshots. Commits on `main` carry no AI attribution. |
 | 2026-11-13 | A payout account whose name differs from the client's ID is never approved, not even by two staff. The same holds for a mobile money number: a different registered name is refused outright. |
 | 2026-11-13 | Decided for now: once a day is reconciled and signed off, the ledger is closed through it and the database refuses any entry dated on or before it. A closed day is never reopened. A mistake found later is corrected by an entry dated in an open day. Today and future days cannot be closed. See [ledger.md](ledger.md#closing-a-day). Asked for in review and built without waiting for the owner, who can revisit it. |
+| 2026-11-13 | Decided for now, by the identity checks thread. A client's document number, date of birth and TIN are encrypted field by field before they reach the database, with a key the database never holds (`FINVEST_IDENTITY_DATA_KEY`). Names and the document expiry date stay readable so staff can search and expiry can be checked. And a person approves every client: a clean result from automatic checks is flagged as passed and still waits for staff, until the owner allows approval with no person involved. See [identity-checks.md](identity-checks.md). |
 
 ## Open
 
@@ -66,6 +70,7 @@ A running log. Add a row when a decision is made, and move an open question up w
 | Do group goals with two approvals count as a collective scheme? | Counsel |
 | ioTec: fees, sandbox, settlement speed from the ioTec wallet to our bank, payout limits, and whether Verify sends its own code. | ioTec |
 | Identity check provider: Smile ID coverage and pricing for Uganda, or ioTec Verify if it can check identity documents. Until one is chosen every client is reviewed by a person. See [identity-checks.md](identity-checks.md). | Owner |
+| Identity checks: may a client be approved with no person involved when every automatic check passed? Built as no since 2026-11-13 (see Decided); one switch turns it on. And confirm field-level encryption of the document number, date of birth and TIN, in use as the working default. | Owner |
 | Will passkeys become compulsory for clients? | Owner |
 | Confirm that signing in with an authenticator app carries no 24 hour withdrawal limit. In use as the working default since 2026-11-13 (see Decided). | Owner |
 | A client signed in with an SMS code can add a passkey or an authenticator app. Should that end the 24 hour limit early? Built as no, in the app and in the sign-in API: the limit runs its full 24 hours, and the screen says so. | Owner |
@@ -93,3 +98,5 @@ A running log. Add a row when a decision is made, and move an open question up w
 | Dealing: when a sale to pay an early withdrawal makes a loss, who bears it: Finvest (assumed so far, nothing posts it yet), or the client through the early withdrawal price? | Owner |
 | Website: the facts shown as `[BRACKETS]`. Registered company name, regulator and licence number, custodian bank, office address, phone number, fees, the notice period for dollar withdrawals. `pnpm placeholders` in `apps/site` lists them. | Owner |
 | Website: links to the App Store and Google Play are left off until the apps are published. | Owner |
+| Website: the terms of early withdrawal as told to the public (how a bill is sold, at what price, any notice period), and how long an identity check takes while every check is reviewed by a person. Both are placeholders on the site. | Owner, counsel |
+| Website: sign off the claims in `apps/site/scripts/claims.json` (regulated, held in the client's name, books checked daily, and the rest). | Owner, counsel |

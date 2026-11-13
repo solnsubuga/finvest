@@ -1,0 +1,19 @@
+---
+import type { IconName } from "../lib/icons.ts";
+import Icon from "./Icon.astro";
+
+interface Props {
+  icon: IconName;
+  title: string;
+  text: string;
+  id?: string;
+}
+
+const { icon, title, text, id } = Astro.props;
+---
+
+<div class="card" id={id}>
+  <span class="tile tile--large"><Icon name={icon} /></span>
+  <h3 class="h3">{title}</h3>
+  <p>{text}</p>
+</div>

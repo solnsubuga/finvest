@@ -1,10 +1,12 @@
 """Identity check fixtures: a provider that answers as told, and a client's finished draft."""
 
+import os
 from dataclasses import dataclass, field
 from datetime import date
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.infrastructure.sealing import KEY_BYTES, Sealer
 from app.modules.kyc import service as kyc
 from app.modules.kyc.domain.checks import DocumentType, IdentityDetails, PhotoKind, required_photos
 from app.modules.kyc.domain.provider import (
@@ -22,6 +24,8 @@ from app.shared.clock import Clock
 from app.shared.push_ids import push_id
 
 SHA256 = "ab" * 32
+# A fresh key for every test run. No key is ever written into the repository.
+SEALER = Sealer(os.urandom(KEY_BYTES), purpose="identity")
 
 
 def all_passed() -> tuple[CheckOutcome, ...]:
@@ -91,6 +95,6 @@ async def ready_draft(
     document_number: str | None = None,
 ) -> kyc.CheckView:
     """A draft with every photo and confirmed details, ready to submit."""
-    await kyc.choose_document(session, client, document_type, "UG", clock)
+    await kyc.choose_document(session, SEALER, client, document_type, "UG", clock)
     await add_photos(session, client, clock, *sorted(required_photos(document_type)))
-    return await kyc.confirm_details(session, client, details(document_number), clock)
+    return await kyc.confirm_details(session, SEALER, client, details(document_number), clock)

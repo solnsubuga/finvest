@@ -1,0 +1,139 @@
+---
+import Cta from "../components/Cta.astro";
+import Icon from "../components/Icon.astro";
+import IconCard from "../components/IconCard.astro";
+import PageTitle from "../components/PageTitle.astro";
+import Base from "../layouts/Base.astro";
+
+const stops = [
+  { title: "You pay", text: "By mobile money or bank transfer, for one named investment." },
+  {
+    title: "Collection account",
+    text: "Money lands in a client collection account kept apart from Finvest's own money. [CONFIRM ACCOUNT STRUCTURE]",
+  },
+  { title: "Auction", text: "We buy treasury bills at the Bank of Uganda auction." },
+  {
+    title: "Custodian",
+    text: "Your bills are recorded against your account at [CUSTODIAN BANK].",
+  },
+  {
+    title: "You are paid",
+    text: "At maturity the money goes straight to your mobile money or bank account.",
+  },
+];
+
+const protections = [
+  {
+    icon: "key",
+    title: "Two steps to sign in",
+    text: "A new device needs your password and then a second step: a passkey, an authenticator app, or a code by SMS. A code alone never opens your account, and signing in with one limits withdrawals for 24 hours.",
+  },
+  {
+    icon: "phone",
+    title: "You see every device",
+    text: "The app lists every phone and browser signed in, and you can sign any of them out.",
+  },
+  {
+    icon: "bank",
+    title: "Payouts only to you",
+    text: "Money is only sent to mobile money numbers and bank accounts in your own name.",
+  },
+  {
+    icon: "eye",
+    title: "Checked every day",
+    text: "Our records are matched against mobile money, bank and custodian statements daily, and a second person signs off.",
+  },
+  {
+    icon: "people",
+    title: "Two people for sensitive actions",
+    text: "Inside Finvest, the person who starts a sensitive change cannot approve it.",
+  },
+  {
+    icon: "document",
+    title: "Receipts for everything",
+    text: "Every payment, payout and tax deduction has a document you can download.",
+  },
+] as const;
+
+const never = [
+  "Ask for your password, PIN or a code by phone, SMS or WhatsApp",
+  "Ask you to send money to a personal mobile money number",
+  "Promise a return higher than the rate shown in the app",
+  "Send an agent to collect cash",
+];
+---
+
+<Base
+  title="Safety"
+  description="Where your money goes with Finvest and who looks after it: the path from your payment to treasury bills in your name, and the checks around your account."
+>
+  <PageTitle
+    eyebrow="Safety"
+    title="Where your money goes, and who looks after it."
+    lead="You should not have to trust a promise. This page shows the path your money takes and the checks around it."
+  />
+
+  <section class="band" id="path">
+    <div class="wrap">
+      <p class="eyebrow">The path of your money</p>
+      <h2 class="h2">Five stops, each one on record.</h2>
+      <p class="lead">
+        Finvest does not keep a spendable balance for you. Every payment in is for a specific
+        investment, and every payout goes straight to you.
+      </p>
+      <ol class="path">
+        {
+          stops.map((stop, index) => (
+            <li>
+              <span class="path__step">Step {index + 1}</span>
+              <h3 class="h3">{stop.title}</h3>
+              <p>{stop.text}</p>
+            </li>
+          ))
+        }
+      </ol>
+    </div>
+  </section>
+
+  <section class="band band--white" id="account">
+    <div class="wrap">
+      <p class="eyebrow">Protecting your account</p>
+      <h2 class="h2">Hard to get into, unless you are you.</h2>
+      <div class="grid grid--3">
+        {protections.map((item) => <IconCard {...item} />)}
+      </div>
+    </div>
+  </section>
+
+  <section class="band">
+    <div class="wrap pair">
+      <div class="panel panel--black" id="never">
+        <h2 class="eyebrow">We will never</h2>
+        <ul class="never">
+          {
+            never.map((line) => (
+              <li>
+                <Icon name="tick" size={20} />
+                {line}
+              </li>
+            ))
+          }
+        </ul>
+      </div>
+      <div class="panel" id="regulation">
+        <p class="eyebrow">Regulation</p>
+        <h2 class="panel__title">Licensed and supervised</h2>
+        <p>
+          Finvest is regulated by [REGULATOR] under licence [LICENCE NUMBER]. Our accounts are
+          audited each year by [AUDITOR]. Your personal data is handled under the Data Protection
+          and Privacy Act, 2019.
+        </p>
+        <p class="after-grid">
+          <a class="button" href="/help#contact">Report something suspicious</a>
+        </p>
+      </div>
+    </div>
+  </section>
+
+  <Cta />
+</Base>

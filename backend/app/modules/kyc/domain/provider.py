@@ -102,10 +102,12 @@ class Decision:
     flags: tuple[str, ...] = ()
 
 
-def decide(outcomes: tuple[CheckOutcome, ...]) -> Decision:
-    """Approve only when every automatic check ran and passed. Anything else goes to a person.
+def decide(outcomes: tuple[CheckOutcome, ...], *, automatic_approval: bool = False) -> Decision:
+    """Approve only when every automatic check ran and passed, and only if that is switched on.
 
-    A provider never rejects a client on its own: a failed check is a reason for review.
+    A provider never rejects a client on its own: a failed check is a reason for review. Until
+    the owner allows approval with no person involved, a clean result also goes to a person,
+    flagged as passed so it is quick to confirm.
     """
     seen = {outcome.check: outcome.verdict for outcome in outcomes}
     if len(seen) != len(outcomes):
@@ -115,4 +117,6 @@ def decide(outcomes: tuple[CheckOutcome, ...]) -> Decision:
         for check in AutomaticCheck
         if (verdict := seen.get(check)) is not Verdict.PASS
     ]
+    if not flags and not automatic_approval:
+        flags = ["automatic_checks_passed"]
     return Decision(approve=not flags, flags=tuple(flags))

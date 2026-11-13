@@ -2,7 +2,7 @@
 
 The Finvest client app. One codebase for Android, iPhone and the web at app.finvestug.com.
 
-**Status:** app shell. Navigation, theme, the welcome, sign up and log in screens, and Sign in and security (add a passkey, set up an authenticator app), running against an in-memory demo sign-in. No investing or payment features yet.
+**Status:** app shell. Navigation, theme, the welcome, sign up and log in screens, Sign in and security (add a passkey, set up an authenticator app), and paying for an investment by mobile money, all running against in-memory demos. No investing screens yet.
 
 ## Stack
 
@@ -32,6 +32,7 @@ Add Expo packages with `npx expo install <package>` so the version matches the S
 | `src/components/` | Shared building blocks: text, buttons, fields, code input, cards |
 | `src/theme/` | Re-exports `@finvest/tokens`, loads Plus Jakarta Sans, and holds the wide breakpoint |
 | `src/auth/` | The sign-in contract, the demo stub, and the phone and password rules |
+| `src/payments/` | The payments contract, the demo stub, money and time formatting, and the status polling |
 | `docs/screenshots/` | Screenshots of every screen and state in this app |
 
 ## Navigation
@@ -68,6 +69,20 @@ Not built: removing a passkey or an authenticator app, adding a second passkey f
 What the stub does not cover yet, each with a screen on the design canvas: the app PIN, the ID check, password reset, log in by email, and company or group accounts. Links to those lead to a short "not ready yet" screen.
 
 Still outstanding on the sign up screen: "the terms" and "the privacy notice" are not links yet, because neither document exists. They must link to the real documents before launch.
+
+## Paying
+
+The pay screens live in `src/app/pay/` and talk to the `PaymentsClient` interface in `src/payments/types.ts`. A payment always pays for one thing, an investment or a goal, and its amount comes from that thing. There is no wallet and no amount field.
+
+- `/pay/[payableId]` confirms the network. The number is the one on the client's own account and cannot be changed, because a payment from a number registered to someone else is refused. The screen makes one idempotency key per visit and sends it with every try. Once a try may have reached us (the answer was lost), the network is locked too, so every retry is the same request under the same key and asks for the money once.
+- `/pay/deposit/[depositId]` is the one address for a payment while it is open. It reads the status every 3 seconds, every 10 after the first minute, not at all while the app is in the background, and shows the prompt, the check or the failure. It only reads. A payment with no clear answer is settled by the server asking the network, so that screen tells the client not to pay again and offers no way to.
+- `/pay/receipt/[depositId]` shows a confirmed payment.
+
+Amounts are integers in the smallest unit (`Money` in `types.ts`) and are formatted without passing through a fraction. Times are shown in Kampala time.
+
+Until the backend publishes its client routes, the only implementation is the in-memory stub in `src/payments/stubPaymentsClient.ts`, loaded under the same rule as the demo sign-in and checked out of production builds by CI. In the demo, the Invest page has a "Demo: pay for an investment" button, and the last two digits of the account's number choose the outcome (sign up in the demo with a number that ends that way): `01` declined, `02` not enough money, `03` never approved, `04` unclear then confirmed, anything else approved.
+
+Not built yet: bank transfer and receipt upload, the fee row (fees are not decided), "send the prompt again" (the backend has no such command), the signed transaction note, sharing a receipt, and the notification when a payment is confirmed.
 
 ## Notes
 

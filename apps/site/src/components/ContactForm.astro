@@ -1,0 +1,52 @@
+---
+import { supportEmail } from "../config.ts";
+
+/**
+ * "Send a message." The website has no server and stores nothing, so the form does not send
+ * anything itself: it opens the visitor's own email app with the message written out, addressed
+ * to support. Without JavaScript the browser does the same through the form's mailto action.
+ */
+---
+
+<form
+  class="contact-form"
+  data-contact-form={supportEmail}
+  action={`mailto:${supportEmail}`}
+  method="post"
+  enctype="text/plain"
+>
+  <h3>Send a message</h3>
+  <label>
+    Your name
+    <input name="name" autocomplete="name" placeholder="Full name" required maxlength="100" />
+  </label>
+  <label>
+    Mobile number or email
+    <input name="reply-to" placeholder="So we can reply" required maxlength="100" />
+  </label>
+  <label>
+    How can we help?
+    <textarea name="message" rows="4" placeholder="Write your message" required maxlength="2000"
+    ></textarea>
+  </label>
+  <button class="button button--large" type="submit">Send message</button>
+  <p>
+    This opens your email app with your message ready to send. Never put a password, PIN or code
+    in this form.
+  </p>
+</form>
+
+<script>
+  import { mailtoLink } from "../lib/contact.ts";
+
+  document.querySelectorAll<HTMLFormElement>("form[data-contact-form]").forEach((form) => {
+    form.addEventListener("submit", (event) => {
+      const to = form.dataset["contactForm"];
+      if (!to || !form.reportValidity()) return;
+      event.preventDefault();
+      const data = new FormData(form);
+      const field = (name: string) => String(data.get(name) ?? "");
+      window.location.href = mailtoLink(to, field("name"), field("reply-to"), field("message"));
+    });
+  });
+</script>
