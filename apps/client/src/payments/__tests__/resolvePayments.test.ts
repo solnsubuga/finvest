@@ -26,5 +26,9 @@ describe("resolvePaymentsClient", () => {
       }),
     ).rejects.toBeInstanceOf(PaymentError);
     await expect(client.getDeposit("d1")).rejects.toBeInstanceOf(PaymentError);
+    await expect(client.getBankInstructions(stub.DEMO_PAYABLE_ID)).rejects.toBeInstanceOf(
+      PaymentError,
+    );
+    await expect(client.getBankTransfer("b1")).rejects.toBeInstanceOf(PaymentError);
   });
 });

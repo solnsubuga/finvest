@@ -1,4 +1,4 @@
-import { FailureReason, Money, Network } from "./types";
+import { FailureReason, MismatchReason, Money, Network } from "./types";
 
 /** "UGX 1,000,000". Works on the integer, so no amount ever passes through a fraction. */
 export function formatMoney(money: Money): string {
@@ -79,4 +79,28 @@ export const failureCopy: Record<FailureReason, FailureCopy> = {
     sentence: (network) => `${network} could not complete the payment.`,
     label: "Could not complete",
   },
+};
+
+/** "214 KB" or "1.4 MB". */
+export function formatFileSize(bytes: number): string {
+  if (bytes < 1024 * 1024) {
+    return `${Math.max(1, Math.round(bytes / 1024))} KB`;
+  }
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+/** "13 Nov 2026" from "2026-11-13". */
+export function formatDay(day: string): string {
+  const [year, month, date] = day.split("-").map(Number);
+  return `${date} ${MONTHS[(month ?? 1) - 1]} ${year}`;
+}
+
+/** Why a receipt was not matched, in plain words the client can act on. */
+export const mismatchCopy: Record<MismatchReason, string> = {
+  amount_differs: "The amount on the receipt is different from the amount we received.",
+  not_on_statement: "We could not find this transfer on our bank statement.",
+  unreadable: "We could not read the receipt. Upload a clearer photo or the PDF from your bank.",
+  name_differs:
+    "The transfer came from an account in a different name. We only accept money from an account in your own name.",
+  other: "We could not match this receipt to a transfer.",
 };

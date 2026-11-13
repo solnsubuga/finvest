@@ -173,6 +173,27 @@ export default function Pay() {
           <Txt size={fontSizes.xs} weight="medium" color={colors.muted}>
             {`${networkName[network]} sends a prompt to the number on your Finvest account. You approve it with your mobile money PIN.`}
           </Txt>
+          {locked ? null : (
+            <Pressable
+              accessibilityRole="link"
+              onPress={() => router.push(`/pay/bank/${payable.id}`)}
+              testID="pay-by-bank"
+              style={({ pressed }) => [styles.option, pressed && { opacity: 0.8 }]}
+            >
+              <View style={styles.badge}>
+                <Txt size={fontSizes.xs} weight="extrabold">
+                  Bank
+                </Txt>
+              </View>
+              <View style={{ flex: 1 }}>
+                <Txt weight="bold">Pay by bank transfer instead</Txt>
+                <Txt size={fontSizes.xs} color={colors.muted}>
+                  Send from your bank, then upload the receipt
+                </Txt>
+              </View>
+              <Icon name="chevron" color={colors.muted} />
+            </Pressable>
+          )}
         </View>
       )}
     </Screen>

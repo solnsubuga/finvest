@@ -58,7 +58,7 @@ jobs:
             exit 1
           fi
           # Nor the demo payments, which confirm payments that never happened.
-          if grep -rIl -e "demo-91-day-bill" -e "FV-DEMO-" dist; then
+          if grep -rIl -e "demo-91-day-bill" -e "FV-DEMO-" -e "Finvest Demo Client Account" dist; then
             echo "The demo payments were bundled into a production build" >&2
             exit 1
           fi
