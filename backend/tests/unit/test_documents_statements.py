@@ -16,6 +16,7 @@ from app.modules.documents.domain.statements import (
     StatementKind,
     group_interest,
     month_end,
+    not_final_from,
     previous_month,
     requested_period,
     summarise,
@@ -313,3 +314,32 @@ def test_a_receipt_is_for_money_received_at_a_known_time() -> None:
         Receipt(**{**fields, "amount": ugx(0)})  # type: ignore[arg-type]
     with pytest.raises(ValueError, match="timezone"):
         Receipt(**{**fields, "received_at": datetime(2026, 11, 13, 15, 32)})  # type: ignore[arg-type]
+
+
+OCTOBER = Period(date(2026, 10, 1), date(2026, 10, 31))
+
+
+@pytest.mark.parametrize(
+    ("closed", "first_open"),
+    [
+        (None, date(2026, 10, 1)),
+        (date(2026, 9, 30), date(2026, 10, 1)),
+        (date(2026, 10, 1), date(2026, 10, 2)),
+        (date(2026, 10, 30), date(2026, 10, 31)),
+        (date(2026, 10, 31), None),
+        (date(2026, 11, 5), None),
+    ],
+)
+def test_the_first_day_that_is_not_final_follows_the_last_closed_day(
+    closed: date | None, first_open: date | None
+) -> None:
+    assert not_final_from(OCTOBER, closed) == first_open
+
+
+def test_only_a_requested_statement_can_cover_days_that_are_not_final() -> None:
+    with pytest.raises(ValueError, match="monthly"):
+        _statement(not_final_from=date(2026, 10, 20))
+    with pytest.raises(ValueError, match="outside"):
+        _statement(kind=StatementKind.REQUESTED, not_final_from=date(2026, 11, 1))
+    drawn = _statement(kind=StatementKind.REQUESTED, not_final_from=date(2026, 10, 20))
+    assert drawn.not_final_from == date(2026, 10, 20)

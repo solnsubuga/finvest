@@ -20,6 +20,7 @@ from app.infrastructure.logging import configure_logging
 from app.infrastructure.process import keep_heartbeat, stop_on_signals
 from app.infrastructure.settings import Settings
 from app.modules.dealing.jobs import MATURITIES_KIND
+from app.modules.documents.service import MONTHLY_KIND
 from app.modules.investments.jobs import ACCRUE_KIND, CANCEL_UNPAID_KIND, MATURE_KIND
 from app.modules.kyc.service import SWEEP_UNANSWERED
 from app.modules.notifications.service import PURGE_MESSAGES
@@ -74,6 +75,14 @@ def schedules() -> list[Schedule]:
             trigger=IntervalTrigger(hours=1),
             kind=MATURITIES_KIND,
             max_age=timedelta(hours=2),
+        ),
+        # Last month's statement for every client. It runs every morning and asks for a month
+        # only once the ledger is closed through its last day; each client is asked once.
+        Schedule(
+            name="documents.monthly_statements",
+            trigger=CronTrigger(hour=6, minute=0, timezone=KAMPALA),
+            kind=MONTHLY_KIND,
+            max_age=timedelta(hours=20),
         ),
     ]
     payments_settings = PaymentsSettings()

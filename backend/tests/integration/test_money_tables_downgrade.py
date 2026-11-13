@@ -1,8 +1,8 @@
 """A downgrade must never delete the books, the issued numbers, the audit trail, the job
 history, the receipts that stop a command running twice, the identity records, the payout
 destinations, the withdrawal limits, the payouts, the migration checks, the imported
-statements, the day closes, the help chat, the complaints register, the goals or the email
-delivery records."""
+statements, the day closes, the pot transfers, the help chat, the complaints register, the
+goals or the email delivery records."""
 
 import os
 from collections.abc import Iterator
@@ -268,6 +268,20 @@ ROWS = {
         "expires_at) VALUES ('-Nabc0000000000000A1', 'signup', 'sms', '+256772123456', "
         "decode(repeat('00', 32), 'hex'), now(), now())",
         "refusing to drop sign-in codes",
+    ),
+    "0140_documents": (
+        "INSERT INTO documents (id, client_id, kind, idempotency_key, period_start, period_end, "
+        "requested_at) VALUES ('-Nabc0000000000000A1', '-Nabc0000000000000B1', "
+        "'monthly_statement', '2026-10', DATE '2026-10-01', DATE '2026-10-31', now())",
+        "refusing to drop documents",
+    ),
+    "0042_pot_transfers": (
+        "INSERT INTO reconciliation_pot_transfers (id, from_source, from_reference, to_source, "
+        "to_reference, currency, sent_minor, received_minor, value_date, provider_reference, "
+        "status, proposed_by, proposed_at, reason) VALUES ('-Nabc0000000000000A1', 'iotec', "
+        "'mtn', 'bank', 'trust', 'UGX', 5, 5, DATE '2026-11-10', 'IOT-1', 'proposed', "
+        "'-Nabc0000000000000B1', now(), 'Sweep')",
+        "refusing to drop pot transfers",
     ),
 }
 

@@ -20,7 +20,9 @@ class Receipt:
     amount: Money
     received_at: datetime
     method: str  # "MTN Mobile Money" or "Bank transfer"
-    paid_from: str  # "number ending 456" or "Stanbic account ending 4821"
+    # "number ending 456". None when we do not know the payer's number, as for a bank
+    # transfer, and then the receipt leaves the line out.
+    paid_from: str | None
     provider_reference: str | None  # the MTN, Airtel or bank reference, when there is one
     payment_reference: str  # the Finvest deposit ID
     paid_for: str  # "91 Day Treasury Bill"

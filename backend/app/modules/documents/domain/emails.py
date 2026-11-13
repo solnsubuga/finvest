@@ -188,7 +188,7 @@ def receipt_email(*, first_name: str, receipt: Receipt, file_name: str) -> Rende
     facts = [
         ("Paid for", receipt.paid_for),
         ("Paid by", receipt.method),
-        ("Paid from", receipt.paid_from),
+        *([("Paid from", receipt.paid_from)] if receipt.paid_from else []),
         ("Received", formatting.moment(receipt.received_at)),
         ("Receipt number", receipt.reference),
     ]
