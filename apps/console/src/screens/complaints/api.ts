@@ -1,10 +1,8 @@
 /**
  * The console's view of the complaints register.
  *
- * A stand-in for the generated client in packages/api-client, like AuthApi.
- * The shapes follow the staff routes in docs/support.md. When the backend
- * client is wired in, an implementation that calls them replaces the stub in
- * index.tsx and the screen does not change.
+ * The shapes follow the staff routes in docs/support.md. `http.ts` calls them;
+ * `stub.ts` is the sample for `pnpm dev` and previews.
  */
 
 import type { Amount } from "@/screens/dealing-desk/api.ts";

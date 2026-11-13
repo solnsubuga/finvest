@@ -1,9 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useAuth } from "@/auth/context.ts";
+import { apiBaseUrl, createHttp } from "@/api/http.ts";
 import { isStubAuth } from "@/auth/index.ts";
 import { can } from "@/auth/types.ts";
 import { Button } from "@/components/ui/button.tsx";
 import { emptyDirectory, type Directory, type StaffCard } from "@/directory/api.ts";
+import { createHttpDirectory } from "@/directory/http.ts";
 import { createStubDirectory } from "@/directory/stub.ts";
 import { cn } from "@/lib.ts";
 import { PageHeader } from "@/pages/PageHeader.tsx";
@@ -19,6 +21,7 @@ import {
 import { DetailPanel, type Command } from "./Detail.tsx";
 import { LogForm } from "./LogForm.tsx";
 import { Figures, RegisterTable } from "./Register.tsx";
+import { createHttpComplaintsApi } from "./http.ts";
 import { createStubComplaintsApi } from "./stub.ts";
 
 const SUMMARY = "The formal register. Every complaint has an owner, a deadline and an outcome.";
@@ -359,7 +362,7 @@ export function ComplaintsScreen({
 
 export default function ComplaintsPage() {
   const { session } = useAuth();
-  // A sample register under `pnpm dev` or a preview build, like sign-in. Otherwise nothing until the API client exists.
+  // A sample register under `pnpm dev` or a preview build, like sign-in. Otherwise the real API.
   const [{ api, directory }] = useState<{ api: ComplaintsApi; directory: Directory }>(() => {
     if (isStubAuth() && session) {
       const me = { id: session.staffId, name: session.name };
@@ -368,7 +371,10 @@ export default function ComplaintsPage() {
       if (sample === "offline") return { api: notConnectedComplaintsApi, directory: createStubDirectory(me) };
       return { api: createStubComplaintsApi(me, kampalaToday, Date.now, sample === "empty" ? "empty" : "sample"), directory: createStubDirectory(me) };
     }
-    return { api: notConnectedComplaintsApi, directory: emptyDirectory };
+    const base = apiBaseUrl();
+    if (!base) return { api: notConnectedComplaintsApi, directory: emptyDirectory };
+    const http = createHttp(base);
+    return { api: createHttpComplaintsApi(http), directory: createHttpDirectory(http) };
   });
   return (
     <ComplaintsScreen
