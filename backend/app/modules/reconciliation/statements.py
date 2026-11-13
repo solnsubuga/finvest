@@ -93,6 +93,7 @@ _FIND = text(
     "     OR (line.amount_minor = :amount_minor AND statement.currency = :currency)) "
     "ORDER BY line.value_date, line.id LIMIT :limit"
 )
+_ADDS_UP = "reconciliation_statements_adds_up, reconciliation_statement_lines_adds_up"
 _REFUSALS = {
     "uq_reconciliation_statements_pot_day": "statement_already_imported",
     "ck_reconciliation_statements_next_day": "statement_day_out_of_order",
@@ -153,8 +154,9 @@ async def import_statement(
                     },
                 )
             # Run the deferred check now, so a refusal is raised here and not at commit.
-            await session.execute(text("SET CONSTRAINTS ALL IMMEDIATE"))
-            await session.execute(text("SET CONSTRAINTS ALL DEFERRED"))
+            # Only these two, so the caller's own constraint settings are left as they were.
+            await session.execute(text(f"SET CONSTRAINTS {_ADDS_UP} IMMEDIATE"))
+            await session.execute(text(f"SET CONSTRAINTS {_ADDS_UP} DEFERRED"))
     except IntegrityError as error:
         name = getattr(getattr(error.orig, "__cause__", None), "constraint_name", None)
         if name in _REFUSALS:
