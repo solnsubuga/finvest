@@ -2,37 +2,73 @@
 
 The Finvest backend: one FastAPI application, a modular monolith, on PostgreSQL.
 
-**Status:** not scaffolded yet. The first backend PR adds the project files, the four entry points and the test harness.
+**Status:** scaffolded. The four entry points, the database roles, the first migration, the test harness and CI are in place. The job queue, idempotency keys, sign-in and the ledger arrive in their own pull requests.
 
 ## Stack
 
-Python, FastAPI, Pydantic, SQLAlchemy 2 with asyncpg, Alembic, PostgreSQL. Tooling is uv, Ruff, strict mypy, import-linter, pip-audit and pytest against real PostgreSQL.
+Python 3.13, FastAPI, Pydantic, SQLAlchemy 2 with asyncpg, Alembic, PostgreSQL 17. Tooling is uv, Ruff, strict mypy, import-linter, pip-audit and pytest against real PostgreSQL.
 
 No Celery and no Redis. Background jobs live in PostgreSQL.
 
+## Commands
+
+Run these from the repository root. They need [uv](https://docs.astral.sh/uv/), Docker and `psql`.
+
+| Command | What it does |
+| --- | --- |
+| `make bootstrap` | Installs the locked dependencies into `backend/.venv` |
+| `make dev` | Builds the image and starts PostgreSQL, migrations, the API on port 8000, the worker and the scheduler |
+| `make dev-stop`, `make dev-down`, `make dev-logs`, `make dev-status` | Control the local stack. Data is kept. |
+| `make check-backend` | Ruff format and lint, mypy, import-linter, and the tests that need no database |
+| `make test-integration` | The integration tests against real PostgreSQL. Starts the Compose database, or uses `FINVEST_TEST_ADMIN_URL` if it is set. |
+| `make test-stack` | Builds the image, starts all four processes and waits for every health check |
+| `make audit` | pip-audit over the locked dependencies |
+
+With the stack running, the API documentation is at http://localhost:8000/docs. It is off in deployed environments unless `FINVEST_API_DOCS` is set.
+
 ## Entry points
 
-| Process | Job |
-| --- | --- |
-| API | Serves HTTP |
-| Worker | Claims and runs jobs from the jobs table |
-| Scheduler | Keeps time and creates scheduled runs |
-| Migrate | Runs Alembic migrations under the migration role |
+One image, four processes. Each connects to PostgreSQL as its own role, given in `FINVEST_DATABASE_URL`.
 
-## Intended layout
+| Process | Command | Database role | Health check |
+| --- | --- | --- | --- |
+| API | `uvicorn app.api_main:app` | `finvest_app` | `GET /health/live`, `GET /health/ready` |
+| Worker | `python -m app.worker_main` | `finvest_worker` | `python -m app.infrastructure.process worker` |
+| Scheduler | `python -m app.scheduler_main` | `finvest_worker` | `python -m app.infrastructure.process scheduler` |
+| Migrate | `python -m app.migrate_main` | `finvest_migrator` | Exits 0 when migrations are applied |
 
-To be settled in the scaffolding PR. The layering is fixed, the names are not.
+The worker and scheduler only check their role and keep a heartbeat for now. They get their real work with the job queue.
+
+## Layout
 
 ```
 app/
-  domain/          Pure rules. No FastAPI, SQLAlchemy or network imports. Clock injected.
-  application/     Commands and queries that use the domain and call infrastructure through interfaces
-  infrastructure/  Database, jobs, outbox, provider adapters (ioTec, bank, identity, Resend, push)
-  api/             FastAPI routes and Pydantic contracts
-migrations/        Alembic
+  shared/            Pure building blocks: clock, push IDs, actors, contracts, error envelope
+  infrastructure/    Settings, logging, database engine and roles, process plumbing
+  api/               The FastAPI application: request IDs, error handling, health
+  modules/<name>/    One package per business module
+    domain/          Pure rules. No FastAPI, SQLAlchemy, network or infrastructure imports.
+    service.py       Commands and queries that open transactions and call the domain
+    api.py           Routes and Pydantic contracts
+  api_main.py, worker_main.py, scheduler_main.py, migrate_main.py
+db/init-roles.sql    Creates the three database roles. Run by an administrator, not by migrations.
+migrations/versions/ Alembic revisions, hand-written SQL, named NNNN_description.py
 tests/
+  unit/              No database
+  integration/       Real PostgreSQL. Every test here carries the `integration` marker.
+  support/           Shared fixtures: fake clock, barrier, database harness
 ```
 
-Modules: identity and auth, clients and KYC, ledger, payments, investments, goals, reconciliation, notifications, console and audit. A module never writes to another module's tables.
+import-linter enforces the purity of `app/shared` and of every `app/modules/*/domain`, and keeps `app/infrastructure` free of modules and HTTP. A module never writes to another module's tables.
+
+## Building on the scaffold
+
+- **IDs.** Use `push_id()` from `app.shared.push_ids` and the `push_id` column type created by migration 0001. No auto-increment and no UUIDs.
+- **Time.** Take a `Clock` from `app.shared.clock`. Never call `datetime.now()` in a rule. Tests use `FakeClock`.
+- **Transactions.** `Database.actor_transaction(actor)` opens a transaction acting for a client, a staff member or the system. Row policies read the actor with `finvest_actor_kind()` and `finvest_actor_id()`. `Database.transaction()` has no actor, so a policy shows it nothing.
+- **Contracts.** Request and response bodies extend `Contract`. It is strict, so `"1000"` and `1000.0` are refused where an integer amount is expected.
+- **Errors.** Raise `ApplicationError(code)`. Every failure leaves the API as the same envelope with a request ID and a code, and never echoes a submitted value.
+- **Migrations.** Hand-write SQL with `op.execute`. Grant each table to `finvest_app` and `finvest_worker` explicitly, with only the privileges they need. A test fails if the history has two heads.
+- **Logs.** Log an event name, the request ID (bound automatically) and codes. Never personal data, account details or amounts.
 
 See [docs/architecture.md](../docs/architecture.md), [docs/engineering-patterns.md](../docs/engineering-patterns.md) and [docs/rules.md](../docs/rules.md).

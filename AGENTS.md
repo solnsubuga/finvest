@@ -66,7 +66,7 @@ Celery, Redis, microservices, Kubernetes, a separate ledger database product, ev
 
 ## Tooling
 
-The toolchain is decided. The commands arrive with the scaffolding PRs, and this section is updated when they do.
+The toolchain is decided. Commands are added here as each area is scaffolded.
 
 | Area | Tools |
 | --- | --- |
@@ -75,7 +75,18 @@ The toolchain is decided. The commands arrive with the scaffolding PRs, and this
 | Local stack | Docker Compose, with `make dev` to start everything |
 | Delivery | GitHub Actions on every PR |
 
-Until a command is documented here or in a directory README, do not assume it exists. Check the directory first.
+Backend commands, run from the repository root. [backend/README.md](backend/README.md) has the detail.
+
+| Command | Use |
+| --- | --- |
+| `make bootstrap` | Install the locked backend dependencies |
+| `make dev` | Start PostgreSQL, migrations, API, worker and scheduler |
+| `make check-backend` | Ruff, mypy, import-linter and unit tests. Run before every push. |
+| `make test-integration` | Integration tests against real PostgreSQL. Run before every push. |
+| `make test-stack` | Build the image and wait for all four processes to be healthy |
+| `make audit` | pip-audit |
+
+For any other area, until a command is documented here or in a directory README, do not assume it exists. Check the directory first.
 
 ## Testing expectations
 

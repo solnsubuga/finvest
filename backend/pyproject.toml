@@ -1,0 +1,92 @@
+[project]
+name = "finvest-backend"
+version = "0.1.0"
+description = "Finvest 2.0 backend: one FastAPI application on PostgreSQL"
+requires-python = ">=3.13,<3.14"
+dependencies = [
+  "fastapi>=0.115,<1",
+  "uvicorn[standard]>=0.32,<1",
+  "sqlalchemy[asyncio]>=2.0.36,<2.1",
+  "alembic>=1.14,<2",
+  "asyncpg>=0.30,<1",
+  "pydantic>=2.9,<3",
+  "pydantic-settings>=2.6,<3",
+  "structlog>=24.4",
+]
+
+[dependency-groups]
+dev = [
+  "pytest>=8.3,<10",
+  "pytest-asyncio>=0.24,<2",
+  "httpx>=0.27,<1",
+  "mypy>=1.13",
+  "ruff>=0.8",
+  "import-linter>=2.1",
+  "pip-audit>=2.9",
+]
+
+[tool.uv]
+package = false
+
+[tool.ruff]
+line-length = 100
+target-version = "py313"
+src = ["."]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "UP", "B", "C4", "SIM", "ASYNC", "S", "T20", "RUF"]
+ignore = ["S101", "B008"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["S105", "S106", "S311", "S603", "S607"]
+"migrations/**" = ["E501"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["app", "tests"]
+
+[tool.mypy]
+python_version = "3.13"
+strict = true
+plugins = ["pydantic.mypy"]
+warn_unused_ignores = true
+disallow_any_generics = true
+no_implicit_reexport = true
+mypy_path = "."
+packages = ["app", "tests"]
+explicit_package_bases = true
+
+[[tool.mypy.overrides]]
+module = ["asyncpg.*"]
+ignore_missing_imports = true
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
+testpaths = ["tests"]
+pythonpath = ["."]
+addopts = "-q --strict-markers --strict-config"
+markers = ["integration: requires a real PostgreSQL with the Finvest roles"]
+filterwarnings = ["error::DeprecationWarning:app.*"]
+
+[tool.importlinter]
+root_package = "app"
+include_external_packages = true
+
+[[tool.importlinter.contracts]]
+name = "Shared rules are pure: no HTTP, database, network or infrastructure"
+type = "forbidden"
+source_modules = ["app.shared"]
+forbidden_modules = ["app.infrastructure", "app.api", "app.modules", "fastapi", "starlette", "sqlalchemy", "asyncpg", "alembic", "uvicorn"]
+
+[[tool.importlinter.contracts]]
+name = "Infrastructure does not depend on modules or the HTTP layer"
+type = "forbidden"
+source_modules = ["app.infrastructure"]
+forbidden_modules = ["app.modules", "app.api", "fastapi", "starlette"]
+
+[[tool.importlinter.contracts]]
+name = "Module domain rules are pure: no HTTP, database, network or infrastructure"
+type = "forbidden"
+source_modules = ["app.modules.*.domain"]
+forbidden_modules = ["app.infrastructure", "app.api", "fastapi", "starlette", "sqlalchemy", "asyncpg", "alembic", "httpx", "socket", "subprocess"]
+allow_indirect_imports = false

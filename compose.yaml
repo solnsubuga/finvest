@@ -1,0 +1,106 @@
+# Local development stack: `make dev`. Not used for deployment.
+#
+# Every password below is a placeholder for a throwaway local database. Deployed environments
+# generate their own and keep them outside the repository.
+name: finvest
+
+x-backend: &backend
+  build: ./backend
+  image: finvest-backend:local
+  restart: unless-stopped
+
+x-roles: &role-passwords
+  FINVEST_MIGRATOR_PASSWORD: local-migrator
+  FINVEST_APP_PASSWORD: local-app
+  FINVEST_WORKER_PASSWORD: local-worker
+
+services:
+  db:
+    image: postgres:17
+    environment:
+      POSTGRES_PASSWORD: local-admin
+      POSTGRES_DB: finvest
+    ports:
+      - "127.0.0.1:${FINVEST_DB_PORT:-5432}:5432"
+    volumes:
+      - db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "postgres", "-d", "finvest"]
+      interval: 2s
+      timeout: 2s
+      retries: 30
+
+  # Creates the three database roles. Idempotent, so it runs on every start.
+  db-roles:
+    image: postgres:17
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      <<: *role-passwords
+      PGPASSWORD: local-admin
+    volumes:
+      - ./backend/db/init-roles.sql:/init-roles.sql:ro
+    command: ["psql", "--no-psqlrc", "-h", "db", "-U", "postgres", "-d", "finvest", "-f", "/init-roles.sql"]
+    restart: "no"
+
+  migrate:
+    <<: *backend
+    depends_on:
+      db-roles:
+        condition: service_completed_successfully
+    environment:
+      FINVEST_DATABASE_URL: postgresql+asyncpg://finvest_migrator:local-migrator@db:5432/finvest
+      FINVEST_LOG_FORMAT: console
+    command: ["python", "-m", "app.migrate_main"]
+    restart: "no"
+
+  api:
+    <<: *backend
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    environment:
+      FINVEST_DATABASE_URL: postgresql+asyncpg://finvest_app:local-app@db:5432/finvest
+      FINVEST_API_DOCS: "true"
+      FINVEST_LOG_FORMAT: console
+    ports:
+      - "127.0.0.1:${FINVEST_API_PORT:-8000}:8000"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health/ready', timeout=2)"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+
+  worker:
+    <<: *backend
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    environment:
+      FINVEST_DATABASE_URL: postgresql+asyncpg://finvest_worker:local-worker@db:5432/finvest
+      FINVEST_LOG_FORMAT: console
+    command: ["python", "-m", "app.worker_main"]
+    healthcheck:
+      test: ["CMD", "python", "-m", "app.infrastructure.process", "worker"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+
+  scheduler:
+    <<: *backend
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    environment:
+      FINVEST_DATABASE_URL: postgresql+asyncpg://finvest_worker:local-worker@db:5432/finvest
+      FINVEST_LOG_FORMAT: console
+    command: ["python", "-m", "app.scheduler_main"]
+    healthcheck:
+      test: ["CMD", "python", "-m", "app.infrastructure.process", "scheduler"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+
+volumes:
+  db-data:
