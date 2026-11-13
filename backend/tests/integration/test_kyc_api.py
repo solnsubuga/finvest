@@ -3,7 +3,7 @@
 import itertools
 from collections.abc import AsyncIterator
 from dataclasses import dataclass
-from urllib.parse import urlsplit
+from datetime import timedelta
 
 import httpx
 import pytest
@@ -11,7 +11,7 @@ from sqlalchemy import text
 
 from app.api.app import create_app
 from app.infrastructure.database import Database
-from app.infrastructure.storage import ObjectStorage, S3Storage
+from app.infrastructure.storage import DisabledStorage, FileStorage, MemoryStorage, sha256_hex
 from app.modules.audit.service import events_for_resource
 from app.modules.identity.api import COOKIES
 from app.modules.identity.hashing import PasswordHasher
@@ -30,14 +30,8 @@ PASSWORD = "copper-harbour-violin"
 CLIENT_ORIGIN = "https://app.finvestug.com"
 STAFF_ORIGIN = "https://admin.finvestug.com"
 HASHER = PasswordHasher(memory_kib=19_456, time_cost=2)
-STORAGE = S3Storage(
-    endpoint="https://storage.example",
-    bucket="finvest-documents",
-    region="fra1",
-    access_key_id="test-access-key-id",
-    secret_access_key="test-only-not-a-real-key",
-)
-SHA = "cd" * 32
+JPEG = b"\xff\xd8\xff\xe0" + b"\x00" * 2044
+PNG = b"\x89PNG\r\n\x1a\n" + b"\x00" * 4088
 _numbers = itertools.count(790_000_000)
 
 
@@ -47,6 +41,7 @@ class Api:
     identity: IdentityService
     clock: FakeClock
     database: Database
+    storage: MemoryStorage
 
     async def client(self) -> dict[str, str]:
         """A new client, signed in on the phone app. Returns the headers to call as them."""
@@ -87,7 +82,7 @@ def an_app(
     database: Database,
     *,
     sealed: bool = True,
-    storage: ObjectStorage | None = STORAGE,
+    storage: FileStorage,
 ) -> tuple[httpx.AsyncClient, IdentityService, FakeClock]:
     settings = test_database.settings("finvest_app").model_copy(
         update={
@@ -114,11 +109,18 @@ def an_app(
 async def api(
     test_database: TestDatabase, app_database: Database, monkeypatch: pytest.MonkeyPatch
 ) -> AsyncIterator[Api]:
-    for name in ("IDENTITY_DATA_KEY", "IDENTITY_PROVIDER", "OBJECT_STORAGE_BUCKET"):
+    for name in ("IDENTITY_DATA_KEY", "IDENTITY_PROVIDER"):
         monkeypatch.delenv(f"FINVEST_{name}", raising=False)
-    http, identity, clock = an_app(test_database, app_database)
+    storage = MemoryStorage()
+    http, identity, clock = an_app(test_database, app_database, storage=storage)
     async with http:
-        yield Api(http, identity, clock, app_database)
+        yield Api(http, identity, clock, app_database, storage)
+
+
+def photo(
+    data: bytes = JPEG, content_type: str = "image/jpeg"
+) -> dict[str, tuple[str, bytes, str]]:
+    return {"photo": ("photo", data, content_type)}
 
 
 def details(number: str) -> dict[str, str]:
@@ -144,9 +146,8 @@ async def hand_in(api: Api, number: str | None = None) -> tuple[dict[str, str], 
         await api.http.put(f"{base}/document", json=document, headers=client)
     ).status_code == 200
     for kind in ("front", "back", "selfie"):
-        photo = {"kind": kind, "content_type": "image/jpeg", "byte_size": 2048, "sha256": SHA}
         assert (
-            await api.http.post(f"{base}/photos", json=photo, headers=client)
+            await api.http.put(f"{base}/photos/{kind}", files=photo(), headers=client)
         ).status_code == 200
     saved = await api.http.put(
         f"{base}/details", json=details(number or a_number()), headers=client
@@ -196,18 +197,22 @@ async def test_a_client_goes_from_nothing_to_a_check_waiting_for_a_person(api: A
     )
 
     for kind in ("front", "selfie"):
-        upload = await api.http.post(
-            f"{base}/photos",
-            json={"kind": kind, "content_type": "image/jpeg", "byte_size": 2048, "sha256": SHA},
-            headers=client,
+        sent = await api.http.put(f"{base}/photos/{kind}", files=photo(), headers=client)
+        assert sent.status_code == 200
+        assert {"kind": kind, "content_type": "image/jpeg", "byte_size": len(JPEG)} in sent.json()[
+            "photos"
+        ]
+    # The API stored each file under the check, with the digest the record holds.
+    stored = sorted(
+        key for key in api.storage.files if key.startswith(f"kyc/{started.json()['id']}/")
+    )
+    assert len(stored) == 2
+    async with api.database.actor_transaction(new_staff()) as session:
+        digests = await session.execute(
+            text("SELECT storage_key, sha256 FROM kyc_photos WHERE check_id = :id"),
+            {"id": started.json()["id"]},
         )
-        body = upload.json()
-        assert body["kind"] == kind
-        assert body["headers"] == {"content-type": "image/jpeg", "x-amz-content-sha256": SHA}
-        address = urlsplit(body["url"])
-        assert address.netloc == "storage.example"
-        assert address.path.startswith(f"/finvest-documents/kyc/{started.json()['id']}/")
-        assert "X-Amz-Signature=" in address.query
+        assert sorted(digests.tuples()) == [(key, sha256_hex(JPEG)) for key in stored]
 
     number = a_number()
     saved = await api.http.put(f"{base}/details", json=details(number), headers=client)
@@ -237,15 +242,23 @@ async def test_bad_details_and_photos_are_refused_field_by_field(api: Api) -> No
     assert (status, code) == (422, "validation_failed")
     assert {"document_number", "date_of_birth", "document_expires_on"} <= {f for f, _ in fields}
 
-    back = {"kind": "back", "content_type": "image/jpeg", "byte_size": 2048, "sha256": SHA}
-    assert error(await api.http.post(f"{base}/photos", json=back, headers=client))[:2] == (
-        422,
-        "validation_failed",
+    # A passport has no back. Each refusal comes before anything is stored.
+    no_back = await api.http.put(f"{base}/photos/back", files=photo(), headers=client)
+    assert error(no_back) == (422, "validation_failed", [("kind", "photo_not_part_of_document")])
+    huge = JPEG + b"\x00" * (10 * 1024 * 1024)
+    too_big = await api.http.put(f"{base}/photos/front", files=photo(huge), headers=client)
+    assert error(too_big)[2] == [("byte_size", "invalid_size")]
+    pdf = await api.http.put(
+        f"{base}/photos/front", files=photo(b"%PDF-1.7", "application/pdf"), headers=client
     )
-    huge = {**back, "kind": "front", "byte_size": 11 * 1024 * 1024}
-    assert error(await api.http.post(f"{base}/photos", json=huge, headers=client))[2] == [
-        ("byte_size", "invalid_size")
-    ]
+    assert error(pdf)[2] == [("content_type", "unsupported_content_type")]
+    # Called a JPEG, but it is not one.
+    page = b"<html><script>alert(1)</script></html>"
+    lying = await api.http.put(f"{base}/photos/front", files=photo(page), headers=client)
+    assert error(lying)[2] == [("photo", "not_an_image_of_that_type")]
+    unknown = await api.http.put(f"{base}/photos/elbow", files=photo(), headers=client)
+    assert unknown.status_code == 422
+    assert api.storage.files == {}
 
 
 async def test_nobody_reaches_a_check_without_the_right_session(api: Api) -> None:
@@ -297,11 +310,10 @@ async def test_staff_see_the_number_masked_and_each_look_is_on_the_audit_trail(a
     links = await api.http.post(f"/staff/identity-checks/{check_id}/photo-links", headers=staff)
     photos = links.json()["photos"]
     assert [photo["kind"] for photo in photos] == ["back", "front", "selfie"]
-    assert all(
-        photo["url"].startswith("https://storage.example/finvest-documents/kyc/")
-        for photo in photos
-    )
-    assert all("X-Amz-Expires=300" in photo["url"] for photo in photos)
+    assert all(photo["url"].startswith(f"memory://kyc/{check_id}/") for photo in photos)
+    assert links.json()["expires_at"] == (
+        api.clock.now() + timedelta(minutes=5)
+    ).isoformat().replace("+00:00", "Z")
     assert (await actions(api, check_id))[-2:] == [
         "kyc.check.document_number_shown",
         "kyc.check.photos_viewed",
@@ -349,10 +361,12 @@ async def test_staff_ask_for_a_photo_escalate_and_reject(api: Api) -> None:
     assert mine["client_message"] == "Your selfie was too dark."
 
     api.clock.advance(minutes=1)
-    retake = {"kind": "selfie", "content_type": "image/png", "byte_size": 4096, "sha256": SHA}
-    assert (
-        await api.http.post("/client/identity-check/photos", json=retake, headers=client)
-    ).status_code == 200
+    front = await api.http.put("/client/identity-check/photos/front", files=photo(), headers=client)
+    assert (front.status_code, front.json()["error"]["code"]) == (409, "conflict")
+    retake = await api.http.put(
+        "/client/identity-check/photos/selfie", files=photo(PNG, "image/png"), headers=client
+    )
+    assert retake.status_code == 200
     assert (await api.http.post("/client/identity-check/submit", headers=client)).status_code == 200
 
     escalated = await api.http.post(
@@ -375,22 +389,25 @@ async def test_staff_ask_for_a_photo_escalate_and_reject(api: Api) -> None:
 async def test_without_the_data_key_or_storage_the_routes_say_unavailable(
     test_database: TestDatabase, app_database: Database, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    for name in ("IDENTITY_DATA_KEY", "IDENTITY_PROVIDER", "OBJECT_STORAGE_BUCKET"):
+    for name in ("IDENTITY_DATA_KEY", "IDENTITY_PROVIDER"):
         monkeypatch.delenv(f"FINVEST_{name}", raising=False)
-    http, identity, clock = an_app(test_database, app_database, sealed=False)
+    http, identity, clock = an_app(
+        test_database, app_database, sealed=False, storage=MemoryStorage()
+    )
     async with http:
-        client = await Api(http, identity, clock, app_database).client()
+        client = await Api(http, identity, clock, app_database, MemoryStorage()).client()
         refused = await http.get("/client/identity-check", headers=client)
         assert (refused.status_code, refused.json()["error"]["code"]) == (503, "unavailable")
 
-    http, identity, clock = an_app(test_database, app_database, storage=None)
+    http, identity, clock = an_app(test_database, app_database, storage=DisabledStorage())
     async with http:
-        client = await Api(http, identity, clock, app_database).client()
+        client = await Api(http, identity, clock, app_database, MemoryStorage()).client()
         document = {"document_type": "passport", "document_country": "UG"}
         started = await http.put("/client/identity-check/document", json=document, headers=client)
         assert started.status_code == 200
-        photo = {"kind": "front", "content_type": "image/jpeg", "byte_size": 2048, "sha256": SHA}
-        refused = await http.post("/client/identity-check/photos", json=photo, headers=client)
+        refused = await http.put(
+            "/client/identity-check/photos/front", files=photo(), headers=client
+        )
         assert (refused.status_code, refused.json()["error"]["code"]) == (503, "unavailable")
         async with app_database.actor_transaction(new_staff()) as session:
             photos = await session.execute(
@@ -408,6 +425,6 @@ async def test_nothing_personal_is_logged(api: Api, capsys: pytest.CaptureFixtur
     await api.http.post(f"/staff/identity-checks/{check_id}/document-number", headers=staff)
     await api.http.post(f"/staff/identity-checks/{check_id}/photo-links", headers=staff)
     logged = capsys.readouterr()
-    for secret in (number, "NAKATO", "Amara", "1994-06-22", "X-Amz-Signature"):
+    for secret in (number, "NAKATO", "Amara", "1994-06-22", f"kyc/{check_id}/"):
         assert secret not in logged.out
         assert secret not in logged.err
