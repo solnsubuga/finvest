@@ -39,7 +39,13 @@ jobs:
             terraform -chdir=$dir validate
           done
       - name: Test
-        run: terraform -chdir=infra/terraform test
+        run: terraform -chdir=infra/terraform test -filter=tests/finvest.tftest.hcl
+      - name: Test the environment files
+        run: |
+          for env in staging production; do
+            test -f infra/terraform/environments/$env.tfvars
+            terraform -chdir=infra/terraform test -filter=tests/environments.tftest.hcl -var-file=environments/$env.tfvars
+          done
       - name: Check the shell scripts
         run: shellcheck infra/deployment/*.sh infra/terraform/scripts/*.sh
       - name: Test the plan hash script

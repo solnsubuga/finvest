@@ -22,7 +22,7 @@ done
 # a minute to accept connections.
 for _ in 1 2 3 4 5 6 7 8 9 10; do
   if docker run --rm -i -e ADMIN_URI -e FINVEST_MIGRATOR_PASSWORD -e FINVEST_APP_PASSWORD \
-    -e FINVEST_WORKER_PASSWORD postgres:17 \
+    -e FINVEST_WORKER_PASSWORD postgres:17.12@sha256:dbb9623d5121b5d2c2c9e2fba56e40193cbb3510d4af7f035b1ab1823aff3205 \
     sh -c 'exec psql "$ADMIN_URI" --no-psqlrc --quiet --set ON_ERROR_STOP=1 --file -' < "$sql"; then
     echo 'Database roles are in place.'
     exit 0
