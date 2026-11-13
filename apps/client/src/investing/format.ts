@@ -74,6 +74,8 @@ export const statusLabel: Record<InvestmentStatus, string> = {
   matured: "Matured",
   cancelled: "Not paid in time",
   withdrawn: "Withdrawn early",
+  // The API never sends one to a client; the label is here so every status has one.
+  unwound: "Reversed",
 };
 
 /**

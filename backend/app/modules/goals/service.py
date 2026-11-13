@@ -491,7 +491,9 @@ async def staff_goal(session: AsyncSession, staff: Actor, goal_id: str, clock: C
         raise ApplicationError("forbidden")
     goal = await get_goal(session, goal_id)
     found = await investments.get_investments(session, await _saving_ids(session, goal.id))
-    savings = [s for s in found if s.status is not InvestmentStatus.CANCELLED]
+    savings = [
+        s for s in found if s.status not in {InvestmentStatus.CANCELLED, InvestmentStatus.UNWOUND}
+    ]
     zero = Money.zero(goal.target.currency)
     value = sum((s.amount + s.accrued_net for s in savings if _counts(s.status)), zero)
     interest = sum((s.accrued_net for s in savings if _counts(s.status)), zero)

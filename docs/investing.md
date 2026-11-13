@@ -144,6 +144,8 @@ The code is `backend/app/modules/investments/api.py`. Amounts are integers in th
 | `GET /staff/rate-proposals?status=` | `rates.view` | Rate changes and their state. |
 | `POST /staff/rate-proposals`, `POST /staff/rate-proposals/{id}/approve`, `/send-back`, `/withdraw` | `rates.change` | Proposing and deciding rate changes, with the second person enforced in the database. |
 | `GET /staff/investments?status=&limit=`, `GET /staff/investments/{id}`, `GET /staff/interest-runs` | `investments.view` | Every investment with its tax, and the record of daily runs. |
+| `GET /staff/investment-corrections?status=&investment_id=&limit=` | `investments.view` | Unwinds and refunds and their state. |
+| `POST /staff/investment-corrections`, `POST /staff/investment-corrections/{id}/approve`, `/send-back`, `/withdraw` | `investment_corrections.change`, `Idempotency-Key` | Proposing and deciding an unwind or a refund. See [Undoing a mistake](#undoing-a-mistake). |
 
 Seeing rates needs `rates.view`. Proposing, approving, sending back and withdrawing a rate change need `rates.change`, held by admin and finance for now. A rate still never takes effect without a second person.
 
@@ -220,14 +222,14 @@ The investments module opens these. The entries are described with the commands 
 
 ## How it joins the other modules
 
-Agreed with the payments and payouts threads on 13 November 2026. Starting and daily interest are built. Maturity and unwinding are not.
+Agreed with the payments and payouts threads on 13 November 2026.
 
 - **Starting.** The client reviews and confirms, which saves an investment that is awaiting payment. Its ID is the purpose of the deposit. Payments asks `investments.service.payable_investment` for the exact amount before taking a deposit. When the deposit is confirmed, payments publishes `payments.deposit_confirmed`, and the `investments.start_from_deposit` job moves the money from `client.awaiting_start` to `client.holding` and starts the investment.
 - **Maturity.** See [Maturity](#maturity). Payouts finds the handover by the client and the investment ID (`payouts.domain.posting.funding_account`), and owns everything after `create_payout`.
 - **Dealing desk.** It reads the book through `owed_by_product(session, on)`, `running_investments(session, product_code, started_after=None)` and `maturing(session, date_from, date_to)` in `investments.service`, and follows the outbox topics `investments.started`, `investments.matured` and `investments.rolled_over`. Interest in these reads is net of tax, as posted so far.
 - **Saving sources.** An investment the client did not make themselves, from an automatic investing run or a goal's saving rule, carries `source_type` (`autoinvest_run` or `goal_saving`) and `source_id`. The columns and their checks are on main (migration 0063): only the worker creates such an investment, at most one per source. The function that creates one, `request_system_investment`, is planned and arrives with the automatic investing work.
 - **Carried over from Finvest 1.0.** At the switch the migration module's job calls `investments.service.open_existing_investment` for each running investment, with the old system's start date, rate and tax, its legacy reference, the trial's "as of" day as `interest_through`, and its own opening balances account (an asset `AccountSpec`, so investing never imports migration). One entry debits that account with the principal plus the interest before tax and credits the holding, the interest after tax and the tax payable. The interest is worked out here with `posting_due`, the daily run's own function, and the investment's running totals are set to match, so the daily run carries on from the next day. The migration switch checks the figures against its own `Opening.interest` and stops if they differ. Only the worker opens one (migration 0065), only while it is still running and for days already passed, and the legacy reference is unique, so it is the command's idempotency key: a second call returns the same investment, and the same reference with other terms is refused with `conflict`. It sends no notice and publishes nothing: the client hears from the claim, and the bills behind it are already on the desk's books.
-- **Unwinding.** For a deposit credited by mistake, `investments.service.unwind_investment` will move the principal back to `client.awaiting_start` and reverse interest not yet paid out. It refuses if anything was already paid out.
+- **Unwinding and refunds.** For a deposit credited by mistake, staff propose an unwind and a second person approves it. See [Undoing a mistake](#undoing-a-mistake).
 
 ## Early withdrawal
 
@@ -245,6 +247,24 @@ The two consumers are wired: `dealing.events.FUND_EARLY_WITHDRAWAL` is named in 
 
 The database fences each step (migration 0064). Only the client asks, once, while the investment runs, before the maturity date and by the database clock. Only the worker withdraws an investment someone asked for. A withdrawn investment changes only to record its payout, once. Accrual and the choice for maturity stop at the request.
 
+## Undoing a mistake
+
+Two staff commands correct money that went the wrong way. Both are maker and checker: one person proposes with a reason, and a different person approves, sends back with a note, or the proposer withdraws it. The code is `backend/app/modules/investments/corrections.py`, and the table is `investment_corrections` (migration 0066). Proposing and deciding need `investment_corrections.change`, held by admin and finance for now. Each one shows in the approvals inbox as `investment_correction`.
+
+- **Unwind.** For a running investment that should never have started, for example a deposit credited to the wrong client. The amount is the principal. It is refused if the client asked to withdraw it early, and the one paid-out case cannot arise, since nothing leaves a running investment except through maturity or a withdrawal.
+- **Refund.** For money waiting in `client.awaiting_start` for an investment that was cancelled or unwound. It names one of the client's approved payout destinations past its first day's safety wait, checked against the payouts limits as an early withdrawal is. The amount is the whole balance waiting at the proposal.
+
+Approving queues `investments.apply_correction`, keyed by the correction, and the worker moves the money, because staff never create payouts:
+
+- An unwind posts `investment.unwound` (key `investment-unwind:<id>`): debit `client.holding` and credit `client.awaiting_start` with the principal, and reverse the interest so far, debiting `client.interest_accrued` with the interest after tax and `tax.withholding_payable` with the tax, and crediting `interest.expense` with the interest before tax. The investment becomes `unwound`. Clients never see an unwound investment.
+- A refund posts `investment.refunded`, moving the waiting money to the client's payout pending account for the correction, and creates the payout with the key `refund:<id>` in the same savepoint. A payout refusal rolls both back.
+
+The worker checks the figures again first: an unwind needs the investment still running with no request, and the holding and interest balances matching the investment; a refund needs the waiting balance to equal what was approved. If not, the correction is `failed` with a code (`investment_not_running`, `investment_not_refundable`, `amount_changed`, `holding_changed`, `interest_changed`, or the payouts code) and nothing moves, so staff propose again. Running the job twice changes nothing.
+
+The database fences it. A correction starts as proposed by the person signed in, is decided once by staff, and never by its proposer (`ck_investment_corrections_second_person`), except that only the proposer withdraws it. Only the worker records what an approved one did, and a finished one never changes. One open correction of each kind per investment. Only the worker moves an investment to `unwound`, only from running with no withdrawal request and only with an approved unwind for it, and an unwound investment never changes.
+
+Audit events on resource `investment_correction`: `investments.correction.proposed`, `.approved`, `.sent_back`, `.withdrawn` by the staff member with their reason or note, and `.done` or `.failed` by the system. Details carry IDs and codes only, never an amount. No notice is sent: payouts tells the client about a refund's payout.
+
 ## Not built yet
 
-Editing a product, a staff refund of money that did not start an investment, the monthly coupon for open terms, and the early withdrawal screen in the client app. The dealing desk is its own module: see [dealing-desk.md](dealing-desk.md).
+Editing a product, the console screens for unwinds and refunds, the monthly coupon for open terms, and the early withdrawal screen in the client app. The dealing desk is its own module: see [dealing-desk.md](dealing-desk.md).

@@ -12,7 +12,7 @@ Three audiences, three routers:
 Each request opens one transaction for the caller and does all its work inside it.
 """
 
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Awaitable, Callable
 from contextlib import asynccontextmanager
 from datetime import date, datetime
 from typing import Annotated
@@ -23,6 +23,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.idempotency import IdempotencyKey
 from app.infrastructure.database import Database
+from app.infrastructure.idempotency import Receipt, run_once
 from app.infrastructure.settings import Settings
 from app.modules.identity.api import CurrentClient, require_permission
 from app.modules.identity.service import StaffSession
@@ -195,6 +196,35 @@ class ProposalOut(Contract):
     decision_note: str | None
 
 
+class CorrectionIn(Contract):
+    kind: service.CorrectionKind = Field(strict=False)
+    investment_id: PushId
+    reason: Note
+    # A refund's payout account. Not sent for an unwind.
+    destination_id: PushId | None = None
+
+
+class CorrectionOut(Contract):
+    id: PushId
+    kind: service.CorrectionKind
+    investment_id: PushId
+    client_id: PushId
+    amount_minor: int
+    currency: Currency
+    destination_id: PushId | None
+    reason: str
+    status: service.CorrectionStatus
+    proposed_by: PushId
+    proposed_at: datetime
+    decided_by: PushId | None
+    decided_at: datetime | None
+    decision_note: str | None
+    done_at: datetime | None
+    entry_id: PushId | None
+    payout_id: PushId | None
+    failure_code: str | None
+
+
 class StaffInvestmentOut(Contract):
     id: PushId
     client_id: PushId
@@ -259,6 +289,9 @@ ProductsViewer = Annotated[StaffSession, Depends(require_permission("products.vi
 RatesViewer = Annotated[StaffSession, Depends(require_permission("rates.view"))]
 RatesChanger = Annotated[StaffSession, Depends(require_permission("rates.change"))]
 InvestmentsViewer = Annotated[StaffSession, Depends(require_permission("investments.view"))]
+CorrectionsChanger = Annotated[
+    StaffSession, Depends(require_permission("investment_corrections.change"))
+]
 
 
 def _money(minor: int, currency: Currency) -> Money:
@@ -371,6 +404,29 @@ def _proposal_out(view: service.ProposalView) -> ProposalOut:
         decided_by=view.decided_by,
         decided_at=view.decided_at,
         decision_note=view.decision_note,
+    )
+
+
+def _correction_out(correction: service.Correction) -> CorrectionOut:
+    return CorrectionOut(
+        id=correction.id,
+        kind=correction.kind,
+        investment_id=correction.investment_id,
+        client_id=correction.client_id,
+        amount_minor=correction.amount.minor,
+        currency=correction.amount.currency,
+        destination_id=correction.destination_id,
+        reason=correction.reason,
+        status=correction.status,
+        proposed_by=correction.proposed_by,
+        proposed_at=correction.proposed_at,
+        decided_by=correction.decided_by,
+        decided_at=correction.decided_at,
+        decision_note=correction.decision_note,
+        done_at=correction.done_at,
+        entry_id=correction.entry_id,
+        payout_id=correction.payout_id,
+        failure_code=correction.failure_code,
     )
 
 
@@ -688,6 +744,146 @@ async def staff_withdraw_rate(
     async with _transaction(request, staff.actor) as session:
         view = await service.withdraw_rate(session, staff.actor, proposal_id, clock)
     return _proposal_out(view)
+
+
+@staff_router.get("/investment-corrections")
+async def staff_corrections(
+    request: Request,
+    staff: InvestmentsViewer,
+    status: service.CorrectionStatus | None = None,
+    investment_id: PushId | None = None,
+    limit: Annotated[int, Query(ge=1, le=200)] = 50,
+) -> list[CorrectionOut]:
+    async with _transaction(request, staff.actor) as session:
+        found = await service.list_corrections(
+            session, staff.actor, status=status, investment_id=investment_id, limit=limit
+        )
+    return [_correction_out(correction) for correction in found]
+
+
+async def _correction_command(
+    request: Request,
+    staff: StaffSession,
+    clock: Clock,
+    *,
+    operation: str,
+    key: str,
+    body: dict[str, object],
+    command: Callable[[AsyncSession], Awaitable[service.Correction]],
+) -> CorrectionOut:
+    """Run one correction command once per key, and answer with the correction as it is now."""
+    async with _transaction(request, staff.actor) as session:
+
+        async def run() -> Receipt:
+            correction = await command(session)
+            return Receipt(200, {"correction_id": correction.id})
+
+        outcome = await run_once(
+            session,
+            actor=staff.actor,
+            operation=operation,
+            key=key,
+            request=body,
+            now=clock.now(),
+            command=run,
+        )
+        correction_id = outcome.receipt.response.get("correction_id")
+        assert isinstance(correction_id, str)
+        return _correction_out(await service.get_correction(session, staff.actor, correction_id))
+
+
+@staff_router.post("/investment-corrections", status_code=201)
+async def staff_propose_correction(
+    request: Request,
+    staff: CorrectionsChanger,
+    clock: AppClock,
+    key: IdempotencyKey,
+    body: CorrectionIn,
+) -> CorrectionOut:
+    """Propose undoing an investment or refunding money awaiting start. A second person must
+    approve it before anything moves."""
+    return await _correction_command(
+        request,
+        staff,
+        clock,
+        operation="investments.propose_correction",
+        key=key,
+        body=body.model_dump(mode="json"),
+        command=lambda session: service.propose_correction(
+            session,
+            staff.actor,
+            kind=body.kind,
+            investment_id=body.investment_id,
+            reason=body.reason,
+            destination_id=body.destination_id,
+            clock=clock,
+        ),
+    )
+
+
+@staff_router.post("/investment-corrections/{correction_id}/approve")
+async def staff_approve_correction(
+    request: Request,
+    staff: CorrectionsChanger,
+    clock: AppClock,
+    key: IdempotencyKey,
+    correction_id: PushId,
+) -> CorrectionOut:
+    """Approve someone else's correction. The worker then moves the money."""
+    return await _correction_command(
+        request,
+        staff,
+        clock,
+        operation="investments.approve_correction",
+        key=key,
+        body={"correction_id": correction_id},
+        command=lambda session: service.approve_correction(
+            session, staff.actor, correction_id, clock
+        ),
+    )
+
+
+@staff_router.post("/investment-corrections/{correction_id}/send-back")
+async def staff_send_back_correction(
+    request: Request,
+    staff: CorrectionsChanger,
+    clock: AppClock,
+    key: IdempotencyKey,
+    correction_id: PushId,
+    body: SendBack,
+) -> CorrectionOut:
+    return await _correction_command(
+        request,
+        staff,
+        clock,
+        operation="investments.send_back_correction",
+        key=key,
+        body={"correction_id": correction_id, "note": body.note},
+        command=lambda session: service.send_back_correction(
+            session, staff.actor, correction_id, body.note, clock
+        ),
+    )
+
+
+@staff_router.post("/investment-corrections/{correction_id}/withdraw")
+async def staff_withdraw_correction(
+    request: Request,
+    staff: CorrectionsChanger,
+    clock: AppClock,
+    key: IdempotencyKey,
+    correction_id: PushId,
+) -> CorrectionOut:
+    return await _correction_command(
+        request,
+        staff,
+        clock,
+        operation="investments.withdraw_correction",
+        key=key,
+        body={"correction_id": correction_id},
+        command=lambda session: service.withdraw_correction(
+            session, staff.actor, correction_id, clock
+        ),
+    )
 
 
 @staff_router.get("/investments")

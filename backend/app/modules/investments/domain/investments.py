@@ -44,6 +44,9 @@ class InvestmentStatus(StrEnum):
     MATURED = "matured"
     # Closed early at the client's request. The money went to payouts.
     WITHDRAWN = "withdrawn"
+    # Undone by two members of staff because the deposit that started it was a mistake. The
+    # principal went back to money awaiting start and the interest was reversed.
+    UNWOUND = "unwound"
 
 
 class AtMaturity(StrEnum):

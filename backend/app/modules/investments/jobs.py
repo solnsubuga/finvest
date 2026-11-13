@@ -23,7 +23,7 @@ from app.infrastructure.jobs import (
     PermanentJobError,
 )
 from app.infrastructure.jobs import queue as job_queue
-from app.modules.investments import accrual, holdings, maturity, withdrawal
+from app.modules.investments import accrual, corrections, holdings, maturity, withdrawal
 from app.modules.investments.events import PAY_EARLY_WITHDRAWAL_KIND, START_KIND, WITHDRAW_KIND
 from app.modules.payouts import payouts
 from app.shared.actors import SYSTEM
@@ -50,6 +50,7 @@ class InvestmentJobs:
             ACCRUE_KIND: self.accrue_interest,
             MATURE_KIND: self.mature,
             TELL_EARNINGS_KIND: self.tell_earnings,
+            corrections.APPLY_KIND: self.apply_correction,
             WITHDRAW_KIND: self.withdraw_early,
             PAY_EARLY_WITHDRAWAL_KIND: self.pay_early_withdrawal,
         }
@@ -119,6 +120,21 @@ class InvestmentJobs:
             except ApplicationError as error:
                 raise PermanentJobError(code=f"investment_{error.code}") from error
             return {"investment_id": investment.id, "payout_id": investment.withdrawal_payout_id}
+
+        await context.apply(effect)
+
+    async def apply_correction(self, job: ClaimedJob, context: JobContext) -> None:
+        """Carry out a correction two members of staff agreed. A failure is recorded on it."""
+        correction_id = job.payload.get("correction_id")
+        if not isinstance(correction_id, str):
+            raise PermanentJobError(code="correction_id_missing")
+
+        async def effect(session: AsyncSession) -> Mapping[str, object]:
+            try:
+                done = await corrections.apply_correction(session, correction_id, self._clock)
+            except ApplicationError as error:
+                raise PermanentJobError(code=f"correction_{error.code}") from error
+            return {"status": done.status.value, "error_code": done.failure_code}
 
         await context.apply(effect)
 

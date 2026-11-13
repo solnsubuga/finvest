@@ -102,6 +102,7 @@ STATUS_LABELS: dict[InvestmentStatus, str] = {
     InvestmentStatus.CANCELLED: "Cancelled",
     InvestmentStatus.MATURED: "Matured",
     InvestmentStatus.WITHDRAWN: "Withdrawn early",
+    InvestmentStatus.UNWOUND: "Reversed",
 }
 
 
