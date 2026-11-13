@@ -217,3 +217,37 @@ async def test_a_bank_statement_is_checked_with_its_date(api: Api) -> None:
     approved = await api.http.post(f"{BASE}/{destination_id}/approve", json={"reason": "Agree"})
     assert approved.status_code == 200, approved.text
     assert approved.json()["status"] == "approved"
+
+
+async def test_a_checked_account_waits_in_the_approvals_inbox(api: Api) -> None:
+    _, destination_id, number = await in_review(api)
+    checker = await api.staff("operations")
+    inbox = (await api.http.get("/staff/approvals")).json()["items"]
+    # Waiting for a first check is the review queue's business, not the inbox's.
+    assert destination_id not in [item["id"] for item in inbox]
+    checked = await api.http.post(
+        f"{BASE}/{destination_id}/check",
+        json={"proof_name": "Amara Nakato", "reason": "Letter names her"},
+    )
+    assert checked.status_code == 200, checked.text
+
+    own = (await api.http.get("/staff/approvals")).json()["items"]
+    [mine] = [item for item in own if item["id"] == destination_id]
+    assert (mine["kind"], mine["proposed_by"], mine["yours"], mine["can_decide"]) == (
+        "payout_account",
+        checker.id,
+        True,
+        False,
+    )
+    # The subject is the kind of account, never the number or the holder's name.
+    assert mine["subject"] == "bank"
+    assert number not in str(own) and "Amara" not in str(own)
+
+    await api.staff("compliance")
+    theirs = (await api.http.get("/staff/approvals")).json()["items"]
+    [waiting] = [item for item in theirs if item["id"] == destination_id]
+    assert (waiting["yours"], waiting["can_decide"]) == (False, True)
+    approved = await api.http.post(f"{BASE}/{destination_id}/approve", json={"reason": "Agree"})
+    assert approved.status_code == 200, approved.text
+    after = (await api.http.get("/staff/approvals")).json()["items"]
+    assert destination_id not in [item["id"] for item in after]

@@ -19,6 +19,7 @@ from app.modules.ledger import corrections
 from app.modules.migration import service as migration
 from app.modules.notifications import wording_store
 from app.modules.payments import bank_transfers
+from app.modules.payouts import destinations
 from app.modules.reconciliation import day_close, transfers
 
 
@@ -43,6 +44,8 @@ async def waiting_for(session: AsyncSession, staff: StaffSession, now: datetime)
         found += await _migration(session)
     if "phone_change" in kinds:
         found += await _phone_changes(session, now)
+    if "payout_account" in kinds:
+        found += await _payout_accounts(session)
     return inbox(found, staff.staff_id, staff.permissions)
 
 
@@ -145,4 +148,13 @@ async def _phone_changes(session: AsyncSession, now: datetime) -> list[Waiting]:
     return [
         Waiting("phone_change", c.id, c.client_id, c.proposed_by, c.proposed_at)
         for c in await phone_changes.waiting(session, now)
+    ]
+
+
+async def _payout_accounts(session: AsyncSession) -> list[Waiting]:
+    # The subject is the kind of account, never the number or the holder's name.
+    return [
+        Waiting("payout_account", d.id, d.kind.value, d.checked_by, d.checked_at)
+        for d in await destinations.checks_awaiting_approval(session)
+        if d.checked_by is not None and d.checked_at is not None
     ]

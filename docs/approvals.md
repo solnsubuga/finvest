@@ -33,12 +33,13 @@ The inbox only reads. Deciding happens on the owning module's own route, which c
 | `rate_change` | investments `list_proposals`, proposed | `rates.view` | `rates.view` |
 | `migration_totals` | migration `overview`, totals not yet confirmed | `migration.view` | `migration.sign_off` |
 | `migration_sign_off` | migration `overview`, sign-offs proposed | `migration.view` | `migration.sign_off` |
+| `payout_account` | payouts `destinations.checks_awaiting_approval` | `review_queue.view` | `payout_accounts.change` |
 
 Where a module has no separate deciding permission, the screen's own is used. Team changes, client locks and email suppression lifts join the table when their pull requests merge.
 
 Only the sources the reader's permissions show are read, and all of them inside the reader's staff transaction, so row policies apply as they do on each module's own screen.
 
-Not in the inbox, because they are not two-person decisions: identity checks (one reviewer, by the owner's decision), large payouts and withdrawal limits, payout destinations, products and support.
+Not in the inbox, because they are not two-person decisions: identity checks (one reviewer, by the owner's decision), large payouts and withdrawal limits, refusing or removing a payout account, products and support.
 
 ## Where it lives
 

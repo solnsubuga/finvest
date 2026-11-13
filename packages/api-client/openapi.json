@@ -294,7 +294,8 @@
               "rate_change",
               "migration_totals",
               "migration_sign_off",
-              "phone_change"
+              "phone_change",
+              "payout_account"
             ],
             "title": "Kind",
             "type": "string"
