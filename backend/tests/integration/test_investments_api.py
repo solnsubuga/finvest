@@ -3,6 +3,7 @@ clients and the public see figures after tax only."""
 
 import secrets
 from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
 from dataclasses import dataclass
 
 import httpx
@@ -40,13 +41,16 @@ class Api:
     database: Database
 
 
-@pytest.fixture
-async def api(test_database: TestDatabase, app_database: Database) -> AsyncIterator[Api]:
+@asynccontextmanager
+async def serving(
+    test_database: TestDatabase, app_database: Database, **settings_changed: object
+) -> AsyncIterator[Api]:
     settings = test_database.settings("finvest_app").model_copy(
         update={
             "client_allowed_origins": [CLIENT_ORIGIN],
             "staff_allowed_origins": [STAFF_ORIGIN],
             "trusted_proxies": ["127.0.0.1"],
+            **settings_changed,
         }
     )
     # The real time: the database refuses an investment that is not created now.
@@ -54,6 +58,12 @@ async def api(test_database: TestDatabase, app_database: Database) -> AsyncItera
     transport = httpx.ASGITransport(app=app, raise_app_exceptions=False, client=("127.0.0.1", 1))
     async with httpx.AsyncClient(transport=transport, base_url="https://api") as http:
         yield Api(http, app.state.identity, app_database)
+
+
+@pytest.fixture
+async def api(test_database: TestDatabase, app_database: Database) -> AsyncIterator[Api]:
+    async with serving(test_database, app_database) as served:
+        yield served
 
 
 def code(response: httpx.Response) -> str:
@@ -381,3 +391,53 @@ async def test_a_started_investment_shows_after_tax_to_its_client(
     assert running.json()["start_date"] == today().isoformat()
     assert running.json()["value_minor"] == 1_000_000
     no_tax(running.json())
+
+
+async def running_investment(api: Api, worker_database: Database) -> tuple[str, dict[str, str]]:
+    """A client's investment that has started, and the client's sign-in."""
+    _, auth = await signed_in_client(api)
+    created = await api.http.post(
+        "/client/investments",
+        json={"product_code": "TREA-91", "amount_minor": 1_000_000, "currency": "UGX"},
+        headers={**auth, "Idempotency-Key": f"k-{push_id()}"},
+    )
+    async with worker_database.actor_transaction(SYSTEM) as session:
+        investment = await investments.get_investment(session, created.json()["id"])
+    await pay(worker_database, investment, investment.amount, PRESENT)
+    async with worker_database.actor_transaction(SYSTEM) as session:
+        await investments.start_investment(
+            session, investment.id, confirmed_on=today(), clock=PRESENT
+        )
+    return investment.id, auth
+
+
+async def test_early_withdrawal_is_refused_while_it_is_switched_off(
+    api: Api, worker_database: Database
+) -> None:
+    # Off by default: nothing pays a withdrawal until the dealing desk's funding is wired.
+    investment_id, auth = await running_investment(api, worker_database)
+    shown = await api.http.get(f"/client/investments/{investment_id}", headers=auth)
+    assert shown.json()["status"] == "active"
+    assert shown.json()["can_withdraw"] is False
+
+    refused = await api.http.post(
+        f"/client/investments/{investment_id}/withdraw",
+        json={"destination_id": push_id()},
+        headers={**auth, "Idempotency-Key": f"w-{push_id()}"},
+    )
+    assert refused.status_code == 409
+    assert code(refused) == "conflict"
+    after = await api.http.get(f"/client/investments/{investment_id}", headers=auth)
+    assert after.json()["withdrawal_requested_at"] is None
+    assert after.json()["status"] == "active"
+
+
+async def test_a_running_investment_can_be_withdrawn_once_it_is_switched_on(
+    test_database: TestDatabase, app_database: Database, worker_database: Database
+) -> None:
+    async with serving(test_database, app_database, early_withdrawal_open=True) as api:
+        investment_id, auth = await running_investment(api, worker_database)
+        shown = await api.http.get(f"/client/investments/{investment_id}", headers=auth)
+        assert shown.json()["can_withdraw"] is True
+        listed = await api.http.get("/client/investments", headers=auth)
+        assert listed.json()[0]["can_withdraw"] is True
