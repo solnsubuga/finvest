@@ -12,6 +12,15 @@ async function visit(page: Page, path: string) {
   }, path);
 }
 
+/** Wait until sign-in has finished and the app has gone on to the person's first screen.
+ * After sign-in the app opens "/" and then redirects to that screen. A visit made in between
+ * would be overwritten by the redirect. */
+async function landed(page: Page) {
+  await expect(page).not.toHaveURL(/\/sign-in/);
+  await expect(page).not.toHaveURL(/^https?:\/\/[^/]+\/?$/);
+  await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
+}
+
 async function signIn(page: Page, email: string) {
   await page.goto("/sign-in");
   await page.getByLabel("Work email").fill(email);
@@ -56,7 +65,7 @@ test("typing the address of a screen the role may not open shows no access", asy
 }) => {
   await signIn(page, "support@finvest.test");
   await page.getByRole("button", { name: "Use passkey" }).click();
-  await expect(page).not.toHaveURL(/\/sign-in/);
+  await landed(page);
   await visit(page, "/dealing-desk");
   await expect(page).toHaveURL(/\/dealing-desk/);
   await expect(page.getByRole("heading", { name: "You cannot open this screen" })).toBeVisible();
@@ -68,7 +77,7 @@ test("on the dealing desk an order is approved by a second person, never its pre
 }) => {
   await signIn(page, "admin@finvest.test");
   await page.getByRole("button", { name: "Use passkey" }).click();
-  await expect(page).not.toHaveURL(/\/sign-in/);
+  await landed(page);
   await visit(page, "/dealing-desk");
   await page.getByRole("button", { name: "Prepare an order" }).click();
   const form = page.getByRole("form", { name: "Prepare an order" });
