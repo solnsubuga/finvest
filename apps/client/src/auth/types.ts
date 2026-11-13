@@ -25,6 +25,7 @@ export type AuthErrorCode =
   | "phone_taken"
   | "leaked_password"
   | "expired"
+  | "cancelled"
   | "unavailable";
 
 export class AuthError extends Error {
@@ -56,6 +57,18 @@ export type LoginChallenge = {
   methods: SecondStep[];
 };
 
+/**
+ * What a client scans or types into an authenticator app. The server makes
+ * the key. The app shows it once, during set-up, and never stores it.
+ */
+export type AuthenticatorSetup = {
+  setupId: string;
+  /** The key in base32, for typing by hand when the QR code cannot be scanned. */
+  key: string;
+  /** The same key as an otpauth:// address, for the QR code and for opening an app. */
+  uri: string;
+};
+
 export interface AuthClient {
   /**
    * Sign up, step 1: sends a code by SMS to prove the number. It answers the
@@ -81,6 +94,25 @@ export interface AuthClient {
   sendLoginCode(loginId: string): Promise<void>;
   verifyWithCode(loginId: string, code: string): Promise<Session>;
 
+  /**
+   * The second steps the signed-in client has set up, strongest first, in the
+   * same shape as `LoginChallenge.methods`. SMS is always there.
+   */
+  listSecondSteps(): Promise<SecondStep[]>;
+  /**
+   * Creates a passkey on this device and saves its public half to the
+   * account. Fails with `cancelled` when the client dismisses the device
+   * prompt, and nothing is saved.
+   */
+  addPasskey(): Promise<void>;
+  /** Authenticator app set-up, step 1: a fresh key. Nothing is switched on yet. */
+  startAuthenticatorSetup(): Promise<AuthenticatorSetup>;
+  /**
+   * Authenticator app set-up, step 2: a code from the app proves the key was
+   * saved. Only then does the app become a way to log in.
+   */
+  confirmAuthenticatorSetup(setupId: string, code: string): Promise<void>;
+
   signOut(): Promise<void>;
 }
 
@@ -90,6 +122,7 @@ const messages: Record<AuthErrorCode, string> = {
   phone_taken: "This number already has a Finvest account. Log in instead.",
   leaked_password:
     "This password has appeared in a known leak, so it is not safe to use. Choose a different one.",
+  cancelled: "Nothing was added. You can try again when you are ready.",
   expired: "That took too long, so we stopped for your safety. Please start again.",
   unavailable: "We could not reach Finvest. Check your connection and try again.",
 };
