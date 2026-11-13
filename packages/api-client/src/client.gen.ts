@@ -20,6 +20,11 @@ export const AuthenticatorState = z.object({
 });
 export type AuthenticatorState = z.infer<typeof AuthenticatorState>;
 
+export const Put = z.object({
+  photo: Upload,
+});
+export type Put = z.infer<typeof Put>;
+
 export const PaymentsBankTransferPost = z.object({
   amount_minor: z.number().int(),
   bank_name: z.string(),
@@ -35,6 +40,9 @@ export const CategoryChannels = z.object({
   channels: z.array(z.enum(["push", "sms", "email"])),
 });
 export type CategoryChannels = z.infer<typeof CategoryChannels>;
+
+export const CheckStatus = z.enum(["draft", "submitted", "needs_review", "with_compliance", "awaiting_client", "approved", "rejected"]);
+export type CheckStatus = z.infer<typeof CheckStatus>;
 
 export const ConversationItem = z.object({
   created_at: z.string(),
@@ -62,6 +70,50 @@ export const ClientChat = z.object({
   unread: z.number().int(),
 });
 export type ClientChat = z.infer<typeof ClientChat>;
+
+export const PhotoKind = z.enum(["front", "back", "selfie"]);
+export type PhotoKind = z.infer<typeof PhotoKind>;
+
+export const ClientPhoto = z.object({
+  byte_size: z.number().int(),
+  content_type: z.string(),
+  kind: PhotoKind,
+});
+export type ClientPhoto = z.infer<typeof ClientPhoto>;
+
+export const DetailsBody = z.object({
+  date_of_birth: z.string(),
+  document_expires_on: z.string(),
+  document_number: z.string(),
+  given_names: z.string(),
+  surname: z.string(),
+  tin: z.string().nullable().optional(),
+});
+export type DetailsBody = z.infer<typeof DetailsBody>;
+
+export const DocumentType = z.enum(["national_id", "passport", "driving_permit", "refugee_id"]);
+export type DocumentType = z.infer<typeof DocumentType>;
+
+export const ClientCheck = z.object({
+  account_number: z.string().nullable(),
+  client_message: z.string().nullable(),
+  details: DetailsBody.nullable(),
+  details_confirmed: z.boolean(),
+  document_country: z.string(),
+  document_type: DocumentType,
+  id: z.string(),
+  missing: z.array(z.string()),
+  photos: z.array(ClientPhoto),
+  retake_photos: z.array(PhotoKind),
+  status: CheckStatus,
+  submitted_at: z.string().nullable(),
+});
+export type ClientCheck = z.infer<typeof ClientCheck>;
+
+export const ClientCheckEnvelope = z.object({
+  check: ClientCheck.nullable(),
+});
+export type ClientCheckEnvelope = z.infer<typeof ClientCheckEnvelope>;
 
 export const ClientComplaint = z.object({
   category: z.enum(["payments", "withdrawals", "investments", "identity", "account", "fees", "service", "other"]),
@@ -141,6 +193,12 @@ export const ConfirmCode = z.object({
   code: z.string(),
 });
 export type ConfirmCode = z.infer<typeof ConfirmCode>;
+
+export const DocumentBody = z.object({
+  document_country: z.string(),
+  document_type: DocumentType,
+});
+export type DocumentBody = z.infer<typeof DocumentBody>;
 
 export const DocumentItem = z.object({
   byte_size: z.number().int().nullable(),
@@ -893,6 +951,63 @@ export const operations = {
     idempotent: true,
     status: 201,
     response: SavingView,
+  },
+  "GET /client/identity-check": {
+    method: "GET",
+    path: "/client/identity-check",
+    params: z.object({}),
+    query: z.object({}),
+    body: null,
+    bodyKind: null,
+    idempotent: false,
+    status: 200,
+    response: ClientCheckEnvelope,
+  },
+  "PUT /client/identity-check/details": {
+    method: "PUT",
+    path: "/client/identity-check/details",
+    params: z.object({}),
+    query: z.object({}),
+    body: DetailsBody,
+    bodyKind: "json",
+    idempotent: false,
+    status: 200,
+    response: ClientCheck,
+  },
+  "PUT /client/identity-check/document": {
+    method: "PUT",
+    path: "/client/identity-check/document",
+    params: z.object({}),
+    query: z.object({}),
+    body: DocumentBody,
+    bodyKind: "json",
+    idempotent: false,
+    status: 200,
+    response: ClientCheck,
+  },
+  "PUT /client/identity-check/photos/{kind}": {
+    method: "PUT",
+    path: "/client/identity-check/photos/{kind}",
+    params: z.object({
+    kind: PhotoKind,
+  }),
+    query: z.object({}),
+    body: Put,
+    bodyKind: "multipart",
+    idempotent: false,
+    status: 200,
+    response: ClientCheck,
+  },
+  "POST /client/identity-check/submit": {
+    method: "POST",
+    path: "/client/identity-check/submit",
+    params: z.object({}),
+    query: z.object({}),
+    body: null,
+    bodyKind: null,
+    idempotent: false,
+    status: 200,
+    response: ClientCheck,
   },
   "GET /client/insights": {
     method: "GET",
