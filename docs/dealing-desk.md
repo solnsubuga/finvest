@@ -62,11 +62,12 @@ Migration 0080 adds `dealing_orders`. These hold even if application code is wro
 | What an order is for never changes | The API role can update only the decision and result columns |
 | A result is whole, no larger than the order, and matures after it settles | Check constraints |
 | No order is removed | The trigger refuses DELETE and TRUNCATE for every role |
-| No order is settled yet | The trigger refuses it until the holdings tables and the ledger entry exist |
+| An order is settled by someone other than whoever recorded its result | The trigger, and a check constraint (migration 0081) |
+| A settled order has exactly the ledger entry and the bills its result shows | The trigger checks the entry's source, date and `bank.trust` and `dealing.bills` lines, and the lot or sale lines, before the order may be marked settled |
 
 Every step writes an audit event in the same transaction.
 
-The smallest step an order accepts is UGX 100,000 or $1,000, a working value until the primary dealer confirms it. While no bills are recorded as held, every sale is refused.
+The smallest step an order accepts is UGX 100,000 or $1,000, a working value until the primary dealer confirms it. A sale is refused for more face value than the desk holds.
 
 ### How much to bid for
 
@@ -89,6 +90,31 @@ A lot is one purchase: face value, cost and maturity date. Nothing is revalued d
 | Maturity | The issuer pays the face value. The income is face value minus cost. Refused before the maturity date. |
 
 The maturity of a client's investment, with rollover and payout, belongs to the investments module. This module handles only the maturity of the bills at the custodian.
+
+### Settling an order
+
+Confirming a recorded result settles the order in one transaction: the journal entry, the lot bought or the parts of lots a sale took, and the order marked settled. Migration 0081 adds `dealing_lots` and `dealing_lot_sales`.
+
+| Order | Debit | Credit |
+| --- | --- | --- |
+| Purchase | `dealing.bills`, the cost | `bank.trust`, the cost |
+| Sale | `bank.trust`, the proceeds | `dealing.bills`, the cost released |
+| | `dealing.sale_losses`, any shortfall | `dealing.sale_gains`, any excess |
+
+The entry is dated on the settlement date, points back at the order (`dealing.order`), and has a fixed idempotency key made from the order's ID. A purchase the trust bank account cannot pay for is refused, and so is a settlement date in a closed day.
+
+A sale names the maturity date of the bills sold, on the custodian's note. It takes face value from the lots of that product and maturity, oldest purchase first. A loss on a sale is booked as Finvest's own expense until the owner decides who bears it (see the open question in [decisions.md](decisions.md)).
+
+What the database holds for bills:
+
+| Rule | How |
+| --- | --- |
+| Lots and sale lines are written only while a second person settles their order | A trigger on both tables checks the order and the person signed in |
+| A lot is exactly what its purchase recorded | The same trigger compares every figure |
+| A sale takes bills of the instrument it recorded, and never more than a lot still holds | The same trigger, under a two-key advisory lock on the lot, so two sales at once are checked one after the other |
+| Nothing about bills held is changed or removed | The trigger refuses UPDATE, DELETE and TRUNCATE for every role |
+
+`dealing.holdings` answers what is held: `lots_of` for one instrument, `face_held`, `holdings_on(session, on)` for each instrument at the end of a day, and `expected_bank_movements(session, date_from=, date_to=)` for the day close. A lot counts from its settlement date until the day before it matures. The worker can read all of these.
 
 ## The liquidity buffer
 
@@ -121,13 +147,13 @@ The values are from the design canvas and are awaiting the owner's confirmation.
 
 ## How it joins the other modules
 
-Agreed with the investing, and the payouts and reconciliation, threads on 13 November 2026. None of it is built yet.
+Agreed with the investing, and the payouts and reconciliation, threads on 13 November 2026. The reconciliation part is built. The rest is not yet.
 
 - **Investments.** The desk reads `investments.service.owed_by_product`, `running_investments` and `maturing`. It keeps allocations in its own tables, keyed by investment ID, and follows `investments.started`, `investments.matured`, `investments.rolled_over` and `investments.withdrawn_early`.
 - **Early withdrawal.** Investments owns the request, the pricing and the client's ledger entries. It calls `dealing.service.fund_early_withdrawal`, and creates the payout at once or when the desk reports `dealing.withdrawal_funded`.
 - **Payouts.** Payouts knows nothing about the buffer. The desk's cash is in the same trust bank account that payouts leave from.
-- **Reconciliation.** Every purchase, sale and maturity is a ledger entry on `bank.trust`, effective on its value date. The desk exposes `dealing.service.holdings_on(date)`, with face value and custodian references for each instrument, and `dealing.service.expected_bank_movements(date_from, date_to)` so the day close can match the bank statement and the custodian statement.
+- **Reconciliation.** Every purchase, sale and maturity is a ledger entry on `bank.trust`, effective on its value date. The desk exposes `dealing.holdings.holdings_on(session, on)`, with face value, cost and custodian references for each instrument in minor units, and `dealing.holdings.expected_bank_movements(session, date_from=, date_to=)` so the day close can match the bank statement and the custodian statement.
 
 ## Not built yet
 
-HTTP routes for the order commands, settling an order, the tables for bills held and allocations, the ledger entries for purchases, sales and maturities, the two-person change to the buffer rules, the custodian statement comparison, the allocation report, and the console screen.
+HTTP routes for the order commands, allocations, the maturity of bills and its ledger entry, the two-person change to the buffer rules, the custodian statement comparison and the allocation report. The console screen runs on sample data until the routes exist.
