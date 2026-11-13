@@ -192,7 +192,7 @@ resource "digitalocean_uptime_check" "api" {
   count = length(var.alert_emails) > 0 ? 1 : 0
 
   name    = "${local.name}-api"
-  target  = "https://${var.hostnames.api}/health"
+  target  = "https://${var.hostnames.api}/health/ready"
   type    = "https"
   regions = ["eu_west", "us_east"]
 }

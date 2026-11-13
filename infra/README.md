@@ -15,7 +15,7 @@ Each environment (staging and production) is one Terraform root in `terraform/en
 | Documents | A private, versioned Spaces bucket for ID photos, receipts and statements, with CORS for presigned uploads from the app and console. Protected from `terraform destroy`. |
 | DNS and edge | Proxied Cloudflare records for every hostname. Production also owns the zone settings: Full (strict) TLS, HTTPS only, TLS 1.2 minimum. |
 | Back office | Cloudflare Access in front of the console, so only listed staff emails reach it, on top of the console's own password and passkey sign in. Required in production: a plan fails without staff emails. Optional in staging. |
-| Alerts | Uptime check on `https://<api>/health`, and CPU and disk alerts on the host, when `alert_emails` is set. |
+| Alerts | Uptime check on `https://<api>/health/ready`, and CPU and disk alerts on the host, when `alert_emails` is set. |
 
 | Address | Production | Staging |
 | --- | --- | --- |
