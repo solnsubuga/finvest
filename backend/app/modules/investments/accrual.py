@@ -22,7 +22,7 @@ import structlog
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.modules.investments.domain.interest import Accrual, posting_due
+from app.modules.investments.domain.interest import Accrual, day_accrual, days_earned, posting_due
 from app.modules.investments.holdings import (
     MAX_PAGE_SIZE,
     Investment,
@@ -31,6 +31,7 @@ from app.modules.investments.holdings import (
 )
 from app.modules.ledger import service as ledger
 from app.modules.ledger.domain.entries import AccountKind, AccountSpec, EntryDraft, credit, debit
+from app.modules.notifications import contract as notifications
 from app.shared.actors import Actor
 from app.shared.business_day import business_date
 from app.shared.clock import Clock
@@ -204,6 +205,76 @@ async def finish_run(session: AsyncSession, run_date: date, clock: Clock) -> dic
             },
         )
     return {currency.value: behind for currency, behind in counts.items()}
+
+
+# The clients whose investments were paid up to the run date, a page at a time in client order.
+# A matured investment counts: its last day is paid on its maturity date.
+_EARNED_ON = "i.accrued_through = :run_date AND i.status IN ('active', 'matured')"
+_EARNERS = text(
+    f"SELECT DISTINCT i.client_id FROM investments i WHERE {_EARNED_ON} "  # noqa: S608
+    "AND i.client_id > :after ORDER BY i.client_id LIMIT :limit"
+)
+_EARNINGS_OF = select_investments(
+    f"WHERE {_EARNED_ON} AND i.client_id = ANY(CAST(:clients AS text[])) ORDER BY i.id"
+)
+
+
+@dataclass(frozen=True)
+class Told:
+    """One page of telling clients what they earned. `last_client` is None once none are left."""
+
+    last_client: str | None
+    told: int
+
+
+async def tell_earnings(
+    session: AsyncSession, run_date: date, clock: Clock, *, after: str = "", limit: int = BATCH
+) -> Told:
+    """Tell the next clients, in client order after `after`, what they earned on `run_date`.
+    Worker only.
+
+    One message per client and currency: the day's interest after tax across their
+    investments, the same `interest_today` the app shows. The key is the day and the
+    currency, so a retried run tells nobody twice. A client whose day earned nothing net is
+    not told.
+    """
+    clients = [
+        str(row.client_id)
+        for row in (
+            await session.execute(_EARNERS, {"run_date": run_date, "after": after, "limit": limit})
+        ).all()
+    ]
+    if not clients:
+        return Told(last_client=None, told=0)
+    earned: dict[tuple[str, Currency], tuple[int, Money]] = {}
+    for row in (
+        await session.execute(_EARNINGS_OF, {"run_date": run_date, "clients": clients})
+    ).all():
+        investment = investment_from_row(row)
+        if investment.start_date is None:
+            continue
+        days = days_earned(investment.start_date, run_date, investment.term_days)
+        if days <= 0:
+            continue
+        net = day_accrual(investment.terms, days).net
+        key = (investment.client_id, investment.amount.currency)
+        count, total = earned.get(key, (0, Money.zero(investment.amount.currency)))
+        earned[key] = (count + 1, total + net)
+    told = 0
+    now = clock.now()
+    for (client_id, currency), (count, total) in sorted(earned.items()):
+        if total.minor <= 0:
+            continue
+        if await notifications.notify(
+            session,
+            event_name="interest_earned",
+            client_id=client_id,
+            idempotency_key=f"{run_date.isoformat()}:{currency.value}",
+            variables={"amount": total, "count": count},
+            now=now,
+        ):
+            told += 1
+    return Told(last_client=clients[-1], told=told)
 
 
 async def interest_runs(
