@@ -84,6 +84,8 @@ export type AuthErrorCode =
 
 export class AuthError extends Error {
   readonly code: AuthErrorCode;
+  /** For `rate_limited`: how long the API asked us to wait, when it said. */
+  retryAfterSeconds: number | null = null;
 
   constructor(code: AuthErrorCode) {
     super(code);
@@ -113,6 +115,10 @@ export const AUTH_ERROR_MESSAGES: Record<AuthErrorCode, string> = {
 
 export function authErrorMessage(error: unknown): string {
   const code = error instanceof AuthError ? error.code : "unavailable";
+  if (error instanceof AuthError && code === "rate_limited" && error.retryAfterSeconds) {
+    const minutes = Math.max(1, Math.ceil(error.retryAfterSeconds / 60));
+    return `Too many attempts. Try again in ${minutes} minute${minutes === 1 ? "" : "s"}.`;
+  }
   return AUTH_ERROR_MESSAGES[code];
 }
 
