@@ -1,5 +1,5 @@
 import { Platform } from "react-native";
-import type { ClientInvestmentOut, PaymentView, Upload } from "@finvest/api-client/client";
+import type { BankTransferDetails, ClientInvestmentOut, PaymentView, Upload } from "@finvest/api-client/client";
 
 import { api, ApiError } from "@/api/http";
 
@@ -222,9 +222,33 @@ export function createApiPaymentsClient(): PaymentsClient {
       }
     },
 
-    async getBankInstructions() {
-      // The API has no route for the bank details yet (docs/payments.md, "Not built yet").
-      throw new PaymentError("bank_details_missing");
+    async getBankInstructions(payableId) {
+      let details: BankTransferDetails;
+      try {
+        details = await api("GET /client/investments/{investment_id}/bank-transfer-details", {
+          params: { investment_id: payableId },
+        });
+      } catch (error) {
+        // No account is set up yet for the investment's currency: the API says so with a 503.
+        if (error instanceof ApiError && error.code === "unavailable" && error.status === 503) {
+          throw new PaymentError("bank_details_missing");
+        }
+        throw await whyRefused(payableId, error);
+      }
+      try {
+        const payable = await payableFor(payableId);
+        return {
+          // The amount to send is the investment's, as the API states it on the details.
+          payable: { ...payable, amount: details.amount },
+          bankName: details.bank_name,
+          accountName: details.account_name,
+          accountNumber: details.account_number,
+          branch: details.branch,
+          reference: details.reference,
+        };
+      } catch (error) {
+        throw toPaymentError(error);
+      }
     },
 
     async submitBankReceipt(submission) {

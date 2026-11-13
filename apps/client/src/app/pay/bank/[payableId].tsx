@@ -11,7 +11,7 @@ import { Title, Txt } from "@/components/Txt";
 import { formatMoney } from "@/payments/format";
 import { Loading } from "@/payments/Parts";
 import { usePayments } from "@/payments/PaymentsProvider";
-import { BankInstructions, describePaymentError } from "@/payments/types";
+import { BankInstructions, describePaymentError, openPaymentHref } from "@/payments/types";
 import { colors, fontSizes } from "@/theme";
 
 /** One bank detail with its own Copy button, because these get typed into a banking app. */
@@ -58,12 +58,21 @@ export default function BankDetails() {
     let live = true;
     client.getBankInstructions(payableId).then(
       (found) => live && setInstructions(found),
-      (caught) => live && setLoadError(describePaymentError(caught)),
+      (caught) => {
+        if (!live) return;
+        // A payment is already under way: show it instead of details for a second one.
+        const open = openPaymentHref(caught);
+        if (open) {
+          router.replace(open);
+          return;
+        }
+        setLoadError(describePaymentError(caught));
+      },
     );
     return () => {
       live = false;
     };
-  }, [client, payableId]);
+  }, [client, payableId, router]);
 
   const rows = instructions
     ? [
