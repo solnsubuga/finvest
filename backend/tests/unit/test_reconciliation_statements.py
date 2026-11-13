@@ -148,14 +148,46 @@ def test_an_empty_statement_is_valid_when_the_balance_did_not_move() -> None:
 
 @pytest.mark.parametrize(
     ("text", "minor"),
-    [("1500000", 1_500_000), ("1,500,000", 1_500_000), ("1,500,000.00", 1_500_000), (" 75 ", 75)],
+    [
+        ("1500000", 1_500_000),
+        ("1,500,000", 1_500_000),
+        ("1,500,000.00", 1_500_000),
+        ("1,500", 1_500),
+        ("999,999", 999_999),
+        (" 75 ", 75),
+    ],
 )
 def test_shilling_amounts_are_parsed_exactly(text: str, minor: int) -> None:
     assert parse_amount(text, Currency.UGX) == ugx(minor)
 
 
 @pytest.mark.parametrize(
-    "text", ["", "1.5", "1500000.01", "-5", "+5", "1e3", "١٢٣", "1 500", "0x10", "1.0.0", "."]
+    "text",
+    [
+        "",
+        "1.5",
+        "1500000.01",
+        "-5",
+        "+5",
+        "1e3",
+        "١٢٣",
+        "1 500",
+        "0x10",
+        "1.0.0",
+        ".",
+        "1500,00",
+        "1,5,0",
+        "1,50",
+        ",500",
+        "1,,500",
+        "1500,000",
+        "1,500,00",
+        "1,5000",
+        "1,500,",
+        "0,5",
+        "1.500,00",
+        "12,34,567",
+    ],
 )
 def test_other_shilling_amounts_are_refused(text: str) -> None:
     with pytest.raises(InvalidStatement):
@@ -164,8 +196,9 @@ def test_other_shilling_amounts_are_refused(text: str) -> None:
 
 def test_dollar_amounts_keep_their_cents() -> None:
     assert parse_amount("1,234.5", Currency.USD) == Money(123_450, Currency.USD)
-    with pytest.raises(InvalidStatement):
-        parse_amount("1.005", Currency.USD)
+    for refused in ("1.005", "12,34.50", "1234,50"):
+        with pytest.raises(InvalidStatement):
+            parse_amount(refused, Currency.USD)
 
 
 # --- Fingerprints -----------------------------------------------------------------------------

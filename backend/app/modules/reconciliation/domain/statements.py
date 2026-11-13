@@ -10,6 +10,7 @@ from __future__ import annotations
 import csv
 import hashlib
 import io
+import re
 from collections import Counter
 from collections.abc import Mapping
 from dataclasses import dataclass
@@ -19,6 +20,7 @@ from enum import StrEnum
 from app.shared.money import Currency, Money, MoneyError
 
 MAX_LINES = 50_000
+_GROUPED = re.compile(r"[0-9]{1,3}(,[0-9]{3})+(\.[0-9]+)?")
 MAX_TEXT = 200
 
 
@@ -124,10 +126,18 @@ class CsvFormat:
 def parse_amount(text: str, currency: Currency) -> Money:
     """Parse "1,500,000" or "1500000.00" exactly. Refuses signs, exponents and stray text.
 
+    A comma is accepted only as a thousands separator. A comma used as a decimal mark, as in
+    "1500,00", is refused, because reading it as 150,000 would be a hundredfold error.
+
     Trailing zero decimals are accepted for a currency with no minor unit, because bank exports
     print shillings as "1,500,000.00". Any non-zero fraction of a shilling is refused.
     """
-    cleaned = text.strip().replace(",", "")
+    cleaned = text.strip()
+    if "," in cleaned:
+        # Commas only as thousands separators: "1,500,000", never "1500,00" or "1,5,0".
+        if _GROUPED.fullmatch(cleaned) is None:
+            raise InvalidStatement("statement_amount_invalid")
+        cleaned = cleaned.replace(",", "")
     if currency.minor_digits == 0 and "." in cleaned:
         whole, _, fraction = cleaned.partition(".")
         if fraction.strip("0"):
