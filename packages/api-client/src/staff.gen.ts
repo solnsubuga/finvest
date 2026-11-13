@@ -266,6 +266,38 @@ export const EnrolmentView = z.object({
 });
 export type EnrolmentView = z.infer<typeof EnrolmentView>;
 
+export const JsonValue = z.record(z.string(), z.unknown());
+export type JsonValue = z.infer<typeof JsonValue>;
+
+export const EventView = z.object({
+  action: z.string(),
+  actor_id: z.string().nullable(),
+  actor_kind: z.enum(["client", "staff", "system", "provider", "anonymous"]),
+  actor_name: z.string().nullable(),
+  category: z.enum(["change", "access", "approval", "operator_control", "security"]),
+  correlation_id: z.string().nullable(),
+  details: z.record(z.string(), z.unknown()),
+  id: z.string(),
+  occurred_at: z.string(),
+  outcome: z.enum(["succeeded", "denied", "failed"]),
+  reason: z.string().nullable(),
+  resource_id: z.string().nullable(),
+  resource_type: z.string(),
+});
+export type EventView = z.infer<typeof EventView>;
+
+export const EventPage = z.object({
+  events: z.array(EventView),
+  next_cursor: z.string().nullable(),
+});
+export type EventPage = z.infer<typeof EventPage>;
+
+export const Facets = z.object({
+  actions: z.array(z.string()),
+  resource_types: z.array(z.string()),
+});
+export type Facets = z.infer<typeof Facets>;
+
 export const Figure = z.enum(["clients", "verified_identities", "running_investments", "pending_orders", "invested", "interest_before_tax"]);
 export type Figure = z.infer<typeof Figure>;
 
@@ -650,7 +682,7 @@ export type StaffSendMessage = z.infer<typeof StaffSendMessage>;
 
 export const StaffSessionView = z.object({
   name: z.string(),
-  permissions: z.array(z.enum(["overview.view", "review_queue.view", "identity_checks.view", "maturities.view", "support.view", "support.reply", "complaints.view", "complaints.manage", "complaints.close", "clients.view", "money_movement.view", "reconciliation.view", "investments.view", "automatic_investing.view", "goals.view", "dealing_desk.view", "finance.view", "products.view", "rates.view", "compliance.view", "team.view", "reports.view", "settings.view", "wordings.change", "migration.view", "bank_transfers.change", "migration.import", "migration.sign_off"])),
+  permissions: z.array(z.enum(["overview.view", "review_queue.view", "identity_checks.view", "maturities.view", "support.view", "support.reply", "complaints.view", "complaints.manage", "complaints.close", "clients.view", "money_movement.view", "reconciliation.view", "investments.view", "automatic_investing.view", "goals.view", "dealing_desk.view", "finance.view", "products.view", "rates.view", "compliance.view", "team.view", "reports.view", "audit.view", "settings.view", "wordings.change", "migration.view", "bank_transfers.change", "migration.import", "migration.sign_off"])),
   role: z.enum(["admin", "operations", "finance", "compliance", "support"]),
   staff_id: z.string(),
 });
@@ -702,6 +734,63 @@ export type WordingList = z.infer<typeof WordingList>;
 
 /** Every route, by method and path, with what it takes and what it answers. */
 export const operations = {
+  "GET /staff/audit/events": {
+    method: "GET",
+    path: "/staff/audit/events",
+    params: z.object({}),
+    query: z.object({
+    cursor: z.string().nullable().optional(),
+    limit: z.number().int().optional(),
+    category: z.enum(["change", "access", "approval", "operator_control", "security"]).nullable().optional(),
+    action: z.string().nullable().optional(),
+    outcome: z.enum(["succeeded", "denied", "failed"]).nullable().optional(),
+    actor_kind: z.enum(["client", "staff", "system", "provider", "anonymous"]).nullable().optional(),
+    actor_id: z.string().nullable().optional(),
+    resource_type: z.string().nullable().optional(),
+    resource_id: z.string().nullable().optional(),
+    correlation_id: z.string().nullable().optional(),
+    since: z.string().nullable().optional(),
+    until: z.string().nullable().optional(),
+  }),
+    body: null,
+    bodyKind: null,
+    idempotent: false,
+    status: 200,
+    response: EventPage,
+  },
+  "GET /staff/audit/events.csv": {
+    method: "GET",
+    path: "/staff/audit/events.csv",
+    params: z.object({}),
+    query: z.object({
+    category: z.enum(["change", "access", "approval", "operator_control", "security"]).nullable().optional(),
+    action: z.string().nullable().optional(),
+    outcome: z.enum(["succeeded", "denied", "failed"]).nullable().optional(),
+    actor_kind: z.enum(["client", "staff", "system", "provider", "anonymous"]).nullable().optional(),
+    actor_id: z.string().nullable().optional(),
+    resource_type: z.string().nullable().optional(),
+    resource_id: z.string().nullable().optional(),
+    correlation_id: z.string().nullable().optional(),
+    since: z.string().nullable().optional(),
+    until: z.string().nullable().optional(),
+  }),
+    body: null,
+    bodyKind: null,
+    idempotent: false,
+    status: 200,
+    response: null,
+  },
+  "GET /staff/audit/facets": {
+    method: "GET",
+    path: "/staff/audit/facets",
+    params: z.object({}),
+    query: z.object({}),
+    body: null,
+    bodyKind: null,
+    idempotent: false,
+    status: 200,
+    response: Facets,
+  },
   "GET /staff/complaints": {
     method: "GET",
     path: "/staff/complaints",
