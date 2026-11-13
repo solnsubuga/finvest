@@ -296,6 +296,11 @@ ROWS = {
         "'-Nabc0000000000000B1', now(), 'Sweep')",
         "refusing to drop pot transfers",
     ),
+    "0009_claims": (
+        "INSERT INTO identity_clients (id, phone, status, created_at) VALUES "
+        "('-Nabc0000000000000A1', '+256772123456', 'unclaimed', now())",
+        "refusing to drop unclaimed accounts or claim codes",
+    ),
 }
 
 

@@ -38,7 +38,7 @@ _REFUSALS: dict[int | str, dict[str, object]] = {
 
 client_router = APIRouter(prefix="/client/goals", tags=["goals"], responses=_REFUSALS)
 staff_router = APIRouter(prefix="/staff/goals", tags=["goals"], responses=_REFUSALS)
-StaffWithView = Annotated[StaffSession, Depends(require_permission("investments.view"))]
+StaffWithView = Annotated[StaffSession, Depends(require_permission("goals.view"))]
 
 AmountMinor = Annotated[int, Field(gt=0, le=10**15)]
 # JSON has no date or enum type, so these are read from their text forms. Amounts stay strict.

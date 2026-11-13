@@ -38,6 +38,7 @@ json.dump({
     "admin_access_emails": items("ADMIN_ACCESS_EMAILS"),
     "alert_emails": items("ALERT_EMAILS"),
     "cloudflare_account_id": os.environ.get("CLOUDFLARE_ACCOUNT_ID", ""),
+    "client_app_public": os.environ.get("CLIENT_APP_PUBLIC", "") == "true",
 }, __import__("sys").stdout)
 PY
     ;;

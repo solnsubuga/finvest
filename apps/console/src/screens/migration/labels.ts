@@ -100,7 +100,7 @@ export function lineResult(line: TotalLine): LineResult {
   if (line.old === null) return "not_entered";
   // Compared as numbers, so "0100" and "100" agree. Never as text, never as floats.
   if (BigInt(line.old) === BigInt(line.new)) return "agrees";
-  if (!line.signedOff) return "look_into";
+  if (!line.signedOff || line.signedOff.state === "rejected") return "look_into";
   return line.signedOff.state === "approved" ? "signed_off" : "waiting";
 }
 

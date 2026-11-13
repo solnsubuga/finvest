@@ -46,9 +46,9 @@ A failed job keeps the check red for 24 hours. That is on purpose: a failed mone
 | API down | `/health/ready` fails from the uptime checker | `ALERT_EMAILS` |
 | Background work stopped | `/health/operations` fails from the uptime checker | `ALERT_EMAILS` |
 | Host CPU, host disk | Over the thresholds in `infra/terraform/main.tf` | `ALERT_EMAILS` |
-| Database CPU, memory and disk | Not set up yet: asked of the infrastructure thread | `ALERT_EMAILS` |
+| Database CPU, memory and disk | CPU over 85%, memory over 90% or disk over 80% for 10 minutes | `ALERT_EMAILS` |
 
-The uptime and host alerts are made by Terraform (owned by the infrastructure thread). `ALERT_EMAILS` must hold at least two people before launch, so an alert never depends on one person's inbox.
+The uptime, host and database alerts are made by Terraform (owned by the infrastructure thread). `ALERT_EMAILS` must hold at least two people before launch, so an alert never depends on one person's inbox.
 
 ## First steps when an alert fires
 

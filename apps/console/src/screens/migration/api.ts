@@ -26,14 +26,18 @@ export interface Problem {
 
 /**
  * A difference accepted with a reason. One member of staff proposes it and a
- * different one approves it. Only an approved sign-off clears the difference.
+ * different one approves or rejects it. Only an approved sign-off clears the
+ * difference. A rejected one stays, with its reason, until it is proposed again.
  */
 export interface SignOff {
   id: string;
   reason: string;
-  state: "proposed" | "approved";
+  state: "proposed" | "approved" | "rejected";
   proposedBy: string;
-  approvedBy: string | null;
+  /** Who approved or rejected it. */
+  decidedBy: string | null;
+  /** Why it was rejected. An approval may leave it out. */
+  decisionReason: string | null;
   /** True when the signed-in person proposed it, so they cannot approve it. */
   mine: boolean;
 }
@@ -125,6 +129,11 @@ export type Blocker =
   | "totals_not_confirmed"
   | "difference_not_signed_off";
 
+/**
+ * What the signed-in person may do, as the backend's overview says. `enter_totals` covers
+ * entering and confirming the Finvest 1.0 totals: both routes require `migration.sign_off`,
+ * the same permission that gives `sign_off` (backend/app/modules/migration/api.py).
+ */
 export type Allowed = "run_trial" | "enter_totals" | "sign_off";
 
 export interface Overview {

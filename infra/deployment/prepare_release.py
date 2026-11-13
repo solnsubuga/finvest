@@ -212,6 +212,9 @@ def prepare(output: Path, env: Mapping[str, str]) -> None:
         "FINVEST_CLIENT_PASSKEY_APP_ORIGINS": optional(env, "FINVEST_CLIENT_PASSKEY_APP_ORIGINS") or "[]",
         **storage,
     }
+    # Client sign-up stays closed unless this is exactly "true": production until switch day,
+    # staging except during the pen test weeks (docs/launch.md).
+    api["FINVEST_CLIENT_SIGNUP_OPEN"] = "true" if optional(env, "FINVEST_CLIENT_SIGNUP_OPEN") == "true" else "false"
     if optional(env, "FINVEST_AUTHENTICATOR_KEY"):
         api["FINVEST_AUTHENTICATOR_KEY"] = optional(env, "FINVEST_AUTHENTICATOR_KEY")
 

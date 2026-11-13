@@ -127,6 +127,25 @@ Money that waits shows in the payouts console queue. The client sends it on with
 
 The run publishes `investments.rolled_over` or `investments.matured`. The goals module follows `investments.rolled_over` (consumer `goals.follow_rollover`) to keep a rolled-over saving in its goal. A matured investment carries its maturity entry and exactly one of: the investment it rolled into, the payout, or the reason the money is waiting.
 
+## HTTP routes
+
+The code is `backend/app/modules/investments/api.py`. Amounts are integers in the smallest unit (`amount_minor`), and a request that sends one as text or with a fraction is refused. Client and public responses are built only from after-tax figures, and a unit test checks that no field of those contracts names tax, a gross figure or basis points.
+
+| Route | Who | What |
+| --- | --- | --- |
+| `GET /public/products` | Anyone | Live and paused products with the rate after tax. `Cache-Control: public, max-age=300`, `Access-Control-Allow-Origin: *`. |
+| `GET /public/quote?product=&amount_minor=` | Anyone | The returns calculator: interest after tax and total at maturity, or nulls for an open term. 422 with the field code when the product would not take the amount. |
+| `GET /client/products`, `GET /client/products/{code}/quote` | Signed-in client | The same, for live products only. |
+| `POST /client/investments` | Signed-in client, `Idempotency-Key` | Review and confirm. Body `{product_code, amount_minor, currency, at_maturity?}`. Returns the investment, awaiting payment. |
+| `GET /client/investments`, `GET /client/investments/{id}` | Signed-in client | Their portfolio and one investment, after tax. |
+| `PUT /client/investments/{id}/at-maturity` | Signed-in client | `{at_maturity, destination_id?}`, up to the day before maturity. |
+| `POST /client/investments/{id}/pay-out` | Signed-in client | `{destination_id}`: send on money that matured and is waiting. A refusal from payouts is a 422 on `destination_id` with the payouts code. |
+| `GET /staff/products`, `GET /staff/products/{code}/rates` | `products.view`, `rates.view` | Products with the rate and tax in force and the next approved one, and each product's rate history. |
+| `GET /staff/rate-proposals?status=`, `POST /staff/rate-proposals`, `POST /staff/rate-proposals/{id}/approve`, `/send-back`, `/withdraw` | `rates.view` | Rate changes, with the second person enforced in the database. |
+| `GET /staff/investments?status=&limit=`, `GET /staff/investments/{id}`, `GET /staff/interest-runs` | `investments.view` | Every investment with its tax, and the record of daily runs. |
+
+The permission catalogue has only "view" permissions for now, so proposing and deciding a rate need `rates.view`. That is safe because a rate never takes effect without a second person, but a separate `rates.change` permission may be wanted.
+
 ## What clients see
 
 Clients see the yearly rate after tax and the interest they earn after tax. They never see the tax rate, the tax amount or the rate before tax. In the code, `ClientReturns` and `RateVersion.client_rate_percent` are the only figures a client-facing response is built from, and the service functions `client_products` and `client_quote` are the only ones a client-facing route may call. `client_quote` is the returns calculator and the review screen: what an amount earns after tax if it starts today, and when it matures. The rate shown is a label, rounded to two decimal places. No amount is ever worked out from it.
@@ -191,8 +210,10 @@ Agreed with the payments and payouts threads on 13 November 2026. Starting and d
 
 - **Starting.** The client reviews and confirms, which saves an investment that is awaiting payment. Its ID is the purpose of the deposit. Payments asks `investments.service.payable_investment` for the exact amount before taking a deposit. When the deposit is confirmed, payments publishes `payments.deposit_confirmed`, and the `investments.start_from_deposit` job moves the money from `client.awaiting_start` to `client.holding` and starts the investment.
 - **Maturity.** See [Maturity](#maturity). Payouts finds the handover by the client and the investment ID (`payouts.domain.posting.funding_account`), and owns everything after `create_payout`.
+- **Dealing desk.** It reads the book through `owed_by_product(session, on)`, `running_investments(session, product_code, started_after=None)` and `maturing(session, date_from, date_to)` in `investments.service`, and follows the outbox topics `investments.started`, `investments.matured` and `investments.rolled_over`. Interest in these reads is net of tax, as posted so far.
+- **Saving sources.** An investment the client did not make themselves, from an automatic investing run or a goal's saving rule, carries `source_type` (`autoinvest_run` or `goal_saving`) and `source_id`. Only the worker creates one, at most one per source, through `request_system_investment`, which the automatic investing module writes.
 - **Unwinding.** For a deposit credited by mistake, `investments.service.unwind_investment` will move the principal back to `client.awaiting_start` and reverse interest not yet paid out. It refuses if anything was already paid out.
 
 ## Not built yet
 
-HTTP routes (they need sign-in sessions and permissions), editing a product, a staff refund of money that did not start an investment, early withdrawal, the monthly coupon for open terms, statements, and every screen. The dealing desk is its own module: see [dealing-desk.md](dealing-desk.md).
+Editing a product, a staff refund of money that did not start an investment, early withdrawal, the monthly coupon for open terms, statements, and every screen. The dealing desk is its own module: see [dealing-desk.md](dealing-desk.md).
