@@ -158,6 +158,18 @@ When the buffer pays, the bills behind that investment stay with the desk as a s
 
 The values are from the design canvas and are awaiting the owner's confirmation. The rules are versioned by effective date, and each version is proposed by one member of staff and approved by another. One withdrawal from the buffer can never be set above the floor, so a buffer on its floor always holds enough for one. No version in force is an error, never "no buffer needed".
 
+### Changing the rules
+
+A change is a new version, never an edit. Migration 0083 seeds the shilling rules above from 1 January 2026, and `dealing.buffer` saves every later version.
+
+1. A member of staff proposes the four values, the day they take effect and a reason. The day is later than today, so the rules in force today never change under the desk. A version that repeats the one before it, or starts on a day another version already starts, is refused.
+2. A second member of staff approves it or sends it back with a note. The proposer can withdraw it while nobody has decided. Approval checks the day and the clashes again, because days may pass and other versions may be approved in between.
+3. Approval saves the version in the same transaction. It is never changed or removed.
+
+Only one change per currency waits at a time, so two people never approve conflicting versions side by side. Every step is in the audit trail under `dealing_buffer_rules_proposal`.
+
+The database holds these rules whatever the code does. Nobody approves or sends back their own change, a decided proposal never changes, and a version is saved only for an approved proposal, by the person who approved it, with exactly its values. The worker can read the rules, because it funds early withdrawals, and clients cannot.
+
 ## How it joins the other modules
 
 Agreed with the investing, and the payouts and reconciliation, threads on 13 November 2026. The reconciliation part is built. The rest is not yet.
@@ -169,4 +181,4 @@ Agreed with the investing, and the payouts and reconciliation, threads on 13 Nov
 
 ## Not built yet
 
-HTTP routes for the order commands, allocations, the two-person change to the buffer rules, the custodian statement comparison and the allocation report. The console screen runs on sample data until the routes exist.
+HTTP routes for the order commands, allocations, the buffer rules changes, the custodian statement comparison and the allocation report. The console screen runs on sample data until the routes exist.
