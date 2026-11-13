@@ -38,6 +38,11 @@ import /etc/caddy/upstreams.caddy
 	}
 }
 
+# Search engines list only the production website. Every other address asks to be left out.
+(unlisted) {
+	header X-Robots-Tag "noindex, nofollow"
+}
+
 (private_paths) {
 	@private path_regexp private (?i)(^|/)(\.env[^/]*|\.git)(/|$)|\.(php|bak|old|save|sql|log)$
 	respond @private 404
@@ -47,6 +52,7 @@ import /etc/caddy/upstreams.caddy
 	import origin_tls
 	import updating
 	import common_headers
+	import unlisted
 	encode zstd gzip
 	# The API answers JSON only, so nothing it returns may run script or be framed.
 	header ?Content-Security-Policy "default-src 'none'; frame-ancestors 'none'"
@@ -60,6 +66,7 @@ import /etc/caddy/upstreams.caddy
 	import origin_tls
 	import updating
 	import common_headers
+	import unlisted
 	encode zstd gzip
 	# Scripts and styles come from this origin; Cloudflare Web Analytics, which Cloudflare may add
 	# to the pages it serves, reports to cloudflareinsights.com. Data comes only from the API.
@@ -74,6 +81,7 @@ import /etc/caddy/upstreams.caddy
 {$FINVEST_APP_DOMAIN} {
 	import origin_tls
 	import common_headers
+	import unlisted
 	header Cache-Control no-store
 	respond "Finvest is coming soon." 503
 }

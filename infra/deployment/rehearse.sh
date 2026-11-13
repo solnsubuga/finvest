@@ -118,4 +118,20 @@ code() { "${curl_local[@]}" --resolve "$1:$port:127.0.0.1" --output /dev/null --
 [[ $(code app-staging.finvestug.com /) == 503 ]]
 [[ $(code "$host" /.env) == 404 ]]
 [[ $(code unknown.example /) == 000 ]]
+# Staging asks search engines to leave every address out.
+for name in staging.finvestug.com admin-staging.finvestug.com "$host"; do
+  "${curl_local[@]}" --resolve "$name:$port:127.0.0.1" --output /dev/null --dump-header - \
+    "https://$name:$port/" | grep -qi '^x-robots-tag: noindex'
+done
+
+echo '== A release that does not name its environment is refused'
+bad="$work/opt-finvest/releases/unnamed"
+cp -R "$work/opt-finvest/releases/second" "$bad"
+sed -i '/^FINVEST_ENVIRONMENT=/d' "$bad/runtime/worker.env"
+if (cd "$bad" && bash deploy.sh false) > "$work/unnamed.log" 2>&1; then
+  echo 'A release without FINVEST_ENVIRONMENT must be refused' >&2
+  exit 1
+fi
+grep -q 'does not say FINVEST_ENVIRONMENT=staging' "$work/unnamed.log"
+[[ $(serving) == green && $(ready) == 200 ]]
 echo 'Rehearsal passed.'
