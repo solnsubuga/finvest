@@ -21,7 +21,7 @@ Infrastructure as code for Finvest, modelled on Fidiba's provisioning. Terraform
 | Managed PostgreSQL 17 | `db-s-1vcpu-1gb` | `db-s-1vcpu-2gb` | One node, database `finvest`, daily backups and point in time recovery, rehearsed by the drill in [docs/backup-and-restore.md](../docs/backup-and-restore.md). Only the droplet may connect. |
 | Database roles | Same | Same | `finvest_migrator`, `finvest_app`, `finvest_worker`, created from the host with `backend/db/init-roles.sql` and generated passwords |
 | Spaces bucket and key | `finvest-staging-documents` | `finvest-production-documents` | Private, versioned, read by the console through short-lived links (no browser uploads), and a key limited to the bucket |
-| Cloudflare | Proxied records, Origin CA certificate | Same, plus Access on the back office | Full (strict) TLS from the edge to the host |
+| Cloudflare | Proxied records, Origin CA certificate | Same, plus Access on the back office, and on the client app until switch day | Full (strict) TLS from the edge to the host |
 | GitHub settings | Written into the `staging` environment | Written into `production` | See below |
 | Alerts | When `ALERT_EMAILS` is set | Same | Uptime on `https://<api>/health/ready` and `/health/operations`, host CPU and disk, database CPU, memory and disk. What each alert means: [docs/observability.md](../docs/observability.md) |
 | Tag | `finvest-staging` | `finvest-production` | Tells the environments apart inside the one project |
@@ -128,6 +128,7 @@ Repository variables under **Settings → Secrets and variables → Actions → 
 | `CLOUDFLARE_ACCOUNT_ID` | From the Cloudflare dashboard. Required for production. |
 | `ADMIN_ACCESS_EMAILS` | Staff emails allowed into the back office, comma separated. Required for production. |
 | `ALERT_EMAILS` | Optional, comma separated |
+| `CLIENT_APP_PUBLIC` | Leave unset until switch day. Until then the production client app host lets in only `ADMIN_ACCESS_EMAILS`, through Cloudflare Access, while the API stays public. At step T+75 of [docs/launch.md](../docs/launch.md) set it to `true` and run Provision `production` (plan, then apply) to lift Access from the app host. The back office keeps it. |
 
 ## Provision
 
