@@ -5,7 +5,8 @@ change of status and the ledger entry that goes with it. Nothing here talks to a
 queued payout is picked up by the worker, which reports back through `apply_event`.
 
 `create_payout` is called by the module that owns the money being withdrawn (an investment
-paying out at maturity, or an early withdrawal), which passes the ledger account it is held in.
+paying out at maturity, or an early withdrawal). That module first moves the money into the
+client's "payout pending" account for that piece of business and passes its reference.
 The HTTP command that calls it carries the idempotency key.
 """
 
@@ -19,7 +20,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.modules.audit import service as audit
 from app.modules.audit.domain.events import AuditActor, AuditEvent
 from app.modules.ledger import service as ledger
-from app.modules.ledger.domain.errors import InsufficientFunds, UnknownAccount
+from app.modules.ledger.domain.errors import InsufficientFunds
 from app.modules.payouts import destinations
 from app.modules.payouts.domain import payouts as machine
 from app.modules.payouts.domain import posting
@@ -61,6 +62,7 @@ class PayoutView:
     reviewed_by: str | None
     created_at: datetime
     source_account_id: str
+    source_reference: str
     in_flight_account_id: str
 
     @property
@@ -73,7 +75,7 @@ class PayoutView:
 _COLUMNS = (
     "id, client_id, destination_id, kind, amount_minor, currency, status, business_date, "
     "provider_reference, failure_code, reviewed_by, created_at, source_account_id, "
-    "in_flight_account_id, request_key"
+    "in_flight_account_id, request_key, source_reference"
 )
 _LIMITS = text(
     "SELECT effective_from, currency, mobile_money_per_payout, mobile_money_per_day, "
@@ -89,9 +91,10 @@ _TODAY = text(
 )
 _INSERT = text(
     "INSERT INTO payouts (id, client_id, destination_id, kind, amount_minor, currency, status, "
-    "business_date, source_account_id, in_flight_account_id, request_key, created_at, "
-    "updated_at) VALUES (:id, :client_id, :destination_id, :kind, :amount_minor, :currency, "
-    ":status, :day, :source_account_id, :in_flight_account_id, :request_key, :now, :now)"
+    "business_date, source_account_id, source_reference, in_flight_account_id, request_key, "
+    "created_at, updated_at) VALUES (:id, :client_id, :destination_id, :kind, :amount_minor, "
+    ":currency, :status, :day, :source_account_id, :source_reference, :in_flight_account_id, "
+    ":request_key, :now, :now)"
 )
 _BY_KEY = text(
     f"SELECT {_COLUMNS} FROM payouts "  # noqa: S608 - constant column list
@@ -147,7 +150,7 @@ async def create_payout(
     client_id: str,
     destination_id: str,
     amount: Money,
-    source_account_id: str,
+    source_reference: str,
     request_key: str,
     clock: Clock,
     restricted_since: datetime | None = None,
@@ -162,9 +165,11 @@ async def create_payout(
     the first payout and reserves nothing more. The same key for a different destination,
     amount or source is refused.
 
-    A client transaction can only name its own money as the source, because the ledger hides
-    every other account from it. The system sees every account, so a system caller must pass
-    an account that belongs to `client_id`.
+    The money comes from one place only: the client's "payout pending" account for
+    `source_reference`, where the calling module handed it over (see `posting.funding_account`).
+    The account is found from the client and the reference, never taken as an ID, so a payout
+    cannot be funded from another payout's money in flight, from the failed-payout pot or from
+    another client's account, whoever calls.
     """
     if actor.kind == "staff" or (actor.kind == "client" and actor.id != client_id):
         raise ApplicationError("forbidden")
@@ -172,15 +177,20 @@ async def create_payout(
     today = business_date(now)
     await session.execute(_LOCK_CLIENT, {"client_id": client_id})
 
+    try:
+        funding = posting.funding_account(client_id, source_reference, amount.currency)
+    except ValueError:  # includes the ledger's InvalidEntry
+        raise PayoutRefused("source_not_allowed") from None
+
     saved = (
         await session.execute(_BY_KEY, {"client_id": client_id, "request_key": request_key})
     ).one_or_none()
     if saved is not None:
         first = _view(saved)
-        if (first.destination_id, first.amount, first.source_account_id) != (
+        if (first.destination_id, first.amount, first.source_reference) != (
             destination_id,
             amount,
-            source_account_id,
+            source_reference,
         ):
             raise ApplicationError("idempotency_key_reused")
         return first
@@ -210,17 +220,11 @@ async def create_payout(
     if decision.refusal is not None:
         raise PayoutRefused(decision.refusal.value)
 
-    # In a client transaction the ledger shows only the client's own accounts, so this read
-    # is what stops a request naming someone else's money as its source.
-    try:
-        await ledger.get_balance(session, source_account_id)
-    except UnknownAccount:
-        raise PayoutRefused("source_not_found") from None
-
     payout_id = push_id()
     status = machine.initial_status(needs_review=decision.needs_review)
     try:
         async with session.begin_nested():
+            source = await ledger.open_account(session, funding, clock)
             in_flight = await ledger.open_account(
                 session, posting.in_flight_account(payout_id, client_id, amount.currency), clock
             )
@@ -235,13 +239,14 @@ async def create_payout(
                     "currency": amount.currency,
                     "status": status,
                     "day": today,
-                    "source_account_id": source_account_id,
+                    "source_account_id": source.id,
+                    "source_reference": source_reference,
                     "in_flight_account_id": in_flight.id,
                     "request_key": request_key,
                     "now": now,
                 },
             )
-            terms = PayoutTerms(payout_id, client_id, amount, source_account_id, in_flight.id)
+            terms = PayoutTerms(payout_id, client_id, amount, source.id, in_flight.id)
             await ledger.post_entry(session, posting.reserve(terms, today), clock)
     except InsufficientFunds:
         raise PayoutRefused("insufficient_funds") from None
@@ -386,5 +391,6 @@ def _view(row: Row[Any]) -> PayoutView:
         reviewed_by=row.reviewed_by,
         created_at=row.created_at,
         source_account_id=row.source_account_id,
+        source_reference=row.source_reference,
         in_flight_account_id=row.in_flight_account_id,
     )

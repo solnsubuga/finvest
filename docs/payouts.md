@@ -115,18 +115,20 @@ Migration 0031 adds `withdrawal_limits` and `payouts`. The commands are in `back
 2. Returns the first payout if this `request_key` was already used for the same request, and refuses the key for a different one.
 3. Checks the destination is the client's, approved, past its 24 hours and allowed under a restricted session.
 4. Checks the limits in force on the business day against what already went that day.
-5. Inserts the payout and posts the reserve entry.
+5. Finds the client's handover account for `source_reference`, inserts the payout and posts the reserve entry.
 
-A refusal leaves nothing behind. The codes are `destination_not_approved`, `destination_in_safety_wait`, `destination_not_known_yet`, `amount_not_positive`, `currency_not_supported`, `over_mobile_money_limit`, `over_bank_limit`, `over_daily_limit`, `source_not_found` and `insufficient_funds`.
+A refusal leaves nothing behind. The codes are `destination_not_approved`, `destination_in_safety_wait`, `destination_not_known_yet`, `amount_not_positive`, `currency_not_supported`, `over_mobile_money_limit`, `over_bank_limit`, `over_daily_limit`, `source_not_allowed` and `insufficient_funds`.
+
+A payout is funded from one place only: the client's own `client.payout_pending` account for the `source_reference` the caller names, which is the investment whose money was handed over. The caller never names a ledger account, so a payout cannot be funded from another payout's in-flight money, from the money parked after a failed payout, or from another client. `source_not_allowed` is the refusal for an empty reference.
 
 ### The entries
 
 | Entry | Debit | Credit | Key |
 | --- | --- | --- | --- |
-| `payout.reserve` | Where the money was held | `client.payout_in_flight`, reference the payout | `payout:<id>:reserve` |
+| `payout.reserve` | `client.payout_pending`, reference the investment | `client.payout_in_flight`, reference the payout | `payout:<id>:reserve` |
 | `payout.settle` | Payout in flight | `iotec.wallet` (reference the network) for mobile money, `bank.trust` for a bank account | `payout:<id>:settle` |
 | `payout.park` | Payout in flight | `client.payout_pending` | `payout:<id>:park` |
-| `payout.release` | Payout in flight | Where the money was held | `payout:<id>:release` |
+| `payout.release` | Payout in flight | `client.payout_pending`, reference the investment | `payout:<id>:release` |
 
 Every account but the wallet and the bank is a liability to the same client, so what Finvest owes the client does not change until the provider confirms. The fixed keys mean no step can post twice.
 

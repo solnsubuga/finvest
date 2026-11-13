@@ -6,10 +6,10 @@ made from the payout's ID, so posting the same step twice posts once.
 
 | Entry   | Debit                    | Credit                                   |
 | ------- | ------------------------ | ---------------------------------------- |
-| reserve | where the money was held | the client's payout in flight            |
+| reserve | the handover account     | the client's payout in flight            |
 | settle  | payout in flight         | the wallet or bank account it left from  |
 | park    | payout in flight         | the client's payout pending              |
-| release | payout in flight         | where the money was held                 |
+| release | payout in flight         | the handover account                     |
 
 Every account but the wallet or bank is a liability to the same client, so until the provider
 confirms, the total owed to the client does not change. Only settle reduces it.
@@ -55,6 +55,27 @@ def in_flight_account(payout_id: str, client_id: str, currency: Currency) -> Acc
         "Payout in flight",
         owner_client_id=client_id,
         reference=payout_id,
+    )
+
+
+def funding_account(client_id: str, reference: str, currency: Currency) -> AccountSpec:
+    """The only kind of account a payout may be funded from: money handed over for paying out.
+
+    It is the client's "payout pending" account for one piece of business, such as the
+    investment that matured, and `reference` names that business. A payout can never be
+    funded from another payout's in-flight account, from the pot of failed payouts (which has
+    no reference and is released by staff), or from any account of another client, because
+    none of those can be named here.
+    """
+    if not reference:
+        raise ValueError("A payout is funded from a named handover, never the failed-payout pot")
+    return AccountSpec(
+        PENDING,
+        AccountKind.LIABILITY,
+        currency,
+        "Payout pending",
+        owner_client_id=client_id,
+        reference=reference,
     )
 
 
