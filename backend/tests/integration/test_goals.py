@@ -2,7 +2,7 @@
 investments, the fences the database holds and the races."""
 
 import asyncio
-from datetime import date
+from datetime import date, timedelta
 
 import pytest
 from sqlalchemy import text
@@ -11,21 +11,24 @@ from sqlalchemy.exc import DBAPIError
 from app.infrastructure.database import Database
 from app.modules.goals import service as goals
 from app.modules.goals.domain.goals import MAX_ACTIVE_GOALS, GoalCategory, GoalStatus, Standing
+from app.modules.goals.domain.plans import add_months
 from app.modules.investments import service as investments
 from app.modules.investments.domain.investments import AtMaturity, InvestmentStatus
 from app.shared.actors import SYSTEM, Actor
 from app.shared.errors import ApplicationError
 from app.shared.money import Currency, Money
 from tests.support.clock import AsyncBarrier
-from tests.support.investments import approved_client, at, pay
+from tests.support.investments import PRESENT, approved_client, pay, today
 from tests.support.ledger import key, ugx
 from tests.support.ledger import staff as new_staff
 
 pytestmark = pytest.mark.integration
 
-DAY = date(2026, 11, 13)
-NOW = at(DAY)
-YEAR_ON = date(2027, 11, 13)
+# The database refuses an investment that is not created now, so these run at the real time.
+DAY = today()
+NOW = PRESENT
+YEAR_ON = add_months(DAY, 12)
+SOONER_THAN_EVERY_TERM = DAY + timedelta(days=40)
 
 
 def refused(error: pytest.ExceptionInfo[ApplicationError]) -> tuple[str, list[tuple[str, str]]]:
@@ -131,7 +134,7 @@ async def test_a_plan_for_a_date_sooner_than_every_term_is_none(app_database: Da
     async with app_database.actor_transaction(client) as session:
         assert (
             await goals.client_plan(
-                session, target=ugx(2_000_000), target_date=date(2027, 1, 1), clock=NOW
+                session, target=ugx(2_000_000), target_date=SOONER_THAN_EVERY_TERM, clock=NOW
             )
             is None
         )
@@ -140,7 +143,7 @@ async def test_a_plan_for_a_date_sooner_than_every_term_is_none(app_database: Da
 async def test_a_goal_sooner_than_every_term_is_refused(app_database: Database) -> None:
     client = await approved_client(app_database, NOW)
     with pytest.raises(ApplicationError) as error:
-        await new_goal(app_database, client, target_date=date(2027, 1, 1))
+        await new_goal(app_database, client, target_date=SOONER_THAN_EVERY_TERM)
     assert refused(error) == ("validation_failed", [("target_date", "sooner_than_every_term")])
 
 
@@ -167,7 +170,7 @@ async def test_a_goal_with_no_date_uses_the_shortest_term_and_has_no_plan(
         ("  ", 2_000_000, YEAR_ON, ("name", "name_empty")),
         ("x" * 61, 2_000_000, YEAR_ON, ("name", "name_too_long")),
         ("Land", 2_000_000, DAY, ("target_date", "date_not_in_future")),
-        ("Land", 2_000_000, date(2037, 1, 1), ("target_date", "date_too_far")),
+        ("Land", 2_000_000, DAY + timedelta(days=3661), ("target_date", "date_too_far")),
     ],
 )
 async def test_a_goal_that_breaks_a_rule_is_refused(
@@ -214,7 +217,7 @@ async def test_two_taps_at_once_set_up_one_goal(app_database: Database) -> None:
                 name="Land",
                 category=GoalCategory.LAND_OR_HOME,
                 target=ugx(20_000_000),
-                target_date=date(2028, 11, 13),
+                target_date=add_months(DAY, 24),
                 clock=NOW,
             )
             return goal.id

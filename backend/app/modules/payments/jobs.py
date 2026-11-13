@@ -95,6 +95,9 @@ class DepositJobs:
                 raise PermanentJobError(code="deposit_not_found")
             if deposit.provider != self._provider.name:
                 raise PermanentJobError(code="provider_mismatch")
+            if deposit.network is None or deposit.payer_msisdn is None:
+                raise PermanentJobError(code="not_mobile_money")
+            network, msisdn = deposit.network, deposit.payer_msisdn
             if deposit.status is not DepositStatus.CREATED:
                 # Already marked or moved on. A marked deposit may have been sent, so it is
                 # left for the sweep and a status read. It is not sent from here.
@@ -107,8 +110,8 @@ class DepositJobs:
             result = await self._provider.request_collection(
                 CollectionRequest(
                     request_id=deposit.id,
-                    network=deposit.network,
-                    msisdn=deposit.payer_msisdn,
+                    network=network,
+                    msisdn=msisdn,
                     amount=deposit.amount,
                 )
             )

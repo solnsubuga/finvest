@@ -11,6 +11,7 @@ from app.api import health
 from app.api.errors import UnexpectedErrorMiddleware, install_error_handlers
 from app.api.hardening import BodyLimitMiddleware, SecurityHeadersMiddleware
 from app.api.request_id import RequestIdMiddleware
+from app.api.request_log import RequestLogMiddleware
 from app.infrastructure.database import Database
 from app.infrastructure.settings import Settings
 from app.modules.goals import api as goals_api
@@ -22,9 +23,11 @@ from app.modules.identity.passkeys import PasskeyService
 from app.modules.identity.service import IdentityService
 from app.modules.notifications import api as notifications_api
 from app.modules.payments import api as payments_api
+from app.modules.payments import routes as payment_routes
 from app.modules.payments.domain.provider import CollectionsProvider
 from app.modules.payments.settings import PaymentsSettings
 from app.modules.payments.wiring import collections_provider
+from app.modules.support import api as support_api
 from app.shared.clock import Clock, SystemClock
 from app.shared.errors import ErrorEnvelope
 
@@ -84,6 +87,7 @@ def create_app(
         )
     app.add_middleware(BodyLimitMiddleware)
     app.add_middleware(UnexpectedErrorMiddleware)
+    app.add_middleware(RequestLogMiddleware)
     app.add_middleware(SecurityHeadersMiddleware)
     app.add_middleware(RequestIdMiddleware)
     # Attempt limits count by caller address. X-Forwarded-For is believed only from our own
@@ -92,9 +96,16 @@ def create_app(
         ProxyHeadersMiddleware, trusted_hosts=settings.trusted_proxies or ["127.0.0.1"]
     )
     app.include_router(health.router)
-    for router in (*identity_api.routers, *passkeys_api.routers, *notifications_api.routers):
+    for router in (
+        *identity_api.routers,
+        *passkeys_api.routers,
+        *notifications_api.routers,
+        *support_api.routers,
+    ):
         app.include_router(router)
     app.include_router(payments_api.create_router(collections))
     for router in goals_api.routers:
         app.include_router(router)
+    app.include_router(payment_routes.create_client_router(collections))
+    app.include_router(payment_routes.staff_router)
     return app

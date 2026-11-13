@@ -15,10 +15,13 @@
 | [payments.md](payments.md) | How a deposit by mobile money is sent, confirmed and posted, what happens when the provider's answer is unclear, and how a mistaken credit is corrected |
 | [goals.md](goals.md) | Goals as targets attached to investments, the monthly plan and how a goal's progress is labelled |
 | [notifications.md](notifications.md) | How a module tells a client something, the event catalogue, channels, and how staff change the words |
+| [documents.md](documents.md) | Statements and receipts: what they show, how the figures are checked, and the emails that carry them |
+| [support.md](support.md) | Help chat between clients and staff, and the complaints register: routes, rules and who sees what |
 | [account-numbers.md](account-numbers.md) | Format, generation and lifetime of client account numbers |
 | [roadmap.md](roadmap.md) | Build phases and the feature checklist for the client app and back office |
 | [migration.md](migration.md) | Moving Finvest 1.0 clients onto the new system |
 | [security.md](security.md) | The security review before launch: findings, the ASVS checklist and the penetration test scope |
+| [observability.md](observability.md) | Logs, health checks, alerts and the first steps when an alert fires |
 | [decisions.md](decisions.md) | Decisions made so far and questions still open |
 | [design.md](design.md) | The design canvas, brand and tokens |
 

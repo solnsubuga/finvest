@@ -13,7 +13,7 @@ A client's investment starts when the payment is confirmed. The bill behind it i
 | Clients owed | The principal of every running investment in the product |
 | Bills held | What was paid for the bills held for the product |
 | To buy | Clients owed minus bills held, never below zero |
-| On order | The expected cost of orders to buy that are prepared or approved and not yet settled |
+| On order | The face value of orders to buy that are not finished. The cost is not known until the result is. |
 
 Both sides leave interest out. Clients are owed principal and bills are carried at cost, so a bill bought for exactly the money paid in covers it on every day of the term.
 
@@ -45,6 +45,28 @@ The preparer can withdraw an order while it waits for approval. An order is for 
 A result carries the face value dealt, the cash paid or received, the settlement date, the maturity date and the custodian's reference. A bid can be filled in part and never above the order. A Treasury bill never costs or fetches more than its face value. A bond may. A result cannot be recorded before its settlement date.
 
 Only a confirmed result moves money in the ledger and allocates bills.
+
+A purchase runs no longer than the product's term, so a 182 day bill never stands behind 91 day investments. A sale is checked against the face value held twice: when it is prepared and again when its result is recorded, because holdings can change in between.
+
+### What the database enforces
+
+Migration 0080 adds `dealing_orders`. These hold even if application code is wrong.
+
+| Rule | How |
+| --- | --- |
+| Only staff see or change orders | A row policy for the API role, and no grant at all for the worker |
+| An order starts as prepared, in the name of the person signed in | A trigger compares the row with the actor of the transaction |
+| Nobody approves or sends back their own order, and only the preparer withdraws it | Check constraints, and the trigger requires the decision to be signed by the person signed in |
+| Whoever recorded a result cannot reject it | The same trigger |
+| Steps happen in order, and a finished order never changes | The trigger allows only the listed moves from one status to the next |
+| What an order is for never changes | The API role can update only the decision and result columns |
+| A result is whole, no larger than the order, and matures after it settles | Check constraints |
+| No order is removed | The trigger refuses DELETE and TRUNCATE for every role |
+| No order is settled yet | The trigger refuses it until the holdings tables and the ledger entry exist |
+
+Every step writes an audit event in the same transaction.
+
+The smallest step an order accepts is UGX 100,000 or $1,000, a working value until the primary dealer confirms it. While no bills are recorded as held, every sale is refused.
 
 ### How much to bid for
 
@@ -108,4 +130,4 @@ Agreed with the investing, and the payouts and reconciliation, threads on 13 Nov
 
 ## Not built yet
 
-Tables, the order commands, the ledger entries for purchases, sales and maturities, the two-person change to the buffer rules, the custodian statement comparison, the allocation report, and the console screen.
+HTTP routes for the order commands, settling an order, the tables for bills held and allocations, the ledger entries for purchases, sales and maturities, the two-person change to the buffer rules, the custodian statement comparison, the allocation report, and the console screen.

@@ -71,3 +71,9 @@ class DayNotEnded(LedgerError):
     """Only a day that has ended in Kampala can be closed."""
 
     code = "ledger_day_not_ended"
+
+
+class StaffSourceNotAllowed(LedgerError):
+    """A staff transaction may post only the source types listed in the database."""
+
+    code = "ledger_staff_source_not_allowed"

@@ -173,7 +173,8 @@ data "digitalocean_database_ca" "postgres" {
   cluster_id = digitalocean_database_cluster.postgres.id
 }
 
-# Private object storage for KYC documents and statements.
+# Private file storage: identity document photos, bank transfer receipts, proofs of account
+# ownership and statements.
 
 resource "digitalocean_spaces_bucket" "documents" {
   name   = var.documents_bucket
@@ -193,11 +194,11 @@ resource "digitalocean_spaces_bucket_cors_configuration" "documents" {
   bucket = digitalocean_spaces_bucket.documents.id
   region = var.region
 
-  # Browsers upload documents straight to the bucket with presigned URLs.
+  # Files are uploaded by the API, never by a browser. The console only reads them, through
+  # short-lived read links (backend app/infrastructure/storage).
   cors_rule {
-    allowed_headers = ["*"]
-    allowed_methods = ["PUT", "GET"]
-    allowed_origins = ["https://${var.app_domain}", "https://${var.admin_domain}"]
+    allowed_methods = ["GET"]
+    allowed_origins = ["https://${var.admin_domain}"]
     max_age_seconds = 3000
   }
 }

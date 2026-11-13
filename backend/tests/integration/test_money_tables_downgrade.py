@@ -1,6 +1,7 @@
 """A downgrade must never delete the books, the issued numbers, the audit trail, the job
 history, the receipts that stop a command running twice, the identity records, the payout
-destinations, the withdrawal limits, the payouts or the goals."""
+destinations, the withdrawal limits, the payouts, the migration checks, the imported
+statements, the help chat, the complaints register or the goals."""
 
 import os
 from collections.abc import Iterator
@@ -39,12 +40,17 @@ ROWS = {
         "'-Nabc0000000000000A1', 'test.run', 'key-0001', repeat('0', 64), 200, '{}', now())",
         "refusing to drop operation receipts",
     ),
+    "0062_investment_interest_runs": (
+        "INSERT INTO investment_interest_runs (run_date, currency, started_at) "
+        "VALUES (DATE '2026-11-14', 'UGX', now())",
+        "refusing to drop interest runs",
+    ),
     "0061_investments": (
         "INSERT INTO investments (id, client_id, product_id, currency, principal_minor, "
         "annual_rate_bps, tax_bps, term_days, at_maturity, created_at, pay_by, updated_at) "
         "VALUES ('-Nabc0000000000000A1', '-Nabc0000000000000B1', 'FvProduct1TREA91_001', "
-        "'UGX', 1000000, 1250, 1500, 91, 'roll_over', TIMESTAMPTZ '2026-11-13 09:00+00', "
-        "TIMESTAMPTZ '2026-11-16 09:00+00', now())",
+        "'UGX', 1000000, 1250, 1500, 91, 'roll_over', now(), now() + interval '72 hours', "
+        "now())",
         "refusing to drop investments",
     ),
     "0110_goals": (
@@ -62,6 +68,14 @@ ROWS = {
         "'FvProduct1TREA91_001', DATE '2030-01-01', 1300, 1500, 'Auction', "
         "'-Nabc0000000000000B1', now()); COMMIT",
         "refusing to drop rates",
+    ),
+    "0080_dealing_orders": (
+        "BEGIN; SELECT set_config('finvest.actor_kind', 'staff', true); "
+        "SELECT set_config('finvest.actor_id', '-Nabc0000000000000B1', true); "
+        "INSERT INTO dealing_orders (id, kind, product_code, currency, face_minor, prepared_by, "
+        "prepared_at) VALUES ('-Nabc0000000000000A1', 'auction_bid', 'TREA-91', 'UGX', 100000, "
+        "'-Nabc0000000000000B1', now()); COMMIT",
+        "refusing to drop dealing orders",
     ),
     "0050_kyc": (
         "INSERT INTO kyc_checks (id, client_id, document_type, document_country, created_at, "
@@ -102,6 +116,13 @@ ROWS = {
         "VALUES ('-Nabc0000000000000A1', 'sandbox', 'notice-1', now())",
         "refusing to drop payments",
     ),
+    "0022_bank_transfer_deposits": (
+        "INSERT INTO payment_deposits (id, client_id, purpose_type, purpose_id, method, provider, "
+        "currency, amount_minor, status, created_at, updated_at) VALUES ('-Nabc0000000000000A1', "
+        "'-Nabc0000000000000B1', 'investment', '-Nabc0000000000000C1', 'bank_transfer', 'bank', "
+        "'UGX', 1000, 'in_review', now(), now())",
+        "refusing to drop bank transfers",
+    ),
     "0030_payout_destinations": (
         "INSERT INTO payout_destinations (id, client_id, kind, network, account_number, "
         "holder_name, status, created_at, updated_at) VALUES ('-Nabc0000000000000A1', "
@@ -138,6 +159,23 @@ ROWS = {
         "variables, created_at) VALUES ('-Nabc0000000000000A1', 'test:1', 'email', "
         "'ada@example.com', 'sign_in_code', '{}', now())",
         "refusing to drop messages",
+    ),
+    "0070_migration_checks": (
+        "INSERT INTO migration_control_totals (id, as_of, totals, entered_by, entered_at) "
+        "VALUES ('-Nabc0000000000000A1', DATE '2026-11-13', '{}', '-Nabc0000000000000S1', now())",
+        "refusing to drop migration checks",
+    ),
+    "0040_reconciliation_statements": (
+        "INSERT INTO reconciliation_statements (id, source, account_reference, business_date, "
+        "currency, opening_minor, closing_minor, line_count, file_sha256, imported_by, "
+        "imported_at) VALUES ('-Nabc0000000000000A1', 'bank', 'trust', DATE '2026-11-10', "
+        "'UGX', 100, 100, 0, repeat('0', 64), '-Nabc0000000000000B1', now())",
+        "refusing to drop imported statements",
+    ),
+    "0100_support": (
+        "INSERT INTO support_conversations (id, client_id, created_at, last_message_at) "
+        "VALUES ('-Nabc0000000000000A1', '-Nabc0000000000000B1', now(), now())",
+        "refusing to drop help chat or complaints",
     ),
 }
 

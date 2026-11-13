@@ -26,6 +26,7 @@ from app.modules.kyc.domain.provider import (
     Verdict,
     decide,
 )
+from tests.support.kyc import details as sample_details
 
 TODAY = date(2026, 11, 13)
 S = CheckStatus
@@ -111,6 +112,12 @@ GOOD = IdentityDetails(
 def test_good_details_have_no_problems() -> None:
     assert detail_problems(GOOD, TODAY) == []
     assert detail_problems(replace(GOOD, tin=None, surname="O'Brien-Okello"), TODAY) == []
+
+
+def test_the_sample_details_get_a_valid_document_number_no_other_test_shares() -> None:
+    numbers = [sample_details().document_number for _ in range(10_000)]
+    assert len(set(numbers)) == len(numbers)
+    assert all(detail_problems(sample_details(n), TODAY) == [] for n in numbers[:100])
 
 
 def test_details_are_normalised_before_they_are_checked() -> None:

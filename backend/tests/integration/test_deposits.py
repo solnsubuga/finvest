@@ -639,6 +639,7 @@ async def test_a_worker_that_dies_mid_call_does_not_send_twice(
         locked = await service.find_deposit(session, deposit.id, lock=True)
         assert locked is not None
         await service.apply_move(session, locked, Move(S.SENDING), fake_clock, cause="send")
+    assert deposit.network is not None and deposit.payer_msisdn is not None
     await provider.request_collection(
         CollectionRequest(deposit.id, deposit.network, deposit.payer_msisdn, deposit.amount)
     )
@@ -1222,13 +1223,21 @@ async def test_the_database_allows_exactly_the_moves_the_rules_allow(
         "confirmed": (None, True, True),
         "failed": ("declined", False, True),
         "uncertain": ("send_uncertain", False, False),
+        "in_review": (None, False, False),
     }
     allowed: dict[DepositStatus, set[DepositStatus]] = {status: set() for status in S}
     insert = text(
         "INSERT INTO payment_deposits (id, client_id, purpose_type, purpose_id, method, "
         "provider, currency, amount_minor, payer_msisdn, status, code, ledger_entry_id, "
-        "created_at, updated_at, settled_at) VALUES (:id, :client, 'goal', :purpose, 'airtel', "
-        "'fake', 'UGX', 1000, '+256752000000', :status, :code, :entry, now(), now(), :settled)"
+        "created_at, updated_at, settled_at) VALUES (:id, :client, 'goal', :purpose, :method, "
+        ":provider, 'UGX', 1000, :msisdn, :status, :code, :entry, now(), now(), :settled)"
+    )
+    # A bank transfer is settled only as its staff review says, so one in review gets the
+    # review its move needs. Every other state is a mobile money deposit.
+    review = text(
+        "INSERT INTO payment_bank_reviews (deposit_id, outcome, reason, statement_line_id, "
+        "account_reference, reviewed_by, reviewed_at) VALUES (:id, :outcome, :reason, :line, "
+        ":account, :by, now())"
     )
     move = text(
         "UPDATE payment_deposits SET status = :status, code = :code, ledger_entry_id = :entry, "
@@ -1244,19 +1253,46 @@ async def test_the_database_allows_exactly_the_moves_the_rules_allow(
                         continue
                     code, has_entry, settled = shape[old.value]
                     deposit_id = push_id()
+                    bank = old is S.IN_REVIEW
                     await session.execute(
                         insert,
                         {
                             "id": deposit_id,
                             "client": push_id(),
                             "purpose": push_id(),
+                            "method": "bank_transfer" if bank else "airtel",
+                            "provider": "bank" if bank else "fake",
+                            "msisdn": None if bank else "+256752000000",
                             "status": old.value,
                             "code": code,
                             "entry": push_id() if has_entry else None,
                             "settled": now if settled else None,
                         },
                     )
+                    matched = new is S.CONFIRMED
+                    if bank:
+                        await session.execute(
+                            review,
+                            {
+                                "id": deposit_id,
+                                "outcome": "matched" if matched else "not_matched",
+                                "reason": None if matched else "other",
+                                "line": push_id() if matched else None,
+                                "account": "trust" if matched else None,
+                                "by": push_id(),
+                            },
+                        )
+                        if matched:
+                            await session.execute(
+                                text(
+                                    "INSERT INTO payment_bank_approvals (deposit_id, "
+                                    "approved_by, approved_at) VALUES (:id, :by, now())"
+                                ),
+                                {"id": deposit_id, "by": push_id()},
+                            )
                     code, has_entry, settled = shape[new.value]
+                    if bank and new is S.FAILED:
+                        code = "other"
                     try:
                         async with session.begin_nested():
                             await session.execute(
