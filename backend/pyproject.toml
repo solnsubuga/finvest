@@ -16,6 +16,7 @@ dependencies = [
   "argon2-cffi>=23.1",
   "webauthn>=3,<4",
   "cryptography>=46",
+  "fpdf2>=2.8,<3",
 ]
 
 [dependency-groups]
