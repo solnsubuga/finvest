@@ -9,6 +9,7 @@ from uvicorn.middleware.proxy_headers import ProxyHeadersMiddleware
 
 from app.api import health
 from app.api.errors import UnexpectedErrorMiddleware, install_error_handlers
+from app.api.hardening import BodyLimitMiddleware, SecurityHeadersMiddleware
 from app.api.request_id import RequestIdMiddleware
 from app.infrastructure.database import Database
 from app.infrastructure.settings import Settings
@@ -80,7 +81,9 @@ def create_app(
             expose_headers=["X-Request-ID", "Retry-After"],
             max_age=600,
         )
+    app.add_middleware(BodyLimitMiddleware)
     app.add_middleware(UnexpectedErrorMiddleware)
+    app.add_middleware(SecurityHeadersMiddleware)
     app.add_middleware(RequestIdMiddleware)
     # Attempt limits count by caller address. X-Forwarded-For is believed only from our own
     # proxy; with none configured, only from this machine.
