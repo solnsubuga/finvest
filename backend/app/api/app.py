@@ -24,9 +24,16 @@ from app.modules.console import api as console_api
 from app.modules.documents import api as documents_api
 from app.modules.goals import api as goals_api
 from app.modules.identity import api as identity_api
-from app.modules.identity import codes_api, passkeys_api, phone_changes_api, team_api
+from app.modules.identity import (
+    codes_api,
+    email_checks_api,
+    passkeys_api,
+    phone_changes_api,
+    team_api,
+)
 from app.modules.identity.authenticators import AuthenticatorService
 from app.modules.identity.codes import CodeService
+from app.modules.identity.email_checks import EmailCheckService
 from app.modules.identity.hashing import PasswordHasher
 from app.modules.identity.passkeys import PasskeyService
 from app.modules.identity.phone_changes import PhoneChangeService
@@ -112,6 +119,11 @@ def create_app(
     app.state.authenticators = AuthenticatorService(database, clock, settings, identity, passkeys)
     app.state.codes = CodeService(database, clock, identity, passkeys, hasher)
     app.state.phone_changes = PhoneChangeService(database, clock)
+    app.state.email_checks = EmailCheckService(
+        database,
+        clock,
+        settings.client_allowed_origins[0] if settings.client_allowed_origins else None,
+    )
     install_error_handlers(app)
     # The last middleware added is the outermost, so the request ID exists before anything runs.
     origins = sorted({*settings.client_allowed_origins, *settings.staff_allowed_origins})
@@ -142,6 +154,7 @@ def create_app(
         *passkeys_api.routers,
         *codes_api.routers,
         *phone_changes_api.routers,
+        *email_checks_api.routers,
         *team_api.routers,
         *notifications_api.routers,
         *suppressions_api.routers,

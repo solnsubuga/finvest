@@ -8,10 +8,11 @@ Each template lists the variables it needs. Every value is escaped before it goe
 so nothing a person typed can add markup or a link.
 
 This file owns only the messages that carry a secret or guard an account: sign-in, signup,
-reset and claim codes, the notice that a number changed, and the staff set-up link. They are
-fixed in code so that nobody can edit them into a phishing message, and so that they work
-before anything else is set up. Every other client notice is worded in `domain/wording.py`,
-which staff edit with a second person approving. Neither file adds text of the other kind.
+reset and claim codes, the notice that a number changed, the link that proves an email
+address, and the staff set-up link. They are fixed in code so that nobody can edit them into
+a phishing message, and so that they work before anything else is set up. Every other client
+notice is worded in `domain/wording.py`, which staff edit with a second person approving.
+Neither file adds text of the other kind.
 """
 
 import html
@@ -26,6 +27,7 @@ Template = Literal[
     "claim_code",
     "payout_account_code",
     "phone_changed",
+    "email_verification",
     "staff_enrolment",
     "client_notice",
 ]
@@ -38,6 +40,7 @@ _VARIABLES: dict[Template, frozenset[str]] = {
     "claim_code": frozenset({"code", "minutes"}),
     "payout_account_code": frozenset({"code", "minutes"}),
     "phone_changed": frozenset({"ending"}),
+    "email_verification": frozenset({"link", "hours"}),
     "staff_enrolment": frozenset({"name", "link", "hours"}),
     # A notification's words, already filled in: the title and body for an email.
     "client_notice": frozenset({"title", "body"}),
@@ -136,6 +139,18 @@ def render(
                 "Open the Finvest app to see it. You can choose how we reach you in Profile, "
                 "under Notifications.",
             ],
+        )
+    if template == "email_verification":
+        return _message(
+            "Confirm your email address for Finvest",
+            [
+                "Open this link to confirm that this email address is yours. Finvest sends "
+                "your statements and receipts only to an address you have confirmed:",
+                values["link"],
+                f"The link works once, for {values['hours']} hours. If you did not ask for "
+                "this, you can ignore this email.",
+            ],
+            link=values["link"],
         )
     if template == "phone_changed":
         return _message(

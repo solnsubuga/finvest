@@ -172,6 +172,9 @@ class ClientSessionView(Contract):
     phone: str
     # Set for a day after signing in with a code: withdrawals go to known accounts only.
     restricted_until: datetime | None
+    email: str | None = None
+    # Whether the client proved `email` with a link. Statements go only to a proved address.
+    email_verified: bool = False
 
 
 class StaffSessionView(Contract):
@@ -196,7 +199,11 @@ async def client_login_start(
 @client_router.get("/session")
 async def client_session(client: CurrentClient) -> ClientSessionView:
     return ClientSessionView(
-        client_id=client.client_id, phone=client.phone, restricted_until=client.restricted_until
+        client_id=client.client_id,
+        phone=client.phone,
+        restricted_until=client.restricted_until,
+        email=client.email,
+        email_verified=client.email_verified,
     )
 
 
