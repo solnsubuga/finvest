@@ -82,6 +82,11 @@ export function toSupportError(error: unknown): SupportError {
   }
 }
 
+/** The most messages `GET /staff/support/conversations/{id}` gives at once, oldest first. */
+export const CHAT_PAGE = 200;
+/** A chat longer than this many pages is shown up to there: 10,000 messages. */
+const MAX_CHAT_PAGES = 50;
+
 export function createHttpSupportApi(http: Http): SupportApi {
   const chatPath = (id: string, action = "") => `/staff/support/conversations/${encodeURIComponent(id)}${action}`;
   const call = async <T>(run: () => Promise<T>): Promise<T> => {
@@ -111,11 +116,20 @@ export function createHttpSupportApi(http: Http): SupportApi {
       }),
     chat: (conversationId) =>
       call(async () => {
-        const json = await http.request<{ conversation: ConversationJson; client_id: string; messages: MessageJson[] }>(
-          "GET",
-          chatPath(conversationId),
-        );
-        return { conversation: toConversation(json.conversation), clientId: json.client_id, messages: json.messages.map(toMessage) } satisfies Chat;
+        type ChatJson = { conversation: ConversationJson; client_id: string; messages: MessageJson[] };
+        // A full page means there may be more: ask again after the last message until a page is short.
+        let page = await http.request<ChatJson>("GET", `${chatPath(conversationId)}?limit=${CHAT_PAGE}`);
+        const messages = [...page.messages];
+        for (let pages = 1; page.messages.length === CHAT_PAGE && pages < MAX_CHAT_PAGES; pages++) {
+          const last = page.messages[page.messages.length - 1]!.id;
+          page = await http.request<ChatJson>(
+            "GET",
+            `${chatPath(conversationId)}?${new URLSearchParams({ limit: String(CHAT_PAGE), after: last }).toString()}`,
+          );
+          messages.push(...page.messages);
+        }
+        // The last page carries the chat as it stands now.
+        return { conversation: toConversation(page.conversation), clientId: page.client_id, messages: messages.map(toMessage) } satisfies Chat;
       }),
     reply: (conversationId, body, key) =>
       call(async () => toMessage(await http.request<MessageJson>("POST", chatPath(conversationId, "/messages"), { body, key }))),
