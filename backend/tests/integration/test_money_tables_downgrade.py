@@ -239,6 +239,19 @@ ROWS = {
         "VALUES ('-Nabc0000000000000A1', 1, 'sandbox', now())",
         "refusing to drop payout send attempts",
     ),
+    # The owner turns the guard off for this one transaction: a real request needs a running
+    # investment, which needs a confirmed payment and its ledger entries.
+    "0064_investment_early_withdrawal": (
+        "BEGIN; ALTER TABLE investments DISABLE TRIGGER USER; "
+        "INSERT INTO investments (id, client_id, product_id, currency, principal_minor, "
+        "annual_rate_bps, tax_bps, term_days, at_maturity, created_at, pay_by, updated_at, "
+        "withdrawal_requested_at, withdrawal_destination_id) "
+        "VALUES ('-Nabc0000000000000A1', '-Nabc0000000000000B1', 'FvProduct1TREA91_001', "
+        "'UGX', 1000000, 1250, 1500, 91, 'roll_over', now(), now() + interval '72 hours', "
+        "now(), now(), '-Nabc0000000000000D1'); "
+        "ALTER TABLE investments ENABLE TRIGGER USER; COMMIT",
+        "refusing to drop the record of early withdrawals",
+    ),
     "0034_payout_account_codes": (
         "INSERT INTO identity_codes (id, purpose, channel, phone, actor_id, bound_to, "
         "code_hash, created_at, expires_at) VALUES ('-Nabc0000000000000A1', 'payout_account', "

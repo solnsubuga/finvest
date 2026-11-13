@@ -13536,7 +13536,7 @@
     },
     "/client/investments/{investment_id}/withdraw": {
       "post": {
-        "description": "Ask to withdraw a running investment early. It pays `value_minor` from the investment\nas shown: interest stops now. The money is sent once the dealing desk has funded it.",
+        "description": "Ask to withdraw a running investment early. It pays `value_minor` from the investment\nas shown: interest stops now. The money is sent once the dealing desk has funded it.\n\nRefused with `conflict` while early withdrawal is switched off, before anything is saved.",
         "operationId": "withdraw_early_client_investments__investment_id__withdraw_post",
         "parameters": [
           {
