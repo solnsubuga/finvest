@@ -1,7 +1,7 @@
 """Carry running investments over from Finvest 1.0.
 
 Revision ID: 0065_investment_carried_over
-Revises: 0164_identity_session_devices
+Revises: 0086_dealing_sale_funding
 
 Adds `legacy_reference`, the investment's reference in Finvest 1.0, unique, so the switch
 opens each one once. The guard of migration 0064 is replaced with one more way in: the worker
@@ -14,7 +14,7 @@ from collections.abc import Sequence
 from alembic import op
 
 revision: str = "0065_investment_carried_over"
-down_revision: str | None = "0164_identity_session_devices"
+down_revision: str | None = "0086_dealing_sale_funding"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 
