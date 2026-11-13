@@ -92,6 +92,9 @@ export function toKycError(error: unknown): KycError {
     // A decision the check's state no longer allows, or a document another approved client holds.
     case "conflict":
       return new KycError("conflict");
+    // The person closed the "confirm it is you" dialog, so nothing was done.
+    case "confirm_it_is_you":
+      return new KycError("not_confirmed");
     case "forbidden":
       return new KycError("forbidden");
     default:

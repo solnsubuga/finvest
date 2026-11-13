@@ -108,6 +108,9 @@ export function toTeamError(error: unknown, deciding = false): TeamError {
       return new TeamError("invalid");
     case "conflict":
       return new TeamError("waiting");
+    // The person closed the "confirm it is you" dialog, so nothing was done.
+    case "confirm_it_is_you":
+      return new TeamError("not_confirmed");
     case "forbidden":
       return new TeamError(deciding ? "same_person" : "forbidden");
     case "not_found":

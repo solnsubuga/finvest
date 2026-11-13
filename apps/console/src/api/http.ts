@@ -11,6 +11,8 @@
  * exists. The paths and shapes follow the backend's routes.
  */
 
+import { askToConfirm, CONFIRM_IT_IS_YOU, type Confirmer } from "./confirmation.ts";
+
 export interface FieldProblem {
   field_path: readonly (string | number)[];
   code: string;
@@ -50,8 +52,14 @@ export interface RequestOptions {
 
 type Fetch = typeof fetch;
 
-/** `baseUrl` is the API's origin, such as https://api.finvestug.com, with no trailing slash. */
-export function createHttp(baseUrl: string, fetchImpl: Fetch = fetch): Http {
+/**
+ * `baseUrl` is the API's origin, such as https://api.finvestug.com, with no trailing slash.
+ *
+ * `confirm` is asked when the API answers `confirm_it_is_you`. If the person
+ * confirms, the request is sent once more, with the same idempotency key: the
+ * API refused the first one before doing anything.
+ */
+export function createHttp(baseUrl: string, fetchImpl: Fetch = fetch, confirm: Confirmer = askToConfirm): Http {
   const base = baseUrl.replace(/\/+$/, "");
 
   async function send(method: Method, path: string, body: unknown, options?: RequestOptions) {
@@ -74,14 +82,24 @@ export function createHttp(baseUrl: string, fetchImpl: Fetch = fetch): Http {
     return response;
   }
 
+  async function sendConfirmed(method: Method, path: string, body: unknown, options?: RequestOptions) {
+    try {
+      return await send(method, path, body, options);
+    } catch (error) {
+      if (!(error instanceof ApiError) || error.code !== CONFIRM_IT_IS_YOU) throw error;
+      if (!(await confirm())) throw error;
+      return send(method, path, body, options);
+    }
+  }
+
   return {
     async request<T>(method: Method, path: string, body?: unknown, options?: RequestOptions) {
-      const response = await send(method, path, body, options);
+      const response = await sendConfirmed(method, path, body, options);
       if (response.status === 204) return undefined as T;
       return (await response.json()) as T;
     },
     async download(path: string) {
-      const response = await send("GET", path, undefined);
+      const response = await sendConfirmed("GET", path, undefined);
       return response.blob();
     },
   };
