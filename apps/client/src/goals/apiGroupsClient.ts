@@ -35,6 +35,7 @@ export function toGroup(view: GroupView): Group {
       joinedAt: m.joined_at,
       isYou: m.is_you,
       isOwner: m.is_owner,
+      memberId: m.member_id,
     })),
     inviteExpiresAt: view.invite_expires_at,
   };
@@ -156,6 +157,15 @@ export function createApiGroupsClient(): GroupsClient {
       wrap(async () => {
         await api("POST /client/goal-groups/{group_id}/leave", { params: { group_id: groupId } });
       }, "leave"),
+
+    removeMember: (groupId, memberId) =>
+      wrap(async () =>
+        toGroup(
+          await api("POST /client/goal-groups/{group_id}/members/{member_id}/remove", {
+            params: { group_id: groupId, member_id: memberId },
+          }),
+        ),
+      ),
 
     closeGroup: (groupId) =>
       wrap(async () => toGroup(await api("POST /client/goal-groups/{group_id}/close", { params: { group_id: groupId } }))),

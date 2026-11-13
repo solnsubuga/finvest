@@ -32,6 +32,7 @@ describe("member summary", () => {
     joinedAt: "2026-11-13T09:00:00Z",
     isYou,
     isOwner: false,
+    memberId: null,
   });
 
   it("names up to three and counts the rest", () => {

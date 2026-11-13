@@ -17,6 +17,8 @@ export type GroupMember = {
   joinedAt: string;
   isYou: boolean;
   isOwner: boolean;
+  /** Only for the one who set the group up, for each of the others: what removes them. */
+  memberId: string | null;
 };
 
 export type Group = {
@@ -99,6 +101,8 @@ export type GroupsClient = {
     idempotencyKey: string,
   ): Promise<Group>;
   leaveGroup(groupId: string): Promise<void>;
+  /** Only the one who set the group up. It also stops the open link. */
+  removeMember(groupId: string, memberId: string): Promise<Group>;
   closeGroup(groupId: string): Promise<Group>;
 };
 

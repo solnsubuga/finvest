@@ -141,6 +141,30 @@ describe("group goals", () => {
     expect(String(link.props.children)).toMatch(/^https:\/\/app\.finvestug\.com\/goals\/groups\/join#[A-Za-z0-9_-]{22}$/);
   });
 
+  it("lets the one who set it up remove a member, after asking", async () => {
+    await openGoals();
+    await fireEvent.press(await screen.findByText("Family land in Mukono"));
+    await fireEvent.press(await screen.findByTestId("group-make-link"));
+    expect(await screen.findByTestId("group-link")).toBeTruthy();
+    // Nobody is offered a way to remove themselves.
+    expect(screen.queryByLabelText("Remove Amara")).toBeNull();
+
+    await fireEvent.press(screen.getByLabelText("Remove Daniel"));
+    expect(await screen.findByText("Remove Daniel from the group goal?")).toBeTruthy();
+    await fireEvent.press(screen.getByText("Keep them in"));
+    expect(screen.queryByTestId("group-remove-confirm")).toBeNull();
+    expect(screen.getByText("Members, 3 of 10")).toBeTruthy();
+
+    await fireEvent.press(screen.getByLabelText("Remove Daniel"));
+    await fireEvent.press(await screen.findByTestId("group-remove-yes"));
+    expect(await screen.findByText("Members, 2 of 10")).toBeTruthy();
+    expect(screen.queryByText("Daniel")).toBeNull();
+    expect(screen.getByText("Miriam")).toBeTruthy();
+    // The link shown before stopped working, so it is gone too.
+    expect(screen.queryByTestId("group-link")).toBeNull();
+    expect(screen.getByTestId("group-make-link")).toBeTruthy();
+  });
+
   it("checks the set-up form, then sets a group up and opens it", async () => {
     await openGoals();
     await fireEvent.press(await screen.findByTestId("new-group"));
@@ -188,6 +212,8 @@ describe("group goals", () => {
     expect(await screen.findByText("Saved together")).toBeTruthy();
     expect(screen.getByText("Members, 4 of 10")).toBeTruthy();
     expect(screen.getByText("Leave this group goal")).toBeTruthy();
+    // Only the one who set it up can remove anyone.
+    expect(screen.queryByText("Remove")).toBeNull();
   });
 
   it("leaves a group and keeps the own goal", async () => {
