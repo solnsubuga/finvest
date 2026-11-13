@@ -40,6 +40,7 @@ export class DocumentsError extends Error {
   constructor(
     readonly code:
       | "unavailable"
+      | "offline"
       | "rate_limited"
       | "validation_failed"
       | "not_found",

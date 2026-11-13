@@ -80,6 +80,11 @@ jobs:
             echo "The demo goals or a rate before tax were bundled into a production build" >&2
             exit 1
           fi
+          # Nor the demo statements and receipts, which list documents that do not exist.
+          if grep -rIl -e "demo-monthly-" -e "RC-Pq7Tz2Lm" dist; then
+            echo "The demo documents were bundled into a production build" >&2
+            exit 1
+          fi
           # Nor the demo notifications and help chat, which show alerts and replies nobody sent.
           if grep -rIl -e "no one at Finvest has seen your message" -e "You earned UGX 2,416 today" dist; then
             echo "The demo notifications or help chat were bundled into a production build" >&2

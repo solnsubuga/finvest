@@ -303,15 +303,19 @@ function StatementForm({ onAsked }: { onAsked: (document: DocumentItem) => void 
 }
 
 function requestFailure(error: unknown, from: string, to: string, today: string): string {
-  if (error instanceof DocumentsError) {
-    if (error.code === "validation_failed" && error.field) {
-      return problemCopy(error.field, from, to, today).message;
-    }
-    if (error.code === "rate_limited") {
-      return "You have asked for 10 statements today, the most for one day. You can ask again tomorrow.";
-    }
+  const code = error instanceof DocumentsError ? error.code : "offline";
+  if (error instanceof DocumentsError && code === "validation_failed" && error.field) {
+    return problemCopy(error.field, from, to, today).message;
   }
-  return "We could not reach Finvest. Check your connection and try again.";
+  if (code === "rate_limited") {
+    // The API does not say how many, so the screen does not either.
+    return "You have asked for as many statements as one day allows. You can ask again tomorrow.";
+  }
+  if (code === "offline") {
+    return "We could not reach Finvest. Check your connection and try again.";
+  }
+  // Asking again sends the same key, so it never makes a second statement.
+  return "Something went wrong on our side. Try again in a few minutes.";
 }
 
 function StatementProgress({

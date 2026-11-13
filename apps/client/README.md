@@ -124,6 +124,12 @@ Until the backend publishes these client routes, the only implementations are th
 
 Not built yet: sending an investment to another client, changing a plan's amount or day (the backend allows it, the screen does not yet), and the notifications before each prompt.
 
+## Documents
+
+`/documents` is where a client asks for a statement of any period up to a year, follows it while it is made, and downloads statements and receipts. On a phone it is not in the bottom bar: it is reached from Profile (the Home card "Your details, documents and help", then Documents). On a wide screen it is in the sidebar. The screen shows no amounts: every figure is in the PDF, after tax.
+
+`src/documents/apiDocumentsClient.ts` answers from the API routes in [docs/documents.md](../../docs/documents.md). The PDF is fetched with the session by `src/documents/savePdf.ts`: on the web as a browser download, and on a phone into the cache, then the share sheet, then the cached copy is removed. Development and demo builds use `src/documents/stubDocumentsClient.ts`, which CI checks is left out of production builds. In the demo a statement asked for from before 2020 fails, to show that state.
+
 ## Notes
 
 - The web version ships at launch. About five screens have wide layouts (home, invest, portfolio, activity, documents). Everything else reuses the phone screen in a centred column.
