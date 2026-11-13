@@ -662,6 +662,18 @@ export type GroupProgressView = z.infer<typeof GroupProgressView>;
 export const GroupStatus = z.enum(["active", "closed"]);
 export type GroupStatus = z.infer<typeof GroupStatus>;
 
+export const HeldUpPayoutOut = z.object({
+  amount: MoneyView,
+  client_id: z.string(),
+  created_at: z.string(),
+  first_tried_at: z.string(),
+  id: z.string(),
+  kind: z.literal("mobile_money"),
+  last_tried_at: z.string(),
+  tries: z.number().int(),
+});
+export type HeldUpPayoutOut = z.infer<typeof HeldUpPayoutOut>;
+
 export const InboxRow = z.object({
   client_id: z.string(),
   conversation: ConversationItem,
@@ -2432,6 +2444,17 @@ export const operations = {
     idempotent: false,
     status: 200,
     response: StaffDestinationOut,
+  },
+  "GET /staff/payouts/held-up": {
+    method: "GET",
+    path: "/staff/payouts/held-up",
+    params: z.object({}),
+    query: z.object({}),
+    body: null,
+    bodyKind: null,
+    idempotent: false,
+    status: 200,
+    response: z.array(HeldUpPayoutOut),
   },
   "GET /staff/people": {
     method: "GET",

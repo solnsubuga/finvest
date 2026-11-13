@@ -34,7 +34,7 @@ from app.modules.payouts.domain.limits import (
 )
 from app.modules.payouts.domain.payouts import LedgerEffect, PayoutEvent, PayoutStatus
 from app.modules.payouts.domain.posting import PayoutTerms
-from app.modules.payouts.domain.sending import SEND_ATTEMPTS
+from app.modules.payouts.domain.sending import HELD_UP_AFTER, SEND_ATTEMPTS
 from app.shared.actors import Actor
 from app.shared.business_day import business_date
 from app.shared.clock import Clock
@@ -120,6 +120,19 @@ _UPDATE = text(
 _HELD = text(
     f"SELECT {_COLUMNS} FROM payouts WHERE status = 'held' "  # noqa: S608 - constant column list
     "ORDER BY created_at, id LIMIT :limit"
+)
+# Queued mobile money payouts no send has left, first tried before a time.
+_HELD_UP = text(
+    "SELECT * FROM (SELECT "  # noqa: S608 - constant column list
+    f"{_COLUMNS}, "
+    "(SELECT count(*) FROM payout_send_attempts a WHERE a.payout_id = payouts.id) AS tries, "
+    "(SELECT min(a.started_at) FROM payout_send_attempts a WHERE a.payout_id = payouts.id) "
+    "AS first_tried_at, "
+    "(SELECT max(a.started_at) FROM payout_send_attempts a WHERE a.payout_id = payouts.id) "
+    "AS last_tried_at FROM payouts WHERE status = 'queued' AND kind = 'mobile_money' "
+    "AND NOT EXISTS (SELECT FROM payout_send_attempts a WHERE a.payout_id = payouts.id "
+    "AND (a.outcome IS NULL OR a.outcome <> 'deferred'))) AS queued "
+    "WHERE first_tried_at <= :since ORDER BY first_tried_at, id LIMIT :limit"
 )
 _FOR_CLIENT = text(
     f"SELECT {_COLUMNS} FROM payouts WHERE client_id = :client_id "  # noqa: S608
@@ -371,6 +384,31 @@ async def held_for_review(session: AsyncSession, *, limit: int = 50) -> list[Pay
     """Payouts waiting for a staff decision, oldest first. Empty outside a staff transaction."""
     rows = await session.execute(_HELD, {"limit": max(1, min(limit, 100))})
     return [_view(row) for row in rows.all()]
+
+
+@dataclass(frozen=True, slots=True)
+class HeldUpPayout:
+    """A queued payout first tried `HELD_UP_AFTER` or more ago, and taken by nothing since."""
+
+    payout: PayoutView
+    first_tried_at: datetime
+    last_tried_at: datetime
+    # Sends tried so far. Each one ended with the provider saying it took nothing.
+    tries: int
+
+
+async def held_up(session: AsyncSession, now: datetime, *, limit: int = 50) -> list[HeldUpPayout]:
+    """Payouts held up at the provider, longest first. Empty outside a staff transaction.
+
+    The sweep keeps sending them; this is for a person to see and find out why.
+    """
+    rows = await session.execute(
+        _HELD_UP, {"since": now - HELD_UP_AFTER, "limit": max(1, min(limit, 100))}
+    )
+    return [
+        HeldUpPayout(_view(row), row.first_tried_at, row.last_tried_at, int(row.tries))
+        for row in rows.all()
+    ]
 
 
 async def payouts_for_client(

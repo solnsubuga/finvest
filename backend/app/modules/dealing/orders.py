@@ -18,6 +18,7 @@ from typing import Any
 from sqlalchemy import Row, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.infrastructure.jobs import JobRequest, enqueue
 from app.modules.audit import service as audit
 from app.modules.audit.domain.events import AuditActor, AuditCategory, AuditEvent
 from app.modules.dealing import holdings
@@ -43,6 +44,7 @@ from app.modules.dealing.domain.settlement import (
     accounts,
     settlement_entry,
 )
+from app.modules.dealing.events import FUND_FROM_SALE_KIND
 from app.modules.investments import service as investments
 from app.modules.investments.domain.products import Product, ProductKind
 from app.modules.ledger import service as ledger
@@ -390,6 +392,17 @@ async def confirm_result(
         clock,
         reason="Confirmed against the custodian's note as the second person",
     )
+    if not view.kind.buys:
+        # Withdrawals waiting for a sale are paid from what it raised, by the worker, at once.
+        await enqueue(
+            session,
+            JobRequest(
+                kind=FUND_FROM_SALE_KIND,
+                idempotency_key=f"sale:{view.id}",
+                payload={"sale": view.id},
+            ),
+            now=clock.now(),
+        )
     return await get_order(session, view.id)
 
 
