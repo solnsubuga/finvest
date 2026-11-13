@@ -43,6 +43,12 @@ The client can change the name, what it is for, the target and the date. A new t
 
 Closing a goal is final. Its investments carry on as the client's ordinary investments, because they are the client's own and closing moves no money. A closed goal takes no saving.
 
+## Rolling over
+
+A saving that rolls over at maturity becomes a new investment for the proceeds, principal and interest after tax. The investments module publishes `investments.rolled_over` with the consumer `goals.follow_rollover` (named in `goals/events.py`, so investing imports nothing else of goals). The worker then links the new investment to the same goal, so the goal's value carries on. Only running investments count towards the value, so the matured one stays in the list as a record and is not counted twice.
+
+A closed goal is not followed: its investments keep rolling over as the client's own. Following the same rollover again changes nothing.
+
 ## Limits
 
 - 20 open goals per client, checked under a per-client lock so two at once cannot pass it.
@@ -54,6 +60,8 @@ Closing a goal is final. Its investments carry on as the client's ordinary inves
 - A client creates and changes only their own goals. Staff read every goal and change none. The worker reads.
 - A goal begins active, keeps its client, currency and start, and never changes once closed.
 - A saving belongs to one goal of the same client. It is never changed or removed by any role, and it is refused for a goal that is not active. The check locks the goal, so a saving and a close at the same moment cannot cross.
+- Only the worker records a rollover, as the system, and only from a saving already linked to the same goal. A saving rolls over once. A client's own saving never names one.
+- The guards run with `search_path = pg_catalog, pg_temp` and name every table in full. The savings guard runs as its owner, so the worker can lock the goal without holding UPDATE on it.
 - Nobody deletes a goal, and a downgrade refuses to drop the tables while they hold rows.
 
 ## API
@@ -74,5 +82,4 @@ Client responses carry net figures and the yearly rate after tax as a label. No 
 
 - Saving rules: a monthly saving collected on a set day, with a mobile money prompt sent by the worker.
 - Group goals: one target shared by several clients, each saving into their own investments.
-- When an investment rolls over at maturity, the new term must stay linked to its goal. That waits for maturity in the investments module.
 - Withdrawing from a goal before its date, which waits for early withdrawal.
