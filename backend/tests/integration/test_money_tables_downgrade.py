@@ -1,7 +1,7 @@
 """A downgrade must never delete the books, the issued numbers, the audit trail, the job
 history, the receipts that stop a command running twice, the identity records, the payout
 destinations, the withdrawal limits, the payouts, the migration checks, the imported
-statements, the help chat or the complaints register."""
+statements, the help chat, the complaints register or the goals."""
 
 import os
 from collections.abc import Iterator
@@ -65,6 +65,13 @@ ROWS = {
         "'UGX', 1000000, 1250, 1500, 91, 'roll_over', now(), now() + interval '72 hours', "
         "now()); COMMIT",
         "refusing to drop investments",
+    ),
+    "0110_goals": (
+        "INSERT INTO goals (id, client_id, name, category, currency, target_minor, "
+        "product_code, created_at, updated_at) VALUES ('-Nabc0000000000000A1', "
+        "'-Nabc0000000000000B1', 'School fees', 'school_fees', 'UGX', 2000000, 'TREA-91', "
+        "now(), now())",
+        "refusing to drop goals",
     ),
     "0060_investment_products": (
         "BEGIN; SELECT set_config('finvest.actor_kind', 'staff', true); "
