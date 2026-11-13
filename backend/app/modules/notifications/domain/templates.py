@@ -16,7 +16,12 @@ from dataclasses import dataclass
 from typing import Literal, get_args
 
 Template = Literal[
-    "signup_code", "sign_in_code", "password_reset_code", "claim_code", "staff_enrolment"
+    "signup_code",
+    "sign_in_code",
+    "password_reset_code",
+    "claim_code",
+    "payout_account_code",
+    "staff_enrolment",
 ]
 TEMPLATES: tuple[Template, ...] = get_args(Template)
 
@@ -25,6 +30,7 @@ _VARIABLES: dict[Template, frozenset[str]] = {
     "sign_in_code": frozenset({"code", "minutes"}),
     "password_reset_code": frozenset({"code", "minutes"}),
     "claim_code": frozenset({"code", "minutes"}),
+    "payout_account_code": frozenset({"code", "minutes"}),
     "staff_enrolment": frozenset({"name", "link", "hours"}),
 }
 MAX_VALUE = 2000
@@ -62,6 +68,8 @@ _SMS: dict[str, str] = {
     "{minutes} minutes. Never share it.",
     "claim_code": "Your code to claim your Finvest account is {code}. It works for {minutes} "
     "minutes. Never share it. Finvest staff will never ask for it.",
+    "payout_account_code": "Your Finvest code to add a new account for your withdrawals is "
+    "{code}. It works for {minutes} minutes. Never share it. If this was not you, call us.",
 }
 
 
@@ -90,7 +98,7 @@ def render(
         and not any(link.startswith(f"{origin}/") for origin in link_origins)
     ):
         raise InvalidTemplate("The link does not point to a Finvest site")
-    if template in ("signup_code", "claim_code"):
+    if template in ("signup_code", "claim_code", "payout_account_code"):
         raise InvalidTemplate("This template is not sent by email")
     if template == "sign_in_code":
         return _message(

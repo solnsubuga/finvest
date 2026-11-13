@@ -158,8 +158,10 @@ In `backend/app/modules/payouts/api.py`. Every route needs a signed-in client an
 | Route | What it does |
 | --- | --- |
 | `GET /client/payout-destinations` | The client's payout accounts that are not removed, newest first |
-| `POST /client/payout-destinations` | Add one: `{kind: "mobile_money", phone, holder_name}` or `{kind: "bank", bank_code, account_number, holder_name}`. 201, awaiting the SMS code. 409 if it is already saved |
+| `POST /client/payout-destinations` | Add one: `{kind: "mobile_money", phone, holder_name}` or `{kind: "bank", bank_code, account_number, holder_name}`. 201, awaiting the SMS code. 409 if it is already saved, or `too_many_unconfirmed_accounts` when the client already has five awaiting their code |
 | `GET /client/payout-destinations/{id}` | One account |
+| `POST /client/payout-destinations/{id}/code` | Text the code for an account that is `awaiting_code`. 204. A new code replaces the one before. 429 past three in 15 minutes for the account, five for the client, three to the number texted, or ten for the client in a day |
+| `POST /client/payout-destinations/{id}/code/verify` | `{code}`. Moves the account to `awaiting_proof`. 401 `invalid_code` for a wrong code, 410 `expired` when none is left |
 | `DELETE /client/payout-destinations/{id}` | Remove it for good. 204 |
 | `POST /client/payout-destinations/{id}/proof` | Bank accounts only. A form with `proof_kind` (`bank_statement`, `bank_letter` or `bank_card`) and `file` (PDF, JPEG or PNG, at most 10 MiB). Sends it to staff |
 | `GET /client/payouts` | The client's payouts, newest first, at most 50 |
@@ -172,7 +174,7 @@ A proof file is checked by its first bytes, stored under `payouts/<destination i
 
 No route creates a payout. The module whose money is paid out creates it: an investment that matures, or an early withdrawal.
 
-**Not built yet, so no account can finish today.** Every new account, mobile money or bank, stays at `awaiting_code` until the SMS code step exists; it needs a code purpose in the identity module and comes in the next payouts PR. After it, a mobile money account also waits at `awaiting_proof` until Finvest can read the name the network holds for the number. Until then the client app should save an account and say it is waiting for the code step, not show a code screen that cannot finish.
+A new account moves from `awaiting_code` to `awaiting_proof` when the client enters a code texted for it: to the mobile money number itself, or for a bank account to the client's own number. The identity module issues and spends the code (purpose `payout_account`, migration 0034), and the account moves on in the same transaction that spends it. A wrong code still counts as one of the five tries. A mobile money account then waits at `awaiting_proof` until Finvest can read the name the network holds for the number, which is not built yet.
 
 ## Sending a payout
 

@@ -4,6 +4,7 @@ import asyncio
 import itertools
 from collections.abc import AsyncIterator
 from dataclasses import dataclass
+from typing import get_args
 
 import httpx
 import pytest
@@ -12,7 +13,7 @@ from sqlalchemy.exc import DBAPIError
 
 from app.api.app import create_app
 from app.infrastructure.database import Database
-from app.modules.identity.codes import CLAIM_COMPLETIONS, MAX_TRIES, CodeService
+from app.modules.identity.codes import CLAIM_COMPLETIONS, MAX_TRIES, CodeService, Purpose
 from app.modules.identity.hashing import PasswordHasher
 from app.modules.identity.service import (
     ClientContact,
@@ -273,3 +274,20 @@ async def test_a_claimed_account_never_becomes_unclaimed(
                 ),
                 {"id": client_id},
             )
+
+
+async def test_a_claim_code_is_still_issued_beside_payout_account_codes(api: Api) -> None:
+    # 0034 rewrote the purposes a code may have; claims must have kept theirs.
+    phone, client_id = await imported(api)
+    await api.codes.claim_start(client_id, address=None)
+    [code] = await texted(api, phone)
+    assert len(code) == 6
+    async with api.owner.transaction() as session:
+        definition = await session.scalar(
+            text(
+                "SELECT pg_get_constraintdef(oid) FROM pg_constraint "
+                "WHERE conname = 'ck_identity_codes_purpose'"
+            )
+        )
+    for purpose in get_args(Purpose):
+        assert f"'{purpose}'" in str(definition), purpose
