@@ -7,7 +7,7 @@ import { formatDay, formatExact, formatShort, formatTime, KIND_LABELS, parseAmou
 import { Row } from "./Position.tsx";
 
 const MAX_NOTE = 500;
-const FIELD = "h-12 w-full rounded-lg border border-border-strong bg-surface px-3.5 text-md font-semibold text-ink";
+export const FIELD = "h-12 w-full rounded-lg border border-border-strong bg-surface px-3.5 text-md font-semibold text-ink";
 
 export type OrderCommand =
   | { action: "approve" | "withdraw" | "confirm_result" }
@@ -167,7 +167,7 @@ export function OrderCard({ order, position, busy, error, today, onCommand, onCa
   );
 }
 
-function NoteForm(props: { label: string; submit: string; busy: boolean; onCancel: () => void; onSubmit: (note: string) => void }) {
+export function NoteForm(props: { label: string; submit: string; busy: boolean; onCancel: () => void; onSubmit: (note: string) => void }) {
   const id = useId();
   const [note, setNote] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -413,7 +413,7 @@ interface ControlProps {
 }
 
 /** A label, one control, and the hint and error that describe it. */
-function Field(props: {
+export function Field(props: {
   id: string;
   label: string;
   error?: string | undefined;
@@ -436,7 +436,7 @@ function Field(props: {
   );
 }
 
-function FieldError({ id, children }: { id: string; children: ReactNode }) {
+export function FieldError({ id, children }: { id: string; children: ReactNode }) {
   return (
     <p id={id} className="m-0 text-sm font-bold text-danger">
       {children}
@@ -444,7 +444,7 @@ function FieldError({ id, children }: { id: string; children: ReactNode }) {
   );
 }
 
-function FormButtons({ submit, busy, onCancel }: { submit: string; busy: boolean; onCancel: () => void }) {
+export function FormButtons({ submit, busy, onCancel }: { submit: string; busy: boolean; onCancel: () => void }) {
   return (
     <div className="flex flex-wrap gap-2">
       <Button type="submit" disabled={busy}>
