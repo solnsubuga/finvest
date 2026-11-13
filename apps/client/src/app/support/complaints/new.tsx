@@ -75,7 +75,9 @@ export default function NewComplaint() {
       });
     } catch (error) {
       if (error instanceof SupportError && error.code !== "unavailable") {
+        // Refused, so nothing was logged under this key, even if an earlier try was lost.
         setKey(newIdempotencyKey());
+        setLocked(false);
       } else {
         setLocked(true);
       }
