@@ -98,6 +98,13 @@ describe("rates screen", () => {
     expect(await api.listProposals()).toEqual([]);
   });
 
+  it("refuses, like the backend, a change to the rate already in force", async () => {
+    const stub = createStubCatalogueApi({ me: ME, today: TODAY, sample: "empty" });
+    const same = { productCode: "TREA-91", annualRateBps: 1250, taxBps: 1500, effectiveFrom: "2026-12-01", reason: "x" };
+    await expect(stub.propose(same)).rejects.toMatchObject({ code: "nothing_changes" });
+    await expect(stub.propose({ ...same, taxBps: 1000 })).resolves.toMatchObject({ productCode: "TREA-91" });
+  });
+
   it("shows the backend's refusal", async () => {
     const stub = createStubCatalogueApi({ me: ME, today: TODAY, sample: "empty" });
     const refusing: CatalogueApi = { ...stub, propose: () => Promise.reject(new CatalogueError("date_already_taken")) };

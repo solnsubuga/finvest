@@ -150,6 +150,13 @@ export function createStubCatalogueApi({ me, today, sample = "default" }: StubOp
       if (history.some((r) => r.effectiveFrom === draft.effectiveFrom)) {
         return Promise.reject(new CatalogueError("date_already_taken"));
       }
+      // Like the backend: a change to the rate and tax already in force on that day is refused.
+      const before = history
+        .filter((r) => r.effectiveFrom < draft.effectiveFrom)
+        .sort((a, b) => b.effectiveFrom.localeCompare(a.effectiveFrom))[0];
+      if (before && before.annualRateBps === draft.annualRateBps && before.taxBps === draft.taxBps) {
+        return Promise.reject(new CatalogueError("nothing_changes"));
+      }
       return Promise.resolve(clone(add(me, draft, new Date().toISOString())));
     },
     approve(proposalId) {
