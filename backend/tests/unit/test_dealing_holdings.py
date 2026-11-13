@@ -3,8 +3,10 @@ from datetime import date
 import pytest
 
 from app.modules.dealing.domain.holdings import (
+    Draw,
     InvalidLot,
     Lot,
+    draw,
     face_for_cost,
     income_at_maturity,
     sell,
@@ -117,3 +119,45 @@ def test_the_face_to_bid_for_refuses_a_bad_lot_size_or_cost() -> None:
         face_for_cost(ugx(100), 970_000, Money(100, Currency.USD))
     with pytest.raises(InvalidLot):
         face_for_cost(ugx(-1), 970_000, ugx(100))
+
+
+# Drawing a sale from several lots ---------------------------------------------------------------
+
+OLDER = Lot(face=ugx(100_000_000), cost=ugx(96_000_000), matures_on=MATURES)
+NEWER = Lot(face=ugx(100_000_000), cost=ugx(98_000_000), matures_on=MATURES)
+
+
+def test_a_sale_empties_the_first_lot_before_touching_the_next() -> None:
+    assert draw([OLDER, NEWER], ugx(150_000_000)) == (
+        Draw(0, ugx(100_000_000), ugx(96_000_000)),
+        Draw(1, ugx(50_000_000), ugx(49_000_000)),
+    )
+
+
+def test_a_sale_inside_one_lot_leaves_the_others_alone() -> None:
+    assert draw([OLDER, NEWER], ugx(1)) == (Draw(0, ugx(1), ugx(0)),)
+
+
+def test_drawing_everything_releases_every_shilling_of_cost() -> None:
+    parts = draw([OLDER, NEWER], ugx(200_000_000))
+    assert sum((part.cost_released for part in parts), ugx(0)) == ugx(194_000_000)
+
+
+@pytest.mark.parametrize("face", [0, -1, 200_000_001])
+def test_a_draw_is_positive_and_within_what_the_lots_hold(face: int) -> None:
+    with pytest.raises(InvalidLot):
+        draw([OLDER, NEWER], ugx(face))
+
+
+def test_a_draw_is_in_the_lots_currency() -> None:
+    with pytest.raises(InvalidLot):
+        draw([OLDER], Money(1, Currency.USD))
+
+
+@pytest.mark.parametrize("face", range(1, 200_000_001, 9_999_991))
+def test_cost_released_never_exceeds_the_share_sold(face: int) -> None:
+    parts = draw([OLDER, NEWER], ugx(face))
+    assert sum((part.face for part in parts), ugx(0)) == ugx(face)
+    for part in parts:
+        lot = (OLDER, NEWER)[part.lot]
+        assert part.cost_released.minor * lot.face.minor <= lot.cost.minor * part.face.minor

@@ -101,6 +101,26 @@ ROWS = {
         "'-Nabc0000000000000B1', now()); COMMIT",
         "refusing to drop dealing orders",
     ),
+    "0081_dealing_holdings": (
+        "BEGIN; SELECT set_config('finvest.actor_kind', 'staff', true); "
+        "SELECT set_config('finvest.actor_id', '-Nabc0000000000000B1', true); "
+        "INSERT INTO dealing_orders (id, kind, product_code, currency, face_minor, prepared_by, "
+        "prepared_at) VALUES ('-Nabc0000000000000A1', 'auction_bid', 'TREA-91', 'UGX', 100000, "
+        "'-Nabc0000000000000B1', now()); "
+        "SELECT set_config('finvest.actor_id', '-Nabc0000000000000C1', true); "
+        "UPDATE dealing_orders SET status = 'approved', decided_by = '-Nabc0000000000000C1', "
+        "decided_at = now(); "
+        "UPDATE dealing_orders SET status = 'result_recorded', result_face_minor = 100000, "
+        "result_amount_minor = 97000, result_settled_on = DATE '2026-11-19', "
+        "result_matures_on = DATE '2027-02-18', custodian_reference = 'CSD-1', "
+        "result_recorded_by = '-Nabc0000000000000C1', result_recorded_at = now(); "
+        "SELECT set_config('finvest.actor_id', '-Nabc0000000000000D1', true); "
+        "INSERT INTO dealing_lots (id, order_id, product_code, currency, face_minor, cost_minor, "
+        "settled_on, matures_on, custodian_reference) VALUES ('-Nabc0000000000000L1', "
+        "'-Nabc0000000000000A1', 'TREA-91', 'UGX', 100000, 97000, DATE '2026-11-19', "
+        "DATE '2027-02-18', 'CSD-1'); COMMIT",
+        "refusing to drop bills held or settled orders",
+    ),
     "0050_kyc": (
         "INSERT INTO kyc_checks (id, client_id, document_type, document_country, created_at, "
         "updated_at) VALUES ('-Nabc0000000000000A1', '-Nabc0000000000000B1', 'passport', 'UG', "
