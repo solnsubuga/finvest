@@ -10,6 +10,7 @@ import signal
 import sys
 import tempfile
 import time
+from collections.abc import Awaitable, Callable
 from pathlib import Path
 
 HEARTBEAT_SECONDS = 5.0
@@ -47,6 +48,20 @@ async def wait_or_stop(stop: asyncio.Event, seconds: float) -> None:
             await stop.wait()
     except TimeoutError:
         pass
+
+
+async def keep_heartbeat(
+    name: str, ready: Callable[[], Awaitable[bool]], stop: asyncio.Event
+) -> None:
+    """Touch the heartbeat while `ready` holds, until asked to stop. Removes it on the way out."""
+    path = heartbeat_path(name)
+    try:
+        while not stop.is_set():
+            if await ready():
+                beat(path)
+            await wait_or_stop(stop, HEARTBEAT_SECONDS)
+    finally:
+        path.unlink(missing_ok=True)
 
 
 def main() -> None:
