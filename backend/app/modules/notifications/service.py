@@ -53,8 +53,9 @@ async def queue_message(
     await session.execute(
         text(
             "INSERT INTO notification_messages (id, idempotency_key, channel, recipient, "
-            "template, variables, created_at) VALUES (:id, :key, :channel, :recipient, "
-            ":template, CAST(:variables AS jsonb), :now) ON CONFLICT (idempotency_key) DO NOTHING"
+            "template, variables, created_at, deliver_by) VALUES (:id, :key, :channel, :recipient, "
+            ":template, CAST(:variables AS jsonb), :now, :deliver_by) "
+            "ON CONFLICT (idempotency_key) DO NOTHING"
         ),
         {
             "id": push_id(),
@@ -64,6 +65,7 @@ async def queue_message(
             "template": template,
             "variables": to_json({name: str(value) for name, value in variables.items()}),
             "now": now,
+            "deliver_by": now + deliver_within,
         },
     )
     # The job names the message by its key, so the payload holds no address and no content.

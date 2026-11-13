@@ -30,7 +30,9 @@ from app.modules.payments.wiring import collections_provider
 from app.shared.clock import Clock, SystemClock
 
 
-def handlers(database: Database, clock: Clock) -> dict[str, JobHandler | Handler]:
+def handlers(
+    database: Database, clock: Clock, settings: Settings
+) -> dict[str, JobHandler | Handler]:
     """Every job kind this worker runs. A module adds its handlers here, keyed by kind.
 
     A handler that calls a provider is registered with `external_effect(handler)`, so a crash
@@ -61,7 +63,12 @@ def handlers(database: Database, clock: Clock) -> dict[str, JobHandler | Handler
         kinds.update(DepositJobs(database, collections, clock).handlers())
     kinds.update(
         notification_jobs.handlers(
-            database, clock, EmailSettings().transport(), SmsSettings().transport()
+            database,
+            clock,
+            EmailSettings().transport(),
+            SmsSettings().transport(),
+            # A link in a message may only point to the console or the client app.
+            link_origins=[*settings.staff_allowed_origins, *settings.client_allowed_origins],
         )
     )
     kinds.update(DeliveryEventJobs(database, clock).handlers())
@@ -77,7 +84,7 @@ async def run(settings: Settings, stop: asyncio.Event | None = None) -> None:
         await check_role(database, WORKER)
         worker = Worker(
             database,
-            handlers(database, clock),
+            handlers(database, clock, settings),
             WorkerConfig(
                 queue=jobs.queue,
                 lease=jobs.lease,

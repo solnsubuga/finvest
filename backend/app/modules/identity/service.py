@@ -17,6 +17,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.infrastructure.database import Database
 from app.infrastructure.settings import Settings
 from app.infrastructure.throttling import clear_attempts, reserve_attempts, throttle_key
+from app.modules.identity import trail
 from app.modules.identity.domain.accounts import InvalidIdentifier, normalize_email, normalize_phone
 from app.modules.identity.domain.passwords import password_problem
 from app.modules.identity.domain.permissions import Permission, Role, permissions_for
@@ -320,6 +321,7 @@ class IdentityService:
             raise ApplicationError("validation_failed")  # staff use the web console only
         idle, absolute = policy.expiry(now, now)
         token = new_token()
+        session_id = push_id(self.clock)
         await session.execute(
             text(
                 "INSERT INTO identity_sessions (id, actor_kind, actor_id, token_hash, "
@@ -328,7 +330,7 @@ class IdentityService:
                 ":now, :now, :idle, :absolute)"
             ),
             {
-                "id": push_id(self.clock),
+                "id": session_id,
                 "kind": actor.kind,
                 "actor": actor.id,
                 "hash": token_digest(token),
@@ -338,6 +340,15 @@ class IdentityService:
                 "idle": idle,
                 "absolute": absolute,
             },
+        )
+        await trail.note(
+            session,
+            self.clock,
+            actor,
+            "identity.session.opened",
+            resource_type="session",
+            resource_id=session_id,
+            details={"second_step": second_step, "transport": transport},
         )
         logger.info("session_opened", kind=actor.kind, second_step=second_step)
         return IssuedSession(token, transport, idle, absolute)
@@ -417,6 +428,30 @@ class IdentityService:
                 {"now": self.clock.now(), "reason": reason, "kind": actor.kind, "id": actor.id},
             )
             return len(rows.all())
+
+
+@dataclass(frozen=True, slots=True)
+class ClientContact:
+    """Where to reach a client. `email` is None when they gave none."""
+
+    phone: str
+    email: str | None
+
+
+async def client_contact(session: AsyncSession, client_id: str) -> ClientContact | None:
+    """The phone and email of an active client, for the worker to send them a message.
+
+    Other modules call this instead of reading identity tables. It answers nothing for a
+    client who is locked or closed, so nobody is messaged after closing their account. The
+    worker role may read only these columns.
+    """
+    row = (
+        await session.execute(
+            text("SELECT phone, email FROM identity_clients WHERE id = :id AND status = 'active'"),
+            {"id": client_id},
+        )
+    ).one_or_none()
+    return ClientContact(row.phone, row.email) if row is not None else None
 
 
 def _invalid(field: str, code: str) -> ApplicationError:

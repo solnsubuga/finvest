@@ -18,8 +18,9 @@ from app.infrastructure.settings import Settings
 from app.infrastructure.storage import FileStorage, StorageSettings
 from app.modules.goals import api as goals_api
 from app.modules.identity import api as identity_api
-from app.modules.identity import passkeys_api
+from app.modules.identity import codes_api, passkeys_api
 from app.modules.identity.authenticators import AuthenticatorService
+from app.modules.identity.codes import CodeService
 from app.modules.identity.hashing import PasswordHasher
 from app.modules.identity.passkeys import PasskeyService
 from app.modules.identity.service import IdentityService
@@ -81,6 +82,7 @@ def create_app(
     passkeys = PasskeyService(database, clock, settings, identity, hasher)
     app.state.passkeys = passkeys
     app.state.authenticators = AuthenticatorService(database, clock, settings, identity, passkeys)
+    app.state.codes = CodeService(database, clock, identity, passkeys, hasher)
     install_error_handlers(app)
     # The last middleware added is the outermost, so the request ID exists before anything runs.
     origins = sorted({*settings.client_allowed_origins, *settings.staff_allowed_origins})
@@ -109,6 +111,7 @@ def create_app(
     for router in (
         *identity_api.routers,
         *passkeys_api.routers,
+        *codes_api.routers,
         *notifications_api.routers,
         *support_api.routers,
     ):

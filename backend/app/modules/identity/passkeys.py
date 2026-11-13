@@ -45,6 +45,7 @@ from webauthn.helpers.structs import (
 from app.infrastructure.database import Database
 from app.infrastructure.settings import Settings
 from app.infrastructure.throttling import reserve_attempts, throttle_key
+from app.modules.identity import trail
 from app.modules.identity.domain.passwords import password_problem
 from app.modules.identity.domain.permissions import Role
 from app.modules.identity.domain.sessions import (
@@ -286,6 +287,14 @@ class PasskeyService:
             ),
             {**row, "name": name, "now": now},
         )
+        await trail.note(
+            session,
+            self.clock,
+            Actor(row["kind"], row["actor"]),
+            "identity.passkey.added",
+            resource_type="passkey",
+            resource_id=row["id"],
+        )
         logger.info("passkey_added", kind=row["kind"])
         return PasskeyView(row["id"], name, now, None)
 
@@ -446,6 +455,15 @@ class PasskeyService:
                 ),
                 {"now": self.clock.now(), "id": passkey_id, "actor": client.client_id},
             )
+            if removed:
+                await trail.note(
+                    session,
+                    self.clock,
+                    client.actor,
+                    "identity.passkey.removed",
+                    resource_type="passkey",
+                    resource_id=passkey_id,
+                )
         if not removed:
             raise ApplicationError("not_found")
         logger.info("passkey_removed", kind="client")
@@ -473,6 +491,21 @@ class PasskeyService:
                     "WHERE staff_id = :staff AND consumed_at IS NULL"
                 ),
                 {"now": now, "staff": staff_id},
+            )
+            # A link lets its holder replace the person's password and second step, so every
+            # one issued is on the record, and it says whether the person had already enrolled.
+            enrolled = await session.scalar(
+                text("SELECT status = 'active' FROM identity_staff WHERE id = :id"),
+                {"id": staff_id},
+            )
+            await trail.note(
+                session,
+                self.clock,
+                Actor("staff", staff_id),
+                "identity.staff.enrolment_link_issued",
+                resource_type="staff",
+                resource_id=staff_id,
+                details={"replaces_existing_sign_in": bool(enrolled)},
             )
             await session.execute(
                 text(
@@ -599,6 +632,16 @@ class PasskeyService:
                         "password_changed_at = :now WHERE id = :staff AND status <> 'disabled'"
                     ),
                     {"hash": hashed, "now": now, "staff": enrolment.staff_id},
+                )
+                # Everything the person signed in with before is gone, and this replaces it.
+                await trail.note(
+                    session,
+                    self.clock,
+                    actor,
+                    "identity.staff.enrolled",
+                    resource_type="staff",
+                    resource_id=enrolment.staff_id,
+                    details={"second_step": second_step},
                 )
                 issued = await self.identity.issue_in(session, actor, second_step, "cookie", now)
         except IntegrityError:
