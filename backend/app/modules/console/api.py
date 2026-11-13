@@ -13,7 +13,7 @@ from pydantic import Field
 from app.infrastructure.database import Database
 from app.modules.console import clients
 from app.modules.identity import client_locks
-from app.modules.identity.api import require_permission
+from app.modules.identity.api import require_confirmed, require_permission
 from app.modules.identity.service import StaffSession
 from app.shared.business_day import business_date
 from app.shared.clock import Clock
@@ -31,6 +31,8 @@ routers = [router]
 
 ClientViewer = Annotated[StaffSession, Depends(require_permission("clients.view"))]
 ClientLocker = Annotated[StaffSession, Depends(require_permission("clients.lock"))]
+# Deciding needs a passkey or app code from the last few minutes.
+LockDecider = Annotated[StaffSession, Depends(require_confirmed("clients.lock"))]
 Reason = Annotated[str, Field(min_length=1, max_length=client_locks.MAX_REASON)]
 
 
@@ -293,7 +295,7 @@ async def propose_lock(
 
 @router.post("/locks/{lock_id}/decision")
 async def decide_lock(
-    lock_id: PushId, body: DecideLock, staff: ClientLocker, database: Db, clock: Time
+    lock_id: PushId, body: DecideLock, staff: LockDecider, database: Db, clock: Time
 ) -> LockView:
     """Approve or reject someone else's lock or unlock, or withdraw your own."""
     async with database.actor_transaction(staff.actor) as session:

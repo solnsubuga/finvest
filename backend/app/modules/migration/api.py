@@ -12,7 +12,7 @@ from fastapi import APIRouter, Depends, Request
 from pydantic import BeforeValidator, Field
 
 from app.infrastructure.database import Database
-from app.modules.identity.api import require_permission
+from app.modules.identity.api import require_confirmed, require_permission
 from app.modules.identity.service import StaffSession
 from app.modules.migration import claims, service
 from app.modules.migration.domain.claim import Progress
@@ -54,6 +54,8 @@ router = APIRouter(prefix="/staff/migration", tags=["migration"], responses=_REF
 Viewer = Annotated[StaffSession, Depends(require_permission("migration.view"))]
 Importer = Annotated[StaffSession, Depends(require_permission("migration.import"))]
 Signer = Annotated[StaffSession, Depends(require_permission("migration.sign_off"))]
+# Deciding needs a passkey or app code from the last few minutes.
+SignOffDecider = Annotated[StaffSession, Depends(require_confirmed("migration.sign_off"))]
 
 
 class ProblemView(Contract):
@@ -408,7 +410,7 @@ async def enter_control_totals(
 
 @router.post("/control-totals/{totals_id}/confirmation")
 async def confirm_control_totals(
-    totals_id: PushId, request: Request, staff: Signer
+    totals_id: PushId, request: Request, staff: SignOffDecider
 ) -> OverviewView:
     """Confirm the totals someone else entered, after checking them against the old system."""
     database, clock = _state(request)
@@ -430,7 +432,7 @@ async def propose_sign_off(body: SignOffRequest, request: Request, staff: Signer
 
 @router.post("/sign-offs/{sign_off_id}/decision")
 async def decide_sign_off(
-    sign_off_id: PushId, body: DecisionRequest, request: Request, staff: Signer
+    sign_off_id: PushId, body: DecisionRequest, request: Request, staff: SignOffDecider
 ) -> SignOffView:
     """Approve or reject a sign-off someone else proposed."""
     database, clock = _state(request)

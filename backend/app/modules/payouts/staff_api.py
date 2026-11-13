@@ -18,7 +18,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.infrastructure.database import Database
 from app.infrastructure.storage import FileStorage, StorageError
-from app.modules.identity.api import require_permission
+from app.modules.identity.api import require_confirmed, require_permission
 from app.modules.identity.service import StaffSession
 from app.modules.kyc import service as kyc
 from app.modules.payouts import destinations
@@ -70,6 +70,8 @@ Files = Annotated[FileStorage, Depends(_storage)]
 Time = Annotated[Clock, Depends(_clock)]
 Viewer = Annotated[StaffSession, Depends(require_permission("review_queue.view"))]
 Decider = Annotated[StaffSession, Depends(require_permission("payout_accounts.change"))]
+# Approving needs a passkey or app code from the last few minutes.
+Approver = Annotated[StaffSession, Depends(require_confirmed("payout_accounts.change"))]
 
 Status = Literal["awaiting_code", "awaiting_proof", "in_review", "approved", "rejected", "removed"]
 Rejection = Literal[
@@ -287,7 +289,7 @@ async def check_destination(
 
 @staff_router.post("/payout-destinations/{destination_id}/approve")
 async def approve_destination(
-    destination_id: PushId, body: Approval, staff: Decider, database: Db, clock: Time
+    destination_id: PushId, body: Approval, staff: Approver, database: Db, clock: Time
 ) -> StaffDestinationOut:
     """Approve someone else's check. The account can be paid 24 hours later.
 

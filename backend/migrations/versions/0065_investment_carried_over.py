@@ -54,6 +54,8 @@ CREATE OR REPLACE FUNCTION finvest_investments_guard() RETURNS trigger
             -- Carried over from Finvest 1.0 at the switch, by the worker only: already running,
             -- on the old system's own rate and tax, with the interest earned up to a day
             -- before today and before it matures. Nothing else of a new investment applies.
+            -- ck_investments_started holds an active row to its start date, start time and
+            -- start entry, so a NULL start date never reaches the comparisons below.
             SELECT * INTO product FROM investment_products WHERE id = NEW.product_id;
             day := (clock_timestamp() AT TIME ZONE 'Africa/Kampala')::date;
             IF NOT is_worker OR NEW.status <> 'active'

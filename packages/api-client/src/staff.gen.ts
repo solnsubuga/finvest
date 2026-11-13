@@ -392,6 +392,21 @@ export const ComplaintNote = z.object({
 });
 export type ComplaintNote = z.infer<typeof ComplaintNote>;
 
+export const ConfirmCode = z.object({
+  code: z.string(),
+});
+export type ConfirmCode = z.infer<typeof ConfirmCode>;
+
+export const ConfirmWithPasskey = z.object({
+  credential: z.record(z.string(), z.unknown()),
+});
+export type ConfirmWithPasskey = z.infer<typeof ConfirmWithPasskey>;
+
+export const Confirmed = z.object({
+  confirmed_until: z.string(),
+});
+export type Confirmed = z.infer<typeof Confirmed>;
+
 export const MigrationApiAmount = z.object({
   currency: Currency,
   minor: z.number().int(),
@@ -1424,9 +1439,11 @@ export const StaffSendMessage = z.object({
 export type StaffSendMessage = z.infer<typeof StaffSendMessage>;
 
 export const StaffSessionView = z.object({
+  confirmed_until: z.string(),
   name: z.string(),
   permissions: z.array(z.enum(["overview.view", "review_queue.view", "identity_checks.view", "identity_checks.review", "maturities.view", "support.view", "support.reply", "complaints.view", "complaints.manage", "complaints.close", "clients.view", "clients.lock", "money_movement.view", "reconciliation.view", "investments.view", "automatic_investing.view", "goals.view", "dealing_desk.view", "dealing_orders.change", "finance.view", "products.view", "rates.view", "rates.change", "compliance.view", "team.view", "team.change", "reports.view", "audit.view", "settings.view", "wordings.change", "email_suppressions.lift", "announcements.send", "migration.view", "bank_transfers.change", "payout_accounts.change", "migration.import", "migration.sign_off", "client_phones.change", "investment_corrections.change"])),
   role: z.enum(["admin", "operations", "finance", "compliance", "support"]),
+  second_steps: z.array(z.enum(["passkey", "authenticator", "code", "signup"])),
   staff_id: z.string(),
 });
 export type StaffSessionView = z.infer<typeof StaffSessionView>;
@@ -2704,6 +2721,39 @@ export const operations = {
     idempotent: false,
     status: 200,
     response: StaffSessionView,
+  },
+  "POST /staff/session/confirmation/authenticator": {
+    method: "POST",
+    path: "/staff/session/confirmation/authenticator",
+    params: z.object({}),
+    query: z.object({}),
+    body: ConfirmCode,
+    bodyKind: "json",
+    idempotent: false,
+    status: 200,
+    response: Confirmed,
+  },
+  "POST /staff/session/confirmation/passkey": {
+    method: "POST",
+    path: "/staff/session/confirmation/passkey",
+    params: z.object({}),
+    query: z.object({}),
+    body: ConfirmWithPasskey,
+    bodyKind: "json",
+    idempotent: false,
+    status: 200,
+    response: Confirmed,
+  },
+  "POST /staff/session/confirmation/passkey/options": {
+    method: "POST",
+    path: "/staff/session/confirmation/passkey/options",
+    params: z.object({}),
+    query: z.object({}),
+    body: null,
+    bodyKind: null,
+    idempotent: false,
+    status: 200,
+    response: PasskeyOptions,
   },
   "GET /staff/sessions": {
     method: "GET",

@@ -29,7 +29,13 @@ from tests.support.ledger import (
 
 pytestmark = pytest.mark.integration
 
-PRODUCTION_LIST = ["dealing.order", "ledger.correction", "payout", "pot_transfer"]
+PRODUCTION_LIST = [
+    "dealing.buffer_capital",
+    "dealing.order",
+    "ledger.correction",
+    "payout",
+    "pot_transfer",
+]
 
 RAW_ENTRY = text(
     "INSERT INTO ledger_journal_entries (id, entry_type, currency, effective_date, posted_at, "

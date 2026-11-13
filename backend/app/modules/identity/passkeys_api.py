@@ -10,12 +10,14 @@ from app.modules.identity.api import (
     _REFUSALS,
     ClientSessionView,
     CurrentClient,
+    CurrentStaff,
     Identity,
     Password,
     StaffSessionView,
     caller_address,
     check_origin,
     set_session_cookie,
+    staff_view,
 )
 from app.modules.identity.authenticators import AuthenticatorService
 from app.modules.identity.domain.permissions import Role
@@ -287,12 +289,7 @@ async def _staff_signed_in(
     if session is None:
         raise ApplicationError("unauthorized")
     set_session_cookie(request, response, "staff", issued, request.app.state.clock.now())
-    return StaffSessionView(
-        staff_id=session.staff_id,
-        name=session.name,
-        role=session.role,
-        permissions=session.permissions,
-    )
+    return await staff_view(identity, session)
 
 
 @staff_router.post("/login/passkey/options")
@@ -400,3 +397,42 @@ async def staff_enrolment_authenticator_verify(
 
 
 routers: list[APIRouter] = [client_router, staff_router]
+
+
+# A member of staff confirming it is them again before an approval
+
+
+class Confirmed(Contract):
+    # Approving another person's change works without asking again until then.
+    confirmed_until: datetime
+
+
+class ConfirmWithPasskey(Contract):
+    credential: Credential
+
+
+@staff_router.post("/session/confirmation/passkey/options")
+async def staff_confirmation_passkey_options(
+    request: Request, staff: CurrentStaff, passkeys: Passkeys
+) -> PasskeyOptions:
+    """Ask the device to sign again, for this session only."""
+    check_origin(request, "staff", required=True)
+    return PasskeyOptions(public_key=await passkeys.reconfirm_options(staff))
+
+
+@staff_router.post("/session/confirmation/passkey")
+async def staff_confirmation_passkey(
+    body: ConfirmWithPasskey, request: Request, staff: CurrentStaff, passkeys: Passkeys
+) -> Confirmed:
+    """Confirm it is you with a passkey, so approvals work for the next ten minutes."""
+    check_origin(request, "staff", required=True)
+    return Confirmed(confirmed_until=await passkeys.reconfirm(staff, body.credential))
+
+
+@staff_router.post("/session/confirmation/authenticator")
+async def staff_confirmation_authenticator(
+    body: ConfirmCode, request: Request, staff: CurrentStaff, authenticators: Authenticators
+) -> Confirmed:
+    """Confirm it is you with a code from the authenticator app."""
+    check_origin(request, "staff", required=True)
+    return Confirmed(confirmed_until=await authenticators.reconfirm(staff, body.code))

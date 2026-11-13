@@ -13,7 +13,7 @@ from pydantic import Field
 from app.infrastructure.database import Database
 from app.infrastructure.settings import Settings
 from app.modules.identity import team
-from app.modules.identity.api import require_permission
+from app.modules.identity.api import require_confirmed, require_permission
 from app.modules.identity.domain.permissions import ROLES, Permission, Role, permissions_for
 from app.modules.identity.domain.team import MAX_NAME, MAX_REASON, ChangeKind, StaffStatus
 from app.modules.identity.service import StaffSession
@@ -33,6 +33,8 @@ routers = [router]
 
 TeamViewer = Annotated[StaffSession, Depends(require_permission("team.view"))]
 TeamChanger = Annotated[StaffSession, Depends(require_permission("team.change"))]
+# Deciding needs a passkey or app code from the last few minutes.
+TeamDecider = Annotated[StaffSession, Depends(require_confirmed("team.change"))]
 Reason = Annotated[str, Field(min_length=1, max_length=MAX_REASON)]
 
 
@@ -194,7 +196,7 @@ async def propose_change(
 async def decide_change(
     change_id: PushId,
     body: DecideChange,
-    staff: TeamChanger,
+    staff: TeamDecider,
     database: Db,
     clock: Time,
     origin: ConsoleOrigin,

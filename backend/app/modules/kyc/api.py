@@ -16,7 +16,7 @@ from pydantic import Field
 from app.infrastructure.database import Database
 from app.infrastructure.sealing import Sealer
 from app.infrastructure.storage import FileStorage, InvalidFile, NewFile, StorageError
-from app.modules.identity.api import CurrentClient, require_permission
+from app.modules.identity.api import CurrentClient, require_confirmed, require_permission
 from app.modules.identity.service import StaffSession
 from app.modules.kyc import service
 from app.modules.kyc.domain.checks import (
@@ -245,6 +245,8 @@ def create_routers(
     )
     Viewer = Annotated[StaffSession, Depends(require_permission("identity_checks.view"))]
     Reviewer = Annotated[StaffSession, Depends(require_permission("identity_checks.review"))]
+    # Deciding needs a passkey or app code from the last few minutes.
+    Decider = Annotated[StaffSession, Depends(require_confirmed("identity_checks.review"))]
 
     def seal() -> Sealer:
         if sealer is None:
@@ -428,7 +430,7 @@ def create_routers(
 
     @staff_router.post("/{check_id}/approve")
     async def approve(
-        check_id: PushId, body: ReasonBody, staff: Reviewer, request: Request
+        check_id: PushId, body: ReasonBody, staff: Decider, request: Request
     ) -> StaffCheck:
         """Approve the client and issue their account number. It cannot be undone."""
         async with database(request).actor_transaction(staff.actor) as session:
@@ -439,7 +441,7 @@ def create_routers(
 
     @staff_router.post("/{check_id}/reject")
     async def reject(
-        check_id: PushId, body: RejectBody, staff: Reviewer, request: Request
+        check_id: PushId, body: RejectBody, staff: Decider, request: Request
     ) -> StaffCheck:
         """Reject the client. It cannot be undone."""
         async with database(request).actor_transaction(staff.actor) as session:
