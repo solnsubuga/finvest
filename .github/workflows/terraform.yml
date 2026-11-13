@@ -50,6 +50,22 @@ jobs:
             terraform -chdir=infra/terraform/envs/$env init -backend=false -lockfile=readonly
             terraform -chdir=infra/terraform/envs/$env validate
           done
+      - name: Test the plan hash script
+        run: |
+          # Same plan twice gives the same hash, and a different plan gives a different one.
+          dir=$(mktemp -d)
+          script="$PWD/infra/terraform/scripts/plan-hash.sh"
+          cd "$dir"
+          echo 'resource "terraform_data" "t" { input = "a" }' > main.tf
+          terraform init -input=false >/dev/null
+          terraform plan -input=false -out=one >/dev/null
+          terraform plan -input=false -out=two >/dev/null
+          first=$(bash "$script" one)
+          [ "$first" = "$(bash "$script" two)" ]
+          echo 'resource "terraform_data" "t" { input = "b" }' > main.tf
+          terraform plan -input=false -out=three >/dev/null
+          [ "$first" != "$(bash "$script" three)" ]
+          echo "plan hash script ok"
 
   plan:
     name: Plan
@@ -92,7 +108,7 @@ jobs:
             terraform show -no-color tfplan
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
-          echo "plan_hash=$(../../scripts/plan-hash.sh tfplan)" >> "$GITHUB_OUTPUT"
+          echo "plan_hash=$(bash ../../scripts/plan-hash.sh tfplan)" >> "$GITHUB_OUTPUT"
 
   apply:
     name: Apply
@@ -127,7 +143,7 @@ jobs:
           echo "Applying to ${{ inputs.environment }}" >> "$GITHUB_STEP_SUMMARY"
           terraform init -lockfile=readonly
           terraform plan -no-color -out=tfplan
-          hash=$(../../scripts/plan-hash.sh tfplan)
+          hash=$(bash ../../scripts/plan-hash.sh tfplan)
           if [ "$hash" != "$REVIEWED_PLAN_HASH" ]; then
             echo "The plan changed since it was reviewed. Run the workflow again and review the new plan." | tee -a "$GITHUB_STEP_SUMMARY"
             exit 1
