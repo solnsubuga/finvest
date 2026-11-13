@@ -45,12 +45,25 @@ ROWS = {
         "VALUES (DATE '2026-11-14', 'UGX', now())",
         "refusing to drop interest runs",
     ),
-    "0061_investments": (
+    "0063_investment_maturity": (
+        "BEGIN; SELECT set_config('finvest.actor_kind', 'client', true); "
+        "SELECT set_config('finvest.actor_id', '-Nabc0000000000000B1', true); "
         "INSERT INTO investments (id, client_id, product_id, currency, principal_minor, "
         "annual_rate_bps, tax_bps, term_days, at_maturity, created_at, pay_by, updated_at) "
         "VALUES ('-Nabc0000000000000A1', '-Nabc0000000000000B1', 'FvProduct1TREA91_001', "
         "'UGX', 1000000, 1250, 1500, 91, 'roll_over', now(), now() + interval '72 hours', "
-        "now())",
+        "now()); UPDATE investments SET at_maturity = 'pay_out', "
+        "payout_destination_id = '-Nabc0000000000000D1'; COMMIT",
+        "refusing to drop the record of matured investments",
+    ),
+    "0061_investments": (
+        "BEGIN; SELECT set_config('finvest.actor_kind', 'client', true); "
+        "SELECT set_config('finvest.actor_id', '-Nabc0000000000000B1', true); "
+        "INSERT INTO investments (id, client_id, product_id, currency, principal_minor, "
+        "annual_rate_bps, tax_bps, term_days, at_maturity, created_at, pay_by, updated_at) "
+        "VALUES ('-Nabc0000000000000A1', '-Nabc0000000000000B1', 'FvProduct1TREA91_001', "
+        "'UGX', 1000000, 1250, 1500, 91, 'roll_over', now(), now() + interval '72 hours', "
+        "now()); COMMIT",
         "refusing to drop investments",
     ),
     "0060_investment_products": (

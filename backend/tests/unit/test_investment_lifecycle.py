@@ -5,13 +5,20 @@ import pytest
 from app.modules.investments.domain.investments import (
     CANCEL_GRACE,
     PAYMENT_WINDOW,
+    AtMaturity,
+    HoldReason,
     InvestmentStatus,
+    MaturityPlan,
+    MaturityStep,
     Start,
     StartRefusal,
     can_be_cancelled,
     can_be_paid,
+    can_choose_maturity,
     check_start,
+    is_due_to_mature,
     pay_by,
+    plan_maturity,
     start,
 )
 from app.shared.money import Currency, Money
@@ -103,3 +110,71 @@ def test_an_impossible_confirmation_date_is_refused(confirmed_on: date, today: d
 
 def test_an_open_term_has_no_maturity_date() -> None:
     assert start(date(2026, 11, 13), None) == Start(date(2026, 11, 13), None)
+
+
+# Maturity ---------------------------------------------------------------------------------------
+
+MATURES = date(2027, 2, 12)
+MATURED = InvestmentStatus.MATURED
+
+
+def test_the_choice_for_maturity_can_change_up_to_the_day_before() -> None:
+    assert can_choose_maturity(AWAITING, 91, None, date(2026, 11, 13))
+    assert can_choose_maturity(ACTIVE, 91, MATURES, MATURES - timedelta(days=1))
+    assert not can_choose_maturity(ACTIVE, 91, MATURES, MATURES)
+    assert not can_choose_maturity(ACTIVE, 91, MATURES, MATURES + timedelta(days=1))
+
+
+@pytest.mark.parametrize("status", [CANCELLED, MATURED])
+def test_a_closed_investment_has_no_choice_left(status: InvestmentStatus) -> None:
+    assert not can_choose_maturity(status, 91, MATURES, date(2026, 11, 14))
+
+
+def test_an_open_term_has_no_maturity_to_choose_for() -> None:
+    assert not can_choose_maturity(ACTIVE, None, None, date(2026, 11, 14))
+    assert not is_due_to_mature(ACTIVE, None, date(2030, 1, 1))
+
+
+def test_an_investment_is_due_on_its_maturity_date_and_after() -> None:
+    assert not is_due_to_mature(ACTIVE, MATURES, MATURES - timedelta(days=1))
+    assert is_due_to_mature(ACTIVE, MATURES, MATURES)
+    assert is_due_to_mature(ACTIVE, MATURES, MATURES + timedelta(days=9))
+
+
+@pytest.mark.parametrize("status", [AWAITING, CANCELLED, MATURED])
+def test_only_a_running_investment_matures(status: InvestmentStatus) -> None:
+    assert not is_due_to_mature(status, MATURES, MATURES)
+
+
+@pytest.mark.parametrize(
+    ("choice", "has_destination", "product_open", "plan"),
+    [
+        (AtMaturity.ROLL_OVER, False, True, MaturityPlan(MaturityStep.ROLL_OVER)),
+        (AtMaturity.PAY_OUT, True, True, MaturityPlan(MaturityStep.PAY_OUT)),
+        (AtMaturity.PAY_OUT, True, False, MaturityPlan(MaturityStep.PAY_OUT)),
+        # Nowhere to send it: held, never rolled over instead.
+        (
+            AtMaturity.PAY_OUT,
+            False,
+            True,
+            MaturityPlan(MaturityStep.HOLD, HoldReason.NO_DESTINATION),
+        ),
+        # The product closed: held, never sent to a destination the client did not choose.
+        (
+            AtMaturity.ROLL_OVER,
+            True,
+            False,
+            MaturityPlan(MaturityStep.HOLD, HoldReason.PRODUCT_NOT_OPEN),
+        ),
+        (
+            AtMaturity.ROLL_OVER,
+            False,
+            False,
+            MaturityPlan(MaturityStep.HOLD, HoldReason.PRODUCT_NOT_OPEN),
+        ),
+    ],
+)
+def test_money_at_maturity_follows_the_clients_choice_or_waits(
+    choice: AtMaturity, has_destination: bool, product_open: bool, plan: MaturityPlan
+) -> None:
+    assert plan_maturity(choice, has_destination=has_destination, product_open=product_open) == plan
