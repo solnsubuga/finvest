@@ -71,7 +71,7 @@ async def test_a_bank_transfer_is_matched_by_one_person_approved_by_another_and_
     assert await balance(world, HOLDING, owner=client.id, reference=requested.id) == amount
     trail = await audit_for(migrator_database, [payment["id"], requested.id])
     expected = (
-        "payments.bank_transfer_submitted",
+        "payments.deposit_requested",
         "payments.bank_transfer_opened",
         "payments.bank_transfer_reviewed",
         "payments.bank_match_approved",
