@@ -1,5 +1,5 @@
 """A downgrade must never delete the books, the issued numbers, the audit trail, the job
-history or the receipts that stop a command running twice."""
+history, the receipts that stop a command running twice or the identity records."""
 
 import os
 from collections.abc import Iterator
@@ -37,6 +37,12 @@ ROWS = {
         "request_digest, status_code, response, created_at) VALUES ('client', "
         "'-Nabc0000000000000A1', 'test.run', 'key-0001', repeat('0', 64), 200, '{}', now())",
         "refusing to drop operation receipts",
+    ),
+    "0050_kyc": (
+        "INSERT INTO kyc_checks (id, client_id, document_type, document_country, created_at, "
+        "updated_at) VALUES ('-Nabc0000000000000A1', '-Nabc0000000000000B1', 'passport', 'UG', "
+        "now(), now())",
+        "refusing to drop identity checks",
     ),
 }
 

@@ -40,7 +40,7 @@ A running log. Add a row when a decision is made, and move an open question up w
 | Data protection: registration, consent wording, and whether personal data may be stored outside Uganda. This decides the hosting region. | Counsel |
 | Do group goals with two approvals count as a collective scheme? | Counsel |
 | ioTec: fees, sandbox, settlement speed from the ioTec wallet to our bank, payout limits, and whether Verify sends its own code. | ioTec |
-| Identity check provider: Smile ID coverage and pricing for Uganda. | Provider |
+| Identity check provider: Smile ID coverage and pricing for Uganda, or ioTec Verify if it can check identity documents. Until one is chosen every client is reviewed by a person. See [identity-checks.md](identity-checks.md). | Owner |
 | Will passkeys become compulsory for clients? | Owner |
 | Should signing in with an authenticator app carry the 24 hour withdrawal limit? Built as no: only SMS and email codes carry it. | Owner |
 | Is api.finvestug.com the backend address? | Owner |

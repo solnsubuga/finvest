@@ -205,12 +205,18 @@ async def test_the_database_and_python_agree_on_check_digits(app_database: Datab
     assert verdicts[""] is False and verdicts["12a4"] is False and verdicts["1234 5678"] is False
 
 
+REGISTRY_REFUSAL = "never changed or removed"
+
+
 @pytest.mark.parametrize(
-    "statement",
+    ("statement", "refusal"),
     [
-        "UPDATE account_numbers SET issued_at = now()",
-        "DELETE FROM account_numbers",
-        "TRUNCATE account_numbers",
+        ("UPDATE account_numbers SET issued_at = now()", REGISTRY_REFUSAL),
+        ("DELETE FROM account_numbers", REGISTRY_REFUSAL),
+        # Identity checks reference the registry, so PostgreSQL stops a plain TRUNCATE before
+        # the trigger runs. With CASCADE it reaches the trigger.
+        ("TRUNCATE account_numbers", "referenced in a foreign key constraint"),
+        ("TRUNCATE account_numbers CASCADE", REGISTRY_REFUSAL),
     ],
 )
 async def test_a_number_is_never_changed_or_released(
@@ -219,6 +225,7 @@ async def test_a_number_is_never_changed_or_released(
     migrator_database: Database,
     fake_clock: FakeClock,
     statement: str,
+    refusal: str,
 ) -> None:
     async with app_database.actor_transaction(operator(app_database)) as session:
         number = await issue_account_number(session, AccountType.PERSONAL, fake_clock)
@@ -227,7 +234,7 @@ async def test_a_number_is_never_changed_or_released(
             async with database.actor_transaction(operator(database)) as session:
                 await session.execute(text(statement))
     # Closing an account must not free its number, whoever tries.
-    with pytest.raises(DBAPIError, match="never changed or removed"):
+    with pytest.raises(DBAPIError, match=refusal):
         async with migrator_database.transaction() as session:
             await session.execute(text(statement))
     async with app_database.actor_transaction(operator(app_database)) as session:

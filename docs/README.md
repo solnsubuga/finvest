@@ -9,6 +9,7 @@
 | [ledger.md](ledger.md) | How the ledger, integer money, account number issuing and the audit trail are built, and what the database enforces |
 | [payouts.md](payouts.md) | Payout destinations, the name lock, the 24 hour wait, withdrawal limits and the life of a payout |
 | [reconciliation.md](reconciliation.md) | Statements, matching against the ledger, exceptions and the two-person day close |
+| [identity-checks.md](identity-checks.md) | What a client hands in, the lifecycle of a check, automatic checks, and what the database enforces |
 | [account-numbers.md](account-numbers.md) | Format, generation and lifetime of client account numbers |
 | [roadmap.md](roadmap.md) | Build phases and the feature checklist for the client app and back office |
 | [migration.md](migration.md) | Moving Finvest 1.0 clients onto the new system |
