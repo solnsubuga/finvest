@@ -69,6 +69,9 @@ A running log. Add a row when a decision is made, and move an open question up w
 | 2026-11-13 | A payout account whose name differs from the client's ID is never approved, not even by two staff. The same holds for a mobile money number: a different registered name is refused outright. |
 | 2026-11-13 | Decided for now: once a day is reconciled and signed off, the ledger is closed through it and the database refuses any entry dated on or before it. A closed day is never reopened. A mistake found later is corrected by an entry dated in an open day. Today and future days cannot be closed. See [ledger.md](ledger.md#closing-a-day). Asked for in review and built without waiting for the owner, who can revisit it. |
 | 2026-11-13 | Decided for now, by the identity checks thread. A client's document number, date of birth and TIN are encrypted field by field before they reach the database, with a key the database never holds (`FINVEST_IDENTITY_DATA_KEY`). Names and the document expiry date stay readable so staff can search and expiry can be checked. And a person approves every client: a clean result from automatic checks is flagged as passed and still waits for staff, until the owner allows approval with no person involved. See [identity-checks.md](identity-checks.md). |
+| 2026-11-13 | Statements and receipts (owner's request): a statement goes by email to every client after each month in which they held an investment or anything happened, a client can make one for any dates up to one year in the app, and every payment received gets an emailed receipt. Each email carries the PDF. See [documents.md](documents.md). |
+| 2026-11-13 | Working default: a statement shows figures after tax only, with no tax rate and no tax amount, as [rules.md](rules.md) requires. Tax withheld appears only on the yearly tax certificate. The owner can change it at any time. |
+| 2026-11-13 | Working default: a statement email carries no figures, only the attached PDF, and no email carries an image. A receipt email shows the amount received. The PDFs have no password. The owner can change any of these at any time. |
 
 ## Open
 
@@ -78,6 +81,7 @@ A running log. Add a row when a decision is made, and move an open question up w
 | Data protection: registration and consent wording for data hosted in London. | Counsel |
 | Do group goals with two approvals count as a collective scheme? | Counsel |
 | ioTec: fees, sandbox, settlement speed from the ioTec wallet to our bank, payout limits, and whether Verify sends its own code. | ioTec |
+| Should statement and receipt PDFs be password protected, and with what (for example the account number)? Working default: no password. | Owner |
 | Identity check provider: Smile ID coverage and pricing for Uganda, or ioTec Verify if it can check identity documents. Until one is chosen every client is reviewed by a person. See [identity-checks.md](identity-checks.md). | Owner |
 | Identity checks: may a client be approved with no person involved when every automatic check passed? Built as no since 2026-11-13 (see Decided); one switch turns it on. And confirm field-level encryption of the document number, date of birth and TIN, in use as the working default. | Owner |
 | Will passkeys become compulsory for clients? | Owner |
