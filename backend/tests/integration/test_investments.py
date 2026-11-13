@@ -13,8 +13,9 @@ from app.infrastructure.jobs import JobRequest, Worker, WorkerConfig, enqueue
 from app.modules.investments import service as investments
 from app.modules.investments.domain.interest import ClientReturns
 from app.modules.investments.domain.investments import AtMaturity, InvestmentStatus
+from app.modules.investments.events import START_KIND
 from app.modules.investments.holdings import AWAITING_START, HOLDING
-from app.modules.investments.jobs import START_KIND, InvestmentJobs
+from app.modules.investments.jobs import InvestmentJobs
 from app.modules.ledger import service as ledger
 from app.shared.actors import SYSTEM, Actor
 from app.shared.errors import ApplicationError
@@ -22,21 +23,25 @@ from app.shared.money import Currency, Money
 from app.shared.push_ids import push_id
 from tests.support.clock import AsyncBarrier, FakeClock
 from tests.support.investments import (
+    PRESENT,
     account_balance,
+    after,
     approved_client,
     at,
     pay,
     request,
     started,
+    today,
 )
 from tests.support.ledger import client as new_client
 from tests.support.ledger import key, ugx
 from tests.support.ledger import staff as new_staff
+from tests.support.payments import start_deposit
 
 pytestmark = pytest.mark.integration
 
-DAY = date(2026, 11, 13)
-NOW = at(DAY)
+DAY = today()
+NOW = PRESENT
 ACTIVE, AWAITING, CANCELLED = (
     InvestmentStatus.ACTIVE,
     InvestmentStatus.AWAITING_PAYMENT,
@@ -76,7 +81,8 @@ async def test_a_confirmed_review_saves_the_investment_with_todays_terms(
     assert (investment.terms.annual_rate_bps, investment.terms.tax_bps) == (1250, 1500)
     assert investment.term_days == 91
     assert investment.at_maturity is AtMaturity.ROLL_OVER
-    assert investment.pay_by == NOW.now() + timedelta(hours=72)
+    assert investment.pay_by == investment.created_at + timedelta(hours=72)
+    assert abs(investment.created_at - NOW.now()) < timedelta(minutes=1)
     assert investment.start_date is None
 
 
@@ -142,15 +148,19 @@ async def test_an_amount_the_product_would_not_take_is_refused(
     assert refused(error) == ("validation_failed", [("amount", problem)])
 
 
-async def test_a_client_holds_at_most_five_unpaid_investments(app_database: Database) -> None:
+async def test_a_client_holds_at_most_five_unpaid_investments(
+    app_database: Database, worker_database: Database
+) -> None:
     client = await approved_client(app_database, NOW)
     for _ in range(5):
         await request(app_database, client, NOW)
     with pytest.raises(ApplicationError) as error:
         await request(app_database, client, NOW)
     assert error.value.code == "conflict"
-    # Once the window has closed on them, the client can ask again.
-    await request(app_database, client, at(DAY + timedelta(days=4)))
+    # Once they are cancelled for not being paid, the client can ask again.
+    async with worker_database.actor_transaction(SYSTEM) as session:
+        await investments.cancel_unpaid(session, after(hours=74))
+    await request(app_database, client, NOW)
 
 
 async def test_the_cap_holds_when_requests_race(app_database: Database) -> None:
@@ -185,9 +195,32 @@ _INSERT = text(
     "INSERT INTO investments (id, client_id, product_id, currency, principal_minor, "
     "annual_rate_bps, tax_bps, term_days, at_maturity, created_at, pay_by, updated_at) VALUES "
     "(:id, :client_id, 'FvProduct1TREA91_001', :currency, :principal, :rate, :tax, :term, "
-    "'roll_over', TIMESTAMPTZ '2026-11-13 09:00+00', TIMESTAMPTZ '2026-11-16 09:00+00', now())"
+    "'roll_over', now(), now() + interval '72 hours', now())"
 )
 _GOOD = {"currency": "UGX", "principal": 1_000_000, "rate": 1250, "tax": 1500, "term": 91}
+
+
+@pytest.mark.parametrize(
+    ("created_at", "pay_by", "message"),
+    [
+        ("now() - interval '10 minutes'", "now() + interval '71 hours 50 minutes'", "current"),
+        ("now() + interval '10 minutes'", "now() + interval '72 hours 10 minutes'", "current"),
+        ("now()", "now() + interval '30 days'", "72 hours"),
+    ],
+)
+async def test_the_database_refuses_an_investment_not_created_now_or_payable_for_longer(
+    app_database: Database, created_at: str, pay_by: str, message: str
+) -> None:
+    client = new_client()
+    statement = text(
+        "INSERT INTO investments (id, client_id, product_id, currency, principal_minor, "  # noqa: S608
+        "annual_rate_bps, tax_bps, term_days, at_maturity, created_at, pay_by, updated_at) "
+        "VALUES (:id, :client_id, 'FvProduct1TREA91_001', 'UGX', 1000000, 1250, 1500, 91, "
+        f"'roll_over', {created_at}, {pay_by}, now())"
+    )
+    with pytest.raises(DBAPIError, match=message):
+        async with app_database.actor_transaction(client) as session:
+            await session.execute(statement, {"id": push_id(), "client_id": client.id})
 
 
 @pytest.mark.parametrize(
@@ -239,13 +272,13 @@ async def test_nobody_in_the_api_can_start_cancel_or_reprice_an_investment(
     investment = await request(app_database, owner, NOW)
     for actor in (owner, new_staff()):
         for statement in (
-            "UPDATE investments SET status = 'active', start_date = DATE '2026-11-13', "
+            "UPDATE investments SET status = 'active', start_date = CURRENT_DATE, "
             "started_at = now(), start_entry_id = id WHERE id = :id",
             "UPDATE investments SET status = 'cancelled', cancelled_at = now() WHERE id = :id",
             "UPDATE investments SET annual_rate_bps = 5000 WHERE id = :id",
             "UPDATE investments SET principal_minor = 9000000 WHERE id = :id",
             "UPDATE investments SET accrued_gross_minor = 500000, "
-            "accrued_through = DATE '2026-11-14' WHERE id = :id",
+            "accrued_through = CURRENT_DATE + 1 WHERE id = :id",
             "DELETE FROM investments WHERE id = :id",
         ):
             with pytest.raises(DBAPIError, match="permission denied"):
@@ -259,8 +292,8 @@ async def test_the_worker_cannot_change_terms_or_rewrite_a_start(
     investment = await started(app_database, worker_database, NOW)
     for statement, message in (
         (
-            "UPDATE investments SET start_date = DATE '2026-11-01', maturity_date = "
-            "DATE '2027-01-31' WHERE id = :id",
+            "UPDATE investments SET start_date = start_date - 12, maturity_date = "
+            "maturity_date - 12 WHERE id = :id",
             "start of an investment never changes",
         ),
         (
@@ -269,9 +302,9 @@ async def test_the_worker_cannot_change_terms_or_rewrite_a_start(
             "cannot go from active",
         ),
         (
-            "UPDATE investments SET accrued_gross_minor = 10, accrued_through = DATE '2026-11-14' "
+            "UPDATE investments SET accrued_gross_minor = 10, accrued_through = start_date + 1 "
             "WHERE id = :id; UPDATE investments SET accrued_gross_minor = 5, "
-            "accrued_through = DATE '2026-11-15' WHERE id = :id",
+            "accrued_through = start_date + 2 WHERE id = :id",
             "forwards only",
         ),
     ):
@@ -295,7 +328,7 @@ async def test_the_confirmed_payment_moves_into_the_holding_and_the_investment_s
 
     assert running.status is ACTIVE
     assert running.start_date == DAY
-    assert running.maturity_date == date(2027, 2, 12)
+    assert running.maturity_date == DAY + timedelta(days=91)
     assert await account_balance(worker_database, investment, AWAITING_START) == 0
     assert await account_balance(worker_database, investment, HOLDING) == 1_000_000
     async with worker_database.actor_transaction(SYSTEM) as session:
@@ -320,7 +353,7 @@ async def test_the_start_date_is_the_day_the_payment_was_confirmed_not_the_day_i
     two_days_later = at(DAY + timedelta(days=2))
     running = await start(worker_database, investment.id, clock=two_days_later)
     assert running.start_date == DAY
-    assert running.maturity_date == date(2027, 2, 12)
+    assert running.maturity_date == DAY + timedelta(days=91)
 
 
 @pytest.mark.parametrize("paid", [0, 999_999, 1_000_001])
@@ -438,7 +471,7 @@ async def test_a_confirmed_deposit_starts_its_investment(
             "deposit_id": push_id(),
             "purpose_type": "investment",
             "purpose_id": investment.id,
-            "confirmed_on": "2026-11-13",
+            "confirmed_on": DAY.isoformat(),
         },
         processed_late,
     )
@@ -502,7 +535,7 @@ async def test_an_investment_cannot_be_paid_by_someone_else_or_after_its_window(
 
     assert await payable(client.id or "") == "payable"
     assert await payable(new_client().id or "") == "not_found"
-    assert await payable(client.id or "", at(DAY + timedelta(days=3))) == "conflict"
+    assert await payable(client.id or "", after(hours=72, minutes=1)) == "conflict"
     await pay(worker_database, investment, ugx(1_000_000), NOW)
     await start(worker_database, investment.id)
     assert await payable(client.id or "") == "conflict"
@@ -524,9 +557,9 @@ async def test_an_unpaid_investment_is_cancelled_after_its_window(
         async with worker_database.actor_transaction(SYSTEM) as session:
             return (await investments.get_investment(session, investment_id)).status
 
-    await sweep(at(DAY + timedelta(days=3)))  # the window has closed, the grace has not
+    await sweep(after(hours=72, minutes=30))  # the window has closed, the grace has not
     assert await status(unpaid.id) is AWAITING
-    await sweep(at(DAY + timedelta(days=3), hour=10))
+    await sweep(after(hours=73, minutes=1))
     assert await status(unpaid.id) is CANCELLED
     # Money arrived for this one, so it is never cancelled under it.
     assert await status(part_paid.id) is AWAITING
@@ -538,6 +571,20 @@ async def test_an_unpaid_investment_is_cancelled_after_its_window(
             )
     with pytest.raises(ApplicationError):
         await start(worker_database, unpaid.id)
+
+
+async def test_an_investment_with_a_deposit_still_in_progress_is_not_cancelled(
+    app_database: Database, worker_database: Database
+) -> None:
+    client = await approved_client(app_database, NOW)
+    investment = await request(app_database, client, NOW)
+    # The prompt went out and the client has not answered by the end of the window.
+    await start_deposit(app_database, NOW, actor=client, amount=1_000_000, purpose_id=investment.id)
+
+    async with worker_database.actor_transaction(SYSTEM) as session:
+        await investments.cancel_unpaid(session, after(hours=74))
+        still = await investments.get_investment(session, investment.id)
+    assert still.status is AWAITING
 
 
 # What the client sees ---------------------------------------------------------------------------
@@ -557,7 +604,7 @@ async def test_the_portfolio_shows_figures_after_tax_only(
     assert view.amount == view.value == ugx(1_000_000)
     assert view.interest_so_far == view.interest_today == ugx(0)
     assert view.at_maturity_returns == ClientReturns(ugx(26_490), ugx(1_026_490))
-    assert (view.start_date, view.maturity_date) == (DAY, date(2027, 2, 12))
+    assert (view.start_date, view.maturity_date) == (DAY, DAY + timedelta(days=91))
     assert not [name for name in investments.ClientInvestment.__slots__ if "tax" in name]
     assert not [name for name in investments.ClientInvestment.__slots__ if "gross" in name]
 

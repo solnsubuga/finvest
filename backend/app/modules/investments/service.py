@@ -7,6 +7,7 @@ Functions and types whose names start with `client_` or `Client` carry only figu
 They are the only ones a client-facing route may use.
 """
 
+from app.modules.investments.accrual import InterestRun, accrue_investment, interest_runs
 from app.modules.investments.catalogue import (
     MAX_PROPOSALS,
     PROPOSAL_RESOURCE,
@@ -49,10 +50,12 @@ __all__ = [
     "ClientInvestment",
     "ClientProduct",
     "ClientQuote",
+    "InterestRun",
     "Investment",
     "PayableInvestment",
     "ProductView",
     "ProposalView",
+    "accrue_investment",
     "approve_rate",
     "cancel_unpaid",
     "client_investment",
@@ -61,6 +64,7 @@ __all__ = [
     "client_quote",
     "get_investment",
     "get_product",
+    "interest_runs",
     "list_investments",
     "list_products",
     "list_proposals",
