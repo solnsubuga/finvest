@@ -12,6 +12,7 @@ from typing import Literal
 import structlog
 from sqlalchemy import text
 from sqlalchemy.exc import IntegrityError
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.infrastructure.database import Database
 from app.infrastructure.settings import Settings
@@ -59,6 +60,7 @@ class ClientSession:
     client_id: str
     phone: str
     restricted_until: datetime | None
+    signed_in_at: datetime
 
     @property
     def actor(self) -> Actor:
@@ -241,6 +243,21 @@ class IdentityService:
                     text(f"UPDATE {table} SET password_hash = :hash WHERE id = :id"),  # noqa: S608
                     {"hash": await self.hasher.hash(password), "id": account.id},
                 )
+            has_passkey = await session.scalar(
+                text(
+                    "SELECT EXISTS (SELECT 1 FROM identity_passkeys WHERE actor_kind = :kind "
+                    "AND actor_id = :actor AND removed_at IS NULL)"
+                ),
+                {"kind": kind, "actor": account.id},
+            )
+            has_app = kind == "staff" and await session.scalar(
+                text(
+                    "SELECT EXISTS (SELECT 1 FROM identity_authenticators WHERE actor_kind = "
+                    "'staff' AND actor_id = :actor AND confirmed_at IS NOT NULL "
+                    "AND removed_at IS NULL)"
+                ),
+                {"actor": account.id},
+            )
             await session.execute(
                 text(
                     "INSERT INTO identity_login_challenges "
@@ -258,9 +275,13 @@ class IdentityService:
         # The right password clears the wrong-guess counts for this account, not for the address.
         await clear_attempts(self.database, [account_key, pair_key])
         logger.info("login_started", kind=kind, login_id=challenge_id)
-        # Staff have no code option: a passkey or an authenticator app, once those exist.
-        # Clients are offered a passkey first once they have one.
-        return LoginChallenge(challenge_id, ["passkey"] if kind == "staff" else ["code"])
+        # Staff have no texted or emailed code. Clients are offered a passkey first once they
+        # have one.
+        if kind == "staff":
+            # Whichever the person enrolled with. An account always has one of the two.
+            methods: list[SecondStep] = ["passkey"] if has_passkey else []
+            return LoginChallenge(challenge_id, [*methods, "authenticator"] if has_app else methods)
+        return LoginChallenge(challenge_id, ["passkey", "code"] if has_passkey else ["code"])
 
     # Sessions
 
@@ -292,18 +313,24 @@ class IdentityService:
                     ),
                     {"until": limited, "id": actor_id},
                 )
-            return await self._issue(session, Actor(kind, actor_id), second_step, transport, now)
+            return await self.issue_in(session, Actor(kind, actor_id), second_step, transport, now)
 
     async def issue_session(
         self, actor: Actor, *, second_step: SecondStep, transport: Transport
     ) -> IssuedSession:
         """Open a session directly, for a flow that has just proved who the person is."""
         async with self.database.transaction() as session:
-            return await self._issue(session, actor, second_step, transport, self.clock.now())
+            return await self.issue_in(session, actor, second_step, transport, self.clock.now())
 
-    async def _issue(  # type: ignore[no-untyped-def]
-        self, session, actor: Actor, second_step: SecondStep, transport: Transport, now: datetime
+    async def issue_in(
+        self,
+        session: AsyncSession,
+        actor: Actor,
+        second_step: SecondStep,
+        transport: Transport,
+        now: datetime,
     ) -> IssuedSession:
+        """Open a session inside the caller's transaction, so it commits with what proved it."""
         if actor.kind not in ("client", "staff"):
             raise ValueError("Only a client or a staff member has a session")
         policy = self._policies.get((actor.kind, transport))
@@ -376,7 +403,7 @@ class IdentityService:
         limited = account.restricted_until
         if limited is not None and limited <= self.clock.now():
             limited = None
-        return ClientSession(row.id, account.id, account.phone, limited)
+        return ClientSession(row.id, account.id, account.phone, limited, row.created_at)
 
     async def staff_session(self, token: str) -> StaffSession | None:
         row, account = await self._touch(token, "staff")

@@ -1,5 +1,6 @@
 """Process configuration from the environment. Secrets arrive here and nowhere else."""
 
+import base64
 import ipaddress
 import ssl
 from pathlib import Path
@@ -34,6 +35,18 @@ class Settings(BaseSettings):
     # honoured for an unsafe request only when its Origin is one of them.
     client_allowed_origins: list[str] = Field(default_factory=list)
     staff_allowed_origins: list[str] = Field(default_factory=list)
+    # Passkeys (WebAuthn). The site a passkey belongs to: `finvestug.com` for clients, so one
+    # passkey works on the web and in the phone apps, and the console's own host for staff.
+    # Unset turns passkeys off for that audience.
+    client_passkey_site: str | None = None
+    staff_passkey_site: str | None = None
+    # What the phone apps report as their origin, besides the allowed browser origins above:
+    # `android:apk-key-hash:...` for Android, `https://<site>` for iPhone.
+    client_passkey_app_origins: list[str] = Field(default_factory=list)
+    # Encrypts the secrets of staff authenticator apps: 32 random bytes, base64url. Generate
+    # with `python -c "import secrets; print(secrets.token_urlsafe(32))"`. Unset turns the
+    # authenticator app option off. Changing it locks out everyone who uses an app.
+    authenticator_key: SecretStr | None = None
     # Off only for local development over plain http.
     cookie_secure: bool = True
     # Client on the web, client on a phone (the app's PIN guards it between uses), and staff.
@@ -68,6 +81,22 @@ class Settings(BaseSettings):
             ):
                 raise ValueError("Allowed origins are exact scheme://host[:port] values")
         return value
+
+    @field_validator("authenticator_key", mode="before")
+    @classmethod
+    def authenticator_key_bytes(cls, value: object) -> object:
+        if value is None or value == "":
+            return None
+        text = value.get_secret_value() if isinstance(value, SecretStr) else str(value)
+        try:
+            # Accept the key with or without its base64 padding.
+            padded = text + "=" * (-len(text) % 4)
+            size = len(base64.b64decode(padded, altchars=b"-_", validate=True))
+        except ValueError:
+            size = 0
+        if size != 32:
+            raise ValueError("The authenticator key is 32 random bytes in base64url")
+        return padded
 
     @field_validator("trusted_proxies")
     @classmethod

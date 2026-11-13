@@ -173,7 +173,7 @@ async def test_every_sign_in_failure_looks_the_same(api: Api) -> None:
         }
 
 
-async def test_staff_sign_in_never_offers_a_code(api: Api) -> None:
+async def test_staff_are_never_offered_a_texted_code(api: Api) -> None:
     email, _ = await a_staff_member(api)
     response = await api.http.post(
         "/staff/login/start",
@@ -181,7 +181,8 @@ async def test_staff_sign_in_never_offers_a_code(api: Api) -> None:
         headers={"Origin": STAFF_ORIGIN},
     )
     assert response.status_code == 200
-    assert response.json()["methods"] == ["passkey"]
+    # Only what the person enrolled with is offered, and this account has neither yet.
+    assert response.json()["methods"] == []
 
 
 async def test_staff_sign_in_is_refused_from_any_other_site(api: Api) -> None:
@@ -382,6 +383,20 @@ async def test_a_client_session_is_not_a_staff_session(api: Api) -> None:
         await api.identity.issue_session(
             Actor("staff", client_id), second_step="passkey", transport="token"
         )
+
+
+async def test_a_staff_cookie_sent_from_the_client_site_is_refused(api: Api) -> None:
+    # The two sites share a registrable domain, so SameSite does not keep them apart. The
+    # Origin check does, on reads as well as writes.
+    _, staff_id = await a_staff_member(api)
+    issued = await api.identity.issue_session(
+        Actor("staff", staff_id), second_step="passkey", transport="cookie"
+    )
+    api.http.cookies.set(COOKIES["staff"], issued.token)
+    refused = await api.http.get("/staff/session", headers={"Origin": CLIENT_ORIGIN})
+    assert (refused.status_code, code(refused)) == (403, "forbidden")
+    allowed = await api.http.get("/staff/session", headers={"Origin": STAFF_ORIGIN})
+    assert allowed.status_code == 200
 
 
 async def test_the_database_refuses_a_staff_session_without_a_passkey_or_an_app(

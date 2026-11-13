@@ -76,6 +76,10 @@ services:
       FINVEST_CLIENT_ALLOWED_ORIGINS: '["http://localhost:8081"]'
       FINVEST_STAFF_ALLOWED_ORIGINS: '["http://localhost:5174"]'
       FINVEST_COOKIE_SECURE: "false"
+      FINVEST_CLIENT_PASSKEY_SITE: localhost
+      FINVEST_STAFF_PASSKEY_SITE: localhost
+      # Staff authenticator apps are off unless you export a key of your own. See backend/README.md.
+      FINVEST_AUTHENTICATOR_KEY: ${FINVEST_AUTHENTICATOR_KEY:-}
     ports:
       - "127.0.0.1:${FINVEST_API_PORT:-8000}:8000"
     healthcheck:
