@@ -70,6 +70,24 @@ async def notifications_of(database: Database, client: Actor) -> list[inbox.Noti
 # Help chat ----------------------------------------------------------------------------------------
 
 
+async def settle(
+    database: Database,
+    complaint_id: str,
+    closure: Closure,
+    clock: FakeClock,
+    proposer: Actor | None = None,
+    confirmer: Actor | None = None,
+) -> complaints.ComplaintView:
+    """One member of staff proposes the outcome and another confirms it."""
+    proposer, confirmer = proposer or new_staff(), confirmer or new_staff()
+    async with database.actor_transaction(proposer) as session:
+        proposal = await complaints.propose_outcome(session, proposer, complaint_id, closure, clock)
+    async with database.actor_transaction(confirmer) as session:
+        return await complaints.decide_outcome(
+            session, confirmer, complaint_id, proposal.id, "confirmed", None, clock
+        )
+
+
 async def test_a_client_and_staff_talk_and_the_client_is_told_of_each_reply(
     app_database: Database, clock: FakeClock
 ) -> None:
@@ -348,7 +366,7 @@ async def test_a_client_makes_a_complaint_and_is_told_its_reference_and_reply_da
 ) -> None:
     client = new_client()
     async with app_database.actor_transaction(client) as session:
-        view = await complaints.log_by_client(session, client, LATE, clock)
+        view = await complaints.log_by_client(session, client, LATE, key(), clock)
     assert view.reference.startswith("C-") and int(view.reference[2:]) >= 1001
     assert (view.status, view.received_via, view.owner_id) == ("new", "app", None)
     # Received on Friday 13 November: five working days later is Friday 20 November.
@@ -379,11 +397,11 @@ async def test_a_complaint_received_at_night_in_kampala_counts_from_the_kampala_
     clock = FakeClock(datetime(2026, 11, 13, 22, 30, tzinfo=UTC))
     client = new_client()
     async with app_database.actor_transaction(client) as session:
-        view = await complaints.log_by_client(session, client, LATE, clock)
+        view = await complaints.log_by_client(session, client, LATE, key(), clock)
     assert view.due_on == date(2026, 11, 20)
     clock = FakeClock(datetime(2026, 11, 15, 22, 30, tzinfo=UTC))
     async with app_database.actor_transaction(client) as session:
-        monday = await complaints.log_by_client(session, client, LATE, clock)
+        monday = await complaints.log_by_client(session, client, LATE, key(), clock)
     assert monday.due_on == date(2026, 11, 23)
 
 
@@ -401,7 +419,7 @@ async def test_staff_work_a_complaint_to_its_outcome(
     )
     async with app_database.actor_transaction(grace) as session:
         view = await complaints.log_by_staff(
-            session, grace, client.id or "", new, clock, conversation_id=conversation_id
+            session, grace, client.id or "", new, key(), clock, conversation_id=conversation_id
         )
         assert view.amount == Money(2_000_000, Currency.UGX)
         assert view.conversation_id == conversation_id
@@ -418,19 +436,33 @@ async def test_staff_work_a_complaint_to_its_outcome(
             await complaints.move(session, daniel, view.id, "escalated", "Again", clock)
         assert raised.value.code == "conflict"
     clock.advance(days=4)
-    async with app_database.actor_transaction(grace) as session:
-        today = date(2026, 11, 20)
+    today = date(2026, 11, 20)
+    async with app_database.actor_transaction(daniel) as session:
         assert not (await complaints.complaint_for_staff(session, view.id, today))[0].overdue
         assert (await complaints.complaint_for_staff(session, view.id, date(2026, 11, 21)))[
             0
         ].overdue
-        closed = await complaints.close(
+        proposal = await complaints.propose_outcome(
             session,
-            grace,
+            daniel,
             view.id,
             Closure("upheld", "Matched and invested, with interest.", True),
             clock,
         )
+    # Neither the proposer nor whoever logged the complaint confirms it.
+    for person in (daniel, grace):
+        with pytest.raises(ApplicationError) as raised:
+            async with app_database.actor_transaction(person) as session:
+                await complaints.decide_outcome(
+                    session, person, view.id, proposal.id, "confirmed", None, clock
+                )
+        assert raised.value.code == "forbidden"
+    amina = new_staff()
+    async with app_database.actor_transaction(amina) as session:
+        closed = await complaints.decide_outcome(
+            session, amina, view.id, proposal.id, "confirmed", None, clock
+        )
+        assert await complaints.pending_outcome(session, view.id) is None
         _, history = await complaints.complaint_for_staff(session, view.id, today)
         trail = await events_for_resource(session, complaints.RESOURCE, view.id)
     assert (closed.status, closed.outcome, closed.client_accepted) == ("closed", "upheld", True)
@@ -441,6 +473,7 @@ async def test_staff_work_a_complaint_to_its_outcome(
         ("status", "new", "investigating"),
         ("note", None, None),
         ("escalated", "investigating", "escalated"),
+        ("proposed", None, None),
         ("closed", "escalated", "closed"),
     ]
     assert [event.action for event in reversed(trail)] == [
@@ -448,7 +481,12 @@ async def test_staff_work_a_complaint_to_its_outcome(
         "complaints.assigned",
         "complaints.status",
         "complaints.escalated",
+        "complaints.outcome_proposed",
         "complaints.closed",
+    ]
+    assert [(event.action, event.actor_id) for event in trail[:2]] == [
+        ("complaints.closed", amina.id),
+        ("complaints.outcome_proposed", daniel.id),
     ]
     titles = [told.title for told in await notifications_of(app_database, client)]
     assert titles == [f"Complaint {view.reference} closed", f"Complaint {view.reference} received"]
@@ -462,7 +500,7 @@ async def test_a_closed_complaint_never_changes_and_nothing_is_deleted(
 ) -> None:
     client, staff = new_client(), new_staff()
     async with app_database.actor_transaction(client) as session:
-        view = await complaints.log_by_client(session, client, LATE, clock)
+        view = await complaints.log_by_client(session, client, LATE, key(), clock)
     with pytest.raises(DBAPIError, match="permission denied for table complaints"):
         async with app_database.actor_transaction(staff) as session:
             await session.execute(
@@ -472,7 +510,8 @@ async def test_a_closed_complaint_never_changes_and_nothing_is_deleted(
                 ),
                 {"id": view.id},
             )
-    with pytest.raises(DBAPIError, match="ck_complaints_closed"):
+    # Closing without an outcome. Since 0101 the guard refuses it before the check does.
+    with pytest.raises(DBAPIError, match=r"outcome a second person confirmed|ck_complaints_closed"):
         async with app_database.actor_transaction(staff) as session:
             await session.execute(
                 text(
@@ -491,15 +530,25 @@ async def test_a_closed_complaint_never_changes_and_nothing_is_deleted(
                 ),
                 {"id": view.id, "other": new_staff().id},
             )
-    async with app_database.actor_transaction(staff) as session:
-        await complaints.close(
-            session, staff, view.id, Closure("not_upheld", "Explained.", False), clock
-        )
-    for call in ("close", "move", "note", "assign"):
+    # Closing outright, with every field filled in, still needs a confirmed outcome.
+    with pytest.raises(DBAPIError, match="outcome a second person confirmed"):
+        async with app_database.actor_transaction(staff) as session:
+            await session.execute(
+                text(
+                    "UPDATE complaints SET status = 'closed', closed_at = now(), "
+                    "closed_by = :staff, outcome = 'not_upheld', resolution = 'No', "
+                    "client_accepted = false WHERE id = :id"
+                ),
+                {"id": view.id, "staff": staff.id},
+            )
+    await settle(
+        app_database, view.id, Closure("not_upheld", "Explained.", False), clock, confirmer=staff
+    )
+    for call in ("propose", "move", "note", "assign"):
         with pytest.raises(ApplicationError) as raised:
             async with app_database.actor_transaction(staff) as session:
-                if call == "close":
-                    await complaints.close(
+                if call == "propose":
+                    await complaints.propose_outcome(
                         session, staff, view.id, Closure("upheld", "Changed my mind.", True), clock
                     )
                 elif call == "move":
@@ -525,35 +574,34 @@ async def test_a_closed_complaint_never_changes_and_nothing_is_deleted(
                 await session.execute(text(statement), {"id": view.id})
 
 
-async def test_two_staff_closing_at_once_record_one_outcome(
+async def test_two_staff_confirming_at_once_record_one_outcome(
     app_database: Database, clock: FakeClock, concurrency_barrier: AsyncBarrier
 ) -> None:
-    client = new_client()
+    client, proposer = new_client(), new_staff()
     async with app_database.actor_transaction(client) as session:
-        view = await complaints.log_by_client(session, client, LATE, clock)
+        view = await complaints.log_by_client(session, client, LATE, key(), clock)
+    async with app_database.actor_transaction(proposer) as session:
+        proposal = await complaints.propose_outcome(
+            session, proposer, view.id, Closure("upheld", "Done.", True), clock
+        )
 
-    async def close(outcome: Outcome) -> str:
+    async def confirm() -> str:
         staff = new_staff()
         try:
             async with app_database.actor_transaction(staff) as session:
                 await concurrency_barrier.wait()
-                await complaints.close(
-                    session,
-                    staff,
-                    view.id,
-                    Closure(outcome, "Done.", True),
-                    clock,
+                await complaints.decide_outcome(
+                    session, staff, view.id, proposal.id, "confirmed", None, clock
                 )
         except ApplicationError as error:
             return error.code
-        return outcome
+        return "confirmed"
 
-    results = await asyncio.gather(close("upheld"), close("not_upheld"))
-    assert sorted(results, key=lambda result: result != "conflict")[0] == "conflict"
-    (outcome,) = [result for result in results if result != "conflict"]
+    results = await asyncio.gather(confirm(), confirm())
+    assert sorted(results) == ["confirmed", "conflict"]
     async with app_database.actor_transaction(new_staff()) as session:
         final, history = await complaints.complaint_for_staff(session, view.id, date(2026, 11, 13))
-    assert final.outcome == outcome
+    assert final.outcome == "upheld"
     assert [event.action for event in history].count("closed") == 1
     closed = [
         told
@@ -563,12 +611,191 @@ async def test_two_staff_closing_at_once_record_one_outcome(
     assert len(closed) == 1
 
 
+async def test_two_staff_proposing_at_once_leave_one_outcome_waiting(
+    app_database: Database, clock: FakeClock, concurrency_barrier: AsyncBarrier
+) -> None:
+    client = new_client()
+    async with app_database.actor_transaction(client) as session:
+        view = await complaints.log_by_client(session, client, LATE, key(), clock)
+
+    async def propose(outcome: Outcome) -> str:
+        staff = new_staff()
+        try:
+            async with app_database.actor_transaction(staff) as session:
+                await concurrency_barrier.wait()
+                await complaints.propose_outcome(
+                    session, staff, view.id, Closure(outcome, "Done.", True), clock
+                )
+        except ApplicationError as error:
+            return error.code
+        return outcome
+
+    results = await asyncio.gather(propose("upheld"), propose("not_upheld"))
+    assert "conflict" in results
+    (outcome,) = [result for result in results if result != "conflict"]
+    async with app_database.actor_transaction(new_staff()) as session:
+        pending = await complaints.pending_outcome(session, view.id)
+    assert pending is not None and pending.outcome == outcome
+
+
+async def test_an_outcome_is_rejected_with_a_reason_or_withdrawn_by_its_proposer(
+    app_database: Database, clock: FakeClock
+) -> None:
+    client, maker, checker = new_client(), new_staff(), new_staff()
+    async with app_database.actor_transaction(client) as session:
+        view = await complaints.log_by_client(session, client, LATE, key(), clock)
+
+    async def propose() -> complaints.OutcomeProposal:
+        async with app_database.actor_transaction(maker) as session:
+            return await complaints.propose_outcome(
+                session, maker, view.id, Closure("not_upheld", "No error found.", False), clock
+            )
+
+    async def decide(
+        person: Actor, proposal_id: str, decision: complaints.Decision, reason: str | None
+    ) -> complaints.ComplaintView:
+        async with app_database.actor_transaction(person) as session:
+            return await complaints.decide_outcome(
+                session, person, view.id, proposal_id, decision, reason, clock
+            )
+
+    first = await propose()
+    with pytest.raises(ApplicationError) as raised:
+        await propose()
+    assert raised.value.code == "conflict"
+    with pytest.raises(ApplicationError) as raised:
+        await decide(checker, first.id, "rejected", None)
+    assert raised.value.code == "validation_failed"
+    # Only the proposer withdraws, and the proposer only withdraws.
+    for person, decision in ((checker, "withdrawn"), (maker, "rejected")):
+        with pytest.raises(ApplicationError) as raised:
+            await decide(person, first.id, decision, "Because")  # type: ignore[arg-type]
+        assert raised.value.code == "forbidden"
+    rejected = await decide(checker, first.id, "rejected", "The bank statement shows the error")
+    assert rejected.status == "new"
+    # A decided proposal is not decided again.
+    with pytest.raises(ApplicationError) as raised:
+        await decide(checker, first.id, "confirmed", None)
+    assert raised.value.code == "conflict"
+    second = await propose()
+    await decide(maker, second.id, "withdrawn", None)
+    third = await propose()
+    closed = await decide(checker, third.id, "confirmed", None)
+    assert closed.status == "closed" and closed.outcome == "not_upheld"
+    async with app_database.actor_transaction(checker) as session:
+        _, history = await complaints.complaint_for_staff(session, view.id, date(2026, 11, 13))
+    assert [(event.action, event.note) for event in history] == [
+        ("logged", None),
+        ("proposed", None),
+        ("rejected", "The bank statement shows the error"),
+        ("proposed", None),
+        ("withdrawn", None),
+        ("proposed", None),
+        ("closed", None),
+    ]
+
+
+async def test_postgresql_holds_the_two_person_rule(
+    app_database: Database, clock: FakeClock
+) -> None:
+    client, maker, checker = new_client(), new_staff(), new_staff()
+    async with app_database.actor_transaction(maker) as session:
+        view = await complaints.log_by_staff(
+            session, maker, client.id or "", NewComplaint("fees", "S", "D", "phone"), key(), clock
+        )
+    insert = text(
+        "INSERT INTO complaint_outcome_proposals (id, complaint_id, outcome, resolution, "
+        "client_accepted, proposed_by, proposed_at, status, decided_by, decided_at) VALUES "
+        "(:id, :complaint, 'upheld', 'Paid.', true, :by, now(), :status, :decided, :at)"
+    )
+    for values, refusal in (
+        ({"by": checker.id, "status": "pending", "decided": None, "at": None}, "acting member"),
+        ({"by": maker.id, "status": "confirmed", "decided": checker.id, "at": FRIDAY}, "acting"),
+    ):
+        with pytest.raises(DBAPIError, match=refusal):
+            async with app_database.actor_transaction(maker) as session:
+                await session.execute(insert, {"id": push_id(), "complaint": view.id, **values})
+    proposal_id = push_id()
+    async with app_database.actor_transaction(checker) as session:
+        await session.execute(
+            insert,
+            {
+                "id": proposal_id,
+                "complaint": view.id,
+                "by": checker.id,
+                "status": "pending",
+                "decided": None,
+                "at": None,
+            },
+        )
+    decide = text(
+        "UPDATE complaint_outcome_proposals SET status = :status, decided_by = :by, "
+        "decided_at = now() WHERE id = :id"
+    )
+    for person, status, refusal in (
+        (checker, "confirmed", "someone other than its proposer"),
+        (maker, "confirmed", "whoever logged a complaint"),
+        (maker, "withdrawn", "only the proposer"),
+    ):
+        with pytest.raises(DBAPIError, match=refusal):
+            async with app_database.actor_transaction(person) as session:
+                await session.execute(
+                    decide, {"status": status, "by": person.id, "id": proposal_id}
+                )
+    # The proposal's words are not even granted for update. The guard is the second fence.
+    with pytest.raises(DBAPIError, match="permission denied for table complaint_outcome"):
+        async with app_database.actor_transaction(checker) as session:
+            await session.execute(
+                text(
+                    "UPDATE complaint_outcome_proposals SET outcome = 'not_upheld', "
+                    "status = 'withdrawn', decided_by = :by, decided_at = now() WHERE id = :id"
+                ),
+                {"by": checker.id, "id": proposal_id},
+            )
+    with pytest.raises(DBAPIError, match="permission denied"):
+        async with app_database.actor_transaction(checker) as session:
+            await session.execute(
+                text("DELETE FROM complaint_outcome_proposals WHERE id = :id"), {"id": proposal_id}
+            )
+
+
+async def test_a_complaint_sent_twice_with_one_key_is_logged_once(
+    app_database: Database, clock: FakeClock, concurrency_barrier: AsyncBarrier
+) -> None:
+    client = new_client()
+    same = key()
+
+    async def make() -> str:
+        async with app_database.actor_transaction(client) as session:
+            await concurrency_barrier.wait()
+            return (await complaints.log_by_client(session, client, LATE, same, clock)).id
+
+    first, second = await asyncio.gather(make(), make())
+    assert first == second
+    async with app_database.actor_transaction(client) as session:
+        again = await complaints.log_by_client(session, client, LATE, same, clock)
+        listed = await complaints.complaints_for_client(
+            session, client.id or "", date(2026, 11, 13)
+        )
+    assert again.id == first and [view.id for view in listed] == [first]
+    received = [
+        told
+        for told in await notifications_of(app_database, client)
+        if told.event == "complaint_received"
+    ]
+    assert len(received) == 1
+    with pytest.raises(ApplicationError) as raised:
+        async with app_database.actor_transaction(client) as session:
+            await complaints.log_by_client(session, client, LATE, "short", clock)
+    assert raised.value.code == "validation_failed"
+
+
 async def test_a_client_sees_only_their_own_complaints_and_never_the_staff_notes(
     app_database: Database, clock: FakeClock
 ) -> None:
     client, other, staff = new_client(), new_client(), new_staff()
     async with app_database.actor_transaction(client) as session:
-        view = await complaints.log_by_client(session, client, LATE, clock)
+        view = await complaints.log_by_client(session, client, LATE, key(), clock)
     async with app_database.actor_transaction(staff) as session:
         await complaints.add_note(session, staff, view.id, "Client was rude on the phone", clock)
     async with app_database.actor_transaction(other) as session:
@@ -620,11 +847,11 @@ async def test_a_client_cannot_log_a_complaint_for_someone_else_or_as_staff(
                 await session.execute(insert, {"id": push_id(), **values})
     with pytest.raises(ApplicationError):
         async with app_database.actor_transaction(staff) as session:
-            await complaints.log_by_staff(session, staff, client.id or "", LATE, clock)
+            await complaints.log_by_staff(session, staff, client.id or "", LATE, key(), clock)
     with pytest.raises(ApplicationError):
         async with app_database.actor_transaction(client) as session:
             await complaints.log_by_client(
-                session, client, NewComplaint("other", "S", "D", "phone"), clock
+                session, client, NewComplaint("other", "S", "D", "phone"), key(), clock
             )
 
 
@@ -633,23 +860,18 @@ async def test_the_figures_at_the_top_of_the_register(
 ) -> None:
     # The figures count the whole register, so this test starts from an empty one.
     async with migrator_database.transaction() as session:
-        await session.execute(text("TRUNCATE complaint_events, complaints"))
+        await session.execute(
+            text("TRUNCATE complaint_outcome_proposals, complaint_events, complaints")
+        )
     staff, client = new_staff(), new_client()
     clock = FakeClock(datetime(2026, 9, 28, 9, 0, tzinfo=UTC))
 
     async def log() -> str:
         async with app_database.actor_transaction(client) as session:
-            return (await complaints.log_by_client(session, client, LATE, clock)).id
+            return (await complaints.log_by_client(session, client, LATE, key(), clock)).id
 
     async def close(complaint_id: str, outcome: Outcome) -> None:
-        async with app_database.actor_transaction(staff) as session:
-            await complaints.close(
-                session,
-                staff,
-                complaint_id,
-                Closure(outcome, "Done.", True),
-                clock,
-            )
+        await settle(app_database, complaint_id, Closure(outcome, "Done.", True), clock)
 
     last_quarter = await log()  # Monday 28 September, due Monday 5 October
     old_and_open = await log()
@@ -761,16 +983,19 @@ async def test_help_chat_over_http(api: Api) -> None:
 
 async def test_complaints_over_http(api: Api) -> None:
     client = await api.client()
-    made = await api.http.post(
-        "/client/complaints",
-        json={
-            "category": "withdrawals",
-            "summary": "Payout did not arrive",
-            "details": "Since Tuesday.",
-        },
-    )
+    making = {
+        "client_key": "complaint-key-0001",
+        "category": "withdrawals",
+        "summary": "Payout did not arrive",
+        "details": "Since Tuesday.",
+    }
+    made = await api.http.post("/client/complaints", json=making)
     assert made.status_code == 201
     complaint = made.json()
+    # The same request again, after a lost answer, gives the same complaint.
+    assert (await api.http.post("/client/complaints", json=making)).json() == complaint
+    keyless = {key: value for key, value in making.items() if key != "client_key"}
+    assert (await api.http.post("/client/complaints", json=keyless)).status_code == 422
     assert complaint["status"] == "new" and complaint["due_on"] == "2026-11-20"
     assert set(complaint) == {
         "id",
@@ -786,7 +1011,13 @@ async def test_complaints_over_http(api: Api) -> None:
         "resolution",
     }
     unknown = await api.http.post(
-        "/client/complaints", json={"category": "weather", "summary": "S", "details": "D"}
+        "/client/complaints",
+        json={
+            "client_key": "complaint-key-0002",
+            "category": "weather",
+            "summary": "S",
+            "details": "D",
+        },
     )
     assert unknown.status_code == 422
     listed = (await api.http.get("/client/complaints")).json()["complaints"]
@@ -804,6 +1035,7 @@ async def test_complaints_over_http(api: Api) -> None:
     logged = await api.http.post(
         "/staff/complaints",
         json={
+            "client_key": "complaint-key-0003",
             "client_id": client.id,
             "category": "fees",
             "received_via": "phone",
@@ -819,6 +1051,7 @@ async def test_complaints_over_http(api: Api) -> None:
     float_amount = await api.http.post(
         "/staff/complaints",
         json={
+            "client_key": "complaint-key-0004",
             "client_id": client.id,
             "category": "fees",
             "received_via": "phone",
@@ -841,22 +1074,28 @@ async def test_complaints_over_http(api: Api) -> None:
     assert (
         await api.http.post(f"{route}/notes", json={"note": "MTN confirmed"})
     ).status_code == 200
-    # The front line works a complaint but does not close it.
-    refused = await api.http.post(
-        f"{route}/close",
-        json={"outcome": "not_upheld", "resolution": "No.", "client_accepted": False},
-    )
-    assert refused.status_code == 403
-    await api.staff("compliance")
+    # The front line proposes the outcome. It cannot confirm one.
     incomplete = await api.http.post(
-        f"{route}/close", json={"outcome": "upheld", "resolution": "Paid."}
+        f"{route}/outcome", json={"outcome": "upheld", "resolution": "Paid."}
     )
     assert incomplete.status_code == 422
-    closed = await api.http.post(
-        f"{route}/close",
+    proposed = await api.http.post(
+        f"{route}/outcome",
         json={"outcome": "upheld", "resolution": "Paid again.", "client_accepted": True},
     )
+    assert proposed.status_code == 201
+    proposal = proposed.json()
+    assert (proposal["proposed_by"], proposal["outcome"]) == (grace.id, "upheld")
+    assert (await api.http.get(route)).json()["pending_outcome"] == proposal
+    confirm = {"proposal_id": proposal["id"], "decision": "confirmed"}
+    assert (await api.http.post(f"{route}/outcome/decision", json=confirm)).status_code == 403
+    await api.staff("support")
+    assert (await api.http.post(f"{route}/outcome/decision", json=confirm)).status_code == 403
+    await api.staff("compliance")
+    closed = await api.http.post(f"{route}/outcome/decision", json=confirm)
     assert closed.status_code == 200 and closed.json()["status"] == "closed"
+    again = await api.http.post(f"{route}/outcome/decision", json=confirm)
+    assert again.status_code == 409
     assert (await api.http.post(f"{route}/notes", json={"note": "Late"})).status_code == 409
     detail = (await api.http.get(route)).json()
     assert [event["action"] for event in detail["history"]] == [
@@ -864,8 +1103,10 @@ async def test_complaints_over_http(api: Api) -> None:
         "assigned",
         "status",
         "note",
+        "proposed",
         "closed",
     ]
+    assert detail["pending_outcome"] is None
 
     await api.as_client(client)
     mine = (await api.http.get(f"/client/complaints/{complaint['id']}")).json()
@@ -887,7 +1128,13 @@ async def test_seeing_help_and_complaints_is_not_enough_to_act_on_them(
     conversation = sent.json()["conversation_id"]
     complaint = (
         await api.http.post(
-            "/client/complaints", json={"category": "other", "summary": "S", "details": "D"}
+            "/client/complaints",
+            json={
+                "client_key": "complaint-key-0005",
+                "category": "other",
+                "summary": "S",
+                "details": "D",
+            },
         )
     ).json()["id"]
     await api.staff("support")
@@ -919,6 +1166,7 @@ async def test_seeing_help_and_complaints_is_not_enough_to_act_on_them(
             "post",
             "/staff/complaints",
             {
+                "client_key": "complaint-key-0006",
                 "client_id": client.id,
                 "category": "fees",
                 "received_via": "phone",
@@ -931,9 +1179,10 @@ async def test_seeing_help_and_complaints_is_not_enough_to_act_on_them(
         ("post", f"{route}/notes", {"note": "Note"}),
         (
             "post",
-            f"{route}/close",
+            f"{route}/outcome",
             {"outcome": "not_upheld", "resolution": "No.", "client_accepted": False},
         ),
+        ("post", f"{route}/outcome/decision", {"proposal_id": push_id(), "decision": "confirmed"}),
     ]
     for verb, path, body in writes:
         response = await api.http.request(verb.upper(), path, json=body)

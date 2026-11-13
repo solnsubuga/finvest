@@ -2,7 +2,7 @@
 history, the receipts that stop a command running twice, the identity records, the payout
 destinations, the withdrawal limits, the payouts, the migration checks, the imported
 statements, the day closes, the pot transfers, the help chat, the complaints register, the
-goals or the email delivery records."""
+goals, the email delivery records or the complaint outcomes."""
 
 import os
 from collections.abc import Iterator
@@ -256,6 +256,13 @@ ROWS = {
         "imported_at) VALUES ('-Nabc0000000000000A1', 'bank', 'trust', DATE '2026-11-10', "
         "'UGX', 100, 100, 0, repeat('0', 64), '-Nabc0000000000000B1', now())",
         "refusing to drop imported statements",
+    ),
+    "0101_complaint_outcomes": (
+        "INSERT INTO complaints (id, client_id, category, received_via, summary, details, "
+        "received_at, due_on, logged_by_kind, logged_by, client_key, updated_at) VALUES "
+        "('-Nabc0000000000000A1', '-Nabc0000000000000B1', 'other', 'app', 'S', 'D', now(), "
+        "current_date, 'client', '-Nabc0000000000000B1', 'complaint-key-1', now())",
+        "refusing to drop complaint outcomes or keys",
     ),
     "0100_support": (
         "INSERT INTO support_conversations (id, client_id, created_at, last_message_at) "
