@@ -47,7 +47,7 @@ jobs:
       - name: Validate
         run: |
           for env in staging production; do
-            terraform -chdir=infra/terraform/envs/$env init -backend=false
+            terraform -chdir=infra/terraform/envs/$env init -backend=false -lockfile=readonly
             terraform -chdir=infra/terraform/envs/$env validate
           done
 
@@ -133,22 +133,3 @@ jobs:
             exit 1
           fi
           terraform apply -no-color tfplan
-
-  print-lock:
-    # Temporary: prints provider lock files so they can be committed. Removed before merge.
-    name: Print provider lock files
-    if: github.event_name == 'pull_request'
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
-      - uses: hashicorp/setup-terraform@b9cd54a3c349d3f38e8881555d616ced269862dd # v3.1.2
-        with:
-          terraform_version: ${{ env.TF_VERSION }}
-      - run: |
-          for env in staging production; do
-            cd infra/terraform/envs/$env
-            terraform init -backend=false >/dev/null
-            terraform providers lock -platform=linux_amd64 -platform=darwin_arm64 -platform=darwin_amd64 -platform=windows_amd64 >/dev/null
-            echo "=====BEGIN $env"; cat .terraform.lock.hcl; echo "=====END $env"
-            cd - >/dev/null
-          done
