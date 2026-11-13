@@ -4,25 +4,31 @@ The client never says how much to pay: the amount is the investment's, read in t
 transaction. Mobile money is collected from the number on the client's own account, from their
 session, never from the request. Every route that can move money takes an `Idempotency-Key`.
 
-A client tells us about a bank transfer through a route that uploads the receipt itself. It
-arrives with the shared file storage, so until then a bank transfer cannot be started over HTTP.
+A bank transfer arrives as a form with the receipt file. The file is stored first, outside any
+transaction, then the transfer is saved pointing at it, so a saved transfer always has its file.
 """
 
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from typing import Annotated, Literal
 
-from fastapi import APIRouter, Depends, Query, Request
+from fastapi import APIRouter, Depends, File, Form, Query, Request, UploadFile
 from pydantic import Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.idempotency import IdempotencyKey
 from app.infrastructure.database import Database
+from app.infrastructure.storage import FileStorage, InvalidFile, NewFile, StorageError, sha256_hex
 from app.modules.identity.api import CurrentClient, require_permission
-from app.modules.identity.service import StaffSession
+from app.modules.identity.service import ClientSession, StaffSession
 from app.modules.investments import holdings
 from app.modules.payments import bank_transfers as bank
 from app.modules.payments import service
-from app.modules.payments.domain.bank_transfers import NotMatchedReason
+from app.modules.payments.domain.bank_transfers import (
+    MAX_RECEIPT_BYTES,
+    NotMatchedReason,
+    ReceiptDetails,
+    ReceiptFile,
+)
 from app.modules.payments.domain.deposits import (
     DepositStatus,
     Method,
@@ -35,7 +41,8 @@ from app.modules.payments.service import Deposit, DepositRequest
 from app.modules.reconciliation.statements import StatementLineView
 from app.shared.clock import Clock
 from app.shared.contracts import Contract, PushId
-from app.shared.errors import ApplicationError, ErrorEnvelope
+from app.shared.errors import ApplicationError, ErrorEnvelope, FieldProblem
+from app.shared.money import Money
 
 _REFUSALS: dict[int | str, dict[str, object]] = {
     401: {"model": ErrorEnvelope},
@@ -59,7 +66,13 @@ def _clock(request: Request) -> Clock:
     return clock
 
 
+def _storage(request: Request) -> FileStorage:
+    storage: FileStorage = request.app.state.storage
+    return storage
+
+
 Db = Annotated[Database, Depends(_database)]
+Files = Annotated[FileStorage, Depends(_storage)]
 Time = Annotated[Clock, Depends(_clock)]
 
 
@@ -95,6 +108,34 @@ class PaymentView(Contract):
 
 class MobileMoneyPayment(Contract):
     network: Literal["mtn", "airtel"]
+
+
+async def _payable_for_transfer(
+    session: AsyncSession,
+    client: ClientSession,
+    investment_id: str,
+    amount_minor: int,
+    clock: Clock,
+) -> holdings.PayableInvestment:
+    payable = await holdings.payable_investment(
+        session, client_id=client.client_id, investment_id=investment_id, clock=clock
+    )
+    if amount_minor != payable.amount.minor:
+        raise ApplicationError(
+            "validation_failed",
+            fields=[
+                FieldProblem(
+                    field_path=["body", "amount_minor"], code="amount_differs_from_investment"
+                )
+            ],
+        )
+    return payable
+
+
+def _receipt_problem(code: str) -> ApplicationError:
+    return ApplicationError(
+        "validation_failed", fields=[FieldProblem(field_path=["body", "receipt"], code=code)]
+    )
 
 
 def _view(deposit: Deposit, receipt: bank.BankReceipt | None = None) -> PaymentView:
@@ -168,6 +209,66 @@ def create_client_router(collections: CollectionsProvider | None) -> APIRouter:
             )
             return _view(deposit)
 
+    @router.post("/investments/{investment_id}/payments/bank-transfer", status_code=201)
+    async def pay_by_bank_transfer(
+        investment_id: PushId,
+        receipt: Annotated[UploadFile, File(description="PDF, JPEG or PNG, at most 10 MiB")],
+        amount_minor: Annotated[int, Form()],
+        sent_on: Annotated[date, Form()],
+        bank_name: Annotated[str, Form(min_length=1, max_length=120)],
+        transaction_number: Annotated[str, Form(min_length=1, max_length=100)],
+        client: CurrentClient,
+        key: IdempotencyKey,
+        database: Db,
+        clock: Time,
+        storage: Files,
+    ) -> PaymentView:
+        """Tell us about a bank transfer the client made, with its receipt, for staff to check.
+
+        A `multipart/form-data` body. The amount sent must be exactly the investment's: a
+        transfer for any other amount would be refused by staff hours later, so it is refused
+        here first.
+        """
+        data = await receipt.read(MAX_RECEIPT_BYTES + 1)
+        content_type = receipt.content_type or ""
+        file = ReceiptFile(content_type, len(data), sha256_hex(data))
+
+        def details(owed: Money) -> ReceiptDetails:
+            return ReceiptDetails(owed, sent_on, bank_name, transaction_number)
+
+        async with database.actor_transaction(client.actor) as session:
+            # Everything that can be refused is checked before the file is stored.
+            payable = await _payable_for_transfer(
+                session, client, investment_id, amount_minor, clock
+            )
+            bank.check_submission(file, details(payable.amount), clock)
+        deposit_id = bank.new_deposit_id()
+        try:
+            stored = await storage.put(NewFile(bank.receipt_key(deposit_id), data, content_type))
+        except InvalidFile:
+            raise _receipt_problem("unsupported_content_type") from None
+        except StorageError:
+            # Nothing was saved, so the client can send the same request again.
+            raise ApplicationError("unavailable") from None
+        async with database.actor_transaction(client.actor) as session:
+            payable = await _payable_for_transfer(
+                session, client, investment_id, amount_minor, clock
+            )
+            transfer = await bank.submit_bank_receipt(
+                session,
+                client.actor,
+                bank.BankTransferRequest(
+                    purpose=Purpose.INVESTMENT,
+                    purpose_id=payable.investment_id,
+                    file=ReceiptFile(stored.content_type, stored.byte_size, stored.sha256),
+                    details=details(payable.amount),
+                ),
+                idempotency_key=key,
+                clock=clock,
+                deposit_id=deposit_id,
+            )
+            return _view(transfer.deposit, transfer.receipt)
+
     @router.get("/investments/{investment_id}/payment")
     async def current_payment(
         investment_id: PushId, client: CurrentClient, database: Db
@@ -212,9 +313,18 @@ class ReviewOut(Contract):
     approved_at: datetime | None
 
 
+class ReceiptLinkOut(Contract):
+    # Opens the receipt inline for a few minutes. Anyone holding it can open the file until it
+    # expires, so it is never logged or kept.
+    url: str
+    expires_at: datetime
+
+
 class BankTransferOut(Contract):
     payment: PaymentView
     client_id: PushId
+    # None if storage cannot make a link right now; the rest of the transfer still shows.
+    receipt_link: ReceiptLinkOut | None
     review: ReviewOut | None
     # The line the first person chose, shown to the second beside the receipt so the approval
     # is a real check of amount, date and narrative. None until the transfer is matched.
@@ -285,7 +395,27 @@ async def bank_transfers_in_review(
     )
 
 
-async def _detail(session: AsyncSession, staff: StaffSession, payment_id: str) -> BankTransferOut:
+RECEIPT_LINK_LIFETIME = timedelta(minutes=5)
+
+
+def _receipt_link(
+    storage: FileStorage, receipt: bank.BankReceipt, clock: Clock
+) -> ReceiptLinkOut | None:
+    try:
+        link = storage.read_link(
+            receipt.storage_key,
+            content_type=receipt.content_type,
+            lifetime=RECEIPT_LINK_LIFETIME,
+            now=clock.now(),
+        )
+    except StorageError:
+        return None
+    return ReceiptLinkOut(url=link.url, expires_at=link.expires_at)
+
+
+async def _detail(
+    session: AsyncSession, staff: StaffSession, payment_id: str, storage: FileStorage, clock: Clock
+) -> BankTransferOut:
     transfer = await bank.get_bank_transfer(session, payment_id)
     review = await bank.get_review(session, staff.actor, payment_id)
     line = await bank.matched_line(session, staff.actor, payment_id) if review else None
@@ -295,6 +425,7 @@ async def _detail(session: AsyncSession, staff: StaffSession, payment_id: str) -
     return BankTransferOut(
         payment=_view(transfer.deposit, transfer.receipt),
         client_id=transfer.deposit.client_id,
+        receipt_link=_receipt_link(storage, transfer.receipt, clock),
         review=_review(review) if review else None,
         matched_line=_line(line) if line else None,
         candidates=[_line(line) for line in candidates],
@@ -303,14 +434,14 @@ async def _detail(session: AsyncSession, staff: StaffSession, payment_id: str) -
 
 @staff_router.get("/payments/bank-transfers/{payment_id}")
 async def bank_transfer(
-    payment_id: PushId, staff: BankStaff, database: Db, clock: Time
+    payment_id: PushId, staff: BankStaff, database: Db, clock: Time, storage: Files
 ) -> BankTransferOut:
     """One transfer, its review and the statement lines that could be it.
 
     The bank's narrative can name the sender, so opening a transfer is written to the audit trail.
     """
     async with database.actor_transaction(staff.actor) as session:
-        detail = await _detail(session, staff, payment_id)
+        detail = await _detail(session, staff, payment_id, storage, clock)
         await bank.record_opened(session, staff.actor, payment_id, clock)
     return detail
 
@@ -323,6 +454,7 @@ async def review_bank_transfer(
     key: IdempotencyKey,
     database: Db,
     clock: Time,
+    storage: Files,
 ) -> BankTransferOut:
     """Match the transfer to a statement line, or say why it cannot be matched.
 
@@ -338,12 +470,17 @@ async def review_bank_transfer(
             session, staff.actor, payment_id, outcome, idempotency_key=key, clock=clock
         )
     async with database.actor_transaction(staff.actor) as session:
-        return await _detail(session, staff, payment_id)
+        return await _detail(session, staff, payment_id, storage, clock)
 
 
 @staff_router.post("/payments/bank-transfers/{payment_id}/approve")
 async def approve_bank_match(
-    payment_id: PushId, staff: BankDeciders, key: IdempotencyKey, database: Db, clock: Time
+    payment_id: PushId,
+    staff: BankDeciders,
+    key: IdempotencyKey,
+    database: Db,
+    clock: Time,
+    storage: Files,
 ) -> BankTransferOut:
     """Approve another staff member's match. The payment is confirmed moments later."""
     async with database.actor_transaction(staff.actor) as session:
@@ -351,4 +488,4 @@ async def approve_bank_match(
             session, staff.actor, payment_id, idempotency_key=key, clock=clock
         )
     async with database.actor_transaction(staff.actor) as session:
-        return await _detail(session, staff, payment_id)
+        return await _detail(session, staff, payment_id, storage, clock)
