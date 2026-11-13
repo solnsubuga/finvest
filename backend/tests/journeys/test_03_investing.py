@@ -12,6 +12,7 @@ from app.modules.investments.holdings import HOLDING
 from app.modules.ledger import service as ledger
 from app.modules.payouts import payouts
 from app.modules.payouts.domain.destinations import DestinationError
+from app.modules.payouts.domain.payouts import PayoutStatus
 from app.modules.payouts.domain.posting import funding_account
 from app.shared.actors import SYSTEM
 from app.shared.business_day import KAMPALA
@@ -150,6 +151,14 @@ async def test_a_matured_investment_pays_out_to_a_number_in_the_clients_own_name
             session, funding_account(client.id, investment_id, payout.amount.currency), world.clock
         )
         assert (await ledger.get_balance(session, pending.id)).minor == 0
+
+    # The worker sends it to ioTec, reads back that it arrived, and books it out of the wallet.
+    sending_from = world.clock.now()
+    await world.settle()
+    async with world.worker_database.actor_transaction(SYSTEM) as session:
+        paid = await payouts.get_payout(session, payout.id)
+    assert paid.status is PayoutStatus.PAID, paid.status
+    assert await world.failed_jobs(sending_from) == []
 
     trail = await audit_for(
         migrator_database, [client.id, own, other, spelt, payout.id, investment_id]
