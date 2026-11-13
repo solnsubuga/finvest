@@ -1,7 +1,6 @@
 import { StyleSheet, View } from "react-native";
 import { Redirect, Stack, useLocalSearchParams, useRouter } from "expo-router";
 
-import { formatE164 } from "@/auth/phone";
 import { Notice } from "@/components/Blocks";
 import { Button } from "@/components/Button";
 import { Icon } from "@/components/Icon";
@@ -51,7 +50,7 @@ export default function Receipt() {
   const rows: Detail[] = [
     { label: "Date and time", value: formatDateTime(deposit.confirmedAt) },
     { label: "Paid from", value: networkProduct[deposit.network] },
-    { label: "Number", value: formatE164(deposit.payer) },
+    { label: "Number", value: deposit.payer },
   ];
   if (deposit.networkReference) {
     rows.push({ label: `${network} reference`, value: deposit.networkReference });
