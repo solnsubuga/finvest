@@ -35,6 +35,9 @@ export default function NewComplaint() {
   // One key for this form, reused on every try after a lost answer, so the complaint is logged
   // once. A definite refusal logged nothing, so the next try gets a fresh key.
   const [key, setKey] = useState(newIdempotencyKey);
+  // After a try whose answer was lost the complaint may already be logged, and the API answers
+  // the same key with that first complaint. So the words can no longer change.
+  const [locked, setLocked] = useState(false);
 
   /** An error goes as soon as the client starts to put it right. */
   const clear = (field: keyof Problems) =>
@@ -73,6 +76,8 @@ export default function NewComplaint() {
     } catch (error) {
       if (error instanceof SupportError && error.code !== "unavailable") {
         setKey(newIdempotencyKey());
+      } else {
+        setLocked(true);
       }
       setFailure(describeSupportError(error));
       setBusy(false);
@@ -85,6 +90,12 @@ export default function NewComplaint() {
       footer={
         <>
           {failure ? <Notice tone="danger">{failure}</Notice> : null}
+          {locked ? (
+            <Notice tone="warning">
+              Your complaint may already have reached us, so it can no longer be changed. Pressing Send
+              complaint again sends the same complaint. It never logs two.
+            </Notice>
+          ) : null}
           <Button label="Send complaint" onPress={submit} loading={busy} testID="send-complaint" />
         </>
       }
@@ -100,7 +111,8 @@ export default function NewComplaint() {
                 <Pressable
                   key={choice.category}
                   accessibilityRole="radio"
-                  accessibilityState={{ checked: chosen }}
+                  accessibilityState={{ checked: chosen, disabled: locked }}
+                  disabled={locked}
                   onPress={() => {
                     setCategory(choice.category);
                     clear("category");
@@ -128,6 +140,7 @@ export default function NewComplaint() {
             clear("summary");
           }}
           maxLength={MAX_SUMMARY}
+          editable={!locked}
           error={problems.summary}
           testID="complaint-summary"
         />
@@ -140,6 +153,7 @@ export default function NewComplaint() {
             clear("details");
           }}
           maxLength={MAX_DETAILS}
+          editable={!locked}
           multiline
           textAlignVertical="top"
           style={{ height: 150, paddingTop: 14, paddingBottom: 14 }}
