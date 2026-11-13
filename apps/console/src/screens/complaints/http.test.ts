@@ -143,6 +143,18 @@ describe("complaints over HTTP", () => {
     expect(reads).toEqual(Array.from({ length: 6 }, () => `https://api.test/staff/complaints/${COMPLAINT.id}`));
   });
 
+  it("says a note was saved, not that Finvest was unreachable, when only the read after it fails", async () => {
+    const fetch = vi
+      .fn<typeof globalThis.fetch>()
+      .mockImplementationOnce(() => reply(200, COMPLAINT))
+      .mockImplementationOnce(() => Promise.reject(new TypeError("offline")));
+    await expect(createHttpComplaintsApi(createHttp("https://api.test", fetch)).addNote(COMPLAINT.id, "Called")).rejects.toMatchObject({
+      code: "stale",
+    });
+    // The note was sent once.
+    expect(fetch.mock.calls.filter((call) => call[1]?.method === "POST")).toHaveLength(1);
+  });
+
   it("turns refusals into the screen's errors", async () => {
     for (const [status, code, expected] of [
       [409, "conflict", "conflict"],

@@ -164,13 +164,21 @@ export function createHttpComplaintsApi(http: Http): ComplaintsApi {
   const path = (id: string, action = "") => `/staff/complaints/${encodeURIComponent(id)}${action}`;
   const detail = async (id: string) => toDetail(await http.request<DetailJson>("GET", path(id)));
 
-  /** Runs the command, then reads the complaint as it now stands. */
+  /**
+   * Runs the command, then reads the complaint as it now stands. Once the command has gone
+   * through, a failed read is `stale`, never an error that would have the person send it again.
+   */
   async function command(run: () => Promise<{ id: string } | string>): Promise<ComplaintDetail> {
+    let done: { id: string } | string;
     try {
-      const done = await run();
-      return await detail(typeof done === "string" ? done : done.id);
+      done = await run();
     } catch (error) {
       throw toComplaintsError(error);
+    }
+    try {
+      return await detail(typeof done === "string" ? done : done.id);
+    } catch {
+      throw new ComplaintsError("stale");
     }
   }
 

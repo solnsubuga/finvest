@@ -10,6 +10,7 @@ import { createStubDirectory } from "@/directory/stub.ts";
 import { cn } from "@/lib.ts";
 import { PageHeader } from "@/pages/PageHeader.tsx";
 import {
+  ComplaintsError,
   complaintsErrorMessage,
   notConnectedComplaintsApi,
   type ComplaintDetail,
@@ -199,6 +200,14 @@ export function ComplaintsScreen({
       return true;
     } catch (error) {
       setFailed({ on: complaintId, message: complaintsErrorMessage(error) });
+      if (error instanceof ComplaintsError && error.code === "stale") {
+        // It was saved: show what Finvest now holds, and let the form start again.
+        setRound((count) => count + 1);
+        await openDetail(complaintId);
+        const next = await fetchRegister(show);
+        if (next.state === "ready") setRegister(next);
+        return true;
+      }
       return false;
     } finally {
       setBusy(false);
@@ -222,6 +231,15 @@ export function ComplaintsScreen({
       }
       await afterChange(value);
     } catch (error) {
+      if (error instanceof ComplaintsError && error.code === "stale") {
+        // It was logged: the register, read again, shows it. The key is spent.
+        logKey.current = null;
+        setLogging(false);
+        setFailed({ on: "register", message: complaintsErrorMessage(error) });
+        const next = await fetchRegister(show);
+        if (next.state === "ready") setRegister(next);
+        return;
+      }
       setFailed({ on: "new", message: complaintsErrorMessage(error) });
     } finally {
       setBusy(false);
@@ -289,6 +307,11 @@ export function ComplaintsScreen({
                   </button>
                 ))}
               </div>
+              {failed?.on === "register" ? (
+                <p role="status" className="m-0 rounded-md bg-surface-sunken px-3.5 py-3 text-md leading-normal">
+                  {failed.message}
+                </p>
+              ) : null}
               {register.value.complaints.length === 0 ? (
                 <section className="flex flex-col gap-2 rounded-xl border border-border bg-surface p-5">
                   <h2 className="m-0 text-[17px] font-extrabold">
