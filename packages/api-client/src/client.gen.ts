@@ -555,6 +555,17 @@ export const ProductOut = z.object({
 });
 export type ProductOut = z.infer<typeof ProductOut>;
 
+export const PushDevice = z.object({
+  platform: z.enum(["ios", "android"]),
+  token: z.string(),
+});
+export type PushDevice = z.infer<typeof PushDevice>;
+
+export const PushDeviceToken = z.object({
+  token: z.string(),
+});
+export type PushDeviceToken = z.infer<typeof PushDeviceToken>;
+
 export const QuoteOut = z.object({
   amount_minor: z.number().int(),
   currency: Currency,
@@ -1362,6 +1373,28 @@ export const operations = {
     idempotent: false,
     status: 200,
     response: QuoteOut,
+  },
+  "PUT /client/push-devices": {
+    method: "PUT",
+    path: "/client/push-devices",
+    params: z.object({}),
+    query: z.object({}),
+    body: PushDevice,
+    bodyKind: "json",
+    idempotent: false,
+    status: 204,
+    response: null,
+  },
+  "POST /client/push-devices/remove": {
+    method: "POST",
+    path: "/client/push-devices/remove",
+    params: z.object({}),
+    query: z.object({}),
+    body: PushDeviceToken,
+    bodyKind: "json",
+    idempotent: false,
+    status: 204,
+    response: null,
   },
   "GET /client/second-steps": {
     method: "GET",

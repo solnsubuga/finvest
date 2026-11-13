@@ -1,6 +1,7 @@
 """The notification centre, channel choices and wordings against real PostgreSQL."""
 
 import asyncio
+import uuid
 from collections.abc import AsyncIterator
 from dataclasses import dataclass
 
@@ -685,7 +686,9 @@ class Api:
 
     async def staff(self, role: str = "admin") -> Actor:
         staff_id = await self.identity.invite_staff(
-            email=f"staff-{push_id().lower().strip('-_')}@finvestug.com".replace("_", "-"),
+            # Not from a push ID: lower-casing one is not one-to-one, and ids made under a test
+            # clock share a millisecond, so two of them can fold to the same address.
+            email=f"staff-{uuid.uuid4().hex}@finvestug.com",
             name="Grace Auma",
             role=role,  # type: ignore[arg-type]
             created_by=None,
