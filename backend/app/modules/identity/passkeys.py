@@ -476,50 +476,8 @@ class PasskeyService:
         The token is returned once, to be sent to the person, and is never stored. Used for a
         new member, and again for one who lost their passkey.
         """
-        token = new_token()
-        now = self.clock.now()
         async with self.database.transaction() as session:
-            known = await session.scalar(
-                text("SELECT true FROM identity_staff WHERE id = :id AND status <> 'disabled'"),
-                {"id": staff_id},
-            )
-            if not known:
-                raise ApplicationError("not_found")
-            await session.execute(
-                text(
-                    "UPDATE identity_staff_enrolments SET consumed_at = :now "
-                    "WHERE staff_id = :staff AND consumed_at IS NULL"
-                ),
-                {"now": now, "staff": staff_id},
-            )
-            # A link lets its holder replace the person's password and second step, so every
-            # one issued is on the record, and it says whether the person had already enrolled.
-            enrolled = await session.scalar(
-                text("SELECT status = 'active' FROM identity_staff WHERE id = :id"),
-                {"id": staff_id},
-            )
-            await trail.note(
-                session,
-                self.clock,
-                Actor("staff", staff_id),
-                "identity.staff.enrolment_link_issued",
-                resource_type="staff",
-                resource_id=staff_id,
-                details={"replaces_existing_sign_in": bool(enrolled)},
-            )
-            await session.execute(
-                text(
-                    "INSERT INTO identity_staff_enrolments (id, staff_id, token_hash, "
-                    "created_at, expires_at) VALUES (:id, :staff, :hash, :now, :expires)"
-                ),
-                {
-                    "id": push_id(self.clock),
-                    "staff": staff_id,
-                    "hash": token_digest(token),
-                    "now": now,
-                    "expires": now + ENROLMENT_LIFETIME,
-                },
-            )
+            token = await issue_enrolment(session, self.clock, staff_id, Actor("staff", staff_id))
         logger.info("staff_enrolment_created", staff_id=staff_id)
         return token
 
@@ -657,3 +615,55 @@ def check_enrolment_password(enrolment: Enrolment, password: str) -> None:
             "leaked_password" if problem == "leaked_password" else "validation_failed",
             fields=[FieldProblem(field_path=["body", "password"], code=problem)],
         )
+
+
+async def issue_enrolment(session: AsyncSession, clock: Clock, staff_id: str, actor: Actor) -> str:
+    """Make a one-time link token in the caller's transaction, recorded as done by `actor`.
+
+    An earlier link for the person stops working. The token is returned once and never stored.
+    The command line issues a link as the person it is for; an approved team change issues it
+    as the admin who approved it.
+    """
+    token = new_token()
+    now = clock.now()
+    known = await session.scalar(
+        text("SELECT true FROM identity_staff WHERE id = :id AND status <> 'disabled'"),
+        {"id": staff_id},
+    )
+    if not known:
+        raise ApplicationError("not_found")
+    await session.execute(
+        text(
+            "UPDATE identity_staff_enrolments SET consumed_at = :now "
+            "WHERE staff_id = :staff AND consumed_at IS NULL"
+        ),
+        {"now": now, "staff": staff_id},
+    )
+    # A link lets its holder replace the person's password and second step, so every one
+    # issued is on the record, and it says whether the person had already enrolled.
+    enrolled = await session.scalar(
+        text("SELECT status = 'active' FROM identity_staff WHERE id = :id"), {"id": staff_id}
+    )
+    await trail.note(
+        session,
+        clock,
+        actor,
+        "identity.staff.enrolment_link_issued",
+        resource_type="staff",
+        resource_id=staff_id,
+        details={"replaces_existing_sign_in": bool(enrolled)},
+    )
+    await session.execute(
+        text(
+            "INSERT INTO identity_staff_enrolments (id, staff_id, token_hash, "
+            "created_at, expires_at) VALUES (:id, :staff, :hash, :now, :expires)"
+        ),
+        {
+            "id": push_id(clock),
+            "staff": staff_id,
+            "hash": token_digest(token),
+            "now": now,
+            "expires": now + ENROLMENT_LIFETIME,
+        },
+    )
+    return token

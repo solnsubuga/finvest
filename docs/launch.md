@@ -19,6 +19,7 @@ Staging is set up but switched off to save cost (Solo, 2026-11-13), so productio
 | The regulator has been told of the change of system, if it must be | Solo | |
 | A real Finvest 1.0 export has been through the trial import with no errors | Operations | |
 | Every check in [Real device checks](#real-device-checks) has passed on an Android and an iPhone build of the release | Engineering | |
+| At least three active admins with a passkey or authenticator app, so every team change can be made in the console ([console-admin.md](console-admin.md#how-many-admins-the-scheme-needs)) | Solo, engineering | |
 
 ## 2. The parallel run
 

@@ -43,6 +43,9 @@ Permission = Literal[
     "rates.change",
     "compliance.view",
     "team.view",
+    # Proposing or deciding a change to the team: an invite, a new role, deactivating or
+    # reactivating someone, or a new set-up link. Seeing the team is `team.view`. Admin only.
+    "team.change",
     "reports.view",
     # Reading and exporting the audit trail: who did what, when and why, across the product.
     # A section of the Reports and audit screen, not a screen of its own.
