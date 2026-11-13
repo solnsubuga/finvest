@@ -48,12 +48,17 @@ jobs:
           pnpm typecheck
           pnpm test
           pnpm build:web
-      - name: A production build leaves the demo sign-in out
+      - name: A production build leaves the demos out
         working-directory: apps/client
         run: |
           # build:web above ran without EXPO_PUBLIC_DEMO_AUTH. The demo account
           # and its fixed code must not be anywhere in what it produced.
           if grep -rIl -e "correcthorse1" -e "Amara Nakato" dist; then
             echo "The demo sign-in was bundled into a production build" >&2
+            exit 1
+          fi
+          # Nor the demo payments, which confirm payments that never happened.
+          if grep -rIl -e "demo-91-day-bill" -e "FV-DEMO-" dist; then
+            echo "The demo payments were bundled into a production build" >&2
             exit 1
           fi

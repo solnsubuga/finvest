@@ -13,6 +13,8 @@ type Props = {
   /** Pinned under the content: the main button and any links below it. */
   footer?: ReactNode;
   dark?: boolean;
+  /** For screens reached after signing in, where the demo's sign-in hint would be out of place. */
+  signedIn?: boolean;
 };
 
 /**
@@ -21,7 +23,7 @@ type Props = {
  * On a phone it fills the screen. On a wide screen the same column sits in
  * the centre, which is how every screen without its own wide layout behaves.
  */
-export function Screen({ children, footer, dark = false }: Props) {
+export function Screen({ children, footer, dark = false, signedIn = false }: Props) {
   const insets = useSafeAreaInsets();
   const wide = useIsWide();
   const background = dark ? colors.black : colors.paper;
@@ -46,7 +48,7 @@ export function Screen({ children, footer, dark = false }: Props) {
         <View style={styles.column}>
           <View>
             <View style={styles.demo}>
-              <DemoLabel onDark={dark} />
+              <DemoLabel onDark={dark} signedIn={signedIn} />
             </View>
             {children}
           </View>
