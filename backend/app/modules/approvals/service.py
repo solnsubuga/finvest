@@ -21,7 +21,7 @@ from app.modules.ledger import corrections
 from app.modules.migration import service as migration
 from app.modules.notifications import announcements, suppression_lifts, wording_store
 from app.modules.payments import bank_transfers
-from app.modules.payouts import destinations
+from app.modules.payouts import destinations, resolutions
 from app.modules.reconciliation import day_close, transfers
 from app.modules.support import complaints
 
@@ -65,6 +65,8 @@ async def waiting_for(session: AsyncSession, staff: StaffSession, now: datetime)
         found += await _payout_accounts(session)
     if "investment_correction" in kinds:
         found += await _investment_corrections(session, staff)
+    if "payout_resolution" in kinds:
+        found += await _payout_resolutions(session)
     return inbox(found, staff.staff_id, staff.permissions)
 
 
@@ -257,4 +259,12 @@ async def _payout_accounts(session: AsyncSession) -> list[Waiting]:
         Waiting("payout_account", d.id, d.kind.value, d.checked_by, d.checked_at)
         for d in await destinations.checks_awaiting_approval(session)
         if d.checked_by is not None and d.checked_at is not None
+    ]
+
+
+async def _payout_resolutions(session: AsyncSession) -> list[Waiting]:
+    # The subject is the outcome proposed, never the client, the number or the amount.
+    return [
+        Waiting("payout_resolution", r.id, r.outcome.value, r.proposed_by, r.proposed_at)
+        for r in await resolutions.waiting(session)
     ]

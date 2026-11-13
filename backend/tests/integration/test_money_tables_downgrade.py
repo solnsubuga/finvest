@@ -1,10 +1,11 @@
 """A downgrade must never delete the books, the issued numbers, the audit trail, the job
 history, the receipts that stop a command running twice, the identity records, the payout
-destinations and their two-person checks, the withdrawal limits, the payouts and their send
-attempts, the migration checks, the imported statements, the day closes and their recorded
-matches, the pot transfers, the help chat, the complaints register, the goals, the email
-delivery records, the unclaimed accounts, the complaint outcomes, the suppression lifts, the
-client locks, the announcements, the team changes or Finvest's own money in the buffer."""
+destinations and their two-person checks, the withdrawal limits, the payouts, their send
+attempts and their resolutions, the migration checks, the imported statements, the day closes
+and their recorded matches, the pot transfers, the help chat, the complaints register, the
+goals, the email delivery records, the unclaimed accounts, the complaint outcomes, the
+suppression lifts, the client locks, the announcements, the team changes or Finvest's own
+money in the buffer."""
 
 import os
 from collections.abc import Iterator
@@ -361,6 +362,28 @@ ROWS = {
         "'mobile_money', 'mtn', '256772000000', 'Test', 'in_review', 'network_registered_name', "
         "'Test', 'exact', '-Nabc0000000000000S1', now(), now(), now())",
         "refusing to drop the checks and approvals of payout destinations",
+    ),
+    "0037_payout_resolutions": (
+        "INSERT INTO payout_destinations (id, client_id, kind, network, account_number, "
+        "holder_name, status, created_at, updated_at) VALUES ('-Nabc0000000000000D1', "
+        "'-Nabc0000000000000B1', 'mobile_money', 'mtn', '256772000000', 'Test', "
+        "'awaiting_code', now(), now()); "
+        "INSERT INTO payouts (id, client_id, destination_id, kind, amount_minor, currency, "
+        "status, business_date, source_account_id, source_reference, in_flight_account_id, "
+        "request_key, created_at, updated_at) VALUES ('-Nabc0000000000000A1', "
+        "'-Nabc0000000000000B1', '-Nabc0000000000000D1', 'mobile_money', 1000, 'UGX', 'queued', "
+        "DATE '2026-11-10', '-Nabc0000000000000E1', 'investment-1', '-Nabc0000000000000F1', "
+        "'request-key-1', now(), now()); "
+        "INSERT INTO reconciliation_statements (id, source, account_reference, business_date, "
+        "currency, opening_minor, closing_minor, line_count, file_sha256, imported_by, "
+        "imported_at) VALUES ('-Nabc0000000000000C1', 'iotec', 'mtn', DATE '2026-11-10', "
+        "'UGX', 100, 100, 0, repeat('0', 64), '-Nabc0000000000000B1', now()); "
+        # The guard admits only staff proposing with the statement as evidence.
+        "ALTER TABLE payout_resolutions DISABLE TRIGGER payout_resolutions_guard; "
+        "INSERT INTO payout_resolutions (id, payout_id, outcome, statement_id, reason, status, "
+        "proposed_by, proposed_at) VALUES ('-Nabc0000000000000R1', '-Nabc0000000000000A1', "
+        "'failed', '-Nabc0000000000000C1', 'Checked', 'proposed', '-Nabc0000000000000S1', now())",
+        "refusing to drop the resolutions of payouts",
     ),
     "0051_kyc_sealed_details": (
         "INSERT INTO kyc_checks (id, client_id, document_type, document_country, "

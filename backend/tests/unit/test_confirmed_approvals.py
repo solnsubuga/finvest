@@ -27,6 +27,7 @@ DECISIONS = {
     "POST /staff/identity-checks/{check_id}/reject",
     "POST /staff/payments/bank-transfers/{payment_id}/approve",
     "POST /staff/payout-destinations/{destination_id}/approve",
+    "POST /staff/payout-resolutions/{resolution_id}/approve",
     "POST /staff/migration/control-totals/{totals_id}/confirmation",
     "POST /staff/migration/sign-offs/{sign_off_id}/decision",
     "POST /staff/rate-proposals/{proposal_id}/approve",

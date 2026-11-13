@@ -31,6 +31,7 @@ Kind = Literal[
     "announcement",
     "payout_account",
     "investment_correction",
+    "payout_resolution",
 ]
 
 
@@ -65,6 +66,7 @@ SOURCES: dict[Kind, Source] = {
     "complaint_outcome": Source("complaints.view", "complaints.close"),
     "announcement": Source("settings.view", "announcements.send"),
     # Checking a payout account is part of the review queue, so approving the check is too.
+    "payout_resolution": Source("reconciliation.view", "reconciliation.view"),
     "payout_account": Source("review_queue.view", "payout_accounts.change"),
     "investment_correction": Source("investments.view", "investment_corrections.change"),
 }

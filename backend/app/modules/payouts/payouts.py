@@ -45,6 +45,8 @@ from app.shared.push_ids import push_id
 SEND_KIND = "payouts.send_payout"
 READ_KIND = "payouts.read_payout_status"
 SWEEP_KIND = "payouts.sweep_payouts"
+# Notes a payout settled by hand on its destination. Only the worker writes that note.
+FIRST_PAID_KIND = "payouts.record_first_payout"
 # A send job not started within this is left to the sweep, which queues a fresh one.
 SEND_MAX_AGE = timedelta(hours=1)
 
@@ -296,13 +298,61 @@ async def apply_event(
     refuses any other pairing of actor and step.
     """
     if event in machine.NEEDS_TWO_PEOPLE:
-        # Arrives with reconciliation, where the second signature is stored.
+        # Only `resolutions.approve` settles a payout by hand, through `settle_by_hand`.
         raise ApplicationError("forbidden")
     if (event in _PERSON_EVENTS) != (actor.kind != "system"):
         raise ApplicationError("forbidden")
     if event in _REVIEW_EVENTS and (actor.kind != "staff" or not (reason or "").strip()):
         raise ApplicationError("forbidden" if actor.kind != "staff" else "validation_failed")
+    moved = await _move(
+        session,
+        actor,
+        payout_id,
+        event,
+        clock,
+        provider_reference=provider_reference,
+        failure_code=failure_code,
+    )
+    if event in _PERSON_EVENTS:
+        await _audit(
+            session,
+            actor,
+            f"payouts.payout_{event.value}",
+            payout_id,
+            clock,
+            category="approval" if event in _REVIEW_EVENTS else "change",
+            reason=reason,
+        )
+    return moved
 
+
+async def settle_by_hand(
+    session: AsyncSession, staff: Actor, payout_id: str, event: PayoutEvent, clock: Clock
+) -> PayoutView:
+    """Move a stranded payout to paid or failed, with its ledger entry, for a resolution.
+
+    Called only by `resolutions.approve`, in the transaction where the second person approves
+    someone else's resolution. The database refuses the step without that approved resolution,
+    and refuses the approval if the payout does not move with it.
+    """
+    if event not in machine.NEEDS_TWO_PEOPLE or staff.kind != "staff":
+        raise ApplicationError("forbidden")
+    failed = event is PayoutEvent.STAFF_RESOLVED_FAILED
+    return await _move(
+        session, staff, payout_id, event, clock, failure_code="staff_resolved" if failed else None
+    )
+
+
+async def _move(
+    session: AsyncSession,
+    actor: Actor,
+    payout_id: str,
+    event: PayoutEvent,
+    clock: Clock,
+    *,
+    provider_reference: str | None = None,
+    failure_code: str | None = None,
+) -> PayoutView:
     row = (await session.execute(_LOCK, {"id": payout_id})).one_or_none()
     if row is None:
         raise ApplicationError("not_found")
@@ -328,20 +378,20 @@ async def apply_event(
                 before.terms, transition.effect, business_date(now), to_account_id=to_account
             )
             await ledger.post_entry(session, draft, clock)
-    if transition.status is PayoutStatus.PAID:
+    if transition.status is PayoutStatus.PAID and actor.kind == "system":
         await destinations.record_first_payout(session, before.destination_id, now)
+    elif transition.status is PayoutStatus.PAID:
+        await enqueue(
+            session,
+            JobRequest(
+                kind=FIRST_PAID_KIND,
+                idempotency_key=f"{payout_id}:first-paid",
+                payload={"payout_id": payout_id, "paid_at": now.isoformat()},
+            ),
+            now=now,
+        )
     if before.status is PayoutStatus.HELD and transition.status is PayoutStatus.QUEUED:
         await queue_send(session, payout_id, before.kind, now)
-    if event in _PERSON_EVENTS:
-        await _audit(
-            session,
-            actor,
-            f"payouts.payout_{event.value}",
-            payout_id,
-            clock,
-            category="approval" if event in _REVIEW_EVENTS else "change",
-            reason=reason,
-        )
     return await get_payout(session, payout_id)
 
 

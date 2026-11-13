@@ -41,6 +41,7 @@ The inbox only reads. Deciding happens on the owning module's own route, which c
 | `suppression_lift` | notifications `suppression_lifts.open_lifts`. The subject is the start of the address hash. | `clients.view` | `email_suppressions.lift` |
 | `complaint_outcome` | support `complaints.pending_outcomes`. The subject is the complaint's reference. | `complaints.view` | `complaints.close` |
 | `announcement` | notifications `announcements.list_announcements`, proposed | `settings.view` | `announcements.send` |
+| `payout_resolution` | payouts `resolutions.waiting` | `reconciliation.view` | `reconciliation.view` |
 | `payout_account` | payouts `destinations.checks_awaiting_approval`: a check recorded, not yet approved | `review_queue.view` | `payout_accounts.change` |
 | `investment_correction` | investments `list_corrections`, proposed. The subject is `unwind` or `refund`. | `investments.view` | `investment_corrections.change` |
 
