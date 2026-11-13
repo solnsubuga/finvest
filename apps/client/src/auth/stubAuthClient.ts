@@ -139,6 +139,11 @@ export function createStubAuthClient(options: StubOptions = {}): AuthClient {
   };
 
   return {
+    async restoreSession(): Promise<Session | null> {
+      // Nothing is stored, so a reload always starts signed out.
+      return null;
+    },
+
     async startSignup(input): Promise<SignupChallenge> {
       await wait();
       // Says nothing about whether the number has an account. That is only

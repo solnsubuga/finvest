@@ -42,7 +42,7 @@ describe("the return address after logging in again", () => {
     expect(screen.getByText("none")).toBeTruthy();
   });
 
-  it("is dropped when the app goes to the background", async () => {
+  it("survives the app going to the background, which reading a code does", async () => {
     let listener: ((state: AppStateStatus) => void) | undefined;
     const spy = jest.spyOn(AppState, "addEventListener").mockImplementation((_type, handler) => {
       listener = handler as (state: AppStateStatus) => void;
@@ -50,9 +50,8 @@ describe("the return address after logging in again", () => {
     });
     await mount();
     await fireEvent.press(screen.getByTestId("ask"));
-    expect(screen.getByText("/security/passkey")).toBeTruthy();
     await act(async () => listener?.("background"));
-    expect(screen.getByText("none")).toBeTruthy();
+    expect(screen.getByText("/security/passkey")).toBeTruthy();
     spy.mockRestore();
   });
 });

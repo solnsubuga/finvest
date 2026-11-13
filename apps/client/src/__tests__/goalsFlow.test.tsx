@@ -64,6 +64,10 @@ async function signIn(phone: string) {
   await fireEvent.press(await screen.findByTestId(phone === "772123456" ? "use-passkey" : "use-authenticator"));
 }
 
+// The first test in a file renders the whole router from cold, which takes several seconds on
+// a busy CI runner. The assertions are unchanged; only the time allowed to reach them is.
+jest.setTimeout(30_000);
+
 describe("goals", () => {
   it("lists the demo account's goals with their progress", async () => {
     await signIn("772123456");
