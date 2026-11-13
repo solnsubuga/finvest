@@ -432,26 +432,82 @@ class IdentityService:
 
 @dataclass(frozen=True, slots=True)
 class ClientContact:
-    """Where to reach a client. `email` is None when they gave none."""
+    """Where to reach a client. `email` is None when they gave none.
+
+    `claimed` is false for an account carried over from Finvest 1.0 that its owner has not
+    claimed yet. Send such a client only a reminder to claim, never their statements.
+    """
 
     phone: str
     email: str | None
+    claimed: bool
 
 
 async def client_contact(session: AsyncSession, client_id: str) -> ClientContact | None:
-    """The phone and email of an active client, for the worker to send them a message.
+    """The phone and email of a client, for the worker to send them a message.
 
-    Other modules call this instead of reading identity tables. It answers nothing for a
-    client who is locked or closed, so nobody is messaged after closing their account. The
-    worker role may read only these columns.
+    Other modules call this instead of reading identity tables. It answers for an active
+    client and for one carried over from Finvest 1.0 who has not claimed the account yet, who
+    still needs reminders. It answers nothing for a client who is locked or closed, so nobody
+    is messaged after closing their account. The worker role may read only these columns.
     """
     row = (
         await session.execute(
-            text("SELECT phone, email FROM identity_clients WHERE id = :id AND status = 'active'"),
+            text(
+                "SELECT phone, email, status FROM identity_clients "
+                "WHERE id = :id AND status IN ('active', 'unclaimed')"
+            ),
             {"id": client_id},
         )
     ).one_or_none()
-    return ClientContact(row.phone, row.email) if row is not None else None
+    if row is None:
+        return None
+    return ClientContact(row.phone, row.email, claimed=row.status == "active")
+
+
+def _staff_only(actor: Actor) -> None:
+    if actor.kind != "staff":
+        raise ValueError("Only a member of staff does this")
+
+
+async def create_unclaimed_client(
+    session: AsyncSession, clock: Clock, actor: Actor, *, phone: str, email: str | None
+) -> str:
+    """Create the sign-in of a client carried over from Finvest 1.0, in the caller's transaction.
+
+    The account has no password, so nothing signs in as it until the client claims it with
+    `CodeService.claim_start` and `claim_complete`. `actor` is the member of staff running the
+    import, and the transaction must be acting as them. Raises `phone_taken` and leaves the
+    transaction usable when the number already has an account.
+    """
+    _staff_only(actor)
+    try:
+        phone = normalize_phone(phone)
+        email = normalize_email(email) if email else None
+    except InvalidIdentifier as error:
+        raise _invalid(str(error), "invalid") from None
+    client_id = push_id(clock)
+    try:
+        async with session.begin_nested():
+            await session.execute(
+                text(
+                    "INSERT INTO identity_clients (id, phone, email, status, created_at) "
+                    "VALUES (:id, :phone, :email, 'unclaimed', :now)"
+                ),
+                {"id": client_id, "phone": phone, "email": email, "now": clock.now()},
+            )
+    except IntegrityError:
+        raise ApplicationError("phone_taken") from None
+    await trail.note(
+        session,
+        clock,
+        actor,
+        "identity.client.imported",
+        resource_type="client",
+        resource_id=client_id,
+    )
+    logger.info("client_imported", client_id=client_id)
+    return client_id
 
 
 def _invalid(field: str, code: str) -> ApplicationError:
