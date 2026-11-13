@@ -66,6 +66,8 @@ import-linter enforces the purity of `app/shared` and of every `app/modules/*/do
 ## Building on the scaffold
 
 - **IDs.** Use `push_id()` from `app.shared.push_ids` and the `push_id` column type created by migration 0001. No auto-increment and no UUIDs.
+- **Money.** Use `Money` from `app.shared.money`. Amounts are integers in the smallest unit, and a rate is applied with `mul_ratio`. To move money, call `app.modules.ledger.service`; see [docs/ledger.md](../docs/ledger.md).
+- **Audit.** Record who did what and why with `app.modules.audit.service.record`, in the same transaction as the change.
 - **Time.** Take a `Clock` from `app.shared.clock`. Never call `datetime.now()` in a rule. Tests use `FakeClock`.
 - **Transactions.** `Database.actor_transaction(actor)` opens a transaction acting for a client, a staff member or the system. Row policies read the actor with `finvest_actor_kind()` and `finvest_actor_id()`. `Database.transaction()` has no actor, so a policy shows it nothing. The actor is a fence against bugs, not a credential, because a connection sets it for itself. A policy that admits the `system` actor must be `TO finvest_worker` only, never `finvest_app`.
 - **Contracts.** Request and response bodies extend `Contract`. It is strict, so `"1000"` and `1000.0` are refused where an integer amount is expected.
