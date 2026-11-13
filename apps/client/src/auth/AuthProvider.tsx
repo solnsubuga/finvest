@@ -1,4 +1,5 @@
-import { createContext, ReactNode, useContext, useMemo, useState } from "react";
+import { createContext, ReactNode, useContext, useEffect, useMemo, useState } from "react";
+import { AppState } from "react-native";
 
 import { resolveAuthClient } from "./resolveClient";
 import {
@@ -40,6 +41,10 @@ type AuthState = {
 /** Only the set-up screens, so a log in can never be sent somewhere unexpected. */
 export type ReturnTo = "/security/passkey" | "/security/authenticator";
 
+/** The return address is for logging in again right away, not for a later visit. */
+export const RETURN_TO_LIFETIME_MS = 5 * 60 * 1000;
+
+
 const AuthContext = createContext<AuthState | null>(null);
 
 export function AuthProvider({
@@ -56,6 +61,24 @@ export function AuthProvider({
   const [ticket, setTicket] = useState<SignupTicket | null>(null);
   const [login, setLogin] = useState<LoginChallenge | null>(null);
   const [returnTo, setReturnTo] = useState<ReturnTo | null>(null);
+
+  // The return address is dropped after a few minutes, and when the app is
+  // put away, so a much later log in goes Home and not to a set-up screen.
+  useEffect(() => {
+    if (!returnTo) {
+      return undefined;
+    }
+    const timer = setTimeout(() => setReturnTo(null), RETURN_TO_LIFETIME_MS);
+    const subscription = AppState.addEventListener("change", (state) => {
+      if (state === "background") {
+        setReturnTo(null);
+      }
+    });
+    return () => {
+      clearTimeout(timer);
+      subscription.remove();
+    };
+  }, [returnTo]);
 
   const value = useMemo(
     () => ({
