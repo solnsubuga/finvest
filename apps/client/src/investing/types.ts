@@ -103,6 +103,7 @@ export type InvestingErrorCode =
   | "not_verified"
   | "too_many_unpaid"
   | "not_found"
+  | "key_reused"
   | "unavailable";
 
 export class InvestingError extends Error {
@@ -121,6 +122,7 @@ const messages: Record<InvestingErrorCode, string> = {
   not_verified: "You can invest once your ID check is approved.",
   too_many_unpaid: "You have investments waiting to be paid for. Pay for one of those, or let it lapse, before starting another.",
   not_found: "We could not find that.",
+  key_reused: "Something changed since you last tried. Go back and review your investment again.",
   unavailable: "We could not reach Finvest. Check your connection and try again.",
 };
 

@@ -8,7 +8,7 @@ import { Button } from "@/components/Button";
 import { Field, Input } from "@/components/Field";
 import { Screen } from "@/components/Screen";
 import { Eyebrow, Title, Txt } from "@/components/Txt";
-import { formatAmount, formatDay, groupDigits, kindLabel, parseWholeAmount, termLabel } from "@/investing/format";
+import { formatAmount, formatDay, groupDigits, kindLabel, parseWholeAmount, termLabel, wholeUnits } from "@/investing/format";
 import { useInvesting } from "@/investing/InvestingProvider";
 import { Failed } from "@/investing/Parts";
 import { describeInvestingError, Product, Quote } from "@/investing/types";
@@ -106,7 +106,7 @@ export default function ProductDetail() {
               value={text}
               onChangeText={(typed) => setText(groupDigits(typed))}
               keyboardType="number-pad"
-              placeholder={groupDigits(String(product.minimum.minor / (product.currency === "USD" ? 100 : 1)))}
+              placeholder={wholeUnits(product.minimum)}
               invalid={calc.state === "failed"}
               testID="amount"
             />

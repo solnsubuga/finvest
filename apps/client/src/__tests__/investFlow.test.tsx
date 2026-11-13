@@ -8,6 +8,8 @@ import { DEMO_PASSWORD } from "@/auth/stubAuthClient";
 const mockClock = { ms: Date.parse("2026-11-13T09:00:00Z") };
 const mockRequest = jest.fn();
 const mockSample = { value: "empty" };
+/** The next request's failure, if any: what the network or the backend answers instead. */
+const mockFailNext: { code: string | null } = { code: null };
 
 jest.mock("@/auth/stubAuthClient", () => {
   const actual = jest.requireActual("@/auth/stubAuthClient");
@@ -33,6 +35,12 @@ jest.mock("@/investing/stubInvestingClient", () => {
         ...client,
         requestInvestment: async (request: unknown) => {
           mockRequest(request);
+          const code = mockFailNext.code;
+          if (code) {
+            mockFailNext.code = null;
+            const { InvestingError } = jest.requireActual("@/investing/types");
+            throw new InvestingError(code);
+          }
           return client.requestInvestment(request);
         },
       };
@@ -72,7 +80,18 @@ jest.setTimeout(20_000);
 beforeEach(() => {
   mockRequest.mockClear();
   mockSample.value = "empty";
+  mockFailNext.code = null;
 });
+
+async function openReview() {
+  await signIn();
+  await fireEvent.press(screen.getByLabelText("Invest"));
+  await fireEvent.press(await screen.findByTestId("product-TREA-91"));
+  await quoteFor("1000000");
+  await screen.findByTestId("quote");
+  await fireEvent.press(screen.getByTestId("review"));
+  await screen.findByText("Review your investment");
+}
 
 describe("investing", () => {
   it("lists products with the rate after tax and never the tax", async () => {
@@ -131,6 +150,34 @@ describe("investing", () => {
       mockClock.ms += 8_000;
     });
     await screen.findByText("Completed");
+  });
+
+  it("sends the same request again after an answer that was lost, with the choice locked", async () => {
+    await openReview();
+    await fireEvent.press(screen.getByTestId("at-maturity-pay_out"));
+    mockFailNext.code = "unavailable";
+    await fireEvent.press(screen.getByTestId("confirm"));
+    await screen.findByText(/Trying again sends the same request/);
+    expect(screen.getByTestId("at-maturity-roll_over")).toBeDisabled();
+    await fireEvent.press(screen.getByTestId("at-maturity-roll_over"));
+    await fireEvent.press(screen.getByTestId("confirm"));
+    await screen.findByText("Pay UGX 1,000,000");
+    const [first, second] = mockRequest.mock.calls.map(([request]) => request);
+    expect(second).toEqual(first);
+    expect(second.atMaturity).toBe("pay_out");
+  });
+
+  it("uses a new key after a definite refusal, so a changed choice is a new request", async () => {
+    await openReview();
+    mockFailNext.code = "product_not_open";
+    await fireEvent.press(screen.getByTestId("confirm"));
+    await screen.findByText("This product is not taking new investments right now.");
+    await fireEvent.press(screen.getByTestId("at-maturity-pay_out"));
+    await fireEvent.press(screen.getByTestId("confirm"));
+    await screen.findByText("Pay UGX 1,000,000");
+    const [first, second] = mockRequest.mock.calls.map(([request]) => request);
+    expect(second.idempotencyKey).not.toBe(first.idempotencyKey);
+    expect(second.atMaturity).toBe("pay_out");
   });
 
   it("shows a new client how to start", async () => {

@@ -29,8 +29,11 @@ export default function Review() {
   const [atMaturity, setAtMaturity] = useState<AtMaturity>("roll_over");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  // One key for this visit: a double tap or a retry after a lost answer saves one investment.
-  const [idempotencyKey] = useState(newIdempotencyKey);
+  // One key per request: a double tap or a retry after a lost answer saves one investment.
+  // After a try whose outcome is unknown the choice is locked, so trying again sends the
+  // same request. After a definite refusal nothing was saved, so the next try gets a new key.
+  const [idempotencyKey, setIdempotencyKey] = useState(newIdempotencyKey);
+  const [locked, setLocked] = useState(false);
 
   const minor = Number(params.amount);
   const [loaded, retry] = useLoaded(
@@ -60,7 +63,14 @@ export default function Review() {
       // Replace, so Back from paying does not land on a confirm button that saves another one.
       router.replace(`/pay/${investment.id}`);
     } catch (caught) {
-      setError(describeInvestingError(caught));
+      const unknown = !(caught instanceof InvestingError) || caught.code === "unavailable";
+      if (unknown) {
+        setLocked(true);
+        setError(`${describeInvestingError(caught)} Trying again sends the same request, so you will not invest twice.`);
+      } else {
+        setIdempotencyKey(newIdempotencyKey());
+        setError(describeInvestingError(caught));
+      }
       setBusy(false);
     }
   };
@@ -110,7 +120,8 @@ export default function Review() {
                   <Pressable
                     key={choice}
                     accessibilityRole="radio"
-                    accessibilityState={{ checked: selected }}
+                    accessibilityState={{ checked: selected, disabled: locked }}
+                    disabled={locked}
                     accessibilityLabel={atMaturityLabel[choice]}
                     onPress={() => setAtMaturity(choice)}
                     testID={`at-maturity-${choice}`}
@@ -129,7 +140,9 @@ export default function Review() {
                 );
               })}
               <Txt size={fontSizes.xs} color={colors.muted}>
-                You can change this until the day before it matures.
+                {locked
+                  ? "Your last try may have gone through, so this choice stays as it was. You can change it later from the investment."
+                  : "You can change this until the day before it matures."}
               </Txt>
             </View>
           ) : null}

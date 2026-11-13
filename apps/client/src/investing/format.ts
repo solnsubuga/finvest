@@ -15,6 +15,13 @@ export function formatAmount(amount: Amount): string {
   return `${amount.currency} ${amount.minor < 0 ? "-" : ""}${whole}${fraction}`;
 }
 
+/** "1,000,000" for UGX 1,000,000 or "500" for USD 500.00: the whole units, as the amount field takes them. */
+export function wholeUnits(amount: Amount): string {
+  return formatAmount(amount)
+    .replace(/^[A-Z]+ /, "")
+    .replace(/\.\d+$/, "");
+}
+
 /**
  * Reads what the client typed as whole units: "1,000,000" or "1000000".
  * Digits only, so no decimal ever reaches an amount. Null when it is not a whole number.

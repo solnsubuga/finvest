@@ -47,6 +47,20 @@ describe("demo investing", () => {
     expect(await api.listInvestments()).toHaveLength(1);
   });
 
+  it("refuses a known key sent with different details, as the backend does", async () => {
+    const { api } = client();
+    const request = { productCode: "TREA-91", amount: ugx(1_000_000), atMaturity: "roll_over" as const, idempotencyKey: "k2" };
+    await api.requestInvestment(request);
+    for (const changed of [
+      { ...request, atMaturity: "pay_out" as const },
+      { ...request, amount: ugx(2_000_000) },
+      { ...request, productCode: "TREA-182" },
+    ]) {
+      await expect(api.requestInvestment(changed)).rejects.toMatchObject({ code: "key_reused" });
+    }
+    expect(await api.listInvestments()).toHaveLength(1);
+  });
+
   it("starts the term once the demo payment is confirmed and adds interest each night", async () => {
     const { api, clock } = client();
     const saved = await api.requestInvestment({

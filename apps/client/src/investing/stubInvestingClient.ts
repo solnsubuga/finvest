@@ -119,7 +119,7 @@ export function createStubInvestingClient(options: StubOptions = {}): InvestingC
   const delayMs = options.delayMs ?? 350;
   const now = options.now ?? Date.now;
   const stored = new Map<string, Stored>();
-  const byKey = new Map<string, string>();
+  const byKey = new Map<string, { id: string; request: string }>();
 
   const pause = () =>
     delayMs > 0 ? new Promise<void>((resolve) => setTimeout(resolve, delayMs)) : Promise.resolve();
@@ -233,9 +233,15 @@ export function createStubInvestingClient(options: StubOptions = {}): InvestingC
 
     async requestInvestment(request: NewInvestment) {
       await pause();
+      // Like the backend: a known key returns its investment, and the same key with
+      // different details is refused rather than saving or replaying the wrong thing.
+      const details = JSON.stringify([request.productCode, request.amount, request.atMaturity ?? null]);
       const known = byKey.get(request.idempotencyKey);
       if (known) {
-        return view(stored.get(known) as Stored);
+        if (known.request !== details) {
+          throw new InvestingError("key_reused");
+        }
+        return view(stored.get(known.id) as Stored);
       }
       const product = check(request.productCode, request.amount);
       const unpaid = [...stored.values()].filter((entry) => view(entry).status === "awaiting_payment");
@@ -252,7 +258,7 @@ export function createStubInvestingClient(options: StubOptions = {}): InvestingC
         startDate: null,
       };
       stored.set(entry.id, entry);
-      byKey.set(request.idempotencyKey, entry.id);
+      byKey.set(request.idempotencyKey, { id: entry.id, request: details });
       if (entry.amount.currency === "UGX") {
         addDemoPayable({
           id: entry.id,
