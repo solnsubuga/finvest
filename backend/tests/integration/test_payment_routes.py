@@ -131,7 +131,9 @@ async def api(test_database: TestDatabase, app_database: Database) -> AsyncItera
             "staff_allowed_origins": [STAFF_ORIGIN],
         }
     )
-    clock = FakeClock(NOW)
+    # The time the test starts: the database refuses an investment not created now, and a
+    # module-level time goes stale when the whole suite runs longer than five minutes.
+    clock = FakeClock(datetime.now(UTC))
     collections = FakeCollections()
     storage = MemoryStorage()
     app = create_app(
@@ -557,7 +559,9 @@ async def test_without_storage_no_transfer_is_saved(
     settings = test_database.settings("finvest_app").model_copy(
         update={"client_allowed_origins": [CLIENT_ORIGIN]}
     )
-    clock = FakeClock(NOW)
+    # The time the test starts: the database refuses an investment not created now, and a
+    # module-level time goes stale when the whole suite runs longer than five minutes.
+    clock = FakeClock(datetime.now(UTC))
     app = create_app(
         settings,
         app_database,
