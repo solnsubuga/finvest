@@ -29,6 +29,7 @@ from app.modules.identity import (
     codes_api,
     email_checks_api,
     passkeys_api,
+    people_api,
     phone_changes_api,
     team_api,
 )
@@ -157,6 +158,7 @@ def create_app(
         *phone_changes_api.routers,
         *email_checks_api.routers,
         *team_api.routers,
+        *people_api.routers,
         *notifications_api.routers,
         *suppressions_api.routers,
         *support_api.routers,

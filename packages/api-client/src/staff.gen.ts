@@ -865,6 +865,17 @@ export const PasskeyOptions = z.object({
 });
 export type PasskeyOptions = z.infer<typeof PasskeyOptions>;
 
+export const PersonView = z.object({
+  id: z.string(),
+  name: z.string(),
+});
+export type PersonView = z.infer<typeof PersonView>;
+
+export const PeopleList = z.object({
+  people: z.array(PersonView),
+});
+export type PeopleList = z.infer<typeof PeopleList>;
+
 export const PhoneChangeView = z.object({
   client_id: z.string(),
   expires_at: z.string(),
@@ -2373,6 +2384,19 @@ export const operations = {
     idempotent: false,
     status: 200,
     response: StaffDestinationOut,
+  },
+  "GET /staff/people": {
+    method: "GET",
+    path: "/staff/people",
+    params: z.object({}),
+    query: z.object({
+    ids: z.array(z.string()).nullable().optional(),
+  }),
+    body: null,
+    bodyKind: null,
+    idempotent: false,
+    status: 200,
+    response: PeopleList,
   },
   "GET /staff/phone-changes": {
     method: "GET",
