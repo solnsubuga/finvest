@@ -26,9 +26,19 @@ Staff and their roles live in the identity module (`backend/app/modules/identity
 
 Rules, and where they are enforced:
 
-- **Two admins.** The approver is never the proposer, and only the proposer withdraws. The database refuses anything else (`ck_identity_staff_changes_two_people`).
+- **Two admins.** The approver is never the proposer, and only the proposer withdraws. The database refuses anything else (`ck_identity_staff_changes_two_people`), and its guard accepts a proposal or a decision only from an active admin.
 - **Nobody acts on their own account.** Nobody proposes, approves or rejects a change about themselves (`ck_identity_staff_changes_not_own`).
 - **Only an approval changes an account.** A trigger on `identity_staff` refuses a new member of staff added by staff, a new role, or a move into or out of `disabled`, unless a change approved in the same transaction says so. An approval from an earlier transaction is not enough, so one cannot be replayed. The first administrator is still added from the command line (`python -m app.modules.identity.bootstrap`), with no acting member of staff.
 - **One open change per person,** and one open invite per email address. An address already on the team cannot be invited again.
 - **There is always an active admin.** A change that would deactivate or demote the last active admin is refused when it is proposed and again when it is approved. Approvals lock the active admins, so two approvals cannot each remove one of the last two.
 - **On the record.** The proposal and the decision are audit events (`identity.team.<kind>_proposed`, `identity.team.change_<decision>`) with their reasons, and a set-up link issued is `identity.staff.enrolment_link_issued`, recorded as the admin who approved it.
+
+### How many admins the scheme needs
+
+Every change needs two admins, and nobody decides a change about themselves. So:
+
+- **With one admin,** nothing can be approved in the console at all.
+- **With two admins,** they can invite others and change other people's roles, but neither of them can be deactivated, demoted or sent a new set-up link from the console: the person concerned cannot decide it, and the proposer cannot approve it.
+- **With three or more,** every change can be made in the console. This is the working minimum. Plan for three admins on day one (see [launch.md](launch.md)).
+
+Below three, the command line is the way out. `python -m app.modules.identity.bootstrap` adds a person or issues a new set-up link with one operator and no second approval. It is the break-glass path: it needs shell access to production, it is not in the console, and every use should be written up in the incident log.

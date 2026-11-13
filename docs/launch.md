@@ -18,6 +18,7 @@ Staging is set up but switched off to save cost (Solo, 2026-11-13), so productio
 | Payment and payout providers are live in production with real credentials, tested with a small real payment and payout | Solo, engineering | |
 | The regulator has been told of the change of system, if it must be | Solo | |
 | A real Finvest 1.0 export has been through the trial import with no errors | Operations | |
+| At least three active admins with a passkey or authenticator app, so every team change can be made in the console ([console-admin.md](console-admin.md#how-many-admins-the-scheme-needs)) | Solo, engineering | |
 
 ## 2. The parallel run
 

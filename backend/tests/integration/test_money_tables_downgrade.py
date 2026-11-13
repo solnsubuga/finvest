@@ -3,7 +3,7 @@ history, the receipts that stop a command running twice, the identity records, t
 destinations, the withdrawal limits, the payouts and their send attempts, the migration
 checks, the imported statements, the day closes, the pot transfers, the help chat, the
 complaints register, the goals, the email delivery records, the unclaimed accounts, the
-complaint outcomes or the suppression lifts."""
+complaint outcomes, the suppression lifts or the team changes."""
 
 import os
 from collections.abc import Iterator
@@ -348,6 +348,18 @@ ROWS = {
         "created_at, updated_at) VALUES ('-Nabc0000000000000A1', 'CL-1', false, 'not_invited', "
         "now(), now())",
         "refusing to drop migration claims",
+    ),
+    "0150_staff_changes": (
+        "BEGIN; INSERT INTO identity_staff (id, email, name, role, password_hash, status, "
+        "created_at) VALUES ('-Nabc0000000000000S1', 'admin@finvestug.com', 'Admin', 'admin', "
+        "'x', 'active', now()); "
+        "SELECT set_config('finvest.actor_kind', 'staff', true); "
+        "SELECT set_config('finvest.actor_id', '-Nabc0000000000000S1', true); "
+        "INSERT INTO identity_staff_changes (id, kind, staff_id, email, name, role, reason, "
+        "proposed_by, proposed_at) VALUES ('-Nabc0000000000000A1', 'invite', "
+        "'-Nabc0000000000000S2', 'new@finvestug.com', 'New Person', 'support', 'Hire', "
+        "'-Nabc0000000000000S1', now()); COMMIT",
+        "refusing to drop identity_staff_changes",
     ),
 }
 

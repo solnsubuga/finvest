@@ -275,6 +275,22 @@ async def test_the_database_refuses_a_role_or_status_change_without_an_approval(
                 await session.execute(text(statement), {"id": subject.id})
 
 
+async def test_the_database_refuses_a_proposal_from_anyone_but_an_active_admin(
+    api: Api,
+) -> None:
+    operations = await api.staff("operations")
+    with pytest.raises(DBAPIError, match="only an active admin"):
+        async with api.database.actor_transaction(operations) as session:
+            await session.execute(
+                text(
+                    "INSERT INTO identity_staff_changes (id, kind, staff_id, email, name, role, "
+                    "reason, proposed_by, proposed_at) VALUES (:id, 'invite', :new, "
+                    "'someone@finvestug.com', 'Someone', 'admin', 'x', :me, now())"
+                ),
+                {"id": push_id(), "new": push_id(), "me": operations.id},
+            )
+
+
 async def test_the_database_refuses_one_person_deciding_their_own_proposal(api: Api) -> None:
     subject = await api.staff("support")
     admin = await api.staff("admin")

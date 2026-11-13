@@ -94,19 +94,20 @@ CREATE INDEX ix_identity_staff_changes_staff
 # The actor settings are a fence against bugs, not a credential (see migration 0001).
 CHANGES_GUARD = """
 CREATE FUNCTION finvest_identity_staff_changes_guard() RETURNS trigger
-    LANGUAGE plpgsql SET search_path = pg_catalog, public, pg_temp
+    LANGUAGE plpgsql SET search_path = pg_catalog, pg_temp
     AS $$
     BEGIN
-        IF finvest_actor_kind() IS DISTINCT FROM 'staff' THEN
+        IF public.finvest_actor_kind() IS DISTINCT FROM 'staff' THEN
             RAISE EXCEPTION 'only staff change the team' USING ERRCODE = '42501';
         END IF;
-        IF NOT EXISTS (SELECT FROM identity_staff
-                       WHERE id = finvest_actor_id() AND status = 'active') THEN
-            RAISE EXCEPTION 'only an active member of staff changes the team'
+        IF NOT EXISTS (SELECT FROM public.identity_staff
+                       WHERE id = public.finvest_actor_id() AND status = 'active'
+                         AND role = 'admin') THEN
+            RAISE EXCEPTION 'only an active admin changes the team'
                 USING ERRCODE = '42501';
         END IF;
         IF TG_OP = 'INSERT' THEN
-            IF NEW.status <> 'proposed' OR NEW.proposed_by <> finvest_actor_id() THEN
+            IF NEW.status <> 'proposed' OR NEW.proposed_by <> public.finvest_actor_id() THEN
                 RAISE EXCEPTION 'a team change starts as a proposal by the acting member of staff'
                     USING ERRCODE = '42501';
             END IF;
@@ -115,7 +116,7 @@ CREATE FUNCTION finvest_identity_staff_changes_guard() RETURNS trigger
         IF OLD.status <> 'proposed' THEN
             RAISE EXCEPTION 'a decided team change never changes' USING ERRCODE = '42501';
         END IF;
-        IF NEW.status = 'proposed' OR NEW.decided_by IS DISTINCT FROM finvest_actor_id()
+        IF NEW.status = 'proposed' OR NEW.decided_by IS DISTINCT FROM public.finvest_actor_id()
             OR (NEW.status = 'approved') <> (NEW.decided_in = pg_current_xact_id())
             OR (to_jsonb(NEW) - ARRAY['status', 'decided_by', 'decided_at', 'decision_reason',
                                       'decided_in'])
@@ -133,17 +134,17 @@ CREATE FUNCTION finvest_identity_staff_changes_guard() RETURNS trigger
 # transaction approved for the account, so an old approval is never enough.
 STAFF_GUARD = """
 CREATE FUNCTION finvest_identity_staff_guard() RETURNS trigger
-    LANGUAGE plpgsql SET search_path = pg_catalog, public, pg_temp
+    LANGUAGE plpgsql SET search_path = pg_catalog, pg_temp
     AS $$
     DECLARE
-        approved identity_staff_changes%ROWTYPE;
+        approved public.identity_staff_changes%ROWTYPE;
     BEGIN
         IF TG_OP = 'INSERT' THEN
-            IF NEW.created_by IS NULL AND finvest_actor_kind() IS DISTINCT FROM 'staff' THEN
+            IF NEW.created_by IS NULL AND public.finvest_actor_kind() IS DISTINCT FROM 'staff' THEN
                 -- The first administrator, added from the command line.
                 RETURN NEW;
             END IF;
-            SELECT * INTO approved FROM identity_staff_changes
+            SELECT * INTO approved FROM public.identity_staff_changes
              WHERE staff_id = NEW.id AND kind = 'invite' AND status = 'approved'
                AND decided_in = pg_current_xact_id();
             IF NOT FOUND OR NEW.status <> 'invited' OR NEW.email <> approved.email
@@ -155,20 +156,20 @@ CREATE FUNCTION finvest_identity_staff_guard() RETURNS trigger
             RETURN NEW;
         END IF;
         IF NEW.role IS DISTINCT FROM OLD.role AND NOT EXISTS (
-            SELECT FROM identity_staff_changes
+            SELECT FROM public.identity_staff_changes
              WHERE staff_id = NEW.id AND kind = 'change_role' AND role = NEW.role
                AND status = 'approved' AND decided_in = pg_current_xact_id()) THEN
             RAISE EXCEPTION 'a role changes only by an approved change' USING ERRCODE = '42501';
         END IF;
         IF NEW.status = 'disabled' AND OLD.status <> 'disabled' AND NOT EXISTS (
-            SELECT FROM identity_staff_changes
+            SELECT FROM public.identity_staff_changes
              WHERE staff_id = NEW.id AND kind = 'deactivate'
                AND status = 'approved' AND decided_in = pg_current_xact_id()) THEN
             RAISE EXCEPTION 'staff are deactivated only by an approved change'
                 USING ERRCODE = '42501';
         END IF;
         IF OLD.status = 'disabled' AND NEW.status <> 'disabled' AND NOT EXISTS (
-            SELECT FROM identity_staff_changes
+            SELECT FROM public.identity_staff_changes
              WHERE staff_id = NEW.id AND kind = 'reactivate'
                AND status = 'approved' AND decided_in = pg_current_xact_id()) THEN
             RAISE EXCEPTION 'staff are reactivated only by an approved change'
