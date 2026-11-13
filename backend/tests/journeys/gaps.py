@@ -6,7 +6,6 @@ unnoticed.
 
 Steps of the client journey with no code to test yet, and so no journey yet:
 
-- Early withdrawal of a running investment (investing thread; dealing's withdrawal funding).
 - Money notifications: payments, investing and payouts never call `notifications.notify`, so
   no payment, interest, maturity or payout message is sent (notifications thread, and each
   module).

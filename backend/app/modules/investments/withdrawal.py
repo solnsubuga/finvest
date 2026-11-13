@@ -23,6 +23,7 @@ from app.infrastructure.idempotency import Receipt, run_once
 from app.infrastructure.jobs import JobRequest, enqueue, publish
 from app.modules.audit import service as audit
 from app.modules.audit.domain.events import AuditActor, AuditEvent
+from app.modules.dealing.events import FUND_EARLY_WITHDRAWAL
 from app.modules.investments.catalogue import invalid
 from app.modules.investments.domain.investments import InvestmentStatus, can_withdraw_early
 from app.modules.investments.events import WITHDRAW_KIND
@@ -197,9 +198,9 @@ async def withdraw(session: AsyncSession, investment_id: str, clock: Clock) -> I
             "currency": amount.currency.value,
             "amount_minor": amount.minor,
         },
-        # The dealing desk adds `dealing.events.FUND_EARLY_WITHDRAWAL` here when its funding
-        # lands, whoever merges second.
-        consumers=[],
+        # The dealing desk funds it from the buffer or a sale, then announces
+        # `dealing.withdrawal_funded`, which pays the client.
+        consumers=[FUND_EARLY_WITHDRAWAL],
         now=now,
     )
     await audit.record(
