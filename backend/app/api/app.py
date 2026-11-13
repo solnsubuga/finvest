@@ -17,6 +17,7 @@ from app.infrastructure.email.webhooks import ResendHookSettings, WebhookVerifie
 from app.infrastructure.sealing import Sealer
 from app.infrastructure.settings import Settings
 from app.infrastructure.storage import FileStorage, StorageSettings
+from app.modules.approvals import api as approvals_api
 from app.modules.audit import api as audit_api
 from app.modules.autoinvest import api as autoinvest_api
 from app.modules.console import api as console_api
@@ -136,6 +137,7 @@ def create_app(
         *documents_api.routers,
         *audit_api.routers,
         *payouts_api.routers,
+        *approvals_api.routers,
     ):
         app.include_router(router)
     app.include_router(payments_api.create_router(collections))

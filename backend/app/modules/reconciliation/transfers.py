@@ -8,7 +8,7 @@ and the transfer's ID is the ledger reference that reconciliation matches on bot
 """
 
 from dataclasses import dataclass
-from datetime import date
+from datetime import date, datetime
 
 from sqlalchemy import Row, text
 from sqlalchemy.exc import IntegrityError
@@ -43,12 +43,13 @@ class TransferView:
     proposed_by: str
     decided_by: str | None
     ledger_entry_id: str | None
+    proposed_at: datetime
 
 
 _COLUMNS = (
     "id, from_source, from_reference, to_source, to_reference, currency, sent_minor, "
     "received_minor, value_date, provider_reference, status, proposed_by, decided_by, "
-    "ledger_entry_id"
+    "ledger_entry_id, proposed_at"
 )
 _INSERT = text(
     "INSERT INTO reconciliation_pot_transfers (id, from_source, from_reference, to_source, "
@@ -250,6 +251,7 @@ def _view(row: Row[tuple[object, ...]]) -> TransferView:
         proposed_by=row.proposed_by,
         decided_by=row.decided_by,
         ledger_entry_id=row.ledger_entry_id,
+        proposed_at=row.proposed_at,
     )
 
 
