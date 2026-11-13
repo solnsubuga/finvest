@@ -58,20 +58,3 @@ jobs:
           terraform plan -input=false -out=three >/dev/null
           [ "$first" != "$(bash "$script" three)" ]
           echo "plan hash script ok"
-
-  print-lock:
-    # Temporary: prints provider lock files so they can be committed. Removed before merge.
-    name: Print provider lock files
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
-      - uses: hashicorp/setup-terraform@b9cd54a3c349d3f38e8881555d616ced269862dd # v3.1.2
-        with:
-          terraform_version: ${{ env.TF_VERSION }}
-      - run: |
-          for dir in infra/terraform infra/terraform/shared; do
-            rm -f $dir/.terraform.lock.hcl
-            terraform -chdir=$dir init -backend=false >/dev/null
-            terraform -chdir=$dir providers lock -platform=linux_amd64 -platform=darwin_arm64 -platform=darwin_amd64 -platform=windows_amd64 >/dev/null
-            echo "=====BEGIN $dir"; cat $dir/.terraform.lock.hcl; echo "=====END $dir"
-          done
