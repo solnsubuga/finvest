@@ -85,6 +85,11 @@ export interface StaffSession {
   name: string;
   role: Role;
   permissions: readonly Permission[];
+  /**
+   * The second steps this person holds, passkey first, which the "confirm it
+   * is you" dialog offers. Empty when the API did not say.
+   */
+  secondSteps: readonly ("passkey" | "authenticator")[];
 }
 
 export function can(session: StaffSession, permission: Permission): boolean {

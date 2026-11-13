@@ -153,6 +153,9 @@ export function toComplaintsError(error: unknown): ComplaintsError {
     // Closed, an outcome already waiting, or a key sent again with other details.
     case "conflict":
       return new ComplaintsError("conflict");
+    // The person closed the "confirm it is you" dialog, so nothing was done.
+    case "confirm_it_is_you":
+      return new ComplaintsError("not_confirmed");
     case "forbidden":
       return new ComplaintsError("forbidden");
     default:

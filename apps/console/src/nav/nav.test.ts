@@ -4,7 +4,7 @@ import { ROLES, SCREEN_PERMISSIONS, type Role, type StaffSession } from "@/auth/
 import { homePath, NAV_GROUPS, NAV_ITEMS, visibleNav } from "./nav.ts";
 
 function sessionFor(role: Role): StaffSession {
-  return { staffId: role, name: "Sample Person", role, permissions: STUB_ROLE_PERMISSIONS[role] };
+  return { staffId: role, name: "Sample Person", role, permissions: STUB_ROLE_PERMISSIONS[role], secondSteps: [] };
 }
 
 const labels = (session: StaffSession) =>
@@ -49,7 +49,7 @@ describe("console menu", () => {
   });
 
   it("shows nothing to someone with no permissions", () => {
-    const nobody: StaffSession = { staffId: "x", name: "No One", role: "support", permissions: [] };
+    const nobody: StaffSession = { staffId: "x", name: "No One", role: "support", permissions: [], secondSteps: [] };
     expect(visibleNav(nobody)).toEqual([]);
     expect(homePath(nobody)).toBeNull();
   });

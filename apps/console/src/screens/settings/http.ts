@@ -141,6 +141,9 @@ export function toWordingsError(error: unknown, deciding = false): WordingsError
       return new WordingsError("invalid", problems<Problem>(error, WORDING_FIELDS, WORDING_CODES));
     case "conflict":
       return new WordingsError("conflict");
+    // The person closed the "confirm it is you" dialog, so nothing was done.
+    case "confirm_it_is_you":
+      return new WordingsError("not_confirmed");
     case "forbidden":
       return new WordingsError(deciding ? "same_person" : "forbidden");
     case "not_found":
@@ -156,6 +159,8 @@ export function toAnnouncementsError(error: unknown): AnnouncementsError {
   switch (error.code) {
     case "validation_failed":
       return new AnnouncementsError("invalid", problems<AnnouncementProblem>(error, ANNOUNCEMENT_FIELDS, ANNOUNCEMENT_CODES));
+    case "confirm_it_is_you":
+      return new AnnouncementsError("not_confirmed");
     case "forbidden":
       return new AnnouncementsError("forbidden");
     case "not_found":

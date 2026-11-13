@@ -60,7 +60,7 @@ export interface AnnouncementsApi {
   decide(announcementId: string, decision: AnnouncementDecision, reason: string | null): Promise<Announcement>;
 }
 
-export type AnnouncementsErrorCode = "invalid" | "forbidden" | "not_found" | "not_connected" | "unavailable";
+export type AnnouncementsErrorCode = "invalid" | "forbidden" | "not_found" | "not_connected" | "not_confirmed" | "unavailable";
 
 export class AnnouncementsError extends Error {
   constructor(
@@ -78,6 +78,7 @@ const MESSAGES: Record<AnnouncementsErrorCode, string> = {
   forbidden: "An announcement needs a second person, or a role you do not have. Ask an admin.",
   not_found: "This announcement has already been decided. Here is the list as it now stands.",
   not_connected: "Announcements are not connected to the Finvest service yet.",
+  not_confirmed: "Not done. Confirm it is you with your passkey or authenticator app, then try again.",
   unavailable: "We could not reach Finvest. Check your connection and try again.",
 };
 

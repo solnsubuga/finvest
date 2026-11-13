@@ -1,4 +1,6 @@
+import { createHttpConfirmationApi, type ConfirmationApi } from "@/api/confirmation.ts";
 import { apiBaseUrl, createHttp } from "@/api/http.ts";
+import { browserPasskeys } from "@/api/webauthn.ts";
 import { notConnectedAuthApi, type AuthApi } from "./api.ts";
 import { createHttpAuthApi } from "./http.ts";
 import { createStubAuthApi } from "./stub.ts";
@@ -22,4 +24,11 @@ export function createAuthApi(): AuthApi {
   if (isStubAuth()) return createStubAuthApi();
   const base = apiBaseUrl();
   return base ? createHttpAuthApi(createHttp(base)) : notConnectedAuthApi;
+}
+
+/** The "confirm it is you" routes, or null in the sample sign-in and in a build with no API. */
+export function createConfirmationApi(): ConfirmationApi | null {
+  if (isStubAuth()) return null;
+  const base = apiBaseUrl();
+  return base ? createHttpConfirmationApi(createHttp(base), browserPasskeys) : null;
 }
