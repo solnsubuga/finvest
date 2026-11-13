@@ -31,7 +31,7 @@ Each client has one check. It moves through these states.
 | `approved` | Final. The account number is issued. | Nobody |
 | `rejected` | Final | Nobody |
 
-Staff can approve, reject, ask for photos again or escalate. Every staff decision needs a reason and is written to the audit trail in the same transaction. A client who is asked for a photo retakes only that photo and does not start again.
+Staff can approve, reject, ask for photos again or escalate. One member of staff decides alone (the owner's decision, an exception to the maker and checker rule). Every staff decision needs a reason and is written to the audit trail in the same transaction. A client who is asked for a photo retakes only that photo and does not start again.
 
 ## Automatic checks
 
