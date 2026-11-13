@@ -90,7 +90,8 @@ class ProviderJobs:
             return {"outcome": "accepted" if noted else "moved_on"}
 
         async def to_person(session: AsyncSession) -> Mapping[str, object]:
-            flag = "provider_refused" if isinstance(answer, Refused) else "provider_unreachable"
+            # Refused, or asked after an uncertain send and it holds nothing: never received.
+            flag = "provider_refused" if isinstance(answer, Refused) else "provider_not_received"
             await kyc.give_to_person(session, check_id, submission, flag, self.clock)
             return {"outcome": flag}
 

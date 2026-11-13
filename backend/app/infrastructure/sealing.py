@@ -1,6 +1,6 @@
 """Field-level encryption for personal data, and keyed fingerprints for matching it.
 
-A sealed value is `version byte + key id byte + 12 byte nonce + AES-256-GCM ciphertext`. The
+A sealed value is `version byte (2) + key id byte + 12 byte nonce + AES-256-GCM ciphertext`. The
 key id says which key sealed it, so a key can be replaced: new values are sealed with the current
 key while values sealed with a retired key still open, until they are sealed again.
 
@@ -31,7 +31,9 @@ from cryptography.hazmat.primitives.kdf.hkdf import HKDF
 
 KEY_BYTES = 32
 _NONCE_BYTES = 12
-_VERSION = b"\x01"
+# Version 1 had no key id byte. It was never used outside tests and is refused by name.
+_VERSION = b"\x02"
+_RETIRED_VERSION = b"\x01"
 _HEADER_BYTES = 2 + _NONCE_BYTES
 
 
@@ -93,6 +95,8 @@ class Sealer:
 
     def open(self, sealed: bytes, associated: bytes) -> str:
         sealed = bytes(sealed)
+        if sealed[:1] == _RETIRED_VERSION:
+            raise SealError("Sealed with format version 1, which is no longer read")
         aead = self._aeads.get(sealed[1:2])
         if len(sealed) <= _HEADER_BYTES or sealed[:1] != _VERSION or aead is None:
             raise SealError("Unknown sealed value format or key")

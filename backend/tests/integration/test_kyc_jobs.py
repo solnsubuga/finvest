@@ -196,7 +196,7 @@ async def test_an_uncertain_send_the_provider_does_not_hold_goes_to_a_person(
     await work(worker_database, fake_clock, provider)
     view = await check(app_database, check_id)
     assert view.status is CheckStatus.NEEDS_REVIEW
-    assert view.review_flags == ("provider_unreachable",)
+    assert view.review_flags == ("provider_not_received",)
     assert await jobs_for(worker_database, key) == {kyc.SEND_CHECK: ("succeeded", None)}
 
 

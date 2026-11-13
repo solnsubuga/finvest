@@ -24,6 +24,8 @@ class KycSettings(BaseSettings):
     identity_provider: Literal["manual", "development-stub"] = "manual"
     # The owner's decision (docs/decisions.md). Off: a person approves every client.
     identity_automatic_approval: bool = False
+    # `staging` or `production` where deployed (infra/README.md). Unset on a developer's machine.
+    environment: str | None = None
 
     @field_validator("identity_data_key")
     @classmethod
@@ -37,6 +39,9 @@ class KycSettings(BaseSettings):
     def keep_the_stub_harmless(self) -> Self:
         if self.identity_provider != "manual" and self.identity_data_key is None:
             raise ValueError("An identity provider needs FINVEST_IDENTITY_DATA_KEY")
+        if self.identity_provider == "development-stub" and self.environment == "production":
+            # Staff would see passes for checks nobody ran, and approve on them.
+            raise ValueError("The development stub checks nothing and may not run in production")
         if self.identity_provider == "development-stub" and self.identity_automatic_approval:
             raise ValueError("The development stub checks nothing and may not approve clients")
         return self

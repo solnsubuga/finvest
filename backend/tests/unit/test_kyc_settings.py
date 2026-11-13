@@ -64,6 +64,28 @@ def test_a_provider_needs_the_key() -> None:
         KycSettings(identity_provider="development-stub")
 
 
+@pytest.mark.parametrize(
+    ("environment", "starts"), [("production", False), ("staging", True), (None, True)]
+)
+def test_the_development_stub_does_not_start_in_production(
+    environment: str | None, starts: bool, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("FINVEST_IDENTITY_DATA_KEY", fresh_key())
+    monkeypatch.setenv("FINVEST_IDENTITY_PROVIDER", "development-stub")
+    if environment is None:
+        monkeypatch.delenv("FINVEST_ENVIRONMENT", raising=False)
+    else:
+        monkeypatch.setenv("FINVEST_ENVIRONMENT", environment)
+    if starts:
+        assert isinstance(KycSettings().provider(), DevelopmentStubProvider)
+    else:
+        with pytest.raises(ValidationError, match="may not run in production"):
+            KycSettings()
+    # The manual provider is unaffected by where it runs.
+    monkeypatch.setenv("FINVEST_IDENTITY_PROVIDER", "manual")
+    assert isinstance(KycSettings().provider(), ManualProvider)
+
+
 def test_the_development_stub_can_never_approve_clients() -> None:
     with pytest.raises(ValidationError, match="may not approve clients"):
         KycSettings(
