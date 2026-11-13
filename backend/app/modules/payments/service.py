@@ -20,6 +20,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.infrastructure.idempotency import Receipt, run_once
 from app.infrastructure.jobs import JobRequest, enqueue, publish
+from app.modules.investments.jobs import START_ON_DEPOSIT
 from app.modules.ledger import service as ledger
 from app.modules.ledger.domain.entries import AccountKind, AccountSpec, EntryDraft, credit, debit
 from app.modules.payments.domain.deposits import (
@@ -444,8 +445,10 @@ async def apply_move(
                 "deposit_id": deposit.id,
                 "purpose_type": deposit.purpose.value,
                 "purpose_id": deposit.purpose_id,
+                # The business day of the ledger entry. An investment earns from this day.
+                "confirmed_on": business_date(now).isoformat(),
             },
-            consumers=[],
+            consumers=[START_ON_DEPOSIT],
             now=now,
         )
     logger.info(

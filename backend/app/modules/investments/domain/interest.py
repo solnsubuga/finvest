@@ -29,6 +29,11 @@ from app.shared.money import Money, Rounding
 
 DAYS_IN_YEAR = 365
 BASIS_POINTS = 10_000
+# The rounding of interest and of tax is decided here and nowhere else. Both round down:
+# interest that has not been earned is never credited, and the fraction of tax stays with the
+# client. Changing either is a decision for docs/decisions.md.
+INTEREST_ROUNDING = Rounding.DOWN
+TAX_ROUNDING = Rounding.DOWN
 # A yearly rate above this is a typing mistake, not a product.
 MAX_ANNUAL_RATE_BPS = 5_000
 
@@ -88,9 +93,9 @@ def accrued(terms: Terms, days: int) -> Accrual:
     if type(days) is not int or days < 0:
         raise InvalidTerms("Days is a whole number, zero or more")
     gross = terms.principal.mul_ratio(
-        terms.annual_rate_bps * days, BASIS_POINTS * DAYS_IN_YEAR, Rounding.DOWN
+        terms.annual_rate_bps * days, BASIS_POINTS * DAYS_IN_YEAR, INTEREST_ROUNDING
     )
-    tax = gross.mul_ratio(terms.tax_bps, BASIS_POINTS, Rounding.DOWN)
+    tax = gross.mul_ratio(terms.tax_bps, BASIS_POINTS, TAX_ROUNDING)
     return Accrual(gross=gross, tax=tax)
 
 
