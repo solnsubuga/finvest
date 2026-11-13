@@ -4,6 +4,7 @@ import asyncio
 import itertools
 from collections.abc import AsyncIterator
 from dataclasses import dataclass
+from datetime import timedelta
 from typing import Annotated
 
 import httpx
@@ -468,6 +469,12 @@ async def test_staff_session_lists_the_role_and_its_permissions(api: Api) -> Non
             "clients.view",
             "email_suppressions.lift",
         ],
+        # Signing in counts as confirming it is them, for ten minutes.
+        "confirmed_until": (api.clock.now() + timedelta(minutes=10))
+        .isoformat()
+        .replace("+00:00", "Z"),
+        # Issued directly here, so nothing is set up.
+        "second_steps": [],
     }
     refused = await api.http.get("/staff/team-test")
     assert (refused.status_code, code(refused)) == (403, "forbidden")

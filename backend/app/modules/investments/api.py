@@ -24,7 +24,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.idempotency import IdempotencyKey
 from app.infrastructure.database import Database
 from app.infrastructure.settings import Settings
-from app.modules.identity.api import CurrentClient, require_permission
+from app.modules.identity.api import CurrentClient, require_confirmed, require_permission
 from app.modules.identity.service import StaffSession
 from app.modules.investments import service
 from app.modules.investments.domain.interest import ClientReturns
@@ -258,6 +258,8 @@ async def _transaction(request: Request, actor: Actor | None) -> AsyncIterator[A
 ProductsViewer = Annotated[StaffSession, Depends(require_permission("products.view"))]
 RatesViewer = Annotated[StaffSession, Depends(require_permission("rates.view"))]
 RatesChanger = Annotated[StaffSession, Depends(require_permission("rates.change"))]
+# Deciding needs a passkey or app code from the last few minutes.
+RatesApprover = Annotated[StaffSession, Depends(require_confirmed("rates.change"))]
 InvestmentsViewer = Annotated[StaffSession, Depends(require_permission("investments.view"))]
 
 
@@ -665,7 +667,7 @@ async def staff_propose_rate(
 
 @staff_router.post("/rate-proposals/{proposal_id}/approve")
 async def staff_approve_rate(
-    request: Request, staff: RatesChanger, clock: AppClock, proposal_id: str
+    request: Request, staff: RatesApprover, clock: AppClock, proposal_id: str
 ) -> ProposalOut:
     async with _transaction(request, staff.actor) as session:
         view = await service.approve_rate(session, staff.actor, proposal_id, clock)

@@ -20,7 +20,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.idempotency import IdempotencyKey
 from app.infrastructure.database import Database
 from app.infrastructure.storage import FileStorage, InvalidFile, NewFile, StorageError, sha256_hex
-from app.modules.identity.api import CurrentClient, require_permission
+from app.modules.identity.api import CurrentClient, require_confirmed, require_permission
 from app.modules.identity.service import ClientSession, StaffSession
 from app.modules.investments import holdings
 from app.modules.kyc import service as kyc
@@ -64,6 +64,8 @@ _REFUSALS: dict[int | str, dict[str, object]] = {
 BankStaff = Annotated[StaffSession, Depends(require_permission("reconciliation.view"))]
 # Matching, refusing or approving confirms money, so it is a permission of its own.
 BankDeciders = Annotated[StaffSession, Depends(require_permission("bank_transfers.change"))]
+# Deciding needs a passkey or app code from the last few minutes.
+BankApprovers = Annotated[StaffSession, Depends(require_confirmed("bank_transfers.change"))]
 
 
 def _database(request: Request) -> Database:
@@ -568,7 +570,7 @@ async def review_bank_transfer(
 @staff_router.post("/payments/bank-transfers/{payment_id}/approve")
 async def approve_bank_match(
     payment_id: PushId,
-    staff: BankDeciders,
+    staff: BankApprovers,
     key: IdempotencyKey,
     database: Db,
     clock: Time,

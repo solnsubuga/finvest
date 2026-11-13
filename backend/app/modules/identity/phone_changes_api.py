@@ -6,7 +6,7 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, Request
 from pydantic import Field
 
-from app.modules.identity.api import _REFUSALS, require_permission
+from app.modules.identity.api import _REFUSALS, require_confirmed, require_permission
 from app.modules.identity.phone_changes import PhoneChangeService
 from app.modules.identity.service import StaffSession
 from app.shared.contracts import Contract, PushId
@@ -18,6 +18,8 @@ router = APIRouter(
     responses={**_REFUSALS, 409: {"model": ErrorEnvelope}, 410: {"model": ErrorEnvelope}},
 )
 Changer = Annotated[StaffSession, Depends(require_permission("client_phones.change"))]
+# Deciding needs a passkey or app code from the last few minutes.
+Approver = Annotated[StaffSession, Depends(require_confirmed("client_phones.change"))]
 Text = Annotated[str, Field(min_length=1, max_length=500)]
 
 
@@ -85,7 +87,7 @@ async def list_phone_changes(staff: Changer, changes: Changes) -> PhoneChangeLis
 
 
 @router.post("/phone-changes/{change_id}/approval", status_code=204)
-async def approve_phone_change(change_id: PushId, staff: Changer, changes: Changes) -> None:
+async def approve_phone_change(change_id: PushId, staff: Approver, changes: Changes) -> None:
     """Approve someone else's proposal. The number changes and the client is signed out."""
     await changes.approve(staff.actor, change_id)
 
