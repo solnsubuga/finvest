@@ -236,7 +236,17 @@ def prepare(output: Path, env: Mapping[str, str]) -> None:
     if optional(env, "FINVEST_IDENTITY_DATA_KEY"):
         api["FINVEST_IDENTITY_DATA_KEY"] = optional(env, "FINVEST_IDENTITY_DATA_KEY")
         worker["FINVEST_IDENTITY_DATA_KEY"] = optional(env, "FINVEST_IDENTITY_DATA_KEY")
-    for name in ("FINVEST_EMAIL_BACKEND", "FINVEST_EMAIL_FROM", "FINVEST_EMAIL_RESEND_API_KEY"):
+    # Signs Resend's delivery events as relayed by the hooks.fidiba.com router. The API checks it;
+    # nothing else needs it.
+    if optional(env, "RESEND_HOOK_SECRET"):
+        api["RESEND_HOOK_SECRET"] = optional(env, "RESEND_HOOK_SECRET")
+    for name in (
+        "FINVEST_EMAIL_BACKEND",
+        "FINVEST_EMAIL_FROM",
+        "FINVEST_EMAIL_RESEND_API_KEY",
+        # Tags each message so the router sends its events back to this environment.
+        "FINVEST_EMAIL_FIDIBA_ENVIRONMENT",
+    ):
         if optional(env, name):
             worker[name] = optional(env, name)
 

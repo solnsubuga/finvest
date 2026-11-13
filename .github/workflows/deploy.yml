@@ -145,6 +145,8 @@ jobs:
           FINVEST_EMAIL_BACKEND: ${{ vars.FINVEST_EMAIL_BACKEND }}
           FINVEST_EMAIL_FROM: ${{ vars.FINVEST_EMAIL_FROM }}
           FINVEST_EMAIL_RESEND_API_KEY: ${{ secrets.FINVEST_EMAIL_RESEND_API_KEY }}
+          FINVEST_EMAIL_FIDIBA_ENVIRONMENT: ${{ vars.FINVEST_EMAIL_FIDIBA_ENVIRONMENT }}
+          RESEND_HOOK_SECRET: ${{ secrets.RESEND_HOOK_SECRET }}
           STOP_BEFORE_MIGRATE: ${{ vars.STOP_BEFORE_MIGRATE }}
         run: python3 infra/deployment/prepare_release.py "$RUNNER_TEMP/finvest-release"
       - name: Admit this run to SSH
