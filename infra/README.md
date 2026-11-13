@@ -176,7 +176,12 @@ On the host, `deploy.sh`:
 4. Switches Caddy to the new colour with a reload, which drops no connections.
 5. Checks the API, the console and the website (where it is served) through the public address. If that fails, it switches back and removes the new colour. If it passes, it records the colour and stops the old one.
 
-Migrations must be able to run beside the previous release: add first, remove in a later release. Nothing checks this yet (Fidiba's release preflight is not ported), so it is the author's and the reviewer's job. For one that cannot, set the environment variable `STOP_BEFORE_MIGRATE=true` for that deploy; the old release stops first and visitors see "being updated" until the new one is up.
+Migrations must be able to run beside the previous release: add first, remove in a later release. Before migrating, `deploy.sh` runs the release preflight from the new image (`python -m app.release_preflight`, ported from Fidiba) as `finvest_migrator`. It only reads, and it:
+
+- refuses a database at a revision the image does not know, which means a newer release already migrated it (deploy that release, or restore its backup);
+- stops the old release first when a pending migration says `zero_downtime = False`, so visitors see "being updated" until the new one is up.
+
+A unit test (`backend/tests/unit/test_migration_zero_downtime.py`) fails any migration that drops or renames a table, column or function, or makes a column required, unless it says `zero_downtime` either way. To force a stop for one deploy anyway, set the environment variable `STOP_BEFORE_MIGRATE=true`.
 
 To go back to an earlier version, revert the commit on the source branch and let it deploy. Rerunning an old run is refused, because a deploy only accepts the branch head.
 

@@ -22,6 +22,9 @@ revision: str = "0051_kyc_sealed_details"
 down_revision: str | None = "0014_ledger_closed_days"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
+# It drops the plain detail columns, but it merged before the first deployment, so no earlier
+# release can be running beside it (app/release_preflight.py).
+zero_downtime = True
 
 WORKER_ROLE = "finvest_worker"
 
