@@ -174,6 +174,35 @@ ROWS = {
         "'Test', '-Nabc0000000000000B1', now()); COMMIT",
         "refusing to drop buffer rules that staff proposed or approved",
     ),
+    "0084_dealing_withdrawal_funding": (
+        "BEGIN; SELECT set_config('finvest.actor_kind', 'system', true); "
+        "INSERT INTO dealing_withdrawal_fundings (id, investment_id, currency, amount_minor, "
+        "source, status, asked_at) VALUES ('-Nabc0000000000000A1', '-Nabc0000000000000B1', "
+        "'UGX', 100000, 'sale', 'waiting', now()); COMMIT",
+        "refusing to drop withdrawal fundings",
+    ),
+    # As for 0082, the owner turns the guards off: a real lot needs a settled purchase.
+    "0085_dealing_allocations": (
+        "BEGIN; "
+        "ALTER TABLE dealing_orders DISABLE TRIGGER dealing_orders_guard; "
+        "ALTER TABLE dealing_lots DISABLE TRIGGER dealing_lots_guard; "
+        "ALTER TABLE dealing_allocations DISABLE TRIGGER dealing_allocations_guard; "
+        "INSERT INTO dealing_orders (id, kind, product_code, currency, face_minor, prepared_by, "
+        "prepared_at) VALUES ('-Nabc0000000000000A1', 'auction_bid', 'TREA-91', 'UGX', 100000, "
+        "'-Nabc0000000000000B1', now()); "
+        "INSERT INTO dealing_lots (id, order_id, product_code, currency, face_minor, cost_minor, "
+        "settled_on, matures_on, custodian_reference) VALUES ('-Nabc0000000000000L1', "
+        "'-Nabc0000000000000A1', 'TREA-91', 'UGX', 100000, 97000, DATE '2026-11-19', "
+        "DATE '2027-02-18', 'CSD-1'); "
+        "INSERT INTO dealing_allocations (id, investment_id, lot_id, cost_minor, allocated_at) "
+        "VALUES ('-Nabc0000000000000M1', '-Nabc0000000000000I1', '-Nabc0000000000000L1', 97000, "
+        "now()); "
+        "ALTER TABLE dealing_orders ENABLE TRIGGER dealing_orders_guard; "
+        "ALTER TABLE dealing_lots ENABLE TRIGGER dealing_lots_guard; "
+        "ALTER TABLE dealing_allocations ENABLE TRIGGER dealing_allocations_guard; "
+        "COMMIT",
+        "refusing to drop allocations",
+    ),
     "0050_kyc": (
         "INSERT INTO kyc_checks (id, client_id, document_type, document_country, created_at, "
         "updated_at) VALUES ('-Nabc0000000000000A1', '-Nabc0000000000000B1', 'passport', 'UG', "
@@ -248,6 +277,19 @@ ROWS = {
         "INSERT INTO payout_send_attempts (payout_id, attempt, provider, started_at) "
         "VALUES ('-Nabc0000000000000A1', 1, 'sandbox', now())",
         "refusing to drop payout send attempts",
+    ),
+    # The owner turns the guard off for this one transaction: a real request needs a running
+    # investment, which needs a confirmed payment and its ledger entries.
+    "0064_investment_early_withdrawal": (
+        "BEGIN; ALTER TABLE investments DISABLE TRIGGER USER; "
+        "INSERT INTO investments (id, client_id, product_id, currency, principal_minor, "
+        "annual_rate_bps, tax_bps, term_days, at_maturity, created_at, pay_by, updated_at, "
+        "withdrawal_requested_at, withdrawal_destination_id) "
+        "VALUES ('-Nabc0000000000000A1', '-Nabc0000000000000B1', 'FvProduct1TREA91_001', "
+        "'UGX', 1000000, 1250, 1500, 91, 'roll_over', now(), now() + interval '72 hours', "
+        "now(), now(), '-Nabc0000000000000D1'); "
+        "ALTER TABLE investments ENABLE TRIGGER USER; COMMIT",
+        "refusing to drop the record of early withdrawals",
     ),
     "0034_payout_account_codes": (
         "INSERT INTO identity_codes (id, purpose, channel, phone, actor_id, bound_to, "

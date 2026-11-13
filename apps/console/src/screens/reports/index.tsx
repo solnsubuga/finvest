@@ -19,7 +19,16 @@ import {
   type Facets,
 } from "./api.ts";
 import { createHttpAuditApi } from "./http.ts";
-import { ACTOR_KIND_LABELS, CATEGORY_LABELS, describeActor, formatDetail, formatTime, OUTCOME_LABELS } from "./labels.ts";
+import {
+  ACTOR_KIND_LABELS,
+  actorIdLabel,
+  CATEGORY_LABELS,
+  describeActor,
+  formatDetail,
+  formatTime,
+  narrowByActorLabel,
+  OUTCOME_LABELS,
+} from "./labels.ts";
 import { createStubAuditApi } from "./stub.ts";
 
 const SUMMARY = "Reports from the ledger, and the record of who did what and why.";
@@ -373,7 +382,7 @@ function EventRow({
             <dd className="m-0 font-mono break-all">{record}</dd>
             {event.actorId ? (
               <>
-                <dt className="font-bold text-muted">{event.actorKind === "client" ? "Client ID" : "Staff ID"}</dt>
+                <dt className="font-bold text-muted">{actorIdLabel(event.actorKind)}</dt>
                 <dd className="m-0 font-mono break-all">{event.actorId}</dd>
               </>
             ) : null}
@@ -399,7 +408,7 @@ function EventRow({
             ) : null}
             {event.actorId ? (
               <Button variant="secondary" onClick={() => onNarrow({ actorId: event.actorId ?? "" })}>
-                Everything by {event.actorKind === "staff" ? describeActor(event) : "this client"}
+                Everything by {narrowByActorLabel(event)}
               </Button>
             ) : null}
           </div>

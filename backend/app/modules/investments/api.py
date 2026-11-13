@@ -23,6 +23,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.idempotency import IdempotencyKey
 from app.infrastructure.database import Database
+from app.infrastructure.settings import Settings
 from app.modules.identity.api import CurrentClient, require_permission
 from app.modules.identity.service import StaffSession
 from app.modules.investments import service
@@ -112,6 +113,11 @@ class PayOutRequest(Contract):
     destination_id: PushId
 
 
+class WithdrawalRequest(Contract):
+    # One of the client's approved payout destinations.
+    destination_id: PushId
+
+
 class ClientInvestmentOut(Contract):
     id: PushId
     product_code: str
@@ -137,6 +143,10 @@ class ClientInvestmentOut(Contract):
     rolled_into_id: PushId | None
     payout_id: PushId | None
     waiting_for_destination: bool
+    # Whether the client may ask to withdraw it early now, and when they did. An early
+    # withdrawal pays `value_minor`: interest stops when it is asked for.
+    can_withdraw: bool
+    withdrawal_requested_at: datetime | None
 
 
 class RateOut(Contract):
@@ -282,7 +292,13 @@ def _quote_out(quote: service.ClientQuote) -> QuoteOut:
     )
 
 
-def _client_out(view: service.ClientInvestment) -> ClientInvestmentOut:
+def _withdrawals_open(request: Request) -> bool:
+    """Early withdrawal is off until both halves that pay it are wired (`early_withdrawal_open`)."""
+    settings: Settings = request.app.state.settings
+    return settings.early_withdrawal_open
+
+
+def _client_out(view: service.ClientInvestment, request: Request) -> ClientInvestmentOut:
     at_maturity = view.at_maturity_returns
     return ClientInvestmentOut(
         id=view.id,
@@ -308,6 +324,8 @@ def _client_out(view: service.ClientInvestment) -> ClientInvestmentOut:
         rolled_into_id=view.rolled_into_id,
         payout_id=view.payout_id,
         waiting_for_destination=view.waiting_for_destination,
+        can_withdraw=view.can_withdraw and _withdrawals_open(request),
+        withdrawal_requested_at=view.withdrawal_requested_at,
     )
 
 
@@ -491,7 +509,7 @@ async def request_investment(
             clock=clock,
         )
         view = await service.client_investment(session, client.actor, saved.id, clock)
-    return _client_out(view)
+    return _client_out(view, request)
 
 
 @client_router.get("/investments")
@@ -500,7 +518,7 @@ async def client_investments(
 ) -> list[ClientInvestmentOut]:
     async with _transaction(request, client.actor) as session:
         views = await service.client_investments(session, client.actor, clock)
-    return [_client_out(view) for view in views]
+    return [_client_out(view, request) for view in views]
 
 
 @client_router.get("/investments/{investment_id}")
@@ -509,7 +527,7 @@ async def client_investment(
 ) -> ClientInvestmentOut:
     async with _transaction(request, client.actor) as session:
         view = await service.client_investment(session, client.actor, investment_id, clock)
-    return _client_out(view)
+    return _client_out(view, request)
 
 
 @client_router.put("/investments/{investment_id}/at-maturity")
@@ -531,7 +549,7 @@ async def choose_at_maturity(
             clock=clock,
         )
         view = await service.client_investment(session, client.actor, investment_id, clock)
-    return _client_out(view)
+    return _client_out(view, request)
 
 
 @client_router.post("/investments/{investment_id}/pay-out")
@@ -563,7 +581,36 @@ async def pay_out_matured(
             "validation_failed",
             fields=[FieldProblem(field_path=["destination_id"], code=refused.code)],
         ) from None
-    return _client_out(view)
+    return _client_out(view, request)
+
+
+@client_router.post("/investments/{investment_id}/withdraw")
+async def withdraw_early(
+    request: Request,
+    client: CurrentClient,
+    clock: AppClock,
+    key: IdempotencyKey,
+    investment_id: str,
+    body: WithdrawalRequest,
+) -> ClientInvestmentOut:
+    """Ask to withdraw a running investment early. It pays `value_minor` from the investment
+    as shown: interest stops now. The money is sent once the dealing desk has funded it.
+
+    Refused with `conflict` while early withdrawal is switched off, before anything is saved.
+    """
+    if not _withdrawals_open(request):
+        raise ApplicationError("conflict")
+    async with _transaction(request, client.actor) as session:
+        await service.request_withdrawal(
+            session,
+            client.actor,
+            investment_id,
+            destination_id=body.destination_id,
+            idempotency_key=key,
+            clock=clock,
+        )
+        view = await service.client_investment(session, client.actor, investment_id, clock)
+    return _client_out(view, request)
 
 
 # Staff ------------------------------------------------------------------------------------------

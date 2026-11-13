@@ -6,6 +6,9 @@ import { PageHeader } from "@/pages/PageHeader.tsx";
 import { Panel, PanelRow, Pill } from "@/screens/migration/Checks.tsx";
 import { goalsErrorMessage, notConnectedGoalsApi, type Goal, type GoalDetail, type GoalsApi, type GoalStatus, type SavingStatus, type Standing } from "./api.ts";
 import { CATEGORY_LABELS, formatDay, formatShillings, SAVING_LABELS, STANDING_LABELS } from "./labels.ts";
+import { GroupGoals } from "./Groups.tsx";
+import { notConnectedGroupsApi, type GroupsApi } from "./groupsApi.ts";
+import { createStubGroupsApi } from "./groupsStub.ts";
 import { createStubGoalsApi, type StubCase } from "./stub.ts";
 
 function today(now: Date): string {
@@ -20,11 +23,23 @@ function stubCase(): StubCase {
 
 /** Sample goals under `pnpm dev` or a preview build, like sign-in. `?sample=empty` and `?sample=error` show those states. */
 const defaultApi: GoalsApi = isStubAuth() ? createStubGoalsApi(today(new Date()), 150, stubCase()) : notConnectedGoalsApi;
+const defaultGroupsApi: GroupsApi = isStubAuth() ? createStubGroupsApi(today(new Date()), 150, stubCase()) : notConnectedGroupsApi;
+
+type View = "goals" | "groups";
+
+const VIEWS: readonly { value: View; label: string }[] = [
+  { value: "goals", label: "Goals" },
+  { value: "groups", label: "Group goals" },
+];
+
+function initialView(): View {
+  return new URLSearchParams(window.location.search).get("view") === "groups" ? "groups" : "goals";
+}
 
 type Load<T> = { state: "loading" } | { state: "failed"; message: string } | { state: "ready"; value: T };
 type Filter = GoalStatus | "all";
 
-const SUMMARY = "What clients are saving towards, and the investments each goal is made of.";
+const SUMMARY = "What clients are saving towards, alone or together, and the investments each goal is made of.";
 
 const FILTERS: readonly { value: Filter; label: string }[] = [
   { value: "all", label: "All" },
@@ -46,7 +61,31 @@ const SAVING_TONES: Record<SavingStatus, string> = {
   cancelled: "bg-surface-sunken text-muted",
 };
 
-export function GoalsScreen({ api = defaultApi }: { api?: GoalsApi }) {
+export function GoalsScreen({ api = defaultApi, groupsApi = defaultGroupsApi }: { api?: GoalsApi; groupsApi?: GroupsApi }) {
+  const [view, setView] = useState<View>(initialView);
+
+  return (
+    <>
+      <PageHeader title="Goals" summary={SUMMARY} />
+      <div role="group" aria-label="View" className="flex w-fit gap-1 rounded-pill border border-border bg-surface p-1">
+        {VIEWS.map((option) => (
+          <button
+            key={option.value}
+            type="button"
+            aria-pressed={view === option.value}
+            onClick={() => setView(option.value)}
+            className={cn("h-9 rounded-pill px-4 text-sm font-bold", view === option.value ? "bg-black text-white" : "text-ink")}
+          >
+            {option.label}
+          </button>
+        ))}
+      </div>
+      {view === "goals" ? <OwnGoals api={api} /> : <GroupGoals api={groupsApi} />}
+    </>
+  );
+}
+
+function OwnGoals({ api }: { api: GoalsApi }) {
   const [load, setLoad] = useState<Load<readonly Goal[]>>({ state: "loading" });
   const [filter, setFilter] = useState<Filter>("all");
   const [selected, setSelected] = useState<string | null>(null);
@@ -70,7 +109,6 @@ export function GoalsScreen({ api = defaultApi }: { api?: GoalsApi }) {
 
   return (
     <>
-      <PageHeader title="Goals" summary={SUMMARY} />
       {load.state === "loading" ? (
         <p role="status" className="m-0 text-md text-muted">
           Loading goals
