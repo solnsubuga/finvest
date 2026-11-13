@@ -155,6 +155,25 @@ async def test_a_claim_works_once(api: Api) -> None:
     assert restart.value.code == "not_found"
 
 
+async def test_a_claim_passes_the_client_status_guard(api: Api) -> None:
+    # Migration 0152 guards every change of a client's status. A claim is the one move it
+    # leaves to identity_claim_client.
+    phone, client_id = await imported(api)
+    challenge = await api.codes.claim_start(client_id, address=None)
+    [sent] = await texted(api, phone)
+    await api.codes.claim_complete(challenge, sent, PASSWORD, "token")
+    async with api.owner.transaction() as session:
+        guards = await session.scalar(
+            text(
+                "SELECT count(*) FROM pg_trigger WHERE tgname = 'tr_identity_clients_status_guard'"
+            )
+        )
+        status = await session.scalar(
+            text("SELECT status FROM identity_clients WHERE id = :id"), {"id": client_id}
+        )
+    assert (guards, status) == (1, "active")
+
+
 async def test_two_claims_at_once_make_one_password(api: Api) -> None:
     phone, client_id = await imported(api)
     first = await api.codes.claim_start(client_id, address=None)

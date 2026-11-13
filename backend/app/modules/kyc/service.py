@@ -666,6 +666,40 @@ async def photos_for_viewing(
     return view.photos
 
 
+@dataclass(frozen=True, slots=True)
+class CheckSummary:
+    """Where a client's identity check stands, for the console's client page. No details."""
+
+    id: str
+    status: str
+    submitted_at: datetime | None
+    decided_at: datetime | None
+    account_number: str | None
+
+
+_SUMMARY = text(
+    "SELECT id, status, submitted_at, decided_at, account_number FROM kyc_checks "
+    "WHERE client_id = :client_id"
+)
+_BY_ACCOUNT_NUMBER = text(
+    "SELECT client_id FROM kyc_checks WHERE account_number = :number AND status = 'approved'"
+)
+
+
+async def check_summary(session: AsyncSession, client_id: str) -> CheckSummary | None:
+    """The client's check, or None before they start one. For staff transactions."""
+    row = (await session.execute(_SUMMARY, {"client_id": client_id})).one_or_none()
+    if row is None:
+        return None
+    return CheckSummary(row.id, row.status, row.submitted_at, row.decided_at, row.account_number)
+
+
+async def client_for_account_number(session: AsyncSession, number: str) -> str | None:
+    """The client an account number was issued to, for staff looking a client up."""
+    client_id = await session.scalar(_BY_ACCOUNT_NUMBER, {"number": number})
+    return str(client_id) if client_id is not None else None
+
+
 async def approve(
     session: AsyncSession, sealer: Sealer, staff: Actor, check_id: str, reason: str, clock: Clock
 ) -> CheckView:
