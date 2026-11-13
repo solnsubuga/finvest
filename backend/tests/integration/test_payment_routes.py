@@ -30,7 +30,7 @@ from app.shared.push_ids import push_id
 from tests.support.clock import FakeClock
 from tests.support.database import TestDatabase
 from tests.support.investments import request as request_investment
-from tests.support.kyc import SEALER, ready_draft
+from tests.support.kyc import SEALER, decide, ready_draft
 from tests.support.ledger import staff as new_staff
 from tests.support.ledger import ugx
 from tests.support.payments import FakeCollections, drain
@@ -78,9 +78,7 @@ class Api:
         async with self.database.actor_transaction(actor) as session:
             await ready_draft(session, actor, self.clock)
             check = await kyc.submit(session, SEALER, actor, ManualProvider(), self.clock)
-        reviewer = new_staff()
-        async with self.database.actor_transaction(reviewer) as session:
-            await kyc.approve(session, SEALER, reviewer, check.id, "Documents match", self.clock)
+        await decide(self.database, check.id, "approve", self.clock)
         issued = await self.identity.issue_session(actor, second_step="passkey", transport="token")
         http.headers["Authorization"] = f"Bearer {issued.token}"
         return actor, phone
