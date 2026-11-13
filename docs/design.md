@@ -22,7 +22,7 @@ Build screens to match the canvas. If a screen needs to differ from it, say so i
 
 The logo mark is a white rising line ending in a lime dot on a black rounded square. The wordmark is "finvest" in lowercase.
 
-These values live in code in [`packages/tokens/`](../packages/tokens/README.md). The app, console and website import them from there and never hard-code a brand colour.
+These values, and the supporting colours, spacing, radii and type sizes from the canvas, live in code in [`packages/tokens/`](../packages/tokens/README.md). The app, console and website import them from there and never hard-code a brand colour.
 
 ## Screenshots
 
