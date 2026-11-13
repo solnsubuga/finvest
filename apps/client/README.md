@@ -2,7 +2,7 @@
 
 The Finvest client app. One codebase for Android, iPhone and the web at app.finvestug.com.
 
-**Status:** app shell. Navigation, theme, the welcome, sign up and log in screens, Sign in and security (add a passkey, set up an authenticator app), and paying for an investment by mobile money, all running against in-memory demos. No investing screens yet.
+**Status:** app shell. Navigation, theme, the welcome, sign up and log in screens, Sign in and security (add a passkey, set up an authenticator app), and paying for an investment by mobile money or bank transfer, all running against in-memory demos. No investing screens yet.
 
 ## Stack
 
@@ -77,12 +77,15 @@ The pay screens live in `src/app/pay/` and talk to the `PaymentsClient` interfac
 - `/pay/[payableId]` confirms the network. The number is the one on the client's own account and cannot be changed, because a payment from a number registered to someone else is refused. The screen makes one idempotency key per visit and sends it with every try. Once a try may have reached us (the answer was lost), the network is locked too, so every retry is the same request under the same key and asks for the money once.
 - `/pay/deposit/[depositId]` is the one address for a payment while it is open. It reads the status every 3 seconds, every 10 after the first minute, not at all while the app is in the background, and shows the prompt, the check or the failure. It only reads. A payment with no clear answer is settled by the server asking the network, so that screen tells the client not to pay again and offers no way to.
 - `/pay/receipt/[depositId]` shows a confirmed payment.
+- `/pay/bank/[payableId]` shows where to send a bank transfer, each detail with a Copy button, the reference to use (the client's Finvest account number) and the rule that the money must come from an account in the client's own name. The details come from the server. The app holds none.
+- `/pay/bank/receipt/[payableId]` takes the receipt (a file, or a photo on a phone; JPG, PNG or PDF up to 10 MB, checked in `src/payments/receipt.ts` and again by the server) and what the client says they sent: amount, day, bank and transaction number. The app reads nothing from the receipt. One idempotency key per visit, and after a lost try the receipt and details are locked so a retry is the same request.
+- `/pay/bank/transfer/[transferId]` is the one address for a bank transfer: checking, confirmed, or not matched with the reason in plain words and a way to upload another receipt.
 
 Amounts are integers in the smallest unit (`Money` in `types.ts`) and are formatted without passing through a fraction. Times are shown in Kampala time.
 
-Until the backend publishes its client routes, the only implementation is the in-memory stub in `src/payments/stubPaymentsClient.ts`, loaded under the same rule as the demo sign-in and checked out of production builds by CI. In the demo, the Invest page has a "Demo: pay for an investment" button, and the last two digits of the account's number choose the outcome (sign up in the demo with a number that ends that way): `01` declined, `02` not enough money, `03` never approved, `04` unclear then confirmed, anything else approved.
+Until the backend publishes its client routes, the only implementation is the in-memory stub in `src/payments/stubPaymentsClient.ts`, loaded under the same rule as the demo sign-in and checked out of production builds by CI. In the demo, the Invest page has a "Demo: pay for an investment" button, and the last two digits of the account's number choose the outcome (sign up in the demo with a number that ends that way): `01` declined, `02` not enough money, `03` never approved, `04` unclear then confirmed, anything else approved. A demo bank transfer is matched after nine seconds, where staff take hours, and the last two digits of the transaction number choose: `01` the amount differs, `02` not on the statement, anything else matched.
 
-Not built yet: bank transfer and receipt upload, the fee row (fees are not decided), "send the prompt again" (the backend has no such command), the signed transaction note, sharing a receipt, and the notification when a payment is confirmed.
+Not built yet: reading the receipt for the client (the canvas shows fields filled in from it), "I will upload later" and "Share these details" on the bank screen, finding an open payment again after closing the app (it needs the Activity page), the fee row (fees are not decided), "send the prompt again" (the backend has no such command), the signed transaction note, sharing a receipt, and the notification when a payment is confirmed.
 
 ## Notes
 

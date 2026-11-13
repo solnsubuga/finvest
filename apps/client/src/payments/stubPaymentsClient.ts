@@ -1,4 +1,7 @@
+import { MAX_RECEIPT_BYTES } from "./receipt";
 import {
+  BankReceiptSubmission,
+  BankTransfer,
   Deposit,
   DepositStatus,
   FailureReason,
@@ -23,6 +26,13 @@ import {
  *   03  the prompt is never approved
  *   04  no clear answer at first, so the payment is checked, then confirmed
  *   any other number  approved after a few seconds
+ *
+ * A bank transfer is matched after a few seconds too, where real staff take
+ * hours. The last two digits of the transaction number on the receipt choose:
+ *
+ *   01  the amount differs
+ *   02  not on the bank statement
+ *   anything else  matched
  */
 export const DEMO_PAYABLE_ID = "demo-91-day-bill";
 
@@ -64,6 +74,19 @@ function outcomeFor(scenario: string, elapsedMs: number): Outcome {
   return { status: "confirmed", failure: null };
 }
 
+/** How long the demo's "staff" take to match a receipt. */
+const MATCHING_MS = 9_000;
+/** Obviously not a real account. The real details come from the server. */
+const DEMO_BANK = {
+  bankName: "Demo Bank",
+  accountName: "Finvest Demo Client Account",
+  accountNumber: "0000 0000 0000",
+  branch: "Demo branch",
+  reference: "1001004827",
+};
+
+type StoredTransfer = { submission: BankReceiptSubmission; id: string; submittedAtMs: number };
+
 type Stored = { request: MobileMoneyRequest; id: string; requestedAtMs: number; scenario: string };
 
 export type StubOptions = {
@@ -81,6 +104,8 @@ export function createStubPaymentsClient(options: StubOptions = {}): PaymentsCli
   const scenarioFor = options.scenarioFor ?? ((payer: string) => payer.slice(-2));
   const deposits = new Map<string, Stored>();
   const byKey = new Map<string, string>();
+  const transfers = new Map<string, StoredTransfer>();
+  const transferByKey = new Map<string, string>();
   let counter = 0;
 
   const pause = () =>
@@ -104,6 +129,45 @@ export function createStubPaymentsClient(options: StubOptions = {}): PaymentsCli
       networkReference: confirmed ? `DEMO-${stored.id.toUpperCase()}` : null,
       reference: `FV-DEMO-${stored.id}`,
     };
+  }
+
+  function readTransfer(stored: StoredTransfer): BankTransfer {
+    const scenario = stored.submission.transactionNumber.slice(-2);
+    const matched = now() - stored.submittedAtMs >= MATCHING_MS;
+    const reason = scenario === "01" ? "amount_differs" : scenario === "02" ? "not_on_statement" : null;
+    return {
+      id: stored.id,
+      payable: DEMO_PAYABLE,
+      amountSent: stored.submission.amountSent,
+      status: !matched ? "checking" : reason ? "not_matched" : "confirmed",
+      reason: matched ? reason : null,
+      submittedAt: new Date(stored.submittedAtMs).toISOString(),
+      confirmedAt:
+        matched && !reason ? new Date(stored.submittedAtMs + MATCHING_MS).toISOString() : null,
+      reference: DEMO_BANK.reference,
+    };
+  }
+
+  /** One thing is paid for once, by whichever method. Only a failed try frees it. */
+  function refuseIfTaken() {
+    for (const stored of deposits.values()) {
+      const status = read(stored).status;
+      if (status === "confirmed") {
+        throw new PaymentError("not_payable");
+      }
+      if (status !== "failed") {
+        throw new PaymentError("already_paying");
+      }
+    }
+    for (const stored of transfers.values()) {
+      const status = readTransfer(stored).status;
+      if (status === "confirmed") {
+        throw new PaymentError("not_payable");
+      }
+      if (status === "checking") {
+        throw new PaymentError("already_paying");
+      }
+    }
   }
 
   return {
@@ -134,16 +198,7 @@ export function createStubPaymentsClient(options: StubOptions = {}): PaymentsCli
       if (request.payableId !== DEMO_PAYABLE_ID) {
         throw new PaymentError("not_payable");
       }
-      // One thing is paid for once. Only a failed payment frees it for another try.
-      for (const stored of deposits.values()) {
-        const status = read(stored).status;
-        if (status === "confirmed") {
-          throw new PaymentError("not_payable");
-        }
-        if (status !== "failed") {
-          throw new PaymentError("already_paying");
-        }
-      }
+      refuseIfTaken();
       counter += 1;
       const stored: Stored = {
         request,
@@ -154,6 +209,43 @@ export function createStubPaymentsClient(options: StubOptions = {}): PaymentsCli
       deposits.set(stored.id, stored);
       byKey.set(request.idempotencyKey, stored.id);
       return read(stored);
+    },
+
+    async getBankInstructions(payableId) {
+      await pause();
+      if (payableId !== DEMO_PAYABLE_ID) {
+        throw new PaymentError("not_payable");
+      }
+      return { payable: DEMO_PAYABLE, ...DEMO_BANK };
+    },
+
+    async submitBankReceipt(submission) {
+      await pause();
+      const known = transferByKey.get(submission.idempotencyKey);
+      if (known) {
+        return readTransfer(transfers.get(known) as StoredTransfer);
+      }
+      if (submission.payableId !== DEMO_PAYABLE_ID) {
+        throw new PaymentError("not_payable");
+      }
+      if (submission.file.sizeBytes > MAX_RECEIPT_BYTES) {
+        throw new PaymentError("receipt_not_accepted");
+      }
+      refuseIfTaken();
+      counter += 1;
+      const stored: StoredTransfer = { submission, id: `b${counter}`, submittedAtMs: now() };
+      transfers.set(stored.id, stored);
+      transferByKey.set(submission.idempotencyKey, stored.id);
+      return readTransfer(stored);
+    },
+
+    async getBankTransfer(transferId) {
+      await pause();
+      const stored = transfers.get(transferId);
+      if (!stored) {
+        throw new PaymentError("not_found");
+      }
+      return readTransfer(stored);
     },
 
     async getDeposit(depositId) {
