@@ -166,3 +166,79 @@ describe("describeAuthError", () => {
     );
   });
 });
+
+describe("setting up a second step", () => {
+  async function signUp(auth: ReturnType<typeof client>) {
+    const challenge = await auth.startSignup(signupInput);
+    const ticket = await auth.confirmSignupCode(challenge.challengeId, DEMO_CODE);
+    return auth.completeSignup(ticket.ticket, "green matooke sunday");
+  }
+
+  it("is refused for someone who is not signed in", async () => {
+    const auth = client();
+    expect(await codeOf(auth.listSecondSteps())).toBe("expired");
+    expect(await codeOf(auth.addPasskey())).toBe("expired");
+    expect(await codeOf(auth.startAuthenticatorSetup())).toBe("expired");
+  });
+
+  it("starts a new client with SMS only", async () => {
+    const auth = client();
+    await signUp(auth);
+    expect(await auth.listSecondSteps()).toEqual(["code"]);
+  });
+
+  it("offers a passkey at the next log in once one is added", async () => {
+    const auth = client();
+    await signUp(auth);
+    await auth.addPasskey();
+    expect(await auth.listSecondSteps()).toEqual(["passkey", "code"]);
+    await auth.signOut();
+    const login = await auth.startLogin(NEW_PHONE, "green matooke sunday");
+    expect(login.methods).toEqual(["passkey", "code"]);
+    expect((await auth.verifyWithPasskey(login.loginId)).restricted).toBe(false);
+  });
+
+  it("hands out a key and an otpauth address that carry the same key", async () => {
+    const auth = client();
+    await signUp(auth);
+    const setup = await auth.startAuthenticatorSetup();
+    expect(setup.key).toMatch(/^[A-Z2-7]{32}$/);
+    const uri = new URL(setup.uri);
+    expect(uri.protocol).toBe("otpauth:");
+    expect(uri.searchParams.get("secret")).toBe(setup.key);
+    expect(uri.searchParams.get("issuer")).toBe("Finvest");
+    // A new key every time: nothing fixed sits in the source.
+    expect((await auth.startAuthenticatorSetup()).key).not.toBe(setup.key);
+  });
+
+  it("does not switch the authenticator on until a right code confirms it", async () => {
+    const auth = client();
+    await signUp(auth);
+    const setup = await auth.startAuthenticatorSetup();
+    expect(await auth.listSecondSteps()).toEqual(["code"]);
+    expect(await codeOf(auth.confirmAuthenticatorSetup(setup.setupId, "000000"))).toBe(
+      "invalid_code",
+    );
+    expect(await auth.listSecondSteps()).toEqual(["code"]);
+    await auth.confirmAuthenticatorSetup(setup.setupId, DEMO_CODE);
+    expect(await auth.listSecondSteps()).toEqual(["authenticator", "code"]);
+    // A set-up is used once.
+    expect(await codeOf(auth.confirmAuthenticatorSetup(setup.setupId, DEMO_CODE))).toBe("expired");
+  });
+
+  it("forgets a half-finished set-up at sign out, so the next person cannot finish it", async () => {
+    const auth = client();
+    await signUp(auth);
+    const setup = await auth.startAuthenticatorSetup();
+    await auth.signOut();
+    const login = await auth.startLogin(DEMO_PHONE_AUTHENTICATOR, DEMO_PASSWORD);
+    await auth.verifyWithCode(login.loginId, DEMO_CODE);
+    expect(await codeOf(auth.confirmAuthenticatorSetup(setup.setupId, DEMO_CODE))).toBe("expired");
+  });
+
+  it("says in plain words that nothing was added when the device prompt is dismissed", () => {
+    expect(describeAuthError(new AuthError("cancelled"))).toBe(
+      "Nothing was added. You can try again when you are ready.",
+    );
+  });
+});

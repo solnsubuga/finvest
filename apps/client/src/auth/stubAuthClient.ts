@@ -1,6 +1,7 @@
 import {
   AuthClient,
   AuthError,
+  AuthenticatorSetup,
   LoginChallenge,
   SecondStep,
   Session,
@@ -20,7 +21,10 @@ import {
  *   - DEMO_PHONE with DEMO_PASSWORD has a passkey, an authenticator app and SMS
  *   - DEMO_PHONE_AUTHENTICATOR with DEMO_PASSWORD has an authenticator app and
  *     SMS, but no passkey
- *   - an account created by signing up has SMS only
+ *   - an account created by signing up has SMS only, until a passkey or an
+ *     authenticator app is added from Sign in and security
+ *   - the authenticator key shown during set-up is random letters made on the
+ *     spot. It is not kept and no real app code is checked against it.
  */
 export const DEMO_CODE = "123456";
 export const DEMO_PHONE = "+256772123456";
@@ -48,6 +52,17 @@ function methodsFor(account: Account): SecondStep[] {
   }
   methods.push("code");
   return methods;
+}
+
+const BASE32 = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567";
+
+/** Looks like an authenticator key. Random, never stored, never checked. */
+function demoKey(): string {
+  let key = "";
+  for (let index = 0; index < 32; index += 1) {
+    key += BASE32.charAt(Math.floor(Math.random() * BASE32.length));
+  }
+  return key;
 }
 
 export type StubOptions = {
@@ -80,17 +95,27 @@ export function createStubAuthClient(options: StubOptions = {}): AuthClient {
   const signups = new Map<string, SignupStart>();
   const tickets = new Map<string, SignupStart>();
   const logins = new Map<string, string>();
+  const authenticatorSetups = new Map<string, string>();
+  /** The number of whoever is signed in, as the server would know from the session. */
+  let signedIn: string | null = null;
   let counter = 0;
 
   const nextId = (prefix: string) => `${prefix}_${(counter += 1)}`;
   const wait = () =>
     delayMs > 0 ? new Promise<void>((resolve) => setTimeout(resolve, delayMs)) : Promise.resolve();
 
-  const sessionFor = (phone: string, restricted: boolean): Session => ({
-    phone,
-    displayName: accounts.get(phone)?.displayName ?? null,
-    restricted,
-  });
+  const sessionFor = (phone: string, restricted: boolean): Session => {
+    signedIn = phone;
+    return { phone, displayName: accounts.get(phone)?.displayName ?? null, restricted };
+  };
+
+  const currentAccount = (): Account => {
+    const account = signedIn ? accounts.get(signedIn) : undefined;
+    if (!account) {
+      throw new AuthError("expired");
+    }
+    return account;
+  };
 
   return {
     async startSignup(input): Promise<SignupChallenge> {
@@ -193,8 +218,44 @@ export function createStubAuthClient(options: StubOptions = {}): AuthClient {
       return sessionFor(phone, true);
     },
 
+    async listSecondSteps(): Promise<SecondStep[]> {
+      await wait();
+      return methodsFor(currentAccount());
+    },
+
+    async addPasskey(): Promise<void> {
+      await wait();
+      currentAccount().hasPasskey = true;
+    },
+
+    async startAuthenticatorSetup(): Promise<AuthenticatorSetup> {
+      await wait();
+      currentAccount();
+      const phone = signedIn ?? "";
+      const setupId = nextId("authenticator");
+      authenticatorSetups.set(setupId, phone);
+      const key = demoKey();
+      const label = encodeURIComponent(`Finvest:${phone}`);
+      return { setupId, key, uri: `otpauth://totp/${label}?secret=${key}&issuer=Finvest` };
+    },
+
+    async confirmAuthenticatorSetup(setupId, code): Promise<void> {
+      await wait();
+      const account = currentAccount();
+      if (authenticatorSetups.get(setupId) !== signedIn) {
+        throw new AuthError("expired");
+      }
+      if (code !== DEMO_CODE) {
+        throw new AuthError("invalid_code");
+      }
+      authenticatorSetups.delete(setupId);
+      account.hasAuthenticator = true;
+    },
+
     async signOut(): Promise<void> {
       await wait();
+      signedIn = null;
+      authenticatorSetups.clear();
     },
   };
 }

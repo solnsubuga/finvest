@@ -2,6 +2,7 @@ import { Pressable, StyleSheet, View } from "react-native";
 import { useRouter } from "expo-router";
 
 import { useAuth } from "@/auth/AuthProvider";
+import { useSecondSteps } from "@/auth/useSecondSteps";
 import { AppPage } from "@/components/AppPage";
 import { Notice } from "@/components/Blocks";
 import { Icon } from "@/components/Icon";
@@ -21,6 +22,10 @@ export default function Home() {
   const router = useRouter();
   const { session } = useAuth();
   const wide = useIsWide();
+  const steps = useSecondSteps();
+  // Shown only when we know SMS is the one second step. If the list cannot be
+  // loaded, Home stays quiet about it: Sign in and security reports the error.
+  const onlySms = steps.status === "ready" && steps.methods.length === 1;
   const name = session?.displayName ?? null;
   const firstName = name?.split(/\s+/)[0];
 
@@ -34,6 +39,25 @@ export default function Home() {
           You signed in with an SMS code, so for 24 hours withdrawals only go to accounts you have used
           before.
         </Notice>
+      ) : null}
+      {onlySms ? (
+        <Pressable
+          accessibilityRole="link"
+          onPress={() => router.push("/security")}
+          style={({ pressed }) => [styles.profile, pressed && { opacity: 0.7 }]}
+          testID="security-prompt"
+        >
+          <View style={[styles.avatar, { borderRadius: 14 }]}>
+            <Icon name="key" color={colors.lime} />
+          </View>
+          <View style={{ flex: 1 }}>
+            <Txt weight="bold">Make signing in safer</Txt>
+            <Txt size={13} color={colors.muted}>
+              Add a passkey or an authenticator app, so you do not depend on SMS codes.
+            </Txt>
+          </View>
+          <Icon name="chevron" size={16} strokeWidth={2.2} />
+        </Pressable>
       ) : null}
       <Notice tone="neutral">
         Nothing here yet. Your investments, goals and activity will appear on this screen as soon as

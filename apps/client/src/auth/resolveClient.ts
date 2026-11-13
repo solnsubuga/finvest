@@ -49,5 +49,9 @@ const unavailableAuthClient: AuthClient = {
   verifyWithAuthenticator: refuse,
   sendLoginCode: refuse,
   verifyWithCode: refuse,
+  listSecondSteps: refuse,
+  addPasskey: refuse,
+  startAuthenticatorSetup: refuse,
+  confirmAuthenticatorSetup: refuse,
   signOut: async () => {},
 };
