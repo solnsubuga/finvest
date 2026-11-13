@@ -1,0 +1,112 @@
+# Payments in
+
+How a client pays for an investment or a goal. The code is in `backend/app/modules/payments`, and the database side is migration 0020. Payouts are in `backend/app/modules/payouts`.
+
+There is no wallet. Every deposit names the investment or goal it pays for, and the money it brings sits in a ledger account for that purpose until the investment starts.
+
+**Status:** mobile money deposits work end to end against a sandbox provider. Bank transfer with a receipt, the client and console routes, and the correction commands arrive in their own pull requests.
+
+## A mobile money deposit, step by step
+
+1. The client asks to pay. `request_deposit` saves the deposit as `created` and a job to send it, in the client's own transaction, under the client's idempotency key. Nothing is sent yet.
+2. The worker marks the deposit `sending` and commits that. Only then does it ask the provider to prompt the payer, with no transaction open.
+3. The provider accepts, and the deposit is `awaiting_approval`. The payer approves on their phone.
+4. The worker reads the status back from the provider. When the provider's own record says the money arrived, for exactly the amount asked, the deposit becomes `confirmed` and the ledger entry is posted in the same transaction.
+5. A `payments.deposit_confirmed` event is published once. Investments and goals will start from it.
+
+| Status | Meaning |
+| --- | --- |
+| `created` | Saved. Nothing has reached the provider. |
+| `sending` | A worker is about to call, or is calling, the provider. |
+| `awaiting_approval` | The payer has the prompt. |
+| `confirmed` | Money arrived and the ledger entry is posted. Final. |
+| `failed` | No money moved. Final. The code says why: `declined`, `insufficient_funds`, `approval_timed_out`, `account_not_found`, `limit_exceeded`, `provider_unavailable`, `other`. |
+| `uncertain` | We cannot tell. Waits for a status read or for reconciliation. The code says why: `send_uncertain`, `unknown_to_provider`, `approval_overdue`, `amount_mismatch`. |
+
+## The three ways a provider call can end
+
+| Outcome | What it means | What happens |
+| --- | --- | --- |
+| Rejected | The provider refused. No money moved. | The deposit fails with the provider's reason. |
+| Deferred | The request certainly did not reach the provider's books. | It is sent again later, up to five times within eight minutes, then fails with `provider_unavailable`. |
+| Uncertain | It may or may not have been taken: a timeout, a dropped connection, a provider error, or our own worker dying mid-call. | The deposit becomes `uncertain`. **It is never sent again.** The status is read back from the provider. If that does not settle it, reconciliation does, by calling `settle_deposit` with what the provider's record shows. |
+
+Two things make this safe. The `sending` mark is committed before the call, and only a deposit that is still `created` is ever sent. And the send job is registered with the queue as having an external effect, so the queue never runs it again after a crash or a lost lease. A deposit left with the mark is found by the sweep below.
+
+## Callbacks are hints
+
+The provider calls `POST /provider-callbacks/collections/{provider}`. The route checks the signature, records the callback once, and queues a job that reads the real status from the provider. A callback never changes a deposit, and the route cannot read deposits at all. A callback that says "paid" while the provider's record says "pending" changes nothing.
+
+## What stops a deposit getting stuck
+
+A sweep runs every minute and picks up deposits whose own job was lost:
+
+| Found | Action |
+| --- | --- |
+| `created` for ten minutes | Fails with `provider_unavailable`. It was never marked `sending`, so it was never sent. |
+| `sending` for two minutes | Becomes `uncertain`, and a status read is queued. |
+| `awaiting_approval` and quiet for two minutes | A status read is queued. After fifteen minutes with no result it becomes `uncertain` with `approval_overdue`. |
+
+## Ledger entries
+
+| Event | Debit | Credit |
+| --- | --- | --- |
+| Deposit confirmed (`payment.deposit_confirmed`) | Asset `<provider>.wallet`, reference `mtn` or `airtel`. With ioTec this is `iotec.wallet`. | Liability `client.awaiting_start`, owned by the client, reference the investment or goal ID |
+
+The entry's idempotency key is `deposit:<deposit ID>` and its source is the deposit, so a deposit can only ever be posted once. Payouts leave from the same wallet account, which lets reconciliation tie one ledger account to one provider statement.
+
+If the provider confirms a different amount from the one asked for, nothing is posted. The deposit is held as `uncertain` with `amount_mismatch` for staff, because an overpayment or an unmatched deposit is refunded or matched by staff and never kept as credit.
+
+## What the database enforces
+
+- A deposit's client, purpose, method, amount and payer never change.
+- A deposit moves only along the allowed path. `confirmed` and `failed` are final. A test tries every pair of states against the trigger and compares the result with the rules in `domain/deposits.py`.
+- A deposit is `confirmed` exactly when it points at its ledger entry.
+- The status history (`payment_deposit_events`) and the callback record (`payment_provider_notices`) are insert only for every role.
+- A client transaction sees and creates only that client's deposits. The API cannot change a deposit. Only the worker can, and only its status fields.
+
+## Correcting a mistaken credit
+
+Decided by the owner on 13 November 2026: receivable, then recover. The original entry is never touched, and no balance goes below zero. Every step is proposed by one staff member and approved by another through the ledger's corrections ([ledger.md](ledger.md)), with a reason, and is audited.
+
+**The money is still in `client.awaiting_start`.** Staff propose an exact reversal of the deposit entry and a second person approves it.
+
+**The money has moved on**, for example the investment has started, so a reversal would overdraw the account. Staff propose a forward entry `payment.deposit_correction`:
+
+| Debit | Credit |
+| --- | --- |
+| Asset `receivables.deposit_correction`, owned by the client, reference the deposit ID | The cash account the deposit debited, because that money never arrived |
+
+The receivable shows that the client owes the amount. It is cleared in exactly one of three ways, each with two staff:
+
+| How | Debit | Credit |
+| --- | --- | --- |
+| The investment is unwound | The client's holding | The receivable |
+| The money does arrive late | The cash account | The receivable |
+| It is written off | Expense `losses.deposit_correction` | The receivable |
+
+An open receivable is reported by the daily close until it is zero.
+
+## The provider
+
+ioTec Pay is the chosen provider. Its API details are not confirmed, so the only adapter today is a sandbox that moves no money. Any adapter implements `CollectionsProvider` in `domain/provider.py`: request a collection, read its status, and check and parse a callback. An adapter sorts every failure into rejected, deferred or uncertain and never raises. If one does raise, the deposit is treated as uncertain.
+
+`FINVEST_PAYMENTS_PROVIDER` chooses the adapter. The default is `disabled`: no deposit can be sent and the callback address answers 404. `sandbox` is set by the local Compose stack and must never be set in production. In the sandbox, the last two digits of the payer's number choose the result:
+
+| Number ends in | Result |
+| --- | --- |
+| 01 | The payer declines |
+| 02 | Not enough money |
+| 03 | The payer never answers |
+| 04 | No answer to the request, and no record of it (uncertain) |
+| 05 | The provider is busy (deferred) |
+| 06 | Confirmed for a different amount |
+| Anything else | Approved after six seconds |
+
+## Not built yet
+
+- The ioTec adapter, which needs ioTec's API details, callback signature scheme and sandbox access.
+- Client and staff HTTP routes, which need sign-in sessions.
+- Checking that the investment or goal exists and that the amount meets the product minimum, which needs the investments module.
+- Provider limits and fees.
+- Bank transfer with a receipt, and the correction commands.

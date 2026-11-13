@@ -14,6 +14,8 @@ x-backend: &backend
 x-backend-environment: &backend-environment
   FINVEST_DATABASE_SSL_MODE: disable
   FINVEST_LOG_FORMAT: console
+  # Local only: a stand-in for ioTec Pay that moves no money. See docs/payments.md.
+  FINVEST_PAYMENTS_PROVIDER: sandbox
 
 x-roles: &role-passwords
   FINVEST_MIGRATOR_PASSWORD: local-migrator
