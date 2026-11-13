@@ -107,6 +107,27 @@ export const BankTransferPage = z.object({
 });
 export type BankTransferPage = z.infer<typeof BankTransferPage>;
 
+export const ChangeView = z.object({
+  about_you: z.boolean(),
+  current_role: z.enum(["admin", "operations", "finance", "compliance", "support"]).nullable(),
+  decided_at: z.string().nullable(),
+  decided_by: z.string().nullable(),
+  decision_reason: z.string().nullable(),
+  email: z.string().nullable(),
+  id: z.string(),
+  kind: z.enum(["invite", "change_role", "deactivate", "reactivate", "reset_sign_in"]),
+  proposed_at: z.string(),
+  proposed_by: z.string(),
+  proposed_by_name: z.string(),
+  reason: z.string(),
+  role: z.enum(["admin", "operations", "finance", "compliance", "support"]).nullable(),
+  staff_id: z.string(),
+  staff_name: z.string(),
+  status: z.enum(["proposed", "approved", "rejected", "withdrawn"]),
+  yours: z.boolean(),
+});
+export type ChangeView = z.infer<typeof ChangeView>;
+
 export const ClaimProgressView = z.object({
   cannot_be_invited: z.number().int(),
   claimed_and_confirmed: z.number().int(),
@@ -209,6 +230,12 @@ export const ConversationItem = z.object({
   waiting_since: z.string().nullable(),
 });
 export type ConversationItem = z.infer<typeof ConversationItem>;
+
+export const DecideChange = z.object({
+  decision: z.enum(["approved", "rejected", "withdrawn"]),
+  reason: z.string(),
+});
+export type DecideChange = z.infer<typeof DecideChange>;
 
 export const DecideLift = z.object({
   decision: z.enum(["approved", "rejected", "withdrawn"]),
@@ -605,6 +632,16 @@ export const ProposalView = z.object({
 });
 export type ProposalView = z.infer<typeof ProposalView>;
 
+export const ProposeChange = z.object({
+  email: z.string().nullable().optional(),
+  kind: z.enum(["invite", "change_role", "deactivate", "reactivate", "reset_sign_in"]),
+  name: z.string().nullable().optional(),
+  reason: z.string(),
+  role: z.enum(["admin", "operations", "finance", "compliance", "support"]).nullable().optional(),
+  staff_id: z.string().nullable().optional(),
+});
+export type ProposeChange = z.infer<typeof ProposeChange>;
+
 export const ProposeLift = z.object({
   reason: z.string(),
 });
@@ -628,6 +665,12 @@ export const Register = z.object({
   summary: ComplaintSummary,
 });
 export type Register = z.infer<typeof Register>;
+
+export const RoleView = z.object({
+  permissions: z.array(z.enum(["overview.view", "review_queue.view", "identity_checks.view", "maturities.view", "support.view", "support.reply", "complaints.view", "complaints.manage", "complaints.close", "clients.view", "money_movement.view", "reconciliation.view", "investments.view", "automatic_investing.view", "goals.view", "dealing_desk.view", "finance.view", "products.view", "rates.view", "compliance.view", "team.view", "team.change", "reports.view", "audit.view", "settings.view", "wordings.change", "email_suppressions.lift", "migration.view", "bank_transfers.change", "migration.import", "migration.sign_off"])),
+  role: z.enum(["admin", "operations", "finance", "compliance", "support"]),
+});
+export type RoleView = z.infer<typeof RoleView>;
 
 export const SavedReplyItem = z.object({
   body: z.string(),
@@ -795,7 +838,7 @@ export type StaffSendMessage = z.infer<typeof StaffSendMessage>;
 
 export const StaffSessionView = z.object({
   name: z.string(),
-  permissions: z.array(z.enum(["overview.view", "review_queue.view", "identity_checks.view", "maturities.view", "support.view", "support.reply", "complaints.view", "complaints.manage", "complaints.close", "clients.view", "money_movement.view", "reconciliation.view", "investments.view", "automatic_investing.view", "goals.view", "dealing_desk.view", "finance.view", "products.view", "rates.view", "compliance.view", "team.view", "reports.view", "audit.view", "settings.view", "wordings.change", "email_suppressions.lift", "migration.view", "bank_transfers.change", "migration.import", "migration.sign_off"])),
+  permissions: z.array(z.enum(["overview.view", "review_queue.view", "identity_checks.view", "maturities.view", "support.view", "support.reply", "complaints.view", "complaints.manage", "complaints.close", "clients.view", "money_movement.view", "reconciliation.view", "investments.view", "automatic_investing.view", "goals.view", "dealing_desk.view", "finance.view", "products.view", "rates.view", "compliance.view", "team.view", "team.change", "reports.view", "audit.view", "settings.view", "wordings.change", "email_suppressions.lift", "migration.view", "bank_transfers.change", "migration.import", "migration.sign_off"])),
   role: z.enum(["admin", "operations", "finance", "compliance", "support"]),
   staff_id: z.string(),
 });
@@ -806,6 +849,27 @@ export const SuppressionList = z.object({
   suppressions: z.array(SuppressionView),
 });
 export type SuppressionList = z.infer<typeof SuppressionList>;
+
+export const TeamMemberView = z.object({
+  created_at: z.string(),
+  email: z.string(),
+  has_authenticator: z.boolean(),
+  has_passkey: z.boolean(),
+  id: z.string(),
+  last_signed_in_at: z.string().nullable(),
+  name: z.string(),
+  role: z.enum(["admin", "operations", "finance", "compliance", "support"]),
+  status: z.enum(["invited", "active", "disabled"]),
+});
+export type TeamMemberView = z.infer<typeof TeamMemberView>;
+
+export const TeamView = z.object({
+  can_change: z.boolean(),
+  changes: z.array(ChangeView),
+  members: z.array(TeamMemberView),
+  roles: z.array(RoleView),
+});
+export type TeamView = z.infer<typeof TeamView>;
 
 export const TrialSummaryView = z.object({
   as_of: z.string(),
@@ -1638,6 +1702,41 @@ export const operations = {
     idempotent: false,
     status: 204,
     response: null,
+  },
+  "GET /staff/team": {
+    method: "GET",
+    path: "/staff/team",
+    params: z.object({}),
+    query: z.object({}),
+    body: null,
+    bodyKind: null,
+    idempotent: false,
+    status: 200,
+    response: TeamView,
+  },
+  "POST /staff/team/changes": {
+    method: "POST",
+    path: "/staff/team/changes",
+    params: z.object({}),
+    query: z.object({}),
+    body: ProposeChange,
+    bodyKind: "json",
+    idempotent: false,
+    status: 201,
+    response: ChangeView,
+  },
+  "POST /staff/team/changes/{change_id}/decision": {
+    method: "POST",
+    path: "/staff/team/changes/{change_id}/decision",
+    params: z.object({
+    change_id: z.string(),
+  }),
+    query: z.object({}),
+    body: DecideChange,
+    bodyKind: "json",
+    idempotent: false,
+    status: 200,
+    response: ChangeView,
   },
 } as const;
 

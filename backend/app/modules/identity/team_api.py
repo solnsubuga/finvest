@@ -56,7 +56,7 @@ Time = Annotated[Clock, Depends(_clock)]
 ConsoleOrigin = Annotated[str | None, Depends(_console_origin)]
 
 
-class MemberView(Contract):
+class TeamMemberView(Contract):
     id: PushId
     name: str
     email: str
@@ -99,7 +99,7 @@ class RoleView(Contract):
 
 
 class TeamView(Contract):
-    members: list[MemberView]
+    members: list[TeamMemberView]
     changes: list[ChangeView]
     roles: list[RoleView]
     # Whether this person may propose and decide changes.
@@ -153,7 +153,7 @@ async def get_team(staff: TeamViewer, database: Db) -> TeamView:
         changes = await team.open_changes(session)
     return TeamView(
         members=[
-            MemberView(
+            TeamMemberView(
                 id=member.id,
                 name=member.name,
                 email=member.email,

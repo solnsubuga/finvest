@@ -10,6 +10,7 @@ from sqlalchemy import text
 from sqlalchemy.exc import DBAPIError
 
 from app.infrastructure.database import Database
+from app.modules.identity import team
 from app.modules.notifications import suppression_lifts as lifts
 from app.modules.notifications.domain.email_events import address_hash
 from app.modules.notifications.email_delivery import is_suppressed
@@ -184,10 +185,18 @@ async def test_a_member_of_staff_no_longer_active_cannot_decide(
     maker, checker = await api.staff("support"), await api.staff("operations")
     async with api.database.actor_transaction(maker) as session:
         proposal = await lifts.propose(session, maker, address_hash(address), "Fixed", api.clock)
-    async with migrator_database.transaction() as session:
-        await session.execute(
-            text("UPDATE identity_staff SET status = 'disabled' WHERE id = :id"),
-            {"id": checker.id},
+    # Deactivated the only way there is: two admins (migration 0150).
+    first, second = await api.staff("admin"), await api.staff("admin")
+    async with api.database.actor_transaction(first) as session:
+        change = await team.propose(
+            session,
+            first,
+            team.Proposed(kind="deactivate", reason="Left", staff_id=checker.id),
+            api.clock,
+        )
+    async with api.database.actor_transaction(second) as session:
+        await team.decide(
+            session, second, change.id, "approved", "Checked", api.clock, console_origin=None
         )
     with pytest.raises(DBAPIError, match="only an active member of staff"):
         async with api.database.actor_transaction(checker) as session:
