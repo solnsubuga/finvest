@@ -61,10 +61,20 @@ describe("complaints screen", () => {
         ["C-2611", "Joan Namutebi", "Payout did not arrive", "Grace", "12 Nov", "Past deadline"],
         ["C-2614", "Peter Okello", "Bank deposit not matched", "Grace", "16 Nov", "Investigating"],
         ["C-2615", "Sarah Achieng", "Rate was lower than expected", "Daniel", "17 Nov", "Investigating"],
-        ["C-2616", "Ivan Ssemanda", "Could not sign in on a new phone", "No one yet", "18 Nov", "Waiting for client"],
+        // Ivan's account is locked in the samples.
+        ["C-2616", "Ivan SsemandaLocked", "Could not sign in on a new phone", "No one yet", "18 Nov", "Waiting for client"],
         ["C-2617", "Kira Road Savings Group", "Signatory change taking too long", "Grace", "18 Nov", "New"],
       ]),
     );
+  });
+
+  it("says when the client's account is locked, since the outcome will not reach them", async () => {
+    const { user } = renderComplaints();
+    await panel("C-2611, Joan Namutebi");
+    expect(screen.queryByText(/Their account is locked/)).not.toBeInTheDocument();
+    await user.click(await screen.findByRole("button", { name: /C-2616/ }));
+    const detail = await panel("C-2616, Ivan Ssemanda");
+    expect(within(detail).getByText(/Their account is locked, so Finvest sends them no messages/)).toBeInTheDocument();
   });
 
   it("opens a complaint with what the client said and its history", async () => {

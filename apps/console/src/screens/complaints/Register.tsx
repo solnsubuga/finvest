@@ -1,3 +1,4 @@
+import type { ClientCardStatus } from "@/directory/api.ts";
 import { cn } from "@/lib.ts";
 import type { Complaint, Summary } from "./api.ts";
 import { dueLabel, kampalaDate, OUTCOME_LABELS, shortDate, STATUS_LABELS, tenthsOfDays } from "./labels.ts";
@@ -54,11 +55,12 @@ interface RegisterTableProps {
   selected: string | null;
   today: string;
   clientName: (clientId: string) => string;
+  clientStatus: (clientId: string) => ClientCardStatus | null;
   ownerName: (ownerId: string | null) => string;
   onSelect: (complaintId: string) => void;
 }
 
-export function RegisterTable({ complaints, selected, today, clientName, ownerName, onSelect }: RegisterTableProps) {
+export function RegisterTable({ complaints, selected, today, clientName, clientStatus, ownerName, onSelect }: RegisterTableProps) {
   return (
     <div className="overflow-x-auto rounded-xl border border-border bg-surface">
       <table className="w-full min-w-[560px] border-collapse text-md">
@@ -91,7 +93,10 @@ export function RegisterTable({ complaints, selected, today, clientName, ownerNa
                     {complaint.reference}
                   </button>
                 </th>
-                <td className="px-2.5 py-3">{clientName(complaint.clientId)}</td>
+                <td className="px-2.5 py-3">
+                  {clientName(complaint.clientId)}
+                  <AccountChip status={clientStatus(complaint.clientId)} />
+                </td>
                 <td className="px-2.5 py-3">{complaint.summary}</td>
                 <td className="px-2.5 py-3">{ownerName(complaint.ownerId)}</td>
                 <td className={cn("whitespace-nowrap px-2.5 py-3", complaint.overdue && "font-bold text-danger")}>
@@ -106,5 +111,15 @@ export function RegisterTable({ complaints, selected, today, clientName, ownerNa
         </tbody>
       </table>
     </div>
+  );
+}
+
+/** Shown beside a client's name when their account is locked or closed, so staff need not open Clients to find out. */
+export function AccountChip({ status }: { status: ClientCardStatus | null }) {
+  if (status !== "locked" && status !== "closed") return null;
+  return (
+    <span className="ml-1.5 inline-flex rounded-full bg-danger-surface px-2 py-0.5 text-xs font-bold whitespace-nowrap text-danger">
+      {status === "locked" ? "Locked" : "Closed"}
+    </span>
   );
 }

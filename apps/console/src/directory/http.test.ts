@@ -55,7 +55,18 @@ describe("the directory over HTTP", () => {
       accountNumber: "1001004827",
       verified: true,
       clientSince: "2026-10-10",
+      status: "active",
     });
+  });
+
+  it("says when a client is locked, and treats a state it does not know as nothing special", async () => {
+    const locked = { ...CARD, status: "locked" };
+    const odd = { ...CARD, id: "-Nclient00000000000C", status: "something_new" };
+    const fetch = vi.fn<typeof globalThis.fetch>(() => reply(200, { cards: [locked, odd] }));
+    const directory = createHttpDirectory(createHttp("https://api.test", fetch));
+    const [first, second] = await Promise.all([directory.client(locked.id), directory.client(odd.id)]);
+    expect(first?.status).toBe("locked");
+    expect(second?.status).toBe("active");
   });
 
   it("asks for every client wanted at the same moment in one request, and remembers them", async () => {

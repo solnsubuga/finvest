@@ -5,6 +5,7 @@ import { describe, expect, it, vi } from "vitest";
 import { emptyDirectory } from "@/directory/api.ts";
 import { createStubDirectory } from "@/directory/stub.ts";
 import { notConnectedSupportApi, SupportError, type SupportApi } from "./api.ts";
+import { AboutClient } from "./Chat.tsx";
 import { SupportScreen } from "./index.tsx";
 import { waited } from "./labels.ts";
 import { createStubSupportApi } from "./stub.ts";
@@ -47,8 +48,9 @@ describe("support screen", () => {
       expect.stringContaining("Peter Okello12 min"),
       expect.stringContaining("Amara Nakato4 min"),
       expect.stringContaining("Sarah AchiengAnswered"),
+      expect.stringContaining("Ivan SsemandaAnswered"),
     ]);
-    expect(screen.getByRole("tab", { name: "Inbox, 5" })).toHaveAttribute("aria-selected", "true");
+    expect(screen.getByRole("tab", { name: "Inbox, 6" })).toHaveAttribute("aria-selected", "true");
     // The open chat is read, the others still count their new message, and an answered one has none.
     await waitFor(() => expect(within(list).getByRole("button", { name: /Joan Namutebi/ })).not.toHaveTextContent("new"));
     expect(within(list).getByRole("button", { name: /David Mugisha/ })).toHaveTextContent("1 new");
@@ -109,7 +111,7 @@ describe("support screen", () => {
     const chat = await chatWith("Joan Namutebi");
     await user.click(within(chat).getByRole("button", { name: "Mark as solved" }));
     await chatWith("David Mugisha");
-    expect(screen.getByRole("tab", { name: "Inbox, 4" })).toBeInTheDocument();
+    expect(screen.getByRole("tab", { name: "Inbox, 5" })).toBeInTheDocument();
     expect(within(await chats()).queryByRole("button", { name: /Joan Namutebi/ })).not.toBeInTheDocument();
     await user.click(screen.getByRole("tab", { name: "Solved" }));
     const solved = await chatWith("Joan Namutebi");
@@ -153,7 +155,7 @@ describe("support screen", () => {
     expect(within(form).getByLabelText("Name on the button")).toHaveValue("");
     await user.click(within(screen.getByRole("article", { name: "Payout is on its way" })).getByRole("button", { name: "Retire" }));
     await waitFor(() => expect(screen.queryByRole("article", { name: "Payout is on its way" })).not.toBeInTheDocument());
-    await user.click(screen.getByRole("tab", { name: "Inbox, 5" }));
+    await user.click(screen.getByRole("tab", { name: "Inbox, 6" }));
     const chat = await chatWith("Joan Namutebi");
     expect(within(chat).getByRole("button", { name: "Selfie tips" })).toBeInTheDocument();
     expect(within(chat).queryByRole("button", { name: "Payout is on its way" })).not.toBeInTheDocument();
@@ -173,6 +175,28 @@ describe("support screen", () => {
     expect(alert).toHaveTextContent("Support is not connected to the Finvest service yet.");
     await user.click(within(alert).getByRole("button", { name: "Try again" }));
     expect(await screen.findByRole("alert")).toHaveTextContent("not connected");
+  });
+});
+
+describe("about this client", () => {
+  const card = { clientId: "c1", name: "Ivan Ssemanda", accountNumber: "1001002291", verified: true, clientSince: "2026-03-30" };
+
+  it("warns that a locked client cannot read a reply", () => {
+    render(
+      <MemoryRouter>
+        <AboutClient card={{ ...card, status: "locked" }} />
+      </MemoryRouter>,
+    );
+    expect(screen.getByText(/Their account is locked. They cannot sign in to read a reply/)).toBeInTheDocument();
+  });
+
+  it("says nothing extra for an active client", () => {
+    render(
+      <MemoryRouter>
+        <AboutClient card={{ ...card, status: "active" }} />
+      </MemoryRouter>,
+    );
+    expect(screen.queryByText(/Their account is/)).not.toBeInTheDocument();
   });
 });
 
