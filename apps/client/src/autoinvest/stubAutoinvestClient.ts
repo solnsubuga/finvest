@@ -143,7 +143,21 @@ export function createStubAutoinvestClient(
       const plans = plansFor();
       const existing = createdByKey.get(request.idempotencyKey);
       if (existing) {
-        return settle(find(existing));
+        const first = find(existing);
+        // The same key is the same plan. With different details it is refused, as the
+        // backend refuses it.
+        if (
+          first.product.code !== request.productCode ||
+          first.amount.minor !== request.amount.minor ||
+          first.frequency !== request.frequency ||
+          first.day !== request.day ||
+          first.network !== request.network ||
+          first.payer !== request.payer ||
+          first.atMaturity !== request.atMaturity
+        ) {
+          throw new AutoinvestError("key_reused");
+        }
+        return settle(first);
       }
       const product = STUB_PRODUCTS.find((candidate) => candidate.code === request.productCode);
       if (!product) {

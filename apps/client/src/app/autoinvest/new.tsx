@@ -37,6 +37,11 @@ import { colors, fontSizes, radii } from "@/theme";
 const NETWORKS: Network[] = ["mtn", "airtel"];
 const MONTH_DAYS = [1, 5, 10, 15, 20, 25, 28, 31];
 
+/** A refusal means nothing was saved. Anything else may have reached us before the answer was lost. */
+function outcomeUnknown(error: unknown): boolean {
+  return !(error instanceof AutoinvestError) || error.code === "unavailable";
+}
+
 function likelyNetwork(national: string): Network {
   return /^7[045]/.test(national) ? "airtel" : "mtn";
 }
@@ -65,6 +70,9 @@ export default function NewPlan() {
   const [amountError, setAmountError] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  // Set once a try may have been saved before its answer was lost. From then on every try must
+  // be the same plan under the same key, so nothing on the form can change.
+  const [locked, setLocked] = useState(false);
   const [idempotencyKey] = useState(newIdempotencyKey);
 
   useEffect(() => {
@@ -123,6 +131,9 @@ export default function NewPlan() {
       } else {
         setError(describeAutoinvestError(caught));
       }
+      if (outcomeUnknown(caught)) {
+        setLocked(true);
+      }
       setBusy(false);
     }
   };
@@ -156,11 +167,18 @@ export default function NewPlan() {
       ) : (
         <View style={{ marginTop: 20, gap: 18 }}>
           {error ? <Notice tone="danger">{error}</Notice> : null}
+          {locked ? (
+            <Notice tone="warning">
+              Your plan may already have reached us, so its details are fixed. Pressing Start plan
+              again sends the same plan. It never makes two.
+            </Notice>
+          ) : null}
 
           <View style={{ gap: 8 }} accessibilityRole="radiogroup">
             <Eyebrow>Invest in</Eyebrow>
             {products.map((option) => (
               <Choice
+                disabled={locked}
                 key={option.code}
                 selected={option.code === productCode}
                 onPress={() => setProductCode(option.code)}
@@ -188,6 +206,7 @@ export default function NewPlan() {
               keyboardType="number-pad"
               placeholder="250,000"
               invalid={Boolean(amountError)}
+              editable={!locked}
               testID="plan-amount"
             />
           </Field>
@@ -197,6 +216,7 @@ export default function NewPlan() {
             <View style={styles.segments} accessibilityRole="radiogroup">
               {(["monthly", "weekly"] as Frequency[]).map((option) => (
                 <Segment
+                  disabled={locked}
                   key={option}
                   label={option === "monthly" ? "Every month" : "Every week"}
                   selected={frequency === option}
@@ -213,6 +233,7 @@ export default function NewPlan() {
               {frequency === "monthly"
                 ? MONTH_DAYS.map((option) => (
                     <Chip
+                      disabled={locked}
                       key={option}
                       label={ordinal(option)}
                       selected={monthDay === option}
@@ -222,6 +243,7 @@ export default function NewPlan() {
                   ))
                 : WEEKDAYS.map((name, index) => (
                     <Chip
+                      disabled={locked}
                       key={name}
                       label={name.slice(0, 3)}
                       accessibilityLabel={name}
@@ -236,6 +258,7 @@ export default function NewPlan() {
           <View style={{ gap: 8 }} accessibilityRole="radiogroup">
             <Eyebrow>When each one matures</Eyebrow>
             <Choice
+              disabled={locked}
               selected={atMaturity === "roll_over"}
               onPress={() => setAtMaturity("roll_over")}
               title="Roll it over"
@@ -243,6 +266,7 @@ export default function NewPlan() {
               testID="maturity-roll_over"
             />
             <Choice
+              disabled={locked}
               selected={atMaturity === "pay_out"}
               onPress={() => setAtMaturity("pay_out")}
               title="Pay it out"
@@ -256,6 +280,7 @@ export default function NewPlan() {
             <View style={styles.segments}>
               {NETWORKS.map((option) => (
                 <Segment
+                  disabled={locked}
                   key={option}
                   label={networkProduct[option]}
                   selected={network === option}
@@ -287,24 +312,27 @@ export default function NewPlan() {
 
 type ChoiceProps = {
   selected: boolean;
+  disabled: boolean;
   onPress: () => void;
   title: string;
   note: string;
   testID: string;
 };
 
-function Choice({ selected, onPress, title, note, testID }: ChoiceProps) {
+function Choice({ selected, disabled, onPress, title, note, testID }: ChoiceProps) {
   return (
     <Pressable
       accessibilityRole="radio"
-      accessibilityState={{ checked: selected }}
+      accessibilityState={{ checked: selected, disabled }}
       accessibilityLabel={title}
       onPress={onPress}
+      disabled={disabled}
       testID={testID}
       style={({ pressed }) => [
         styles.choice,
         selected && styles.choiceSelected,
         pressed && { opacity: 0.8 },
+        disabled && !selected && styles.faded,
       ]}
     >
       <View style={{ flex: 1 }}>
@@ -321,18 +349,24 @@ function Choice({ selected, onPress, title, note, testID }: ChoiceProps) {
 type SegmentProps = {
   label: string;
   selected: boolean;
+  disabled: boolean;
   onPress: () => void;
   testID: string;
 };
 
-function Segment({ label, selected, onPress, testID }: SegmentProps) {
+function Segment({ label, selected, disabled, onPress, testID }: SegmentProps) {
   return (
     <Pressable
       accessibilityRole="radio"
-      accessibilityState={{ checked: selected }}
+      accessibilityState={{ checked: selected, disabled }}
       onPress={onPress}
+      disabled={disabled}
       testID={testID}
-      style={[styles.segment, selected && styles.segmentSelected]}
+      style={[
+        styles.segment,
+        selected && styles.segmentSelected,
+        disabled && !selected && styles.faded,
+      ]}
     >
       <Txt size={14} weight="bold" color={selected ? colors.white : colors.ink}>
         {label}
@@ -344,6 +378,7 @@ function Segment({ label, selected, onPress, testID }: SegmentProps) {
 function Chip({
   label,
   selected,
+  disabled,
   onPress,
   testID,
   accessibilityLabel,
@@ -352,10 +387,15 @@ function Chip({
     <Pressable
       accessibilityRole="radio"
       accessibilityLabel={accessibilityLabel ?? label}
-      accessibilityState={{ checked: selected }}
+      accessibilityState={{ checked: selected, disabled }}
       onPress={onPress}
+      disabled={disabled}
       testID={testID}
-      style={[styles.chip, selected && styles.segmentSelected]}
+      style={[
+        styles.chip,
+        selected && styles.segmentSelected,
+        disabled && !selected && styles.faded,
+      ]}
     >
       <Txt size={14} weight="bold" color={selected ? colors.white : colors.ink}>
         {label}
@@ -387,6 +427,7 @@ const styles = StyleSheet.create({
   },
   radioSelected: { borderWidth: 7, borderColor: colors.black },
   segments: { flexDirection: "row", gap: 8 },
+  faded: { opacity: 0.4 },
   segment: {
     flex: 1,
     minHeight: 48,

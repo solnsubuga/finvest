@@ -83,6 +83,7 @@ export type AutoinvestErrorCode =
   | "too_many_plans"
   | "not_verified"
   | "not_found"
+  | "key_reused"
   | "unavailable";
 
 export class AutoinvestError extends Error {
@@ -100,7 +101,9 @@ export interface AutoinvestClient {
   /** Plans that are not stopped, newest first. */
   listPlans(): Promise<Plan[]>;
   getPlan(planId: string): Promise<Plan>;
+  /** Idempotent on `idempotencyKey`. The same key with different details is refused. */
   createPlan(plan: NewPlan): Promise<Plan>;
+  // Pause, resume and stop carry no key: each sets a state, so sending one again changes nothing.
   pausePlan(planId: string): Promise<Plan>;
   resumePlan(planId: string): Promise<Plan>;
   stopPlan(planId: string): Promise<Plan>;
@@ -112,6 +115,7 @@ const messages: Record<AutoinvestErrorCode, string> = {
   too_many_plans: "You already have 10 plans. Stop one to start another.",
   not_verified: "You can start a plan once your identity check is approved.",
   not_found: "We could not find that plan.",
+  key_reused: "This plan was already sent with other details. Go back and start a new plan.",
   unavailable: "We could not reach Finvest. Check your connection and try again.",
 };
 

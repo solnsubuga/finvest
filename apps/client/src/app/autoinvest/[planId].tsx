@@ -206,7 +206,7 @@ function RunRow({ run, amount, first }: { run: Run; amount: string; first: boole
         </Txt>
       </View>
       <Txt size={14} weight="bold" color={done ? colors.ink : colors.muted}>
-        {done ? amount : "None"}
+        {done ? amount : "Not collected"}
       </Txt>
     </View>
   );

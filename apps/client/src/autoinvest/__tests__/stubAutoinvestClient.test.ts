@@ -52,6 +52,19 @@ it("refuses what a run could never pay for", async () => {
   ).toBe("amount_too_large");
 });
 
+it("returns the same plan for the same key, and refuses the key with other details", async () => {
+  const client = createStubAutoinvestClient(NEW_CLIENT, newStubStore(), NOW);
+  const first = await client.createPlan(request());
+  expect((await client.createPlan(request())).id).toBe(first.id);
+  expect(
+    await code(client.createPlan(request({ amount: { currency: "UGX", minor: 300_000 } }))),
+  ).toBe("key_reused");
+  expect(await code(client.createPlan(request({ frequency: "weekly", day: 5 })))).toBe(
+    "key_reused",
+  );
+  expect(await client.listPlans()).toHaveLength(1);
+});
+
 it("keeps at most ten open plans", async () => {
   const client = createStubAutoinvestClient(NEW_CLIENT, newStubStore(), NOW);
   for (let index = 0; index < 10; index += 1) {
