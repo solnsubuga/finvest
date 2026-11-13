@@ -124,6 +124,7 @@ class PayoutJobs:
             payouts.SEND_KIND: external_effect(self.send),
             payouts.READ_KIND: self.read,
             payouts.SWEEP_KIND: self.sweep,
+            payouts.FIRST_PAID_KIND: self.record_first_paid,
         }
 
     async def send(self, job: ClaimedJob, context: JobContext) -> None:
@@ -257,6 +258,24 @@ class PayoutJobs:
 
         await context.apply(effect)
 
+    async def record_first_paid(self, job: ClaimedJob, context: JobContext) -> None:
+        """Note on its destination a payout two staff members settled as paid."""
+        payout_id = _payout_id(job.payload)
+        paid_at = job.payload.get("paid_at")
+        if not isinstance(paid_at, str):
+            raise PermanentJobError(code="invalid_payload")
+
+        async def effect(session: AsyncSession) -> Mapping[str, object]:
+            payout = await _find_payout(session, payout_id)
+            if payout is None or payout.status is not PayoutStatus.PAID:
+                return {"status": "unchanged"}
+            await destinations.record_first_payout(
+                session, payout.destination_id, datetime.fromisoformat(paid_at)
+            )
+            return {"status": "recorded"}
+
+        await context.apply(effect)
+
     async def sweep(self, job: ClaimedJob, context: JobContext) -> None:
         """Settle sends that were interrupted, and queue sends and reads that were lost."""
 
@@ -359,22 +378,27 @@ class PayoutJobs:
         )
 
     async def _tell_client(self, session: AsyncSession, payout: PayoutView) -> None:
-        event = _CLIENT_EVENTS.get(payout.status)
-        if event is None:
-            return
-        destination = await destinations.get_destination(session, payout.destination_id)
-        await notifications.notify(
-            session,
-            event_name=event,
-            client_id=payout.client_id,
-            idempotency_key=payout.id,
-            variables={
-                "amount": payout.amount,
-                "destination": destination_label(destination.network or ""),
-            },
-            link=notifications.Link("payout", payout.id),
-            now=self._clock.now(),
-        )
+        await tell_client(session, payout, self._clock.now())
+
+
+async def tell_client(session: AsyncSession, payout: PayoutView, now: datetime) -> None:
+    """Tell the client where their payout has got to, once per step."""
+    event = _CLIENT_EVENTS.get(payout.status)
+    if event is None:
+        return
+    destination = await destinations.get_destination(session, payout.destination_id)
+    await notifications.notify(
+        session,
+        event_name=event,
+        client_id=payout.client_id,
+        idempotency_key=payout.id,
+        variables={
+            "amount": payout.amount,
+            "destination": destination_label(destination.network or ""),
+        },
+        link=notifications.Link("payout", payout.id),
+        now=now,
+    )
 
 
 # What the client is told at each step. A payout that is being read is "being processed",

@@ -72,7 +72,7 @@ export type Approval = z.infer<typeof Approval>;
 export const ApprovalItemOut = z.object({
   can_decide: z.boolean(),
   id: z.string(),
-  kind: z.enum(["wording_change", "ledger_correction", "pot_transfer", "bank_transfer_match", "day_close", "dealing_order", "dealing_result", "buffer_rules", "buffer_capital", "rate_change", "migration_totals", "migration_sign_off", "phone_change", "team_change", "client_lock", "suppression_lift", "complaint_outcome", "announcement", "payout_account", "investment_correction"]),
+  kind: z.enum(["wording_change", "ledger_correction", "pot_transfer", "bank_transfer_match", "day_close", "dealing_order", "dealing_result", "buffer_rules", "buffer_capital", "rate_change", "migration_totals", "migration_sign_off", "phone_change", "team_change", "client_lock", "suppression_lift", "complaint_outcome", "announcement", "payout_account", "investment_correction", "payout_resolution"]),
   proposed_at: z.string(),
   proposed_by: z.string(),
   proposed_by_name: z.string().nullable(),
@@ -548,6 +548,11 @@ export const DecideChange = z.object({
   reason: z.string(),
 });
 export type DecideChange = z.infer<typeof DecideChange>;
+
+export const DecideIn = z.object({
+  reason: z.string(),
+});
+export type DecideIn = z.infer<typeof DecideIn>;
 
 export const DecideLift = z.object({
   decision: z.enum(["approved", "rejected", "withdrawn"]),
@@ -1164,6 +1169,14 @@ export const ProposeChange = z.object({
 });
 export type ProposeChange = z.infer<typeof ProposeChange>;
 
+export const ProposeIn = z.object({
+  outcome: z.enum(["paid", "failed"]),
+  reason: z.string(),
+  statement_id: z.string().nullable().optional(),
+  statement_line_id: z.string().nullable().optional(),
+});
+export type ProposeIn = z.infer<typeof ProposeIn>;
+
 export const ProposeLift = z.object({
   reason: z.string(),
 });
@@ -1258,6 +1271,22 @@ export const Removal = z.object({
 });
 export type Removal = z.infer<typeof Removal>;
 
+export const ResolutionOut = z.object({
+  decided_at: z.string().nullable(),
+  decided_by: z.string().nullable(),
+  decision_reason: z.string().nullable(),
+  id: z.string(),
+  outcome: z.enum(["paid", "failed"]),
+  payout_id: z.string(),
+  proposed_at: z.string(),
+  proposed_by: z.string(),
+  reason: z.string(),
+  statement_id: z.string().nullable(),
+  statement_line_id: z.string().nullable(),
+  status: z.enum(["proposed", "approved", "declined", "withdrawn"]),
+});
+export type ResolutionOut = z.infer<typeof ResolutionOut>;
+
 export const ResultIn = z.object({
   fill: FillIn.nullable(),
 });
@@ -1306,6 +1335,12 @@ export const SetTopic = z.object({
   topic: z.enum(["deposit", "withdrawal", "investment", "identity", "account", "other"]),
 });
 export type SetTopic = z.infer<typeof SetTopic>;
+
+export const SettledPayoutOut = z.object({
+  id: z.string(),
+  status: z.enum(["paid", "failed"]),
+});
+export type SettledPayoutOut = z.infer<typeof SettledPayoutOut>;
 
 export const SignOffRequest = z.object({
   key: z.string(),
@@ -1534,6 +1569,16 @@ export const StaffSessionView = z.object({
   staff_id: z.string(),
 });
 export type StaffSessionView = z.infer<typeof StaffSessionView>;
+
+export const StrandedPayoutOut = z.object({
+  amount: MoneyView,
+  client_id: z.string(),
+  first_sent_at: z.string(),
+  id: z.string(),
+  resolution: ResolutionOut.nullable(),
+  status: z.enum(["sent", "uncertain"]),
+});
+export type StrandedPayoutOut = z.infer<typeof StrandedPayoutOut>;
 
 export const SuppressionList = z.object({
   can_lift: z.boolean(),
@@ -2750,6 +2795,45 @@ export const operations = {
     status: 200,
     response: StaffDestinationOut,
   },
+  "POST /staff/payout-resolutions/{resolution_id}/approve": {
+    method: "POST",
+    path: "/staff/payout-resolutions/{resolution_id}/approve",
+    params: z.object({
+    resolution_id: z.string(),
+  }),
+    query: z.object({}),
+    body: DecideIn,
+    bodyKind: "json",
+    idempotent: true,
+    status: 200,
+    response: SettledPayoutOut,
+  },
+  "POST /staff/payout-resolutions/{resolution_id}/decline": {
+    method: "POST",
+    path: "/staff/payout-resolutions/{resolution_id}/decline",
+    params: z.object({
+    resolution_id: z.string(),
+  }),
+    query: z.object({}),
+    body: DecideIn,
+    bodyKind: "json",
+    idempotent: false,
+    status: 200,
+    response: ResolutionOut,
+  },
+  "POST /staff/payout-resolutions/{resolution_id}/withdraw": {
+    method: "POST",
+    path: "/staff/payout-resolutions/{resolution_id}/withdraw",
+    params: z.object({
+    resolution_id: z.string(),
+  }),
+    query: z.object({}),
+    body: DecideIn,
+    bodyKind: "json",
+    idempotent: false,
+    status: 200,
+    response: ResolutionOut,
+  },
   "GET /staff/payouts/held-up": {
     method: "GET",
     path: "/staff/payouts/held-up",
@@ -2760,6 +2844,30 @@ export const operations = {
     idempotent: false,
     status: 200,
     response: z.array(HeldUpPayoutOut),
+  },
+  "GET /staff/payouts/stranded": {
+    method: "GET",
+    path: "/staff/payouts/stranded",
+    params: z.object({}),
+    query: z.object({}),
+    body: null,
+    bodyKind: null,
+    idempotent: false,
+    status: 200,
+    response: z.array(StrandedPayoutOut),
+  },
+  "POST /staff/payouts/{payout_id}/resolutions": {
+    method: "POST",
+    path: "/staff/payouts/{payout_id}/resolutions",
+    params: z.object({
+    payout_id: z.string(),
+  }),
+    query: z.object({}),
+    body: ProposeIn,
+    bodyKind: "json",
+    idempotent: true,
+    status: 201,
+    response: ResolutionOut,
   },
   "GET /staff/people": {
     method: "GET",
