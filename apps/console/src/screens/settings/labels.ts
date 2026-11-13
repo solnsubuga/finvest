@@ -22,6 +22,8 @@ const EVENT_LABELS: Record<string, string> = {
   investment_started: "Investment started",
   investment_maturing: "Investment matures soon",
   investment_matured: "Investment matured",
+  investment_withdrawal_requested: "Early withdrawal requested",
+  investment_withdrawal_paid: "Early withdrawal sent",
   interest_earned: "Daily earnings",
   kyc_approved: "Identity check approved",
   kyc_retake_requested: "Identity photo needed again",
