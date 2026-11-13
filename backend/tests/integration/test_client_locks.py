@@ -5,10 +5,11 @@ from collections.abc import AsyncIterator
 
 import httpx
 import pytest
-from sqlalchemy import text
+from sqlalchemy import event, text
 from sqlalchemy.exc import DBAPIError
 
 from app.infrastructure.database import Database
+from app.modules.console.clients import client_cards
 from app.modules.identity import client_locks
 from app.modules.identity.service import client_contact
 from app.shared.actors import Actor
@@ -105,6 +106,22 @@ async def test_client_cards_name_only_verified_clients_and_skip_unknown_ids(api:
     assert (await api.http.get("/staff/clients/cards")).status_code == 422
     too_many = {"ids": [verified.id] * 101}
     assert (await api.http.get("/staff/clients/cards", params=too_many)).status_code == 422
+
+
+async def test_client_cards_take_two_queries_however_many_clients(api: Api) -> None:
+    clients = [await api.client() for _ in range(3)]
+    await verify(api.database, clients[1], api.clock)
+    staff = await api.staff("finance")
+    wanted = [str(c.id) for c in reversed(clients)] + ["-Nabc0000000000000Z9", str(clients[0].id)]
+    statements: list[str] = []
+    async with api.database.actor_transaction(staff) as session:
+        event.listen(session.sync_session, "do_orm_execute", lambda state: statements.append("x"))
+        cards = await client_cards(session, wanted)
+    assert len(statements) == 2
+    # In the order asked, each once, with the unknown ID left out.
+    assert [card.account.id for card in cards] == [str(c.id) for c in reversed(clients)]
+    assert [card.verified_name is not None for card in cards] == [False, True, False]
+    assert [card.account_number is not None for card in cards] == [False, True, False]
 
 
 async def test_a_lock_needs_a_second_person_and_ends_the_clients_sessions(api: Api) -> None:

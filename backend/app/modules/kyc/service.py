@@ -619,6 +619,39 @@ async def verified_name(session: AsyncSession, client_id: str) -> str | None:
 
 
 @dataclass(frozen=True, slots=True)
+class Identity:
+    """What a client's check says about who they are, for a card that names them."""
+
+    # "SURNAME Given names" from the document. None until the check is approved.
+    verified_name: str | None
+    # Issued when the check is approved.
+    account_number: str | None
+
+
+_IDENTITIES = text(
+    "SELECT client_id, status, surname, given_names, account_number FROM kyc_checks "
+    "WHERE client_id = ANY(CAST(:ids AS text[]))"
+)
+
+
+async def identities(session: AsyncSession, client_ids: list[str]) -> dict[str, Identity]:
+    """`verified_name` and the account number for each of these clients, in one query.
+
+    A client who has not started a check is left out. For staff transactions.
+    """
+    if not client_ids:
+        return {}
+    rows = await session.execute(_IDENTITIES, {"ids": list(dict.fromkeys(client_ids))})
+    return {
+        row.client_id: Identity(
+            verified_name=f"{row.surname} {row.given_names}" if row.status == "approved" else None,
+            account_number=row.account_number,
+        )
+        for row in rows
+    }
+
+
+@dataclass(frozen=True, slots=True)
 class AccountHolder:
     """Who an approved account belongs to, as printed on a statement or a receipt."""
 
