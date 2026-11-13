@@ -101,6 +101,8 @@ A running log. Add a row when a decision is made, and move an open question up w
 
 | Question | Who answers |
 | --- | --- |
+| Push alerts: Expo, and through it Apple and Google, become processors of what a push says. Is that provider choice acceptable? Built: Expo's push service, off until `FINVEST_PUSH_BACKEND` is set. | Owner |
+| Push alerts show on a locked phone. Should a push carry the amount, as in "UGX 150,000 is on its way", or a plain line such as "Your payout is on its way" with the detail inside the app? Built: the same words as the in-app notification. | Owner |
 | Is money in transit through the trust account covered by the current licence? | Counsel |
 | Data protection: registration and consent wording for data hosted in London. | Counsel |
 | Do group goals with two approvals count as a collective scheme? | Counsel |
