@@ -12,7 +12,7 @@ from pydantic import Field
 
 from app.infrastructure.database import Database
 from app.modules.identity.api import require_permission
-from app.modules.identity.service import StaffSession
+from app.modules.identity.service import StaffSession, staff_names
 from app.modules.notifications import suppression_lifts as lifts
 from app.shared.clock import Clock
 from app.shared.contracts import Contract, PushId
@@ -54,9 +54,12 @@ class LiftView(Contract):
     address_hash: str
     reason: str
     proposed_by: PushId
+    # The member of staff's name, so the second person sees who asked.
+    proposed_by_name: str | None
     proposed_at: datetime
     status: Literal["proposed", "approved", "rejected", "withdrawn"]
     decided_by: PushId | None
+    decided_by_name: str | None
     decided_at: datetime | None
     decision_reason: str | None
     yours: bool
@@ -102,8 +105,9 @@ async def list_suppressions(staff: Viewer, database: Db) -> SuppressionList:
     """The newest 200 suppressions, whether each still applies, and any lift waiting."""
     async with database.actor_transaction(staff.actor) as session:
         found = await lifts.list_suppressions(session)
+        names = await staff_names(session, _staff_ids([i.open_lift for i in found if i.open_lift]))
     return SuppressionList(
-        suppressions=[_view(item, staff) for item in found],
+        suppressions=[_view(item, staff, names) for item in found],
         can_lift="email_suppressions.lift" in staff.permissions,
     )
 
@@ -114,7 +118,10 @@ async def lookup(body: Lookup, staff: Viewer, database: Db) -> LookupResult:
     address never appears in a URL or a log."""
     async with database.actor_transaction(staff.actor) as session:
         found = await lifts.suppression_for_address(session, body.email)
-    return LookupResult(suppression=_view(found, staff) if found else None)
+        names = await staff_names(
+            session, _staff_ids([found.open_lift] if found and found.open_lift else [])
+        )
+    return LookupResult(suppression=_view(found, staff, names) if found else None)
 
 
 @router.post("/{address_hash}/lifts", status_code=201)
@@ -124,7 +131,8 @@ async def propose_lift(
     """Ask to email the address again. A different member of staff decides."""
     async with database.actor_transaction(staff.actor) as session:
         lift = await lifts.propose(session, staff.actor, address_hash, body.reason, clock)
-    return _lift(lift, staff)
+        names = await staff_names(session, _staff_ids([lift]))
+    return _lift(lift, staff, names)
 
 
 @router.post("/lifts/{lift_id}/decision")
@@ -134,10 +142,17 @@ async def decide_lift(
     """Approve or reject someone else's lift, or withdraw your own."""
     async with database.actor_transaction(staff.actor) as session:
         lift = await lifts.decide(session, staff.actor, lift_id, body.decision, body.reason, clock)
-    return _lift(lift, staff)
+        names = await staff_names(session, _staff_ids([lift]))
+    return _lift(lift, staff, names)
 
 
-def _view(item: lifts.Suppression, staff: StaffSession) -> SuppressionView:
+def _staff_ids(found: list[lifts.Lift]) -> set[str]:
+    return {lift.proposed_by for lift in found} | {
+        lift.decided_by for lift in found if lift.decided_by
+    }
+
+
+def _view(item: lifts.Suppression, staff: StaffSession, names: dict[str, str]) -> SuppressionView:
     if item.reason not in ("bounced", "complained"):
         raise ApplicationError("internal_error")
     return SuppressionView(
@@ -148,19 +163,21 @@ def _view(item: lifts.Suppression, staff: StaffSession) -> SuppressionView:
         suppressed=item.suppressed,
         lifted_at=item.lifted_at,
         complained=item.complained,
-        open_lift=_lift(item.open_lift, staff) if item.open_lift else None,
+        open_lift=_lift(item.open_lift, staff, names) if item.open_lift else None,
     )
 
 
-def _lift(lift: lifts.Lift, staff: StaffSession) -> LiftView:
+def _lift(lift: lifts.Lift, staff: StaffSession, names: dict[str, str]) -> LiftView:
     return LiftView(
         id=lift.id,
         address_hash=lift.address_hash,
         reason=lift.reason,
         proposed_by=lift.proposed_by,
+        proposed_by_name=names.get(lift.proposed_by),
         proposed_at=lift.proposed_at,
         status=lift.status,  # type: ignore[arg-type]
         decided_by=lift.decided_by,
+        decided_by_name=names.get(lift.decided_by) if lift.decided_by else None,
         decided_at=lift.decided_at,
         decision_reason=lift.decision_reason,
         yours=lift.proposed_by == staff.staff_id,

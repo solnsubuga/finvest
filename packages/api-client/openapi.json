@@ -3841,6 +3841,17 @@
             ],
             "title": "Decided By"
           },
+          "decided_by_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Decided By Name"
+          },
           "decision_reason": {
             "anyOf": [
               {
@@ -3871,6 +3882,17 @@
             "title": "Proposed By",
             "type": "string"
           },
+          "proposed_by_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Proposed By Name"
+          },
           "reason": {
             "title": "Reason",
             "type": "string"
@@ -3895,9 +3917,11 @@
           "address_hash",
           "reason",
           "proposed_by",
+          "proposed_by_name",
           "proposed_at",
           "status",
           "decided_by",
+          "decided_by_name",
           "decided_at",
           "decision_reason",
           "yours"
