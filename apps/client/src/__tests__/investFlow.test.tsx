@@ -8,6 +8,7 @@ import { WARM_ROUTER_MS, warmRouter } from "@/testing/warmRouter";
 /** The demo's clock, shared by investing and payments so a confirmed payment starts the term. */
 const mockClock = { ms: Date.parse("2026-11-13T09:00:00Z") };
 const mockRequest = jest.fn();
+const mockWithdraw = jest.fn();
 const mockSample = { value: "empty" };
 /** The next request's failure, if any: what the network or the backend answers instead. */
 const mockFailNext: { code: string | null } = { code: null };
@@ -43,6 +44,16 @@ jest.mock("@/investing/stubInvestingClient", () => {
             throw new InvestingError(code);
           }
           return client.requestInvestment(request);
+        },
+        withdrawEarly: async (request: unknown) => {
+          mockWithdraw(request);
+          const code = mockFailNext.code;
+          if (code) {
+            mockFailNext.code = null;
+            const { InvestingError } = jest.requireActual("@/investing/types");
+            throw new InvestingError(code);
+          }
+          return client.withdrawEarly(request);
         },
       };
     },
@@ -80,6 +91,7 @@ beforeAll(warmRouter, WARM_ROUTER_MS);
 
 beforeEach(() => {
   mockRequest.mockClear();
+  mockWithdraw.mockClear();
   mockSample.value = "empty";
   mockFailNext.code = null;
 });
@@ -205,5 +217,68 @@ describe("investing", () => {
     expect(screen.getByLabelText("Interest at maturity, after tax: UGX 132,448")).toBeTruthy();
     expect(screen.getByLabelText("When the term ends: Roll over")).toBeTruthy();
     expect(screen.queryByText(/tax:|15%/)).toBeNull();
+  });
+});
+
+describe("withdrawing early", () => {
+  async function openWithdraw() {
+    mockSample.value = "default";
+    await signIn();
+    await act(async () => {
+      router.push("/portfolio");
+    });
+    await fireEvent.press(await screen.findByLabelText(/^91 Day Treasury Bill, Running/));
+    await fireEvent.press(await screen.findByTestId("withdraw-early"));
+    await screen.findByTestId("withdraw-amount");
+  }
+
+  it("shows exactly what comes back, pays a ready account and stops the interest", async () => {
+    await openWithdraw();
+    expect(screen.getByTestId("withdraw-amount").props.children).toBe("UGX 5,123,715");
+    expect(screen.getByText("No fee. Interest stops when you confirm.")).toBeTruthy();
+    // The new bank account is still in its first day's wait, so it cannot be chosen.
+    expect(screen.getByTestId("account-demo-account-bank").props.accessibilityState).toMatchObject({ disabled: true });
+    expect(screen.getByTestId("account-demo-account-mtn").props.accessibilityState).toMatchObject({ checked: true });
+    expect(screen.queryByText(/tax:|15%/)).toBeNull();
+
+    await fireEvent.press(screen.getByTestId("confirm-withdraw"));
+
+    expect(await screen.findByText(/UGX 5,123,715 goes to your account, and we tell you when it is sent/)).toBeTruthy();
+    expect(screen.getByText("Withdrawn early")).toBeTruthy();
+    expect(screen.queryByText("Running")).toBeNull();
+    expect(screen.queryByTestId("withdraw-early")).toBeNull();
+    expect(mockWithdraw).toHaveBeenCalledTimes(1);
+    expect(mockWithdraw.mock.calls[0][0]).toMatchObject({ destinationId: "demo-account-mtn" });
+  });
+
+  it("asks again under the same key after a lost answer, with the account locked", async () => {
+    await openWithdraw();
+    mockFailNext.code = "unavailable";
+    await fireEvent.press(screen.getByTestId("confirm-withdraw"));
+    expect(await screen.findByText(/so you will not withdraw twice/)).toBeTruthy();
+    expect(screen.getByTestId("account-demo-account-mtn").props.accessibilityState).toMatchObject({ disabled: true });
+
+    await fireEvent.press(screen.getByTestId("confirm-withdraw"));
+    expect(await screen.findByText(/goes to your account, and we tell you when it is sent/)).toBeTruthy();
+    const [first, second] = mockWithdraw.mock.calls.map((call) => call[0].idempotencyKey);
+    expect(second).toBe(first);
+  });
+});
+
+describe("after an early withdrawal", () => {
+  it("lists the investment as withdrawn early in the portfolio", async () => {
+    mockSample.value = "default";
+    await signIn();
+    await act(async () => {
+      router.push("/portfolio");
+    });
+    await fireEvent.press(await screen.findByLabelText(/^91 Day Treasury Bill, Running/));
+    await fireEvent.press(await screen.findByTestId("withdraw-early"));
+    await fireEvent.press(await screen.findByTestId("confirm-withdraw"));
+    await screen.findByText(/goes to your account/);
+    await act(async () => {
+      router.push("/portfolio");
+    });
+    expect(await screen.findByLabelText(/^91 Day Treasury Bill, Withdrawn early/)).toBeTruthy();
   });
 });

@@ -1,8 +1,8 @@
-import type { ClientInvestmentOut, ProductOut, QuoteOut } from "@finvest/api-client/client";
+import type { ClientInvestmentOut, DestinationOut, ProductOut, QuoteOut } from "@finvest/api-client/client";
 
 import { api, ApiError } from "@/api/http";
 
-import { Amount, Currency, Investment, InvestingClient, InvestingError, Product, Quote } from "./types";
+import { Amount, Currency, Investment, InvestingClient, InvestingError, PayoutAccount, Product, Quote } from "./types";
 
 /**
  * The investing screens' contract, answered by the real API (`/client/products`,
@@ -65,6 +65,22 @@ export function toInvestment(view: ClientInvestmentOut): Investment {
     rolledIntoId: view.rolled_into_id,
     payoutId: view.payout_id,
     waitingForDestination: view.waiting_for_destination,
+    canWithdraw: view.can_withdraw,
+    withdrawalRequestedAt: view.withdrawal_requested_at,
+  };
+}
+
+const NETWORKS: Record<"mtn" | "airtel", string> = { mtn: "MTN", airtel: "Airtel" };
+
+/** An approved account, named the way the client knows it. The number arrives masked. */
+export function toPayoutAccount(view: DestinationOut, nowMs: number): PayoutAccount {
+  const name = view.kind === "mobile_money" ? (view.network ? NETWORKS[view.network] : "Mobile money") : "Bank";
+  return {
+    id: view.id,
+    kind: view.kind,
+    label: `${name} ${view.account}`,
+    payableFrom: view.payable_from,
+    ready: view.payable_from !== null && Date.parse(view.payable_from) <= nowMs,
   };
 }
 
@@ -75,7 +91,10 @@ export function toInvestment(view: ClientInvestmentOut): Investment {
  * a timeout, a server error) is "unavailable", which the review screen treats as "may have
  * been saved": it keeps the same key and the same choices, so trying again cannot invest twice.
  */
-export function toInvestingError(error: unknown): InvestingError {
+/** Which call failed, where the same refusal means different things. */
+type Call = "withdraw" | "other";
+
+export function toInvestingError(error: unknown, call: Call = "other"): InvestingError {
   if (error instanceof InvestingError) return error;
   if (!(error instanceof ApiError) || error.uncertain) return new InvestingError("unavailable");
   switch (error.code) {
@@ -88,10 +107,14 @@ export function toInvestingError(error: unknown): InvestingError {
       // signed-in client gets here.
       return new InvestingError("not_verified");
     case "conflict":
-      // The most investments waiting for payment at once.
-      return new InvestingError("too_many_unpaid");
+      // Withdrawing: not running, already asked for, too close to maturity, or switched off.
+      // Investing: the most investments waiting for payment at once.
+      return new InvestingError(call === "withdraw" ? "cannot_withdraw" : "too_many_unpaid");
     case "validation_failed": {
       const codes = error.fields.map((field) => field.code);
+      if (codes.includes("not_usable") || codes.includes("destination_in_safety_wait")) {
+        return new InvestingError("account_not_ready");
+      }
       if (codes.includes("below_minimum")) return new InvestingError("below_minimum");
       if (codes.includes("product_not_open")) return new InvestingError("product_not_open");
       // Still a definite refusal: nothing was saved, so the next try may take a new key.
@@ -102,11 +125,11 @@ export function toInvestingError(error: unknown): InvestingError {
   }
 }
 
-async function wrap<T>(work: () => Promise<T>): Promise<T> {
+async function wrap<T>(work: () => Promise<T>, call: Call = "other"): Promise<T> {
   try {
     return await work();
   } catch (error) {
-    throw toInvestingError(error);
+    throw toInvestingError(error, call);
   }
 }
 
@@ -146,6 +169,28 @@ export function createApiInvestingClient(): InvestingClient {
     getInvestment: (investmentId) =>
       wrap(async () =>
         toInvestment(await api("GET /client/investments/{investment_id}", { params: { investment_id: investmentId } })),
+      ),
+
+    // Only approved accounts can be paid. One still in its safety wait is listed, so the screen
+    // can say when it will be ready.
+    listPayoutAccounts: () =>
+      wrap(async () => {
+        const views = await api("GET /client/payout-destinations", {});
+        const nowMs = Date.now();
+        return views.filter((view) => view.status === "approved").map((view) => toPayoutAccount(view, nowMs));
+      }),
+
+    withdrawEarly: (request) =>
+      wrap(
+        async () =>
+          toInvestment(
+            await api("POST /client/investments/{investment_id}/withdraw", {
+              params: { investment_id: request.investmentId },
+              body: { destination_id: request.destinationId },
+              idempotencyKey: request.idempotencyKey,
+            }),
+          ),
+        "withdraw",
       ),
   };
 }
