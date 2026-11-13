@@ -14,6 +14,9 @@ from app.infrastructure.jobs.settings import JobProcessSettings
 from app.infrastructure.logging import configure_logging
 from app.infrastructure.process import keep_heartbeat, stop_on_signals
 from app.infrastructure.settings import Settings
+from app.modules.payments.jobs import DepositJobs
+from app.modules.payments.settings import PaymentsSettings
+from app.modules.payments.wiring import collections_provider
 from app.shared.clock import Clock, SystemClock
 
 
@@ -23,7 +26,11 @@ def handlers(database: Database, clock: Clock) -> dict[str, JobHandler | Handler
     A handler that calls a provider is registered with `external_effect(handler)`, so a crash
     or an unsorted exception stops the job for reconciliation and it is never run twice.
     """
-    return {}
+    kinds: dict[str, JobHandler | Handler] = {}
+    collections = collections_provider(PaymentsSettings(), clock)
+    if collections is not None:
+        kinds.update(DepositJobs(database, collections, clock).handlers())
+    return kinds
 
 
 async def run(settings: Settings, stop: asyncio.Event | None = None) -> None:

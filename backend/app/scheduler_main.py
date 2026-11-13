@@ -8,6 +8,8 @@ and each fire time becomes exactly one job.
 import asyncio
 from datetime import timedelta
 
+from apscheduler.triggers.interval import IntervalTrigger  # type: ignore[import-untyped]
+
 from app.infrastructure.database import Database
 from app.infrastructure.database.roles import WORKER, check_role
 from app.infrastructure.jobs import LeaderLease, Schedule, SchedulerService
@@ -16,6 +18,8 @@ from app.infrastructure.jobs.worker import default_worker_id
 from app.infrastructure.logging import configure_logging
 from app.infrastructure.process import keep_heartbeat, stop_on_signals
 from app.infrastructure.settings import Settings
+from app.modules.payments import service as payments
+from app.modules.payments.settings import PaymentsSettings
 from app.shared.clock import SystemClock
 
 
@@ -24,7 +28,18 @@ def schedules() -> list[Schedule]:
 
     A run that must happen for each day it missed, such as daily interest, sets `catch_up="all"`.
     """
-    return []
+    runs: list[Schedule] = []
+    if PaymentsSettings().provider != "disabled":
+        # Picks up deposits whose own job was lost. One run covers any it missed.
+        runs.append(
+            Schedule(
+                name="payments.sweep_deposits",
+                trigger=IntervalTrigger(minutes=1),
+                kind=payments.SWEEP_KIND,
+                max_age=timedelta(minutes=5),
+            )
+        )
+    return runs
 
 
 async def run(settings: Settings, stop: asyncio.Event | None = None) -> None:

@@ -58,6 +58,9 @@ Profile opens `/security`, which lists the three second steps and which are on. 
 - **Set up an authenticator app** is not on the canvas, so it is drawn in the same style. Step 1 shows the key as a QR code (drawn on the device with `qrcode-generator`, never sent anywhere to be made into an image), as text to type, and on a phone as a link that opens the authenticator app. Step 2 asks for a code from the app. Only a right code switches it on.
 - The key is held in the set-up screen's memory only. It is never put in a route, the session or storage. The demo key is random letters made on the spot, so no key sits in the source.
 - Adding either one needs a session opened in the last 10 minutes, which is the sign-in API's rule. An older session gets `sign_in_again`, and the screen offers "Log in again" in place of the set-up.
+- After logging in again the client is taken straight back to the set-up they were in. Only the two set-up routes can be a return address. It is dropped after five minutes, and when the app goes to the background.
+- If an authenticator set-up runs out of time before its code is entered, the screen fetches a new key and goes back to step 1. The old key is never shown again.
+- When the real client lands: keep the key screen out of the app switcher and out of screen captures on Android and iPhone, and scan the QR code with a real authenticator app before release.
 - A client who signed in with an SMS code can still add either one, and the screen says the 24 hour limit keeps running. See the open question in [docs/decisions.md](../../docs/decisions.md).
 
 Not built: removing a passkey or an authenticator app, adding a second passkey from this screen, naming devices, and recovery codes. Offering the passkey during sign up, as on the canvas, waits for the app PIN step that comes before it.
@@ -73,5 +76,6 @@ Still outstanding on the sign up screen: "the terms" and "the privacy notice" ar
 - Clients never see tax rates, only net figures.
 - The app PIN or fingerprint unlocks a phone that is already signed in and approves payments. It never signs in a new device.
 - `app.json` cannot import the tokens, so its two `#0D0D0D` values (Android icon and splash background) are written by hand. Keep them equal to `colors.black`.
+- `docs/screenshots/sheets/` holds contact sheets of the same screenshots, for PR descriptions.
 - Screenshots in `docs/screenshots/` keep stable file names. Replace them in place when a screen changes.
 - Build to the [design canvas](../../docs/design.md). Every PR that adds or changes a screen includes screenshots.

@@ -141,8 +141,61 @@ describe("Sign in and security", () => {
     await screen.findByText(/log in again before you change how you sign in/);
     expect(screen.queryByText("Passkey added")).toBeNull();
 
+    expect(screen.getByText("Log in again first")).toBeTruthy();
+
+    // Logging in again brings the client straight back to the set-up.
     await fireEvent.press(screen.getByTestId("sign-in-again"));
     await screen.findByText("Your money, working every day.");
+    mockClock.minutes = 12;
+    await fireEvent.press(screen.getByText("Log in"));
+    await fireEvent.changeText(await screen.findByTestId("phone-input"), "701555012");
+    await fireEvent.changeText(screen.getByTestId("password-input"), NEW_PASSWORD);
+    await fireEvent.press(screen.getByTestId("login-submit"));
+    await fireEvent.press(await screen.findByTestId("use-code"));
+    await fireEvent.changeText(await screen.findByTestId("code-input"), DEMO_CODE);
+    await fireEvent.press(screen.getByTestId("code-submit"));
+    await screen.findByText("It cannot be stolen by a fake site");
+    await fireEvent.press(screen.getByTestId("add-passkey"));
+    await screen.findByText("Passkey added");
+
+    // The note is spent: the next log in goes Home as usual.
+    await fireEvent.press(screen.getByTestId("done"));
+    await screen.findByTestId("on-passkey");
+    await fireEvent.press(screen.getByLabelText("Back"));
+    await screen.findByText("Welcome to Finvest");
+    await fireEvent.press(screen.getByLabelText("Profile"));
+    await fireEvent.press(await screen.findByTestId("sign-out"));
+    await screen.findByText("Your money, working every day.");
+    await fireEvent.press(screen.getByText("Log in"));
+    await fireEvent.changeText(await screen.findByTestId("phone-input"), "701555012");
+    await fireEvent.changeText(screen.getByTestId("password-input"), NEW_PASSWORD);
+    await fireEvent.press(screen.getByTestId("login-submit"));
+    await fireEvent.press(await screen.findByTestId("use-passkey"));
+    await screen.findByText("Welcome to Finvest");
+  });
+
+  it("gives a new key when the set-up ran out of time, and never re-shows the old one", async () => {
+    await signUp();
+    await fireEvent.press(screen.getByLabelText("Profile"));
+    await fireEvent.press(await screen.findByTestId("open-security"));
+    await fireEvent.press(await screen.findByTestId("setup-authenticator"));
+    const firstKey = String((await screen.findByTestId("setup-key")).props.children);
+    await fireEvent.press(screen.getByTestId("key-continue"));
+
+    // Six minutes: the set-up has ended, but the session is still fresh.
+    mockClock.minutes = 6;
+    await fireEvent.changeText(await screen.findByTestId("code-input"), DEMO_CODE);
+    await fireEvent.press(screen.getByTestId("code-submit"));
+
+    await screen.findByText(/the first key no longer works/);
+    const secondKey = String((await screen.findByTestId("setup-key")).props.children);
+    expect(secondKey).not.toBe(firstKey);
+    expect(screen.queryByText("Authenticator app is on")).toBeNull();
+
+    await fireEvent.press(screen.getByTestId("key-continue"));
+    await fireEvent.changeText(await screen.findByTestId("code-input"), DEMO_CODE);
+    await fireEvent.press(screen.getByTestId("code-submit"));
+    await screen.findByText("Authenticator app is on");
   });
 
   it("asks for a fresh log in before showing an authenticator key to an old session", async () => {

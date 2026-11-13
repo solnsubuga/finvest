@@ -3,7 +3,7 @@ import { ActivityIndicator, Linking, StyleSheet, View } from "react-native";
 import { Stack, useRouter } from "expo-router";
 
 import { useAuth } from "@/auth/AuthProvider";
-import { AuthenticatorSetup, describeAuthError } from "@/auth/types";
+import { AuthenticatorSetup, AuthError, describeAuthError } from "@/auth/types";
 import { BackButton } from "@/components/BackButton";
 import { Card, Notice } from "@/components/Blocks";
 import { Button, TextLink } from "@/components/Button";
@@ -44,6 +44,7 @@ export default function SetUpAuthenticator() {
   const [error, setError] = useState<string | null>(null);
   const [openFailed, setOpenFailed] = useState(false);
   const [stale, setStale] = useState(false);
+  const [renewed, setRenewed] = useState(false);
 
   useEffect(() => {
     let current = true;
@@ -70,7 +71,7 @@ export default function SetUpAuthenticator() {
   }, [client, attempt]);
 
   const leave = useCallback(
-    () => (router.canGoBack() ? router.back() : router.replace("/security")),
+    () => router.dismissTo("/security"),
     [router],
   );
 
@@ -93,7 +94,7 @@ export default function SetUpAuthenticator() {
       <Screen>
         <Stack.Screen options={{ title: "Set up an authenticator app" }} />
         <BackButton fallback="/security" />
-        <SignInAgain />
+        <SignInAgain returnTo="/security/authenticator" />
       </Screen>
     );
   }
@@ -134,6 +135,13 @@ export default function SetUpAuthenticator() {
       } catch (caught) {
         if (needsSignInAgain(caught)) {
           setStale(true);
+        } else if (caught instanceof AuthError && caught.code === "expired") {
+          // The old key can no longer be confirmed, so showing it again would
+          // be a dead end. Fetch a new one and go back to step 1.
+          setSetup(null);
+          setRenewed(true);
+          setStep("key");
+          setAttempt((value) => value + 1);
         } else {
           setError(describeAuthError(caught));
         }
@@ -212,6 +220,15 @@ export default function SetUpAuthenticator() {
           Authenticator both work.
         </Txt>
       </View>
+
+      {renewed ? (
+        <View style={{ marginTop: 16 }}>
+          <Notice tone="warning">
+            That took too long, so the first key no longer works. This is a new one. Remove the old
+            Finvest entry from your app, then scan or type this key.
+          </Notice>
+        </View>
+      ) : null}
 
       <View style={{ marginTop: 20 }}>
         <Card>

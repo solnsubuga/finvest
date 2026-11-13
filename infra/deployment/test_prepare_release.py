@@ -58,6 +58,13 @@ class PrepareRelease(unittest.TestCase):
         )
         self.assertNotIn("migrator", everything_but_migrate)
 
+    def test_every_process_is_told_its_environment(self):
+        for environment in pr.ENVIRONMENTS:
+            pr.prepare(self.out, settings(DEPLOY_ENVIRONMENT=environment))
+            for service in pr.ROLES:
+                env = read_env(self.out / "runtime" / f"{service}.env")
+                self.assertEqual(env["FINVEST_ENVIRONMENT"], environment)
+
     def test_password_is_percent_encoded(self):
         pr.prepare(self.out, settings())
         env = read_env(self.out / "runtime" / "migrate.env")
@@ -130,6 +137,13 @@ class PrepareRelease(unittest.TestCase):
         self.assertIn("FINVEST_AUTHENTICATOR_KEY", read_env(self.out / "runtime" / "api.env"))
         for service in ("worker", "scheduler", "migrate"):
             self.assertNotIn("FINVEST_AUTHENTICATOR_KEY", read_env(self.out / "runtime" / f"{service}.env"))
+
+    def test_identity_data_key_reaches_the_api_and_worker_only(self):
+        pr.prepare(self.out, settings(FINVEST_IDENTITY_DATA_KEY="d" * 43))
+        for service in ("api", "worker"):
+            self.assertIn("FINVEST_IDENTITY_DATA_KEY", read_env(self.out / "runtime" / f"{service}.env"))
+        for service in ("scheduler", "migrate"):
+            self.assertNotIn("FINVEST_IDENTITY_DATA_KEY", read_env(self.out / "runtime" / f"{service}.env"))
 
     def test_www_redirects_to_the_apex(self):
         pr.prepare(self.out, settings())

@@ -1,6 +1,6 @@
 # Investing
 
-Products, rates, interest and tax, and the rules in [rules.md](rules.md) that govern them. The pure rules are in `backend/app/modules/investments/domain`. Tables, commands, the daily interest run, maturity and the screens arrive in later pull requests, and this document grows with them.
+Products, rates, interest and tax, and the rules in [rules.md](rules.md) that govern them. The pure rules are in `backend/app/modules/investments/domain`, the catalogue and rate commands in `backend/app/modules/investments/service.py`, and the database side is migration 0060. Investments, the daily interest run, maturity and the screens arrive in later pull requests, and this document grows with them.
 
 ## Products
 
@@ -37,6 +37,22 @@ Rates are stored as whole basis points (12.5% is 1250), never as decimals or flo
 
 A change affects only investments that start on or after its effective date. A running investment keeps the rate and tax it started with.
 
+One change waits for approval per product at a time. Proposing, approving, sending back and withdrawing are each recorded in the audit trail with the reason.
+
+### What the database enforces
+
+| Rule | How |
+| --- | --- |
+| A rate is never changed or removed | A trigger refuses UPDATE, DELETE and TRUNCATE on `investment_rates` for every role, the table owner included. |
+| A rate exists only for an approved proposal | The application can insert a rate only with the ID of a proposal whose status is approved and whose product, date, rate and tax are the same. The seeded rates have no proposal, and only a migration can add such a row. |
+| A second person decides | A check constraint refuses an approval or a send back by the proposer, and a withdrawal by anyone else. |
+| Nobody acts in another's name | A trigger requires the proposer, and later the decider, to be the member of staff the transaction acts for. |
+| A decision is final | A decided proposal never changes, and a proposal's product, rate, date and reason never change at all. |
+| Products are read-only | The application roles hold only SELECT on `investment_products`. Editing a product arrives with its own approval flow. |
+| Proposals are staff business | A row policy shows proposals to staff transactions only. |
+
+Products and rates are readable by any API transaction, including one with nobody signed in, because the public website shows rates. The rows hold the tax rate, so the fence for clients is in the service: see below.
+
 ## Interest
 
 The formula is the one Finvest has always used:
@@ -59,7 +75,7 @@ Worked example: UGX 1,000,000 in the 91 day bill earns 31,164 before tax over th
 
 ## What clients see
 
-Clients see the yearly rate after tax and the interest they earn after tax. They never see the tax rate, the tax amount or the rate before tax. In the code, `ClientReturns` and `RateVersion.client_rate_percent` are the only figures a client-facing response is built from. The rate shown is a label, rounded to two decimal places. No amount is ever worked out from it.
+Clients see the yearly rate after tax and the interest they earn after tax. They never see the tax rate, the tax amount or the rate before tax. In the code, `ClientReturns` and `RateVersion.client_rate_percent` are the only figures a client-facing response is built from, and the service functions `client_products` and `client_quote` are the only ones a client-facing route may call. `client_quote` is the returns calculator and the review screen: what an amount earns after tax if it starts today, and when it matures. The rate shown is a label, rounded to two decimal places. No amount is ever worked out from it.
 
 ## Ledger accounts
 
@@ -82,4 +98,4 @@ Agreed with the payments and payouts threads on 13 November 2026. None of it is 
 
 ## Not built yet
 
-Tables and the seeded catalogue, the rate approval commands, investments and their life cycle, the daily interest run, maturity and rollover, early withdrawal, the monthly coupon for open terms, statements, and every screen. The dealing desk is its own module: see [dealing-desk.md](dealing-desk.md).
+HTTP routes for the catalogue and rates (they need sign-in sessions and permissions), editing a product, investments and their life cycle, the daily interest run, maturity and rollover, early withdrawal, the monthly coupon for open terms, statements, and every screen. The dealing desk is its own module: see [dealing-desk.md](dealing-desk.md).

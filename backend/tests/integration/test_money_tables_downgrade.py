@@ -38,6 +38,15 @@ ROWS = {
         "'-Nabc0000000000000A1', 'test.run', 'key-0001', repeat('0', 64), 200, '{}', now())",
         "refusing to drop operation receipts",
     ),
+    "0060_investment_products": (
+        "BEGIN; SELECT set_config('finvest.actor_kind', 'staff', true); "
+        "SELECT set_config('finvest.actor_id', '-Nabc0000000000000B1', true); "
+        "INSERT INTO investment_rate_proposals (id, product_id, effective_from, annual_rate_bps, "
+        "tax_bps, reason, proposed_by, proposed_at) VALUES ('-Nabc0000000000000A1', "
+        "'FvProduct1TREA91_001', DATE '2030-01-01', 1300, 1500, 'Auction', "
+        "'-Nabc0000000000000B1', now()); COMMIT",
+        "refusing to drop rates",
+    ),
     "0050_kyc": (
         "INSERT INTO kyc_checks (id, client_id, document_type, document_country, created_at, "
         "updated_at) VALUES ('-Nabc0000000000000A1', '-Nabc0000000000000B1', 'passport', 'UG', "
@@ -66,6 +75,11 @@ ROWS = {
         "INSERT INTO identity_staff (id, email, name, role, created_at) "
         "VALUES ('-Nabc0000000000000A1', 'ada@example.com', 'Ada Nakato', 'admin', now())",
         "refusing to drop sign-in tables",
+    ),
+    "0020_payment_deposits": (
+        "INSERT INTO payment_provider_notices (id, provider, notice_key, received_at) "
+        "VALUES ('-Nabc0000000000000A1', 'sandbox', 'notice-1', now())",
+        "refusing to drop payments",
     ),
 }
 

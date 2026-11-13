@@ -161,7 +161,7 @@ On the host, `deploy.sh`:
 4. Switches Caddy to the new colour with a reload, which drops no connections.
 5. Checks the API and the console through the public address. If that fails, it switches back and removes the new colour. If it passes, it records the colour and stops the old one.
 
-Migrations must be able to run beside the previous release: add first, remove in a later release. For one that cannot, set the environment variable `STOP_BEFORE_MIGRATE=true` for that deploy; the old release stops first and visitors see "being updated" until the new one is up.
+Migrations must be able to run beside the previous release: add first, remove in a later release. Nothing checks this yet (Fidiba's release preflight is not ported), so it is the author's and the reviewer's job. For one that cannot, set the environment variable `STOP_BEFORE_MIGRATE=true` for that deploy; the old release stops first and visitors see "being updated" until the new one is up.
 
 To go back to an earlier version, revert the commit on the source branch and let it deploy. Rerunning an old run is refused, because a deploy only accepts the branch head.
 
@@ -173,10 +173,13 @@ In each of the `staging` and `production` GitHub environments, beside what Terra
 | --- | --- | --- |
 | `DEPLOY_FIREWALL_TOKEN` | Secret | A DigitalOcean token with only the `firewall` read and update scopes. The deploy uses it to open and close SSH for itself. Do not reuse the write token here. |
 | `FINVEST_AUTHENTICATOR_KEY` | Secret | `python3 -c "import secrets; print(secrets.token_urlsafe(32))"`, one per environment. It protects staff authenticator secrets. Never change it once staff have enrolled, and keep an offline copy. |
+| `FINVEST_IDENTITY_DATA_KEY` | Secret | `python3 -c "import secrets; print(secrets.token_urlsafe(32))"`, one per environment. It encrypts clients' document numbers, dates of birth and TINs, and reaches the API and worker only. Never change it once clients have been checked: saved checks become unreadable. Keep an offline copy. |
 | `FINVEST_EMAIL_RESEND_API_KEY` | Secret | The Resend key, once email is set up |
 | `FINVEST_EMAIL_BACKEND`, `FINVEST_EMAIL_FROM` | Variables | `resend` and `Finvest <no-reply@finvestug.com>` |
 
-`DEPLOY_SSH_KEY` is already there from provisioning.
+`DEPLOY_SSH_KEY` is already there from provisioning, and Provision records `DEPLOY_HOST_KEY` itself.
+
+Every process also gets `FINVEST_ENVIRONMENT` (`staging` or `production`), taken from the environment being deployed, so code that must not run in production can refuse to start there.
 
 ### What is served today
 
@@ -195,7 +198,8 @@ In each of the `staging` and `production` GitHub environments, beside what Terra
 - The deploy user has passwordless sudo, which `prepare-host.sh` needs, and is in the `docker` group. Both are root equivalent. Treat `DEPLOY_SSH_KEY` like a root key.
 - SSH keys are written once at first boot. To change who can log in, edit `/home/deploy/.ssh/authorized_keys` on the host and update `DEPLOY_SSH_PUBLIC_KEY` so a rebuilt host matches.
 - The firewall reads Cloudflare's ranges at apply time. A range Cloudflare adds later stays blocked until the next apply, so run Provision apply now and then even with no changes.
-- The Provision run trusts the host key it sees on first contact with the reserved IP (`accept-new`). DigitalOcean does not publish droplet host keys through its API, so there is nothing to check it against before that. Each run starts with an empty known hosts file.
+- The host's SSH key is pinned. The first Provision run that reaches a new host trusts the key it sees at the reserved IP, because DigitalOcean publishes no host key to check it against, and records it as the `DEPLOY_HOST_KEY` variable of the environment. Every later Provision run and every deploy accepts only that key. If the server is rebuilt, delete `DEPLOY_HOST_KEY` from the environment and run Provision apply, which records the new one.
+- A run opens port 22 to its own runner and closes it when it ends. The runner's address comes from two public services (`infra/deployment/runner-address.sh`) that must agree. A deploy fails loudly if its rule is still there at the end. Provision apply resets the firewall to `SSH_SOURCE_ADDRESSES`, so run it to clear anything a broken run left behind.
 - There is no state lock yet. Runs for one environment queue behind each other, so do not apply from a laptop. Terraform's lock file (`use_lockfile = true`) has not been tested on Spaces.
 
 ## Open before production

@@ -38,6 +38,8 @@ No bill is bought or sold on one person's word.
 | Record the result from the custodian's note | Any member of staff | Result recorded, or unsuccessful if nothing was dealt |
 | Confirm the result against the note, or reject it with a note | Someone other than the person who recorded it | Settled, or back to approved |
 
+An order needs two people in all, not four. Each check needs a different person from the step it checks: the approver is not the preparer, and whoever confirms a result is not the one who recorded it. The same two people can do both pairs between them.
+
 The preparer can withdraw an order while it waits for approval. An order is for a whole number of lots, and a sale cannot exceed the face value held.
 
 A result carries the face value dealt, the cash paid or received, the settlement date, the maturity date and the custodian's reference. A bid can be filled in part and never above the order. A Treasury bill never costs or fetches more than its face value. A bond may. A result cannot be recorded before its settlement date.
