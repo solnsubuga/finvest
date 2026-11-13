@@ -2,7 +2,7 @@
 
 The Finvest backend: one FastAPI application, a modular monolith, on PostgreSQL.
 
-**Status:** scaffolded. The four entry points, the database roles, the first migration, the test harness and CI are in place. The job queue, idempotency keys, sign-in and the ledger arrive in their own pull requests.
+**Status:** scaffolded. The four entry points, the database roles, the test harness, CI, the ledger, the job queue and idempotency keys are in place. Sign-in arrives in its own pull request.
 
 ## Stack
 
@@ -39,7 +39,7 @@ One image, four processes. Each connects to PostgreSQL as its own role, given in
 
 TLS to the database is verified by default (`FINVEST_DATABASE_SSL_MODE=verify-full`). Set `FINVEST_DATABASE_SSL_ROOT_CERT` to the provider's CA file if it signs with its own CA. Only the local stack and the tests set the mode to `disable`.
 
-The worker and scheduler only check their role and keep a heartbeat for now. They get their real work with the job queue.
+The worker runs the handlers registered in `app/worker_main.py`. Register a handler that calls a provider with `external_effect(handler)`: an error it did not sort, or a worker that dies mid-attempt, then ends the job as `uncertain_outcome` for reconciliation, and the job is never run a second time on a guess.
 
 ## Layout
 

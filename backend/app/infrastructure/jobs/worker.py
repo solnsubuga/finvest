@@ -14,7 +14,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.infrastructure.database import Database
 from app.infrastructure.jobs import queue
-from app.infrastructure.jobs.errors import JobError, PermanentJobError, StaleLeaseError
+from app.infrastructure.jobs.errors import (
+    UNCERTAIN_OUTCOME,
+    JobError,
+    PermanentJobError,
+    StaleLeaseError,
+)
 from app.infrastructure.jobs.queue import ClaimedJob, JsonObject
 from app.infrastructure.jobs.retry import RetryPolicy
 from app.shared.actors import SYSTEM
@@ -26,6 +31,26 @@ logger = structlog.get_logger()
 
 class JobHandler(Protocol):
     async def __call__(self, job: ClaimedJob, context: "JobContext") -> None: ...
+
+
+@dataclass(frozen=True)
+class Handler:
+    """A handler and what the worker must know about it before running it.
+
+    Declare `external_effect=True` for any handler that calls a provider or otherwise changes
+    something outside the database that a second run would repeat. Such a job is never run
+    again on a guess. An exception the handler did not sort into deferred, rejected or
+    uncertain, and a lease that expired after an attempt started, both end the job as
+    `uncertain_outcome`, so reconciliation asks the provider what happened.
+    """
+
+    run: JobHandler
+    external_effect: bool = False
+
+
+def external_effect(handler: JobHandler) -> Handler:
+    """Register a handler whose work reaches outside the database."""
+    return Handler(handler, external_effect=True)
 
 
 def default_worker_id() -> str:
@@ -129,12 +154,18 @@ class Worker:
     def __init__(
         self,
         database: Database,
-        handlers: Mapping[str, JobHandler],
+        handlers: Mapping[str, JobHandler | Handler],
         config: WorkerConfig | None = None,
         clock: Clock | None = None,
     ) -> None:
         self.database = database
-        self.handlers = dict(handlers)
+        self.handlers = {
+            kind: handler if isinstance(handler, Handler) else Handler(handler)
+            for kind, handler in handlers.items()
+        }
+        self.external_kinds = sorted(
+            kind for kind, handler in self.handlers.items() if handler.external_effect
+        )
         self.config = config or WorkerConfig()
         self.clock = clock or SystemClock()
         self.log = logger.bind(worker=self.config.worker_id, queue=self.config.queue)
@@ -144,6 +175,7 @@ class Worker:
             self.database,
             queue=self.config.queue,
             kinds=sorted(self.handlers),
+            external_kinds=self.external_kinds,
             worker=self.config.worker_id,
             now=self.clock.now(),
             lease=self.config.lease,
@@ -210,7 +242,7 @@ class Worker:
         log = self.log
         context = JobContext(self.database, job, self.clock, self.config.lease)
         try:
-            await self.handlers[job.kind](job, context)
+            await self.handlers[job.kind].run(job, context)
             if not context.completed:
                 async with self.database.actor_transaction(SYSTEM) as session:
                     await queue.finish(session, job, now=self.clock.now(), outcome="succeeded")
@@ -237,16 +269,21 @@ class Worker:
         self, job: ClaimedJob, error: Exception, log: structlog.typing.FilteringBoundLogger
     ) -> None:
         now = self.clock.now()
+        # An exception the handler did not sort says nothing about how far the work got. With
+        # an external effect it may have happened, so the job stops for reconciliation.
+        uncertain = not isinstance(error, JobError) and self.handlers[job.kind].external_effect
         if isinstance(error, JobError):
             code, message = error.code, error.safe_message
         else:
             # Arbitrary exception text may contain personal data or secrets. Keep the type only.
-            code, message = "unhandled_error", type(error).__name__
+            code = UNCERTAIN_OUTCOME if uncertain else "unhandled_error"
+            message = type(error).__name__
         retry_at = now + self.config.retry.delay(job.attempt)
-        # An unrecognised exception is retried: handlers that call a provider must sort their
-        # own failures, and must raise UncertainOutcomeError when the effect may have happened.
+        # Without an external effect an unrecognised exception is retried: running the handler
+        # again repeats nothing outside the database.
         retryable = (
-            not isinstance(error, PermanentJobError)
+            not uncertain
+            and not isinstance(error, PermanentJobError)
             and job.attempt < job.max_attempts
             and retry_at < job.expires_at
         )

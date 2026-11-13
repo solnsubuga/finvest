@@ -1,4 +1,5 @@
-"""A downgrade must never delete the books, the issued numbers or the audit trail."""
+"""A downgrade must never delete the books, the issued numbers, the audit trail, the job
+history or the receipts that stop a command running twice."""
 
 import os
 from collections.abc import Iterator
@@ -25,6 +26,17 @@ ROWS = {
         "resource_type) VALUES ('-Nabc0000000000000A1', now(), 'change', 'test.changed', "
         "'succeeded', 'system', 'test')",
         "refusing to drop an audit trail",
+    ),
+    "0002_jobs": (
+        "INSERT INTO outbox_events (id, topic, idempotency_key, payload, created_at) "
+        "VALUES ('-Nabc0000000000000A1', 'test.sent', 'k', '{}', now())",
+        "refusing to drop job tables",
+    ),
+    "0003_idempotency": (
+        "INSERT INTO operation_receipts (actor_kind, actor_id, operation, idempotency_key, "
+        "request_digest, status_code, response, created_at) VALUES ('client', "
+        "'-Nabc0000000000000A1', 'test.run', 'key-0001', repeat('0', 64), 200, '{}', now())",
+        "refusing to drop operation receipts",
     ),
 }
 

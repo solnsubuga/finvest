@@ -9,7 +9,7 @@ from datetime import timedelta
 
 from app.infrastructure.database import Database
 from app.infrastructure.database.roles import WORKER, check_role
-from app.infrastructure.jobs import JobHandler, Worker, WorkerConfig
+from app.infrastructure.jobs import Handler, JobHandler, Worker, WorkerConfig
 from app.infrastructure.jobs.settings import JobProcessSettings
 from app.infrastructure.logging import configure_logging
 from app.infrastructure.process import keep_heartbeat, stop_on_signals
@@ -17,8 +17,12 @@ from app.infrastructure.settings import Settings
 from app.shared.clock import Clock, SystemClock
 
 
-def handlers(database: Database, clock: Clock) -> dict[str, JobHandler]:
-    """Every job kind this worker runs. A module adds its handlers here, keyed by kind."""
+def handlers(database: Database, clock: Clock) -> dict[str, JobHandler | Handler]:
+    """Every job kind this worker runs. A module adds its handlers here, keyed by kind.
+
+    A handler that calls a provider is registered with `external_effect(handler)`, so a crash
+    or an unsorted exception stops the job for reconciliation and it is never run twice.
+    """
     return {}
 
 

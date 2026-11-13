@@ -17,11 +17,19 @@ from app.infrastructure.jobs.scheduler import (
     ScheduleDispatcher,
     SchedulerService,
 )
-from app.infrastructure.jobs.worker import JobContext, JobHandler, Worker, WorkerConfig
+from app.infrastructure.jobs.worker import (
+    Handler,
+    JobContext,
+    JobHandler,
+    Worker,
+    WorkerConfig,
+    external_effect,
+)
 
 __all__ = [
     "ClaimedJob",
     "Consumer",
+    "Handler",
     "JobContext",
     "JobError",
     "JobHandler",
@@ -40,5 +48,6 @@ __all__ = [
     "Worker",
     "WorkerConfig",
     "enqueue",
+    "external_effect",
     "publish",
 ]

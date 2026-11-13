@@ -27,6 +27,7 @@ A running log. Add a row when a decision is made, and move an open question up w
 | 2026-11-13 | Infrastructure is Terraform on DigitalOcean and Cloudflare. |
 | 2026-11-13 | Provisioning and deployment follow Fidiba. Terraform creates every DigitalOcean resource inside one project named `finvest`, generates the database role passwords and bucket key, and writes the deployment settings into the GitHub environments. See [infra/README.md](../infra/README.md). |
 | 2026-11-13 | Terraform state may hold the credentials Terraform generates (database admin connection, role passwords, bucket key, origin certificate key). It is the one exception to keeping secrets out of Terraform state. The state bucket is private and only the Provision workflow on `main` can read it. |
+| 2026-11-13 | APScheduler keeps time for the scheduler process and nothing else. It only says when a schedule is due. PostgreSQL owns the leadership lease and each scheduled run, unique by name and fire time, and APScheduler's own job stores are not used. This adds no Celery or Redis. |
 | 2026-11-13 | Brand is black and lime with Plus Jakarta Sans. See [design.md](design.md). |
 | 2026-11-13 | All work reaches `main` through pull requests. UI work includes screenshots. Commits on `main` carry no AI attribution. |
 

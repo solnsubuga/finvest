@@ -47,5 +47,18 @@ def upgrade() -> None:
         op.execute(statement)
 
 
+# A receipt is the proof that a command already ran. Dropping one lets the command run again.
+EMPTY_GUARD = """
+DO $$
+BEGIN
+    IF EXISTS (SELECT FROM operation_receipts) THEN
+        RAISE EXCEPTION 'refusing to drop operation receipts that hold rows';
+    END IF;
+END
+$$
+"""
+
+
 def downgrade() -> None:
+    op.execute(EMPTY_GUARD)
     op.execute("DROP TABLE operation_receipts")
