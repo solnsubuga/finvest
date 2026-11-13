@@ -1,6 +1,6 @@
 import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { createStubDirectory } from "@/directory/stub.ts";
 import { ComplaintsError, notConnectedComplaintsApi, type ComplaintsApi } from "./api.ts";
 import { ComplaintsScreen } from "./index.tsx";
@@ -200,6 +200,24 @@ describe("complaints screen", () => {
     const waiting = within(await panel("C-2615, Sarah Achieng")).getByRole("group", { name: "Outcome waiting" });
     expect(waiting).toHaveTextContent("Someone who can close complaints confirms it.");
     expect(within(waiting).queryByRole("button")).not.toBeInTheDocument();
+  });
+
+  it("says a note was saved and loads the complaint again, rather than asking for it twice", async () => {
+    const stub = createStubComplaintsApi(ME, () => TODAY, () => NOW);
+    const addNote = vi.fn(async (id: string, note: string) => {
+      await stub.addNote(id, note);
+      throw new ComplaintsError("stale");
+    });
+    const { user } = renderComplaints({ api: { ...stub, addNote } });
+    const detail = await panel("C-2611, Joan Namutebi");
+    await user.click(within(detail).getByRole("button", { name: "Add a note" }));
+    await user.type(within(detail).getByRole("textbox"), "Called the client");
+    await user.click(within(detail).getByRole("button", { name: "Add note" }));
+    const reloaded = await panel("C-2611, Joan Namutebi");
+    expect(await within(reloaded).findByText(/Saved. Finvest could not show the result straight away/)).toBeInTheDocument();
+    expect(within(reloaded).queryByRole("form", { name: "Add a note" })).not.toBeInTheDocument();
+    expect(await within(reloaded).findByText("Called the client")).toBeInTheDocument();
+    expect(addNote).toHaveBeenCalledTimes(1);
   });
 
   it("only shows the register to a role that can look but not act", async () => {

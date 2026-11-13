@@ -2,7 +2,7 @@
  * The Directory over the real API.
  *
  * Staff names come from `GET /staff/people`, which every role may read. Clients come from
- * the Clients screen's routes, which need `clients.view`; every role holds it. A lookup that
+ * `GET /staff/clients/cards`, which needs `clients.view`; every role holds it. A lookup that
  * fails answers "unknown" rather than an error, as a name is never what a screen is for.
  */
 
@@ -15,13 +15,13 @@ interface PeopleJson {
 
 interface AccountJson {
   id: string;
-  created_at: string;
 }
 
-interface ClientPageJson {
-  account: AccountJson;
+interface CardJson {
+  id: string;
   verified_name: string | null;
-  identity_check: { status: string; account_number: string | null } | null;
+  account_number: string | null;
+  created_at: string;
 }
 
 /** A Kampala date, `YYYY-MM-DD`. */
@@ -29,27 +29,56 @@ function kampalaDay(iso: string): string {
   return new Intl.DateTimeFormat("en-CA", { timeZone: "Africa/Kampala" }).format(new Date(iso));
 }
 
-export function toClientCard(json: ClientPageJson): ClientCard {
-  const passed = json.identity_check?.status === "approved";
+export function toClientCard(json: CardJson): ClientCard {
   return {
-    clientId: json.account.id,
+    clientId: json.id,
     name: json.verified_name ?? "Name not yet verified",
-    accountNumber: json.identity_check?.account_number ?? null,
-    verified: passed,
-    clientSince: kampalaDay(json.account.created_at),
+    accountNumber: json.account_number,
+    // The name and the account number come only with an approved identity check.
+    verified: json.verified_name !== null,
+    clientSince: kampalaDay(json.created_at),
   };
 }
+
+/** The most IDs `GET /staff/clients/cards` takes at once. */
+const MAX_CARDS = 100;
 
 export function createHttpDirectory(http: Http): Directory {
   const names = new Map<string, Promise<string | null>>();
   const clients = new Map<string, Promise<ClientCard | null>>();
 
+  // IDs asked for in the same moment, such as every row of an inbox, go in one request.
+  let waiting = new Map<string, (card: ClientCard | null) => void>();
+
+  async function fetchCards(batch: Map<string, (card: ClientCard | null) => void>) {
+    const ids = [...batch.keys()];
+    for (let start = 0; start < ids.length; start += MAX_CARDS) {
+      const chunk = ids.slice(start, start + MAX_CARDS);
+      const query = new URLSearchParams(chunk.map((id) => ["ids", id])).toString();
+      const found = await http.request<{ cards: CardJson[] }>("GET", `/staff/clients/cards?${query}`).then(
+        (json) => new Map(json.cards.map((card) => [card.id, toClientCard(card)])),
+        () => null,
+      );
+      for (const id of chunk) {
+        // A failed read is asked again next time; a client who does not exist is remembered.
+        if (found === null) clients.delete(id);
+        batch.get(id)?.(found?.get(id) ?? null);
+      }
+    }
+  }
+
   const client = (clientId: string): Promise<ClientCard | null> => {
     let known = clients.get(clientId);
     if (!known) {
-      known = http.request<ClientPageJson>("GET", `/staff/clients/${encodeURIComponent(clientId)}`).then(toClientCard, () => {
-        clients.delete(clientId);
-        return null;
+      known = new Promise((resolve) => {
+        if (waiting.size === 0) {
+          queueMicrotask(() => {
+            const batch = waiting;
+            waiting = new Map();
+            void fetchCards(batch);
+          });
+        }
+        waiting.set(clientId, resolve);
       });
       clients.set(clientId, known);
     }

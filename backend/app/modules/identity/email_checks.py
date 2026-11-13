@@ -47,7 +47,8 @@ class EmailCheckService:
         now = self.clock.now()
         token = new_token()
         check_id = push_id(self.clock)
-        async with self.database.transaction() as session:
+        # Acting for the client, whose own links are the only ones its row policy shows.
+        async with self.database.actor_transaction(Actor("client", client_id)) as session:
             account = (
                 await session.execute(
                     text(

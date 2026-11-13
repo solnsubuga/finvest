@@ -1,9 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useAuth } from "@/auth/context.ts";
+import { apiBaseUrl, createHttp } from "@/api/http.ts";
 import { isStubAuth } from "@/auth/index.ts";
 import { can } from "@/auth/types.ts";
 import { Button } from "@/components/ui/button.tsx";
 import type { ClientCard, Directory } from "@/directory/api.ts";
+import { createHttpDirectory } from "@/directory/http.ts";
 import { createStubDirectory } from "@/directory/stub.ts";
 import { emptyDirectory } from "@/directory/api.ts";
 import { cn } from "@/lib.ts";
@@ -21,6 +23,7 @@ import {
 } from "./api.ts";
 import { AboutClient, ChatPanel, InboxItem, UNKNOWN_CLIENT } from "./Chat.tsx";
 import { SavedReplies } from "./SavedReplies.tsx";
+import { createHttpSupportApi } from "./http.ts";
 import { createStubSupportApi } from "./stub.ts";
 
 const SUMMARY = "Answer clients with their account beside you.";
@@ -398,7 +401,7 @@ function Failure({ title, message, onRetry }: { title: string; message: string; 
 
 export default function SupportPage() {
   const { session } = useAuth();
-  // Sample chats under `pnpm dev` or a preview build, like sign-in. Otherwise nothing until the API client exists.
+  // Sample chats under `pnpm dev` or a preview build, like sign-in. Otherwise the real API.
   const [{ api, directory }] = useState<{ api: SupportApi; directory: Directory }>(() => {
     if (isStubAuth() && session) {
       const me = { id: session.staffId, name: session.name };
@@ -407,7 +410,10 @@ export default function SupportPage() {
       if (sample === "offline") return { api: notConnectedSupportApi, directory: createStubDirectory(me) };
       return { api: createStubSupportApi(me, Date.now, sample === "empty" ? "empty" : "sample"), directory: createStubDirectory(me) };
     }
-    return { api: notConnectedSupportApi, directory: emptyDirectory };
+    const base = apiBaseUrl();
+    if (!base) return { api: notConnectedSupportApi, directory: emptyDirectory };
+    const http = createHttp(base);
+    return { api: createHttpSupportApi(http), directory: createHttpDirectory(http) };
   });
   return <SupportScreen api={api} directory={directory} canReply={session ? can(session, "support.reply") : false} />;
 }

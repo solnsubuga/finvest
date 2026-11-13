@@ -49,6 +49,8 @@ from app.infrastructure.push import (
 )
 from app.modules.notifications import service
 from app.modules.notifications.domain.events import Category, Channel
+from app.modules.notifications.domain.preferences import ALWAYS_ON
+from app.modules.notifications.email_delivery import is_suppressed
 from app.modules.notifications.preferences import channels_for_client
 from app.modules.notifications.service import queue_message
 from app.shared.clock import Clock
@@ -161,7 +163,19 @@ class DeliveryJobs:
                     queued.append("push")
             if channels & {Channel.SMS, Channel.EMAIL}:
                 contact = await self._contacts(session, row.client_id)
-                if Channel.SMS in channels and contact and contact.phone:
+                by_sms = Channel.SMS in channels
+                if (
+                    not by_sms
+                    and Category(row.category) in ALWAYS_ON
+                    and Channel.EMAIL in channels
+                    and contact
+                    and contact.phone
+                    and (not contact.email or await is_suppressed(session, contact.email))
+                ):
+                    # A security alert must reach the client outside the app. Their email
+                    # address bounced for good or reported us as spam, so text them instead.
+                    by_sms = True
+                if by_sms and contact and contact.phone:
                     await queue_message(
                         session,
                         channel="sms",

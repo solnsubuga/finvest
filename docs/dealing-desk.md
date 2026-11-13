@@ -164,7 +164,7 @@ When the buffer pays, the bills behind that investment stay with the desk as a s
 1. Investing hands the withdrawal over: the client's money is already in their payout pending account, and it publishes `investments.withdrawn_early` with `investment_id`, `currency` and `amount_minor`, naming the consumer `dealing.events.FUND_EARLY_WITHDRAWAL`.
 2. The worker reads the buffer and decides, one decision per currency at a time. The buffer it reads already counts this withdrawal as owed, so the buffer before it is that figure plus the withdrawal. Up to the buffer's limit with the buffer before it on or above the floor and nobody queued ahead, it is funded at once. Up to the limit otherwise, it queues. Above the limit, it waits for a sale.
 3. Every 15 minutes the worker funds the queue in the order asked, while the buffer allows, and stops at the first it cannot pay so nobody goes ahead of an earlier request.
-4. A member of staff funds the withdrawals waiting for a sale from a settled secondary sale, in the order asked, up to what the sale raised and no withdrawal has used yet.
+4. When a secondary sale settles, the same transaction queues `dealing.fund_from_sale` for it, and the worker funds the withdrawals waiting for a sale from what it raised, in the order asked, and stops at the first it cannot pay. No person releases the payouts: the sale was prepared, approved, recorded and confirmed by two people, and the queue's order and amounts are fixed (migration 0086). Only the sale just settled is used. What it raised beyond the withdrawals waiting is cash like any other and counts in the buffer, so a withdrawal asked later waits for the next sale rather than for proceeds that may already be spent.
 
 A funded withdrawal is announced as `dealing.withdrawal_funded` with `funding_id`, `investment_id`, `source` (`buffer` or `sale`), `amount_minor` and `currency`, and investing pays the client on it.
 
@@ -178,7 +178,7 @@ The buffer is read from the ledger with `ledger.statements.total_balance`:
 
 `dealing.withdrawals.buffer_now` gives these figures with the level, what waits for the buffer and for a sale, and what to raise by selling.
 
-The database holds these rules whatever the code does. Only the worker records a funding and funds one from the buffer. A withdrawal waiting for a sale is funded by the person signed in, from a settled sale in its currency, and the withdrawals funded from one sale never add up to more than it raised. A funding is never removed, and once funded never changes.
+The database holds these rules whatever the code does. Only the worker records a funding or funds one, from the buffer or from a sale, and staff can only read them. A withdrawal waiting for a sale is funded from a settled sale in its currency, and the withdrawals funded from one sale never add up to more than it raised. A funding is never removed, and once funded never changes.
 
 ### Finvest's own money in the buffer
 
@@ -244,4 +244,4 @@ The audit event for a recorded result carries its figures, so a result later rej
 
 ## Not built yet
 
-HTTP routes for allocations, the buffer rules changes, funding withdrawals from a sale, the custodian statement comparison and the allocation report. The console screen runs on sample data until the routes exist.
+HTTP routes for allocations, the buffer rules changes, the custodian statement comparison and the allocation report. The console screen runs on sample data until the routes exist.

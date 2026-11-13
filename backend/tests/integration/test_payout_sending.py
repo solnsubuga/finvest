@@ -7,6 +7,7 @@ from datetime import UTC, datetime, timedelta
 import pytest
 from sqlalchemy import text
 from sqlalchemy.exc import DBAPIError
+from structlog.testing import capture_logs
 
 from app.infrastructure.database import Database
 from app.infrastructure.jobs import JobRequest, Worker, enqueue
@@ -24,6 +25,7 @@ from app.modules.payments.domain.outcomes import (
 from app.modules.payouts import jobs, payouts
 from app.modules.payouts.domain.payouts import PayoutEvent, PayoutStatus
 from app.modules.payouts.domain.sending import (
+    HELD_UP_AFTER,
     READ_WINDOW,
     RESEND_AFTER,
     SEND_GRACE,
@@ -228,6 +230,51 @@ async def test_a_payout_deferred_every_time_stays_queued_and_the_sweep_tries_aga
     # Sweeping again sends nothing more.
     await sweep(worker, world.worker, world.clock)
     assert provider.sends_for(payout.id) == tries + 1
+
+
+async def test_a_payout_the_provider_takes_nothing_of_for_hours_is_shown_to_staff(
+    world: World, provider: FakeDisbursements, worker: Worker
+) -> None:
+    payout = await world.request(1_000_000)
+    provider.on_send(payout.id, Deferred())
+    await drain(worker)
+    for _ in range(6):
+        await later(world.clock, worker, RETRY)
+    reader = staff()
+
+    async def held_up() -> list[payouts.HeldUpPayout]:
+        async with world.app.actor_transaction(reader) as session:
+            found = await payouts.held_up(session, world.clock.now())
+        return [item for item in found if item.payout.id == payout.id]
+
+    # Not yet: deferred for a few seconds is ordinary.
+    assert await held_up() == []
+    with capture_logs() as quiet:
+        await sweep(worker, world.worker, world.clock)
+    assert not [log for log in quiet if log["event"] == "payout_held_up"]
+
+    world.clock.advance(seconds=HELD_UP_AFTER.total_seconds())
+    with capture_logs() as logs:
+        await sweep(worker, world.worker, world.clock)
+    [warning] = [log for log in logs if log["event"] == "payout_held_up"]
+    assert (warning["payout_id"], warning["error_code"]) == (payout.id, "provider_deferred")
+    # Logs carry the payout ID and a code, never an amount, a number or a name.
+    assert set(warning) <= {"event", "log_level", "payout_id", "attempts", "error_code"}
+    [item] = await held_up()
+    assert item.payout.status is S.QUEUED
+    assert item.tries == provider.sends_for(payout.id) > 5
+    assert item.first_tried_at <= world.clock.now() - HELD_UP_AFTER < item.last_tried_at
+    # Nobody outside a staff transaction sees it.
+    async with world.app.actor_transaction(world.client) as session:
+        assert payout.id not in [
+            i.payout.id for i in await payouts.held_up(session, world.clock.now())
+        ]
+
+    provider.on_send(payout.id, Accepted("IOT-9"))
+    world.clock.advance(seconds=RESEND_AFTER.total_seconds())
+    await sweep(worker, world.worker, world.clock)
+    assert (await reload(world, payout)).status is S.SENT
+    assert await held_up() == []
 
 
 # Uncertain: it may have gone, so it is only ever read

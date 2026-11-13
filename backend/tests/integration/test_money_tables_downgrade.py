@@ -212,6 +212,25 @@ ROWS = {
         "'proposed', '-Nabc0000000000000B1', now()); COMMIT",
         "refusing to drop buffer capital movements",
     ),
+    # The owner turns the guards off: a real funding from a sale needs a settled sale.
+    "0086_dealing_sale_funding": (
+        "BEGIN; "
+        "ALTER TABLE dealing_orders DISABLE TRIGGER dealing_orders_guard; "
+        "ALTER TABLE dealing_withdrawal_fundings "
+        "DISABLE TRIGGER dealing_withdrawal_fundings_guard; "
+        "INSERT INTO dealing_orders (id, kind, product_code, currency, face_minor, prepared_by, "
+        "prepared_at) VALUES ('-Nabc0000000000000A1', 'secondary_sale', 'TREA-91', 'UGX', "
+        "100000, '-Nabc0000000000000B1', now()); "
+        "INSERT INTO dealing_withdrawal_fundings (id, investment_id, currency, amount_minor, "
+        "source, status, asked_at, funded_at, sale_order_id) VALUES ('-Nabc0000000000000F1', "
+        "'-Nabc0000000000000I1', 'UGX', 100000, 'sale', 'funded', now(), now(), "
+        "'-Nabc0000000000000A1'); "
+        "ALTER TABLE dealing_orders ENABLE TRIGGER dealing_orders_guard; "
+        "ALTER TABLE dealing_withdrawal_fundings "
+        "ENABLE TRIGGER dealing_withdrawal_fundings_guard; "
+        "COMMIT",
+        "refusing to restore staff funding over withdrawals the worker funded",
+    ),
     "0050_kyc": (
         "INSERT INTO kyc_checks (id, client_id, document_type, document_country, created_at, "
         "updated_at) VALUES ('-Nabc0000000000000A1', '-Nabc0000000000000B1', 'passport', 'UG', "
@@ -515,6 +534,24 @@ ROWS = {
         "expires_at) VALUES ('-Nabc0000000000000A1', '-Nabc0000000000000B1', 'a@example.com', "
         "decode(repeat('00', 32), 'hex'), now(), now() + interval '1 day')",
         "refusing to drop proved email addresses",
+    ),
+    "0163_identity_email_fence": (
+        "INSERT INTO identity_clients (id, phone, status, created_at) VALUES "
+        "('-Nabc0000000000000B1', '+256772123456', 'unclaimed', now()); "
+        "INSERT INTO identity_email_checks (id, client_id, email, token_hash, created_at, "
+        "expires_at) VALUES ('-Nabc0000000000000A1', '-Nabc0000000000000B1', 'a@example.com', "
+        "decode(repeat('00', 32), 'hex'), now(), now() + interval '1 day')",
+        "refusing to unfence email links that exist",
+    ),
+    "0164_identity_session_devices": (
+        "INSERT INTO identity_clients (id, phone, status, created_at) VALUES "
+        "('-Nabc0000000000000B1', '+256772123456', 'unclaimed', now()); "
+        "INSERT INTO identity_sessions (id, actor_kind, actor_id, token_hash, second_step, "
+        "transport, created_at, last_seen_at, idle_expires_at, absolute_expires_at, device) "
+        "VALUES ('-Nabc0000000000000A1', 'client', '-Nabc0000000000000B1', "
+        "decode(repeat('00', 32), 'hex'), 'passkey', 'token', now(), now(), now(), now(), "
+        "'Chrome on Android')",
+        "refusing to drop the devices sessions were opened on",
     ),
 }
 

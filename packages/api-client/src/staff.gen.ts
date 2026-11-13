@@ -527,6 +527,22 @@ export const DeskOut = z.object({
 });
 export type DeskOut = z.infer<typeof DeskOut>;
 
+export const DeviceSessionView = z.object({
+  current: z.boolean(),
+  device: z.string(),
+  id: z.string(),
+  last_seen_at: z.string(),
+  second_step: z.enum(["passkey", "authenticator", "code", "signup"]),
+  signed_in_at: z.string(),
+  transport: z.enum(["cookie", "token"]),
+});
+export type DeviceSessionView = z.infer<typeof DeviceSessionView>;
+
+export const DeviceSessionList = z.object({
+  items: z.array(DeviceSessionView),
+});
+export type DeviceSessionList = z.infer<typeof DeviceSessionList>;
+
 export const SignOffView = z.object({
   decided_by: z.string().nullable(),
   decision_reason: z.string().nullable(),
@@ -645,6 +661,18 @@ export type GroupProgressView = z.infer<typeof GroupProgressView>;
 
 export const GroupStatus = z.enum(["active", "closed"]);
 export type GroupStatus = z.infer<typeof GroupStatus>;
+
+export const HeldUpPayoutOut = z.object({
+  amount: MoneyView,
+  client_id: z.string(),
+  created_at: z.string(),
+  first_tried_at: z.string(),
+  id: z.string(),
+  kind: z.literal("mobile_money"),
+  last_tried_at: z.string(),
+  tries: z.number().int(),
+});
+export type HeldUpPayoutOut = z.infer<typeof HeldUpPayoutOut>;
 
 export const InboxRow = z.object({
   client_id: z.string(),
@@ -1146,6 +1174,11 @@ export const SignOffRequest = z.object({
   reason: z.string(),
 });
 export type SignOffRequest = z.infer<typeof SignOffRequest>;
+
+export const SignedOut = z.object({
+  ended: z.number().int(),
+});
+export type SignedOut = z.infer<typeof SignedOut>;
 
 export const StaffChat = z.object({
   client_id: z.string(),
@@ -2412,6 +2445,17 @@ export const operations = {
     status: 200,
     response: StaffDestinationOut,
   },
+  "GET /staff/payouts/held-up": {
+    method: "GET",
+    path: "/staff/payouts/held-up",
+    params: z.object({}),
+    query: z.object({}),
+    body: null,
+    bodyKind: null,
+    idempotent: false,
+    status: 200,
+    response: z.array(HeldUpPayoutOut),
+  },
   "GET /staff/people": {
     method: "GET",
     path: "/staff/people",
@@ -2559,6 +2603,41 @@ export const operations = {
     idempotent: false,
     status: 200,
     response: StaffSessionView,
+  },
+  "GET /staff/sessions": {
+    method: "GET",
+    path: "/staff/sessions",
+    params: z.object({}),
+    query: z.object({}),
+    body: null,
+    bodyKind: null,
+    idempotent: false,
+    status: 200,
+    response: DeviceSessionList,
+  },
+  "POST /staff/sessions/sign-out-others": {
+    method: "POST",
+    path: "/staff/sessions/sign-out-others",
+    params: z.object({}),
+    query: z.object({}),
+    body: null,
+    bodyKind: null,
+    idempotent: false,
+    status: 200,
+    response: SignedOut,
+  },
+  "DELETE /staff/sessions/{session_id}": {
+    method: "DELETE",
+    path: "/staff/sessions/{session_id}",
+    params: z.object({
+    session_id: z.string(),
+  }),
+    query: z.object({}),
+    body: null,
+    bodyKind: null,
+    idempotent: false,
+    status: 204,
+    response: null,
   },
   "POST /staff/sign-out": {
     method: "POST",

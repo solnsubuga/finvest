@@ -53,7 +53,6 @@ from app.modules.identity import service as identity
 from app.modules.ledger import closing
 from app.modules.ledger import statements as ledger
 from app.modules.notifications import contract as notifications
-from app.modules.notifications.email_delivery import is_suppressed
 from app.modules.payments import service as payments
 from app.shared.actors import SYSTEM
 from app.shared.business_day import business_date
@@ -350,8 +349,9 @@ class DocumentJobs:
 
         The address is looked up now, from identity. A client with none, or who has closed
         their account, or has not claimed an account carried over from Finvest 1.0, is recorded
-        as `skipped` with `no_email`, and an address on the
-        notifications suppression list as `skipped` with `suppressed`.
+        as `skipped` with `no_email`, an address the client has not proved with a link as
+        `skipped` with `email_not_verified`, and an address on the notifications suppression
+        list as `skipped` with `suppressed`.
         Nothing is sent while a transaction is open.
         """
         document_id = job.payload.get("document_id")
@@ -366,10 +366,13 @@ class DocumentJobs:
             rendered, address, skip = None, None, "no_email"
             if status == "queued":
                 contact = await identity.client_contact(session, view.client_id)
-                # Nothing verifies an address yet and the PDF has no password, so an account
-                # carried over from Finvest 1.0 gets no statement until its owner claims it.
+                # The PDF has no password, so it goes only to an address the client proved
+                # with a link, and an account carried over from Finvest 1.0 gets none until
+                # its owner claims it.
                 address = contact.email if contact is not None and contact.claimed else None
-                if address is not None and await is_suppressed(session, address):
+                if address is not None and contact is not None and not contact.email_verified:
+                    address, skip = None, "email_not_verified"
+                if address is not None and await notifications.is_suppressed(session, address):
                     # The address bounced for good or reported our mail as spam. Sending a
                     # PDF every month would harm the sending domain, and a complaint means
                     # the person asked us to stop.

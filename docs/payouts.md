@@ -212,9 +212,11 @@ A payout is sent at most once:
 | --- | --- | --- | --- |
 | Accepted | `accepted` | Sent | Status reads |
 | Refused | `rejected` | Failed, money parked | The client is told |
-| Took nothing | `deferred` | Still queued | The job tries again, up to 5 times; after that the sweep queues a fresh send |
+| Took nothing | `deferred` | Still queued | The job tries again, up to 5 times; after that the sweep queues a fresh send 10 minutes after the last try. Two hours after the first try it is held up (below) |
 | No clear answer, or the adapter raised | `uncertain` | Uncertain | Status reads, never a second send |
 | Nothing saved (the worker stopped) | `interrupted`, set by the sweep after 2 minutes | Uncertain | Status reads, never a second send |
+
+A payout the provider keeps taking nothing of is never given up on, because the client's money is in flight. Two hours after its first try it is **held up**: each time the sweep sends it again it logs `payout_held_up` with the payout ID and `error_code=provider_deferred` (never an amount, number or name), and staff with `money_movement.view` (admin, operations and finance) see it on `GET /staff/payouts/held-up`, longest first, with its first and last try and how many sends were tried. It leaves the list as soon as a send is taken. Finding out why is a person's job, with the provider; nothing is cancelled or refunded automatically.
 
 Status reads come 10 seconds after the send, then further apart, then hourly, for 3 days. Pending, no record or a failed read keeps reading. Confirmed for the payout's amount pays it and settles the money from the pot. Refused fails it and parks the money. Confirmed for another amount moves nothing, stops the reads and is logged for staff. After 3 days with no answer, two staff members settle it from the statement, which is not built yet.
 

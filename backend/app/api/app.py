@@ -31,10 +31,12 @@ from app.modules.identity import (
     passkeys_api,
     people_api,
     phone_changes_api,
+    sessions_api,
     team_api,
 )
 from app.modules.identity.authenticators import AuthenticatorService
 from app.modules.identity.codes import CodeService
+from app.modules.identity.devices import DeviceMiddleware
 from app.modules.identity.email_checks import EmailCheckService
 from app.modules.identity.hashing import PasswordHasher
 from app.modules.identity.passkeys import PasskeyService
@@ -60,6 +62,7 @@ from app.modules.payments.settings import (
 from app.modules.payments.wiring import collections_provider
 from app.modules.payouts import api as payouts_api
 from app.modules.payouts import staff_api as payouts_staff_api
+from app.modules.payouts import staff_payouts_api
 from app.modules.support import api as support_api
 from app.shared.clock import Clock, SystemClock
 from app.shared.errors import ErrorEnvelope
@@ -140,6 +143,7 @@ def create_app(
             expose_headers=["X-Request-ID", "Retry-After"],
             max_age=600,
         )
+    app.add_middleware(DeviceMiddleware)
     app.add_middleware(BodyLimitMiddleware)
     app.add_middleware(UnexpectedErrorMiddleware)
     app.add_middleware(RequestLogMiddleware)
@@ -157,6 +161,7 @@ def create_app(
         *codes_api.routers,
         *phone_changes_api.routers,
         *email_checks_api.routers,
+        *sessions_api.routers,
         *team_api.routers,
         *people_api.routers,
         *notifications_api.routers,
@@ -168,6 +173,7 @@ def create_app(
         *payouts_api.routers,
         *approvals_api.routers,
         *payouts_staff_api.routers,
+        *staff_payouts_api.routers,
     ):
         app.include_router(router)
     app.include_router(payments_api.create_router(collections))

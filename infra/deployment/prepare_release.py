@@ -232,6 +232,11 @@ def prepare(output: Path, env: Mapping[str, str]) -> None:
         api["FINVEST_AUTHENTICATOR_KEY"] = optional(env, "FINVEST_AUTHENTICATOR_KEY")
 
     worker = {**database, "FINVEST_DATABASE_URL": urls["worker"], **storage}
+    # Keys the hash under which email addresses are kept on the suppression list and in delivery
+    # events. The API records events and lift proposals, the worker applies them.
+    if optional(env, "FINVEST_EMAIL_HASH_KEY"):
+        api["FINVEST_EMAIL_HASH_KEY"] = optional(env, "FINVEST_EMAIL_HASH_KEY")
+        worker["FINVEST_EMAIL_HASH_KEY"] = optional(env, "FINVEST_EMAIL_HASH_KEY")
     # Encrypts clients' identity details. The API and the worker read it; nothing else gets it.
     if optional(env, "FINVEST_IDENTITY_DATA_KEY"):
         api["FINVEST_IDENTITY_DATA_KEY"] = optional(env, "FINVEST_IDENTITY_DATA_KEY")

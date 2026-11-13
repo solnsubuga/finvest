@@ -19,6 +19,7 @@ from app.infrastructure.database import Database
 from app.modules.dealing import buffer, withdrawals
 from app.modules.dealing.domain.orders import OrderKind
 from app.modules.dealing.domain.withdrawals import FundingStatus, Source
+from app.modules.dealing.events import FUND_FROM_SALE_KIND
 from app.modules.ledger import service as ledger
 from app.modules.ledger.domain.entries import AccountKind, AccountSpec, EntryDraft, credit, debit
 from app.shared.actors import SYSTEM, Actor
@@ -137,6 +138,33 @@ async def release(worker: Database) -> int:
         return await withdrawals.release_queue(session, NOW)
 
 
+async def from_sale(worker: Database, sale_id: str) -> list[withdrawals.FundingView]:
+    async with worker.actor_transaction(SYSTEM) as session:
+        return await withdrawals.fund_from_sale(session, sale_id, NOW)
+
+
+async def sale_jobs(worker: Database, sale_id: str) -> list[str]:
+    """The status of each job the desk queued to pay withdrawals from a settled sale."""
+    async with worker.actor_transaction(SYSTEM) as session:
+        rows = await session.execute(
+            text("SELECT status FROM jobs WHERE kind = :kind AND idempotency_key = :key"),
+            {"kind": FUND_FROM_SALE_KIND, "key": f"sale:{sale_id}"},
+        )
+        return [row.status for row in rows]
+
+
+async def audited(database: Database, funding_id: str) -> list[tuple[str, str | None]]:
+    async with database.actor_transaction(new_staff()) as session:
+        rows = await session.execute(
+            text(
+                "SELECT actor_kind, reason FROM audit_events "
+                "WHERE action = 'dealing.withdrawal.funded_from_sale' AND resource_id = :id"
+            ),
+            {"id": funding_id},
+        )
+        return [(row.actor_kind, row.reason) for row in rows]
+
+
 async def announced(worker: Database, funding_id: str) -> list[dict[str, object]]:
     async with worker.actor_transaction(SYSTEM) as session:
         rows = await session.execute(
@@ -240,34 +268,33 @@ async def test_a_large_withdrawal_waits_for_a_sale_and_sales_fund_in_order(
     sale = await recorded(
         app_database, fill(40 * M, 39 * M, matures_on), kind=OrderKind.SECONDARY_SALE
     )
-    unsettled = new_staff()
     with pytest.raises(ApplicationError) as too_soon:
-        async with app_database.actor_transaction(unsettled) as session:
-            await withdrawals.fund_from_sale(session, unsettled, sale.id, NOW)
+        await from_sale(worker_database, sale.id)
     assert too_soon.value.code == "conflict"
     await confirm(app_database, sale.id)
+    # Settling the sale queues the worker to pay from it, in the same transaction.
+    assert await sale_jobs(worker_database, sale.id) == ["pending"]
 
-    grace = new_staff()
-    async with app_database.actor_transaction(grace) as session:
-        funded = await withdrawals.fund_from_sale(session, grace, sale.id, NOW)
-        again = await withdrawals.fund_from_sale(session, grace, sale.id, NOW)
+    funded = await from_sale(worker_database, sale.id)
+    again = await from_sale(worker_database, sale.id)
     # 39m pays the 20m and the 15m. The 10m does not fit in the 4m left, so it waits.
     assert [f.investment_id for f in funded] == [f.investment_id for f in waiting[:2]]
-    assert {(f.sale_order_id, f.funded_by) for f in funded} == {(sale.id, grace.id)}
+    assert {(f.sale_order_id, f.funded_by) for f in funded} == {(sale.id, None)}
     assert again == []
+    assert await audited(app_database, funded[0].id) == [("system", f"Sale {sale.id}")]
 
     second_sale = await recorded(
         app_database, fill(11 * M, 10 * M, matures_on), kind=OrderKind.SECONDARY_SALE
     )
     await confirm(app_database, second_sale.id)
-    async with app_database.actor_transaction(grace) as session:
-        last = await withdrawals.fund_from_sale(session, grace, second_sale.id, NOW)
+    last = await from_sale(worker_database, second_sale.id)
+    async with worker_database.actor_transaction(SYSTEM) as session:
         left = await withdrawals.waiting(session, Currency.UGX, Source.SALE)
     assert [f.investment_id for f in last] == [waiting[2].investment_id]
     assert left == []
 
 
-async def test_only_the_worker_records_a_funding_and_funds_from_the_buffer(
+async def test_only_the_worker_records_or_funds_a_withdrawal(
     app_database: Database, worker_database: Database
 ) -> None:
     await set_buffer(app_database, 0)
@@ -276,15 +303,16 @@ async def test_only_the_worker_records_a_funding_and_funds_from_the_buffer(
     with pytest.raises(DBAPIError):
         async with app_database.actor_transaction(staff) as session:
             await withdrawals.fund_early_withdrawal(session, push_id(), usd(UP_TO), NOW)
-    with pytest.raises(DBAPIError, match="only the worker funds"):
-        async with app_database.actor_transaction(staff) as session:
-            await session.execute(
-                text(
-                    "UPDATE dealing_withdrawal_fundings SET status = 'funded', funded_at = now() "
-                    "WHERE id = :id"
-                ),
-                {"id": queued.id},
-            )
+    # Staff can read fundings but change none, from the buffer or from a sale.
+    for change in (
+        "UPDATE dealing_withdrawal_fundings SET status = 'funded', funded_at = now() "
+        "WHERE id = :id",
+        "UPDATE dealing_withdrawal_fundings SET status = 'funded', funded_at = now(), "
+        "sale_order_id = :id, funded_by = :id WHERE id = :id",
+    ):
+        with pytest.raises(DBAPIError, match="permission denied"):
+            async with app_database.actor_transaction(staff) as session:
+                await session.execute(text(change), {"id": queued.id})
     with pytest.raises(DBAPIError, match="starts as waiting"):
         async with worker_database.actor_transaction(SYSTEM) as session:
             await session.execute(
@@ -312,29 +340,34 @@ async def test_the_database_refuses_more_than_a_sale_raised_and_any_later_change
     )
     await confirm(app_database, sale.id)
     large = await fund(worker_database, Money(10 * M, Currency.UGX))
-    staff = new_staff()
-
-    def funding_from(order_id: str) -> tuple[str, dict[str, str | None]]:
-        return (
-            "UPDATE dealing_withdrawal_fundings SET status = 'funded', funded_at = now(), "
-            "sale_order_id = :order, funded_by = :by WHERE id = :id",
-            {"order": order_id, "by": staff.id, "id": large.id},
-        )
+    funding_from = (
+        "UPDATE dealing_withdrawal_fundings SET status = 'funded', funded_at = now(), "
+        "sale_order_id = :order WHERE id = :id"
+    )
 
     with pytest.raises(DBAPIError, match="cannot exceed what it raised"):
-        async with app_database.actor_transaction(staff) as session:
-            await session.execute(text(funding_from(sale.id)[0]), funding_from(sale.id)[1])
+        async with worker_database.actor_transaction(SYSTEM) as session:
+            await session.execute(text(funding_from), {"order": sale.id, "id": large.id})
     purchase = await bought(app_database, 1 * M, 1 * M, matures_on)
     with pytest.raises(DBAPIError, match="settled sale in its currency"):
-        async with app_database.actor_transaction(staff) as session:
-            await session.execute(text(funding_from(purchase.id)[0]), funding_from(purchase.id)[1])
+        async with worker_database.actor_transaction(SYSTEM) as session:
+            await session.execute(text(funding_from), {"order": purchase.id, "id": large.id})
+    # Not even the worker names a person as funding it.
+    with pytest.raises(DBAPIError, match="permission denied"):
+        async with worker_database.actor_transaction(SYSTEM) as session:
+            await session.execute(
+                text(
+                    "UPDATE dealing_withdrawal_fundings SET status = 'funded', funded_at = now(), "
+                    "sale_order_id = :order, funded_by = :order WHERE id = :id"
+                ),
+                {"order": sale.id, "id": large.id},
+            )
 
     bigger = await recorded(
         app_database, fill(11 * M, 10 * M, matures_on), kind=OrderKind.SECONDARY_SALE
     )
     await confirm(app_database, bigger.id)
-    async with app_database.actor_transaction(staff) as session:
-        funded = await withdrawals.fund_from_sale(session, staff, bigger.id, NOW)
+    funded = await from_sale(worker_database, bigger.id)
     assert [f.id for f in funded] == [large.id]
     for statement in (
         "UPDATE dealing_withdrawal_fundings SET funded_at = now() WHERE id = :id",

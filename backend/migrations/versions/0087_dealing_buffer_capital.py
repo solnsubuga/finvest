@@ -1,7 +1,7 @@
 """Add Finvest's own money in the liquidity buffer, paid in or taken out by two people.
 
 Revision ID: 0087_dealing_buffer_capital
-Revises: 0036_payout_guard_search_path
+Revises: 0086_dealing_sale_funding
 
 The owner decided on 2026-11-13 that the buffer's cash is Finvest's own money. It sits in the
 trust account and is booked to the equity account `dealing.buffer_capital`.
@@ -25,7 +25,7 @@ from collections.abc import Sequence
 from alembic import op
 
 revision: str = "0087_dealing_buffer_capital"
-down_revision: str | None = "0036_payout_guard_search_path"
+down_revision: str | None = "0086_dealing_sale_funding"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 
@@ -50,8 +50,6 @@ CREATE TABLE dealing_buffer_capital (
     decision_reason varchar(500),
     ledger_entry_id push_id,
     CONSTRAINT pk_dealing_buffer_capital PRIMARY KEY (id),
-    CONSTRAINT fk_dealing_buffer_capital_entry
-        FOREIGN KEY (ledger_entry_id) REFERENCES ledger_journal_entries (id),
     CONSTRAINT ck_dealing_buffer_capital_direction CHECK (direction IN ('in', 'out')),
     CONSTRAINT ck_dealing_buffer_capital_currency CHECK (currency IN ('UGX', 'USD')),
     CONSTRAINT ck_dealing_buffer_capital_amount CHECK (amount_minor > 0),
