@@ -1,7 +1,7 @@
 """Add the liquidity buffer rules and their two-person changes.
 
 Revision ID: 0083_dealing_buffer_rules
-Revises: 0082_dealing_maturities
+Revises: 0072_migration_claims
 
 A version of the rules is proposed by one member of staff and approved by another, and takes
 effect on a later day. A version is added only for an approved proposal, with exactly its
@@ -14,7 +14,7 @@ from collections.abc import Sequence
 from alembic import op
 
 revision: str = "0083_dealing_buffer_rules"
-down_revision: str | None = "0082_dealing_maturities"
+down_revision: str | None = "0072_migration_claims"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 
