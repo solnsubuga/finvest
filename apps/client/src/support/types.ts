@@ -120,7 +120,13 @@ export type Complaint = {
   resolution: string | null;
 };
 
-export type NewComplaint = { category: ComplaintCategory; summary: string; details: string };
+export type NewComplaint = {
+  category: ComplaintCategory;
+  summary: string;
+  details: string;
+  /** Made once per complaint form and sent again on every try, so a lost answer never logs it twice. */
+  key: string;
+};
 
 export const MAX_MESSAGE = 2000;
 export const MAX_SUMMARY = 120;

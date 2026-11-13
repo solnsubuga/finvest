@@ -118,6 +118,7 @@ describe("complaints in the demo", () => {
       category: "withdrawals",
       summary: " My withdrawal is late ",
       details: "Asked on Tuesday.",
+      key: "complaint-key-1",
     });
     expect(complaint.reference).toBe("C-1001");
     expect(complaint.summary).toBe("My withdrawal is late");
@@ -135,9 +136,18 @@ describe("complaints in the demo", () => {
   it("refuses a complaint with nothing in it, and an unknown one", async () => {
     const { client } = demo();
     await expect(
-      client.makeComplaint({ category: "other", summary: " ", details: "x" }),
+      client.makeComplaint({ category: "other", summary: " ", details: "x", key: "complaint-key-2" }),
     ).rejects.toEqual(new SupportError("invalid"));
     await expect(client.getComplaint("nope")).rejects.toEqual(new SupportError("not_found"));
+  });
+
+  it("answers a repeated key with the complaint it already logged, as the API does", async () => {
+    const { client } = demo({ empty: true });
+    const input = { category: "fees" as const, summary: "Fee", details: "Charged twice.", key: "complaint-key-3" };
+    const first = await client.makeComplaint(input);
+    const again = await client.makeComplaint(input);
+    expect(again.id).toBe(first.id);
+    expect(await client.listComplaints()).toHaveLength(1);
   });
 
   it("skips the weekend when it counts working days", () => {

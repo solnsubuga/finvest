@@ -8,6 +8,7 @@ import { Field, TextField } from "@/components/Field";
 import { Screen } from "@/components/Screen";
 import { StackHeader } from "@/components/StackHeader";
 import { Txt } from "@/components/Txt";
+import { newIdempotencyKey } from "@/payments/idempotency";
 import { complaintCategories } from "@/support/labels";
 import { useSupport } from "@/support/SupportProvider";
 import {
@@ -15,6 +16,7 @@ import {
   describeSupportError,
   MAX_DETAILS,
   MAX_SUMMARY,
+  SupportError,
 } from "@/support/types";
 import { colors } from "@/theme";
 
@@ -30,6 +32,9 @@ export default function NewComplaint() {
   const [problems, setProblems] = useState<Problems>({});
   const [failure, setFailure] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  // One key for this form, reused on every try after a lost answer, so the complaint is logged
+  // once. A definite refusal logged nothing, so the next try gets a fresh key.
+  const [key, setKey] = useState(newIdempotencyKey);
 
   /** An error goes as soon as the client starts to put it right. */
   const clear = (field: keyof Problems) =>
@@ -57,6 +62,7 @@ export default function NewComplaint() {
         category,
         summary: summary.trim(),
         details: details.trim(),
+        key,
       });
       void refreshUnread();
       // Replace, so Back from the complaint does not return to a filled form.
@@ -65,6 +71,9 @@ export default function NewComplaint() {
         params: { complaintId: complaint.id, made: "1" },
       });
     } catch (error) {
+      if (error instanceof SupportError && error.code !== "unavailable") {
+        setKey(newIdempotencyKey());
+      }
       setFailure(describeSupportError(error));
       setBusy(false);
     }

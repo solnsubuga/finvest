@@ -127,7 +127,12 @@ export function createApiSupportClient(): SupportClient {
       wrap(async () =>
         toComplaint(
           await api("POST /client/complaints", {
-            body: { category: complaint.category, summary: complaint.summary, details: complaint.details },
+            body: {
+              category: complaint.category,
+              summary: complaint.summary,
+              details: complaint.details,
+              client_key: complaint.key,
+            },
           }),
         ),
       ),
