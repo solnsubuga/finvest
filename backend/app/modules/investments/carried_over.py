@@ -99,7 +99,8 @@ async def open_existing_investment(
     as for a new one.
 
     Refused with `invalid` for terms or dates that cannot be right, `not_found` for an unknown
-    product, and `conflict` if the reference was already opened with different terms.
+    product, and `conflict` if the reference was already opened with different terms or another
+    `interest_through`.
     """
     if actor.kind != "system":
         raise ApplicationError("forbidden")
@@ -126,6 +127,7 @@ async def open_existing_investment(
             or existing.start_date != start_date
             or existing.terms.annual_rate_bps != annual_rate_bps
             or existing.terms.tax_bps != tax_bps
+            or existing.accrued_through != interest_through
         ):
             raise ApplicationError("conflict")
         return existing
