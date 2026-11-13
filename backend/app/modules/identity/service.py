@@ -63,6 +63,8 @@ class ClientSession:
     phone: str
     restricted_until: datetime | None
     signed_in_at: datetime
+    email: str | None = None
+    email_verified: bool = False
 
     @property
     def actor(self) -> Actor:
@@ -397,7 +399,15 @@ class IdentityService:
         limited = account.restricted_until
         if limited is not None and limited <= self.clock.now():
             limited = None
-        return ClientSession(row.id, account.id, account.phone, limited, row.created_at)
+        return ClientSession(
+            row.id,
+            account.id,
+            account.phone,
+            limited,
+            row.created_at,
+            email=account.email,
+            email_verified=account.email_verified_at is not None,
+        )
 
     async def staff_session(self, token: str) -> StaffSession | None:
         row, account = await self._touch(token, "staff")
@@ -442,6 +452,9 @@ class ClientContact:
     phone: str
     email: str | None
     claimed: bool
+    # True only while `email` is an address the client proved with a link. Statements and
+    # receipts go only to a proved address.
+    email_verified: bool = False
 
 
 async def client_contact(session: AsyncSession, client_id: str) -> ClientContact | None:
@@ -455,7 +468,7 @@ async def client_contact(session: AsyncSession, client_id: str) -> ClientContact
     row = (
         await session.execute(
             text(
-                "SELECT phone, email, status FROM identity_clients "
+                "SELECT phone, email, status, email_verified_at FROM identity_clients "
                 "WHERE id = :id AND status IN ('active', 'unclaimed')"
             ),
             {"id": client_id},
@@ -463,7 +476,12 @@ async def client_contact(session: AsyncSession, client_id: str) -> ClientContact
     ).one_or_none()
     if row is None:
         return None
-    return ClientContact(row.phone, row.email, claimed=row.status == "active")
+    return ClientContact(
+        row.phone,
+        row.email,
+        claimed=row.status == "active",
+        email_verified=row.email_verified_at is not None,
+    )
 
 
 async def active_client_ids(session: AsyncSession, *, after: str | None, limit: int) -> list[str]:

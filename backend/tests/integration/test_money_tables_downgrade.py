@@ -439,6 +439,14 @@ ROWS = {
         "'-Nabc0000000000000S1', now()); COMMIT",
         "refusing to drop identity_staff_changes",
     ),
+    "0162_identity_email_checks": (
+        "INSERT INTO identity_clients (id, phone, status, created_at) VALUES "
+        "('-Nabc0000000000000B1', '+256772123456', 'unclaimed', now()); "
+        "INSERT INTO identity_email_checks (id, client_id, email, token_hash, created_at, "
+        "expires_at) VALUES ('-Nabc0000000000000A1', '-Nabc0000000000000B1', 'a@example.com', "
+        "decode(repeat('00', 32), 'hex'), now(), now() + interval '1 day')",
+        "refusing to drop proved email addresses",
+    ),
 }
 
 
