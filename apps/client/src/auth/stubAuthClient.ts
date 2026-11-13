@@ -6,6 +6,7 @@ import {
   SecondStep,
   Session,
   SignupChallenge,
+  PasswordReset,
   SignupStart,
   SignupTicket,
 } from "./types";
@@ -104,6 +105,8 @@ export function createStubAuthClient(options: StubOptions = {}): AuthClient {
   const signups = new Map<string, SignupStart>();
   const tickets = new Map<string, SignupStart>();
   const logins = new Map<string, string>();
+  /** Reset challenges and the number each was for. A number with no account gets one too. */
+  const resets = new Map<string, string>();
   /** A set-up that was started and not yet confirmed, for this session only. */
   let pendingAuthenticatorAt: number | null = null;
   let signedInAt = 0;
@@ -275,6 +278,33 @@ export function createStubAuthClient(options: StubOptions = {}): AuthClient {
       }
       pendingAuthenticatorAt = null;
       account.hasAuthenticator = true;
+    },
+
+    async startPasswordReset(phone): Promise<PasswordReset> {
+      await wait();
+      const challengeId = nextId("reset");
+      resets.set(challengeId, phone);
+      return { challengeId, phone };
+    },
+
+    async completePasswordReset(challengeId, code, password): Promise<void> {
+      await wait();
+      const phone = resets.get(challengeId);
+      if (!phone) {
+        throw new AuthError("expired");
+      }
+      if (LEAKED.has(password.toLowerCase())) {
+        throw new AuthError("leaked_password");
+      }
+      const account = accounts.get(phone);
+      // A number with no account fails exactly like a wrong code.
+      if (code !== DEMO_CODE || !account) {
+        throw new AuthError("invalid_code");
+      }
+      resets.delete(challengeId);
+      account.password = password;
+      signedIn = null;
+      pendingAuthenticatorAt = null;
     },
 
     async signOut(): Promise<void> {

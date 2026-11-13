@@ -86,7 +86,7 @@ export default function LoginStart() {
       </View>
       <View style={styles.links}>
         <TextLink label="Use email instead" onPress={() => unavailable("email-login")} />
-        <TextLink label="Forgot password?" onPress={() => unavailable("forgot-password")} />
+        <TextLink label="Forgot password?" onPress={() => router.push("/reset")} />
       </View>
       <View style={{ marginTop: 8 }}>
         <Card padded={false}>

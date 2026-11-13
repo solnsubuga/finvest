@@ -157,6 +157,21 @@ export function createApiAuthClient(): AuthClient {
         await api("POST /client/authenticator", { body: { code } });
       }),
 
+    startPasswordReset: (phone) =>
+      wrap(async () => {
+        const result = await api("POST /client/password/reset/start", { body: { phone } });
+        return { challengeId: result.challenge_id, phone };
+      }),
+
+    completePasswordReset: (challengeId, code, password) =>
+      wrap(async () => {
+        await api("POST /client/password/reset/complete", {
+          body: { challenge_id: challengeId, code, password },
+        });
+        // The server ended every session, this device's too.
+        await saveToken(null);
+      }),
+
     signOut: async () => {
       try {
         await api("POST /client/sign-out", {});

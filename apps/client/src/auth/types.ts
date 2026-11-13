@@ -45,6 +45,8 @@ export class AuthError extends Error {
 export type SignupStart = { phone: string; email: string; inviteCode?: string };
 export type SignupChallenge = { challengeId: string; phone: string };
 export type SignupTicket = { ticket: string; phone: string };
+/** A password reset in progress: the texted code is checked only when the new password is set. */
+export type PasswordReset = { challengeId: string; phone: string };
 
 /**
  * The ways to confirm a log in. A client can use any one they have set up:
@@ -128,6 +130,19 @@ export interface AuthClient {
    * saved. Only then does the app become a way to log in.
    */
   confirmAuthenticatorSetup(code: string): Promise<void>;
+
+  /**
+   * Forgot password, step 1: texts a code if the number has an account. It
+   * answers the same way whether or not it does, so it cannot be used to find
+   * out who is a client.
+   */
+  startPasswordReset(phone: string): Promise<PasswordReset>;
+  /**
+   * Forgot password, step 2: the texted code and the new password together.
+   * Every device is signed out, and for 24 hours withdrawals go only to
+   * accounts used before. It opens no session: the client logs in next.
+   */
+  completePasswordReset(challengeId: string, code: string, password: string): Promise<void>;
 
   signOut(): Promise<void>;
 }
