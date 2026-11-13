@@ -75,6 +75,7 @@ describe("the insights client for the real API", () => {
       interest_today_minor: 0, maturity_date: null, pay_by: "2026-11-14T12:00:00Z", payout_destination_id: null,
       payout_id: null, product_code: "P", product_name: "P", rolled_into_id: null, start_date: null, status,
       term_days: null, total_at_maturity_minor: null, value_minor: 0, waiting_for_destination: false,
+      can_withdraw: false, withdrawal_requested_at: null,
     });
     const answer = (items: unknown[]) => setFetch(async () => new Response(JSON.stringify(items), { status: 200 }));
     const client = createApiInsightsClient();

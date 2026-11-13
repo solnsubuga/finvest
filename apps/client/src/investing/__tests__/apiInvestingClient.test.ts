@@ -61,6 +61,8 @@ const investment = {
   payout_id: null,
   payout_destination_id: null,
   waiting_for_destination: false,
+  can_withdraw: false,
+  withdrawal_requested_at: null,
 };
 
 type Seen = { method: string; path: string; key: string | undefined; body: unknown };
