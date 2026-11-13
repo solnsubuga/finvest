@@ -34,6 +34,7 @@ from app.modules.dealing.domain.withdrawals import (
     released_from_queue,
 )
 from app.modules.investments import service as investments
+from app.modules.investments.events import PAY_EARLY_WITHDRAWAL
 from app.modules.ledger import statements as ledger
 from app.shared.actors import Actor
 from app.shared.business_day import business_date
@@ -43,8 +44,8 @@ from app.shared.money import Currency, Money
 from app.shared.push_ids import push_id
 
 FUNDED_TOPIC = "dealing.withdrawal_funded"
-# Who acts on `dealing.withdrawal_funded`. Investing adds the consumer that pays the client.
-FUNDED_CONSUMERS: tuple[Consumer, ...] = ()
+# Who acts on `dealing.withdrawal_funded`: investing, which pays the client.
+FUNDED_CONSUMERS: tuple[Consumer, ...] = (PAY_EARLY_WITHDRAWAL,)
 FUNDING_RESOURCE = "dealing_withdrawal_funding"
 
 _COLUMNS = (

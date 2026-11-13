@@ -6,7 +6,6 @@ unnoticed.
 
 Steps of the client journey with no code to test yet, and so no journey yet:
 
-- Early withdrawal of a running investment (investing thread; dealing's withdrawal funding).
 - Sending a payout to ioTec: payouts are created at maturity but no worker job disburses them
   (payouts and reconciliation thread).
 - Money notifications: payments, investing and payouts never call `notifications.notify`, so
