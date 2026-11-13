@@ -83,6 +83,39 @@ export const ClientComplaints = z.object({
 });
 export type ClientComplaints = z.infer<typeof ClientComplaints>;
 
+export const Currency = z.enum(["UGX", "USD"]);
+export type Currency = z.infer<typeof Currency>;
+
+export const InvestmentStatus = z.enum(["awaiting_payment", "active", "cancelled", "matured"]);
+export type InvestmentStatus = z.infer<typeof InvestmentStatus>;
+
+export const ClientInvestmentOut = z.object({
+  amount_minor: z.number().int(),
+  at_maturity: AtMaturity.nullable(),
+  can_change_maturity: z.boolean(),
+  client_rate_percent: z.string(),
+  currency: Currency,
+  days_earned: z.number().int(),
+  id: z.string(),
+  interest_at_maturity_minor: z.number().int().nullable(),
+  interest_so_far_minor: z.number().int(),
+  interest_today_minor: z.number().int(),
+  maturity_date: z.string().nullable(),
+  pay_by: z.string(),
+  payout_destination_id: z.string().nullable(),
+  payout_id: z.string().nullable(),
+  product_code: z.string(),
+  product_name: z.string(),
+  rolled_into_id: z.string().nullable(),
+  start_date: z.string().nullable(),
+  status: InvestmentStatus,
+  term_days: z.number().int().nullable(),
+  total_at_maturity_minor: z.number().int().nullable(),
+  value_minor: z.number().int(),
+  waiting_for_destination: z.boolean(),
+});
+export type ClientInvestmentOut = z.infer<typeof ClientInvestmentOut>;
+
 export const ClientLoginStart = z.object({
   password: z.string(),
   phone: z.string(),
@@ -109,9 +142,6 @@ export const ConfirmCode = z.object({
 });
 export type ConfirmCode = z.infer<typeof ConfirmCode>;
 
-export const Currency = z.enum(["UGX", "USD"]);
-export type Currency = z.infer<typeof Currency>;
-
 export const DocumentItem = z.object({
   byte_size: z.number().int().nullable(),
   date_from: z.string().nullable(),
@@ -131,6 +161,9 @@ export const DocumentList = z.object({
 });
 export type DocumentList = z.infer<typeof DocumentList>;
 
+export const Frequency = z.enum(["weekly", "monthly"]);
+export type Frequency = z.infer<typeof Frequency>;
+
 export const GoalCategory = z.enum(["school_fees", "emergency", "land_or_home", "business", "wedding", "retirement", "other"]);
 export type GoalCategory = z.infer<typeof GoalCategory>;
 
@@ -146,23 +179,6 @@ export type GoalDetails = z.infer<typeof GoalDetails>;
 export const GoalStatus = z.enum(["active", "closed"]);
 export type GoalStatus = z.infer<typeof GoalStatus>;
 
-export const PlanView = z.object({
-  currency: Currency,
-  first_on: z.string(),
-  interest_minor: z.number().int(),
-  last_on: z.string(),
-  product_code: z.string(),
-  product_name: z.string(),
-  put_in_minor: z.number().int(),
-  raised_to_minimum: z.boolean(),
-  rate_percent: z.string(),
-  saving_minor: z.number().int(),
-  savings: z.number().int(),
-  term_days: z.number().int(),
-  without_investing_minor: z.number().int(),
-});
-export type PlanView = z.infer<typeof PlanView>;
-
 export const Standing = z.enum(["reached", "on_track", "behind", "no_date"]);
 export type Standing = z.infer<typeof Standing>;
 
@@ -174,9 +190,6 @@ export const ProgressView = z.object({
   value_minor: z.number().int(),
 });
 export type ProgressView = z.infer<typeof ProgressView>;
-
-export const InvestmentStatus = z.enum(["awaiting_payment", "active", "cancelled", "matured"]);
-export type InvestmentStatus = z.infer<typeof InvestmentStatus>;
 
 export const SavingView = z.object({
   amount_minor: z.number().int(),
@@ -194,13 +207,30 @@ export const SavingView = z.object({
 });
 export type SavingView = z.infer<typeof SavingView>;
 
+export const GoalsApiPlanView = z.object({
+  currency: Currency,
+  first_on: z.string(),
+  interest_minor: z.number().int(),
+  last_on: z.string(),
+  product_code: z.string(),
+  product_name: z.string(),
+  put_in_minor: z.number().int(),
+  raised_to_minimum: z.boolean(),
+  rate_percent: z.string(),
+  saving_minor: z.number().int(),
+  savings: z.number().int(),
+  term_days: z.number().int(),
+  without_investing_minor: z.number().int(),
+});
+export type GoalsApiPlanView = z.infer<typeof GoalsApiPlanView>;
+
 export const GoalView = z.object({
   category: GoalCategory,
   created_at: z.string(),
   currency: Currency,
   goal_id: z.string(),
   name: z.string(),
-  plan: PlanView.nullable(),
+  plan: GoalsApiPlanView.nullable(),
   product_code: z.string(),
   progress: ProgressView,
   savings: z.array(SavingView),
@@ -246,6 +276,17 @@ export const InsightsView = z.object({
 });
 export type InsightsView = z.infer<typeof InsightsView>;
 
+export const InterestPaid = z.enum(["at_maturity", "monthly"]);
+export type InterestPaid = z.infer<typeof InterestPaid>;
+
+export const InvestmentRequest = z.object({
+  amount_minor: z.number().int(),
+  at_maturity: AtMaturity.nullable().optional(),
+  currency: Currency,
+  product_code: z.string(),
+});
+export type InvestmentRequest = z.infer<typeof InvestmentRequest>;
+
 export const LinkView = z.object({
   id: z.string(),
   kind: z.enum(["deposit", "payout", "investment", "identity_check", "payout_destination", "statement", "security", "conversation", "complaint"]),
@@ -287,6 +328,12 @@ export const MarkRead = z.object({
 });
 export type MarkRead = z.infer<typeof MarkRead>;
 
+export const MaturityChoice = z.object({
+  at_maturity: AtMaturity,
+  destination_id: z.string().nullable().optional(),
+});
+export type MaturityChoice = z.infer<typeof MaturityChoice>;
+
 export const MobileMoneyPayment = z.object({
   network: z.enum(["mtn", "airtel"]),
 });
@@ -297,6 +344,9 @@ export const MoneyView = z.object({
   minor: z.number().int(),
 });
 export type MoneyView = z.infer<typeof MoneyView>;
+
+export const Network = z.enum(["mtn", "airtel"]);
+export type Network = z.infer<typeof Network>;
 
 export const NewPasskey = z.object({
   credential: z.record(z.string(), z.unknown()),
@@ -342,6 +392,11 @@ export const PasskeyOptions = z.object({
 });
 export type PasskeyOptions = z.infer<typeof PasskeyOptions>;
 
+export const PayOutRequest = z.object({
+  destination_id: z.string(),
+});
+export type PayOutRequest = z.infer<typeof PayOutRequest>;
+
 export const ReceiptView = z.object({
   bank_name: z.string(),
   byte_size: z.number().int(),
@@ -365,6 +420,60 @@ export const PaymentView = z.object({
 });
 export type PaymentView = z.infer<typeof PaymentView>;
 
+export const PlanDetails = z.object({
+  amount_minor: z.number().int(),
+  at_maturity: AtMaturity.nullable().optional(),
+  currency: Currency.optional(),
+  day: z.number().int(),
+  frequency: Frequency,
+  network: Network,
+  phone: z.string().nullable().optional(),
+  product_code: z.string(),
+});
+export type PlanDetails = z.infer<typeof PlanDetails>;
+
+export const PlanStatus = z.enum(["active", "paused", "stopped"]);
+export type PlanStatus = z.infer<typeof PlanStatus>;
+
+export const RunStatus = z.enum(["due", "requested", "paid", "failed", "missed"]);
+export type RunStatus = z.infer<typeof RunStatus>;
+
+export const RunView = z.object({
+  attempt: z.number().int(),
+  code: z.string().nullable(),
+  due_on: z.string(),
+  investment_id: z.string().nullable(),
+  retry_on: z.string().nullable(),
+  run_id: z.string(),
+  status: RunStatus,
+});
+export type RunView = z.infer<typeof RunView>;
+
+export const AutoinvestApiPlanView = z.object({
+  amount_minor: z.number().int(),
+  at_maturity: AtMaturity.nullable(),
+  created_at: z.string(),
+  currency: Currency,
+  day: z.number().int(),
+  frequency: Frequency,
+  network: Network,
+  next_run_on: z.string().nullable(),
+  paused_at: z.string().nullable(),
+  payer_msisdn: z.string(),
+  plan_id: z.string(),
+  product_code: z.string(),
+  product_name: z.string(),
+  runs: z.array(RunView),
+  status: PlanStatus,
+  stopped_at: z.string().nullable(),
+});
+export type AutoinvestApiPlanView = z.infer<typeof AutoinvestApiPlanView>;
+
+export const PlanList = z.object({
+  plans: z.array(AutoinvestApiPlanView),
+});
+export type PlanList = z.infer<typeof PlanList>;
+
 export const PreferenceChange = z.object({
   category: z.enum(["money", "investments", "earnings", "account", "security", "support", "news"]),
   channels: z.array(z.enum(["push", "sms", "email"])),
@@ -375,6 +484,36 @@ export const Preferences = z.object({
   categories: z.array(CategoryChannels),
 });
 export type Preferences = z.infer<typeof Preferences>;
+
+export const ProductKind = z.enum(["treasury_bill", "fixed_income"]);
+export type ProductKind = z.infer<typeof ProductKind>;
+
+export const ProductStatus = z.enum(["draft", "live", "paused"]);
+export type ProductStatus = z.infer<typeof ProductStatus>;
+
+export const ProductOut = z.object({
+  client_rate_percent: z.string(),
+  code: z.string(),
+  currency: Currency,
+  interest_paid: InterestPaid,
+  kind: ProductKind,
+  minimum_minor: z.number().int(),
+  name: z.string(),
+  status: ProductStatus,
+  term_days: z.number().int().nullable(),
+});
+export type ProductOut = z.infer<typeof ProductOut>;
+
+export const QuoteOut = z.object({
+  amount_minor: z.number().int(),
+  currency: Currency,
+  interest_minor: z.number().int().nullable(),
+  matures_on: z.string().nullable(),
+  product: z.string(),
+  starts_on: z.string(),
+  total_minor: z.number().int().nullable(),
+});
+export type QuoteOut = z.infer<typeof QuoteOut>;
 
 export const ResetComplete = z.object({
   challenge_id: z.string(),
@@ -503,6 +642,95 @@ export const operations = {
     status: 200,
     response: AuthenticatorSetupView,
   },
+  "GET /client/autoinvest/plans": {
+    method: "GET",
+    path: "/client/autoinvest/plans",
+    params: z.object({}),
+    query: z.object({
+    include_stopped: z.boolean().optional(),
+  }),
+    body: null,
+    bodyKind: null,
+    idempotent: false,
+    status: 200,
+    response: PlanList,
+  },
+  "POST /client/autoinvest/plans": {
+    method: "POST",
+    path: "/client/autoinvest/plans",
+    params: z.object({}),
+    query: z.object({}),
+    body: PlanDetails,
+    bodyKind: "json",
+    idempotent: true,
+    status: 201,
+    response: AutoinvestApiPlanView,
+  },
+  "GET /client/autoinvest/plans/{plan_id}": {
+    method: "GET",
+    path: "/client/autoinvest/plans/{plan_id}",
+    params: z.object({
+    plan_id: z.string(),
+  }),
+    query: z.object({}),
+    body: null,
+    bodyKind: null,
+    idempotent: false,
+    status: 200,
+    response: AutoinvestApiPlanView,
+  },
+  "PUT /client/autoinvest/plans/{plan_id}": {
+    method: "PUT",
+    path: "/client/autoinvest/plans/{plan_id}",
+    params: z.object({
+    plan_id: z.string(),
+  }),
+    query: z.object({}),
+    body: PlanDetails,
+    bodyKind: "json",
+    idempotent: false,
+    status: 200,
+    response: AutoinvestApiPlanView,
+  },
+  "POST /client/autoinvest/plans/{plan_id}/pause": {
+    method: "POST",
+    path: "/client/autoinvest/plans/{plan_id}/pause",
+    params: z.object({
+    plan_id: z.string(),
+  }),
+    query: z.object({}),
+    body: null,
+    bodyKind: null,
+    idempotent: false,
+    status: 200,
+    response: AutoinvestApiPlanView,
+  },
+  "POST /client/autoinvest/plans/{plan_id}/resume": {
+    method: "POST",
+    path: "/client/autoinvest/plans/{plan_id}/resume",
+    params: z.object({
+    plan_id: z.string(),
+  }),
+    query: z.object({}),
+    body: null,
+    bodyKind: null,
+    idempotent: false,
+    status: 200,
+    response: AutoinvestApiPlanView,
+  },
+  "POST /client/autoinvest/plans/{plan_id}/stop": {
+    method: "POST",
+    path: "/client/autoinvest/plans/{plan_id}/stop",
+    params: z.object({
+    plan_id: z.string(),
+  }),
+    query: z.object({}),
+    body: null,
+    bodyKind: null,
+    idempotent: false,
+    status: 200,
+    response: AutoinvestApiPlanView,
+  },
   "GET /client/complaints": {
     method: "GET",
     path: "/client/complaints",
@@ -612,7 +840,7 @@ export const operations = {
     bodyKind: null,
     idempotent: false,
     status: 200,
-    response: PlanView.nullable(),
+    response: GoalsApiPlanView.nullable(),
   },
   "GET /client/goals/{goal_id}": {
     method: "GET",
@@ -678,6 +906,67 @@ export const operations = {
     idempotent: false,
     status: 200,
     response: InsightsView,
+  },
+  "GET /client/investments": {
+    method: "GET",
+    path: "/client/investments",
+    params: z.object({}),
+    query: z.object({}),
+    body: null,
+    bodyKind: null,
+    idempotent: false,
+    status: 200,
+    response: z.array(ClientInvestmentOut),
+  },
+  "POST /client/investments": {
+    method: "POST",
+    path: "/client/investments",
+    params: z.object({}),
+    query: z.object({}),
+    body: InvestmentRequest,
+    bodyKind: "json",
+    idempotent: true,
+    status: 201,
+    response: ClientInvestmentOut,
+  },
+  "GET /client/investments/{investment_id}": {
+    method: "GET",
+    path: "/client/investments/{investment_id}",
+    params: z.object({
+    investment_id: z.string(),
+  }),
+    query: z.object({}),
+    body: null,
+    bodyKind: null,
+    idempotent: false,
+    status: 200,
+    response: ClientInvestmentOut,
+  },
+  "PUT /client/investments/{investment_id}/at-maturity": {
+    method: "PUT",
+    path: "/client/investments/{investment_id}/at-maturity",
+    params: z.object({
+    investment_id: z.string(),
+  }),
+    query: z.object({}),
+    body: MaturityChoice,
+    bodyKind: "json",
+    idempotent: false,
+    status: 200,
+    response: ClientInvestmentOut,
+  },
+  "POST /client/investments/{investment_id}/pay-out": {
+    method: "POST",
+    path: "/client/investments/{investment_id}/pay-out",
+    params: z.object({
+    investment_id: z.string(),
+  }),
+    query: z.object({}),
+    body: PayOutRequest,
+    bodyKind: "json",
+    idempotent: false,
+    status: 200,
+    response: ClientInvestmentOut,
   },
   "GET /client/investments/{investment_id}/payment": {
     method: "GET",
@@ -911,6 +1200,32 @@ export const operations = {
     idempotent: false,
     status: 200,
     response: PaymentView,
+  },
+  "GET /client/products": {
+    method: "GET",
+    path: "/client/products",
+    params: z.object({}),
+    query: z.object({}),
+    body: null,
+    bodyKind: null,
+    idempotent: false,
+    status: 200,
+    response: z.array(ProductOut),
+  },
+  "GET /client/products/{code}/quote": {
+    method: "GET",
+    path: "/client/products/{code}/quote",
+    params: z.object({
+    code: z.string(),
+  }),
+    query: z.object({
+    amount_minor: z.number().int(),
+  }),
+    body: null,
+    bodyKind: null,
+    idempotent: false,
+    status: 200,
+    response: QuoteOut,
   },
   "GET /client/second-steps": {
     method: "GET",
