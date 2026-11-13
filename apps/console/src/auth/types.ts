@@ -56,6 +56,8 @@ export const ACTION_PERMISSIONS = [
   "complaints.close",
   // Proposing or deciding a change to the words of a client message.
   "wordings.change",
+  // Proposing or deciding an announcement to every active client. Apart from wordings, so fewer people can do it.
+  "announcements.send",
   // Matching a bank transfer to a statement line, refusing it, and approving someone else's match.
   "bank_transfers.change",
   // Proposing a rate change, approving or sending back someone else's, and withdrawing your own.

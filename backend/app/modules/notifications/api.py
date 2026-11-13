@@ -9,10 +9,22 @@ from pydantic import Field
 from app.infrastructure.database import Database
 from app.modules.identity.api import CurrentClient, require_permission
 from app.modules.identity.service import StaffSession
-from app.modules.notifications import devices, inbox, preferences, wording_store
+from app.modules.notifications import (
+    announcements,
+    devices,
+    inbox,
+    preferences,
+    wording_store,
+)
 from app.modules.notifications.domain.events import EVENTS, Category, Channel
 from app.modules.notifications.domain.preferences import ALWAYS_ON, CHANNELS
-from app.modules.notifications.domain.wording import Wording, render, sample_values
+from app.modules.notifications.domain.wording import (
+    MAX_ANNOUNCEMENT_MESSAGE,
+    MAX_ANNOUNCEMENT_TITLE,
+    Wording,
+    render,
+    sample_values,
+)
 from app.shared.clock import Clock
 from app.shared.contracts import Contract, PushId
 from app.shared.errors import ErrorEnvelope
@@ -318,3 +330,93 @@ async def decide_wording(
             session, staff.actor, proposal_id, body.decision, body.reason, clock
         )
     return _proposal(proposal, staff)
+
+
+# Announcements go to every client, so they sit with the wordings and need the same two people.
+
+
+class AnnouncementView(Contract):
+    id: PushId
+    title: str
+    message: str
+    reason: str
+    status: Literal["proposed", "approved", "rejected", "withdrawn"]
+    proposed_by: PushId
+    proposed_at: datetime
+    decided_by: PushId | None
+    decided_at: datetime | None
+    decision_reason: str | None
+    # Clients told so far. It grows while the worker sends an approved one.
+    told: int
+    # The proposer can withdraw it. Anyone else who may change wordings can approve or reject.
+    yours: bool
+
+
+class AnnouncementList(Contract):
+    announcements: list[AnnouncementView]
+
+
+class ProposeAnnouncement(Contract):
+    # Checked again in full, with the reasons, by the wording rules.
+    title: Annotated[str, Field(min_length=1, max_length=MAX_ANNOUNCEMENT_TITLE * 2)]
+    message: Annotated[str, Field(min_length=1, max_length=MAX_ANNOUNCEMENT_MESSAGE * 2)]
+    reason: Reason
+
+
+class DecideAnnouncement(Contract):
+    decision: Literal["approved", "rejected", "withdrawn"]
+    # Required to reject.
+    reason: Annotated[str | None, Field(default=None, max_length=500)] = None
+
+
+def _announcement(item: announcements.Announcement, staff: StaffSession) -> AnnouncementView:
+    return AnnouncementView(
+        id=item.id,
+        title=item.title,
+        message=item.message,
+        reason=item.reason,
+        status=item.status,  # type: ignore[arg-type]
+        proposed_by=item.proposed_by,
+        proposed_at=item.proposed_at,
+        decided_by=item.decided_by,
+        decided_at=item.decided_at,
+        decision_reason=item.decision_reason,
+        told=item.told,
+        yours=item.proposed_by == staff.staff_id,
+    )
+
+
+@staff_router.get("/announcements")
+async def list_announcements(staff: SettingsStaff, database: Db) -> AnnouncementList:
+    """The latest announcements, newest first, with any waiting for a second person."""
+    async with database.actor_transaction(staff.actor) as session:
+        listed = await announcements.list_announcements(session)
+    return AnnouncementList(announcements=[_announcement(item, staff) for item in listed])
+
+
+@staff_router.post("/announcements", status_code=201)
+async def propose_announcement(
+    body: ProposeAnnouncement, staff: WordingStaff, database: Db, clock: Time
+) -> AnnouncementView:
+    """Put an announcement to every client forward. A different member of staff approves it."""
+    async with database.actor_transaction(staff.actor) as session:
+        item = await announcements.propose(
+            session, staff.actor, body.title, body.message, body.reason, clock
+        )
+    return _announcement(item, staff)
+
+
+@staff_router.post("/announcements/{announcement_id}/decision")
+async def decide_announcement(
+    announcement_id: PushId,
+    body: DecideAnnouncement,
+    staff: WordingStaff,
+    database: Db,
+    clock: Time,
+) -> AnnouncementView:
+    """Approve, which starts sending, or reject someone else's announcement, or withdraw yours."""
+    async with database.actor_transaction(staff.actor) as session:
+        item = await announcements.decide(
+            session, staff.actor, announcement_id, body.decision, body.reason, clock
+        )
+    return _announcement(item, staff)

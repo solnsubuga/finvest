@@ -25,6 +25,8 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.infrastructure.jobs import publish
+from app.modules.audit import service as audit
+from app.modules.audit.domain.events import AuditActor, AuditEvent
 from app.modules.goals.events import FOLLOW_ROLLOVER
 from app.modules.investments import accrual
 from app.modules.investments.catalogue import invalid, product_from_row, product_row, rates_for
@@ -42,6 +44,7 @@ from app.modules.investments.domain.investments import (
 from app.modules.investments.domain.products import ProductStatus
 from app.modules.investments.domain.rates import rate_in_force
 from app.modules.investments.holdings import (
+    INVESTMENT_RESOURCE,
     Investment,
     get_investment,
     holding_account,
@@ -50,6 +53,7 @@ from app.modules.investments.holdings import (
 )
 from app.modules.ledger import service as ledger
 from app.modules.ledger.domain.entries import EntryDraft, Line, credit, debit
+from app.modules.notifications import contract as notifications
 from app.modules.payouts import destinations, payouts
 from app.modules.payouts.domain import posting as payout_posting
 from app.shared.actors import SYSTEM, Actor
@@ -142,6 +146,18 @@ async def choose_at_maturity(
             "destination_id": destination_id,
             "now": clock.now(),
         },
+    )
+    await audit.record(
+        session,
+        AuditEvent(
+            category="change",
+            action="investments.maturity_chosen",
+            resource_type=INVESTMENT_RESOURCE,
+            resource_id=investment.id,
+            actor=AuditActor.client(investment.client_id),
+            details={"at_maturity": at_maturity.value, "destination_id": destination_id},
+        ),
+        clock,
     )
     return await get_investment(session, investment.id)
 
@@ -265,6 +281,27 @@ async def _mature(
         )
     else:
         await _hand_over(session, investment, plan.step, plan.hold_reason, clock)
+    await audit.record(
+        session,
+        AuditEvent(
+            category="change",
+            action="investments.matured",
+            resource_type=INVESTMENT_RESOURCE,
+            resource_id=investment.id,
+            actor=AuditActor.system(),
+            details={"step": plan.step.value},
+        ),
+        clock,
+    )
+    await notifications.notify(
+        session,
+        event_name="investment_matured",
+        client_id=investment.client_id,
+        idempotency_key=investment.id,
+        variables={"amount": _proceeds(investment), "product": product.name},
+        link=notifications.Link("investment", investment.id),
+        now=clock.now(),
+    )
 
 
 async def _roll_over(

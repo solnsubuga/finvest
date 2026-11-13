@@ -312,6 +312,31 @@ def check(event_name: str, wording: Wording) -> Wording:
     return wording
 
 
+# An announcement's SMS is "Finvest: " and the message, and must fit the wordings' SMS limit.
+MAX_ANNOUNCEMENT_TITLE = MAX_TITLE
+MAX_ANNOUNCEMENT_MESSAGE = MAX_SMS - len("Finvest: ")
+
+
+def check_announcement(title: str, message: str) -> None:
+    """Nothing, if staff may send these words to every client, or `InvalidWording` saying why.
+
+    The same rules as an edited wording: Finvest's own links only, no rates, basic letters in
+    what can go by SMS. An announcement has no placeholders, so a brace is refused.
+    """
+    spec = EVENTS["announcement"]
+    problems = [
+        *_field_problems(spec, "title", title, MAX_ANNOUNCEMENT_TITLE),
+        *_field_problems(spec, "message", message, MAX_ANNOUNCEMENT_MESSAGE),
+    ]
+    for field, value in (("title", title), ("message", message)):
+        if ("{" in value or "}" in value) and (field, "stray_brace") not in problems:
+            problems.append((field, "stray_brace"))
+    if not any(field == "message" for field, _ in problems) and not message.isascii():
+        problems.append(("message", "invalid_characters"))
+    if problems:
+        raise InvalidWording(problems)
+
+
 def sample_values(spec: EventSpec) -> dict[str, Value]:
     """Stand-in values for a preview in the console."""
     samples: dict[str, Value] = {

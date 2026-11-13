@@ -8,6 +8,7 @@ from sqlalchemy.exc import DBAPIError
 
 from app.infrastructure.database import Database
 from app.infrastructure.jobs import JobRequest, Worker, WorkerConfig, enqueue
+from app.modules.audit import service as audit
 from app.modules.investments import accrual
 from app.modules.investments import service as investments
 from app.modules.investments.domain.investments import AtMaturity, InvestmentStatus
@@ -33,6 +34,7 @@ from tests.support.investments import (
     today,
 )
 from tests.support.ledger import client as new_client
+from tests.support.ledger import staff as new_staff
 from tests.support.ledger import ugx
 
 pytestmark = pytest.mark.integration
@@ -130,6 +132,38 @@ async def test_a_matured_investment_rolls_into_a_new_one_with_its_interest(
     assert await interest_owed(worker_database, old) == 0
     assert await account_balance(worker_database, new, HOLDING) == PROCEEDS
     assert await handed_over(worker_database, old) == 0
+
+
+async def test_the_choice_and_the_maturity_are_audited_and_the_client_is_told(
+    app_database: Database, worker_database: Database
+) -> None:
+    investment = await started(app_database, worker_database, NOW)
+    await choose(app_database, investment, AtMaturity.ROLL_OVER)
+    await mature(worker_database, investment.id)
+
+    async with app_database.actor_transaction(new_staff()) as session:
+        events = await audit.events_for_resource(session, "investment", investment.id)
+    actions = [(event.action, event.actor_kind) for event in events]
+    assert actions[:2] == [
+        ("investments.matured", "system"),
+        ("investments.maturity_chosen", "client"),
+    ]
+    assert events[0].details == {"step": "roll_over"}
+    assert events[1].details == {"at_maturity": "roll_over", "destination_id": None}
+    client = Actor("client", investment.client_id)
+    async with app_database.actor_transaction(client) as session:
+        told = (
+            await session.execute(
+                text(
+                    "SELECT body, link_id FROM notifications "
+                    "WHERE client_id = :client AND event = 'investment_matured'"
+                ),
+                {"client": client.id},
+            )
+        ).all()
+    assert [tuple(row) for row in told] == [
+        ("Your 91 Day Treasury Bill has matured at UGX 1,026,490.", investment.id),
+    ]
 
 
 async def test_the_new_term_earns_from_the_day_after_the_old_one_ended(

@@ -1,6 +1,12 @@
 """Outgoing email behind one small interface. Resend is the provider."""
 
-from app.infrastructure.email.message import EmailMessage, InvalidEmail, Sender, check_address
+from app.infrastructure.email.message import (
+    Attachment,
+    EmailMessage,
+    InvalidEmail,
+    Sender,
+    check_address,
+)
 from app.infrastructure.email.settings import EmailSettings
 from app.infrastructure.email.transports import (
     DisabledTransport,
@@ -13,6 +19,7 @@ from app.infrastructure.email.transports import (
 )
 
 __all__ = [
+    "Attachment",
     "DisabledTransport",
     "EmailDeferred",
     "EmailFailure",

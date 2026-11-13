@@ -4,7 +4,7 @@ What a client put in, earned and was paid, month by month, and what comes next f
 
 ## What a client sees
 
-`GET /client/insights?months=6` answers for the signed-in client only, for 1 to 24 months up to and including this one. Amounts are integers in the smallest unit of `currency`.
+`GET /client/insights?months=6&currency=UGX` answers for the signed-in client only, for 1 to 24 months up to and including this one, in one currency: `UGX` (the default) or `USD`. Amounts are integers in the smallest unit of `currency`, whole shillings or cents. Every figure, including what is invested now and what comes up, counts only that currency's accounts and investments. Figures in different currencies are never added together: a client with dollar investments asks once per currency and sees each on its own.
 
 | Figure | Read from |
 | --- | --- |
@@ -29,4 +29,4 @@ The route opens the client's own transaction, so the ledger's row policies show 
 
 ## Not built yet
 
-Upcoming runs of automatic investing plans and goal due dates in "coming up". Insights in dollars, when the dollar product opens. The client app screen runs on a demo until this route is deployed.
+Upcoming runs of automatic investing plans and goal due dates in "coming up". The client app screen runs on a demo until this route is deployed.

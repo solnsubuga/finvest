@@ -34,6 +34,27 @@ export const AmountView = z.object({
 });
 export type AmountView = z.infer<typeof AmountView>;
 
+export const AnnouncementView = z.object({
+  decided_at: z.string().nullable(),
+  decided_by: z.string().nullable(),
+  decision_reason: z.string().nullable(),
+  id: z.string(),
+  message: z.string(),
+  proposed_at: z.string(),
+  proposed_by: z.string(),
+  reason: z.string(),
+  status: z.enum(["proposed", "approved", "rejected", "withdrawn"]),
+  title: z.string(),
+  told: z.number().int(),
+  yours: z.boolean(),
+});
+export type AnnouncementView = z.infer<typeof AnnouncementView>;
+
+export const AnnouncementList = z.object({
+  announcements: z.array(AnnouncementView),
+});
+export type AnnouncementList = z.infer<typeof AnnouncementList>;
+
 export const ApprovalItemOut = z.object({
   can_decide: z.boolean(),
   id: z.string(),
@@ -322,6 +343,12 @@ export const ConversationItem = z.object({
   waiting_since: z.string().nullable(),
 });
 export type ConversationItem = z.infer<typeof ConversationItem>;
+
+export const DecideAnnouncement = z.object({
+  decision: z.enum(["approved", "rejected", "withdrawn"]),
+  reason: z.string().nullable().optional(),
+});
+export type DecideAnnouncement = z.infer<typeof DecideAnnouncement>;
 
 export const DecideLift = z.object({
   decision: z.enum(["approved", "rejected", "withdrawn"]),
@@ -675,6 +702,22 @@ export const PasskeyOptions = z.object({
 });
 export type PasskeyOptions = z.infer<typeof PasskeyOptions>;
 
+export const PhoneChangeView = z.object({
+  client_id: z.string(),
+  expires_at: z.string(),
+  id: z.string(),
+  new_phone: z.string(),
+  proposed_at: z.string(),
+  proposed_by: z.string(),
+  reason: z.string(),
+});
+export type PhoneChangeView = z.infer<typeof PhoneChangeView>;
+
+export const PhoneChangeList = z.object({
+  items: z.array(PhoneChangeView),
+});
+export type PhoneChangeList = z.infer<typeof PhoneChangeList>;
+
 export const PhotoLink = z.object({
   id: z.string(),
   kind: PhotoKind,
@@ -755,6 +798,13 @@ export const ProposalView = z.object({
 });
 export type ProposalView = z.infer<typeof ProposalView>;
 
+export const ProposeAnnouncement = z.object({
+  message: z.string(),
+  reason: z.string(),
+  title: z.string(),
+});
+export type ProposeAnnouncement = z.infer<typeof ProposeAnnouncement>;
+
 export const ProposeLift = z.object({
   reason: z.string(),
 });
@@ -773,11 +823,22 @@ export const ProposeOutcome = z.object({
 });
 export type ProposeOutcome = z.infer<typeof ProposeOutcome>;
 
+export const ProposePhone = z.object({
+  phone: z.string(),
+  reason: z.string(),
+});
+export type ProposePhone = z.infer<typeof ProposePhone>;
+
 export const ProposeWording = z.object({
   reason: z.string(),
   wording: WordingText,
 });
 export type ProposeWording = z.infer<typeof ProposeWording>;
+
+export const Proposed = z.object({
+  id: z.string(),
+});
+export type Proposed = z.infer<typeof Proposed>;
 
 export const QueueEntry = z.object({
   document_type: DocumentType,
@@ -821,6 +882,11 @@ export const RejectBody = z.object({
   reason: z.string(),
 });
 export type RejectBody = z.infer<typeof RejectBody>;
+
+export const Rejection = z.object({
+  note: z.string(),
+});
+export type Rejection = z.infer<typeof Rejection>;
 
 export const SavedReplyItem = z.object({
   body: z.string(),
@@ -1023,7 +1089,7 @@ export type StaffSendMessage = z.infer<typeof StaffSendMessage>;
 
 export const StaffSessionView = z.object({
   name: z.string(),
-  permissions: z.array(z.enum(["overview.view", "review_queue.view", "identity_checks.view", "identity_checks.review", "maturities.view", "support.view", "support.reply", "complaints.view", "complaints.manage", "complaints.close", "clients.view", "clients.lock", "money_movement.view", "reconciliation.view", "investments.view", "automatic_investing.view", "goals.view", "dealing_desk.view", "finance.view", "products.view", "rates.view", "rates.change", "compliance.view", "team.view", "reports.view", "audit.view", "settings.view", "wordings.change", "email_suppressions.lift", "migration.view", "bank_transfers.change", "migration.import", "migration.sign_off"])),
+  permissions: z.array(z.enum(["overview.view", "review_queue.view", "identity_checks.view", "identity_checks.review", "maturities.view", "support.view", "support.reply", "complaints.view", "complaints.manage", "complaints.close", "clients.view", "clients.lock", "money_movement.view", "reconciliation.view", "investments.view", "automatic_investing.view", "goals.view", "dealing_desk.view", "finance.view", "products.view", "rates.view", "rates.change", "compliance.view", "team.view", "reports.view", "audit.view", "settings.view", "wordings.change", "email_suppressions.lift", "migration.view", "bank_transfers.change", "migration.import", "migration.sign_off", "client_phones.change"])),
   role: z.enum(["admin", "operations", "finance", "compliance", "support"]),
   staff_id: z.string(),
 });
@@ -1081,6 +1147,41 @@ export type WordingList = z.infer<typeof WordingList>;
 
 /** Every route, by method and path, with what it takes and what it answers. */
 export const operations = {
+  "GET /staff/announcements": {
+    method: "GET",
+    path: "/staff/announcements",
+    params: z.object({}),
+    query: z.object({}),
+    body: null,
+    bodyKind: null,
+    idempotent: false,
+    status: 200,
+    response: AnnouncementList,
+  },
+  "POST /staff/announcements": {
+    method: "POST",
+    path: "/staff/announcements",
+    params: z.object({}),
+    query: z.object({}),
+    body: ProposeAnnouncement,
+    bodyKind: "json",
+    idempotent: false,
+    status: 201,
+    response: AnnouncementView,
+  },
+  "POST /staff/announcements/{announcement_id}/decision": {
+    method: "POST",
+    path: "/staff/announcements/{announcement_id}/decision",
+    params: z.object({
+    announcement_id: z.string(),
+  }),
+    query: z.object({}),
+    body: DecideAnnouncement,
+    bodyKind: "json",
+    idempotent: false,
+    status: 200,
+    response: AnnouncementView,
+  },
   "GET /staff/approvals": {
     method: "GET",
     path: "/staff/approvals",
@@ -1200,6 +1301,19 @@ export const operations = {
     idempotent: false,
     status: 201,
     response: LockView,
+  },
+  "POST /staff/clients/{client_id}/phone-changes": {
+    method: "POST",
+    path: "/staff/clients/{client_id}/phone-changes",
+    params: z.object({
+    client_id: z.string(),
+  }),
+    query: z.object({}),
+    body: ProposePhone,
+    bodyKind: "json",
+    idempotent: false,
+    status: 201,
+    response: Proposed,
   },
   "GET /staff/complaints": {
     method: "GET",
@@ -1818,6 +1932,43 @@ export const operations = {
     idempotent: true,
     status: 200,
     response: BankTransferOut,
+  },
+  "GET /staff/phone-changes": {
+    method: "GET",
+    path: "/staff/phone-changes",
+    params: z.object({}),
+    query: z.object({}),
+    body: null,
+    bodyKind: null,
+    idempotent: false,
+    status: 200,
+    response: PhoneChangeList,
+  },
+  "POST /staff/phone-changes/{change_id}/approval": {
+    method: "POST",
+    path: "/staff/phone-changes/{change_id}/approval",
+    params: z.object({
+    change_id: z.string(),
+  }),
+    query: z.object({}),
+    body: null,
+    bodyKind: null,
+    idempotent: false,
+    status: 204,
+    response: null,
+  },
+  "POST /staff/phone-changes/{change_id}/rejection": {
+    method: "POST",
+    path: "/staff/phone-changes/{change_id}/rejection",
+    params: z.object({
+    change_id: z.string(),
+  }),
+    query: z.object({}),
+    body: Rejection,
+    bodyKind: "json",
+    idempotent: false,
+    status: 204,
+    response: null,
   },
   "GET /staff/products": {
     method: "GET",

@@ -1,6 +1,7 @@
 """A provider-neutral outgoing email and its validation.
 
-Every message is HTML with a plain-text alternative, to one recipient. Addresses are ASCII
+Every message is HTML with a plain-text alternative, to one recipient, with any PDF files
+attached. Addresses are ASCII
 only and no header value may contain a line break, so caller data can never inject a header.
 """
 
@@ -13,6 +14,11 @@ from email.utils import parseaddr
 MAX_SUBJECT = 200
 MAX_BODY_BYTES = 500_000
 MAX_TAGS = 5
+MAX_ATTACHMENTS = 3
+# Resend takes up to 40 MB a message, base64 included. Finvest's documents are far smaller.
+MAX_ATTACHMENT_BYTES = 10 * 1024 * 1024
+ATTACHMENT_TYPES = frozenset({"application/pdf"})
+FILE_NAME = re.compile(r"^[A-Za-z0-9 ._-]{1,155}[.]pdf$")
 
 ADDRESS = re.compile(
     r"^[A-Za-z0-9.!#$%&'*+/=?^_`{|}~-]{1,64}@"
@@ -65,6 +71,23 @@ class Sender:
 
 
 @dataclass(frozen=True)
+class Attachment:
+    """A file sent with a message. Only PDFs, under a plain file name."""
+
+    file_name: str
+    content: bytes = field(repr=False)
+    content_type: str = "application/pdf"
+
+    def __post_init__(self) -> None:
+        if not FILE_NAME.fullmatch(self.file_name) or self.file_name.strip() != self.file_name:
+            raise InvalidEmail("An attachment's file name is not valid")
+        if self.content_type not in ATTACHMENT_TYPES:
+            raise InvalidEmail("An attachment must be a PDF")
+        if not self.content:
+            raise InvalidEmail("An attachment is empty")
+
+
+@dataclass(frozen=True)
 class EmailMessage:
     """One message. `idempotency_key` lets the provider drop a repeated send of it."""
 
@@ -74,6 +97,7 @@ class EmailMessage:
     text: str = field(repr=False)
     idempotency_key: str
     tags: Mapping[str, str] = field(default_factory=dict)
+    attachments: tuple[Attachment, ...] = ()
 
     def __post_init__(self) -> None:
         check_address(self.to)
@@ -88,3 +112,7 @@ class EmailMessage:
             TAG.fullmatch(name) and TAG.fullmatch(value) for name, value in self.tags.items()
         ):
             raise InvalidEmail("A message tag is not valid")
+        if len(self.attachments) > MAX_ATTACHMENTS:
+            raise InvalidEmail("A message has too many attachments")
+        if sum(len(file.content) for file in self.attachments) > MAX_ATTACHMENT_BYTES:
+            raise InvalidEmail("The attachments are too large")

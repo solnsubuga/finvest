@@ -20,6 +20,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.infrastructure.idempotency import Receipt, run_once
 from app.infrastructure.jobs import publish
+from app.modules.audit import service as audit
+from app.modules.audit.domain.events import AuditActor, AuditEvent
 from app.modules.investments.catalogue import invalid, product_from_row, product_row, rates_for
 from app.modules.investments.domain.interest import (
     ClientReturns,
@@ -44,6 +46,7 @@ from app.modules.investments.domain.rates import RateVersion, rate_in_force
 from app.modules.kyc import service as kyc
 from app.modules.ledger import service as ledger
 from app.modules.ledger.domain.entries import AccountKind, AccountSpec, EntryDraft, credit, debit
+from app.modules.notifications import contract as notifications
 from app.modules.payments import service as payments
 from app.modules.payments.domain.deposits import Purpose
 from app.shared.actors import Actor
@@ -54,6 +57,8 @@ from app.shared.money import Currency, Money
 from app.shared.push_ids import push_id
 
 REQUEST_OPERATION = "investments.request_investment"
+# What audit events about an investment name as their resource.
+INVESTMENT_RESOURCE = "investment"
 STARTED_TOPIC = "investments.started"
 AWAITING_START = "client.awaiting_start"
 HOLDING = "client.holding"
@@ -297,6 +302,21 @@ async def _create(
             "pay_by": pay_by(now),
         },
     )
+    await audit.record(
+        session,
+        AuditEvent(
+            category="change",
+            action="investments.requested",
+            resource_type=INVESTMENT_RESOURCE,
+            resource_id=investment_id,
+            actor=AuditActor.client(client_id),
+            details={
+                "product": product.code,
+                "at_maturity": at_maturity.value if at_maturity else None,
+            },
+        ),
+        clock,
+    )
     logger.info("investment_requested", investment_id=investment_id, product=product.code)
     return investment_id
 
@@ -408,6 +428,31 @@ async def start_investment(
             "currency": currency.value,
         },
         consumers=[],
+        now=now,
+    )
+    await audit.record(
+        session,
+        AuditEvent(
+            category="change",
+            action="investments.started",
+            resource_type=INVESTMENT_RESOURCE,
+            resource_id=investment.id,
+            actor=AuditActor.system(),
+            details={
+                "start_date": dates.start_date.isoformat(),
+                "ledger_entry_id": entry.id,
+            },
+        ),
+        clock,
+    )
+    product = product_from_row(await product_row(session, investment.product_code))
+    await notifications.notify(
+        session,
+        event_name="investment_started",
+        client_id=investment.client_id,
+        idempotency_key=investment.id,
+        variables={"amount": investment.amount, "product": product.name},
+        link=notifications.Link("investment", investment.id),
         now=now,
     )
     logger.info("investment_started", investment_id=investment.id)
