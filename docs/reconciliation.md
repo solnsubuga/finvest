@@ -107,3 +107,22 @@ The ledger is closed before the figures are read at approval, so no entry can sl
 | Who | Only staff prepare and decide. The worker reads. Clients see nothing |
 
 The pots closed today are the two ioTec wallets and the trust bank account (`domain/pots.py`). The custodian joins when the dealing desk can report holdings.
+
+## Transfers between pots
+
+Finvest moves its own money between pots, such as sweeping collected mobile money from an ioTec wallet to the trust bank account so the dealing desk can pay for bills. `reconciliation.transfers` records it (migration `0042_pot_transfers`).
+
+1. One member of staff records a transfer that has already been made, with the provider's reference, what was sent, what arrived and a reason. Nothing is posted.
+2. A different member of staff approves it, which posts one entry: debit the receiving pot with what arrived, debit `fees.provider.iotec` with any difference, credit the sending pot with what was sent. A transfer that leaves the trust bank account cannot carry a fee yet (`transfer_fee_not_allowed`), because no bank charges account is agreed. Or they decline it with a reason.
+
+| Rule | How it is held |
+| --- | --- |
+| Two people | The database refuses a decision by the person who recorded it, or in anyone's name but the signed-in member of staff's |
+| Recorded once | A provider reference can be recorded once per sending pot, unless the first was declined |
+| Never more than sent | What arrived is never more than what was sent. The difference is the fee |
+| Never more than held | An approval that would take the sending pot below zero in the books is refused |
+| Not in a closed day | A value date on or before the last closed day is refused when the transfer is recorded |
+| Fixed terms | What was recorded never changes, and a decided transfer never changes |
+| Reviewed staff money path | `pot_transfer` is in the ledger's list of source types staff may post |
+
+The transfer's ID is the entry's `source_id`, so a statement line that carries it is matched by reference. Otherwise staff pair it by hand. A sweep that has left the wallet but not reached the bank stays an open exception until it arrives.

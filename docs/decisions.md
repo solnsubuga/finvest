@@ -94,6 +94,7 @@ A running log. Add a row when a decision is made, and move an open question up w
 | 2026-11-13 | Decided for now, by the automatic investing thread: a new staff permission, `automatic_investing.view`, opens the read-only Automatic Investing screen. Admin, operations and finance have it, the same roles that see investments. It is part of the role to screen table still to be confirmed. |
 | 2026-11-13 | Staging is on hold to save cost (owner: "We can't afford to have two environments. Everything should be setup but switched off in CI"). Its Terraform, workflows and settings stay in the repository; Provision refuses it and Deploy Staging skips until the repository variable `STAGING_ENABLED` is `true`. Production is the only environment for now. |
 | 2026-11-13 | Decided for now, by the automatic investing thread. A plan runs weekly or monthly, from the first due day after the day it is set up. Each run is one ordinary investment paid by its own mobile money prompt, at most UGX 5,000,000. A run more than a day late is missed and never collected late, a failed payment is tried once more the next day, and a client keeps at most ten plans. Prompts are sent only between 08:00 and 20:00 in Kampala. See [automatic-investing.md](automatic-investing.md). |
+| 2026-11-13 | Decided for now, by the payouts and reconciliation thread: a fee the provider keeps on a sweep between pots is booked, when a second person approves the transfer, to an expense account named per provider, `fees.provider.iotec` for ioTec. A transfer that leaves the trust bank account cannot carry a fee yet, because no bank charges account is agreed. See [reconciliation.md](reconciliation.md#transfers-between-pots). |
 
 ## Open
 
@@ -120,6 +121,7 @@ A running log. Add a row when a decision is made, and move an open question up w
 | Payouts: staff may approve a name with a name left out, such as a middle name, when at least two names agree (built so far). A name spelt differently is refused. Confirm the left-out name allowance. | Owner |
 | Payouts: mobile money prefixes accepted are MTN 76, 77, 78, 39 and Airtel 70, 74, 75, 20. Confirm the list. | Owner, ioTec |
 | Payouts: a client can cancel a withdrawal only while it is held for review (built so far). Should they be able to cancel before it is sent? | Owner |
+| Reconciliation: is a provider's fee on a sweep between pots Finvest's own expense, and under which account (built so far: `fees.provider.iotec`)? Where do bank charges on the trust account go? | Owner, accountant |
 | Migration: a sample Finvest 1.0 export, or the old database tables, to check the import columns against. | Owner |
 | Migration: Finvest 1.0 identity documents with no expiry date on file are treated as still valid (built so far). Should those clients redo the ID check instead? | Owner, counsel |
 | Migration: should payout accounts and past transactions from Finvest 1.0 be brought across? Built: no. | Owner |
