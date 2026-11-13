@@ -15,7 +15,7 @@ and column, the new system's totals, and the figures of the investments that dif
 
 import hashlib
 import json
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import date, datetime
 from typing import Any, Literal
 
@@ -50,7 +50,11 @@ MAX_STORED_PROBLEMS = 500
 MAX_SHEET_BYTES = 40_000_000
 
 BlockerCode = Literal[
-    "no_trial", "import_has_errors", "totals_not_entered", "difference_not_signed_off"
+    "no_trial",
+    "import_has_errors",
+    "totals_not_entered",
+    "totals_not_confirmed",
+    "difference_not_signed_off",
 ]
 SignOffState = Literal["proposed", "approved", "rejected"]
 
@@ -82,10 +86,44 @@ class SignOffView:
 
 
 @dataclass(frozen=True, slots=True)
+class TotalsView:
+    """The latest entry of the old system's totals for a date. It counts once confirmed."""
+
+    id: str
+    as_of: date
+    entered_by: str
+    entered_at: datetime
+    confirmed_by: str | None
+    totals: ControlTotals
+
+
+@dataclass(frozen=True, slots=True)
+class TrialSummary:
+    """One trial run, for following a parallel run day by day. No problems and no figures.
+
+    `totals_differing` is None while that day's Finvest 1.0 totals are not yet confirmed.
+    """
+
+    id: str
+    as_of: date
+    ran_by: str
+    ran_at: datetime
+    error_count: int
+    warning_count: int
+    clients_sha256: str
+    investments_sha256: str
+    totals_confirmed: bool
+    totals_differing: int | None
+    investments_differing: int
+
+
+@dataclass(frozen=True, slots=True)
 class Overview:
     trials_run: int
     trial: TrialView | None
-    # Empty until finance has entered the old system's totals for the trial's "as of" date.
+    # The latest entry of the old system's totals for the trial's "as of" date, if any.
+    totals: TotalsView | None
+    # Empty until that entry has been confirmed by a second person.
     lines: tuple[TotalLine, ...]
     # Everything that differs now, by key, with its figures: total lines, then investments.
     differing: dict[str, tuple[int, ...]]
@@ -106,14 +144,31 @@ _LATEST_TRIAL = text(
     "ran_at FROM migration_trials ORDER BY ran_at DESC, id DESC LIMIT 1"
 )
 _COUNT_TRIALS = text("SELECT count(*) FROM migration_trials")
+_TRIALS_BETWEEN = text(
+    "SELECT id, as_of, error_count, warning_count, problems, new_totals, differing, ran_by, "
+    "ran_at, clients_sha256, investments_sha256 FROM migration_trials "
+    "WHERE as_of BETWEEN :date_from AND :date_to ORDER BY ran_at, id LIMIT :limit"
+)
+# About a quarter of daily runs, more than any parallel run needs.
+MAX_HISTORY = 400
 _INSERT_TOTALS = text(
     "INSERT INTO migration_control_totals (id, as_of, totals, entered_by, entered_at) "
     "VALUES (:id, :as_of, CAST(:totals AS jsonb), :entered_by, :entered_at)"
 )
 _LATEST_TOTALS = text(
-    "SELECT totals FROM migration_control_totals WHERE as_of = :as_of "
-    "ORDER BY entered_at DESC, id DESC LIMIT 1"
+    "SELECT t.id, t.as_of, t.totals, t.entered_by, t.entered_at, c.confirmed_by "
+    "FROM migration_control_totals AS t "
+    "LEFT JOIN migration_control_totals_confirmations AS c ON c.totals_id = t.id "
+    "WHERE t.as_of = :as_of ORDER BY t.entered_at DESC, t.id DESC LIMIT 1"
 )
+_TOTALS_DATE = text("SELECT as_of FROM migration_control_totals WHERE id = :id")
+_INSERT_CONFIRMATION = text(
+    "INSERT INTO migration_control_totals_confirmations (totals_id, confirmed_by, confirmed_at) "
+    "VALUES (:totals_id, :confirmed_by, :confirmed_at)"
+)
+# One confirmation or new entry at a time for a date, so a confirmation is always of the
+# entry that is the latest when it commits.
+_LOCK_TOTALS = text("SELECT pg_advisory_xact_lock(hashtextextended(:as_of, 71))")
 _INSERT_SIGN_OFF = text(
     "INSERT INTO migration_sign_offs (id, key, figures, reason, proposed_by, proposed_at) "
     "VALUES (:id, :key, :figures, :reason, :proposed_by, :proposed_at)"
@@ -151,7 +206,7 @@ async def run_trial_import(
     _staff_only(staff)
     if as_of > business_date(clock.now()):
         raise _invalid("as_of", "in_the_future")
-    if max(len(clients_csv), len(investments_csv)) > MAX_SHEET_BYTES:
+    if max(len(clients_csv.encode()), len(investments_csv.encode())) > MAX_SHEET_BYTES:
         raise ApplicationError("payload_too_large")
     views = await investments.list_products(session, clock)
     products = {view.product.code: view.product for view in views}
@@ -225,10 +280,16 @@ async def run_trial_import(
 
 async def enter_control_totals(
     session: AsyncSession, staff: Actor, clock: Clock, *, as_of: date, totals: ControlTotals
-) -> None:
-    """Record what the old system says it holds on `as_of`. A correction is a new entry."""
+) -> TotalsView:
+    """Record what the old system says it holds on `as_of`. A correction is a new entry.
+
+    The entry is not used until a second person confirms it, and a new entry replaces the one
+    before it, confirmed or not. One person can therefore never change what the trial is
+    compared with.
+    """
     _staff_only(staff)
     totals_id = push_id()
+    await session.execute(_LOCK_TOTALS, {"as_of": as_of.isoformat()})
     await session.execute(
         _INSERT_TOTALS,
         {
@@ -260,6 +321,55 @@ async def enter_control_totals(
         clock,
         details={"as_of": as_of.isoformat()},
     )
+    return TotalsView(totals_id, as_of, _id(staff), clock.now(), None, totals)
+
+
+async def confirm_control_totals(
+    session: AsyncSession, staff: Actor, clock: Clock, totals_id: str
+) -> TotalsView:
+    """Confirm an entry of the old system's totals, as someone other than who entered it.
+
+    Only the latest entry for its date can be confirmed: an older one has been corrected.
+    """
+    _staff_only(staff)
+    as_of = (await session.execute(_TOTALS_DATE, {"id": totals_id})).scalar_one_or_none()
+    if as_of is None:
+        raise ApplicationError("not_found")
+    await session.execute(_LOCK_TOTALS, {"as_of": as_of.isoformat()})
+    entry = await _control_totals(session, as_of)
+    if entry is None or entry.id != totals_id or entry.confirmed_by is not None:
+        raise ApplicationError("conflict")
+    if entry.entered_by == _id(staff):
+        raise ApplicationError("forbidden")
+    try:
+        async with session.begin_nested():
+            await session.execute(
+                _INSERT_CONFIRMATION,
+                {
+                    "totals_id": totals_id,
+                    "confirmed_by": _id(staff),
+                    "confirmed_at": clock.now(),
+                },
+            )
+    except IntegrityError as error:
+        constraint = getattr(getattr(error.orig, "__cause__", None), "constraint_name", None)
+        if constraint == "pk_migration_control_totals_confirmations":
+            raise ApplicationError("conflict") from None
+        if constraint == "migration_totals_second_person":
+            raise ApplicationError("forbidden") from None
+        raise
+    await _audit(
+        session,
+        staff,
+        "approval",
+        "migration.control_totals_confirmed",
+        "migration_control_totals",
+        totals_id,
+        clock,
+        reason="Checked against the Finvest 1.0 report",
+        details={"as_of": as_of.isoformat()},
+    )
+    return replace(entry, confirmed_by=_id(staff))
 
 
 async def overview(session: AsyncSession) -> Overview:
@@ -267,10 +377,11 @@ async def overview(session: AsyncSession) -> Overview:
     trials_run = int((await session.execute(_COUNT_TRIALS)).scalar_one())
     row = (await session.execute(_LATEST_TRIAL)).one_or_none()
     if row is None:
-        return Overview(0, None, (), {}, {}, ("no_trial",))
+        return Overview(0, None, None, (), {}, {}, ("no_trial",))
     trial = _trial(row)
-    old = await _control_totals(session, trial.as_of)
-    lines = () if old is None else total_lines(old, trial.new_totals)
+    entry = await _control_totals(session, trial.as_of)
+    confirmed = entry is not None and entry.confirmed_by is not None
+    lines = total_lines(entry.totals, trial.new_totals) if entry and confirmed else ()
     differing = {line.key: line.figures for line in lines if not line.agrees} | trial.differing
 
     # The latest sign-off per key counts, and only for exactly the figures that stand now.
@@ -286,11 +397,58 @@ async def overview(session: AsyncSession) -> Overview:
     blockers: list[BlockerCode] = []
     if trial.error_count:
         blockers.append("import_has_errors")
-    if old is None:
+    if entry is None:
         blockers.append("totals_not_entered")
+    elif not confirmed:
+        blockers.append("totals_not_confirmed")
     if any(key not in current or current[key].state != "approved" for key in differing):
         blockers.append("difference_not_signed_off")
-    return Overview(trials_run, trial, lines, differing, current, tuple(blockers))
+    return Overview(trials_run, trial, entry, lines, differing, current, tuple(blockers))
+
+
+async def trial_history(
+    session: AsyncSession, *, date_from: date, date_to: date
+) -> tuple[TrialSummary, ...]:
+    """Every trial whose "as of" day falls in the range, oldest first, at most `MAX_HISTORY`.
+
+    Each is compared with the latest Finvest 1.0 totals for its own day, once confirmed.
+    Whether a difference was signed off is only judged for the newest trial, by `overview`.
+    """
+    if date_from > date_to:
+        raise _invalid("date_from", "after_date_to")
+    rows = (
+        await session.execute(
+            _TRIALS_BETWEEN, {"date_from": date_from, "date_to": date_to, "limit": MAX_HISTORY}
+        )
+    ).all()
+    entries: dict[date, TotalsView | None] = {}
+    summaries: list[TrialSummary] = []
+    for row in rows:
+        trial = _trial(row)
+        if trial.as_of not in entries:
+            entries[trial.as_of] = await _control_totals(session, trial.as_of)
+        entry = entries[trial.as_of]
+        confirmed = entry is not None and entry.confirmed_by is not None
+        totals_differing = None
+        if entry is not None and confirmed:
+            lines = total_lines(entry.totals, trial.new_totals)
+            totals_differing = sum(1 for line in lines if not line.agrees)
+        summaries.append(
+            TrialSummary(
+                id=trial.id,
+                as_of=trial.as_of,
+                ran_by=trial.ran_by,
+                ran_at=trial.ran_at,
+                error_count=trial.error_count,
+                warning_count=trial.warning_count,
+                clients_sha256=row.clients_sha256,
+                investments_sha256=row.investments_sha256,
+                totals_confirmed=confirmed,
+                totals_differing=totals_differing,
+                investments_differing=len(trial.differing),
+            )
+        )
+    return tuple(summaries)
 
 
 async def propose_sign_off(
@@ -479,7 +637,7 @@ def _sign_off(row: Row[Any]) -> SignOffView:
     )
 
 
-async def _control_totals(session: AsyncSession, as_of: date) -> ControlTotals | None:
+async def _control_totals(session: AsyncSession, as_of: date) -> TotalsView | None:
     row = (await session.execute(_LATEST_TOTALS, {"as_of": as_of})).one_or_none()
     if row is None:
         return None
@@ -493,7 +651,7 @@ async def _control_totals(session: AsyncSession, as_of: date) -> ControlTotals |
         )
 
     try:
-        return ControlTotals(
+        stored = ControlTotals(
             clients=int(totals["clients"]),
             verified_identities=int(totals["verified_identities"]),
             running_investments=int(totals["running_investments"]),
@@ -503,6 +661,7 @@ async def _control_totals(session: AsyncSession, as_of: date) -> ControlTotals |
         )
     except (KeyError, TypeError, ValueError, InvalidFinanceCheck):
         return None
+    return TotalsView(row.id, row.as_of, row.entered_by, row.entered_at, row.confirmed_by, stored)
 
 
 async def _audit(

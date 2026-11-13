@@ -20,6 +20,7 @@ from app.modules.identity.authenticators import AuthenticatorService
 from app.modules.identity.hashing import PasswordHasher
 from app.modules.identity.passkeys import PasskeyService
 from app.modules.identity.service import IdentityService
+from app.modules.migration import api as migration_api
 from app.modules.notifications import api as notifications_api
 from app.modules.payments import api as payments_api
 from app.modules.payments import routes as payment_routes
@@ -105,4 +106,5 @@ def create_app(
     app.include_router(payments_api.create_router(collections))
     app.include_router(payment_routes.create_client_router(collections))
     app.include_router(payment_routes.staff_router)
+    app.include_router(migration_api.router)
     return app

@@ -43,6 +43,8 @@ Permission = Literal[
     # else's match: this confirms money. Seeing the transfers is `reconciliation.view`. Not a
     # screen: the console's own list gains it with the bank transfers screen.
     "bank_transfers.change",
+    "migration.import",
+    "migration.sign_off",
 ]
 PERMISSIONS: tuple[Permission, ...] = get_args(Permission)
 
@@ -70,6 +72,7 @@ ROLE_PERMISSIONS: dict[Role, frozenset[Permission]] = {
             "reports.view",
             "migration.view",
             "bank_transfers.change",
+            "migration.import",
         }
     ),
     "finance": frozenset(
@@ -88,6 +91,8 @@ ROLE_PERMISSIONS: dict[Role, frozenset[Permission]] = {
             "rates.view",
             "reports.view",
             "bank_transfers.change",
+            "migration.view",
+            "migration.sign_off",
         }
     ),
     "compliance": frozenset(

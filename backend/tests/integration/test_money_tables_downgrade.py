@@ -183,6 +183,13 @@ ROWS = {
         "VALUES ('-Nabc0000000000000A1', '-Nabc0000000000000B1', now(), now())",
         "refusing to drop help chat or complaints",
     ),
+    "0071_migration_totals_confirmed": (
+        "INSERT INTO migration_control_totals (id, as_of, totals, entered_by, entered_at) "
+        "VALUES ('-Nabc0000000000000A1', DATE '2026-11-13', '{}', '-Nabc0000000000000S1', "
+        "now()); INSERT INTO migration_control_totals_confirmations (totals_id, confirmed_by, "
+        "confirmed_at) VALUES ('-Nabc0000000000000A1', '-Nabc0000000000000S2', now())",
+        "refusing to drop confirmations of migration totals",
+    ),
 }
 
 
