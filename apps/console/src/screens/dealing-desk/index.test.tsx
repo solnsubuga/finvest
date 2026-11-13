@@ -28,6 +28,13 @@ function positionRow(product: string): string[] {
     .map((cell) => cell.textContent ?? "");
 }
 
+/** Approves the 91 day bid as the second person and opens its result form. */
+async function openResultForm(user: ReturnType<typeof userEvent.setup>): Promise<HTMLElement> {
+  await user.click(within(await order(BID_91)).getByRole("button", { name: "Approve as second person" }));
+  await user.click(await within(await order(BID_91)).findByRole("button", { name: "Record the result" }));
+  return within(await order(BID_91)).getByRole("form", { name: "Record the result" });
+}
+
 describe("dealing desk screen", () => {
   it("shows the position and the four figures from the canvas", async () => {
     renderDesk();
@@ -110,33 +117,39 @@ describe("dealing desk screen", () => {
     expect(prepare).not.toHaveBeenCalled();
   });
 
-  it("records a result from the custodian's note and leaves it for someone else to confirm", async () => {
+  it("asks for every part of a result before recording it", async () => {
     const { user, api } = renderDesk();
     const record = vi.spyOn(api, "recordResult");
-    await user.click(within(await order(BID_91)).getByRole("button", { name: "Approve as second person" }));
-    await user.click(await within(await order(BID_91)).findByRole("button", { name: "Record the result" }));
-    const form = within(await order(BID_91)).getByRole("form", { name: "Record the result" });
-    const submit = within(form).getByRole("button", { name: "Record the result" });
-
-    await user.click(submit);
+    const form = await openResultForm(user);
+    await user.click(within(form).getByRole("button", { name: "Record the result" }));
     expect(within(form).getByText("Enter the face value as a whole number.")).toBeInTheDocument();
+    expect(within(form).getByText("Enter the cash amount as a whole number.")).toBeInTheDocument();
     expect(within(form).getByText("Enter the maturity date.")).toBeInTheDocument();
     expect(within(form).getByText("Enter the reference on the custodian's note.")).toBeInTheDocument();
+    expect(record).not.toHaveBeenCalled();
+  });
 
+  it("refuses a result larger than the order, or a bill dearer than its face value", async () => {
+    const { user, api } = renderDesk();
+    const record = vi.spyOn(api, "recordResult");
+    const form = await openResultForm(user);
     await user.type(within(form).getByLabelText("Face value bought (UGX)"), "240,100,000");
     await user.type(within(form).getByLabelText("Cash paid (UGX)"), "241,000,000");
-    await user.click(submit);
+    await user.click(within(form).getByRole("button", { name: "Record the result" }));
     expect(within(form).getByText(/The order was for UGX 240,000,000/)).toBeInTheDocument();
     expect(within(form).getByText(/never costs or fetches more than its face value/)).toBeInTheDocument();
     expect(record).not.toHaveBeenCalled();
+  });
 
-    await user.clear(within(form).getByLabelText("Face value bought (UGX)"));
+  it("records a result from the custodian's note and leaves it for someone else to confirm", async () => {
+    const { user, api } = renderDesk();
+    const record = vi.spyOn(api, "recordResult");
+    const form = await openResultForm(user);
     await user.type(within(form).getByLabelText("Face value bought (UGX)"), "240,000,000");
-    await user.clear(within(form).getByLabelText("Cash paid (UGX)"));
     await user.type(within(form).getByLabelText("Cash paid (UGX)"), "232,800,000");
     await user.type(within(form).getByLabelText("Matures on"), "2027-02-12");
     await user.type(within(form).getByLabelText("Custodian reference"), "CSD-2026-0502");
-    await user.click(submit);
+    await user.click(within(form).getByRole("button", { name: "Record the result" }));
 
     const recorded = await order(BID_91);
     expect(await within(recorded).findByText("Result waiting to be confirmed")).toBeInTheDocument();
