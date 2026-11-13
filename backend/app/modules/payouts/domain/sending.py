@@ -37,6 +37,10 @@ SEND_ATTEMPTS = 5
 SEND_GRACE = timedelta(minutes=2)
 # A queued payout left alone this long has lost its send job, and the sweep queues another.
 RESEND_AFTER = timedelta(minutes=10)
+# A queued mobile money payout first tried this long ago, that the provider has taken nothing
+# of since, is held up: the sweep keeps sending it, and staff are shown it so a person can find
+# out why.
+HELD_UP_AFTER = timedelta(hours=2)
 # Status reads go on for this long after the send. After that, two staff members settle the
 # payout from the statement.
 READ_WINDOW = timedelta(days=3)
