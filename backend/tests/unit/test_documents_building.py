@@ -129,3 +129,34 @@ def test_a_matured_investment_reads_as_it_stood_at_the_end_of_the_period(
     )
     period = Period(date(2026, 11, 1), date(2026, 11, 30))
     assert holding_status(facts, period=period, value_at_end=ugx(value)) == label
+
+
+W = InvestmentStatus.WITHDRAWN
+
+
+@pytest.mark.parametrize(
+    ("withdrawn_on", "payout", "value", "label"),
+    [
+        (date(2026, 11, 10), None, 5, "Withdrawn early, waiting to be paid out"),
+        (date(2026, 11, 10), "pay-1", 5, "Withdrawn early, being paid out"),
+        (date(2026, 11, 10), "pay-1", 0, "Withdrawn early and paid out"),
+        (date(2026, 11, 30), None, 5, "Withdrawn early, waiting to be paid out"),
+        # Withdrawn after the period ended: it was still running at the end of the period.
+        (date(2026, 12, 2), "pay-1", 5, "Running"),
+    ],
+)
+def test_an_early_withdrawal_reads_as_it_stood_at_the_end_of_the_period(
+    withdrawn_on: date, payout: str | None, value: int, label: str
+) -> None:
+    facts = InvestmentFacts(
+        "inv-1",
+        "91 Day Treasury Bill",
+        ugx(5),
+        W,
+        ON,
+        date(2027, 2, 1),
+        withdrawn_on=withdrawn_on,
+        withdrawal_payout_id=payout,
+    )
+    period = Period(date(2026, 11, 1), date(2026, 11, 30))
+    assert holding_status(facts, period=period, value_at_end=ugx(value)) == label
