@@ -428,6 +428,7 @@ export type LoginStarted = z.infer<typeof LoginStarted>;
 
 export const MakeComplaint = z.object({
   category: z.enum(["payments", "withdrawals", "investments", "identity", "account", "fees", "service", "other"]),
+  client_key: z.string(),
   details: z.string(),
   summary: z.string(),
 });

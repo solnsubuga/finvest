@@ -116,15 +116,8 @@ export const ClaimProgressView = z.object({
 });
 export type ClaimProgressView = z.infer<typeof ClaimProgressView>;
 
-export const CloseComplaint = z.object({
-  client_accepted: z.boolean(),
-  outcome: z.enum(["upheld", "partly_upheld", "not_upheld"]),
-  resolution: z.string(),
-});
-export type CloseComplaint = z.infer<typeof CloseComplaint>;
-
 export const ComplaintHistoryItem = z.object({
-  action: z.enum(["logged", "assigned", "status", "note", "escalated", "closed"]),
+  action: z.enum(["logged", "assigned", "status", "note", "escalated", "proposed", "rejected", "withdrawn", "closed"]),
   actor: z.enum(["client", "staff"]),
   actor_id: z.string(),
   from_status: z.enum(["new", "investigating", "waiting_for_client", "escalated", "closed"]).nullable(),
@@ -134,6 +127,16 @@ export const ComplaintHistoryItem = z.object({
   to_status: z.enum(["new", "investigating", "waiting_for_client", "escalated", "closed"]).nullable(),
 });
 export type ComplaintHistoryItem = z.infer<typeof ComplaintHistoryItem>;
+
+export const PendingOutcome = z.object({
+  client_accepted: z.boolean(),
+  id: z.string(),
+  outcome: z.enum(["upheld", "partly_upheld", "not_upheld"]),
+  proposed_at: z.string(),
+  proposed_by: z.string(),
+  resolution: z.string(),
+});
+export type PendingOutcome = z.infer<typeof PendingOutcome>;
 
 export const StaffComplaint = z.object({
   amount: AmountOutput.nullable(),
@@ -160,6 +163,7 @@ export type StaffComplaint = z.infer<typeof StaffComplaint>;
 export const ComplaintDetail = z.object({
   complaint: StaffComplaint,
   history: z.array(ComplaintHistoryItem),
+  pending_outcome: PendingOutcome.nullable(),
 });
 export type ComplaintDetail = z.infer<typeof ComplaintDetail>;
 
@@ -205,6 +209,13 @@ export const ConversationItem = z.object({
   waiting_since: z.string().nullable(),
 });
 export type ConversationItem = z.infer<typeof ConversationItem>;
+
+export const DecideOutcome = z.object({
+  decision: z.enum(["confirmed", "rejected", "withdrawn"]),
+  proposal_id: z.string(),
+  reason: z.string().nullable().optional(),
+});
+export type DecideOutcome = z.infer<typeof DecideOutcome>;
 
 export const DecideWording = z.object({
   decision: z.enum(["approved", "rejected", "withdrawn"]),
@@ -363,6 +374,7 @@ export const LogComplaint = z.object({
   amount: SupportApiAmount.nullable().optional(),
   category: z.enum(["payments", "withdrawals", "investments", "identity", "account", "fees", "service", "other"]),
   client_id: z.string(),
+  client_key: z.string(),
   conversation_id: z.string().nullable().optional(),
   details: z.string(),
   owner_id: z.string().nullable().optional(),
@@ -550,6 +562,13 @@ export const ProposalView = z.object({
   yours: z.boolean(),
 });
 export type ProposalView = z.infer<typeof ProposalView>;
+
+export const ProposeOutcome = z.object({
+  client_accepted: z.boolean(),
+  outcome: z.enum(["upheld", "partly_upheld", "not_upheld"]),
+  resolution: z.string(),
+});
+export type ProposeOutcome = z.infer<typeof ProposeOutcome>;
 
 export const ProposeWording = z.object({
   reason: z.string(),
@@ -876,19 +895,6 @@ export const operations = {
     status: 200,
     response: ComplaintDetail,
   },
-  "POST /staff/complaints/{complaint_id}/close": {
-    method: "POST",
-    path: "/staff/complaints/{complaint_id}/close",
-    params: z.object({
-    complaint_id: z.string(),
-  }),
-    query: z.object({}),
-    body: CloseComplaint,
-    bodyKind: "json",
-    idempotent: false,
-    status: 200,
-    response: StaffComplaint,
-  },
   "POST /staff/complaints/{complaint_id}/notes": {
     method: "POST",
     path: "/staff/complaints/{complaint_id}/notes",
@@ -897,6 +903,32 @@ export const operations = {
   }),
     query: z.object({}),
     body: ComplaintNote,
+    bodyKind: "json",
+    idempotent: false,
+    status: 200,
+    response: StaffComplaint,
+  },
+  "POST /staff/complaints/{complaint_id}/outcome": {
+    method: "POST",
+    path: "/staff/complaints/{complaint_id}/outcome",
+    params: z.object({
+    complaint_id: z.string(),
+  }),
+    query: z.object({}),
+    body: ProposeOutcome,
+    bodyKind: "json",
+    idempotent: false,
+    status: 201,
+    response: PendingOutcome,
+  },
+  "POST /staff/complaints/{complaint_id}/outcome/decision": {
+    method: "POST",
+    path: "/staff/complaints/{complaint_id}/outcome/decision",
+    params: z.object({
+    complaint_id: z.string(),
+  }),
+    query: z.object({}),
+    body: DecideOutcome,
     bodyKind: "json",
     idempotent: false,
     status: 200,

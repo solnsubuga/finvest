@@ -3,13 +3,19 @@
 A complaint, its history row, its audit event and the notification to the client commit
 together or not at all. Migration 0100 holds what PostgreSQL enforces: what a complaint said
 when it was logged never changes, closing records an outcome, and a closed complaint is final.
+
+Closing takes two people (migration 0101). One proposes the outcome; a different one confirms
+it, which closes the complaint, or rejects it with a reason. Whoever logged the complaint never
+confirms its outcome.
 """
 
+import re
 from dataclasses import dataclass
 from datetime import date, datetime
 from typing import Any, Literal
 
 from sqlalchemy import Row, text
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.modules.audit import service as audit
@@ -41,10 +47,23 @@ from app.shared.push_ids import push_id, validate_push_id
 __all__ = ["WORKING_DAYS_TO_REPLY"]
 
 RESOURCE = "complaint"
+# The key a client app or the console sends with a new complaint, as chat messages carry.
+_KEY = re.compile(r"^[A-Za-z0-9._:-]{8,64}$")
 DEFAULT_PAGE_SIZE = 50
 MAX_PAGE_SIZE = 200
 Filter = Literal["open", "closed", "all"]
-EventAction = Literal["logged", "assigned", "status", "note", "escalated", "closed"]
+EventAction = Literal[
+    "logged",
+    "assigned",
+    "status",
+    "note",
+    "escalated",
+    "proposed",
+    "rejected",
+    "withdrawn",
+    "closed",
+]
+Decision = Literal["confirmed", "rejected", "withdrawn"]
 
 
 @dataclass(frozen=True, slots=True)
@@ -84,6 +103,18 @@ class ComplaintEvent:
 
 
 @dataclass(frozen=True, slots=True)
+class OutcomeProposal:
+    """An outcome one member of staff proposed, waiting for a second to confirm it."""
+
+    id: str
+    outcome: Outcome
+    resolution: str
+    client_accepted: bool
+    proposed_by: str
+    proposed_at: datetime
+
+
+@dataclass(frozen=True, slots=True)
 class Summary:
     open: int
     overdue: int
@@ -103,10 +134,33 @@ _COLUMNS = (
 _INSERT = text(
     "INSERT INTO complaints (id, client_id, conversation_id, category, received_via, summary, "
     "details, amount_minor, amount_currency, owner_id, received_at, due_on, logged_by_kind, "
-    "logged_by, updated_at) VALUES (:id, :client_id, :conversation_id, :category, :received_via, "
-    ":summary, :details, :amount_minor, :amount_currency, :owner_id, :now, :due_on, :kind, "
-    ":actor, :now)"
+    "logged_by, client_key, updated_at) VALUES (:id, :client_id, :conversation_id, :category, "
+    ":received_via, :summary, :details, :amount_minor, :amount_currency, :owner_id, :now, "
+    ":due_on, :kind, :actor, :key, :now)"
 )
+_BY_KEY = text(
+    f"SELECT {_COLUMNS} FROM complaints "  # noqa: S608 - constant column list
+    "WHERE logged_by = :actor AND client_key = :key"
+)
+_PENDING = text(
+    "SELECT id, outcome, resolution, client_accepted, proposed_by, proposed_at "
+    "FROM complaint_outcome_proposals WHERE complaint_id = :id AND status = 'pending'"
+)
+_PENDING_LOCKED = text(
+    "SELECT id, outcome, resolution, client_accepted, proposed_by, proposed_at "
+    "FROM complaint_outcome_proposals WHERE id = :proposal_id AND complaint_id = :id "
+    "AND status = 'pending' FOR UPDATE"
+)
+_PROPOSE = text(
+    "INSERT INTO complaint_outcome_proposals (id, complaint_id, outcome, resolution, "
+    "client_accepted, proposed_by, proposed_at) VALUES (:id, :complaint_id, :outcome, "
+    ":resolution, :accepted, :staff, :now)"
+)
+_DECIDE = text(
+    "UPDATE complaint_outcome_proposals SET status = :status, decided_by = :staff, "
+    "decided_at = :now, decision_reason = :reason WHERE id = :id"
+)
+_LOGGED_BY = text("SELECT logged_by_kind, logged_by FROM complaints WHERE id = :id")
 _BY_ID = text(f"SELECT {_COLUMNS} FROM complaints WHERE id = :id")  # noqa: S608
 _BY_ID_LOCKED = text(f"SELECT {_COLUMNS} FROM complaints WHERE id = :id FOR UPDATE")  # noqa: S608
 _FOR_CLIENT = text(
@@ -158,12 +212,15 @@ _CLOSED_TIMES = text("SELECT received_at, closed_at FROM complaints WHERE closed
 
 
 async def log_by_client(
-    session: AsyncSession, client: Actor, new: NewComplaint, clock: Clock
+    session: AsyncSession, client: Actor, new: NewComplaint, key: str, clock: Clock
 ) -> ComplaintView:
-    """A client makes a complaint from the app. They are told its reference and reply date."""
+    """A client makes a complaint from the app. They are told its reference and reply date.
+
+    The same `key` from the same client logs one complaint: a repeat returns the first.
+    """
     if client.kind != "client" or client.id is None or new.received_via != "app":
         raise ApplicationError("forbidden")
-    return await _log(session, client, client.id, new, None, None, clock)
+    return await _log(session, client, client.id, new, None, None, key, clock)
 
 
 async def log_by_staff(
@@ -171,12 +228,16 @@ async def log_by_staff(
     staff: Actor,
     client_id: str,
     new: NewComplaint,
+    key: str,
     clock: Clock,
     *,
     conversation_id: str | None = None,
     owner_id: str | None = None,
 ) -> ComplaintView:
-    """Staff log a complaint a client made by phone, email, letter, in person or in chat."""
+    """Staff log a complaint a client made by phone, email, letter, in person or in chat.
+
+    The same `key` from the same member of staff logs one complaint.
+    """
     _staff(staff)
     if new.received_via == "app":
         raise _invalid("received_via", "unknown")
@@ -184,7 +245,7 @@ async def log_by_staff(
         validate_push_id(client_id)
     except ValueError:
         raise _invalid("client_id", "invalid") from None
-    return await _log(session, staff, client_id, new, conversation_id, owner_id, clock)
+    return await _log(session, staff, client_id, new, conversation_id, owner_id, key, clock)
 
 
 async def complaints_for_client(
@@ -287,26 +348,97 @@ async def add_note(
     return await _reload(session, row.id, clock)
 
 
-async def close(
+async def pending_outcome(session: AsyncSession, complaint_id: str) -> OutcomeProposal | None:
+    row = (await session.execute(_PENDING, {"id": complaint_id})).one_or_none()
+    return _proposal(row) if row is not None else None
+
+
+async def propose_outcome(
     session: AsyncSession, staff: Actor, complaint_id: str, closure: Closure, clock: Clock
-) -> ComplaintView:
-    """Record the outcome and close the complaint for good. The client is told."""
+) -> OutcomeProposal:
+    """Propose how the complaint ends. Nothing is final until someone else confirms it."""
     staff_id = _staff(staff)
     row = await _open(session, complaint_id)
     now = clock.now()
+    proposal_id = push_id()
+    try:
+        async with session.begin_nested():
+            await session.execute(
+                _PROPOSE,
+                {
+                    "id": proposal_id,
+                    "complaint_id": row.id,
+                    "outcome": closure.outcome,
+                    "resolution": closure.resolution,
+                    "accepted": closure.client_accepted,
+                    "staff": staff_id,
+                    "now": now,
+                },
+            )
+    except IntegrityError:
+        # One outcome waits at a time. Withdraw or decide that one first.
+        raise ApplicationError("conflict") from None
+    await _event(session, staff, row.id, "proposed", now)
+    await _audit(session, staff, "complaints.outcome_proposed", row, clock, closure.outcome)
+    proposal = await pending_outcome(session, row.id)
+    assert proposal is not None
+    return proposal
+
+
+async def decide_outcome(
+    session: AsyncSession,
+    staff: Actor,
+    complaint_id: str,
+    proposal_id: str,
+    decision: Decision,
+    reason: str | None,
+    clock: Clock,
+) -> ComplaintView:
+    """Confirm, reject or withdraw the outcome waiting on a complaint.
+
+    Confirming closes the complaint for good and tells the client. It needs someone other than
+    the proposer and, for a complaint staff logged, other than whoever logged it. Rejecting needs
+    a reason. Only the proposer withdraws.
+    """
+    staff_id = _staff(staff)
+    row = await _open(session, complaint_id)
+    proposal = (
+        await session.execute(_PENDING_LOCKED, {"proposal_id": proposal_id, "id": row.id})
+    ).one_or_none()
+    if proposal is None:
+        # Decided already, withdrawn, or for another complaint.
+        raise ApplicationError("conflict")
+    mine = proposal.proposed_by == staff_id
+    if (decision == "withdrawn") != mine:
+        raise ApplicationError("forbidden")
+    if decision == "confirmed":
+        logged = (await session.execute(_LOGGED_BY, {"id": row.id})).one()
+        if logged.logged_by_kind == "staff" and logged.logged_by == staff_id:
+            raise ApplicationError("forbidden")
+    cleaned = _note(reason or "") if decision == "rejected" or reason else None
+    now = clock.now()
+    await session.execute(
+        _DECIDE,
+        {"id": proposal.id, "status": decision, "staff": staff_id, "now": now, "reason": cleaned},
+    )
+    if decision != "confirmed":
+        action: EventAction = "rejected" if decision == "rejected" else "withdrawn"
+        await _event(session, staff, row.id, action, now, note=cleaned)
+        await _audit(session, staff, f"complaints.outcome_{decision}", row, clock, cleaned)
+        return await _reload(session, row.id, clock)
     await session.execute(
         _CLOSE,
         {
             "id": row.id,
             "staff": staff_id,
-            "outcome": closure.outcome,
-            "resolution": closure.resolution,
-            "accepted": closure.client_accepted,
+            "outcome": proposal.outcome,
+            "resolution": proposal.resolution,
+            "accepted": proposal.client_accepted,
             "now": now,
         },
     )
     await _event(session, staff, row.id, "closed", now, row.status, "closed")
-    await _audit(session, staff, "complaints.closed", row, clock, closure.outcome, "closed")
+    await _audit(session, staff, "complaints.closed", row, clock, proposal.outcome, "closed")
     await notifications.notify(
         session,
         event_name="complaint_closed",
@@ -350,30 +482,43 @@ async def _log(
     new: NewComplaint,
     conversation_id: str | None,
     owner_id: str | None,
+    key: str,
     clock: Clock,
 ) -> ComplaintView:
     now = clock.now()
+    if not _KEY.fullmatch(key):
+        raise _invalid("client_key", "invalid")
+    repeat = (await session.execute(_BY_KEY, {"actor": actor.id, "key": key})).one_or_none()
+    if repeat is not None:
+        return _view(repeat, business_date(now))
     complaint_id = push_id()
     due_on = reply_due(business_date(now))
-    await session.execute(
-        _INSERT,
-        {
-            "id": complaint_id,
-            "client_id": client_id,
-            "conversation_id": conversation_id,
-            "category": new.category,
-            "received_via": new.received_via,
-            "summary": new.summary,
-            "details": new.details,
-            "amount_minor": new.amount.minor if new.amount else None,
-            "amount_currency": new.amount.currency.value if new.amount else None,
-            "owner_id": owner_id,
-            "now": now,
-            "due_on": due_on,
-            "kind": actor.kind,
-            "actor": actor.id,
-        },
-    )
+    values = {
+        "id": complaint_id,
+        "client_id": client_id,
+        "conversation_id": conversation_id,
+        "category": new.category,
+        "received_via": new.received_via,
+        "summary": new.summary,
+        "details": new.details,
+        "amount_minor": new.amount.minor if new.amount else None,
+        "amount_currency": new.amount.currency.value if new.amount else None,
+        "owner_id": owner_id,
+        "now": now,
+        "due_on": due_on,
+        "kind": actor.kind,
+        "actor": actor.id,
+        "key": key,
+    }
+    try:
+        async with session.begin_nested():
+            await session.execute(_INSERT, values)
+    except IntegrityError:
+        # The same request, a moment ago in another transaction. Answer with that complaint.
+        repeat = (await session.execute(_BY_KEY, {"actor": actor.id, "key": key})).one_or_none()
+        if repeat is None:
+            raise
+        return _view(repeat, business_date(now))
     row = (await session.execute(_BY_ID, {"id": complaint_id})).one()
     await _event(session, actor, complaint_id, "logged", now, None, "new")
     await _audit(session, actor, "complaints.logged", row, clock, status="new")
@@ -455,6 +600,17 @@ async def _audit(
             details={"reference": row.reference, **({"status": status} if status else {})},
         ),
         clock,
+    )
+
+
+def _proposal(row: Row[Any]) -> OutcomeProposal:
+    return OutcomeProposal(
+        id=row.id,
+        outcome=row.outcome,
+        resolution=row.resolution,
+        client_accepted=row.client_accepted,
+        proposed_by=row.proposed_by,
+        proposed_at=row.proposed_at,
     )
 
 

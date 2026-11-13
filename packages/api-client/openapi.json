@@ -798,37 +798,6 @@
         "title": "ClientSignedIn",
         "type": "object"
       },
-      "CloseComplaint": {
-        "additionalProperties": false,
-        "properties": {
-          "client_accepted": {
-            "title": "Client Accepted",
-            "type": "boolean"
-          },
-          "outcome": {
-            "enum": [
-              "upheld",
-              "partly_upheld",
-              "not_upheld"
-            ],
-            "title": "Outcome",
-            "type": "string"
-          },
-          "resolution": {
-            "maxLength": 4000,
-            "minLength": 1,
-            "title": "Resolution",
-            "type": "string"
-          }
-        },
-        "required": [
-          "outcome",
-          "resolution",
-          "client_accepted"
-        ],
-        "title": "CloseComplaint",
-        "type": "object"
-      },
       "ComplaintDetail": {
         "additionalProperties": false,
         "properties": {
@@ -841,11 +810,22 @@
             },
             "title": "History",
             "type": "array"
+          },
+          "pending_outcome": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PendingOutcome"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "required": [
           "complaint",
-          "history"
+          "history",
+          "pending_outcome"
         ],
         "title": "ComplaintDetail",
         "type": "object"
@@ -860,6 +840,9 @@
               "status",
               "note",
               "escalated",
+              "proposed",
+              "rejected",
+              "withdrawn",
               "closed"
             ],
             "title": "Action",
@@ -1168,6 +1151,45 @@
         ],
         "title": "Currency",
         "type": "string"
+      },
+      "DecideOutcome": {
+        "additionalProperties": false,
+        "properties": {
+          "decision": {
+            "enum": [
+              "confirmed",
+              "rejected",
+              "withdrawn"
+            ],
+            "title": "Decision",
+            "type": "string"
+          },
+          "proposal_id": {
+            "maxLength": 20,
+            "minLength": 20,
+            "pattern": "^[-0-9A-Z_a-z]{20}$",
+            "title": "Proposal Id",
+            "type": "string"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "maxLength": 4000,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason"
+          }
+        },
+        "required": [
+          "proposal_id",
+          "decision"
+        ],
+        "title": "DecideOutcome",
+        "type": "object"
       },
       "DecideWording": {
         "additionalProperties": false,
@@ -2792,6 +2814,11 @@
             "title": "Client Id",
             "type": "string"
           },
+          "client_key": {
+            "pattern": "^[A-Za-z0-9._:-]{8,64}$",
+            "title": "Client Key",
+            "type": "string"
+          },
           "conversation_id": {
             "anyOf": [
               {
@@ -2845,6 +2872,7 @@
           }
         },
         "required": [
+          "client_key",
           "client_id",
           "category",
           "received_via",
@@ -2968,6 +2996,11 @@
             "title": "Category",
             "type": "string"
           },
+          "client_key": {
+            "pattern": "^[A-Za-z0-9._:-]{8,64}$",
+            "title": "Client Key",
+            "type": "string"
+          },
           "details": {
             "maxLength": 8000,
             "minLength": 1,
@@ -2982,6 +3015,7 @@
           }
         },
         "required": [
+          "client_key",
           "category",
           "summary",
           "details"
@@ -3905,6 +3939,58 @@
         "title": "PayoutOut",
         "type": "object"
       },
+      "PendingOutcome": {
+        "additionalProperties": false,
+        "description": "An outcome one member of staff proposed. A different one confirms or rejects it.",
+        "properties": {
+          "client_accepted": {
+            "title": "Client Accepted",
+            "type": "boolean"
+          },
+          "id": {
+            "maxLength": 20,
+            "minLength": 20,
+            "pattern": "^[-0-9A-Z_a-z]{20}$",
+            "title": "Id",
+            "type": "string"
+          },
+          "outcome": {
+            "enum": [
+              "upheld",
+              "partly_upheld",
+              "not_upheld"
+            ],
+            "title": "Outcome",
+            "type": "string"
+          },
+          "proposed_at": {
+            "format": "date-time",
+            "title": "Proposed At",
+            "type": "string"
+          },
+          "proposed_by": {
+            "maxLength": 20,
+            "minLength": 20,
+            "pattern": "^[-0-9A-Z_a-z]{20}$",
+            "title": "Proposed By",
+            "type": "string"
+          },
+          "resolution": {
+            "title": "Resolution",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "outcome",
+          "resolution",
+          "client_accepted",
+          "proposed_by",
+          "proposed_at"
+        ],
+        "title": "PendingOutcome",
+        "type": "object"
+      },
       "PlanDetails": {
         "additionalProperties": false,
         "description": "What a plan does. The same shape sets a plan up and changes it.",
@@ -4391,6 +4477,37 @@
           "yours"
         ],
         "title": "ProposalView",
+        "type": "object"
+      },
+      "ProposeOutcome": {
+        "additionalProperties": false,
+        "properties": {
+          "client_accepted": {
+            "title": "Client Accepted",
+            "type": "boolean"
+          },
+          "outcome": {
+            "enum": [
+              "upheld",
+              "partly_upheld",
+              "not_upheld"
+            ],
+            "title": "Outcome",
+            "type": "string"
+          },
+          "resolution": {
+            "maxLength": 4000,
+            "minLength": 1,
+            "title": "Resolution",
+            "type": "string"
+          }
+        },
+        "required": [
+          "outcome",
+          "resolution",
+          "client_accepted"
+        ],
+        "title": "ProposeOutcome",
         "type": "object"
       },
       "ProposeWording": {
@@ -15487,102 +15604,6 @@
         ]
       }
     },
-    "/staff/complaints/{complaint_id}/close": {
-      "post": {
-        "description": "Record the outcome, what was done and whether the client accepted it. This is final.",
-        "operationId": "close_complaint_staff_complaints__complaint_id__close_post",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "complaint_id",
-            "required": true,
-            "schema": {
-              "maxLength": 20,
-              "minLength": 20,
-              "pattern": "^[-0-9A-Z_a-z]{20}$",
-              "title": "Complaint Id",
-              "type": "string"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/CloseComplaint"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/StaffComplaint"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "401": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelope"
-                }
-              }
-            },
-            "description": "Unauthorized"
-          },
-          "403": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelope"
-                }
-              }
-            },
-            "description": "Forbidden"
-          },
-          "404": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelope"
-                }
-              }
-            },
-            "description": "Not Found"
-          },
-          "409": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelope"
-                }
-              }
-            },
-            "description": "Conflict"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelope"
-                }
-              }
-            },
-            "description": "Unprocessable Content"
-          }
-        },
-        "summary": "Close Complaint",
-        "tags": [
-          "staff support"
-        ]
-      }
-    },
     "/staff/complaints/{complaint_id}/notes": {
       "post": {
         "operationId": "note_complaint_staff_complaints__complaint_id__notes_post",
@@ -15673,6 +15694,198 @@
           }
         },
         "summary": "Note Complaint",
+        "tags": [
+          "staff support"
+        ]
+      }
+    },
+    "/staff/complaints/{complaint_id}/outcome": {
+      "post": {
+        "description": "Propose the outcome. A different member of staff confirms it, which closes the complaint.",
+        "operationId": "propose_outcome_staff_complaints__complaint_id__outcome_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "complaint_id",
+            "required": true,
+            "schema": {
+              "maxLength": 20,
+              "minLength": 20,
+              "pattern": "^[-0-9A-Z_a-z]{20}$",
+              "title": "Complaint Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ProposeOutcome"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PendingOutcome"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          }
+        },
+        "summary": "Propose Outcome",
+        "tags": [
+          "staff support"
+        ]
+      }
+    },
+    "/staff/complaints/{complaint_id}/outcome/decision": {
+      "post": {
+        "description": "Confirm or reject someone else's proposed outcome, or withdraw your own.\n\nConfirming closes the complaint for good and needs `complaints.close`. Neither the proposer\nnor whoever logged the complaint may confirm it.",
+        "operationId": "decide_outcome_staff_complaints__complaint_id__outcome_decision_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "complaint_id",
+            "required": true,
+            "schema": {
+              "maxLength": 20,
+              "minLength": 20,
+              "pattern": "^[-0-9A-Z_a-z]{20}$",
+              "title": "Complaint Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DecideOutcome"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StaffComplaint"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          }
+        },
+        "summary": "Decide Outcome",
         "tags": [
           "staff support"
         ]
