@@ -154,6 +154,20 @@ class InvestmentJobs:
                 posted += batch.posted
                 failed += batch.failed
 
+        # Then tell each client what the day earned them. Every message is keyed by the day,
+        # so a retry carries on without telling anyone twice.
+        told = 0
+        after = ""
+        async with context.kept_alive():
+            while True:
+                async with self._database.actor_transaction(SYSTEM) as session:
+                    await job_queue.lock_fenced(session, job)
+                    page = await accrual.tell_earnings(session, run_date, self._clock, after=after)
+                if page.last_client is None:
+                    break
+                after = page.last_client
+                told += page.told
+
         async def effect(session: AsyncSession) -> Mapping[str, object]:
             behind = await accrual.finish_run(session, run_date, self._clock)
             return {"run_date": run_date.isoformat(), "behind": sum(behind.values())}
@@ -165,6 +179,7 @@ class InvestmentJobs:
             run_date=run_date.isoformat(),
             posted=posted,
             failed=failed,
+            told=told,
             behind=result.get("behind"),
         )
 
