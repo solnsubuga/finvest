@@ -75,6 +75,29 @@ export type Investment = {
   payoutId: string | null;
   /** Matured, and waiting for the client to say where to send the money. */
   waitingForDestination: boolean;
+  /** Running, and the client may ask to withdraw it early now. */
+  canWithdraw: boolean;
+  /** When the client asked to withdraw early. ISO 8601, UTC. Interest stopped then. */
+  withdrawalRequestedAt: string | null;
+};
+
+/** One of the client's approved accounts that money can be paid to. */
+export type PayoutAccount = {
+  id: string;
+  kind: "mobile_money" | "bank";
+  /** As the API shows it, already masked: "MTN 0772 *** 456", "Stanbic ****4821". */
+  label: string;
+  /** Money can be sent here from this moment. Null or in the future: still in its first day's safety wait. */
+  payableFrom: string | null;
+  /** Past its safety wait when it was read, so it can be chosen. The server judges again on confirm. */
+  ready: boolean;
+};
+
+export type EarlyWithdrawal = {
+  investmentId: string;
+  destinationId: string;
+  /** Made for this request and sent with every try, so a double tap asks once. */
+  idempotencyKey: string;
 };
 
 export type NewInvestment = {
@@ -94,6 +117,10 @@ export interface InvestingClient {
   /** Newest first, without cancelled ones. */
   listInvestments(): Promise<Investment[]>;
   getInvestment(investmentId: string): Promise<Investment>;
+  /** The client's approved payout accounts, for choosing where an early withdrawal goes. */
+  listPayoutAccounts(): Promise<PayoutAccount[]>;
+  /** Ask to withdraw a running investment early. It pays `value` as shown: interest stops now. */
+  withdrawEarly(request: EarlyWithdrawal): Promise<Investment>;
 }
 
 export type InvestingErrorCode =
@@ -104,6 +131,8 @@ export type InvestingErrorCode =
   | "not_found"
   | "key_reused"
   | "invalid"
+  | "cannot_withdraw"
+  | "account_not_ready"
   | "unavailable";
 
 export class InvestingError extends Error {
@@ -124,6 +153,8 @@ const messages: Record<InvestingErrorCode, string> = {
   not_found: "We could not find that.",
   key_reused: "Something changed since you last tried. Go back and review your investment again.",
   invalid: "We could not accept that investment. Go back, check the details and try again.",
+  cannot_withdraw: "This investment cannot be withdrawn early now. It may already be on its way to you, or it matures too soon.",
+  account_not_ready: "That account cannot be paid yet. A new account can be paid one day after it is approved.",
   unavailable: "We could not reach Finvest. Check your connection and try again.",
 };
 

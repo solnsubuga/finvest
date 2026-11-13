@@ -6,6 +6,7 @@ import {
   InvestingClient,
   InvestingError,
   NewInvestment,
+  PayoutAccount,
   Product,
   Quote,
 } from "./types";
@@ -98,7 +99,29 @@ type Stored = {
   createdAtMs: number;
   /** Set for the sample investments, which start already running. */
   startDate: string | null;
+  /** When the client asked to withdraw it early, in milliseconds. */
+  withdrawnAtMs: number | null;
 };
+
+/** Demo accounts: one ready, and one approved today, so still in its safety wait. */
+function demoAccounts(nowMs: number): PayoutAccount[] {
+  return [
+    {
+      id: "demo-account-mtn",
+      kind: "mobile_money",
+      label: "MTN 0772 *** 456",
+      payableFrom: new Date(nowMs - 10 * DAY_MS).toISOString(),
+      ready: true,
+    },
+    {
+      id: "demo-account-bank",
+      kind: "bank",
+      label: "Bank ****4821",
+      payableFrom: new Date(nowMs + DAY_MS / 2).toISOString(),
+      ready: false,
+    },
+  ];
+}
 
 /**
  * Shared by every demo client in the app's lifetime, so two never hand out the same ID: the
@@ -120,6 +143,7 @@ export function createStubInvestingClient(options: StubOptions = {}): InvestingC
   const now = options.now ?? Date.now;
   const stored = new Map<string, Stored>();
   const byKey = new Map<string, { id: string; request: string }>();
+  const withdrawalKeys = new Map<string, string>();
 
   const pause = () =>
     delayMs > 0 ? new Promise<void>((resolve) => setTimeout(resolve, delayMs)) : Promise.resolve();
@@ -139,6 +163,7 @@ export function createStubInvestingClient(options: StubOptions = {}): InvestingC
         atMaturity,
         createdAtMs: now() - (startedDaysAgo + 1) * DAY_MS,
         startDate: addDays(today, -startedDaysAgo),
+        withdrawnAtMs: null,
       });
     };
     seed("TREA-91", 5_000_000, 85, "roll_over");
@@ -160,9 +185,20 @@ export function createStubInvestingClient(options: StubOptions = {}): InvestingC
     const maturity = start && product.termDays !== null ? addDays(start, product.termDays) : null;
     const lapsed = !start && now() > entry.createdAtMs + PAY_WINDOW_MS;
     const matured = maturity !== null && today >= maturity;
-    const status: Investment["status"] = lapsed ? "cancelled" : !start ? "awaiting_payment" : matured ? "matured" : "active";
-    // Interest is earned from the day after the start, up to today or the maturity date.
-    const lastDay = maturity && maturity < today ? maturity : today;
+    const withdrawn = entry.withdrawnAtMs !== null;
+    const status: Investment["status"] = withdrawn
+      ? "withdrawn"
+      : lapsed
+        ? "cancelled"
+        : !start
+          ? "awaiting_payment"
+          : matured
+            ? "matured"
+            : "active";
+    // Interest is earned from the day after the start, up to today or the maturity date. It
+    // stops on the day an early withdrawal was asked for.
+    const stopped = entry.withdrawnAtMs !== null ? kampalaDay(entry.withdrawnAtMs) : today;
+    const lastDay = maturity && maturity < stopped ? maturity : stopped;
     const days = start ? Math.max(0, daysBetween(start, lastDay)) : 0;
     const soFar = netInterest(amount.minor, product, days);
     const yesterday = days > 0 ? netInterest(amount.minor, product, days - 1) : 0;
@@ -190,6 +226,8 @@ export function createStubInvestingClient(options: StubOptions = {}): InvestingC
       rolledIntoId: null,
       payoutId: null,
       waitingForDestination: false,
+      canWithdraw: status === "active" && (maturity === null || today < maturity),
+      withdrawalRequestedAt: entry.withdrawnAtMs === null ? null : new Date(entry.withdrawnAtMs).toISOString(),
     };
   }
 
@@ -256,6 +294,7 @@ export function createStubInvestingClient(options: StubOptions = {}): InvestingC
         atMaturity: product.termDays === null ? null : (request.atMaturity ?? "roll_over"),
         createdAtMs: now(),
         startDate: null,
+        withdrawnAtMs: null,
       };
       stored.set(entry.id, entry);
       byKey.set(request.idempotencyKey, { id: entry.id, request: details });
@@ -284,6 +323,39 @@ export function createStubInvestingClient(options: StubOptions = {}): InvestingC
       if (!entry) {
         throw new InvestingError("not_found");
       }
+      return view(entry);
+    },
+
+    async listPayoutAccounts() {
+      await pause();
+      return demoAccounts(now());
+    },
+
+    async withdrawEarly(request) {
+      await pause();
+      // Like the backend: a known key returns its answer, and the same key for another
+      // investment or account is refused.
+      const details = JSON.stringify([request.investmentId, request.destinationId]);
+      const known = withdrawalKeys.get(request.idempotencyKey);
+      if (known !== undefined && known !== details) {
+        throw new InvestingError("key_reused");
+      }
+      const entry = stored.get(request.investmentId);
+      if (!entry) {
+        throw new InvestingError("not_found");
+      }
+      if (known !== undefined) {
+        return view(entry);
+      }
+      if (!view(entry).canWithdraw) {
+        throw new InvestingError("cannot_withdraw");
+      }
+      const account = demoAccounts(now()).find((candidate) => candidate.id === request.destinationId);
+      if (!account || !account.ready) {
+        throw new InvestingError("account_not_ready");
+      }
+      entry.withdrawnAtMs = now();
+      withdrawalKeys.set(request.idempotencyKey, details);
       return view(entry);
     },
   };

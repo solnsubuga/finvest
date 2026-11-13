@@ -97,9 +97,10 @@ The investing screens talk to the `InvestingClient` interface in `src/investing/
 - `/invest` lists the products. `/invest/[code]` shows one, with a calculator: the amount typed is quoted after a short pause, and Review opens once the quote is back.
 - `/invest/review` saves the investment at today's rate under one idempotency key per request, so a double tap saves one investment, then replaces itself with the pay screen for that investment. After a try whose answer was lost, the choices are locked and the key is kept, so trying again is the same request. After a definite refusal nothing was saved, and the next try gets a new key. A fixed term asks what happens at the end: roll over (the default) or pay out.
 - `/portfolio` lists the client's investments with what each is worth today. `/investment/[id]` shows one, with interest so far, what it pays at maturity, and a Pay button while it waits for payment.
+- `/investment/withdraw/[id]` withdraws a running investment early. It shows exactly what comes back (the `value` the API sent: what was invested plus the interest after tax so far, no fee), lists the client's approved accounts with any still in their first day's safety wait shown but not choosable, and confirms under one idempotency key per request, locked after a lost answer as on the review screen. The investment then shows that it is being paid out, and interest has stopped. The Withdraw early button appears only when the API says `can_withdraw`, which stays false while `FINVEST_EARLY_WITHDRAWAL_OPEN` is off (backend/README.md). The demo lets every running investment be withdrawn.
 - The demo (`src/investing/stubInvestingClient.ts`) loads only in tests and in a build with `EXPO_PUBLIC_DEMO_AUTH=1`. It has two investments already running, works interest out as the backend does, and starts a term when the demo payment for it is confirmed (`src/demo/payables.ts` joins the two demos). Open `/?sample=empty` on the web to start as a client with no investments.
 
-Not built yet: changing what happens at maturity from the investment screen (it needs the payout destinations screens), withdrawing early, and statements.
+Not built yet: changing what happens at maturity from the investment screen (it needs the payout destinations screens) and statements.
 
 ## Paying
 

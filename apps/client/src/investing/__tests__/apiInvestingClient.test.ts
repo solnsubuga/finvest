@@ -196,6 +196,8 @@ describe("the investing client for the real API", () => {
       rolledIntoId: null,
       payoutId: null,
       waitingForDestination: false,
+      canWithdraw: false,
+      withdrawalRequestedAt: null,
     });
 
     const one = serve(200, { ...investment, interest_at_maturity_minor: null, total_at_maturity_minor: null });
@@ -253,5 +255,83 @@ describe("choosing the investing client", () => {
     const seen = serve(200, [product]);
     await resolveInvestingClient(null).listProducts();
     expect(seen[0]!.path).toBe("/client/products");
+  });
+});
+
+describe("early withdrawal through the real API", () => {
+  const account = {
+    id: "DDDDDDDDDDDDDDDDDDDD",
+    kind: "mobile_money",
+    network: "mtn",
+    bank_code: null,
+    account: "0772 *** 456",
+    holder_name: "Grace Namubiru",
+    status: "approved",
+    proof_kind: null,
+    rejection_reason: null,
+    payable_from: "2026-11-01T09:00:00Z",
+    first_paid_at: null,
+    created_at: "2026-10-31T09:00:00Z",
+  };
+
+  it("lists only approved accounts, named as the client knows them", async () => {
+    const seen = serve(200, [
+      account,
+      { ...account, id: "BBBBBBBBBBBBBBBBBBBB", kind: "bank", network: null, bank_code: "SBIC", account: "****4821" },
+      { ...account, id: "RRRRRRRRRRRRRRRRRRRR", status: "in_review" },
+    ]);
+    const accounts = await createApiInvestingClient().listPayoutAccounts();
+    expect(seen[0]!.path).toBe("/client/payout-destinations");
+    expect(accounts).toEqual([
+      { id: account.id, kind: "mobile_money", label: "MTN 0772 *** 456", payableFrom: "2026-11-01T09:00:00Z", ready: true },
+      { id: "BBBBBBBBBBBBBBBBBBBB", kind: "bank", label: "Bank ****4821", payableFrom: "2026-11-01T09:00:00Z", ready: true },
+    ]);
+  });
+
+  it("marks an account still in its first day's wait as not ready", async () => {
+    const later = new Date(Date.now() + 60 * 60 * 1000).toISOString();
+    serve(200, [{ ...account, payable_from: later }, { ...account, id: "NNNNNNNNNNNNNNNNNNNN", payable_from: null }]);
+    const accounts = await createApiInvestingClient().listPayoutAccounts();
+    expect(accounts.map((one) => one.ready)).toEqual([false, false]);
+  });
+
+  it("asks once under the screen's key and reads back the stopped investment", async () => {
+    const seen = serve(200, { ...investment, withdrawal_requested_at: "2026-11-14T10:00:00Z" });
+    const after = await createApiInvestingClient().withdrawEarly({
+      investmentId: ID,
+      destinationId: account.id,
+      idempotencyKey: "w-1",
+    });
+    expect(seen[0]).toEqual({
+      method: "POST",
+      path: `/client/investments/${ID}/withdraw`,
+      key: "w-1",
+      body: { destination_id: account.id },
+    });
+    expect(after).toMatchObject({ withdrawalRequestedAt: "2026-11-14T10:00:00Z", value: ugx(1000291) });
+  });
+
+  it("says why a withdrawal was refused", async () => {
+    const client = createApiInvestingClient();
+    const request = { investmentId: ID, destinationId: account.id, idempotencyKey: "w" };
+
+    // Not running, already asked for, too close to maturity, or switched off.
+    serve(409, refusal("conflict"));
+    await expect(client.withdrawEarly(request)).rejects.toEqual(new InvestingError("cannot_withdraw"));
+
+    serve(422, refusal("validation_failed", [{ field_path: ["destination_id"], code: "destination_in_safety_wait" }]));
+    await expect(client.withdrawEarly(request)).rejects.toEqual(new InvestingError("account_not_ready"));
+    serve(422, refusal("validation_failed", [{ field_path: ["destination_id"], code: "not_usable" }]));
+    await expect(client.withdrawEarly(request)).rejects.toEqual(new InvestingError("account_not_ready"));
+
+    setFetch(async () => {
+      throw new TypeError("Network request failed");
+    });
+    await expect(client.withdrawEarly(request)).rejects.toEqual(new InvestingError("unavailable"));
+  });
+
+  it("passes on whether the investment can be withdrawn now", async () => {
+    serve(200, { ...investment, can_withdraw: true });
+    expect((await createApiInvestingClient().getInvestment(ID)).canWithdraw).toBe(true);
   });
 });

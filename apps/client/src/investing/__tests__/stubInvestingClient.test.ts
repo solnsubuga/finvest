@@ -92,6 +92,53 @@ describe("demo investing", () => {
   });
 });
 
+describe("demo early withdrawal", () => {
+  async function running() {
+    const { api, clock } = client();
+    const saved = await api.requestInvestment({
+      productCode: "TREA-91",
+      amount: ugx(1_000_000),
+      atMaturity: null,
+      idempotencyKey: "kw",
+    });
+    markDemoPaid(saved.id, new Date(clock.ms).toISOString());
+    clock.ms += 2 * DAY_MS;
+    return { api, clock, id: saved.id };
+  }
+
+  it("pays what was shown and stops interest at the request", async () => {
+    const { api, clock, id } = await running();
+    expect(await api.getInvestment(id)).toMatchObject({ canWithdraw: true, value: ugx(1_000_582) });
+    const after = await api.withdrawEarly({ investmentId: id, destinationId: "demo-account-mtn", idempotencyKey: "w1" });
+    expect(after).toMatchObject({ status: "withdrawn", canWithdraw: false, value: ugx(1_000_582) });
+    clock.ms += 5 * DAY_MS;
+    expect((await api.getInvestment(id)).value).toEqual(ugx(1_000_582));
+  });
+
+  it("asks once per key and refuses the same key for another account", async () => {
+    const { api, id } = await running();
+    const request = { investmentId: id, destinationId: "demo-account-mtn", idempotencyKey: "w2" };
+    await api.withdrawEarly(request);
+    await expect(api.withdrawEarly(request)).resolves.toMatchObject({ status: "withdrawn" });
+    await expect(api.withdrawEarly({ ...request, destinationId: "demo-account-bank" })).rejects.toMatchObject({
+      code: "key_reused",
+    });
+    await expect(api.withdrawEarly({ ...request, idempotencyKey: "w3" })).rejects.toMatchObject({
+      code: "cannot_withdraw",
+    });
+  });
+
+  it("refuses an account still in its safety wait", async () => {
+    const { api, id } = await running();
+    const accounts = await api.listPayoutAccounts();
+    expect(accounts.map((account) => account.id)).toEqual(["demo-account-mtn", "demo-account-bank"]);
+    await expect(
+      api.withdrawEarly({ investmentId: id, destinationId: "demo-account-bank", idempotencyKey: "w4" }),
+    ).rejects.toMatchObject({ code: "account_not_ready" });
+    expect((await api.getInvestment(id)).status).toBe("active");
+  });
+});
+
 describe("amount formats", () => {
   it("reads whole amounts only", () => {
     expect(parseWholeAmount("1,000,000", "UGX")).toEqual(ugx(1_000_000));
