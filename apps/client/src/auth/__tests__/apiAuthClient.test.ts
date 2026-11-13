@@ -78,6 +78,32 @@ describe("the sign-in client for the real API", () => {
     expect(challenge.methods).toEqual(["authenticator", "code"]);
   });
 
+  it("resets a password with the texted code and forgets this device's token", async () => {
+    await saveToken("old-token");
+    const seen = serve({
+      "POST /client/password/reset/start": { status: 200, body: { challenge_id: ID } },
+      "POST /client/password/reset/complete": { status: 204 },
+    });
+    const client = createApiAuthClient();
+    const reset = await client.startPasswordReset("+256772123456");
+    expect(reset).toEqual({ challengeId: ID, phone: "+256772123456" });
+    await client.completePasswordReset(reset.challengeId, "123456", "a long new phrase");
+    expect(seen.map((s) => s.body)).toEqual([
+      { phone: "+256772123456" },
+      { challenge_id: ID, code: "123456", password: "a long new phrase" },
+    ]);
+    await expect(readToken()).resolves.toBeNull();
+  });
+
+  it("says a wrong reset code is wrong, and keeps the token when nothing changed", async () => {
+    await saveToken("old-token");
+    serve({ "POST /client/password/reset/complete": refused(422, "invalid_code") });
+    await expect(createApiAuthClient().completePasswordReset(ID, "000000", "a long new phrase")).rejects.toEqual(
+      new AuthError("invalid_code"),
+    );
+    await expect(readToken()).resolves.toBe("old-token");
+  });
+
   it("adds nothing the API did not list", async () => {
     serve({ "GET /client/second-steps": { status: 200, body: { methods: ["authenticator"] } } });
     await expect(createApiAuthClient().listSecondSteps()).resolves.toEqual(["authenticator"]);

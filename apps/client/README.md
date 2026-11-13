@@ -77,7 +77,9 @@ Profile opens `/security`, which lists the three second steps and which are on. 
 
 Not built: removing a passkey or an authenticator app, adding a second passkey from this screen, naming devices, and recovery codes. Offering the passkey during sign up, as on the canvas, waits for the app PIN step that comes before it.
 
-What the stub does not cover yet, each with a screen on the design canvas: the app PIN, the ID check, password reset, log in by email, and company or group accounts. Links to those lead to a short "not ready yet" screen.
+**Forgot password** (`src/app/(auth)/reset/`) is not on the canvas, so it is drawn in the sign-up style. Step 1 takes the number and texts a code; the answer is the same whether or not the number has an account. Step 2 takes the code and the new password together, because the API checks the code only when the password is set, so a wrong code keeps the typed password and asks for the code again. The API then ends every session, the app forgets this device's token, and the client logs in with the new password. For 24 hours withdrawals go only to accounts used before (docs/rules.md), and both screens say so.
+
+What the stub does not cover yet, each with a screen on the design canvas: the app PIN, the ID check, log in by email, and company or group accounts. Links to those lead to a short "not ready yet" screen.
 
 Still outstanding on the sign up screen: "the terms" and "the privacy notice" are not links yet, because neither document exists. They must link to the real documents before launch.
 

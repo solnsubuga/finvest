@@ -8,10 +8,6 @@ import { Title, Txt } from "@/components/Txt";
 import { colors } from "@/theme";
 
 const topics: Record<string, { title: string; body: string }> = {
-  "forgot-password": {
-    title: "Reset your password",
-    body: "Resetting a password in the app is not ready yet.",
-  },
   "email-login": {
     title: "Log in with email",
     body: "Logging in with your email address is not ready yet. Use your mobile number for now.",
