@@ -81,14 +81,14 @@ Client routes, signed in as the client. Each `POST` needs an `Idempotency-Key`.
 
 There is no route yet for a client to start a bank transfer. It will upload the receipt file itself, so it arrives with the shared file storage. Until then a receipt row could exist without its file, so the route stays closed.
 
-Staff routes need `reconciliation.view` (admin, operations and finance), because matching a transfer to a statement is reconciliation work.
+Seeing transfers needs `reconciliation.view`. Matching, refusing and approving need `bank_transfers.change`, because they confirm money. Admin, operations and finance hold both for now. Opening a transfer writes a `payments.bank_transfer_opened` access event to the audit trail, because the receipt and the bank's narrative can name the client and the sender.
 
 | Route | What it does |
 | --- | --- |
 | `GET /staff/payments/bank-transfers` | Transfers in review, newest first, 50 a page (`?before=`). |
 | `GET /staff/payments/bank-transfers/{id}` | The transfer, its receipt details, its review, and the statement lines that could be it. Once matched, `matched_line` is the chosen line (amount, value date, reference and narrative), so the second person checks it beside the receipt rather than approving blind. |
-| `POST /staff/payments/bank-transfers/{id}/review` | `{"outcome": "matched", "statement_line_id": …}` or `{"outcome": "not_matched", "reason": …}`. |
-| `POST /staff/payments/bank-transfers/{id}/approve` | A second member of staff approves a match. The matcher gets `403`. |
+| `POST /staff/payments/bank-transfers/{id}/review` (`bank_transfers.change`) | `{"outcome": "matched", "statement_line_id": …}` or `{"outcome": "not_matched", "reason": …}`. |
+| `POST /staff/payments/bank-transfers/{id}/approve` (`bank_transfers.change`) | A second member of staff approves a match. The matcher gets `403`. |
 
 ## Ledger entries
 

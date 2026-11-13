@@ -45,6 +45,8 @@ _REFUSALS: dict[int | str, dict[str, object]] = {
 }
 # Matching a transfer to the bank statement is reconciliation work. Admin, operations and finance.
 BankStaff = Annotated[StaffSession, Depends(require_permission("reconciliation.view"))]
+# Matching, refusing or approving confirms money, so it is a permission of its own.
+BankDeciders = Annotated[StaffSession, Depends(require_permission("bank_transfers.change"))]
 
 
 def _database(request: Request) -> Database:
@@ -283,15 +285,13 @@ async def bank_transfers_in_review(
     )
 
 
-@staff_router.get("/payments/bank-transfers/{payment_id}")
-async def bank_transfer(payment_id: PushId, staff: BankStaff, database: Db) -> BankTransferOut:
-    async with database.actor_transaction(staff.actor) as session:
-        transfer = await bank.get_bank_transfer(session, payment_id)
-        review = await bank.get_review(session, staff.actor, payment_id)
-        line = await bank.matched_line(session, staff.actor, payment_id) if review else None
-        candidates: tuple[StatementLineView, ...] = ()
-        if review is None and transfer.deposit.status is DepositStatus.IN_REVIEW:
-            candidates = await bank.candidate_lines(session, staff.actor, payment_id)
+async def _detail(session: AsyncSession, staff: StaffSession, payment_id: str) -> BankTransferOut:
+    transfer = await bank.get_bank_transfer(session, payment_id)
+    review = await bank.get_review(session, staff.actor, payment_id)
+    line = await bank.matched_line(session, staff.actor, payment_id) if review else None
+    candidates: tuple[StatementLineView, ...] = ()
+    if review is None and transfer.deposit.status is DepositStatus.IN_REVIEW:
+        candidates = await bank.candidate_lines(session, staff.actor, payment_id)
     return BankTransferOut(
         payment=_view(transfer.deposit, transfer.receipt),
         client_id=transfer.deposit.client_id,
@@ -301,11 +301,25 @@ async def bank_transfer(payment_id: PushId, staff: BankStaff, database: Db) -> B
     )
 
 
+@staff_router.get("/payments/bank-transfers/{payment_id}")
+async def bank_transfer(
+    payment_id: PushId, staff: BankStaff, database: Db, clock: Time
+) -> BankTransferOut:
+    """One transfer, its review and the statement lines that could be it.
+
+    The bank's narrative can name the sender, so opening a transfer is written to the audit trail.
+    """
+    async with database.actor_transaction(staff.actor) as session:
+        detail = await _detail(session, staff, payment_id)
+        await bank.record_opened(session, staff.actor, payment_id, clock)
+    return detail
+
+
 @staff_router.post("/payments/bank-transfers/{payment_id}/review")
 async def review_bank_transfer(
     payment_id: PushId,
     body: ReviewIn,
-    staff: BankStaff,
+    staff: BankDeciders,
     key: IdempotencyKey,
     database: Db,
     clock: Time,
@@ -323,16 +337,18 @@ async def review_bank_transfer(
         await bank.review_bank_transfer(
             session, staff.actor, payment_id, outcome, idempotency_key=key, clock=clock
         )
-    return await bank_transfer(payment_id, staff, database)
+    async with database.actor_transaction(staff.actor) as session:
+        return await _detail(session, staff, payment_id)
 
 
 @staff_router.post("/payments/bank-transfers/{payment_id}/approve")
 async def approve_bank_match(
-    payment_id: PushId, staff: BankStaff, key: IdempotencyKey, database: Db, clock: Time
+    payment_id: PushId, staff: BankDeciders, key: IdempotencyKey, database: Db, clock: Time
 ) -> BankTransferOut:
     """Approve another staff member's match. The payment is confirmed moments later."""
     async with database.actor_transaction(staff.actor) as session:
         await bank.approve_bank_match(
             session, staff.actor, payment_id, idempotency_key=key, clock=clock
         )
-    return await bank_transfer(payment_id, staff, database)
+    async with database.actor_transaction(staff.actor) as session:
+        return await _detail(session, staff, payment_id)

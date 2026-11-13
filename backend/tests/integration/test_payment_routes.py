@@ -13,6 +13,7 @@ from app.api.app import create_app
 from app.infrastructure.database import Database
 from app.infrastructure.jobs import Worker
 from app.modules.identity.api import COOKIES
+from app.modules.identity.domain.permissions import ROLE_PERMISSIONS
 from app.modules.identity.hashing import PasswordHasher
 from app.modules.identity.service import IdentityService
 from app.modules.kyc import service as kyc
@@ -329,3 +330,39 @@ async def test_a_refused_transfer_says_why_and_staff_without_the_permission_are_
         assert (
             await client_http.get(f"/client/investments/{investment.id}/payment")
         ).status_code == 404
+
+
+async def test_seeing_transfers_is_not_enough_to_confirm_one_and_each_look_is_audited(
+    api: Api, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # No role sees reconciliation without the right to decide transfers today. Give it to
+    # support, as the owner might, and it can look but neither match, refuse nor approve.
+    monkeypatch.setitem(
+        ROLE_PERMISSIONS, "support", ROLE_PERMISSIONS["support"] | {"reconciliation.view"}
+    )
+    async with api.http() as client_http, api.http() as viewer_http:
+        client, _ = await api.client(client_http)
+        investment = await request_investment(api.database, client, api.clock)
+        payment_id = await submit_transfer(api, client, investment.id, investment.amount.minor)
+        viewer = await api.staff(viewer_http, role="support")
+        assert (await viewer_http.get("/staff/payments/bank-transfers")).status_code == 200
+        opened = await viewer_http.get(f"/staff/payments/bank-transfers/{payment_id}")
+        assert opened.status_code == 200
+        for route, body in (
+            ("review", {"outcome": "not_matched", "reason": "other"}),
+            ("approve", None),
+        ):
+            refused = await viewer_http.post(
+                f"/staff/payments/bank-transfers/{payment_id}/{route}", json=body, headers=key()
+            )
+            assert refused.status_code == 403
+        async with api.database.actor_transaction(viewer) as session:
+            audited = await session.scalar(
+                text(
+                    "SELECT count(*) FROM audit_events WHERE resource_id = :id "
+                    "AND action = 'payments.bank_transfer_opened' AND category = 'access' "
+                    "AND actor_id = :staff"
+                ),
+                {"id": payment_id, "staff": viewer.id},
+            )
+        assert audited == 1
