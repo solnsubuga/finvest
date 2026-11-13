@@ -1,0 +1,143 @@
+name: Terraform
+
+# Plans run on every pull request that touches infrastructure.
+# Applies run only by hand from main, and wait for approval on the GitHub environment.
+
+on:
+  pull_request:
+    paths:
+      - "infra/terraform/**"
+      - ".github/workflows/terraform.yml"
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: "Environment to apply"
+        type: choice
+        options: [staging, production]
+        required: true
+
+permissions:
+  contents: read
+
+env:
+  TF_VERSION: "1.13.4"
+  TF_IN_AUTOMATION: "true"
+  TF_INPUT: "false"
+
+jobs:
+  check:
+    name: Format and validate
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+      - name: Format
+        run: terraform -chdir=infra/terraform fmt -check -recursive
+      - name: Validate
+        run: |
+          for env in staging production; do
+            terraform -chdir=infra/terraform/envs/$env init -backend=false
+            terraform -chdir=infra/terraform/envs/$env validate
+          done
+
+  plan:
+    name: Plan ${{ matrix.environment }}
+    needs: check
+    if: github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        environment: ${{ github.event_name == 'workflow_dispatch' && fromJSON(format('["{0}"]', inputs.environment)) || fromJSON('["staging","production"]') }}
+    concurrency:
+      group: terraform-${{ matrix.environment }}
+      cancel-in-progress: false
+    env:
+      DIGITALOCEAN_TOKEN: ${{ secrets.DIGITALOCEAN_TOKEN }}
+      SPACES_ACCESS_KEY_ID: ${{ secrets.SPACES_ACCESS_KEY_ID }}
+      SPACES_SECRET_ACCESS_KEY: ${{ secrets.SPACES_SECRET_ACCESS_KEY }}
+      AWS_ACCESS_KEY_ID: ${{ secrets.SPACES_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.SPACES_SECRET_ACCESS_KEY }}
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      TF_VAR_cloudflare_account_id: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+      TF_VAR_ssh_public_keys: ${{ vars.TF_SSH_PUBLIC_KEYS }}
+      TF_VAR_ssh_allowed_cidrs: ${{ vars.TF_SSH_ALLOWED_CIDRS }}
+      TF_VAR_admin_access_emails: ${{ vars.TF_ADMIN_ACCESS_EMAILS || '[]' }}
+      TF_VAR_alert_emails: ${{ vars.TF_ALERT_EMAILS || '[]' }}
+    steps:
+      - name: Check credentials
+        id: creds
+        run: |
+          if [ -z "$DIGITALOCEAN_TOKEN" ] || [ -z "$CLOUDFLARE_API_TOKEN" ] || [ -z "$SPACES_ACCESS_KEY_ID" ]; then
+            echo "Infrastructure secrets are not set yet, so the plan is skipped." >> "$GITHUB_STEP_SUMMARY"
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "ready=true" >> "$GITHUB_OUTPUT"
+          fi
+      - uses: actions/checkout@v5
+        if: steps.creds.outputs.ready == 'true'
+      - uses: hashicorp/setup-terraform@v3
+        if: steps.creds.outputs.ready == 'true'
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+          terraform_wrapper: false
+      - name: Plan
+        if: steps.creds.outputs.ready == 'true'
+        working-directory: infra/terraform/envs/${{ matrix.environment }}
+        run: |
+          terraform init
+          set +e
+          terraform plan -no-color -detailed-exitcode -out=tfplan > plan.txt 2>&1
+          code=$?
+          set -e
+          {
+            echo "### Terraform plan: ${{ matrix.environment }}"
+            echo '```'
+            grep -E '^(Plan:|No changes|Error)' plan.txt || true
+            echo '```'
+            echo "<details><summary>Full plan</summary>"
+            echo
+            echo '```'
+            cat plan.txt
+            echo '```'
+            echo "</details>"
+          } >> "$GITHUB_STEP_SUMMARY"
+          cat plan.txt
+          if [ "$code" = "1" ]; then exit 1; fi
+
+  apply:
+    name: Apply ${{ inputs.environment }}
+    needs: plan
+    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    # Add required reviewers to these GitHub environments so every apply waits for approval.
+    environment: ${{ inputs.environment }}
+    concurrency:
+      group: terraform-${{ inputs.environment }}
+      cancel-in-progress: false
+    env:
+      DIGITALOCEAN_TOKEN: ${{ secrets.DIGITALOCEAN_TOKEN }}
+      SPACES_ACCESS_KEY_ID: ${{ secrets.SPACES_ACCESS_KEY_ID }}
+      SPACES_SECRET_ACCESS_KEY: ${{ secrets.SPACES_SECRET_ACCESS_KEY }}
+      AWS_ACCESS_KEY_ID: ${{ secrets.SPACES_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.SPACES_SECRET_ACCESS_KEY }}
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      TF_VAR_cloudflare_account_id: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+      TF_VAR_ssh_public_keys: ${{ vars.TF_SSH_PUBLIC_KEYS }}
+      TF_VAR_ssh_allowed_cidrs: ${{ vars.TF_SSH_ALLOWED_CIDRS }}
+      TF_VAR_admin_access_emails: ${{ vars.TF_ADMIN_ACCESS_EMAILS || '[]' }}
+      TF_VAR_alert_emails: ${{ vars.TF_ALERT_EMAILS || '[]' }}
+    steps:
+      - uses: actions/checkout@v5
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+          terraform_wrapper: false
+      - name: Apply
+        working-directory: infra/terraform/envs/${{ inputs.environment }}
+        run: |
+          terraform init
+          terraform plan -no-color -out=tfplan
+          terraform apply -no-color tfplan
