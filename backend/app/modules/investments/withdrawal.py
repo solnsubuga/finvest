@@ -37,6 +37,7 @@ from app.modules.ledger import service as ledger
 from app.modules.ledger.domain.entries import EntryDraft, credit
 from app.modules.payouts import destinations, payouts
 from app.modules.payouts.domain import posting as payout_posting
+from app.modules.payouts.domain.limits import check_withdrawal
 from app.shared.actors import SYSTEM, Actor
 from app.shared.business_day import business_date
 from app.shared.clock import Clock
@@ -109,7 +110,13 @@ async def request_withdrawal(
         ):
             raise ApplicationError("conflict")
         now = clock.now()
-        await _usable(session, investment.client_id, destination_id, now)
+        await _usable(
+            session,
+            investment.client_id,
+            destination_id,
+            investment.terms.principal + investment.accrued_net,
+            now,
+        )
         await session.execute(
             _REQUEST, {"id": investment.id, "destination_id": destination_id, "now": now}
         )
@@ -282,7 +289,7 @@ async def _own_locked(session: AsyncSession, client: Actor, investment_id: str) 
 
 
 async def _usable(
-    session: AsyncSession, client_id: str, destination_id: str, now: datetime
+    session: AsyncSession, client_id: str, destination_id: str, amount: Money, now: datetime
 ) -> None:
     try:
         view = await destinations.usable_destination(session, client_id, destination_id)
@@ -294,3 +301,12 @@ async def _usable(
     # is refused here rather than leaving the payout to fail when the desk has funded it.
     if view.payable_from is None or view.payable_from > now:
         raise invalid("destination_id", "destination_in_safety_wait")
+    # Nor one that can never carry this amount in one payout: more than the account kind takes
+    # at once or in a day, or a currency payouts does not send. Interest has stopped, so the
+    # amount is final. Without this the money would move to the payout pending account and the
+    # payout would then be refused for good. What else the client withdraws that day is
+    # counted when the payout is made.
+    limits = await payouts.current_limits(session, business_date(now))
+    decision = check_withdrawal(limits, view.kind, amount, Money.zero(amount.currency))
+    if decision.refusal is not None:
+        raise invalid("destination_id", decision.refusal.value)

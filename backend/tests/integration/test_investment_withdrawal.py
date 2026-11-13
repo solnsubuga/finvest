@@ -189,6 +189,27 @@ async def test_a_destination_approved_today_is_refused(
     assert error.value.fields[0].code == "destination_in_safety_wait"
 
 
+async def test_a_withdrawal_mobile_money_can_never_carry_is_refused_before_anything_moves(
+    app_database: Database, worker_database: Database
+) -> None:
+    # Over the most one mobile money payout carries, so the payout would be refused for good
+    # once the money had left the holding.
+    investment = await started(app_database, worker_database, NOW, amount=ugx(6_000_000))
+    destination_id = await approved_destination(
+        app_database, Actor("client", investment.client_id), NOW
+    )
+    with pytest.raises(ApplicationError) as error:
+        await ask(app_database, investment, destination_id)
+    assert (error.value.code, error.value.fields[0].code) == (
+        "validation_failed",
+        "over_mobile_money_limit",
+    )
+    async with worker_database.actor_transaction(SYSTEM) as session:
+        after = await investments.get_investment(session, investment.id)
+    assert after.withdrawal_requested_at is None
+    assert after.status is InvestmentStatus.ACTIVE
+
+
 async def test_a_withdrawal_is_asked_once_by_its_client_for_an_approved_destination(
     app_database: Database, worker_database: Database
 ) -> None:
