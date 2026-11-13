@@ -220,6 +220,12 @@ ROWS = {
         "'test.movement', now())",
         "refusing to drop reconciliation records",
     ),
+    "0008_codes": (
+        "INSERT INTO identity_codes (id, purpose, channel, phone, code_hash, created_at, "
+        "expires_at) VALUES ('-Nabc0000000000000A1', 'signup', 'sms', '+256772123456', "
+        "decode(repeat('00', 32), 'hex'), now(), now())",
+        "refusing to drop sign-in codes",
+    ),
 }
 
 
