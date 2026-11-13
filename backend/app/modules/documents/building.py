@@ -64,6 +64,7 @@ async def statement(
     period: Period,
     reference: str,
     issued_on: date,
+    not_final_from: date | None = None,
 ) -> Statement:
     """The client's statement for `period`. Raises `StatementDoesNotAddUp` if the ledger's
     lines do not explain the change between its balances, and `NotReady` before approval."""
@@ -105,6 +106,7 @@ async def statement(
         summaries=summaries,
         holdings=await _holdings(session, period, opening, closing, activity, changes),
         activity=tuple(activity),
+        not_final_from=not_final_from,
     )
 
 

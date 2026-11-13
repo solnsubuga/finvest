@@ -54,9 +54,10 @@ def schedules() -> list[Schedule]:
         # missed while the scheduler was down is made up once; each client is asked once.
         Schedule(
             name="documents.monthly_statements",
-            trigger=CronTrigger(day=1, hour=6, minute=0, timezone=KAMPALA),
+            # Every morning: the run asks for last month only once the ledger has closed it.
+            trigger=CronTrigger(hour=6, minute=0, timezone=KAMPALA),
             kind=MONTHLY_KIND,
-            max_age=timedelta(days=3),
+            max_age=timedelta(hours=20),
         ),
     ]
     payments_settings = PaymentsSettings()

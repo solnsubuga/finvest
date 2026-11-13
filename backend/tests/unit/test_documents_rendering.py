@@ -1,3 +1,4 @@
+import dataclasses
 import re
 from datetime import date, datetime
 
@@ -192,3 +193,14 @@ def test_a_receipt_email_shows_the_amount_and_the_receipt_number() -> None:
     assert "RC-Vt5nC1zd" in mail.text
     assert "number ending 456" in mail.html
     assert "772" not in mail.html
+
+
+def test_a_statement_over_days_that_are_not_final_says_so_and_still_draws() -> None:
+    final = statement()
+    open_days = dataclasses.replace(
+        final, kind=StatementKind.REQUESTED, not_final_from=date(2026, 12, 20)
+    )
+    drawn = statement_pdf(open_days)
+    assert drawn.startswith(b"%PDF-")
+    assert drawn != statement_pdf(final)
+    assert pages(drawn) == 1

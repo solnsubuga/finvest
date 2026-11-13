@@ -65,6 +65,15 @@ def month_end(any_day: date) -> date:
     return any_day.replace(day=calendar.monthrange(any_day.year, any_day.month)[1])
 
 
+def not_final_from(period: Period, closed_through: date | None) -> date | None:
+    """The first day of `period` the ledger has not closed, or None if every day is closed."""
+    if closed_through is not None and closed_through >= period.end:
+        return None
+    if closed_through is None or closed_through < period.start:
+        return period.start
+    return closed_through + timedelta(days=1)
+
+
 def previous_month(today: date) -> Period:
     """The calendar month before the one `today` is in: what the monthly run covers."""
     last = today.replace(day=1) - timedelta(days=1)
@@ -168,9 +177,18 @@ class Statement:
     summaries: tuple[Summary, ...]
     holdings: tuple[Holding, ...]
     activity: tuple[Activity, ...]  # in date order
+    # The first day the ledger had not closed when this was drawn, so its figures from that
+    # day on may still change. None when every day is final. A monthly statement is always
+    # final: it is drawn only once the ledger is closed through its last day.
+    not_final_from: date | None = None
 
     def __post_init__(self) -> None:
         formatting.account_number(self.account_number)
+        if self.not_final_from is not None:
+            if self.kind is StatementKind.MONTHLY:
+                raise ValueError("A monthly statement is drawn only over closed days")
+            if not self.period.start <= self.not_final_from <= self.period.end:
+                raise ValueError("The first day that is not final falls outside the period")
         if not self.summaries:
             raise ValueError("A statement has at least one currency")
         if any(not self.period.start <= line.on <= self.period.end for line in self.activity):

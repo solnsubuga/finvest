@@ -62,6 +62,8 @@ class DocumentView:
     finished_at: datetime | None
     file_name: str | None
     byte_size: int | None
+    # For a statement the client asked for: the first day whose figures were not yet final.
+    not_final_from: date | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -72,7 +74,7 @@ class DocumentFile:
 
 _COLUMNS = (
     "id, client_id, kind, idempotency_key, period_start, period_end, source_id, status, "
-    "failure_code, requested_at, finished_at, file_name, byte_size"
+    "failure_code, requested_at, finished_at, file_name, byte_size, not_final_from"
 )
 _INSERT = text(
     "INSERT INTO documents (id, client_id, kind, idempotency_key, period_start, period_end, "
@@ -83,6 +85,10 @@ _INSERT = text(
 _BY_KEY = text(
     f"SELECT {_COLUMNS} FROM documents "  # noqa: S608 - constant column list
     "WHERE client_id = :client_id AND kind = :kind AND idempotency_key = :key"
+)
+_MONTH_ASKED = text(
+    "SELECT EXISTS (SELECT FROM documents WHERE kind = 'monthly_statement' "
+    "AND idempotency_key = :label)"
 )
 _BY_ID = text(f"SELECT {_COLUMNS} FROM documents WHERE id = :id")  # noqa: S608
 _FILE = text(
@@ -238,6 +244,11 @@ async def _by_key(
     return None if row is None else _view(row)
 
 
+async def monthly_asked(session: AsyncSession, label: str) -> bool:
+    """Whether the monthly run for `label` (`2026-10`) has started asking."""
+    return bool((await session.execute(_MONTH_ASKED, {"label": label})).scalar_one())
+
+
 def _view(row: Row[Any]) -> DocumentView:
     return DocumentView(
         id=row.id,
@@ -252,4 +263,5 @@ def _view(row: Row[Any]) -> DocumentView:
         finished_at=row.finished_at,
         file_name=row.file_name,
         byte_size=row.byte_size,
+        not_final_from=row.not_final_from,
     )

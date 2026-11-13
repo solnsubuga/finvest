@@ -7,7 +7,7 @@ figures. Plus Jakarta Sans is embedded under the SIL Open Font License (fonts/OF
 
 from collections.abc import Sequence
 from dataclasses import dataclass
-from datetime import UTC, datetime, time
+from datetime import UTC, date, datetime, time
 from pathlib import Path
 
 from fpdf import FPDF
@@ -244,6 +244,24 @@ def _note(pdf: _Page, text: str) -> None:
     pdf.multi_cell(CONTENT_W, 4.5, text, new_x=XPos.LMARGIN, new_y=YPos.NEXT)
 
 
+def _not_final(pdf: _Page, first_open: date) -> None:
+    """One line, in a box, saying from which day the figures may still change."""
+    top = pdf.get_y()
+    pdf.set_fill_color(*GROUND)
+    pdf.rect(MARGIN, top, CONTENT_W, 15, style="F", round_corners=True, corner_radius=2.5)
+    pdf.set_xy(MARGIN + 5, top + 3)
+    pdf.font(8.5, weight="B")
+    pdf.multi_cell(
+        CONTENT_W - 10,
+        4.5,
+        f"Not final from {formatting.day(first_open)}. Entries from that day on are still "
+        "being checked and may change. Ask for a new statement later for final figures.",
+        new_x=XPos.LMARGIN,
+        new_y=YPos.NEXT,
+    )
+    pdf.set_y(top + 19)
+
+
 def _fixed_date(pdf: _Page, on: datetime) -> None:
     # The same document always gives the same bytes.
     pdf.set_creation_date(on)
@@ -276,6 +294,8 @@ def statement_pdf(statement: Statement) -> bytes:
             _Fact("Issued", formatting.day(statement.issued_on)),
         ],
     )
+    if statement.not_final_from is not None:
+        _not_final(pdf, statement.not_final_from)
     for summary in statement.summaries:
         if len(statement.summaries) > 1:
             _heading(pdf, f"In {summary.currency.value}")

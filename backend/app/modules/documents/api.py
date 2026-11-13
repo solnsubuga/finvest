@@ -62,6 +62,9 @@ class DocumentItem(Contract):
     finished_at: datetime | None
     file_name: str | None
     byte_size: int | None
+    # A statement for dates the ledger has not all closed yet: the first day whose figures
+    # may still change. Null when every figure is final.
+    not_final_from: date | None
 
 
 class DocumentList(Contract):
@@ -81,6 +84,7 @@ def _item(view: DocumentView) -> DocumentItem:
         finished_at=view.finished_at,
         file_name=view.file_name,
         byte_size=view.byte_size,
+        not_final_from=view.not_final_from,
     )
 
 

@@ -2,19 +2,20 @@
 client, finished once, and the monthly run."""
 
 import asyncio
-from collections.abc import AsyncIterator, Iterator
-from datetime import date
+from collections.abc import AsyncIterator, Awaitable, Callable, Iterator
+from datetime import date, timedelta
 
 import httpx
 import pytest
 from sqlalchemy import text
 from sqlalchemy.exc import DBAPIError
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.app import create_app
 from app.infrastructure.database import Database
 from app.infrastructure.jobs import JobRequest, Worker, WorkerConfig, enqueue
-from app.modules.documents import building, service
-from app.modules.documents.domain.statements import ActivityKind, Period, StatementKind
+from app.modules.documents import building, pdf, service
+from app.modules.documents.domain.statements import ActivityKind, Period, Statement, StatementKind
 from app.modules.documents.jobs import DocumentJobs
 from app.modules.documents.service import DocumentKind, DocumentStatus
 from app.modules.identity.hashing import PasswordHasher
@@ -130,10 +131,24 @@ async def invested(
     return client, investment
 
 
-async def run_jobs(worker_database: Database, clock: FakeClock = LATER) -> int:
+# Closing a day is one fact for the whole shared test database and is never undone, so these
+# tests tell the jobs which day the ledger is closed through instead of closing November.
+ALL_CLOSED = date(2026, 12, 31)
+
+
+def closed(day: date | None) -> Callable[[AsyncSession], Awaitable[date | None]]:
+    async def closed_through(session: AsyncSession) -> date | None:
+        return day
+
+    return closed_through
+
+
+async def run_jobs(
+    worker_database: Database, clock: FakeClock = LATER, through: date | None = ALL_CLOSED
+) -> int:
     runner = Worker(
         worker_database,
-        DocumentJobs(worker_database, clock).handlers(),
+        DocumentJobs(worker_database, clock, closed_through=closed(through)).handlers(),
         WorkerConfig(queue=service.QUEUE),
         clock,
     )
@@ -260,6 +275,7 @@ async def test_a_requested_statement_is_built_stored_and_announced(
     assert ready.file_name == "Finvest statement November 2026.pdf"
     assert found.content.startswith(b"%PDF-")
     assert ready.byte_size == len(found.content)
+    assert ready.not_final_from is None
     assert [(row.title, row.link_kind, row.link_id) for row in told] == [
         ("November 2026 statement is ready", "statement", asked.id)
     ]
@@ -472,6 +488,175 @@ async def test_the_monthly_run_asks_once_for_each_client_and_skips_an_empty_mont
         ).all()
     # October had nothing in it, so it is recorded as empty and never shown or sent.
     assert [tuple(row) for row in statuses] == [("2026-10", "empty"), ("2026-11", "ready")]
+
+
+async def schedule_run(worker_database: Database, queue: str, clock: FakeClock) -> None:
+    """The scheduler's morning run, fired at `clock`'s time."""
+    scheduled = clock.now().isoformat()
+    async with worker_database.actor_transaction(SYSTEM) as session:
+        await enqueue(
+            session,
+            JobRequest(
+                kind=service.MONTHLY_KIND,
+                idempotency_key="documents.monthly_statements@" + scheduled,
+                payload={"scheduled_for": scheduled, "data": {}},
+                queue=queue,
+            ),
+            now=clock.now(),
+        )
+
+
+async def monthly_of(worker_database: Database, client: Actor) -> list[tuple[str, str]]:
+    async with worker_database.actor_transaction(SYSTEM) as session:
+        rows = (
+            await session.execute(
+                text(
+                    "SELECT idempotency_key, status FROM documents WHERE client_id = :client "
+                    "AND kind = 'monthly_statement' ORDER BY idempotency_key"
+                ),
+                {"client": client.id},
+            )
+        ).all()
+    return [tuple(row) for row in rows]
+
+
+def drawn_statements(monkeypatch: pytest.MonkeyPatch) -> dict[str, Statement]:
+    """Every statement the build job draws, by reference."""
+    drawn: dict[str, Statement] = {}
+    real = pdf.statement_pdf
+
+    def keep(statement: Statement) -> bytes:
+        drawn[statement.reference] = statement
+        return real(statement)
+
+    monkeypatch.setattr(pdf, "statement_pdf", keep)
+    return drawn
+
+
+async def test_the_monthly_run_waits_for_the_ledger_to_close_the_month_and_includes_late_entries(
+    app_database: Database,
+    worker_database: Database,
+    own_queue: str,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # A month no other test uses: the run asks for a month once for every client, and the
+    # tests share one database.
+    march = Period(date(2031, 3, 1), date(2031, 3, 31))
+    client = await approved_client(app_database, LATER)
+    reference = push_id()
+
+    def client_account(code: str, name: str) -> AccountSpec:
+        return AccountSpec(
+            code,
+            AccountKind.LIABILITY,
+            ugx(0).currency,
+            name,
+            owner_client_id=client.id,
+            reference=reference,
+        )
+
+    await _post(
+        worker_database,
+        entry_type="payment.deposit_confirmed",
+        debit_spec=AccountSpec("test.collections", AccountKind.ASSET, ugx(0).currency, "Test"),
+        credit_spec=client_account(AWAITING_START, "Paid in, awaiting start"),
+        amount=ugx(5_000),
+        on=date(2031, 3, 10),
+        source_id=push_id(),
+    )
+    drawn = drawn_statements(monkeypatch)
+    first = at(date(2031, 4, 1), hour=3)
+    await schedule_run(worker_database, own_queue, first)
+    # March's last day is not closed: nothing is asked for.
+    await run_jobs(worker_database, first, through=date(2031, 3, 30))
+    assert ("2031-03", "pending") not in await monthly_of(worker_database, client)
+    assert [key for key, _ in await monthly_of(worker_database, client)] == ["2031-02"]
+
+    # Interest for the 31st lands after the morning run, dated in March.
+    await _post(
+        worker_database,
+        entry_type="investment.interest_accrued",
+        debit_spec=AccountSpec(
+            "test.interest_expense", AccountKind.EXPENSE, ugx(0).currency, "Test interest"
+        ),
+        credit_spec=client_account("client.interest_accrued", "Interest earned"),
+        amount=ugx(77),
+        on=march.end,
+    )
+
+    # The ledger is closed through the 31st, and the next morning's run asks.
+    second = at(date(2031, 4, 2), hour=3)
+    await schedule_run(worker_database, own_queue, second)
+    await run_jobs(worker_database, second, through=march.end)
+    assert await monthly_of(worker_database, client) == [
+        ("2031-02", "empty"),
+        ("2031-03", "ready"),
+    ]
+    async with app_database.actor_transaction(client) as session:
+        mine = await service.client_documents(session, client)
+    statement = drawn[f"ST-{mine[0].id}"]
+    assert statement.period == march
+    assert statement.not_final_from is None
+    assert [(s.paid_in, s.earned, s.closing) for s in statement.summaries] == [
+        (ugx(5_000), ugx(77), ugx(5_077))
+    ]
+
+    # A third morning asks for nothing more.
+    third = at(date(2031, 4, 3), hour=3)
+    await schedule_run(worker_database, own_queue, third)
+    await run_jobs(worker_database, third, through=march.end)
+    assert await monthly_of(worker_database, client) == [
+        ("2031-02", "empty"),
+        ("2031-03", "ready"),
+    ]
+
+
+async def test_a_monthly_statement_is_never_built_over_a_day_that_is_not_closed(
+    app_database: Database, worker_database: Database
+) -> None:
+    client, _ = await invested(app_database, worker_database)
+    assert client.id is not None
+    async with worker_database.actor_transaction(SYSTEM) as session:
+        await service.ask(
+            session,
+            client_id=client.id,
+            kind=DocumentKind.MONTHLY_STATEMENT,
+            key="2026-11",
+            period=NOVEMBER,
+            now=LATER.now(),
+        )
+    await run_jobs(worker_database, through=date(2026, 11, 29))
+    assert await monthly_of(worker_database, client) == [("2026-11", "pending")]
+    # It comes back later, and builds once the month is closed.
+    later = FakeClock(LATER.now() + timedelta(minutes=5))
+    await run_jobs(worker_database, later, through=date(2026, 11, 30))
+    assert await monthly_of(worker_database, client) == [("2026-11", "ready")]
+
+
+async def test_a_requested_statement_over_open_days_says_from_which_day_it_is_not_final(
+    app_database: Database, worker_database: Database, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    client, _ = await invested(app_database, worker_database)
+    drawn = drawn_statements(monkeypatch)
+    asked = await ask(app_database, client)
+    await run_jobs(worker_database, through=date(2026, 11, 14))
+    async with app_database.actor_transaction(client) as session:
+        ready = await service.client_document(session, client, asked.id)
+    assert ready.status is DocumentStatus.READY
+    assert ready.not_final_from == date(2026, 11, 15)
+    assert drawn[f"ST-{asked.id}"].not_final_from == date(2026, 11, 15)
+    # The database holds the same rule: a monthly statement is never marked not final.
+    with pytest.raises(DBAPIError, match="ck_documents_not_final"):
+        async with worker_database.actor_transaction(SYSTEM) as session:
+            await session.execute(
+                text(
+                    "INSERT INTO documents (id, client_id, kind, idempotency_key, "
+                    "period_start, period_end, requested_at, not_final_from) VALUES "
+                    "(:id, :client, 'monthly_statement', '2030-01', DATE '2030-01-01', "
+                    "DATE '2030-01-31', now(), DATE '2030-01-15')"
+                ),
+                {"id": push_id(), "client": client.id},
+            )
 
 
 # Routes ---------------------------------------------------------------------------------------

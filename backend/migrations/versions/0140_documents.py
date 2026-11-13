@@ -50,6 +50,9 @@ CREATE TABLE documents (
     content bytea,
     sha256 bytea,
     byte_size integer,
+    -- The first day of a requested statement that the ledger had not closed when it was
+    -- built, so its figures could still change. Null when every day was final.
+    not_final_from date,
     CONSTRAINT pk_documents PRIMARY KEY (id),
     CONSTRAINT uq_documents_client_kind_key UNIQUE (client_id, kind, idempotency_key),
     CONSTRAINT ck_documents_kind
@@ -79,15 +82,20 @@ CREATE TABLE documents (
         AND (content IS NULL OR (octet_length(content) = byte_size
             AND byte_size BETWEEN 1 AND {MAX_BYTES} AND octet_length(sha256) = 32
             AND sha256 = sha256(content)))),
+    -- Only a statement the client asked for can cover days that are not final. A monthly
+    -- statement is built only once the ledger is closed through its last day.
+    CONSTRAINT ck_documents_not_final CHECK (not_final_from IS NULL OR (
+        kind = 'requested_statement' AND status = 'ready'
+        AND not_final_from BETWEEN period_start AND period_end)),
     CONSTRAINT ck_documents_file_name CHECK (file_name ~ '^[A-Za-z0-9 ._-]{{1,160}}[.]pdf$')
 );
 CREATE INDEX ix_documents_client ON documents (client_id, requested_at DESC, id DESC);
 CREATE UNIQUE INDEX uq_documents_receipt ON documents (source_id) WHERE kind = 'receipt'
 """
 
-GUARD = """
-CREATE FUNCTION finvest_documents_guard() RETURNS trigger
-    LANGUAGE plpgsql SET search_path = pg_catalog, public, pg_temp
+GUARD = f"""
+CREATE FUNCTION public.finvest_documents_guard() RETURNS trigger
+    LANGUAGE plpgsql SET search_path = pg_catalog, pg_temp
     AS $$
     BEGIN
         IF TG_OP = 'TRUNCATE' THEN
@@ -104,13 +112,15 @@ CREATE FUNCTION finvest_documents_guard() RETURNS trigger
         IF OLD.status <> 'pending' THEN
             RAISE EXCEPTION 'a finished document never changes' USING ERRCODE = '42501';
         END IF;
-        IF finvest_actor_kind() IS DISTINCT FROM 'system' THEN
+        IF public.finvest_actor_kind() IS DISTINCT FROM 'system'
+            OR current_user <> '{WORKER_ROLE}'
+        THEN
             RAISE EXCEPTION 'only the worker builds a document' USING ERRCODE = '42501';
         END IF;
         IF (to_jsonb(NEW) - ARRAY['status', 'failure_code', 'finished_at', 'file_name',
-                'content', 'sha256', 'byte_size'])
+                'content', 'sha256', 'byte_size', 'not_final_from'])
             <> (to_jsonb(OLD) - ARRAY['status', 'failure_code', 'finished_at', 'file_name',
-                'content', 'sha256', 'byte_size'])
+                'content', 'sha256', 'byte_size', 'not_final_from'])
         THEN
             RAISE EXCEPTION 'what a document was asked for never changes'
                 USING ERRCODE = '42501';
@@ -130,7 +140,7 @@ RULES = [
     # No DELETE for anyone. The API asks for statements; only the worker builds them.
     f"GRANT SELECT, INSERT ON documents TO {APP_ROLE}",
     f"GRANT SELECT, INSERT, UPDATE (status, failure_code, finished_at, file_name, content, "
-    f"sha256, byte_size) ON documents TO {WORKER_ROLE}",
+    f"sha256, byte_size, not_final_from) ON documents TO {WORKER_ROLE}",
     "ALTER TABLE documents ENABLE ROW LEVEL SECURITY",
     # A client reads their own documents. Staff read any client's, so support can see what a
     # client was sent. Which staff may is a permission checked in the application.
