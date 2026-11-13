@@ -20,7 +20,7 @@ const reasons = [
     "It cannot be stolen by a fake site",
     "There is no code to read out, so nobody can trick you into sharing it.",
   ],
-  ["It works without network", "No waiting for an SMS that never arrives."],
+  ["No SMS to wait for", "It works even when a text message is slow or never arrives."],
 ] as const;
 
 /** Add a passkey, from the design canvas. The device does the asking. */
@@ -32,7 +32,7 @@ export default function AddPasskey() {
   const [added, setAdded] = useState(false);
   const [stale, setStale] = useState(false);
 
-  const leave = () => (router.canGoBack() ? router.back() : router.replace("/security"));
+  const leave = () => router.dismissTo("/security");
 
   const add = async () => {
     setBusy(true);
@@ -69,7 +69,7 @@ export default function AddPasskey() {
       <Screen>
         <Stack.Screen options={{ title: "Add a passkey" }} />
         <BackButton fallback="/security" />
-        <SignInAgain />
+        <SignInAgain returnTo="/security/passkey" />
       </Screen>
     );
   }

@@ -68,6 +68,9 @@ function demoKey(): string {
 /** Adding a second step needs a session this fresh, as the sign-in API does. */
 export const RECENT_SIGN_IN_MS = 10 * 60 * 1000;
 
+/** How long a started authenticator set-up can wait for its code. */
+export const SETUP_LIFETIME_MS = 5 * 60 * 1000;
+
 export type StubOptions = {
   /** The clock, so tests can let a session grow old. */
   now?: () => number;
@@ -102,7 +105,7 @@ export function createStubAuthClient(options: StubOptions = {}): AuthClient {
   const tickets = new Map<string, SignupStart>();
   const logins = new Map<string, string>();
   /** A set-up that was started and not yet confirmed, for this session only. */
-  let pendingAuthenticator = false;
+  let pendingAuthenticatorAt: number | null = null;
   let signedInAt = 0;
   /** The number of whoever is signed in, as the server would know from the session. */
   let signedIn: string | null = null;
@@ -115,7 +118,7 @@ export function createStubAuthClient(options: StubOptions = {}): AuthClient {
   const sessionFor = (phone: string, restricted: boolean): Session => {
     signedIn = phone;
     signedInAt = now();
-    pendingAuthenticator = false;
+    pendingAuthenticatorAt = null;
     return { phone, displayName: accounts.get(phone)?.displayName ?? null, restricted };
   };
 
@@ -249,7 +252,7 @@ export function createStubAuthClient(options: StubOptions = {}): AuthClient {
     async startAuthenticatorSetup(): Promise<AuthenticatorSetup> {
       await wait();
       recentAccount();
-      pendingAuthenticator = true;
+      pendingAuthenticatorAt = now();
       const key = demoKey();
       const label = encodeURIComponent(`Finvest:${signedIn ?? ""}`);
       return { key, uri: `otpauth://totp/${label}?secret=${key}&issuer=Finvest` };
@@ -258,20 +261,21 @@ export function createStubAuthClient(options: StubOptions = {}): AuthClient {
     async confirmAuthenticatorSetup(code): Promise<void> {
       await wait();
       const account = recentAccount();
-      if (!pendingAuthenticator) {
+      if (pendingAuthenticatorAt === null || now() - pendingAuthenticatorAt > SETUP_LIFETIME_MS) {
+        pendingAuthenticatorAt = null;
         throw new AuthError("expired");
       }
       if (code !== DEMO_CODE) {
         throw new AuthError("invalid_code");
       }
-      pendingAuthenticator = false;
+      pendingAuthenticatorAt = null;
       account.hasAuthenticator = true;
     },
 
     async signOut(): Promise<void> {
       await wait();
       signedIn = null;
-      pendingAuthenticator = false;
+      pendingAuthenticatorAt = null;
     },
   };
 }

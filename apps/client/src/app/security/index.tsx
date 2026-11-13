@@ -40,7 +40,7 @@ function rowsFor(maskedPhone: string): Row[] {
       icon: "phone",
       title: "Authenticator app",
       on: "A 6 digit code from the app on your phone.",
-      off: "A 6 digit code from an app on your phone. Works without network.",
+      off: "A 6 digit code from an app on your phone. No SMS to wait for.",
       setup: "/security/authenticator",
       action: "Set up",
     },
