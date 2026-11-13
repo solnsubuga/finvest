@@ -26,6 +26,7 @@ from app.infrastructure.jobs import (
 )
 from app.modules.notifications import service
 from app.modules.notifications.domain.email_events import EmailEvent, address_hash, moves_forward
+from app.modules.notifications.suppression_lifts import suppressed_now
 from app.shared.clock import Clock
 
 APPLY_EVENT = "notifications.email_event"
@@ -79,11 +80,16 @@ async def record_event(
     return True
 
 
+_SUPPRESSED = text(
+    "SELECT 1 FROM notification_email_suppressions s WHERE s.address_hash = :hash "  # noqa: S608
+    f"AND {suppressed_now('s.address_hash')}"
+)
+
+
 async def is_suppressed(session: AsyncSession, address: str) -> bool:
-    found = await session.execute(
-        text("SELECT 1 FROM notification_email_suppressions WHERE address_hash = :hash"),
-        {"hash": address_hash(address)},
-    )
+    """True while the address is on the list and no lift two people approved came after its
+    latest lasting bounce or complaint (`suppression_lifts`)."""
+    found = await session.execute(_SUPPRESSED, {"hash": address_hash(address)})
     return found.first() is not None
 
 

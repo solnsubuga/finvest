@@ -99,6 +99,24 @@ The router posts each event, unchanged, to `POST /webhooks/resend` on the API (`
 
 Only facts are kept. Each address is stored as the sha256 of its lower-cased form, never in the clear, and the subject and the rest of the body are dropped on arrival. The API can record an event and cannot read one back. Nothing lifts a suppression yet; when an address needs it, that is a console action still to build.
 
+### Lifting a suppression
+
+An address on the suppression list gets no email. When the client has fixed their inbox, or the complaint was a mistake, staff can send to it again, with two people (`suppression_lifts.py`, migration `0153_email_suppression_lifts`):
+
+| Route | Who | Use |
+| --- | --- | --- |
+| `GET /staff/email-suppressions` | `clients.view` | The newest 200 suppressions: the address hash, bounced or complained, when, the latest suppressing event, whether it still applies, and any lift waiting. |
+| `POST /staff/email-suppressions/lookup` | `clients.view` | Whether one address is suppressed. The address is sent in the body, hashed, and never stored or logged. |
+| `POST /staff/email-suppressions/{address_hash}/lifts` | `email_suppressions.lift` | Propose a lift, with a reason. Only for an address that is suppressed now. |
+| `POST /staff/email-suppressions/lifts/{id}/decision` | `email_suppressions.lift` | `approved` or `rejected` by someone else, `withdrawn` by the proposer, with a reason. |
+
+`email_suppressions.lift` is held by admin, operations and support.
+
+- **Nothing is erased.** The suppression row and its events stay. An approved lift outweighs the suppressing events before it.
+- **A new bounce suppresses again.** `is_suppressed` finds the address's latest lasting bounce or complaint in `notification_email_events` (a GIN index on `recipients`) and compares it with the latest approved lift. A bounce Resend calls transient never suppresses.
+- **Two people.** The database refuses a lift decided by its proposer, and one open lift per address.
+- **Hashes only.** Staff transactions may read the suppression list and the events' hashes, delivery, permanence and time. Nothing else about an event, and nothing without a staff actor.
+
 ## Words
 
 Each event has a title and a body, used in the app, in a push notification and in an email, and a shorter text for SMS. The built-in words are in `domain/wording.py`.

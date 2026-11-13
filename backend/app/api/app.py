@@ -31,6 +31,7 @@ from app.modules.investments import api as investments_api
 from app.modules.migration import api as migration_api
 from app.modules.notifications import api as notifications_api
 from app.modules.notifications import hooks as notification_hooks
+from app.modules.notifications import suppressions_api
 from app.modules.payments import api as payments_api
 from app.modules.payments import routes as payment_routes
 from app.modules.payments.domain.provider import CollectionsProvider
@@ -116,6 +117,7 @@ def create_app(
         *passkeys_api.routers,
         *codes_api.routers,
         *notifications_api.routers,
+        *suppressions_api.routers,
         *support_api.routers,
         *documents_api.routers,
     ):
