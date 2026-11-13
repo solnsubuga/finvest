@@ -285,23 +285,25 @@ async def apply_event(
     before = _view(row)
     transition = machine.apply(before.status, event)
     now = clock.now()
-    await session.execute(
-        _UPDATE,
-        {
-            "id": payout_id,
-            "status": transition.status,
-            "now": now,
-            "provider_reference": provider_reference,
-            "failure_code": failure_code,
-            "reviewed_by": actor.id if event in _REVIEW_EVENTS else None,
-        },
-    )
-    if transition.effect is not LedgerEffect.NONE:
-        to_account = await _destination_account(session, before, transition.effect, clock)
-        draft = posting.finish(
-            before.terms, transition.effect, business_date(now), to_account_id=to_account
+    # One savepoint, so a ledger refusal undoes the status change even if the caller commits.
+    async with session.begin_nested():
+        await session.execute(
+            _UPDATE,
+            {
+                "id": payout_id,
+                "status": transition.status,
+                "now": now,
+                "provider_reference": provider_reference,
+                "failure_code": failure_code,
+                "reviewed_by": actor.id if event in _REVIEW_EVENTS else None,
+            },
         )
-        await ledger.post_entry(session, draft, clock)
+        if transition.effect is not LedgerEffect.NONE:
+            to_account = await _destination_account(session, before, transition.effect, clock)
+            draft = posting.finish(
+                before.terms, transition.effect, business_date(now), to_account_id=to_account
+            )
+            await ledger.post_entry(session, draft, clock)
     if transition.status is PayoutStatus.PAID:
         await destinations.record_first_payout(session, before.destination_id, now)
     if event in _PERSON_EVENTS:
