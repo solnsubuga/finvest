@@ -42,10 +42,10 @@ CREATE TABLE dealing_lot_maturities (
 # lot are checked one after the other.
 MATURITY_GUARD = """
 CREATE FUNCTION finvest_dealing_maturity_guard() RETURNS trigger
-    LANGUAGE plpgsql SET search_path = pg_catalog, public, pg_temp
+    LANGUAGE plpgsql SET search_path = pg_catalog, pg_temp
     AS $$
     DECLARE
-        lot dealing_lots%ROWTYPE;
+        lot public.dealing_lots%ROWTYPE;
         sold_face bigint;
         sold_cost bigint;
         bank bigint;
@@ -54,21 +54,21 @@ CREATE FUNCTION finvest_dealing_maturity_guard() RETURNS trigger
         IF TG_OP <> 'INSERT' THEN
             RAISE EXCEPTION 'a maturity is never changed or removed' USING ERRCODE = '42501';
         END IF;
-        IF finvest_actor_kind() IS DISTINCT FROM 'system' THEN
+        IF public.finvest_actor_kind() IS DISTINCT FROM 'system' THEN
             RAISE EXCEPTION 'only the worker records a maturity' USING ERRCODE = '42501';
         END IF;
         PERFORM pg_advisory_xact_lock(hashtext('dealing_lots'), hashtext(NEW.lot_id));
-        SELECT * INTO lot FROM dealing_lots WHERE id = NEW.lot_id;
+        SELECT * INTO lot FROM public.dealing_lots WHERE id = NEW.lot_id;
         SELECT coalesce(sum(face_minor), 0), coalesce(sum(cost_minor), 0)
-            INTO sold_face, sold_cost FROM dealing_lot_sales WHERE lot_id = NEW.lot_id;
-        IF NEW.matured_on <> lot.matures_on
-            OR NEW.face_minor <> lot.face_minor - sold_face
-            OR NEW.cost_minor <> lot.cost_minor - sold_cost THEN
+            INTO sold_face, sold_cost FROM public.dealing_lot_sales WHERE lot_id = NEW.lot_id;
+        IF lot.id IS NULL OR NEW.matured_on IS DISTINCT FROM lot.matures_on
+            OR NEW.face_minor IS DISTINCT FROM lot.face_minor - sold_face
+            OR NEW.cost_minor IS DISTINCT FROM lot.cost_minor - sold_cost THEN
             RAISE EXCEPTION 'a maturity is what the lot still holds, on its maturity date'
                 USING ERRCODE = '23514';
         END IF;
         IF NOT EXISTS (
-            SELECT FROM ledger_journal_entries
+            SELECT FROM public.ledger_journal_entries
             WHERE id = NEW.ledger_entry_id AND source_type = 'dealing.lot'
                 AND source_id = NEW.lot_id AND currency = lot.currency
                 AND effective_date = lot.matures_on AND reverses_entry_id IS NULL
@@ -79,10 +79,10 @@ CREATE FUNCTION finvest_dealing_maturity_guard() RETURNS trigger
             coalesce(sum(line.amount_minor) FILTER (WHERE account.code = 'bank.trust'), 0),
             coalesce(sum(line.amount_minor) FILTER (WHERE account.code = 'dealing.bills'), 0)
             INTO bank, bills
-            FROM ledger_lines AS line JOIN ledger_accounts AS account ON account.id = line.account_id
+            FROM public.ledger_lines AS line JOIN public.ledger_accounts AS account ON account.id = line.account_id
             WHERE line.entry_id = NEW.ledger_entry_id
                 AND account.owner_client_id IS NULL AND account.reference IS NULL;
-        IF bank <> NEW.face_minor OR bills <> -NEW.cost_minor THEN
+        IF bank IS DISTINCT FROM NEW.face_minor OR bills IS DISTINCT FROM -NEW.cost_minor THEN
             RAISE EXCEPTION 'a maturity needs its ledger entry' USING ERRCODE = '23514';
         END IF;
         RETURN NEW;
@@ -94,12 +94,12 @@ CREATE FUNCTION finvest_dealing_maturity_guard() RETURNS trigger
 # the 0081 guard, which holds the lot's lock by then.
 SALE_GUARD = """
 CREATE FUNCTION finvest_dealing_sale_before_maturity() RETURNS trigger
-    LANGUAGE plpgsql SET search_path = pg_catalog, public, pg_temp
+    LANGUAGE plpgsql SET search_path = pg_catalog, pg_temp
     AS $$
     BEGIN
-        IF EXISTS (SELECT FROM dealing_lot_maturities WHERE lot_id = NEW.lot_id)
+        IF EXISTS (SELECT FROM public.dealing_lot_maturities WHERE lot_id = NEW.lot_id)
             OR NOT EXISTS (
-                SELECT FROM dealing_lots AS lot JOIN dealing_orders AS sale ON sale.id = NEW.order_id
+                SELECT FROM public.dealing_lots AS lot JOIN public.dealing_orders AS sale ON sale.id = NEW.order_id
                 WHERE lot.id = NEW.lot_id AND sale.result_settled_on < lot.matures_on
             ) THEN
             RAISE EXCEPTION 'a sale cannot take bills that have matured' USING ERRCODE = '23514';

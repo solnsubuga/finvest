@@ -12,16 +12,20 @@ from app.infrastructure.database import Database
 from app.modules.dealing import holdings, maturities
 from app.modules.dealing.domain.orders import OrderKind
 from app.modules.dealing.domain.settlement import BANK_TRUST, BILL_INCOME
+from app.modules.ledger import closing
 from app.shared.actors import SYSTEM
 from tests.integration.test_dealing_settlement import (
+    NOW,
     M,
     balance,
     bought,
     confirm,
     fill,
+    fund_bank,
     maturity,
     recorded,
 )
+from tests.integration.test_ledger_closing import first_open_day
 from tests.support.clock import AsyncBarrier, FakeClock
 from tests.support.ledger import staff as new_staff
 
@@ -33,7 +37,7 @@ def on(day: date) -> FakeClock:
     return FakeClock(datetime.combine(day, time(9), tzinfo=UTC))
 
 
-async def run(worker: Database, day: date) -> int:
+async def run(worker: Database, day: date) -> maturities.Run:
     async with worker.actor_transaction(SYSTEM) as session:
         return await maturities.record_maturities(session, on(day), limit=500)
 
@@ -232,3 +236,29 @@ async def test_a_maturity_is_never_changed_or_removed(
             async with worker_database.actor_transaction(SYSTEM) as session:
                 await session.execute(text(statement), {"id": lot})
     assert await maturity_of(app_database, lot) is not None
+
+
+async def test_a_lot_in_a_closed_day_is_reported_and_the_others_are_still_paid(
+    app_database: Database, worker_database: Database
+) -> None:
+    # Closing is for the whole ledger and cannot be undone, so, like the ledger's own closing
+    # tests, this one closes only days in 2001, before any other test posts.
+    day = await first_open_day(app_database)
+    await fund_bank(app_database, 97 * M)
+    old = await recorded(
+        app_database, fill(100 * M, 97 * M, day + timedelta(days=5), settled_on=day)
+    )
+    await confirm(app_database, old.id)
+    stuck_lot = await lot_id(app_database, old.id)
+    closer = new_staff()
+    async with app_database.actor_transaction(closer) as session:
+        await closing.close_through(session, closer, day + timedelta(days=5), NOW)
+
+    matures_on = maturity()
+    paid_lot = await lot_id(
+        app_database, (await bought(app_database, 100 * M, 97 * M, matures_on)).id
+    )
+    result = await run(worker_database, matures_on)
+    assert stuck_lot in result.stuck
+    assert await maturity_of(app_database, stuck_lot) is None
+    assert await maturity_of(app_database, paid_lot) is not None

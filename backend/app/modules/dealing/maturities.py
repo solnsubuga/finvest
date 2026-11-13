@@ -6,12 +6,15 @@ record against the lot and the entry. Reconciliation then expects the money on t
 statement for that date, and a payment that never came shows up there.
 """
 
+from dataclasses import dataclass
+
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.modules.dealing import holdings
 from app.modules.dealing.domain.settlement import accounts, maturity_entry
 from app.modules.ledger import service as ledger
+from app.modules.ledger.domain.errors import DayClosed
 from app.shared.business_day import business_date
 from app.shared.clock import Clock
 
@@ -26,14 +29,24 @@ _INSERT = text(
 )
 
 
-async def record_maturities(session: AsyncSession, clock: Clock, *, limit: int = BATCH) -> int:
+@dataclass(frozen=True, slots=True)
+class Run:
+    recorded: int
+    # Lots whose maturity date is in a day the ledger has closed. Each needs a person: the day
+    # was signed off without the payment, so the cash is already counted somewhere else.
+    stuck: tuple[str, ...]
+
+
+async def record_maturities(session: AsyncSession, clock: Clock, *, limit: int = BATCH) -> Run:
     """Record every lot due by today, up to `limit`, in the caller's transaction.
 
-    Returns how many were recorded. Running it again, or twice at once, records each lot once.
-    A maturity date in a closed day raises the ledger's `DayClosed`, and nothing is recorded.
+    Running it again, or twice at once, records each lot once. Each lot is posted in its own
+    savepoint, so a lot whose maturity date is in a closed day is left out and reported, and
+    the others are still recorded.
     """
     today = business_date(clock.now())
     recorded = 0
+    stuck: list[str] = []
     for lot_id in await holdings.due_for_maturity(session, today, limit=limit):
         await session.execute(_LOCK_LOT, {"id": lot_id})
         held, matured = await holdings.left_of_lot(session, lot_id)
@@ -44,19 +57,24 @@ async def record_maturities(session: AsyncSession, clock: Clock, *, limit: int =
             code: (await ledger.open_account(session, spec, clock)).id
             for code, spec in accounts(held.lot.face.currency).items()
         }
-        entry = await ledger.post_entry(
-            session, maturity_entry(lot_id, held.lot, today, account_ids), clock
-        )
-        await session.execute(
-            _INSERT,
-            {
-                "lot_id": lot_id,
-                "matured_on": held.lot.matures_on,
-                "face": held.lot.face.minor,
-                "cost": held.lot.cost.minor,
-                "entry_id": entry.id,
-                "now": clock.now(),
-            },
-        )
+        try:
+            async with session.begin_nested():
+                entry = await ledger.post_entry(
+                    session, maturity_entry(lot_id, held.lot, today, account_ids), clock
+                )
+                await session.execute(
+                    _INSERT,
+                    {
+                        "lot_id": lot_id,
+                        "matured_on": held.lot.matures_on,
+                        "face": held.lot.face.minor,
+                        "cost": held.lot.cost.minor,
+                        "entry_id": entry.id,
+                        "now": clock.now(),
+                    },
+                )
+        except DayClosed:
+            stuck.append(lot_id)
+            continue
         recorded += 1
-    return recorded
+    return Run(recorded, tuple(stuck))
