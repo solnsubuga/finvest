@@ -105,7 +105,7 @@ The database holds these, in migration 0112:
 | `POST /client/goal-groups/invites/preview` | What the invite is for, before joining. The code is in the body, never the path, so it stays out of access logs. |
 | `POST /client/goal-groups/join` | Join with the code and the client's own part. Takes an `Idempotency-Key`. |
 | `POST /client/goal-groups/{id}/leave` | Leave. The client's own goal carries on. |
-| `POST /client/goal-groups/{id}/members/{goal_id}/remove` | Remove a member. Only for the one who set it up. |
+| `POST /client/goal-groups/{id}/members/{member_id}/remove` | Remove a member. Only for the one who set it up, who sees each other member's `member_id` in the group. Nobody else sees one. |
 | `POST /client/goal-groups/{id}/close` | Close the group for good |
 | `GET /staff/goal-groups`, `GET /staff/goal-groups/{id}` | Staff with `goals.view`, with each member's figure as last recorded |
 
@@ -115,5 +115,5 @@ Client responses carry net figures and the yearly rate after tax as a label. No 
 
 - Saving rules: a monthly saving collected on a set day, with a mobile money prompt sent by the worker.
 - A console view of group goals.
-- Removing a member from the client app: the client routes do not yet name members by an ID the one who set the group up can send back.
+- Removing a member from the client app. The API gives the one who set the group up a `member_id` for it.
 - Withdrawing from a goal before its date, which waits for early withdrawal.

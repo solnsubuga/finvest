@@ -345,6 +345,7 @@ export const MemberView = z.object({
   is_owner: z.boolean(),
   is_you: z.boolean(),
   joined_at: z.string(),
+  member_id: z.string().nullable(),
 });
 export type MemberView = z.infer<typeof MemberView>;
 
@@ -1155,12 +1156,12 @@ export const operations = {
     status: 200,
     response: GroupView,
   },
-  "POST /client/goal-groups/{group_id}/members/{goal_id}/remove": {
+  "POST /client/goal-groups/{group_id}/members/{member_id}/remove": {
     method: "POST",
-    path: "/client/goal-groups/{group_id}/members/{goal_id}/remove",
+    path: "/client/goal-groups/{group_id}/members/{member_id}/remove",
     params: z.object({
     group_id: z.string(),
-    goal_id: z.string(),
+    member_id: z.string(),
   }),
     query: z.object({}),
     body: null,

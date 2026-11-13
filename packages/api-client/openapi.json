@@ -4488,13 +4488,28 @@
             "format": "date-time",
             "title": "Joined At",
             "type": "string"
+          },
+          "member_id": {
+            "anyOf": [
+              {
+                "maxLength": 20,
+                "minLength": 20,
+                "pattern": "^[-0-9A-Z_a-z]{20}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Member Id"
           }
         },
         "required": [
           "display_name",
           "joined_at",
           "is_you",
-          "is_owner"
+          "is_owner",
+          "member_id"
         ],
         "title": "MemberView",
         "type": "object"
@@ -12257,9 +12272,9 @@
         ]
       }
     },
-    "/client/goal-groups/{group_id}/members/{goal_id}/remove": {
+    "/client/goal-groups/{group_id}/members/{member_id}/remove": {
       "post": {
-        "operationId": "remove_member_client_goal_groups__group_id__members__goal_id__remove_post",
+        "operationId": "remove_member_client_goal_groups__group_id__members__member_id__remove_post",
         "parameters": [
           {
             "in": "path",
@@ -12275,13 +12290,13 @@
           },
           {
             "in": "path",
-            "name": "goal_id",
+            "name": "member_id",
             "required": true,
             "schema": {
               "maxLength": 20,
               "minLength": 20,
               "pattern": "^[-0-9A-Z_a-z]{20}$",
-              "title": "Goal Id",
+              "title": "Member Id",
               "type": "string"
             }
           }
