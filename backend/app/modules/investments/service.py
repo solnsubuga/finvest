@@ -15,6 +15,7 @@ from app.modules.investments.book import (
     owed_by_product,
     running_investments,
 )
+from app.modules.investments.carried_over import open_existing_investment
 from app.modules.investments.catalogue import (
     MAX_PROPOSALS,
     PROPOSAL_RESOURCE,
@@ -103,6 +104,7 @@ __all__ = [
     "list_proposals",
     "mature_investment",
     "maturing",
+    "open_existing_investment",
     "owed_by_product",
     "pay_funded",
     "pay_out_matured",
