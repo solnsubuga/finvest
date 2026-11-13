@@ -20,7 +20,7 @@ export const productsEndpoint = `${apiUrl}/public/products`;
 /** Where the calculator asks for the exact figure. */
 export const quoteEndpoint = `${apiUrl}/public/quote`;
 
-/** Search engines are kept out until the bracketed placeholders are filled in. */
+/** Search engines are kept out until the owner says launch. */
 export const indexable = import.meta.env.PUBLIC_INDEXABLE === "true";
 
 export const supportEmail = "support@finvestug.com";

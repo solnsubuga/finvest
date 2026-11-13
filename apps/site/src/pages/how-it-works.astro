@@ -3,6 +3,7 @@ import Cta from "../components/Cta.astro";
 import Icon from "../components/Icon.astro";
 import IconCard from "../components/IconCard.astro";
 import PageTitle from "../components/PageTitle.astro";
+import { company } from "../data/company.ts";
 import Base from "../layouts/Base.astro";
 
 const steps = [
@@ -14,7 +15,7 @@ const steps = [
   {
     title: "Prove who you are",
     text: "Scan your National ID and take a selfie. When you pass, you get a 10 digit Finvest account number.",
-    time: "[REVIEW TIME]",
+    time: company.reviewTime,
   },
   {
     title: "Choose an investment or a goal",
