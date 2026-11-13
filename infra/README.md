@@ -181,7 +181,7 @@ Migrations must be able to run beside the previous release: add first, remove in
 - refuses a database at a revision the image does not know, which means a newer release already migrated it (deploy that release, or restore its backup);
 - stops the old release first when a pending migration says `zero_downtime = False`, so visitors see "being updated" until the new one is up.
 
-A unit test (`backend/tests/unit/test_migration_zero_downtime.py`) fails any migration that drops or renames a table, column or function, or makes a column required, unless it says `zero_downtime` either way. To force a stop for one deploy anyway, set the environment variable `STOP_BEFORE_MIGRATE=true`.
+A unit test (`backend/tests/unit/test_migration_zero_downtime.py`) fails any migration that drops or renames a table, column or function, makes a column required, or adds a required column with no default, unless it says `zero_downtime` either way. It reads only the shape of the SQL: it cannot see a new trigger, guard or CHECK that refuses what the old release writes, so that stays the author's and the reviewer's job. To force a stop for one deploy anyway, set the environment variable `STOP_BEFORE_MIGRATE=true`.
 
 To go back to an earlier version, revert the commit on the source branch and let it deploy. Rerunning an old run is refused, because a deploy only accepts the branch head.
 

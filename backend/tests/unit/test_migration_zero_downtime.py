@@ -26,6 +26,21 @@ BREAKING_SQL = re.compile(
     re.IGNORECASE,
 )
 BREAKING_CALLS = ("drop_table", "drop_column", "rename_table")
+# A new required column with no default makes the old release's inserts fail, as SET NOT NULL does.
+# Each ADD COLUMN clause runs to the next clause of the same ALTER TABLE, or the statement's end.
+ADD_COLUMN = re.compile(
+    r"\bADD\s+COLUMN\b(?P<clause>.*?)(?=,\s*(?:ADD|DROP|ALTER|RENAME)\b|;|$)",
+    re.IGNORECASE | re.DOTALL,
+)
+NOT_NULL = re.compile(r"\bNOT\s+NULL\b", re.IGNORECASE)
+FILLED = re.compile(r"\bDEFAULT\b|\bGENERATED\b", re.IGNORECASE)
+
+
+def _required_without_default(sql: str) -> bool:
+    return any(
+        NOT_NULL.search(match["clause"]) and not FILLED.search(match["clause"])
+        for match in ADD_COLUMN.finditer(sql)
+    )
 
 
 def _load(path: Path) -> ModuleType:
@@ -45,9 +60,17 @@ def _breaking(path: Path) -> list[str]:
     found = [
         sql
         for call in op.execute.call_args_list
-        if isinstance(sql := call.args[0] if call.args else None, str) and BREAKING_SQL.search(sql)
+        if isinstance(sql := call.args[0] if call.args else None, str)
+        and (BREAKING_SQL.search(sql) or _required_without_default(sql))
     ]
     found += [f"op.{name}" for name in BREAKING_CALLS if getattr(op, name).called]
+    for call in op.add_column.call_args_list:
+        column = call.args[1] if len(call.args) > 1 else call.kwargs.get("column")
+        if (
+            getattr(column, "nullable", True) is False
+            and getattr(column, "server_default", None) is None
+        ):
+            found.append("op.add_column")
     for call in op.alter_column.call_args_list:
         if "new_column_name" in call.kwargs or call.kwargs.get("nullable") is False:
             found.append("op.alter_column")
@@ -82,6 +105,34 @@ def test_the_checker_catches_a_dropped_column(tmp_path: Path) -> None:
         "    op.alter_column('clients', 'name', new_column_name='label')\n"
     )
     assert _breaking(migration) == ["ALTER TABLE clients DROP COLUMN name", "op.alter_column"]
+
+
+def test_the_checker_catches_a_required_column_with_no_default(tmp_path: Path) -> None:
+    migration = tmp_path / "9999_required.py"
+    migration.write_text(
+        "import sqlalchemy as sa\n"
+        "from alembic import op\n"
+        "def upgrade():\n"
+        "    op.execute('ALTER TABLE clients ADD COLUMN t text NOT NULL, ADD COLUMN m text')\n"
+        "    op.add_column('clients', sa.Column('band', sa.Text(), nullable=False))\n"
+    )
+    assert _breaking(migration) == [
+        "ALTER TABLE clients ADD COLUMN t text NOT NULL, ADD COLUMN m text",
+        "op.add_column",
+    ]
+
+
+def test_the_checker_passes_a_required_column_with_a_default(tmp_path: Path) -> None:
+    migration = tmp_path / "9999_defaulted.py"
+    migration.write_text(
+        "import sqlalchemy as sa\n"
+        "from alembic import op\n"
+        "def upgrade():\n"
+        "    op.execute(\"ALTER TABLE clients ADD COLUMN t text NOT NULL DEFAULT 'b'\")\n"
+        "    op.execute('ALTER TABLE clients ADD COLUMN n numeric(10, 2) NOT NULL DEFAULT 0')\n"
+        "    op.add_column('c', sa.Column('b', sa.Text(), nullable=False, server_default=''))\n"
+    )
+    assert _breaking(migration) == []
 
 
 def test_the_checker_passes_an_additive_migration(tmp_path: Path) -> None:
