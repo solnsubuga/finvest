@@ -1,0 +1,30 @@
+name: Deploy Production
+
+# Deploys the head of `release` to production (Reusable Deploy). It runs only once `production` is listed in
+# the repository variable DEPLOY_ENVIRONMENTS, so nothing deploys before Provision has made the
+# environment. The `production` GitHub environment's protection rules apply to every run.
+
+on:
+  push:
+    branches: [release]
+  workflow_dispatch:
+    inputs:
+      force_recreate:
+        description: Pass --force-recreate to Docker Compose
+        required: false
+        default: false
+        type: boolean
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  deploy:
+    if: github.ref == 'refs/heads/release' && contains(vars.DEPLOY_ENVIRONMENTS, 'production')
+    uses: ./.github/workflows/deploy.yml
+    with:
+      environment: production
+      revision: ${{ github.sha }}
+      force_recreate: ${{ inputs.force_recreate || false }}
+    secrets: inherit

@@ -1,0 +1,157 @@
+name: Reusable Deploy
+
+# Ported from Fidiba's deploy.yml. Builds the backend and console images, pushes them to GHCR and
+# deploys their immutable digests to one environment's host with infra/deployment/deploy.sh.
+# Called by Deploy Staging (main) and Deploy Production (release). Every setting it reads was
+# written into the GitHub environment by the Provision workflow, apart from the app's own
+# secrets listed in infra/README.md.
+
+on:
+  workflow_call:
+    inputs:
+      environment:
+        description: staging or production
+        required: true
+        type: string
+      revision:
+        description: Exact commit to deploy, the head of the environment's source branch
+        required: true
+        type: string
+      force_recreate:
+        required: false
+        default: false
+        type: boolean
+
+permissions:
+  contents: read
+  packages: write
+
+concurrency:
+  group: deploy-${{ inputs.environment }}
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.environment }}
+    timeout-minutes: 40
+    env:
+      REVISION: ${{ inputs.revision }}
+      DEPLOY_ENVIRONMENT: ${{ inputs.environment }}
+      SOURCE_BRANCH: ${{ inputs.environment == 'production' && 'release' || 'main' }}
+      GH_TOKEN: ${{ github.token }}
+      REPOSITORY: ${{ github.repository }}
+    steps:
+      - name: Require the head of the environment's branch
+        run: |
+          set -euo pipefail
+          [[ $DEPLOY_ENVIRONMENT == staging || $DEPLOY_ENVIRONMENT == production ]]
+          [[ $REVISION =~ ^[a-f0-9]{40}$ ]]
+          # Rerunning an old run can never roll an environment back.
+          test "$(gh api "repos/$REPOSITORY/commits/$SOURCE_BRANCH" --jq .sha)" = "$REVISION"
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+        with:
+          ref: ${{ inputs.revision }}
+          persist-credentials: false
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+      - uses: docker/login-action@8aa5831fb8d48d8f76594c7ddde61ae58019f550 # v4.8.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ github.token }}
+      - name: Set image names
+        id: images
+        run: |
+          echo "backend=ghcr.io/${REPOSITORY,,}-backend" >> "$GITHUB_OUTPUT"
+          echo "console=ghcr.io/${REPOSITORY,,}-console" >> "$GITHUB_OUTPUT"
+      - uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        id: backend
+        with:
+          context: backend
+          platforms: linux/amd64
+          push: true
+          tags: ${{ steps.images.outputs.backend }}:${{ inputs.revision }}
+          cache-from: type=gha,scope=backend
+          cache-to: type=gha,scope=backend,mode=max
+      - uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        id: console
+        with:
+          context: .
+          file: infra/deployment/console.Dockerfile
+          platforms: linux/amd64
+          push: true
+          # A production console refuses the sample sign-in at build time.
+          build-args: VITE_DEPLOY_ENV=${{ inputs.environment }}
+          tags: ${{ steps.images.outputs.console }}:${{ inputs.environment }}-${{ inputs.revision }}
+          cache-from: type=gha,scope=console-${{ inputs.environment }}
+          cache-to: type=gha,scope=console-${{ inputs.environment }},mode=max
+      - name: Prepare private release files
+        env:
+          BACKEND_IMAGE: ${{ steps.images.outputs.backend }}@${{ steps.backend.outputs.digest }}
+          CONSOLE_IMAGE: ${{ steps.images.outputs.console }}@${{ steps.console.outputs.digest }}
+          SITE_DOMAINS: ${{ vars.SITE_DOMAINS }}
+          APP_DOMAIN: ${{ vars.APP_DOMAIN }}
+          ADMIN_DOMAIN: ${{ vars.ADMIN_DOMAIN }}
+          API_DOMAIN: ${{ vars.API_DOMAIN }}
+          DATABASE_HOST: ${{ vars.DATABASE_HOST }}
+          DATABASE_PORT: ${{ vars.DATABASE_PORT }}
+          DATABASE_NAME: ${{ vars.DATABASE_NAME }}
+          DATABASE_MIGRATOR_PASSWORD: ${{ secrets.DATABASE_MIGRATOR_PASSWORD }}
+          DATABASE_APP_PASSWORD: ${{ secrets.DATABASE_APP_PASSWORD }}
+          DATABASE_WORKER_PASSWORD: ${{ secrets.DATABASE_WORKER_PASSWORD }}
+          DATABASE_CA_CERT: ${{ secrets.DATABASE_CA_CERT }}
+          ORIGIN_TLS_CERT: ${{ secrets.ORIGIN_TLS_CERT }}
+          ORIGIN_TLS_KEY: ${{ secrets.ORIGIN_TLS_KEY }}
+          FINVEST_OBJECT_STORAGE_BUCKET: ${{ vars.FINVEST_OBJECT_STORAGE_BUCKET }}
+          FINVEST_OBJECT_STORAGE_ENDPOINT: ${{ vars.FINVEST_OBJECT_STORAGE_ENDPOINT }}
+          FINVEST_OBJECT_STORAGE_REGION: ${{ vars.FINVEST_OBJECT_STORAGE_REGION }}
+          FINVEST_OBJECT_STORAGE_ACCESS_KEY_ID: ${{ secrets.FINVEST_OBJECT_STORAGE_ACCESS_KEY_ID }}
+          FINVEST_OBJECT_STORAGE_SECRET_ACCESS_KEY: ${{ secrets.FINVEST_OBJECT_STORAGE_SECRET_ACCESS_KEY }}
+          FINVEST_AUTHENTICATOR_KEY: ${{ secrets.FINVEST_AUTHENTICATOR_KEY }}
+          FINVEST_CLIENT_PASSKEY_APP_ORIGINS: ${{ vars.FINVEST_CLIENT_PASSKEY_APP_ORIGINS }}
+          FINVEST_EMAIL_BACKEND: ${{ vars.FINVEST_EMAIL_BACKEND }}
+          FINVEST_EMAIL_FROM: ${{ vars.FINVEST_EMAIL_FROM }}
+          FINVEST_EMAIL_RESEND_API_KEY: ${{ secrets.FINVEST_EMAIL_RESEND_API_KEY }}
+          STOP_BEFORE_MIGRATE: ${{ vars.STOP_BEFORE_MIGRATE }}
+        run: python3 infra/deployment/prepare_release.py "$RUNNER_TEMP/finvest-release"
+      - name: Admit this run to SSH
+        env:
+          DIGITALOCEAN_TOKEN: ${{ secrets.DEPLOY_FIREWALL_TOKEN }}
+          FIREWALL_ID: ${{ vars.DEPLOY_FIREWALL_ID }}
+        run: |
+          set -euo pipefail
+          [[ $FIREWALL_ID =~ ^[a-f0-9-]{36}$ ]] || { echo 'DEPLOY_FIREWALL_ID is not set; run Provision apply' >&2; exit 1; }
+          address=$(curl -fsS --retry 3 https://api.ipify.org)
+          [[ $address =~ ^[0-9]+(\.[0-9]+){3}$ ]]
+          rule=$(jq -nc --arg a "$address" '{inbound_rules: [{protocol: "tcp", ports: "22", sources: {addresses: [$a]}}]}')
+          echo "SSH_RULE=$rule" >> "$GITHUB_ENV"
+          curl -fsS -X POST -H "Authorization: Bearer $DIGITALOCEAN_TOKEN" -H 'Content-Type: application/json' \
+            -d "$rule" "https://api.digitalocean.com/v2/firewalls/$FIREWALL_ID/rules"
+          # The firewall change takes a few seconds to reach the host.
+          sleep 10
+      - name: Transfer release and deploy
+        env:
+          DEPLOY_HOST: ${{ vars.DEPLOY_HOST }}
+          DEPLOY_USER: ${{ vars.DEPLOY_USER }}
+          DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+          REGISTRY_USER: ${{ github.actor }}
+          REGISTRY_TOKEN: ${{ github.token }}
+          FORCE_RECREATE: ${{ inputs.force_recreate }}
+        run: |
+          set -euo pipefail
+          # A run that started at the branch head finishes even if the branch moved; the run queued
+          # for the newer commit deploys next. A force-push that dropped the revision stops it.
+          status=$(gh api "repos/$REPOSITORY/compare/$REVISION...$SOURCE_BRANCH" --jq .status)
+          [[ $status == identical || $status == ahead ]]
+          bash infra/deployment/ship-release.sh "$RUNNER_TEMP/finvest-release"
+      - name: Close SSH to this run
+        if: always() && env.SSH_RULE != ''
+        env:
+          DIGITALOCEAN_TOKEN: ${{ secrets.DEPLOY_FIREWALL_TOKEN }}
+          FIREWALL_ID: ${{ vars.DEPLOY_FIREWALL_ID }}
+        run: |
+          curl -fsS -X DELETE -H "Authorization: Bearer $DIGITALOCEAN_TOKEN" -H 'Content-Type: application/json' \
+            -d "$SSH_RULE" "https://api.digitalocean.com/v2/firewalls/$FIREWALL_ID/rules"
+      - name: Remove private release files
+        if: always()
+        run: rm -rf -- "$RUNNER_TEMP/finvest-release"

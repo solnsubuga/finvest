@@ -8,7 +8,7 @@ Infrastructure as code for Finvest, modelled on Fidiba's provisioning. Terraform
 | `terraform/` | One environment: host, network, database, buckets, DNS, back office access, alerts, and the settings it writes into GitHub. |
 | `terraform/environments/*.tfvars` | What differs between `staging` and `production`. Each has its own state, so planning one never touches the other. |
 | `terraform/tests/` | `terraform test` with mock providers: the rules below that must not drift. |
-| `deployment/` | Scripts the Provision run executes on the host: `prepare-host.sh` (from Fidiba) and `create-roles.sh`. |
+| `deployment/` | The deployed stack and its scripts, ported from Fidiba: `compose.yaml`, `Caddyfile`, `deploy.sh`, `prepare_release.py`, `ship-release.sh`, the console image, `prepare-host.sh`, `create-roles.sh`, and `rehearse.sh`. |
 
 ## What an environment gets
 
@@ -134,7 +134,61 @@ Repository variables under **Settings → Secrets and variables → Actions → 
 1. Provision `shared` with `plan`, then `apply`. It creates the `finvest` project and the zone settings.
 2. Provision `staging` with `plan`, read it, then `apply`. Then do the same for `production`.
 3. Database roles are created only once `backend/db/init-roles.sql` is on `main`. If it is not there yet, the run says so; run apply again later. It never changes an existing role's password.
-4. Deploy. The deploy workflow (images, blue and green rollout with checks and rollback, as in Fidiba) comes in its own pull request.
+4. Turn on deploys for the environment (see Deploy below).
+
+## Deploy
+
+Deploys follow Fidiba. A push to the source branch deploys its environment, and you can also run the workflow by hand on that branch.
+
+| Workflow | Source branch | GitHub environment |
+| --- | --- | --- |
+| Deploy Staging | `main` | `staging` |
+| Deploy Production | `release` | `production`, so it waits for your approval |
+
+A workflow does nothing until its environment is listed in the repository variable `DEPLOY_ENVIRONMENTS` (for example `staging`, later `staging,production`). Add an environment only after Provision has applied it.
+
+Each run:
+
+1. Builds the backend image and the console image, pushes them to GitHub's container registry and deploys their exact digests. The console is built with `VITE_DEPLOY_ENV` set to the environment, so a production console cannot contain the sample sign-in.
+2. Writes one release bundle (`prepare_release.py`). Each process gets a runtime file with only its own database role, verified TLS to the database against DigitalOcean's CA, and the sign-in settings for the environment's domains.
+3. Admits its own address to SSH on the firewall, copies the bundle to `/opt/finvest/releases/<id>` and runs `deploy.sh` there, then removes its address again.
+
+On the host, `deploy.sh`:
+
+1. Takes a lock, validates the Compose and Caddy configuration and pulls the pinned images.
+2. Checks all three database roles are inside their boundaries, then runs migrations as `finvest_migrator` while the current release keeps serving.
+3. Starts the new colour (blue or green) beside the old one and waits for every health check.
+4. Switches Caddy to the new colour with a reload, which drops no connections.
+5. Checks the API and the console through the public address. If that fails, it switches back and removes the new colour. If it passes, it records the colour and stops the old one.
+
+Migrations must be able to run beside the previous release: add first, remove in a later release. For one that cannot, set the environment variable `STOP_BEFORE_MIGRATE=true` for that deploy; the old release stops first and visitors see "being updated" until the new one is up.
+
+To go back to an earlier version, revert the commit on the source branch and let it deploy. Rerunning an old run is refused, because a deploy only accepts the branch head.
+
+### Settings you add for deploys
+
+In each of the `staging` and `production` GitHub environments, beside what Terraform writes:
+
+| Name | Kind | Value |
+| --- | --- | --- |
+| `DEPLOY_FIREWALL_TOKEN` | Secret | A DigitalOcean token with only the `firewall` read and update scopes. The deploy uses it to open and close SSH for itself. Do not reuse the write token here. |
+| `FINVEST_AUTHENTICATOR_KEY` | Secret | `python3 -c "import secrets; print(secrets.token_urlsafe(32))"`, one per environment. It protects staff authenticator secrets. Never change it once staff have enrolled, and keep an offline copy. |
+| `FINVEST_EMAIL_RESEND_API_KEY` | Secret | The Resend key, once email is set up |
+| `FINVEST_EMAIL_BACKEND`, `FINVEST_EMAIL_FROM` | Variables | `resend` and `Finvest <no-reply@finvestug.com>` |
+
+`DEPLOY_SSH_KEY` is already there from provisioning.
+
+### What is served today
+
+| Address | Serves |
+| --- | --- |
+| API | The backend |
+| Back office | The console, behind Cloudflare Access in production |
+| Client app, public website | A "coming soon" answer until those apps are built |
+
+### Rehearsal
+
+`bash infra/deployment/rehearse.sh` runs the whole deployment on one machine with Docker: real images, roles, migrations, two switches while polling the API, and a failed check that must switch back. CI runs it on every infrastructure pull request.
 
 ## Host access
 
@@ -146,7 +200,6 @@ Repository variables under **Settings → Secrets and variables → Actions → 
 
 ## Open before production
 
-- The region is `lon1` (London), as in Fidiba. DigitalOcean has no region in Africa. Confirm it against Uganda's Data Protection and Privacy Act before production data is stored.
 - The firewall proves traffic came through Cloudflare, not through this zone. Turn on Authenticated Origin Pulls in Caddy, or have the console check the Access token, before production.
 - Production runs one database node. A standby (`database_node_count = 2`) roughly doubles the database cost.
 

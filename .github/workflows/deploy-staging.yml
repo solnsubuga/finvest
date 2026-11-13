@@ -1,0 +1,30 @@
+name: Deploy Staging
+
+# Deploys the head of `main` to staging (Reusable Deploy). It runs only once `staging` is listed in
+# the repository variable DEPLOY_ENVIRONMENTS, so nothing deploys before Provision has made the
+# environment. The `staging` GitHub environment's protection rules apply to every run.
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      force_recreate:
+        description: Pass --force-recreate to Docker Compose
+        required: false
+        default: false
+        type: boolean
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  deploy:
+    if: github.ref == 'refs/heads/main' && contains(vars.DEPLOY_ENVIRONMENTS, 'staging')
+    uses: ./.github/workflows/deploy.yml
+    with:
+      environment: staging
+      revision: ${{ github.sha }}
+      force_recreate: ${{ inputs.force_recreate || false }}
+    secrets: inherit
