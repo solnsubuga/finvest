@@ -18,8 +18,10 @@ from app.modules.identity.api import COOKIES, require_permission
 from app.modules.identity.hashing import PasswordHasher
 from app.modules.identity.service import (
     ACCOUNT_FROM_ADDRESS_ATTEMPTS,
+    ClientContact,
     IdentityService,
     StaffSession,
+    client_contact,
 )
 from app.shared.actors import Actor
 from app.shared.errors import ApplicationError
@@ -197,6 +199,18 @@ async def test_staff_with_no_second_step_cannot_sign_in(api: Api) -> None:
         headers={"Origin": STAFF_ORIGIN},
     )
     assert (wrong.status_code, code(wrong)) == (401, "invalid_credentials")
+
+
+async def test_the_no_second_step_answer_is_limited_like_a_wrong_guess(api: Api) -> None:
+    # The answer confirms the password, so it must not be free to ask for.
+    email, _ = await a_staff_member(api)
+    body = {"email": email, "password": PASSWORD}
+    headers = {"Origin": STAFF_ORIGIN, "X-Forwarded-For": "203.0.113.44"}
+    for _ in range(ACCOUNT_FROM_ADDRESS_ATTEMPTS):
+        response = await api.http.post("/staff/login/start", json=body, headers=headers)
+        assert (response.status_code, code(response)) == (403, "second_step_missing")
+    limited = await api.http.post("/staff/login/start", json=body, headers=headers)
+    assert (limited.status_code, code(limited)) == (429, "rate_limited")
 
 
 async def test_staff_sign_in_is_refused_from_any_other_site(api: Api) -> None:
@@ -444,7 +458,14 @@ async def test_staff_session_lists_the_role_and_its_permissions(api: Api) -> Non
         "staff_id": staff_id,
         "name": "Ada Nakato",
         "role": "support",
-        "permissions": ["overview.view", "support.view", "complaints.view", "clients.view"],
+        "permissions": [
+            "overview.view",
+            "support.view",
+            "support.reply",
+            "complaints.view",
+            "complaints.manage",
+            "clients.view",
+        ],
     }
     refused = await api.http.get("/staff/team-test")
     assert (refused.status_code, code(refused)) == (403, "forbidden")
@@ -539,7 +560,6 @@ async def test_browsers_are_told_which_origins_may_call(api: Api) -> None:
 
 async def test_the_worker_cannot_touch_sign_in_tables(worker_database: Database) -> None:
     for table in (
-        "identity_clients",
         "identity_staff",
         "identity_login_challenges",
         "identity_sessions",
@@ -550,11 +570,45 @@ async def test_the_worker_cannot_touch_sign_in_tables(worker_database: Database)
                 await session.execute(text(f"SELECT 1 FROM {table} LIMIT 1"))  # noqa: S608
 
 
+async def test_the_worker_can_read_how_to_reach_a_client_and_nothing_more(
+    api: Api, worker_database: Database
+) -> None:
+    phone, client_id = await a_client(api)
+    async with worker_database.transaction() as session:
+        contact = await client_contact(session, client_id)
+        assert contact == ClientContact(phone, None)
+        assert await client_contact(session, "-Nabc0000000000000Z9") is None
+    for column in ("password_hash", "restricted_until", "created_at"):
+        with pytest.raises(DBAPIError, match="permission denied"):
+            async with worker_database.transaction() as session:
+                await session.execute(text(f"SELECT {column} FROM identity_clients"))  # noqa: S608
+    with pytest.raises(DBAPIError, match="permission denied"):
+        async with worker_database.transaction() as session:
+            await session.execute(
+                text("UPDATE identity_clients SET status = 'closed' WHERE id = :id"),
+                {"id": client_id},
+            )
+
+
 async def test_the_api_cannot_delete_accounts_or_sessions(api: Api) -> None:
     for table in ("identity_clients", "identity_staff", "identity_sessions"):
         with pytest.raises(DBAPIError, match="permission denied"):
             async with api.database.transaction() as session:
                 await session.execute(text(f"DELETE FROM {table}"))  # noqa: S608
+
+
+async def test_the_api_can_change_only_the_account_columns_sign_in_needs(api: Api) -> None:
+    _, staff_id = await a_staff_member(api, "support")
+    _, client_id = await a_client(api)
+    for statement, account in (
+        ("UPDATE identity_staff SET role = 'admin' WHERE id = :id", staff_id),
+        ("UPDATE identity_staff SET email = 'other@example.com' WHERE id = :id", staff_id),
+        ("UPDATE identity_clients SET phone = '+256772000001' WHERE id = :id", client_id),
+        ("UPDATE identity_clients SET status = 'closed' WHERE id = :id", client_id),
+    ):
+        with pytest.raises(DBAPIError, match="permission denied"):
+            async with api.database.transaction() as session:
+                await session.execute(text(statement), {"id": account})
 
 
 async def test_nothing_personal_is_logged(api: Api, capsys: pytest.CaptureFixture[str]) -> None:

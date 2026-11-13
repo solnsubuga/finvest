@@ -74,9 +74,20 @@ class Case:
             )
 
 
-async def enter(database: Database, staff: Actor, old: ControlTotals) -> None:
+async def enter(
+    database: Database, staff: Actor, old: ControlTotals, *, confirm: bool = True
+) -> migration.TotalsView:
+    """Enter the old system's totals and, unless told not to, have a second person confirm."""
     async with database.actor_transaction(staff) as session:
-        await migration.enter_control_totals(session, staff, NOW, as_of=AS_OF, totals=old)
+        entry = await migration.enter_control_totals(session, staff, NOW, as_of=AS_OF, totals=old)
+    if confirm:
+        await confirm_totals(database, new_staff(), entry.id)
+    return entry
+
+
+async def confirm_totals(database: Database, staff: Actor, totals_id: str) -> migration.TotalsView:
+    async with database.actor_transaction(staff) as session:
+        return await migration.confirm_control_totals(session, staff, NOW, totals_id)
 
 
 async def look(database: Database) -> migration.Overview:
@@ -125,7 +136,9 @@ async def test_a_trial_keeps_its_result_and_nothing_from_the_spreadsheet(
                 {"id": view.id},
             )
         ).scalar_one()
-    for personal in ("Nakato", "772", "example.com", "CM0000000001"):
+    # The sample phone is +256772000001. Seven of its digits, because the row also holds a
+    # SHA-256 in hex, where a short run of digits such as "772" turns up by chance.
+    for personal in ("Nakato", "7720000", "example.com", "CM0000000001"):
         assert personal not in stored
 
     async with app_database.actor_transaction(staff) as session:
@@ -383,3 +396,170 @@ async def test_only_staff_read_and_write_the_checks(
     with pytest.raises(DBAPIError, match="permission denied"):
         async with worker_database.actor_transaction(SYSTEM) as session:
             await session.execute(_SIGN_OFF, {"id": push_id(), "by": push_id()})
+
+
+async def test_totals_count_only_once_a_second_person_confirms_them(
+    app_database: Database,
+) -> None:
+    case, finance = Case(), new_staff()
+    await case.trial(app_database, finance)
+    entry = await enter(app_database, finance, totals(case.stated), confirm=False)
+
+    state = await look(app_database)
+    assert state.totals == entry
+    assert state.lines == ()
+    assert "totals_not_confirmed" in state.blockers
+
+    with pytest.raises(ApplicationError) as error:
+        await confirm_totals(app_database, finance, entry.id)
+    assert error.value.code == "forbidden"
+    with pytest.raises(ApplicationError) as error:
+        await confirm_totals(app_database, new_staff(), push_id())
+    assert error.value.code == "not_found"
+
+    second = new_staff()
+    confirmed = await confirm_totals(app_database, second, entry.id)
+    assert confirmed.confirmed_by == second.id
+    state = await look(app_database)
+    assert "totals_not_confirmed" not in state.blockers
+    # The old system's interest total is the stated figure, so the total line differs.
+    assert state.differing["total:interest_before_tax:UGX"] == (case.stated, 11_643)
+
+    with pytest.raises(ApplicationError) as error:
+        await confirm_totals(app_database, new_staff(), entry.id)
+    assert error.value.code == "conflict"
+    async with app_database.actor_transaction(second) as session:
+        events = await events_for_resource(session, "migration_control_totals", entry.id)
+    assert sorted(event.action for event in events) == [
+        "migration.control_totals_confirmed",
+        "migration.control_totals_entered",
+    ]
+
+
+async def test_one_person_cannot_make_a_difference_on_the_totals_disappear(
+    app_database: Database,
+) -> None:
+    case, finance = Case(), new_staff()
+    await case.trial(app_database, finance)
+    await enter(app_database, finance, totals(case.stated))
+    assert "total:interest_before_tax:UGX" in (await look(app_database)).differing
+
+    # The same person enters the new system's own figure as what the old system says.
+    replaced = await enter(app_database, finance, totals(11_643), confirm=False)
+    state = await look(app_database)
+    assert state.lines == ()
+    assert "totals_not_confirmed" in state.blockers
+
+    # The entry it replaced can no longer be confirmed, and nor can they confirm their own.
+    with pytest.raises(ApplicationError) as error:
+        await confirm_totals(app_database, finance, replaced.id)
+    assert error.value.code == "forbidden"
+
+
+async def test_only_the_latest_entry_of_totals_can_be_confirmed(app_database: Database) -> None:
+    case, finance = Case(), new_staff()
+    await case.trial(app_database, finance)
+    first = await enter(app_database, finance, totals(case.stated), confirm=False)
+    await enter(app_database, new_staff(), totals(11_643), confirm=False)
+
+    with pytest.raises(ApplicationError) as error:
+        await confirm_totals(app_database, new_staff(), first.id)
+    assert error.value.code == "conflict"
+
+
+async def test_two_people_confirming_at_once_leave_one_confirmation(
+    app_database: Database,
+) -> None:
+    case, finance = Case(), new_staff()
+    await case.trial(app_database, finance)
+    entry = await enter(app_database, finance, totals(case.stated), confirm=False)
+    barrier = AsyncBarrier(2)
+
+    async def confirm() -> str:
+        staff = new_staff()
+        try:
+            async with app_database.actor_transaction(staff) as session:
+                await barrier.wait()
+                await migration.confirm_control_totals(session, staff, NOW, entry.id)
+        except ApplicationError as error:
+            return error.code
+        return "confirmed"
+
+    assert sorted(await asyncio.gather(confirm(), confirm())) == ["confirmed", "conflict"]
+
+
+async def test_the_database_holds_a_confirmation_of_totals_to_a_second_person(
+    app_database: Database,
+) -> None:
+    case, finance, other = Case(), new_staff(), new_staff()
+    await case.trial(app_database, finance)
+    entry = await enter(app_database, finance, totals(case.stated), confirm=False)
+    insert = text(
+        "INSERT INTO migration_control_totals_confirmations (totals_id, confirmed_by, "
+        "confirmed_at) VALUES (:id, :by, now())"
+    )
+
+    with pytest.raises(DBAPIError, match="confirmed by a second person"):
+        async with app_database.actor_transaction(finance) as session:
+            await session.execute(insert, {"id": entry.id, "by": finance.id})
+    # Nobody confirms in another person's name.
+    with pytest.raises(DBAPIError, match="row-level security"):
+        async with app_database.actor_transaction(finance) as session:
+            await session.execute(insert, {"id": entry.id, "by": other.id})
+    await confirm_totals(app_database, other, entry.id)
+    with pytest.raises(DBAPIError, match="pk_migration_control_totals_confirmations"):
+        third = new_staff()
+        async with app_database.actor_transaction(third) as session:
+            await session.execute(insert, {"id": entry.id, "by": third.id})
+    with pytest.raises(DBAPIError, match="permission denied"):
+        async with app_database.actor_transaction(other) as session:
+            await session.execute(
+                text("DELETE FROM migration_control_totals_confirmations WHERE totals_id = :id"),
+                {"id": entry.id},
+            )
+
+
+async def test_the_history_lists_each_days_trial_for_a_parallel_run(app_database: Database) -> None:
+    # Days before AS_OF, which every other test uses, so their trials are not in the range.
+    first, second = AS_OF - timedelta(days=2), AS_OF - timedelta(days=1)
+    staff, checker = new_staff(), new_staff()
+
+    async def trial_on(day: date, stated: int) -> None:
+        row = investment("HIST-1", "1", interest_before_tax=str(stated))
+        clock = FakeClock(datetime.combine(second, datetime.min.time(), UTC) + timedelta(hours=9))
+        async with app_database.actor_transaction(staff) as session:
+            await migration.run_trial_import(
+                session,
+                staff,
+                clock,
+                clients_csv=clients(client("1")),
+                investments_csv=investments(row),
+                as_of=day,
+            )
+
+    await trial_on(first, 11_000)
+    await trial_on(second, 11_000)
+    async with app_database.actor_transaction(staff) as session:
+        entry = await migration.enter_control_totals(
+            session, staff, NOW, as_of=second, totals=totals(11_000)
+        )
+    await confirm_totals(app_database, checker, entry.id)
+
+    async with app_database.actor_transaction(staff) as session:
+        history = await migration.trial_history(session, date_from=first, date_to=second)
+        earlier = await migration.trial_history(
+            session, date_from=first - timedelta(days=30), date_to=first - timedelta(days=1)
+        )
+    assert [(t.as_of, t.totals_confirmed, t.totals_differing) for t in history] == [
+        (first, False, None),
+        (second, True, 1),
+    ]
+    assert [(t.error_count, t.investments_differing) for t in history] == [(0, 1), (0, 1)]
+    assert history[0].clients_sha256 == history[1].clients_sha256
+    assert history[0].investments_sha256 == history[1].investments_sha256
+    assert earlier == ()
+
+    with pytest.raises(ApplicationError) as error:
+        async with app_database.actor_transaction(staff) as session:
+            await migration.trial_history(session, date_from=second, date_to=first)
+    assert refused(error) == ("validation_failed", [("date_from", "after_date_to")])

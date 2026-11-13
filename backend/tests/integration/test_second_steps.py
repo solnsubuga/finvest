@@ -809,3 +809,47 @@ async def test_a_client_sees_the_second_steps_they_have_strongest_first(api: Api
     await add_passkey(api, token, Device(CLIENT_SITE, CLIENT_ORIGIN))
     assert await methods() == ["passkey", "authenticator", "code"]
     assert (await api.http.get("/client/second-steps")).status_code == 401
+
+
+async def test_changes_to_how_someone_signs_in_are_on_the_audit_trail(api: Api) -> None:
+    _, staff_id, token = await invited(api)
+    await enrol_with_passkey(api, token, Device(STAFF_SITE, STAFF_ORIGIN))
+    await enrol_with_app(api, await api.passkeys.create_enrolment(staff_id))
+    _, client_id, client_token = await a_signed_in_client(api)
+    added = await add_passkey(api, client_token, Device(CLIENT_SITE, CLIENT_ORIGIN))
+    await api.http.delete(
+        f"/client/passkeys/{added.json()['id']}",
+        headers={"Authorization": f"Bearer {client_token}"},
+    )
+
+    async with api.database.actor_transaction(Actor("staff", staff_id)) as session:
+        rows = (
+            await session.execute(
+                text(
+                    "SELECT action, actor_kind, actor_id, category, details::text AS details, "
+                    "correlation_id FROM audit_events WHERE actor_id = ANY(:ids) ORDER BY id"
+                ),
+                {"ids": [staff_id, client_id]},
+            )
+        ).all()
+    assert [(row.actor_kind, row.action) for row in rows] == [
+        ("staff", "identity.staff.enrolment_link_issued"),
+        ("staff", "identity.passkey.added"),
+        ("staff", "identity.staff.enrolled"),
+        ("staff", "identity.session.opened"),
+        ("staff", "identity.staff.enrolment_link_issued"),
+        ("staff", "identity.authenticator.added"),
+        ("staff", "identity.staff.enrolled"),
+        ("staff", "identity.session.opened"),
+        ("client", "identity.session.opened"),
+        ("client", "identity.passkey.added"),
+        ("client", "identity.passkey.removed"),
+    ]
+    assert {row.category for row in rows} == {"security"}
+    # Tied to the request that made the change, and holding no secret.
+    outside_a_request = {"identity.session.opened", "identity.staff.enrolment_link_issued"}
+    assert all(row.correlation_id for row in rows if row.action not in outside_a_request)
+    # The second link was for someone who could already sign in, and the record says so.
+    links = [row.details for row in rows if row.action.endswith("enrolment_link_issued")]
+    assert ["true" in details for details in links] == [False, True]
+    assert all("secret" not in row.details and "otpauth" not in row.details for row in rows)

@@ -2,10 +2,16 @@
 
 Each template lists the variables it needs. Every value is escaped before it goes into HTML,
 so nothing a person typed can add markup or a link.
+
+This file owns only the messages that carry a secret or open an account: sign-in, signup and
+reset codes and the staff set-up link. They are fixed in code so that nobody can edit them into
+a phishing message, and so that they work before anything else is set up. Every other client
+notice is worded in `domain/wording.py`, which staff edit with a second person approving.
+Neither file adds text of the other kind.
 """
 
 import html
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from typing import Literal, get_args
 
@@ -62,9 +68,23 @@ def render_sms(template: str, variables: Mapping[str, object]) -> str:
     return _SMS[template].format(**values)
 
 
-def render(template: str, variables: Mapping[str, object]) -> Rendered:
-    """The subject and bodies of an email."""
+def render(
+    template: str, variables: Mapping[str, object], *, link_origins: Sequence[str] | None = None
+) -> Rendered:
+    """The subject and bodies of an email.
+
+    When `link_origins` is given, a link in the message must point into one of those sites.
+    The worker always gives it, so a bug or a misused database role cannot send a Finvest
+    email that links anywhere else.
+    """
     values = check(template, variables)
+    link = values.get("link")
+    if (
+        link is not None
+        and link_origins is not None
+        and not any(link.startswith(f"{origin}/") for origin in link_origins)
+    ):
+        raise InvalidTemplate("The link does not point to a Finvest site")
     if template == "signup_code":
         raise InvalidTemplate("This template is not sent by email")
     if template == "sign_in_code":

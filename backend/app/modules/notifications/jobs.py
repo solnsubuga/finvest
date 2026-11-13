@@ -1,5 +1,6 @@
 """The worker's side of messages: send what was queued, and clear old content."""
 
+from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import timedelta
 
@@ -35,10 +36,12 @@ from app.infrastructure.sms import (
     SmsUncertain,
 )
 from app.modules.notifications.domain.templates import InvalidTemplate, render, render_sms
+from app.modules.notifications.email_delivery import is_suppressed
 from app.modules.notifications.service import PURGE_MESSAGES, SEND_MESSAGE
 from app.shared.clock import Clock
 
-# A queued message that was never sent keeps its content at most this long.
+# A queued message with no delivery deadline keeps its content at most this long. One with a
+# deadline is cleared by the first purge after it.
 UNSENT_CONTENT = timedelta(days=1)
 # After this, only the delivery facts remain: no address and no number.
 RECIPIENT_RETENTION = timedelta(days=30)
@@ -53,12 +56,18 @@ class _Sent:
 
 
 def handlers(
-    database: Database, clock: Clock, email: EmailTransport, sms: SmsTransport
+    database: Database,
+    clock: Clock,
+    email: EmailTransport,
+    sms: SmsTransport,
+    link_origins: Sequence[str] = (),
 ) -> dict[str, JobHandler | Handler]:
+    """`link_origins` are the only sites a link in a message may point to."""
+
     async def deliver(channel: str, recipient: str, template: str, key: str, values: dict) -> _Sent:  # type: ignore[type-arg]
         """Render and send. Raises the job error that says whether a retry is safe."""
         if channel == "email":
-            rendered = render(template, values)
+            rendered = render(template, values, link_origins=link_origins)
             message = EmailMessage(
                 to=recipient,
                 subject=rendered.subject,
@@ -100,7 +109,9 @@ def handlers(
         if row is None:
             raise PermanentJobError("The queued message does not exist", code="message_missing")
 
-        async def finished(session: AsyncSession, status: str, sent: _Sent | None) -> None:
+        async def finished(
+            session: AsyncSession, status: str, sent: _Sent | None, failure: str = "rejected"
+        ) -> None:
             await session.execute(
                 text(
                     "UPDATE notification_messages SET status = :status, "
@@ -112,7 +123,7 @@ def handlers(
                     "status": status,
                     "provider": sent.provider if sent else None,
                     "message_id": sent.message_id if sent else None,
-                    "failure": None if status == "sent" else "rejected",
+                    "failure": None if status == "sent" else failure,
                     "now": clock.now(),
                     "id": row.id,
                 },
@@ -122,6 +133,20 @@ def handlers(
             # Sent by an earlier attempt whose result was saved, or cleared since.
             await context.apply(_nothing)
             return
+        if row.channel == "email":
+            async with database.transaction() as session:
+                suppressed = await is_suppressed(session, row.recipient)
+            if suppressed:
+                # The address bounced for good or reported our mail as spam. Sending again
+                # would only harm the sending domain's standing with every other inbox.
+
+                async def suppress(session: AsyncSession) -> dict[str, object]:
+                    await finished(session, "failed", None, "suppressed")
+                    return {"suppressed": True}
+
+                await context.apply(suppress)
+                logger.warning("message_suppressed", message_id=row.id, template=row.template)
+                return
         try:
             # No transaction is open while the provider is called.
             sent = await deliver(
@@ -136,9 +161,10 @@ def handlers(
             UncertainOutcomeError,
         ) as error:
             # The content is cleared in its own transaction, then the job fails for good.
-            async with database.transaction() as session:
-                await finished(session, "failed", None)
+            # The real reason is kept, so support can tell "may have arrived" from "refused".
             code = getattr(error, "code", "message_invalid")
+            async with database.transaction() as session:
+                await finished(session, "failed", None, code)
             logger.warning("message_refused", message_id=row.id, error_code=code)
             if isinstance(error, UncertainOutcomeError):
                 raise
@@ -159,9 +185,10 @@ def handlers(
                 text(
                     "UPDATE notification_messages SET status = 'failed', "
                     "variables = '{}'::jsonb, failure_code = 'expired', finished_at = :now "
-                    "WHERE status = 'queued' AND created_at < :stale"
+                    "WHERE status = 'queued' "
+                    "AND coalesce(deliver_by, created_at + :unsent) < :now"
                 ),
-                {"now": now, "stale": now - UNSENT_CONTENT},
+                {"now": now, "unsent": UNSENT_CONTENT},
             )
             await session.execute(
                 text(

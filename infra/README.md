@@ -20,7 +20,7 @@ Infrastructure as code for Finvest, modelled on Fidiba's provisioning. Terraform
 | Cloud firewall | Same rules | Same rules | 80 and 443 only from Cloudflare's ranges, so nobody can skip the edge. SSH only from `SSH_SOURCE_ADDRESSES`, plus the Provision run while it prepares the host. |
 | Managed PostgreSQL 17 | `db-s-1vcpu-1gb` | `db-s-1vcpu-2gb` | One node, database `finvest`, daily backups and point in time recovery. Only the droplet may connect. |
 | Database roles | Same | Same | `finvest_migrator`, `finvest_app`, `finvest_worker`, created from the host with `backend/db/init-roles.sql` and generated passwords |
-| Spaces bucket and key | `finvest-staging-documents` | `finvest-production-documents` | Private, versioned, CORS for presigned uploads, and a key limited to the bucket |
+| Spaces bucket and key | `finvest-staging-documents` | `finvest-production-documents` | Private, versioned, read by the console through short-lived links (no browser uploads), and a key limited to the bucket |
 | Cloudflare | Proxied records, Origin CA certificate | Same, plus Access on the back office | Full (strict) TLS from the edge to the host |
 | GitHub settings | Written into the `staging` environment | Written into `production` | See below |
 | Alerts | When `ALERT_EMAILS` is set | Same | Uptime on `https://<api>/health/ready`, host CPU and disk |
@@ -67,7 +67,7 @@ DigitalOcean list prices at the time of writing. Check the pricing page before a
 | Spaces | $5 a month for the account, shared by every bucket including Terraform state | Same |
 | Cloudflare | Free plan. Access is free for up to 50 users. | Same |
 
-That is roughly $27 for staging, $59 for production and $5 for Spaces, about $91 a month together.
+That is roughly $27 for staging, $59 for production and $5 for Spaces. **Staging is on hold to save cost**, so today it is about $64 a month for production alone, and $91 once staging is switched on.
 
 ## How changes are made
 
@@ -132,7 +132,7 @@ Repository variables under **Settings → Secrets and variables → Actions → 
 ## Provision
 
 1. Provision `shared` with `plan`, then `apply`. It creates the `finvest` project, the zone settings and the API rate limit.
-2. Provision `staging` with `plan`, read it, then `apply`. Then do the same for `production`.
+2. Provision `production` with `plan`, read it, then `apply`. Staging is on hold: Provision refuses it until the repository variable `STAGING_ENABLED` is `true` (see Staging on hold below).
 3. Database roles are created only once `backend/db/init-roles.sql` is on `main`. If it is not there yet, the run says so; run apply again later. It never changes an existing role's password.
 4. Turn on deploys for the environment (see Deploy below).
 
@@ -145,7 +145,21 @@ Deploys follow Fidiba. A push to the source branch deploys its environment, and 
 | Deploy Staging | `main` | `staging` |
 | Deploy Production | `release` | `production`, so it waits for your approval |
 
-A workflow does nothing until its environment is listed in the repository variable `DEPLOY_ENVIRONMENTS` (for example `staging`, later `staging,production`). Add an environment only after Provision has applied it.
+A workflow does nothing until its environment is listed in the repository variable `DEPLOY_ENVIRONMENTS` (`production` while staging is on hold, `staging,production` later). Add an environment only after Provision has applied it.
+
+### Staging on hold
+
+Staging costs about $27 a month, so it is switched off for now (the owner's decision). Everything for it stays in the repository and is checked on every pull request, but nothing creates or deploys it:
+
+- Provision refuses `staging` with a message, for both plan and apply.
+- Deploy Staging skips every push to `main`.
+- Its GitHub environments, settings and secrets need not exist yet.
+
+The CI rehearsal still runs a whole deployment on the runner on every infrastructure pull request, using staging's names. It creates nothing in the cloud and costs nothing.
+
+Without staging, a release goes from `main` to production by updating the `release` branch, so check a change in the rehearsal and in review before you push `release`.
+
+To switch staging on: set the repository variable `STAGING_ENABLED` to `true`, create its GitHub environments and settings (above), run Provision for `staging`, then add `staging` to `DEPLOY_ENVIRONMENTS`. To switch it off again, first destroy its resources (ask the infrastructure thread), then set `STAGING_ENABLED` back.
 
 Each run:
 

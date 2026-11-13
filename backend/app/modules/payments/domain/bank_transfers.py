@@ -78,6 +78,21 @@ class ReceiptDetails:
     transaction_number: str
 
 
+# How each accepted type begins. The content type is the client's own claim, so the first bytes
+# must agree with it before the file is stored or shown to staff.
+_SIGNATURES: dict[str, tuple[bytes, ...]] = {
+    "application/pdf": (b"%PDF-",),
+    "image/jpeg": (b"\xff\xd8\xff",),
+    "image/png": (b"\x89PNG\r\n\x1a\n",),
+}
+
+
+def check_receipt_bytes(content_type: str, data: bytes) -> None:
+    """Refuse a file whose first bytes are not those of its claimed type."""
+    if not data.startswith(_SIGNATURES.get(content_type, ())):
+        raise InvalidReceipt("file", "content_does_not_match_type")
+
+
 def check_receipt_file(file: ReceiptFile) -> ReceiptFile:
     if file.content_type not in RECEIPT_CONTENT_TYPES:
         raise InvalidReceipt("file", "unsupported_content_type")

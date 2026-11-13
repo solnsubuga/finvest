@@ -12,7 +12,7 @@ There is no wallet. Every deposit names the investment or goal it pays for, and 
 2. The worker marks the deposit `sending` and commits that. Only then does it ask the provider to prompt the payer, with no transaction open.
 3. The provider accepts, and the deposit is `awaiting_approval`. The payer approves on their phone.
 4. The worker reads the status back from the provider. When the provider's own record says the money arrived, for exactly the amount asked, the deposit becomes `confirmed` and the ledger entry is posted in the same transaction.
-5. A `payments.deposit_confirmed` event is published once, carrying the business day of the confirmation. The `investments.start_from_deposit` job starts the investment from it ([investing.md](investing.md)). Goals will start from it too.
+5. A `payments.deposit_confirmed` event is published once, carrying the business day of the confirmation. The `investments.start_from_deposit` job starts the investment from it ([investing.md](investing.md)). A saving towards a goal is an investment of its own, so it is paid for and started the same way ([goals.md](goals.md)).
 
 Two things are refused before anything is saved:
 
@@ -59,7 +59,7 @@ A sweep runs every minute and picks up deposits whose own job was lost:
 
 The client sends money from their own bank account, then tells us about it. The code is in `bank_transfers.py` and `domain/bank_transfers.py`.
 
-1. **Receipt.** The client sends the receipt file's type, size and SHA-256, the amount, the day they sent it, their bank and the bank's transaction number (`submit_bank_receipt`, with an idempotency key). The deposit is saved as `in_review` in the same table as mobile money deposits, with method `bank_transfer`, provider `bank` and no payer number, so the one live deposit per investment rule covers both ways to pay. The file goes to private storage under `payments/receipts/<deposit ID>`. The database keeps only its type, size and digest. Nothing the client says moves money.
+1. **Receipt.** The client sends the receipt file's type, size and SHA-256, the amount, the day they sent it, their bank and the bank's transaction number (`submit_bank_receipt`, with an idempotency key). The deposit is saved as `in_review` in the same table as mobile money deposits, with method `bank_transfer`, provider `bank` and no payer number, so the one live deposit per investment rule covers both ways to pay. The API stores the file in private storage under `payments/receipts/<deposit ID>` before the transaction opens. The database keeps its key, type, size and digest. Nothing the client says moves money.
 2. **Staff check.** A staff member compares the receipt with the bank statement that reconciliation imported (`reconciliation.statements`). `candidate_lines` lists the lines that could be this transfer: money in, for exactly the amount owed, valued from the day the client gave to seven days later, and not already used. The staff member records either the line (`Matched`) or a reason (`NotMatched`: `amount_differs`, `not_on_statement`, `unreadable`, `name_differs`, `other`). The review is checked again against the statement when it is saved, is audited, and changes no deposit and no balance. A refusal queues the job that settles it. A match waits for a second member of staff, who approves it (`approve_bank_match`). The line is checked again, the person who matched it cannot approve it, and the approval is audited and queues the job.
 3. **Settling.** The worker confirms an approved match and posts it, or fails an unmatched one with the review's reason. A failed transfer frees the investment, so the client can send a new receipt as a new deposit.
 
@@ -68,6 +68,27 @@ Choices in this design:
 - **Two people confirm a transfer, one can refuse it.** Sensitive actions need two people (`docs/rules.md`). One person alone could match a transfer to another client's payment of the same amount, so a match needs a second member of staff. Refusing moves no money and needs one. The owner decided this (see [decisions.md](decisions.md)).
 - **Only an exact amount is confirmed.** A transfer for any other amount is refused as `amount_differs` and the money is returned or matched by staff, as with a mobile money amount mismatch. No part payment is posted.
 - **The statement reference is not required to match.** Banks often cut or change the reference, so staff decide from the receipt, the amount, the date and the sender's name. A transfer from an account in another name is refused as `name_differs`.
+
+## Routes
+
+Client routes, signed in as the client. Each `POST` needs an `Idempotency-Key`.
+
+| Route | What it does |
+| --- | --- |
+| `POST /client/investments/{id}/payments/mobile-money` | `{"network": "mtn" or "airtel"}`. Prompts the number on the client's own account for exactly the investment's amount. The request cannot name a number or an amount. |
+| `POST /client/investments/{id}/payments/bank-transfer` | A `multipart/form-data` body: the `receipt` file (PDF, JPEG or PNG, at most 10 MiB), `amount_minor`, `sent_on`, `bank_name` and `transaction_number`. The amount must be the investment's, or it is refused with `amount_differs_from_investment`. First, `preflight_bank_receipt` runs the whole submission in a savepoint it rolls back. That covers the details, an investment already being paid, and a reused key. A replayed key gets the earlier transfer back without storing anything. The file's first bytes must match its claimed type (PDF, JPEG or PNG), or it is refused as `content_does_not_match_type`. Only then is the file stored, outside any transaction, under `payments/receipts/<deposit ID>`, and the transfer is saved pointing at it. So a saved transfer always has its file. If saving still fails, or a simultaneous identical request saved first, the stored file is deleted. If the store cannot be reached to delete it, `receipt_orphaned` is logged with the deposit ID. If storage is down when storing, the answer is `503` and nothing is saved. The body limit for this path is 11 MiB, and the edge allows 12 MiB. |
+| `GET /client/investments/{id}/payment` | The investment's payment that has not failed. A `409` from either `POST` means one exists: show this one instead of asking the client to pay again. |
+| `GET /client/payments/{id}` | One payment, the client's own only. |
+
+
+Seeing transfers needs `reconciliation.view`. Matching, refusing and approving need `bank_transfers.change`, because they confirm money. Admin, operations and finance hold both for now. Opening a transfer writes a `payments.bank_transfer_opened` access event to the audit trail, because the receipt and the bank's narrative can name the client and the sender.
+
+| Route | What it does |
+| --- | --- |
+| `GET /staff/payments/bank-transfers` | Transfers in review, newest first, 50 a page (`?before=`). |
+| `GET /staff/payments/bank-transfers/{id}` | The transfer, its receipt details, its review, and the statement lines that could be it. Once matched, `matched_line` is the chosen line (amount, value date, reference and narrative), so the second person checks it beside the receipt rather than approving blind. `receipt_link` opens the receipt file inline for 5 minutes. It is never logged. The link is the main reason opening a transfer writes `payments.bank_transfer_opened`: whoever saw the receipt is on the audit trail. |
+| `POST /staff/payments/bank-transfers/{id}/review` (`bank_transfers.change`) | `{"outcome": "matched", "statement_line_id": …}` or `{"outcome": "not_matched", "reason": …}`. |
+| `POST /staff/payments/bank-transfers/{id}/approve` (`bank_transfers.change`) | A second member of staff approves a match. The matcher gets `403`. |
 
 ## Ledger entries
 
@@ -135,7 +156,6 @@ ioTec Pay is the chosen provider. Its API details are not confirmed, so the only
 ## Not built yet
 
 - The ioTec adapter, which needs ioTec's API details, callback signature scheme and sandbox access.
-- Client and staff HTTP routes, which need sign-in sessions.
-- Checking that the investment or goal exists and that the amount meets the product minimum, which needs the investments module.
+- Paying for a goal over HTTP. The routes take investments only.
 - Provider limits and fees.
-- Storing and serving receipt files, the bank details the client is shown, and the correction commands.
+- Storing and serving receipt files (the infra thread owns the shared storage adapter), the bank details the client is shown, and the correction commands.

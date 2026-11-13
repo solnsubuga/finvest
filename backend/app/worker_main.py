@@ -16,11 +16,13 @@ from app.infrastructure.logging import configure_logging
 from app.infrastructure.process import keep_heartbeat, stop_on_signals
 from app.infrastructure.settings import Settings
 from app.infrastructure.sms import SmsSettings
+from app.modules.autoinvest.jobs import AutoinvestJobs
 from app.modules.investments.jobs import InvestmentJobs
 from app.modules.kyc.jobs import ProviderJobs, sweep_unanswered
 from app.modules.kyc.service import SWEEP_UNANSWERED
 from app.modules.kyc.settings import KycSettings
 from app.modules.notifications import jobs as notification_jobs
+from app.modules.notifications.email_delivery import DeliveryEventJobs
 from app.modules.payments.bank_transfers import BankTransferJobs
 from app.modules.payments.jobs import DepositJobs
 from app.modules.payments.settings import PaymentsSettings
@@ -28,7 +30,9 @@ from app.modules.payments.wiring import collections_provider
 from app.shared.clock import Clock, SystemClock
 
 
-def handlers(database: Database, clock: Clock) -> dict[str, JobHandler | Handler]:
+def handlers(
+    database: Database, clock: Clock, settings: Settings
+) -> dict[str, JobHandler | Handler]:
     """Every job kind this worker runs. A module adds its handlers here, keyed by kind.
 
     A handler that calls a provider is registered with `external_effect(handler)`, so a crash
@@ -37,6 +41,7 @@ def handlers(database: Database, clock: Clock) -> dict[str, JobHandler | Handler
     kinds: dict[str, JobHandler | Handler] = {
         SWEEP_UNANSWERED: sweep_unanswered(clock),
         **InvestmentJobs(database, clock).handlers(),
+        **AutoinvestJobs(database, clock).handlers(),
     }
     identity = KycSettings()
     if identity.identity_provider != "manual":
@@ -58,9 +63,15 @@ def handlers(database: Database, clock: Clock) -> dict[str, JobHandler | Handler
         kinds.update(DepositJobs(database, collections, clock).handlers())
     kinds.update(
         notification_jobs.handlers(
-            database, clock, EmailSettings().transport(), SmsSettings().transport()
+            database,
+            clock,
+            EmailSettings().transport(),
+            SmsSettings().transport(),
+            # A link in a message may only point to the console or the client app.
+            link_origins=[*settings.staff_allowed_origins, *settings.client_allowed_origins],
         )
     )
+    kinds.update(DeliveryEventJobs(database, clock).handlers())
     return kinds
 
 
@@ -73,7 +84,7 @@ async def run(settings: Settings, stop: asyncio.Event | None = None) -> None:
         await check_role(database, WORKER)
         worker = Worker(
             database,
-            handlers(database, clock),
+            handlers(database, clock, settings),
             WorkerConfig(
                 queue=jobs.queue,
                 lease=jobs.lease,

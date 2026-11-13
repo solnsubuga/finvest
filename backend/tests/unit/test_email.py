@@ -183,3 +183,22 @@ def test_a_template_refuses_the_wrong_variables(
 ) -> None:
     with pytest.raises(InvalidTemplate):
         render(template, variables)
+
+
+def test_a_link_must_point_to_a_finvest_site() -> None:
+    def enrolment(link: str) -> dict[str, object]:
+        return {"name": "Ada", "link": link, "hours": 72}
+
+    console = ["https://admin.finvestug.com"]
+    good = "https://admin.finvestug.com/enrol#token"
+    assert good in render("staff_enrolment", enrolment(good), link_origins=console).text
+    for link in (
+        "https://admin.finvestug.com.evil.example/enrol#token",
+        "https://evil.example/enrol#token",
+        "http://admin.finvestug.com/enrol#token",
+        "https://admin.finvestug.com",
+    ):
+        with pytest.raises(InvalidTemplate, match="Finvest site"):
+            render("staff_enrolment", enrolment(link), link_origins=console)
+    with pytest.raises(InvalidTemplate):
+        render("staff_enrolment", enrolment(good), link_origins=[])

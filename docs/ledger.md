@@ -143,8 +143,9 @@ The list changes only by migration: the module that needs a new way for staff to
 - `account_movements(session, account_id, date_from=..., date_to=...)` lists every line on the account dated in the range, both days included. Each has the entry ID and line number, the date, the signed amount (a debit is positive), the entry type and the entry's `source_type` and `source_id`. A statement line is matched to a movement on `source_id`.
 - `balance_as_of(session, account_id, day)` is the balance counting only entries dated on or before that day, in the account's normal direction.
 - `account_owner(session, account_id)` is the client the account belongs to, or nothing for one of Finvest's own accounts.
+- `client_month_totals(session, client_id=..., code=..., currency=..., date_from=..., date_to=..., entry_type=...)` sums debits and credits by calendar month of effective date, across every account of one client with one code. Insights uses it. With `entry_type` set, it counts entries of that type and the exact reversals of them (an entry whose `reverses_entry_id` points at one), in the reversal's own month. That covers both `reverse_entry` and two-person corrections that reverse. A forward correction, such as a deposit correction to a receivable, has its own entry type and does not count against the original. It is not a balance, and it ignores closed days.
 
-Row policies apply as everywhere else. A client transaction can read only that client's accounts, and all three raise `UnknownAccount` for an account the transaction cannot see.
+Row policies apply as everywhere else. A client transaction can read only that client's accounts. The first three raise `UnknownAccount` for an account the transaction cannot see, and `client_month_totals` returns nothing for another client.
 
 ### Closing a day
 

@@ -1,6 +1,6 @@
 """An investment: one payment by one client into one product. Pure: no I/O.
 
-    awaiting_payment ──► active
+    awaiting_payment ──► active ──► matured
            │
            └─► cancelled
 
@@ -9,6 +9,8 @@
 * `active`: the payment was confirmed and the money is in the client's holding. It earns
   interest from the next day.
 * `cancelled`: it was not paid for in time. Final. No money ever moved.
+* `matured`: a fixed term ended. The principal and the interest left the holding together:
+  into a new investment (rolled over), or handed to payouts to be paid to the client. Final.
 
 Which day an investment starts on matters, because interest is counted from it. The start date
 is the business day (Kampala) on which the payment was confirmed. It is not the day of the
@@ -39,6 +41,7 @@ class InvestmentStatus(StrEnum):
     AWAITING_PAYMENT = "awaiting_payment"
     ACTIVE = "active"
     CANCELLED = "cancelled"
+    MATURED = "matured"
 
 
 class AtMaturity(StrEnum):
@@ -114,3 +117,64 @@ def start(confirmed_on: date, term_days: int | None) -> Start:
         start_date=confirmed_on,
         maturity_date=None if term_days is None else maturity_date(confirmed_on, term_days),
     )
+
+
+# Maturity ---------------------------------------------------------------------------------------
+
+
+class MaturityStep(StrEnum):
+    ROLL_OVER = "roll_over"
+    PAY_OUT = "pay_out"
+    # Hand the money to payouts and wait for the client: there is nowhere to send it yet.
+    HOLD = "hold"
+
+
+class HoldReason(StrEnum):
+    # The client chose to be paid and never said where.
+    NO_DESTINATION = "no_destination"
+    # The client chose to roll over and the product no longer takes new money.
+    PRODUCT_NOT_OPEN = "product_not_open"
+
+
+@dataclass(frozen=True, slots=True)
+class MaturityPlan:
+    step: MaturityStep
+    hold_reason: HoldReason | None = None
+
+
+def can_choose_maturity(
+    status: InvestmentStatus, term_days: int | None, maturity: date | None, today: date
+) -> bool:
+    """Whether the client may still change what happens at maturity.
+
+    Only a fixed term has a maturity. The choice can change up to the day before it: on the
+    day itself the run may already have acted on it.
+    """
+    if term_days is None:
+        return False
+    if status is InvestmentStatus.AWAITING_PAYMENT:
+        return True
+    return status is InvestmentStatus.ACTIVE and maturity is not None and today < maturity
+
+
+def is_due_to_mature(status: InvestmentStatus, maturity: date | None, run_date: date) -> bool:
+    return status is InvestmentStatus.ACTIVE and maturity is not None and maturity <= run_date
+
+
+def plan_maturity(
+    choice: AtMaturity | None, *, has_destination: bool, product_open: bool
+) -> MaturityPlan:
+    """What the maturity run does with a matured investment.
+
+    Money is never moved on a guess. If the client's choice cannot be carried out, the money
+    is handed to payouts and held there until the client says where to send it. It is never
+    rolled into something the client did not choose, and never sent somewhere they did not
+    name.
+    """
+    if choice is AtMaturity.PAY_OUT:
+        if has_destination:
+            return MaturityPlan(MaturityStep.PAY_OUT)
+        return MaturityPlan(MaturityStep.HOLD, HoldReason.NO_DESTINATION)
+    if product_open:
+        return MaturityPlan(MaturityStep.ROLL_OVER)
+    return MaturityPlan(MaturityStep.HOLD, HoldReason.PRODUCT_NOT_OPEN)

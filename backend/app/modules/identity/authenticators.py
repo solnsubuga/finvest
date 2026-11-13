@@ -19,6 +19,7 @@ from app.infrastructure.database import Database
 from app.infrastructure.sealing import Sealer, SealError, associated_data, key_from_text
 from app.infrastructure.settings import Settings
 from app.infrastructure.throttling import clear_attempts, reserve_attempts, throttle_key
+from app.modules.identity import trail
 from app.modules.identity.domain import totp
 from app.modules.identity.domain.sessions import Transport
 from app.modules.identity.passkeys import (
@@ -147,6 +148,14 @@ class AuthenticatorService:
                 ),
                 {"now": now, "step": step, "id": pending.id},
             )
+            await trail.note(
+                session,
+                self.clock,
+                Actor("staff", enrolment.staff_id),
+                "identity.authenticator.added",
+                resource_type="authenticator",
+                resource_id=pending.id,
+            )
 
         issued = await self.enrolments.finish_enrolment(enrolment, password, "authenticator", add)
         await self._clear_attempts(enrolment.staff_id)
@@ -272,6 +281,14 @@ class AuthenticatorService:
                 ),
                 {"now": now, "step": step, "id": pending.id},
             )
+            await trail.note(
+                session,
+                self.clock,
+                client.actor,
+                "identity.authenticator.added",
+                resource_type="authenticator",
+                resource_id=pending.id,
+            )
         await self._clear_attempts(client.client_id)
         logger.info("authenticator_added", kind="client")
 
@@ -282,10 +299,19 @@ class AuthenticatorService:
                 text(
                     "UPDATE identity_authenticators SET removed_at = :now WHERE actor_kind = "
                     "'client' AND actor_id = :actor AND confirmed_at IS NOT NULL "
-                    "AND removed_at IS NULL RETURNING true"
+                    "AND removed_at IS NULL RETURNING id"
                 ),
                 {"now": self.clock.now(), "actor": client.client_id},
             )
+            if removed:
+                await trail.note(
+                    session,
+                    self.clock,
+                    client.actor,
+                    "identity.authenticator.removed",
+                    resource_type="authenticator",
+                    resource_id=removed,
+                )
         if not removed:
             raise ApplicationError("not_found")
         logger.info("authenticator_removed", kind="client")

@@ -117,10 +117,18 @@ code() { "${curl_local[@]}" --resolve "$1:$port:127.0.0.1" --output /dev/null --
   grep -q "script-src 'self'.*connect-src 'self' https://$host "
 [[ $(code app-staging.finvestug.com /) == 503 ]]
 [[ $(code "$host" /.env) == 404 ]]
-# A body far over the API's own limit stops at the edge.
+# A body far over the API's own limit stops at the edge. Caddy's refusal has no body, so no
+# content type; anything the API answers is JSON, whatever its status (it has limits of its own).
+post() {
+  "${curl_local[@]}" --output /dev/null --write-out '%{http_code} %{content_type}' \
+    --data-binary "@$1" -H 'Content-Type: application/octet-stream' "https://$host:$port$2" || true
+}
 head -c 2000000 /dev/zero > "$work/large-body"
-[[ $("${curl_local[@]}" --output /dev/null --write-out '%{http_code}' --data-binary "@$work/large-body" \
-  -H 'Content-Type: application/json' "https://$host:$port/client/sign-in") == 413 ]]
+head -c 13000000 /dev/zero > "$work/huge-body"
+[[ $(post "$work/large-body" /client/sign-in) == '413 ' ]]
+# An upload route takes that body through to the API, and stops one over 12 MiB at the edge.
+[[ $(post "$work/large-body" /staff/reconciliation/statements) == *application/json* ]]
+[[ $(post "$work/huge-body" /staff/reconciliation/statements) == '413 ' ]]
 [[ $(code unknown.example /) == 000 ]]
 # Staging asks search engines to leave every address out.
 for name in staging.finvestug.com admin-staging.finvestug.com "$host"; do

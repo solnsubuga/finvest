@@ -1,7 +1,7 @@
 """Add the bills the dealing desk holds, and let a second person settle an order.
 
 Revision ID: 0081_dealing_holdings
-Revises: 0080_dealing_orders
+Revises: 0008_codes
 
 A lot is the bills one purchase bought: face value, cost and maturity. A sale takes face value
 from lots of one instrument (product and maturity date). Settling an order needs, in the same
@@ -17,7 +17,7 @@ from pathlib import Path
 from alembic import op
 
 revision: str = "0081_dealing_holdings"
-down_revision: str | None = "0080_dealing_orders"
+down_revision: str | None = "0008_codes"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 

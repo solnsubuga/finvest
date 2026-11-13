@@ -1,7 +1,8 @@
 """A downgrade must never delete the books, the issued numbers, the audit trail, the job
 history, the receipts that stop a command running twice, the identity records, the payout
-destinations, the withdrawal limits, the payouts, the migration checks or the imported
-statements."""
+destinations, the withdrawal limits, the payouts, the migration checks, the imported
+statements, the day closes, the help chat, the complaints register, the goals or the email
+delivery records."""
 
 import os
 from collections.abc import Iterator
@@ -45,13 +46,43 @@ ROWS = {
         "VALUES (DATE '2026-11-14', 'UGX', now())",
         "refusing to drop interest runs",
     ),
-    "0061_investments": (
+    "0063_investment_maturity": (
+        "BEGIN; SELECT set_config('finvest.actor_kind', 'client', true); "
+        "SELECT set_config('finvest.actor_id', '-Nabc0000000000000B1', true); "
         "INSERT INTO investments (id, client_id, product_id, currency, principal_minor, "
         "annual_rate_bps, tax_bps, term_days, at_maturity, created_at, pay_by, updated_at) "
         "VALUES ('-Nabc0000000000000A1', '-Nabc0000000000000B1', 'FvProduct1TREA91_001', "
         "'UGX', 1000000, 1250, 1500, 91, 'roll_over', now(), now() + interval '72 hours', "
-        "now())",
+        "now()); UPDATE investments SET at_maturity = 'pay_out', "
+        "payout_destination_id = '-Nabc0000000000000D1'; COMMIT",
+        "refusing to drop the record of matured investments",
+    ),
+    "0061_investments": (
+        "BEGIN; SELECT set_config('finvest.actor_kind', 'client', true); "
+        "SELECT set_config('finvest.actor_id', '-Nabc0000000000000B1', true); "
+        "INSERT INTO investments (id, client_id, product_id, currency, principal_minor, "
+        "annual_rate_bps, tax_bps, term_days, at_maturity, created_at, pay_by, updated_at) "
+        "VALUES ('-Nabc0000000000000A1', '-Nabc0000000000000B1', 'FvProduct1TREA91_001', "
+        "'UGX', 1000000, 1250, 1500, 91, 'roll_over', now(), now() + interval '72 hours', "
+        "now()); COMMIT",
         "refusing to drop investments",
+    ),
+    "0110_goals": (
+        "INSERT INTO goals (id, client_id, name, category, currency, target_minor, "
+        "product_code, created_at, updated_at) VALUES ('-Nabc0000000000000A1', "
+        "'-Nabc0000000000000B1', 'School fees', 'school_fees', 'UGX', 2000000, 'TREA-91', "
+        "now(), now())",
+        "refusing to drop goals",
+    ),
+    "0120_autoinvest_plans": (
+        "BEGIN; SELECT set_config('finvest.actor_kind', 'client', true); "
+        "SELECT set_config('finvest.actor_id', '-Nabc0000000000000B1', true); "
+        "INSERT INTO autoinvest_plans (id, client_id, product_code, currency, amount_minor, "
+        "frequency, run_day, network, payer_msisdn, status, next_run_on, created_at, "
+        "updated_at) VALUES ('-Nabc0000000000000A1', '-Nabc0000000000000B1', 'TREA-91', 'UGX', "
+        "100000, 'monthly', 28, 'mtn', '+256772000000', 'active', DATE '2030-01-28', now(), "
+        "now()); COMMIT",
+        "refusing to drop automatic investing plans",
     ),
     "0060_investment_products": (
         "BEGIN; SELECT set_config('finvest.actor_kind', 'staff', true); "
@@ -167,6 +198,11 @@ ROWS = {
         "VALUES ('-Nabc0000000000000B1', 'money', ARRAY['push'], now())",
         "refusing to drop notifications",
     ),
+    "0092_email_delivery": (
+        "INSERT INTO notification_email_events (svix_id, delivery, email_id, recipients, "
+        "permanent, received_at) VALUES ('msg_test1', 'delivered', 'email-1', '{}', false, now())",
+        "refusing to drop email delivery records",
+    ),
     "0007_notifications": (
         "INSERT INTO notification_messages (id, idempotency_key, channel, recipient, template, "
         "variables, created_at) VALUES ('-Nabc0000000000000A1', 'test:1', 'email', "
@@ -184,6 +220,31 @@ ROWS = {
         "imported_at) VALUES ('-Nabc0000000000000A1', 'bank', 'trust', DATE '2026-11-10', "
         "'UGX', 100, 100, 0, repeat('0', 64), '-Nabc0000000000000B1', now())",
         "refusing to drop imported statements",
+    ),
+    "0100_support": (
+        "INSERT INTO support_conversations (id, client_id, created_at, last_message_at) "
+        "VALUES ('-Nabc0000000000000A1', '-Nabc0000000000000B1', now(), now())",
+        "refusing to drop help chat or complaints",
+    ),
+    "0071_migration_totals_confirmed": (
+        "INSERT INTO migration_control_totals (id, as_of, totals, entered_by, entered_at) "
+        "VALUES ('-Nabc0000000000000A1', DATE '2026-11-13', '{}', '-Nabc0000000000000S1', "
+        "now()); INSERT INTO migration_control_totals_confirmations (totals_id, confirmed_by, "
+        "confirmed_at) VALUES ('-Nabc0000000000000A1', '-Nabc0000000000000S2', now())",
+        "refusing to drop confirmations of migration totals",
+    ),
+    "0041_reconciliation_day_close": (
+        "INSERT INTO reconciliation_movements (entry_id, line_no, source, account_reference, "
+        "effective_date, currency, amount_minor, reference, entry_type, recorded_at) VALUES "
+        "('-Nabc0000000000000A1', 1, 'bank', 'trust', DATE '2026-11-10', 'UGX', 5, '', "
+        "'test.movement', now())",
+        "refusing to drop reconciliation records",
+    ),
+    "0008_codes": (
+        "INSERT INTO identity_codes (id, purpose, channel, phone, code_hash, created_at, "
+        "expires_at) VALUES ('-Nabc0000000000000A1', 'signup', 'sms', '+256772123456', "
+        "decode(repeat('00', 32), 'hex'), now(), now())",
+        "refusing to drop sign-in codes",
     ),
 }
 

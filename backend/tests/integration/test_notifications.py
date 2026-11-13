@@ -173,7 +173,7 @@ async def test_a_rejected_email_fails_and_keeps_no_content(
     await worker.run_once()
     assert transport.to(address) == []
     row = await stored(worker_database, key)
-    assert (row.status, row.failure_code, row.variables) == ("failed", "rejected", {})
+    assert (row.status, row.failure_code, row.variables) == ("failed", "email_rejected", {})
     async with worker_database.transaction() as session:
         job = (
             await session.execute(
@@ -247,10 +247,6 @@ async def test_old_content_and_addresses_are_cleared(
     worker = a_worker(worker_database, transport, clock)
     await queue(app_database, clock, an_address(), sent_key)
     await worker.run_once()
-    clock.advance(minutes=30)
-    # Never sent: its job has expired, so only the purge will clear the code.
-    await queue(app_database, clock, an_address(), stuck_key)
-    clock.advance(days=1, minutes=1)
 
     async def purge() -> None:
         async with worker_database.transaction() as session:
@@ -265,6 +261,12 @@ async def test_old_content_and_addresses_are_cleared(
                 now=clock.now(),
             )
         await worker.run_once()
+
+    clock.advance(minutes=30)
+    # Never sent: its job has expired, so only the purge will clear the code. It was worth
+    # sending for ten minutes, and the first purge after that empties it.
+    await queue(app_database, clock, an_address(), stuck_key)
+    clock.advance(minutes=11)
 
     await purge()
     stuck = await stored(worker_database, stuck_key)
@@ -333,7 +335,8 @@ async def test_a_text_that_may_have_been_sent_is_never_sent_again(
     await worker.run_once()
     assert [m for m in sms.sent if m.to == phone] == []
     row = await stored(worker_database, key)
-    assert (row.status, row.variables) == ("failed", {})
+    # The row says it may have arrived, which is not the same as refused.
+    assert (row.status, row.failure_code, row.variables) == ("failed", "uncertain_outcome", {})
     async with worker_database.transaction() as session:
         code = await session.scalar(
             text("SELECT last_error_code FROM jobs WHERE idempotency_key = :key"), {"key": key}

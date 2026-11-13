@@ -1,10 +1,15 @@
-import { ActivityIndicator, Pressable, StyleSheet, ViewStyle } from "react-native";
+import {
+  ActivityIndicator,
+  Pressable,
+  StyleSheet,
+  ViewStyle,
+} from "react-native";
 
 import { colors, fontSizes } from "@/theme";
 
 import { Txt } from "./Txt";
 
-type Variant = "primary" | "lime" | "outlineOnDark";
+type Variant = "primary" | "lime" | "secondary" | "outlineOnDark";
 
 type Props = {
   label: string;
@@ -16,10 +21,22 @@ type Props = {
   testID?: string;
 };
 
-const fills: Record<Variant, { background: string; text: string; border?: string }> = {
+const fills: Record<
+  Variant,
+  { background: string; text: string; border?: string }
+> = {
   primary: { background: colors.black, text: colors.white },
   lime: { background: colors.lime, text: colors.ink },
-  outlineOnDark: { background: "transparent", text: colors.white, border: colors.white },
+  secondary: {
+    background: colors.surface,
+    text: colors.ink,
+    border: colors.borderStrong,
+  },
+  outlineOnDark: {
+    background: "transparent",
+    text: colors.white,
+    border: colors.white,
+  },
 };
 
 export function Button({
@@ -65,10 +82,20 @@ export function Button({
   );
 }
 
-type LinkProps = { label: string; onPress: () => void; onDark?: boolean; underline?: boolean };
+type LinkProps = {
+  label: string;
+  onPress: () => void;
+  onDark?: boolean;
+  underline?: boolean;
+};
 
 /** A text link with a full 44 point touch target. */
-export function TextLink({ label, onPress, onDark, underline = true }: LinkProps) {
+export function TextLink({
+  label,
+  onPress,
+  onDark,
+  underline = true,
+}: LinkProps) {
   return (
     <Pressable
       accessibilityRole="link"

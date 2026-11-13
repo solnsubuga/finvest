@@ -13,13 +13,14 @@ Error messages are safe to store: they never contain addresses, content or crede
 """
 
 import re
+from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import Protocol
 
 import httpx
 from pydantic import SecretStr
 
-from app.infrastructure.email.message import EmailMessage, Sender
+from app.infrastructure.email.message import MAX_TAGS, TAG, EmailMessage, InvalidEmail, Sender
 
 
 class EmailFailure(Exception):
@@ -62,7 +63,12 @@ class DisabledTransport:
 
 
 class ResendTransport:
-    """Send through Resend's HTTP API with its idempotency key, so a retry never duplicates."""
+    """Send through Resend's HTTP API with its idempotency key, so a retry never duplicates.
+
+    `tags` go on every message this transport sends, after the message's own. The shared
+    webhook router at hooks.fidiba.com reads `fidiba_environment` to send Resend's events for
+    a message back to the environment that sent it.
+    """
 
     name = "resend"
 
@@ -74,9 +80,15 @@ class ResendTransport:
         base_url: str = "https://api.resend.com",
         timeout: float = 30,
         client: httpx.AsyncClient | None = None,
+        tags: Mapping[str, str] | None = None,
     ) -> None:
         if not api_key.get_secret_value():
             raise ValueError("A Resend API key is required")
+        self.tags = dict(tags or {})
+        if len(self.tags) > MAX_TAGS or not all(
+            TAG.fullmatch(name) and TAG.fullmatch(value) for name, value in self.tags.items()
+        ):
+            raise ValueError("A transport tag is not valid")
         self.api_key = api_key
         self.sender = sender
         self.base_url = base_url.rstrip("/")
@@ -91,8 +103,11 @@ class ResendTransport:
             "html": message.html,
             "text": message.text,
         }
-        if message.tags:
-            body["tags"] = [{"name": k, "value": v} for k, v in message.tags.items()]
+        tags = {**message.tags, **self.tags}
+        if len(tags) > MAX_TAGS:
+            raise InvalidEmail("A message has too many tags")
+        if tags:
+            body["tags"] = [{"name": k, "value": v} for k, v in tags.items()]
         return body
 
     async def send(self, message: EmailMessage) -> SendResult:

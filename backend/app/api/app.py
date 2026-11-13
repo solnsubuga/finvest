@@ -11,19 +11,29 @@ from app.api import health
 from app.api.errors import UnexpectedErrorMiddleware, install_error_handlers
 from app.api.hardening import BodyLimitMiddleware, SecurityHeadersMiddleware
 from app.api.request_id import RequestIdMiddleware
+from app.api.request_log import RequestLogMiddleware
 from app.infrastructure.database import Database
+from app.infrastructure.email.webhooks import ResendHookSettings, WebhookVerifier
 from app.infrastructure.settings import Settings
+from app.infrastructure.storage import FileStorage, StorageSettings
+from app.modules.goals import api as goals_api
 from app.modules.identity import api as identity_api
-from app.modules.identity import passkeys_api
+from app.modules.identity import codes_api, passkeys_api
 from app.modules.identity.authenticators import AuthenticatorService
+from app.modules.identity.codes import CodeService
 from app.modules.identity.hashing import PasswordHasher
 from app.modules.identity.passkeys import PasskeyService
 from app.modules.identity.service import IdentityService
+from app.modules.insights import api as insights_api
+from app.modules.migration import api as migration_api
 from app.modules.notifications import api as notifications_api
+from app.modules.notifications import hooks as notification_hooks
 from app.modules.payments import api as payments_api
+from app.modules.payments import routes as payment_routes
 from app.modules.payments.domain.provider import CollectionsProvider
 from app.modules.payments.settings import PaymentsSettings
 from app.modules.payments.wiring import collections_provider
+from app.modules.support import api as support_api
 from app.shared.clock import Clock, SystemClock
 from app.shared.errors import ErrorEnvelope
 
@@ -35,11 +45,15 @@ def create_app(
     hasher: PasswordHasher | None = None,
     *,
     collections: CollectionsProvider | None = None,
+    storage: FileStorage | None = None,
+    email_hooks: WebhookVerifier | None = None,
 ) -> FastAPI:
     owned = database is None
     database = database or Database(settings)
     clock = clock or SystemClock()
     collections = collections or collections_provider(PaymentsSettings(), clock)
+    storage = storage or StorageSettings().storage()
+    email_hooks = email_hooks or ResendHookSettings().verifier()
 
     @asynccontextmanager
     async def lifespan(_: FastAPI) -> AsyncIterator[None]:
@@ -59,6 +73,7 @@ def create_app(
     app.state.settings = settings
     app.state.database = database
     app.state.clock = clock
+    app.state.storage = storage
     hasher = hasher or PasswordHasher(
         memory_kib=settings.password_memory_kib, time_cost=settings.password_time_cost
     )
@@ -67,6 +82,7 @@ def create_app(
     passkeys = PasskeyService(database, clock, settings, identity, hasher)
     app.state.passkeys = passkeys
     app.state.authenticators = AuthenticatorService(database, clock, settings, identity, passkeys)
+    app.state.codes = CodeService(database, clock, identity, passkeys, hasher)
     install_error_handlers(app)
     # The last middleware added is the outermost, so the request ID exists before anything runs.
     origins = sorted({*settings.client_allowed_origins, *settings.staff_allowed_origins})
@@ -83,6 +99,7 @@ def create_app(
         )
     app.add_middleware(BodyLimitMiddleware)
     app.add_middleware(UnexpectedErrorMiddleware)
+    app.add_middleware(RequestLogMiddleware)
     app.add_middleware(SecurityHeadersMiddleware)
     app.add_middleware(RequestIdMiddleware)
     # Attempt limits count by caller address. X-Forwarded-For is believed only from our own
@@ -91,7 +108,20 @@ def create_app(
         ProxyHeadersMiddleware, trusted_hosts=settings.trusted_proxies or ["127.0.0.1"]
     )
     app.include_router(health.router)
-    for router in (*identity_api.routers, *passkeys_api.routers, *notifications_api.routers):
+    for router in (
+        *identity_api.routers,
+        *passkeys_api.routers,
+        *codes_api.routers,
+        *notifications_api.routers,
+        *support_api.routers,
+    ):
         app.include_router(router)
     app.include_router(payments_api.create_router(collections))
+    for router in goals_api.routers:
+        app.include_router(router)
+    app.include_router(notification_hooks.create_router(email_hooks))
+    app.include_router(payment_routes.create_client_router(collections))
+    app.include_router(payment_routes.staff_router)
+    app.include_router(migration_api.router)
+    app.include_router(insights_api.router)
     return app

@@ -168,6 +168,50 @@ _LINE_KEY = "uq_payment_bank_reviews_statement_line_id"
 _INSUFFICIENT_PRIVILEGE = "42501"
 
 
+class _WouldSave(Exception):
+    """Raised inside a preflight's savepoint once a new transfer would be saved."""
+
+
+async def preflight_bank_receipt(
+    session: AsyncSession,
+    actor: Actor,
+    request: BankTransferRequest,
+    *,
+    idempotency_key: str,
+    clock: Clock,
+) -> BankTransfer | None:
+    """Run `submit_bank_receipt` without keeping anything, before the receipt file is stored.
+
+    Raises whatever it would raise: a refused detail, `DepositExists` for an investment already
+    being paid, or a key reused with other details. Returns the earlier transfer if this key
+    already saved one, so the file need not be stored again, and None if a new transfer would
+    be saved. Nothing is written either way.
+    """
+    try:
+        async with session.begin_nested():
+            return await submit_bank_receipt(
+                session,
+                actor,
+                request,
+                idempotency_key=idempotency_key,
+                clock=clock,
+                _file_stored=False,
+            )
+    except _WouldSave:
+        return None
+
+
+def receipt_key(deposit_id: str) -> str:
+    """Where a deposit's receipt file is stored. One receipt per deposit, written once."""
+    return f"payments/receipts/{validate_push_id(deposit_id)}"
+
+
+def new_deposit_id() -> str:
+    """An ID for a bank transfer not yet saved, so its receipt can be stored under
+    `receipt_key` before the transaction that records it opens."""
+    return push_id()
+
+
 async def submit_bank_receipt(
     session: AsyncSession,
     actor: Actor,
@@ -175,13 +219,16 @@ async def submit_bank_receipt(
     *,
     idempotency_key: str,
     clock: Clock,
+    deposit_id: str | None = None,
+    _file_stored: bool = True,
 ) -> BankTransfer:
     """Save a client's bank transfer for one investment or goal, waiting for staff to check it.
 
     `session` is the client's own transaction. The same key returns the same transfer, and the
     same key with different details is refused. While the investment has a live deposit, by
-    either method, this raises `DepositExists`. The receipt file is stored by the caller under
-    the returned storage key.
+    either method, this raises `DepositExists`. The caller stores the receipt file under
+    `receipt_key(deposit_id)` first, with `deposit_id` from `new_deposit_id`. A replay returns
+    the first transfer, and the file stored for the retry is left under a key nothing records.
     """
     if actor.kind != "client" or actor.id is None:
         raise ApplicationError("forbidden")
@@ -196,9 +243,15 @@ async def submit_bank_receipt(
     except InvalidReceipt as error:
         raise _invalid(error.field, error.code) from None
     client_id = actor.id
+    if deposit_id is not None:
+        try:
+            validate_push_id(deposit_id)
+        except ValueError:
+            raise _invalid("deposit_id", "invalid_id") from None
+    chosen_id = deposit_id or push_id()
 
     async def command() -> Receipt:
-        deposit_id = push_id()
+        deposit_id = chosen_id
         await service.insert_deposit(
             session,
             {
@@ -220,7 +273,7 @@ async def submit_bank_receipt(
             {
                 "deposit_id": deposit_id,
                 "client_id": client_id,
-                "storage_key": f"payments/receipts/{deposit_id}",
+                "storage_key": receipt_key(deposit_id),
                 "content_type": file.content_type,
                 "byte_size": file.byte_size,
                 "sha256": file.sha256,
@@ -233,6 +286,9 @@ async def submit_bank_receipt(
         await service.record_event(
             session, deposit_id, None, DepositStatus.IN_REVIEW, None, "request", now
         )
+        if not _file_stored:
+            # A preflight: everything that could refuse this transfer has run.
+            raise _WouldSave
         return Receipt(201, {"deposit_id": deposit_id})
 
     outcome = await run_once(
@@ -255,10 +311,10 @@ async def submit_bank_receipt(
         now=now,
         command=command,
     )
-    deposit_id = str(outcome.receipt.response["deposit_id"])
+    saved_id = str(outcome.receipt.response["deposit_id"])
     if not outcome.replayed:
-        logger.info("bank_transfer_submitted", deposit_id=deposit_id)
-    return await get_bank_transfer(session, deposit_id)
+        logger.info("bank_transfer_submitted", deposit_id=saved_id)
+    return await get_bank_transfer(session, saved_id)
 
 
 async def get_bank_transfer(session: AsyncSession, deposit_id: str) -> BankTransfer:
@@ -479,6 +535,43 @@ async def get_review(session: AsyncSession, staff: Actor, deposit_id: str) -> Re
         reviewed_at=row.reviewed_at,
         approved_by=row.approved_by,
         approved_at=row.approved_at,
+    )
+
+
+async def record_opened(session: AsyncSession, staff: Actor, deposit_id: str, clock: Clock) -> None:
+    """Write to the audit trail that a member of staff opened a transfer. Its receipt and the
+    bank's narrative can name the client and the sender, so each look is recorded."""
+    if staff.kind != "staff" or staff.id is None:
+        raise ApplicationError("forbidden")
+    await audit.record(
+        session,
+        AuditEvent(
+            category="access",
+            action="payments.bank_transfer_opened",
+            resource_type="payment_deposit",
+            resource_id=deposit_id,
+            actor=AuditActor(staff.kind, staff.id),
+        ),
+        clock,
+    )
+
+
+async def matched_line(
+    session: AsyncSession, staff: Actor, deposit_id: str
+) -> StatementLineView | None:
+    """The statement line a staff member matched the transfer to, for the second person to check
+    beside the receipt before approving. None if the transfer is not matched."""
+    review = await get_review(session, staff, deposit_id)
+    if review is None or review.statement_line_id is None:
+        return None
+    transfer = await get_bank_transfer(session, deposit_id)
+    return next(
+        (
+            found
+            for found in await _lines_for(session, transfer)
+            if found.id == review.statement_line_id
+        ),
+        None,
     )
 
 
