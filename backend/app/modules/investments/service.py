@@ -8,6 +8,13 @@ They are the only ones a client-facing route may use.
 """
 
 from app.modules.investments.accrual import InterestRun, accrue_investment, interest_runs
+from app.modules.investments.book import (
+    ProductOwed,
+    RunningInvestment,
+    maturing,
+    owed_by_product,
+    running_investments,
+)
 from app.modules.investments.catalogue import (
     MAX_PROPOSALS,
     PROPOSAL_RESOURCE,
@@ -64,8 +71,10 @@ __all__ = [
     "InterestRun",
     "Investment",
     "PayableInvestment",
+    "ProductOwed",
     "ProductView",
     "ProposalView",
+    "RunningInvestment",
     "accrue_investment",
     "approve_rate",
     "cancel_unpaid",
@@ -83,11 +92,14 @@ __all__ = [
     "list_products",
     "list_proposals",
     "mature_investment",
+    "maturing",
+    "owed_by_product",
     "pay_out_matured",
     "payable_investment",
     "propose_rate",
     "rate_history",
     "request_investment",
+    "running_investments",
     "send_back_rate",
     "start_investment",
     "withdraw_rate",
