@@ -1,4 +1,5 @@
 import { KycError, type CheckDetail, type Decision, type KycApi, type PhotoKind, type QueueItem } from "./api.ts";
+import { maskDocumentNumber } from "./labels.ts";
 
 /**
  * Sample identity checks for `pnpm dev` and previews. Not real people and not
@@ -15,9 +16,18 @@ function ago(minutes: number): string {
 
 const photos = (...kinds: PhotoKind[]) => kinds.map((kind) => ({ kind, url: null }));
 
+/** The whole document numbers, which the routes give out only one at a time. */
+const NUMBERS: Record<string, string> = {};
+
+function sample(check: Omit<CheckDetail, "documentNumberMasked"> & { documentNumber: string }): CheckDetail {
+  const { documentNumber, ...rest } = check;
+  NUMBERS[check.id] = documentNumber;
+  return { ...rest, documentNumberMasked: maskDocumentNumber(documentNumber) };
+}
+
 function sampleChecks(): CheckDetail[] {
   return [
-    {
+    sample({
       id: "-OdSample0000000001A",
       name: "David Mugisha",
       documentType: "national_id",
@@ -40,8 +50,8 @@ function sampleChecks(): CheckDetail[] {
       clientMessage: null,
       accountNumber: null,
       allowed: REVIEW,
-    },
-    {
+    }),
+    sample({
       id: "-OdSample0000000002A",
       name: "Ruth Akello",
       documentType: "passport",
@@ -60,8 +70,8 @@ function sampleChecks(): CheckDetail[] {
       clientMessage: null,
       accountNumber: null,
       allowed: REVIEW,
-    },
-    {
+    }),
+    sample({
       id: "-OdSample0000000003A",
       name: "Grace Namara",
       documentType: "national_id",
@@ -84,8 +94,8 @@ function sampleChecks(): CheckDetail[] {
       clientMessage: null,
       accountNumber: null,
       allowed: COMPLIANCE,
-    },
-    {
+    }),
+    sample({
       id: "-OdSample0000000004A",
       name: "Joseph Nakato",
       documentType: "driving_permit",
@@ -104,7 +114,7 @@ function sampleChecks(): CheckDetail[] {
       clientMessage: "The front of your permit is blurred. Please take it again in good light.",
       accountNumber: null,
       allowed: [],
-    },
+    }),
   ];
 }
 
@@ -163,6 +173,12 @@ export function createStubKycApi(delayMs = 150): KycApi {
         const check = checks.get(id);
         if (!check) throw new KycError("not_found");
         return check;
+      }),
+    showDocumentNumber: (id) =>
+      wait(() => {
+        const number = NUMBERS[id];
+        if (!number) throw new KycError("not_found");
+        return number;
       }),
     approve: (id) =>
       wait(() => decide(id, "approve", () => ({ status: "approved", allowed: [], accountNumber: sampleAccountNumber(issued++) }))),
