@@ -195,3 +195,27 @@ def test_a_refused_sheet_is_reported_once_not_once_per_investment() -> None:
     assert len([p for p in report.errors if p.sheet is Sheet.CLIENTS]) == len(CLIENT_COLUMNS) + 2
     assert [p for p in report.problems if p.sheet is Sheet.INVESTMENTS] == []
     assert report.summary.running_investments == 0
+
+
+def test_references_that_differ_only_by_case_are_one_reference() -> None:
+    report = run_trial(
+        clients(client("1", legacy_client_ref="c1"), client("2", legacy_client_ref="C1")),
+        investments(investment("inv-a", "c1"), investment("INV-A", "C1")),
+        as_of=AS_OF,
+    )
+    assert codes(report.errors) == [
+        ("clients", 2, "legacy_client_ref", "duplicate_reference"),
+        ("clients", 3, "legacy_client_ref", "duplicate_reference"),
+        ("investments", 2, "legacy_investment_ref", "duplicate_reference"),
+        ("investments", 3, "legacy_investment_ref", "duplicate_reference"),
+    ]
+
+
+def test_an_investment_finds_its_client_whatever_the_case() -> None:
+    report = run_trial(
+        clients(client("1", legacy_client_ref="paper-0012")),
+        investments(investment("A", "PAPER-0012")),
+        as_of=AS_OF,
+    )
+    assert report.problems == ()
+    assert report.clients[0].legacy_client_ref == "PAPER-0012"
