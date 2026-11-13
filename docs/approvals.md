@@ -28,8 +28,10 @@ The inbox only reads. Deciding happens on the owning module's own route, which c
 | `pot_transfer` | reconciliation `transfers.waiting` | `reconciliation.view` | `reconciliation.view` |
 | `bank_transfer_match` | payments `bank_transfers.matches_awaiting_approval` | `reconciliation.view` | `bank_transfers.change` |
 | `day_close` | reconciliation `day_close.prepared_closes` | `reconciliation.view` | `reconciliation.view` |
-| `dealing_order` | dealing `orders.open_orders`, prepared | `dealing_desk.view` | `dealing_desk.view` |
-| `dealing_result` | dealing `orders.open_orders`, result recorded | `dealing_desk.view` | `dealing_desk.view` |
+| `dealing_order` | dealing `orders.open_orders`, prepared | `dealing_desk.view` | `dealing_orders.change` |
+| `dealing_result` | dealing `orders.open_orders`, result recorded | `dealing_desk.view` | `dealing_orders.change` |
+| `buffer_rules` | dealing `buffer.waiting_proposals`. The subject is the currency and the day the rules would start, such as `UGX from 2026-12-01`. | `dealing_desk.view` | `dealing_orders.change` |
+| `buffer_capital` | dealing `capital.waiting`: Finvest's own money paid into or taken out of the buffer. The subject is `UGX paid in` or `UGX taken out`, with no amount. | `dealing_desk.view` | `dealing_orders.change` |
 | `rate_change` | investments `list_proposals`, proposed | `rates.view` | `rates.view` |
 | `migration_totals` | migration `overview`, totals not yet confirmed | `migration.view` | `migration.sign_off` |
 | `migration_sign_off` | migration `overview`, sign-offs proposed | `migration.view` | `migration.sign_off` |
@@ -46,7 +48,7 @@ Where a module has no separate deciding permission, the screen's own is used.
 
 Only the sources the reader's permissions show are read, and all of them inside the reader's staff transaction, so row policies apply as they do on each module's own screen.
 
-Not in the inbox, because they are not two-person decisions: identity checks (one reviewer, by the owner's decision), large payouts and withdrawal limits, refusing or removing a payout account (one person each, as neither lets money out), products and support. Dealing buffer rule changes are two-person but have no staff route yet, so they join when one exists.
+Not in the inbox, because they are not two-person decisions: identity checks (one reviewer, by the owner's decision), large payouts and withdrawal limits, refusing or removing a payout account (one person each, as neither lets money out), products and support.
 
 ## Where it lives
 

@@ -30,6 +30,12 @@ def item(body: dict[str, object], field: str, item_id: str) -> dict[str, object]
     return next(i for i in items if i["id"] == item_id)
 
 
+async def inbox(api: Api, headers: dict[str, str]) -> dict[str, dict[str, object]]:
+    response = await api.http.get("/staff/approvals", headers=headers)
+    assert response.status_code == 200, response.text
+    return {i["id"]: i for i in response.json()["items"]}
+
+
 def new_id(before: dict[str, object], after: httpx.Response, field: str) -> str:
     assert after.status_code == 200, after.text
     old = {i["id"] for i in before[field]}  # type: ignore[attr-defined]
@@ -134,6 +140,10 @@ async def test_a_movement_is_declined_with_a_reason(api: Api) -> None:
         },
     )
     movement_id = new_id(before, proposed, "movements")
+    waiting = (await inbox(api, grace))[movement_id]
+    assert (waiting["kind"], waiting["subject"]) == ("buffer_capital", "USD paid in")
+    assert (waiting["yours"], waiting["can_decide"]) == (False, True)
+    assert (await inbox(api, daniel))[movement_id]["yours"] is True
     declined = await api.http.post(
         f"/staff/dealing/buffer/capital/{movement_id}/decline",
         headers={**grace, **key()},
@@ -142,6 +152,7 @@ async def test_a_movement_is_declined_with_a_reason(api: Api) -> None:
     assert declined.status_code == 200, declined.text
     assert item(declined.json(), "movements", movement_id)["status"] == "declined"
     assert declined.json()["buffer"] == {"minor": 0, "currency": "USD"}
+    assert movement_id not in await inbox(api, grace)
 
 
 async def test_a_rules_change_is_proposed_withdrawn_or_approved_by_another(api: Api) -> None:
@@ -165,6 +176,11 @@ async def test_a_rules_change_is_proposed_withdrawn_or_approved_by_another(api: 
     )
     proposal_id = new_id(before, proposed, "proposals")
     assert item(proposed.json(), "proposals", proposal_id)["allowed"] == ["withdraw"]
+    waiting = (await inbox(api, grace))[proposal_id]
+    assert (waiting["kind"], waiting["subject"]) == ("buffer_rules", f"USD from {starts}")
+    assert (waiting["yours"], waiting["can_decide"]) == (False, True)
+    mine = (await inbox(api, daniel))[proposal_id]
+    assert (mine["yours"], mine["can_decide"]) == (True, False)
     assert item(await screen(api, grace), "proposals", proposal_id)["allowed"] == [
         "approve",
         "send_back",
@@ -175,6 +191,7 @@ async def test_a_rules_change_is_proposed_withdrawn_or_approved_by_another(api: 
     assert approved.status_code == 200, approved.text
     body = approved.json()
     assert item(body, "proposals", proposal_id)["status"] == "approved"
+    assert proposal_id not in await inbox(api, grace)
     assert starts.isoformat() in {v["effective_from"] for v in body["versions"]}
     # In force only from that later day.
     assert body["in_force"]["floor"] == {"minor": 1_000_000, "currency": "USD"}
