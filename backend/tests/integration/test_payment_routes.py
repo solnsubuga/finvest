@@ -12,16 +12,14 @@ from sqlalchemy import text
 from app.api.app import create_app
 from app.infrastructure.database import Database
 from app.infrastructure.jobs import Worker
+from app.infrastructure.storage import DisabledStorage, MemoryStorage, sha256_hex
 from app.modules.identity.api import COOKIES
 from app.modules.identity.domain.permissions import ROLE_PERMISSIONS
 from app.modules.identity.hashing import PasswordHasher
 from app.modules.identity.service import IdentityService
 from app.modules.kyc import service as kyc
 from app.modules.kyc.providers import ManualProvider
-from app.modules.payments import bank_transfers as bank
 from app.modules.payments.bank_transfers import BankTransferJobs
-from app.modules.payments.domain.bank_transfers import ReceiptDetails, ReceiptFile
-from app.modules.payments.domain.deposits import Purpose
 from app.modules.payments.domain.outcomes import Accepted, Pending
 from app.modules.reconciliation import statements
 from app.modules.reconciliation.domain.statements import CsvFormat, StatementSource, parse_csv
@@ -62,6 +60,7 @@ class Api:
     clock: FakeClock
     database: Database
     collections: FakeCollections
+    storage: MemoryStorage
 
     def http(self) -> httpx.AsyncClient:
         transport = httpx.ASGITransport(
@@ -120,8 +119,11 @@ async def api(test_database: TestDatabase, app_database: Database) -> AsyncItera
     )
     clock = FakeClock(NOW)
     collections = FakeCollections()
-    app = create_app(settings, app_database, clock, HASHER, collections=collections)
-    yield Api(app, app.state.identity, clock, app_database, collections)
+    storage = MemoryStorage()
+    app = create_app(
+        settings, app_database, clock, HASHER, collections=collections, storage=storage
+    )
+    yield Api(app, app.state.identity, clock, app_database, collections, storage)
 
 
 def key() -> dict[str, str]:
@@ -199,23 +201,41 @@ async def test_a_client_cannot_pay_for_someone_elses_investment_or_see_their_pay
         ).status_code == 404
 
 
-async def submit_transfer(api: Api, client: Actor, investment_id: str, minor: int) -> str:
-    """A bank transfer the client told us about. Over HTTP this arrives with the receipt upload,
-    which waits for the shared file storage, so the test calls the service."""
-    async with api.database.actor_transaction(client) as session:
-        transfer = await bank.submit_bank_receipt(
-            session,
-            client,
-            bank.BankTransferRequest(
-                purpose=Purpose.INVESTMENT,
-                purpose_id=investment_id,
-                file=ReceiptFile("application/pdf", 48_000, secrets.token_hex(32)),
-                details=ReceiptDetails(ugx(minor), SENT_ON, "Stanbic Bank", "FT2633100042"),
-            ),
-            idempotency_key=f"key-{push_id()}",
-            clock=api.clock,
-        )
-    return transfer.deposit.id
+RECEIPT = b"%PDF-1.7\n" + secrets.token_bytes(4096)
+
+
+def transfer_form(minor: int, **changes: str) -> dict[str, str]:
+    return {
+        "amount_minor": str(minor),
+        "sent_on": SENT_ON.isoformat(),
+        "bank_name": "Stanbic Bank",
+        "transaction_number": "FT2633100042",
+    } | changes
+
+
+async def send_transfer(
+    http: httpx.AsyncClient,
+    investment_id: str,
+    minor: int,
+    *,
+    receipt: bytes = RECEIPT,
+    content_type: str = "application/pdf",
+    headers: dict[str, str] | None = None,
+    **changes: str,
+) -> httpx.Response:
+    return await http.post(
+        f"/client/investments/{investment_id}/payments/bank-transfer",
+        data=transfer_form(minor, **changes),
+        files={"receipt": ("receipt.pdf", receipt, content_type)},
+        headers=headers or key(),
+    )
+
+
+async def submit_transfer(http: httpx.AsyncClient, investment_id: str, minor: int) -> str:
+    """A bank transfer the client told us about, with its receipt, over HTTP."""
+    sent = await send_transfer(http, investment_id, minor)
+    assert sent.status_code == 201, sent.text
+    return str(sent.json()["id"])
 
 
 async def import_statement(api: Api, minor: int) -> str:
@@ -242,13 +262,12 @@ async def test_a_bank_transfer_is_checked_by_one_person_and_approved_by_another(
     async with api.http() as client_http, api.http() as first, api.http() as second:
         client, _ = await api.client(client_http)
         investment = await request_investment(api.database, client, api.clock, amount=ugx(minor))
-        # Not over HTTP until receipts can be uploaded.
-        closed = await client_http.post(
-            f"/client/investments/{investment.id}/payments/bank-transfer", json={}, headers=key()
-        )
-        assert closed.status_code in (404, 405)
-        payment_id = await submit_transfer(api, client, investment.id, minor)
+        payment_id = await submit_transfer(client_http, investment.id, minor)
         payment = (await client_http.get(f"/client/payments/{payment_id}")).json()
+        # The file is stored once, under the transfer's key, and is the bytes the client sent.
+        stored_key = f"payments/receipts/{payment_id}"
+        assert await api.storage.read(stored_key, sha256=sha256_hex(RECEIPT)) == RECEIPT
+        assert payment["receipt"]["byte_size"] == len(RECEIPT)
         assert payment["status"] == "in_review" and payment["method"] == "bank_transfer"
         assert payment["payer"] is None and payment["receipt"]["bank_name"] == "Stanbic Bank"
 
@@ -260,6 +279,7 @@ async def test_a_bank_transfer_is_checked_by_one_person_and_approved_by_another(
         assert payment["id"] in [item["id"] for item in queue.json()["items"]]
         detail = (await first.get(f"/staff/payments/bank-transfers/{payment['id']}")).json()
         line = next(line for line in detail["candidates"] if line["account_reference"] == pot)
+        assert detail["receipt_link"]["url"].startswith(f"memory://{stored_key}?")
 
         matched = await first.post(
             f"/staff/payments/bank-transfers/{payment['id']}/review",
@@ -299,7 +319,7 @@ async def test_a_refused_transfer_says_why_and_staff_without_the_permission_are_
     async with api.http() as client_http, api.http() as staff_http, api.http() as support:
         client, _ = await api.client(client_http)
         investment = await request_investment(api.database, client, api.clock)
-        payment_id = await submit_transfer(api, client, investment.id, investment.amount.minor)
+        payment_id = await submit_transfer(client_http, investment.id, investment.amount.minor)
         await api.staff(support, role="support")
         assert (await support.get("/staff/payments/bank-transfers")).status_code == 403
         assert (
@@ -343,7 +363,7 @@ async def test_seeing_transfers_is_not_enough_to_confirm_one_and_each_look_is_au
     async with api.http() as client_http, api.http() as viewer_http:
         client, _ = await api.client(client_http)
         investment = await request_investment(api.database, client, api.clock)
-        payment_id = await submit_transfer(api, client, investment.id, investment.amount.minor)
+        payment_id = await submit_transfer(client_http, investment.id, investment.amount.minor)
         viewer = await api.staff(viewer_http, role="support")
         assert (await viewer_http.get("/staff/payments/bank-transfers")).status_code == 200
         opened = await viewer_http.get(f"/staff/payments/bank-transfers/{payment_id}")
@@ -366,3 +386,84 @@ async def test_seeing_transfers_is_not_enough_to_confirm_one_and_each_look_is_au
                 {"id": payment_id, "staff": viewer.id},
             )
         assert audited == 1
+
+
+async def test_a_receipt_is_checked_before_it_is_stored(api: Api) -> None:
+    async with api.http() as client_http:
+        client, _ = await api.client(client_http)
+        investment = await request_investment(api.database, client, api.clock)
+        owed = investment.amount.minor
+        refusals = [
+            (
+                await send_transfer(client_http, investment.id, owed + 1000),
+                "amount_minor",
+                "amount_differs_from_investment",
+            ),
+            (
+                await send_transfer(client_http, investment.id, owed, content_type="text/html"),
+                "file",
+                "unsupported_content_type",
+            ),
+            (
+                await send_transfer(client_http, investment.id, owed, receipt=b""),
+                "file",
+                "invalid_size",
+            ),
+            (
+                await send_transfer(
+                    client_http,
+                    investment.id,
+                    owed,
+                    sent_on=(SENT_ON + timedelta(days=3)).isoformat(),
+                ),
+                "sent_on",
+                "in_the_future",
+            ),
+        ]
+        for response, field, code in refusals:
+            assert response.status_code == 422, response.text
+            problem = response.json()["error"]["fields"][0]
+            assert problem["field_path"][-1] == field and problem["code"] == code
+        assert api.storage.files == {}
+
+        # A body over the receipt limit is refused before it is read.
+        too_big = await send_transfer(
+            client_http, investment.id, owed, receipt=b"%PDF" + bytes(12 * 1024 * 1024)
+        )
+        assert too_big.status_code == 413
+        assert api.storage.files == {}
+
+        # The same key and the same receipt give back the same transfer.
+        headers = key()
+        first = await send_transfer(client_http, investment.id, owed, headers=headers)
+        again = await send_transfer(client_http, investment.id, owed, headers=headers)
+        assert first.status_code == 201 and again.status_code == 201
+        assert again.json()["id"] == first.json()["id"]
+        # A second transfer for an investment already being paid is refused.
+        other = await send_transfer(client_http, investment.id, owed)
+        assert other.status_code == 409
+
+
+async def test_without_storage_no_transfer_is_saved(
+    test_database: TestDatabase, app_database: Database
+) -> None:
+    settings = test_database.settings("finvest_app").model_copy(
+        update={"client_allowed_origins": [CLIENT_ORIGIN]}
+    )
+    clock = FakeClock(NOW)
+    app = create_app(
+        settings,
+        app_database,
+        clock,
+        HASHER,
+        collections=FakeCollections(),
+        storage=DisabledStorage(),
+    )
+    api = Api(app, app.state.identity, clock, app_database, FakeCollections(), MemoryStorage())
+    async with api.http() as client_http:
+        client, _ = await api.client(client_http)
+        investment = await request_investment(api.database, client, api.clock)
+        refused = await send_transfer(client_http, investment.id, investment.amount.minor)
+        assert refused.status_code == 503
+        missing = await client_http.get(f"/client/investments/{investment.id}/payment")
+        assert missing.status_code == 404

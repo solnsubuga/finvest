@@ -168,6 +168,27 @@ _LINE_KEY = "uq_payment_bank_reviews_statement_line_id"
 _INSUFFICIENT_PRIVILEGE = "42501"
 
 
+def check_submission(file: ReceiptFile, details: ReceiptDetails, clock: Clock) -> None:
+    """Refuse a receipt `submit_bank_receipt` would refuse, so the route can check it before
+    storing the file."""
+    try:
+        check_receipt_file(file)
+        check_receipt_details(details, today=business_date(clock.now()))
+    except InvalidReceipt as error:
+        raise _invalid(error.field, error.code) from None
+
+
+def receipt_key(deposit_id: str) -> str:
+    """Where a deposit's receipt file is stored. One receipt per deposit, written once."""
+    return f"payments/receipts/{validate_push_id(deposit_id)}"
+
+
+def new_deposit_id() -> str:
+    """An ID for a bank transfer not yet saved, so its receipt can be stored under
+    `receipt_key` before the transaction that records it opens."""
+    return push_id()
+
+
 async def submit_bank_receipt(
     session: AsyncSession,
     actor: Actor,
@@ -175,13 +196,15 @@ async def submit_bank_receipt(
     *,
     idempotency_key: str,
     clock: Clock,
+    deposit_id: str | None = None,
 ) -> BankTransfer:
     """Save a client's bank transfer for one investment or goal, waiting for staff to check it.
 
     `session` is the client's own transaction. The same key returns the same transfer, and the
     same key with different details is refused. While the investment has a live deposit, by
-    either method, this raises `DepositExists`. The receipt file is stored by the caller under
-    the returned storage key.
+    either method, this raises `DepositExists`. The caller stores the receipt file under
+    `receipt_key(deposit_id)` first, with `deposit_id` from `new_deposit_id`. A replay returns
+    the first transfer, and the file stored for the retry is left under a key nothing records.
     """
     if actor.kind != "client" or actor.id is None:
         raise ApplicationError("forbidden")
@@ -196,9 +219,15 @@ async def submit_bank_receipt(
     except InvalidReceipt as error:
         raise _invalid(error.field, error.code) from None
     client_id = actor.id
+    if deposit_id is not None:
+        try:
+            validate_push_id(deposit_id)
+        except ValueError:
+            raise _invalid("deposit_id", "invalid_id") from None
+    chosen_id = deposit_id or push_id()
 
     async def command() -> Receipt:
-        deposit_id = push_id()
+        deposit_id = chosen_id
         await service.insert_deposit(
             session,
             {
@@ -220,7 +249,7 @@ async def submit_bank_receipt(
             {
                 "deposit_id": deposit_id,
                 "client_id": client_id,
-                "storage_key": f"payments/receipts/{deposit_id}",
+                "storage_key": receipt_key(deposit_id),
                 "content_type": file.content_type,
                 "byte_size": file.byte_size,
                 "sha256": file.sha256,
@@ -255,10 +284,10 @@ async def submit_bank_receipt(
         now=now,
         command=command,
     )
-    deposit_id = str(outcome.receipt.response["deposit_id"])
+    saved_id = str(outcome.receipt.response["deposit_id"])
     if not outcome.replayed:
-        logger.info("bank_transfer_submitted", deposit_id=deposit_id)
-    return await get_bank_transfer(session, deposit_id)
+        logger.info("bank_transfer_submitted", deposit_id=saved_id)
+    return await get_bank_transfer(session, saved_id)
 
 
 async def get_bank_transfer(session: AsyncSession, deposit_id: str) -> BankTransfer:

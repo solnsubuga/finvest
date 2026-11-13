@@ -59,7 +59,7 @@ A sweep runs every minute and picks up deposits whose own job was lost:
 
 The client sends money from their own bank account, then tells us about it. The code is in `bank_transfers.py` and `domain/bank_transfers.py`.
 
-1. **Receipt.** The client sends the receipt file's type, size and SHA-256, the amount, the day they sent it, their bank and the bank's transaction number (`submit_bank_receipt`, with an idempotency key). The deposit is saved as `in_review` in the same table as mobile money deposits, with method `bank_transfer`, provider `bank` and no payer number, so the one live deposit per investment rule covers both ways to pay. The file goes to private storage under `payments/receipts/<deposit ID>`. The database keeps only its type, size and digest. Nothing the client says moves money.
+1. **Receipt.** The client sends the receipt file's type, size and SHA-256, the amount, the day they sent it, their bank and the bank's transaction number (`submit_bank_receipt`, with an idempotency key). The deposit is saved as `in_review` in the same table as mobile money deposits, with method `bank_transfer`, provider `bank` and no payer number, so the one live deposit per investment rule covers both ways to pay. The API stores the file in private storage under `payments/receipts/<deposit ID>` before the transaction opens. The database keeps its key, type, size and digest. Nothing the client says moves money.
 2. **Staff check.** A staff member compares the receipt with the bank statement that reconciliation imported (`reconciliation.statements`). `candidate_lines` lists the lines that could be this transfer: money in, for exactly the amount owed, valued from the day the client gave to seven days later, and not already used. The staff member records either the line (`Matched`) or a reason (`NotMatched`: `amount_differs`, `not_on_statement`, `unreadable`, `name_differs`, `other`). The review is checked again against the statement when it is saved, is audited, and changes no deposit and no balance. A refusal queues the job that settles it. A match waits for a second member of staff, who approves it (`approve_bank_match`). The line is checked again, the person who matched it cannot approve it, and the approval is audited and queues the job.
 3. **Settling.** The worker confirms an approved match and posts it, or fails an unmatched one with the review's reason. A failed transfer frees the investment, so the client can send a new receipt as a new deposit.
 
@@ -76,17 +76,17 @@ Client routes, signed in as the client. Each `POST` needs an `Idempotency-Key`.
 | Route | What it does |
 | --- | --- |
 | `POST /client/investments/{id}/payments/mobile-money` | `{"network": "mtn" or "airtel"}`. Prompts the number on the client's own account for exactly the investment's amount. The request cannot name a number or an amount. |
-| `GET /client/investments/{id}/payment` | The investment's payment that has not failed. A `409` from the `POST` means one exists: show this one instead of asking the client to pay again. |
+| `POST /client/investments/{id}/payments/bank-transfer` | A `multipart/form-data` body: the `receipt` file (PDF, JPEG or PNG, at most 10 MiB), `amount_minor`, `sent_on`, `bank_name` and `transaction_number`. The amount must be the investment's, or it is refused with `amount_differs_from_investment`. Everything is checked first, then the file is stored outside any transaction under `payments/receipts/<deposit ID>`, then the transfer is saved pointing at it. So a saved transfer always has its file. If storage is down the answer is `503` and nothing is saved. The body limit for this path is 11 MiB, and the edge allows 12 MiB. |
+| `GET /client/investments/{id}/payment` | The investment's payment that has not failed. A `409` from either `POST` means one exists: show this one instead of asking the client to pay again. |
 | `GET /client/payments/{id}` | One payment, the client's own only. |
 
-There is no route yet for a client to start a bank transfer. It will upload the receipt file itself, so it arrives with the shared file storage. Until then a receipt row could exist without its file, so the route stays closed.
 
 Seeing transfers needs `reconciliation.view`. Matching, refusing and approving need `bank_transfers.change`, because they confirm money. Admin, operations and finance hold both for now. Opening a transfer writes a `payments.bank_transfer_opened` access event to the audit trail, because the receipt and the bank's narrative can name the client and the sender.
 
 | Route | What it does |
 | --- | --- |
 | `GET /staff/payments/bank-transfers` | Transfers in review, newest first, 50 a page (`?before=`). |
-| `GET /staff/payments/bank-transfers/{id}` | The transfer, its receipt details, its review, and the statement lines that could be it. Once matched, `matched_line` is the chosen line (amount, value date, reference and narrative), so the second person checks it beside the receipt rather than approving blind. |
+| `GET /staff/payments/bank-transfers/{id}` | The transfer, its receipt details, its review, and the statement lines that could be it. Once matched, `matched_line` is the chosen line (amount, value date, reference and narrative), so the second person checks it beside the receipt rather than approving blind. `receipt_link` opens the receipt file inline for 5 minutes. It is never logged. |
 | `POST /staff/payments/bank-transfers/{id}/review` (`bank_transfers.change`) | `{"outcome": "matched", "statement_line_id": …}` or `{"outcome": "not_matched", "reason": …}`. |
 | `POST /staff/payments/bank-transfers/{id}/approve` (`bank_transfers.change`) | A second member of staff approves a match. The matcher gets `403`. |
 

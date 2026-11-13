@@ -14,6 +14,7 @@ from app.api.request_id import RequestIdMiddleware
 from app.api.request_log import RequestLogMiddleware
 from app.infrastructure.database import Database
 from app.infrastructure.settings import Settings
+from app.infrastructure.storage import FileStorage, StorageSettings
 from app.modules.identity import api as identity_api
 from app.modules.identity import passkeys_api
 from app.modules.identity.authenticators import AuthenticatorService
@@ -38,11 +39,13 @@ def create_app(
     hasher: PasswordHasher | None = None,
     *,
     collections: CollectionsProvider | None = None,
+    storage: FileStorage | None = None,
 ) -> FastAPI:
     owned = database is None
     database = database or Database(settings)
     clock = clock or SystemClock()
     collections = collections or collections_provider(PaymentsSettings(), clock)
+    storage = storage or StorageSettings().storage()
 
     @asynccontextmanager
     async def lifespan(_: FastAPI) -> AsyncIterator[None]:
@@ -62,6 +65,7 @@ def create_app(
     app.state.settings = settings
     app.state.database = database
     app.state.clock = clock
+    app.state.storage = storage
     hasher = hasher or PasswordHasher(
         memory_kib=settings.password_memory_kib, time_cost=settings.password_time_cost
     )

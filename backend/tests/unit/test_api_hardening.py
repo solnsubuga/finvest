@@ -112,3 +112,26 @@ def test_a_listed_prefix_has_its_own_limit(monkeypatch: pytest.MonkeyPatch) -> N
     assert hardening.body_limit("/staff/files/x") == 20
     assert hardening.body_limit("/staff/other") == 10
     assert hardening.body_limit("/client/x") == hardening.DEFAULT_BODY_LIMIT
+
+
+def test_a_star_in_a_listed_prefix_is_one_path_segment(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(hardening, "BODY_LIMITS", {"/client/things/*/upload": 30})
+    assert hardening.body_limit("/client/things/abc123/upload") == 30
+    assert hardening.body_limit("/client/things/abc123/upload?x=1") == 30
+    for elsewhere in (
+        "/client/things/abc123",
+        "/client/things//upload",
+        "/client/things/a/b/upload",
+        "/client/things/abc123/other",
+        "/client/other/abc123/upload",
+    ):
+        assert hardening.body_limit(elsewhere) == hardening.DEFAULT_BODY_LIMIT, elsewhere
+
+
+def test_only_the_receipt_upload_takes_a_large_body() -> None:
+    receipt = "/client/investments/AbCdEfGhIjKlMnOpQrSt/payments/bank-transfer"
+    assert hardening.body_limit(receipt) == 11 * 1024 * 1024
+    assert (
+        hardening.body_limit("/client/investments/AbCdEfGhIjKlMnOpQrSt/payments/mobile-money")
+        == hardening.DEFAULT_BODY_LIMIT
+    )
