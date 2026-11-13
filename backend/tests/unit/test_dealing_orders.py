@@ -5,12 +5,14 @@ import pytest
 
 from app.modules.dealing.domain.orders import (
     LOT_SIZES,
+    Action,
     Fill,
     InvalidOrder,
     Order,
     OrderKind,
     OrderStatus,
     Refusal,
+    allowed_actions,
     check_approval,
     check_confirmation,
     check_new_order,
@@ -292,3 +294,29 @@ def test_a_sale_is_checked_against_what_is_held_when_the_result_comes_in() -> No
 def test_every_currency_has_a_lot_size_in_its_own_currency() -> None:
     assert set(LOT_SIZES) == set(Currency)
     assert all(lot.currency is currency and lot.is_positive for currency, lot in LOT_SIZES.items())
+
+
+@pytest.mark.parametrize(
+    ("status", "by", "expected"),
+    [
+        (OrderStatus.PREPARED, "preparer", (Action.WITHDRAW,)),
+        (OrderStatus.PREPARED, "other", (Action.APPROVE, Action.SEND_BACK)),
+        (OrderStatus.APPROVED, "preparer", (Action.RECORD_RESULT,)),
+        (OrderStatus.RESULT_RECORDED, "recorder", ()),
+        (OrderStatus.RESULT_RECORDED, "preparer", (Action.CONFIRM_RESULT, Action.REJECT_RESULT)),
+        (OrderStatus.SETTLED, "other", ()),
+        (OrderStatus.SENT_BACK, "preparer", ()),
+    ],
+)
+def test_each_person_is_offered_only_the_steps_they_may_take(
+    status: OrderStatus, by: str, expected: tuple[Action, ...]
+) -> None:
+    order = Order(
+        OrderKind.AUCTION_BID,
+        "TREA-91",
+        Money(100_000, Currency.UGX),
+        "preparer",
+        status,
+        "recorder" if status is OrderStatus.RESULT_RECORDED else None,
+    )
+    assert allowed_actions(order, by) == expected

@@ -64,6 +64,8 @@ export const ACTION_PERMISSIONS = [
   "payout_accounts.change",
   // Proposing a rate change, approving or sending back someone else's, and withdrawing your own.
   "rates.change",
+  // Preparing, approving, sending back or withdrawing a dealing order, and recording, confirming or rejecting its result.
+  "dealing_orders.change",
 ] as const;
 
 export const PERMISSIONS = [...SCREEN_PERMISSIONS, ...ACTION_PERMISSIONS] as const;
