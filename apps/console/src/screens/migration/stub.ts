@@ -45,7 +45,8 @@ const approvedBy = (id: string, reason: string): SignOff => ({
   reason,
   state: "approved",
   proposedBy: "Grace Finance",
-  approvedBy: "Daniel Admin",
+  decidedBy: "Daniel Admin",
+  decisionReason: null,
   mine: false,
 });
 
@@ -117,7 +118,7 @@ const DIFFERENCES: readonly Difference[] = [
     currency: "UGX",
     old: "96120",
     new: "95500",
-    signedOff: { id: "sign-off-20977", reason: "Finvest 1.0 counted the start date as a day earned.", state: "proposed", proposedBy: "Grace Finance", approvedBy: null, mine: false },
+    signedOff: { id: "sign-off-20977", reason: "Finvest 1.0 counted the start date as a day earned.", state: "proposed", proposedBy: "Grace Finance", decidedBy: null, decisionReason: null, mine: false },
   },
   { key: "tax_rate:INV-19034", kind: "tax_rate", row: 34, legacyInvestmentRef: "INV-19034", currency: "UGX", old: "1000", new: "1500", signedOff: null },
   { key: "investment:USD-0091", kind: "interest", row: 3190, legacyInvestmentRef: "USD-0091", currency: "USD", old: "4105", new: "4100", signedOff: approvedBy("sign-off-0091", ROUNDING) },
@@ -237,9 +238,14 @@ export function createStubMigrationApi(delayMs = 150, start: "empty" | "imported
     enterTotals: (input: TotalsInput) =>
       wait(() => {
         may("enter_totals");
-        // A new entry replaces the last and waits for a second person, so sign-offs on the lines start again.
-        state.totals = { ...input, id: nextId("totals"), enteredBy: YOU, enteredAt: new Date().toISOString(), confirmedBy: null, mine: true };
-        state.lineSignOffs = {};
+        // A new entry replaces the last and waits for a second person. As in the backend, a sign-off
+        // on a total line counts again only if that line's Finvest 1.0 figure comes out the same.
+        const before = state.totals;
+        const entered: EnteredTotals = { ...input, id: nextId("totals"), enteredBy: YOU, enteredAt: new Date().toISOString(), confirmedBy: null, mine: true };
+        for (const line of LINES) {
+          if (before === null || BigInt(oldFigure(before, line)) !== BigInt(oldFigure(entered, line))) delete state.lineSignOffs[line.key];
+        }
+        state.totals = entered;
       }),
     confirmTotals: (totalsId: string) =>
       wait(() => {
@@ -251,17 +257,19 @@ export function createStubMigrationApi(delayMs = 150, start: "empty" | "imported
     proposeSignOff: (key: string, reason: string) =>
       wait(() => {
         may("sign_off");
-        if (signOffFor(key)) throw new MigrationError("conflict");
-        setSignOff(key, { id: nextId("sign-off"), reason, state: "proposed", proposedBy: YOU, approvedBy: null, mine: true });
+        // A rejected sign-off may be proposed again, and the new one replaces it.
+        const current = signOffFor(key);
+        if (current && current.state !== "rejected") throw new MigrationError("conflict");
+        setSignOff(key, { id: nextId("sign-off"), reason, state: "proposed", proposedBy: YOU, decidedBy: null, decisionReason: null, mine: true });
       }),
-    decideSignOff: (signOffId: string, approve: boolean) =>
+    decideSignOff: (signOffId: string, approve: boolean, reason?: string) =>
       wait(() => {
         may("sign_off");
         const key = keyOf(signOffId);
         const signOff = signOffFor(key)!;
         if (signOff.mine) throw new MigrationError("forbidden");
         if (signOff.state !== "proposed") throw new MigrationError("conflict");
-        setSignOff(key, approve ? { ...signOff, state: "approved", approvedBy: YOU } : null);
+        setSignOff(key, { ...signOff, state: approve ? "approved" : "rejected", decidedBy: YOU, decisionReason: reason?.trim() || null });
       }),
   };
 }
