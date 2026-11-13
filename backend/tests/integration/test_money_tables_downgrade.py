@@ -44,6 +44,24 @@ ROWS = {
         "now(), now())",
         "refusing to drop identity checks",
     ),
+    "0013_ledger_corrections": (
+        "BEGIN; "
+        "INSERT INTO ledger_accounts (id, code, kind, currency, name, created_at) VALUES "
+        "('-Nabc0000000000000A1', 'test.cash', 'asset', 'UGX', 'Cash', now()), "
+        "('-Nabc0000000000000B2', 'test.owed', 'liability', 'UGX', 'Owed', now()); "
+        "INSERT INTO ledger_journal_entries (id, entry_type, currency, effective_date, "
+        "posted_at, idempotency_key, request_digest) VALUES ('-Nabc0000000000000E1', "
+        "'test.deposit', 'UGX', DATE '2026-11-13', now(), 'downgrade-test', repeat('0', 64)); "
+        "INSERT INTO ledger_lines (entry_id, line_no, account_id, currency, amount_minor) VALUES "
+        "('-Nabc0000000000000E1', 1, '-Nabc0000000000000A1', 'UGX', 5), "
+        "('-Nabc0000000000000E1', 2, '-Nabc0000000000000B2', 'UGX', -5); "
+        "INSERT INTO ledger_correction_proposals (id, corrects_entry_id, reverses, entry_type, "
+        "currency, effective_date, lines, reason, proposed_by, proposed_at) VALUES "
+        "('-Nabc0000000000000P1', '-Nabc0000000000000E1', true, 'ledger.correction', 'UGX', "
+        "DATE '2026-11-13', '[{}, {}]'::jsonb, 'test', '-Nabc0000000000000S1', now()); "
+        "COMMIT",
+        "refusing to drop ledger corrections",
+    ),
 }
 
 
@@ -75,7 +93,12 @@ def test_a_downgrade_refuses_to_drop_a_table_that_holds_rows(
     current = harness.alembic(scratch_database, "current")
     assert revision in current.stdout
     # The row is still there.
-    table = statement.split()[2]
+    table = {
+        "0010_ledger": "ledger_accounts",
+        "0011_account_numbers": "account_numbers",
+        "0012_audit_events": "audit_events",
+        "0013_ledger_corrections": "ledger_correction_proposals",
+    }[revision]
     harness.psql(
         migrator,
         "-c",

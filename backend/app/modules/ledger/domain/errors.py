@@ -41,3 +41,21 @@ class AccountMismatch(LedgerError):
     """An account with this identity already exists with a different kind."""
 
     code = "ledger_account_mismatch"
+
+
+class UnknownCorrection(LedgerError):
+    """The correction proposal does not exist, or is not visible to this transaction."""
+
+    code = "ledger_unknown_correction"
+
+
+class CorrectionAlreadyDecided(LedgerError):
+    """The proposal was already approved or rejected."""
+
+    code = "ledger_correction_already_decided"
+
+
+class SecondPersonRequired(LedgerError):
+    """A correction must be decided by a staff member other than the one who proposed it."""
+
+    code = "ledger_second_person_required"

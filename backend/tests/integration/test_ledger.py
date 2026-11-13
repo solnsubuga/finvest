@@ -522,7 +522,8 @@ MUTATIONS = [
     "DELETE FROM ledger_balances",
     "INSERT INTO ledger_balances (account_id, balance_minor) VALUES ('-Nabc0000000000000A1', 5)",
     "TRUNCATE ledger_lines",
-    "TRUNCATE ledger_lines, ledger_journal_entries, ledger_balances, ledger_accounts",
+    "TRUNCATE ledger_lines, ledger_journal_entries, ledger_balances, ledger_accounts, "
+    "ledger_correction_proposals, ledger_correction_decisions",
     "ALTER TABLE ledger_lines DISABLE TRIGGER ALL",
     "DROP TABLE ledger_lines",
 ]
@@ -553,7 +554,8 @@ async def test_application_roles_cannot_change_history(
         "DELETE FROM ledger_balances",
         "TRUNCATE ledger_lines",
         "TRUNCATE ledger_balances",
-        "TRUNCATE ledger_lines, ledger_journal_entries, ledger_balances, ledger_accounts",
+        "TRUNCATE ledger_lines, ledger_journal_entries, ledger_balances, ledger_accounts, "
+        "ledger_correction_proposals, ledger_correction_decisions",
     ],
 )
 async def test_even_the_table_owner_cannot_change_history(
@@ -586,6 +588,10 @@ async def test_application_roles_hold_only_the_documented_privileges(
         ("ledger_accounts", "finvest_worker", "INSERT,SELECT"),
         ("ledger_balances", "finvest_app", "SELECT"),
         ("ledger_balances", "finvest_worker", "SELECT"),
+        ("ledger_correction_decisions", "finvest_app", "INSERT,SELECT"),
+        ("ledger_correction_decisions", "finvest_worker", "SELECT"),
+        ("ledger_correction_proposals", "finvest_app", "INSERT,SELECT"),
+        ("ledger_correction_proposals", "finvest_worker", "SELECT"),
         ("ledger_journal_entries", "finvest_app", "INSERT,SELECT"),
         ("ledger_journal_entries", "finvest_worker", "INSERT,SELECT"),
         ("ledger_lines", "finvest_app", "INSERT,SELECT"),

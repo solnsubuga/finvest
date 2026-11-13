@@ -1,6 +1,6 @@
 # Ledger and audit trail
 
-How the money rules in [rules.md](rules.md) are built. The code is in `backend/app/modules/ledger`, `backend/app/modules/audit`, `backend/app/modules/account_numbers` and `backend/app/shared/money.py`. The database side is migrations 0010 to 0012.
+How the money rules in [rules.md](rules.md) are built. The code is in `backend/app/modules/ledger`, `backend/app/modules/audit`, `backend/app/modules/account_numbers` and `backend/app/shared/money.py`. The database side is migrations 0010 to 0013.
 
 ## Money
 
@@ -40,9 +40,9 @@ These hold even if application code is wrong, because PostgreSQL checks them.
 ### What the database does not enforce
 
 - **Which accounts a command may touch.** Any client or staff transaction can insert lines against any account. The database keeps every entry balanced, every balance at zero or above and every client's view fenced, but it does not stop a faulty command from debiting the wrong client's account. That is the job of the command, and of its tests.
-- **That a reversal is always possible.** A reversal is refused if it would take a balance below zero. A deposit credited by mistake and then invested cannot simply be reversed. The payments module needs a written process for that case before it is built.
+- **That a reversal is always possible.** A reversal is refused if it would take a balance below zero. A deposit credited by mistake and then invested cannot simply be reversed. It is put right with an approved correction, described under [Corrections](#corrections).
 
-Migrations 0010 to 0012 refuse to downgrade while their tables hold any row, so `alembic downgrade` cannot delete the books, the issued numbers or the audit trail.
+Migrations 0010 to 0013 refuse to downgrade while their tables hold any row, so `alembic downgrade` cannot delete the books, the issued numbers or the audit trail.
 
 There is no overdraft switch. If an account ever needs to run below zero, that is a change to the shape of the ledger and goes to the owner first.
 
@@ -79,6 +79,48 @@ async with worker_database.actor_transaction(SYSTEM) as session:
 No other module writes to these tables. A module that needs money moved calls the ledger.
 
 The chart of accounts is not seeded here. Each module that moves money opens the accounts it needs.
+
+### Corrections
+
+A mistake in the books is fixed by a new entry, and a person choosing that entry is a risk of its own. So a correction takes two members of staff. One proposes the entry with a reason. A different one approves or rejects it. Only an approval posts anything, and what it posts is exactly what was proposed.
+
+There are two kinds, and both go through the same two steps:
+
+- **A reversal**, when the money has not moved. The proposal carries no lines of its own. The entry is the exact mirror of the original.
+- **A forward correction**, when the money has moved on and a reversal would overdraw an account. The proposal carries the lines that take the money back from where it sits now. For a deposit credited to the wrong client and then invested, the payments module debits a receivable held against that client and credits the account the money should have reached. The client's investment is not touched. Recovering the receivable, or writing it off, is a later entry. The account codes, the entry types and the recovery policy belong to the payments module.
+
+```python
+from app.modules.ledger import corrections
+
+async with database.actor_transaction(maker) as session:
+    proposal = await corrections.propose_correction(
+        session,
+        maker,
+        clock,
+        corrects_entry_id=mistaken_entry_id,
+        effective_date=today,
+        reason="Credited to the wrong client, bank reference 4471",
+        entry_type="payment.deposit_correction",
+        lines=(debit(receivable_id, amount), credit(unidentified_receipts_id, amount)),
+    )
+
+async with database.actor_transaction(checker) as session:
+    entry = await corrections.approve_correction(session, checker, proposal.id, clock)
+```
+
+`reject_correction` closes a proposal with a reason and posts nothing. `pending_corrections` lists the proposals nobody has decided, oldest first, for the console's review queue. A proposal is decided once. A second decision raises `CorrectionAlreadyDecided`, and deciding your own proposal raises `SecondPersonRequired`. Each step writes an audit event against the resource type `ledger_correction`.
+
+What the database enforces, for every role including the table owner:
+
+| Rule | How |
+| --- | --- |
+| Two different people | A decision whose `decided_by` is the proposer is refused by a trigger. Row policies let only a staff transaction write, and only under its own ID, so one member of staff cannot write the other's row. The worker can read both tables and write neither. |
+| An approval posts what was proposed | An entry with the source type `ledger.correction` is checked at commit against its proposal: the same type, date, currency and lines, an approved decision that points at it, and a reversal only where the proposal said so. Changing a line after the fact is impossible because lines are insert-only. |
+| One decision per proposal | The decision's primary key is the proposal. Two checkers deciding at the same moment produce one decision and one entry. |
+| Nothing is edited | Proposals and decisions are insert-only, like the rest of the ledger. A rejected proposal stays on record. To try again, make a new proposal. |
+| Still within the books | The correction is an ordinary entry. It balances, uses one currency and cannot take any account below zero. If the money has moved again since the proposal, approval fails with `InsufficientFunds`, nothing is decided, and the proposal stays open to be rejected. |
+
+What this does not do: it does not stop a staff command from calling `post_entry` directly with some other source type. The two-person rule covers everything recorded as a correction. Keeping manual adjustments on this path is the job of the commands the console exposes, which must offer no other way to post a manual entry.
 
 ## Account numbers
 
