@@ -21,6 +21,7 @@ Read these before writing code:
 | `apps/client/` | Client app. React Native, Expo, TypeScript. Ships to Android, iPhone and web (app.finvestug.com). |
 | `apps/console/` | Back office console. React, Vite, TypeScript, Tailwind, shadcn (admin.finvestug.com). |
 | `apps/site/` | Public website. Astro (finvestug.com). |
+| `apps/web-e2e/` | Playwright browser tests for the client app and the console on the web. |
 | `packages/tokens/` | Shared design tokens. |
 | `packages/api-client/` | Generated TypeScript types and Zod validators. Never edited by hand. |
 | `infra/` | Terraform for DigitalOcean and Cloudflare. Owned by the infrastructure thread. Do not change it from a feature PR. |
