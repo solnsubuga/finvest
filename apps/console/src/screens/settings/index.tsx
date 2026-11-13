@@ -16,6 +16,9 @@ import {
   type WordingText,
   type WordingsApi,
 } from "./api.ts";
+import { AnnouncementsSection } from "./Announcements.tsx";
+import { notConnectedAnnouncementsApi, type AnnouncementsApi } from "./announcements.ts";
+import { createStubAnnouncementsApi } from "./announcementsStub.ts";
 import { CATEGORIES, CATEGORY_LABELS } from "./labels.ts";
 import { createStubWordingsApi } from "./stub.ts";
 import { WordingPanel, WordingRow } from "./Wordings.tsx";
@@ -26,12 +29,13 @@ type Load = { state: "loading" } | { state: "failed"; message: string } | { stat
 
 interface SettingsScreenProps {
   api: WordingsApi;
+  announcements: AnnouncementsApi;
   directory: Directory;
   /** `wordings.change`: propose and decide changes. The API checks it again. */
   canChange: boolean;
 }
 
-export function SettingsScreen({ api, directory, canChange }: SettingsScreenProps) {
+export function SettingsScreen({ api, announcements, directory, canChange }: SettingsScreenProps) {
   const [load, setLoad] = useState<Load>({ state: "loading" });
   const [selected, setSelected] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -115,6 +119,7 @@ export function SettingsScreen({ api, directory, canChange }: SettingsScreenProp
         <p role="status" className="m-0 text-md text-muted">
           Loading settings
         </p>
+        <AnnouncementsSection api={announcements} directory={directory} canChange={canChange} />
       </>
     );
   }
@@ -135,6 +140,7 @@ export function SettingsScreen({ api, directory, canChange }: SettingsScreenProp
             Try again
           </Button>
         </section>
+        <AnnouncementsSection api={announcements} directory={directory} canChange={canChange} />
       </>
     );
   }
@@ -207,6 +213,7 @@ export function SettingsScreen({ api, directory, canChange }: SettingsScreenProp
           </div>
         )}
       </section>
+      <AnnouncementsSection api={announcements} directory={directory} canChange={canChange} />
     </>
   );
 }
@@ -214,16 +221,28 @@ export function SettingsScreen({ api, directory, canChange }: SettingsScreenProp
 export default function SettingsPage() {
   const { session } = useAuth();
   // Sample messages under `pnpm dev` or a preview build, like sign-in. Otherwise nothing until the API client exists.
-  const [{ api, directory }] = useState<{ api: WordingsApi; directory: Directory }>(() => {
+  const [{ api, announcements, directory }] = useState<{ api: WordingsApi; announcements: AnnouncementsApi; directory: Directory }>(() => {
     if (isStubAuth() && session) {
       const me = { id: session.staffId, name: session.name };
-      // Under the stub, `?sample=offline` shows the screen as if Finvest could not be reached.
-      if (new URLSearchParams(window.location.search).get("sample") === "offline") {
-        return { api: notConnectedWordingsApi, directory: createStubDirectory(me) };
+      // Under the stub, `?sample=offline` shows the screen as if Finvest could not be reached, and `?sample=empty` with no announcements.
+      const sample = new URLSearchParams(window.location.search).get("sample");
+      if (sample === "offline") {
+        return { api: notConnectedWordingsApi, announcements: notConnectedAnnouncementsApi, directory: createStubDirectory(me) };
       }
-      return { api: createStubWordingsApi(me), directory: createStubDirectory(me) };
+      return {
+        api: createStubWordingsApi(me),
+        announcements: createStubAnnouncementsApi(me, Date.now, sample === "empty" ? "empty" : "sample"),
+        directory: createStubDirectory(me),
+      };
     }
-    return { api: notConnectedWordingsApi, directory: emptyDirectory };
+    return { api: notConnectedWordingsApi, announcements: notConnectedAnnouncementsApi, directory: emptyDirectory };
   });
-  return <SettingsScreen api={api} directory={directory} canChange={session ? can(session, "wordings.change") : false} />;
+  return (
+    <SettingsScreen
+      api={api}
+      announcements={announcements}
+      directory={directory}
+      canChange={session ? can(session, "wordings.change") : false}
+    />
+  );
 }
