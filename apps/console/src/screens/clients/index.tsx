@@ -10,13 +10,23 @@ import { ClientsError, clientsErrorMessage, notConnectedClientsApi, type ClientP
 import { createHttpClientsApi } from "./http.ts";
 import { ClientDetails, ClientHeader, INPUT, LockSection } from "./Parts.tsx";
 import { createStubClientsApi } from "./stub.ts";
+import { ClientEmailStatus, SuppressionsSection } from "./Suppressions.tsx";
+import { createHttpSuppressionsApi, notConnectedSuppressionsApi, type SuppressionsApi } from "./suppressions.ts";
+import { createStubSuppressionsApi } from "./suppressionsStub.ts";
 
 const SUMMARY = "Every client, their accounts and their history.";
 
 type Load = { state: "loading" } | { state: "failed"; message: string } | { state: "ready"; page: ClientPage };
 type Search = { state: "idle" } | { state: "searching" } | { state: "none"; query: string } | { state: "failed"; message: string };
 
-export function ClientsScreen({ api }: { api: ClientsApi }) {
+interface ClientsScreenProps {
+  api: ClientsApi;
+  suppressions: SuppressionsApi;
+  /** `email_suppressions.lift`. The API checks it again. */
+  canLift: boolean;
+}
+
+export function ClientsScreen({ api, suppressions, canLift }: ClientsScreenProps) {
   const [params, setParams] = useSearchParams();
   const clientId = params.get("client");
   const [query, setQuery] = useState("");
@@ -79,17 +89,20 @@ export function ClientsScreen({ api }: { api: ClientsApi }) {
         ) : null}
       </form>
       {clientId ? (
-        <ClientView key={clientId} api={api} clientId={clientId} />
+        <ClientView key={clientId} api={api} clientId={clientId} suppressions={suppressions} canLift={canLift} />
       ) : (
-        <p className="m-0 max-w-[720px] rounded-xl border border-border bg-surface p-5 text-md text-muted">
-          Find a client to see their account, what Finvest holds for them, where their payouts go, and to lock or unlock them.
-        </p>
+        <>
+          <p className="m-0 max-w-[720px] rounded-xl border border-border bg-surface p-5 text-md text-muted">
+            Find a client to see their account, what Finvest holds for them, where their payouts go, and to lock or unlock them.
+          </p>
+          <SuppressionsSection api={suppressions} canLift={canLift} />
+        </>
       )}
     </>
   );
 }
 
-function ClientView({ api, clientId }: { api: ClientsApi; clientId: string }) {
+function ClientView({ api, clientId, suppressions, canLift }: { api: ClientsApi; clientId: string; suppressions: SuppressionsApi; canLift: boolean }) {
   const [load, setLoad] = useState<Load>({ state: "loading" });
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -191,6 +204,7 @@ function ClientView({ api, clientId }: { api: ClientsApi; clientId: string }) {
         </p>
       ) : null}
       <ClientHeader page={page} />
+      {page.account.email ? <ClientEmailStatus api={suppressions} email={page.account.email} canLift={canLift} /> : null}
       <ClientDetails page={page} />
       <LockSection page={page} busy={busy} error={error} onPropose={propose} onDecide={decide} />
     </>
@@ -199,18 +213,27 @@ function ClientView({ api, clientId }: { api: ClientsApi; clientId: string }) {
 
 export default function ClientsPage() {
   const { session } = useAuth();
-  const [api] = useState<ClientsApi>(() => {
+  const canLift = session ? can(session, "email_suppressions.lift") : false;
+  const [{ api, suppressions }] = useState<{ api: ClientsApi; suppressions: SuppressionsApi }>(() => {
     if (isStubAuth() && session) {
       // Under the stub, `?sample=offline` shows the screen as if Finvest could not be reached.
-      if (new URLSearchParams(window.location.search).get("sample") === "offline") return notConnectedClientsApi;
-      return createStubClientsApi({ id: session.staffId, name: session.name }, Date.now, {
-        canLock: can(session, "clients.lock"),
-        seesSupport: can(session, "support.view"),
-        seesComplaints: can(session, "complaints.view"),
-      });
+      if (new URLSearchParams(window.location.search).get("sample") === "offline") {
+        return { api: notConnectedClientsApi, suppressions: notConnectedSuppressionsApi };
+      }
+      const me = { id: session.staffId, name: session.name };
+      return {
+        api: createStubClientsApi(me, Date.now, {
+          canLock: can(session, "clients.lock"),
+          seesSupport: can(session, "support.view"),
+          seesComplaints: can(session, "complaints.view"),
+        }),
+        suppressions: createStubSuppressionsApi(me, Date.now, canLift),
+      };
     }
     const base = apiBaseUrl();
-    return base ? createHttpClientsApi(createHttp(base)) : notConnectedClientsApi;
+    if (!base) return { api: notConnectedClientsApi, suppressions: notConnectedSuppressionsApi };
+    const http = createHttp(base);
+    return { api: createHttpClientsApi(http), suppressions: createHttpSuppressionsApi(http) };
   });
-  return <ClientsScreen api={api} />;
+  return <ClientsScreen api={api} suppressions={suppressions} canLift={canLift} />;
 }
