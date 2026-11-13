@@ -22,12 +22,6 @@ export type AccountView = z.infer<typeof AccountView>;
 export const Action = z.enum(["approve", "send_back", "withdraw", "record_result", "confirm_result", "reject_result"]);
 export type Action = z.infer<typeof Action>;
 
-export const AmountOutput = z.object({
-  currency: z.enum(["UGX", "USD"]),
-  minor: z.number().int(),
-});
-export type AmountOutput = z.infer<typeof AmountOutput>;
-
 export const Currency = z.enum(["UGX", "USD"]);
 export type Currency = z.infer<typeof Currency>;
 
@@ -36,6 +30,46 @@ export const AmountOut = z.object({
   minor: z.number().int(),
 });
 export type AmountOut = z.infer<typeof AmountOut>;
+
+export const LotOut = z.object({
+  allocated: AmountOut,
+  cost: AmountOut,
+  custodian_reference: z.string(),
+  face: AmountOut,
+  investments: z.number().int(),
+  lot_id: z.string(),
+  matures_on: z.string(),
+  settled_on: z.string(),
+  unallocated: AmountOut,
+});
+export type LotOut = z.infer<typeof LotOut>;
+
+export const ProductAllocationOut = z.object({
+  allocated: AmountOut,
+  cost_held: AmountOut,
+  covered: AmountOut,
+  investments: z.number().int(),
+  investments_waiting: z.number().int(),
+  lots: z.array(LotOut),
+  owed: AmountOut,
+  product_code: z.string(),
+  unallocated: AmountOut,
+  waiting: AmountOut,
+});
+export type ProductAllocationOut = z.infer<typeof ProductAllocationOut>;
+
+export const AllocationReportOut = z.object({
+  currency: Currency,
+  on: z.string(),
+  products: z.array(ProductAllocationOut),
+});
+export type AllocationReportOut = z.infer<typeof AllocationReportOut>;
+
+export const AmountOutput = z.object({
+  currency: z.enum(["UGX", "USD"]),
+  minor: z.number().int(),
+});
+export type AmountOutput = z.infer<typeof AmountOutput>;
 
 export const AmountView = z.object({
   currency: Currency,
@@ -183,6 +217,15 @@ export const BankTransferPage = z.object({
   next_before: z.string().nullable(),
 });
 export type BankTransferPage = z.infer<typeof BankTransferPage>;
+
+export const BillsOut = z.object({
+  cost: AmountOut,
+  custodian_reference: z.string(),
+  lot_id: z.string(),
+  matures_on: z.string(),
+  product_code: z.string(),
+});
+export type BillsOut = z.infer<typeof BillsOut>;
 
 export const BufferLevel = z.enum(["on_target", "under_target", "below_floor"]);
 export type BufferLevel = z.infer<typeof BufferLevel>;
@@ -823,6 +866,13 @@ export const InterestRunOut = z.object({
   tax_minor: z.number().int(),
 });
 export type InterestRunOut = z.infer<typeof InterestRunOut>;
+
+export const InvestmentBillsOut = z.object({
+  bills: z.array(BillsOut),
+  investment_id: z.string(),
+  total: AmountOut.nullable(),
+});
+export type InvestmentBillsOut = z.infer<typeof InvestmentBillsOut>;
 
 export const InvestmentStatus = z.enum(["awaiting_payment", "active", "cancelled", "matured", "withdrawn", "unwound"]);
 export type InvestmentStatus = z.infer<typeof InvestmentStatus>;
@@ -1891,6 +1941,32 @@ export const operations = {
     idempotent: false,
     status: 200,
     response: StaffComplaint,
+  },
+  "GET /staff/dealing/allocations": {
+    method: "GET",
+    path: "/staff/dealing/allocations",
+    params: z.object({}),
+    query: z.object({
+    currency: Currency.optional(),
+  }),
+    body: null,
+    bodyKind: null,
+    idempotent: false,
+    status: 200,
+    response: AllocationReportOut,
+  },
+  "GET /staff/dealing/allocations/investments/{investment_id}": {
+    method: "GET",
+    path: "/staff/dealing/allocations/investments/{investment_id}",
+    params: z.object({
+    investment_id: z.string(),
+  }),
+    query: z.object({}),
+    body: null,
+    bodyKind: null,
+    idempotent: false,
+    status: 200,
+    response: InvestmentBillsOut,
   },
   "GET /staff/dealing/buffer": {
     method: "GET",
