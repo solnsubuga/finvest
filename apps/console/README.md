@@ -22,15 +22,15 @@ Install once from the repository root with `pnpm install`. Then, from this direc
 
 ## Signing in locally
 
-The backend's sign-in is not built yet, so `pnpm dev` uses sample staff from `src/auth/stub.ts`. Any password works, and the passkey step is simulated.
+The backend's sign-in is not built yet, so `pnpm dev` uses sample staff from `src/auth/stub.ts`. Any password works. The passkey step is simulated, and any six digits except `000000` work as an authenticator code.
 
-| Email | Role |
-| --- | --- |
-| admin@finvest.test | Admin |
-| operations@finvest.test | Operations |
-| finance@finvest.test | Finance |
-| compliance@finvest.test | Compliance |
-| support@finvest.test | Support |
+| Email | Role | Second step set up |
+| --- | --- | --- |
+| admin@finvest.test | Admin | Passkey and authenticator app |
+| operations@finvest.test | Operations | Passkey and authenticator app |
+| finance@finvest.test | Finance | Authenticator app only |
+| compliance@finvest.test | Compliance | Passkey only |
+| support@finvest.test | Support | Passkey and authenticator app |
 
 The stub is not security. It runs only under `pnpm dev`, or in a build made with `VITE_STUB_API=true`. A normal production build has no working sign-in until the real API client is wired in.
 
@@ -66,7 +66,7 @@ The role to screen table in `src/auth/stub.ts` is a proposal, read from the role
 
 ## Notes
 
-- Staff sign in with a password and a passkey. There is no SMS option.
+- Staff sign in with a password and then a passkey or an authenticator app code, whichever they have set up. There is no SMS option.
 - Permissions are by role. Sensitive actions are maker and checker: one person proposes, another approves.
 - Every staff action is written to the audit trail with a reason.
 - The console is never linked from the public website and opens only for staff on allowed networks.

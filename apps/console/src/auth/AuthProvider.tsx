@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
-import type { AuthApi, PasskeyChallenge } from "./api.ts";
+import type { AuthApi, SecondStepAnswer, SignInChallenge } from "./api.ts";
 import { AuthContext, type AuthState } from "./context.ts";
 import type { StaffSession } from "./types.ts";
 
@@ -33,8 +33,8 @@ export function AuthProvider({ api, children }: AuthProviderProps) {
   );
 
   const finishSignIn = useCallback(
-    async (challenge: PasskeyChallenge) => {
-      setSession(await api.finishSignIn(challenge));
+    async (challenge: SignInChallenge, answer: SecondStepAnswer) => {
+      setSession(await api.finishSignIn(challenge, answer));
     },
     [api],
   );

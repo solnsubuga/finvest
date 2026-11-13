@@ -73,8 +73,8 @@ describe("console shell", () => {
     let failures = 1;
     const api: AuthApi = {
       ...stub,
-      finishSignIn: (challenge) =>
-        failures-- > 0 ? Promise.reject(new AuthError("passkey_failed")) : stub.finishSignIn(challenge),
+      finishSignIn: (challenge, answer) =>
+        failures-- > 0 ? Promise.reject(new AuthError("passkey_failed")) : stub.finishSignIn(challenge, answer),
     };
     const { user } = renderApp("/sign-in", api);
     await signIn(user, "admin@finvest.test");
@@ -82,6 +82,55 @@ describe("console shell", () => {
     expect(await screen.findByRole("alert")).toHaveTextContent("We could not confirm your passkey.");
     await user.click(screen.getByRole("button", { name: "Use passkey" }));
     expect(await screen.findByRole("heading", { level: 1, name: "Overview" })).toBeInTheDocument();
+  });
+
+  it("signs in with an authenticator code in place of a passkey", async () => {
+    const { user } = renderApp("/sign-in");
+    await user.type(await screen.findByLabelText("Work email"), "admin@finvest.test");
+    await user.type(screen.getByLabelText("Password"), "not-a-real-password");
+    await user.click(screen.getByRole("button", { name: "Continue" }));
+    await user.click(await screen.findByRole("button", { name: "Use a code from your authenticator app" }));
+
+    await user.type(screen.getByLabelText("6-digit code"), "123456");
+    await user.click(screen.getByRole("button", { name: "Sign in" }));
+    expect(await screen.findByRole("heading", { level: 1, name: "Overview" })).toBeInTheDocument();
+  });
+
+  it("goes straight to the code when the person has no passkey, and offers no passkey", async () => {
+    const { user } = renderApp("/sign-in");
+    await user.type(await screen.findByLabelText("Work email"), "finance@finvest.test");
+    await user.type(screen.getByLabelText("Password"), "not-a-real-password");
+    await user.click(screen.getByRole("button", { name: "Continue" }));
+
+    expect(await screen.findByLabelText("6-digit code")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /passkey/i })).not.toBeInTheDocument();
+  });
+
+  it("offers no code to someone who only has a passkey", async () => {
+    const { user } = renderApp("/sign-in");
+    await user.type(await screen.findByLabelText("Work email"), "compliance@finvest.test");
+    await user.type(screen.getByLabelText("Password"), "not-a-real-password");
+    await user.click(screen.getByRole("button", { name: "Continue" }));
+
+    expect(await screen.findByRole("button", { name: "Use passkey" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /authenticator/i })).not.toBeInTheDocument();
+  });
+
+  it("shows an error for a wrong or short code and does not sign in", async () => {
+    const { user } = renderApp("/sign-in");
+    await user.type(await screen.findByLabelText("Work email"), "finance@finvest.test");
+    await user.type(screen.getByLabelText("Password"), "not-a-real-password");
+    await user.click(screen.getByRole("button", { name: "Continue" }));
+
+    await user.type(await screen.findByLabelText("6-digit code"), "123");
+    await user.click(screen.getByRole("button", { name: "Sign in" }));
+    expect(screen.getByRole("alert")).toHaveTextContent("Enter the 6-digit code from your authenticator app.");
+
+    await user.clear(screen.getByLabelText("6-digit code"));
+    await user.type(screen.getByLabelText("6-digit code"), "000000");
+    await user.click(screen.getByRole("button", { name: "Sign in" }));
+    expect(await screen.findByRole("alert")).toHaveTextContent("That code is not right.");
+    expect(screen.queryByRole("navigation", { name: "Console" })).not.toBeInTheDocument();
   });
 
   it("shows the menu for the person's role only", async () => {

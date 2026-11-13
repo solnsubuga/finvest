@@ -48,7 +48,7 @@ Each can be restarted or scaled alone without splitting the code.
 
 | Module | Owns |
 | --- | --- |
-| Identity and auth | Password plus a second step (passkey, or a code as backup), app PIN for unlocking a trusted phone, devices, sessions, staff sign-in with password and passkey, roles and permissions |
+| Identity and auth | Password plus a second step (passkey, or a code as backup), app PIN for unlocking a trusted phone, devices, sessions, staff sign-in with password and a passkey or authenticator app code, roles and permissions |
 | Clients and KYC | Client profiles, documents, identity check results, risk answers, next of kin |
 | Ledger | Accounts, journal entries, balances. The only place money moves. |
 | Payments | Deposits and payouts through ioTec Pay (MTN and Airtel) and the bank. Talks to providers and posts to the ledger. |

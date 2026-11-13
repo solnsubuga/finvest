@@ -1,11 +1,12 @@
-import { AuthError, type AuthApi, type PasskeyChallenge } from "./api.ts";
+import { AuthError, type AuthApi, type SecondStepMethod, type SignInChallenge } from "./api.ts";
 import { PERMISSIONS, type Permission, type Role, type StaffSession } from "./types.ts";
 
 /**
  * Sample staff for local work, until the backend's sign-in lands.
  *
  * This is not security. It holds no passwords and checks none, it never calls
- * WebAuthn, and it is only used under `pnpm dev` or when VITE_STUB_API is
+ * WebAuthn, it takes any six digits but 000000 as an authenticator code, and
+ * it is only used under `pnpm dev` or when VITE_STUB_API is
  * "true". See createAuthApi in ./index.ts.
  */
 
@@ -63,15 +64,22 @@ interface StubStaff {
   staffId: string;
   name: string;
   role: Role;
+  /** The second steps this person has set up. Staff choose their own. */
+  methods: readonly SecondStepMethod[];
 }
+
+const BOTH: readonly SecondStepMethod[] = ["passkey", "authenticator"];
+
+/** The one code the stub refuses, so the error state can be seen. */
+export const STUB_WRONG_CODE = "000000";
 
 /** Names are the sample people drawn on the canvas. The .test domain is reserved and cannot receive mail. */
 export const STUB_STAFF: readonly StubStaff[] = [
-  { email: "admin@finvest.test", staffId: "stub-admin", name: "Solomon N.", role: "admin" },
-  { email: "operations@finvest.test", staffId: "stub-operations", name: "Grace Auma", role: "operations" },
-  { email: "finance@finvest.test", staffId: "stub-finance", name: "Daniel Opio", role: "finance" },
-  { email: "compliance@finvest.test", staffId: "stub-compliance", name: "Miriam Atim", role: "compliance" },
-  { email: "support@finvest.test", staffId: "stub-support", name: "Tom Byaruhanga", role: "support" },
+  { email: "admin@finvest.test", staffId: "stub-admin", name: "Solomon N.", role: "admin", methods: BOTH },
+  { email: "operations@finvest.test", staffId: "stub-operations", name: "Grace Auma", role: "operations", methods: BOTH },
+  { email: "finance@finvest.test", staffId: "stub-finance", name: "Daniel Opio", role: "finance", methods: ["authenticator"] },
+  { email: "compliance@finvest.test", staffId: "stub-compliance", name: "Miriam Atim", role: "compliance", methods: ["passkey"] },
+  { email: "support@finvest.test", staffId: "stub-support", name: "Tom Byaruhanga", role: "support", methods: BOTH },
 ];
 
 const STORAGE_KEY = "finvest.console.stub-session";
@@ -101,15 +109,26 @@ export function createStubAuthApi(storage: Storage = window.sessionStorage): Aut
       if (!staff || password.length === 0) {
         return Promise.reject(new AuthError("invalid_credentials"));
       }
-      const challenge: PasskeyChallenge = { challengeId: `stub-${nextChallenge++}` };
+      const challenge: SignInChallenge = {
+        challengeId: `stub-${nextChallenge++}`,
+        methods: staff.methods,
+      };
       pending.set(challenge.challengeId, staff);
       return Promise.resolve(challenge);
     },
 
-    finishSignIn(challenge) {
+    finishSignIn(challenge, answer) {
       const staff = pending.get(challenge.challengeId);
-      if (!staff) {
-        return Promise.reject(new AuthError("passkey_failed"));
+      if (!staff || !staff.methods.includes(answer.method)) {
+        return Promise.reject(
+          new AuthError(answer.method === "passkey" ? "passkey_failed" : "code_invalid"),
+        );
+      }
+      if (answer.method === "authenticator") {
+        // A wrong code leaves the challenge open so the person can try again.
+        if (!/^\d{6}$/.test(answer.code) || answer.code === STUB_WRONG_CODE) {
+          return Promise.reject(new AuthError("code_invalid"));
+        }
       }
       pending.delete(challenge.challengeId);
       storage.setItem(STORAGE_KEY, staff.staffId);

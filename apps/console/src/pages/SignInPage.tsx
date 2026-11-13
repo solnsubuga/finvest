@@ -1,6 +1,6 @@
 import { useId, useState, type FormEvent } from "react";
 import { Navigate, useLocation } from "react-router";
-import { authErrorMessage, type PasskeyChallenge } from "@/auth/api.ts";
+import { authErrorMessage, type SecondStepMethod, type SignInChallenge } from "@/auth/api.ts";
 import { useAuth } from "@/auth/context.ts";
 import { LogoMark } from "@/components/Logo.tsx";
 import { Button } from "@/components/ui/button.tsx";
@@ -22,10 +22,13 @@ export function SignInPage() {
   const emailId = useId();
   const passwordId = useId();
   const errorId = useId();
+  const codeId = useId();
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [challenge, setChallenge] = useState<PasskeyChallenge | null>(null);
+  const [challenge, setChallenge] = useState<SignInChallenge | null>(null);
+  const [method, setMethod] = useState<SecondStepMethod>("passkey");
+  const [code, setCode] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -42,7 +45,11 @@ export function SignInPage() {
     setBusy(true);
     setError(null);
     try {
-      setChallenge(await startSignIn(email, password));
+      const next = await startSignIn(email, password);
+      setChallenge(next);
+      // Offer the passkey first when the person has one.
+      setMethod(next.methods.includes("passkey") ? "passkey" : "authenticator");
+      setCode("");
       setPassword("");
     } catch (caught) {
       setError(authErrorMessage(caught));
@@ -56,11 +63,35 @@ export function SignInPage() {
     setBusy(true);
     setError(null);
     try {
-      await finishSignIn(challenge);
+      await finishSignIn(challenge, { method: "passkey" });
     } catch (caught) {
       setError(authErrorMessage(caught));
       setBusy(false);
     }
+  }
+
+  async function submitCode(event: FormEvent) {
+    event.preventDefault();
+    if (!challenge) return;
+    if (!/^\d{6}$/.test(code)) {
+      setError("Enter the 6-digit code from your authenticator app.");
+      return;
+    }
+    setBusy(true);
+    setError(null);
+    try {
+      await finishSignIn(challenge, { method: "authenticator", code });
+    } catch (caught) {
+      setError(authErrorMessage(caught));
+      setCode("");
+      setBusy(false);
+    }
+  }
+
+  function switchMethod(next: SecondStepMethod) {
+    setMethod(next);
+    setCode("");
+    setError(null);
   }
 
   function startAgain() {
@@ -128,8 +159,8 @@ export function SignInPage() {
                   <KeyIcon />
                 </span>
                 <p className="m-0 text-sm leading-[1.45]">
-                  <strong>Two steps, every time.</strong> After your password we confirm it is you with your passkey.
-                  Staff cannot sign in with a texted code.
+                  <strong>Two steps, every time.</strong> After your password we confirm it is you with your passkey
+                  or a code from your authenticator app. Staff cannot sign in with a texted code.
                 </p>
               </div>
 
@@ -146,21 +177,59 @@ export function SignInPage() {
               <h1 className="mt-2 mb-0 text-4xl leading-[1.1] font-extrabold tracking-[-0.8px]">
                 Confirm it is you
               </h1>
-              <p className="mt-2.5 mb-0 text-lg leading-normal text-muted">
-                Use the passkey on this device or your security key. Your browser will ask for your fingerprint, face
-                or device PIN.
-              </p>
 
-              {error ? <ErrorNote id={errorId} message={error} /> : null}
+              {method === "passkey" ? (
+                <>
+                  <p className="mt-2.5 mb-0 text-lg leading-normal text-muted">
+                    Use the passkey on this device or your security key. Your browser will ask for your fingerprint,
+                    face or device PIN.
+                  </p>
+                  {error ? <ErrorNote id={errorId} message={error} /> : null}
+                  <Button size="lg" disabled={busy} onClick={() => void confirmPasskey()} className="mt-6">
+                    <KeyIcon />
+                    {busy ? "Waiting for your passkey" : "Use passkey"}
+                  </Button>
+                </>
+              ) : (
+                <form onSubmit={(event) => void submitCode(event)} noValidate className="flex flex-col">
+                  <p className="mt-2.5 mb-0 text-lg leading-normal text-muted">
+                    Open your authenticator app and enter the 6-digit code for Finvest.
+                  </p>
+                  <div className="mt-5 flex flex-col gap-1.5">
+                    <Label htmlFor={codeId}>6-digit code</Label>
+                    <Input
+                      id={codeId}
+                      inputMode="numeric"
+                      autoComplete="one-time-code"
+                      maxLength={6}
+                      autoFocus
+                      value={code}
+                      onChange={(event) => setCode(event.target.value.replace(/\D/g, ""))}
+                      aria-invalid={error ? true : undefined}
+                      aria-describedby={error ? errorId : undefined}
+                      className="text-2xl tracking-[0.3em] tabular-nums"
+                    />
+                  </div>
+                  {error ? <ErrorNote id={errorId} message={error} /> : null}
+                  <Button type="submit" size="lg" disabled={busy} className="mt-6">
+                    {busy ? "Checking" : "Sign in"}
+                  </Button>
+                </form>
+              )}
 
-              <Button size="lg" disabled={busy} onClick={() => void confirmPasskey()} className="mt-6">
-                <KeyIcon />
-                {busy ? "Waiting for your passkey" : "Use passkey"}
-              </Button>
+              {challenge.methods.length > 1 ? (
+                <button
+                  type="button"
+                  onClick={() => switchMethod(method === "passkey" ? "authenticator" : "passkey")}
+                  className="mt-2 h-11 cursor-pointer self-center text-md font-semibold text-ink underline"
+                >
+                  {method === "passkey" ? "Use a code from your authenticator app" : "Use your passkey"}
+                </button>
+              ) : null}
               <button
                 type="button"
                 onClick={startAgain}
-                className="mt-2 h-11 cursor-pointer self-center text-md font-semibold text-ink underline"
+                className="h-11 cursor-pointer self-center text-md font-semibold text-ink underline"
               >
                 Sign in as someone else
               </button>
