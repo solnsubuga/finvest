@@ -86,6 +86,19 @@ Security alerts cannot be silenced. A client can change their channels, but SMS 
 
 SMS is on by default only for money and security, because each text is paid for.
 
+## Email delivery events
+
+Resend reports what happened to each email (sent, delayed, delivered, failed, bounced, complained). Its webhooks reach us through the shared router at hooks.fidiba.com, which routes each event by the tag every Resend email carries: `fidiba_environment`, set from `FINVEST_EMAIL_FIDIBA_ENVIRONMENT` on the worker (`app_finvest_prod` in production). Without the variable, mail still sends but its events are not routed back.
+
+The router posts each event, unchanged, to `POST /webhooks/resend` on the API (`https://api.finvestug.com/webhooks/resend` in production):
+
+1. The route checks the Svix signature (`svix-id`, `svix-timestamp`, `svix-signature`) with the hook secret from `RESEND_HOOK_SECRET`, the router's `whsec_...` secret, not the one in Resend's dashboard. A missing or wrong signature, or one more than five minutes old, gets 401. With no secret set, the route answers 404.
+2. It saves the event in `notification_email_events` under its `svix-id` and queues `notifications.email_event`, in one transaction, then answers 204. A retry of the same event saves nothing and queues nothing. Types we do not act on (opens, clicks, contact and domain events) get 204 and are dropped. A signed body we cannot read gets 422.
+3. The worker sets `delivery` and `delivery_at` on the message with that Resend id. Delivery only moves forward: a late `email.sent` never undoes `email.delivered`. If no message has that id yet, because the send's result is not saved yet, the job retries for ten minutes and then keeps the event as unmatched.
+4. A bounce Resend does not call `Transient`, and any spam complaint, adds the address to `notification_email_suppressions`. From then on `notifications.send` does not email that address: the message ends `failed` with `failure_code = 'suppressed'`.
+
+Only facts are kept. Each address is stored as the sha256 of its lower-cased form, never in the clear, and the subject and the rest of the body are dropped on arrival. The API can record an event and cannot read one back. Nothing lifts a suppression yet; when an address needs it, that is a console action still to build.
+
 ## Words
 
 Each event has a title and a body, used in the app, in a push notification and in an email, and a shorter text for SMS. The built-in words are in `domain/wording.py`.
@@ -115,3 +128,4 @@ An announcement carries the words staff wrote when sending it, so it has no word
 | `GET /staff/notification-wordings` | Staff with `settings.view` | Every message, its words, a preview with sample values, and any change waiting |
 | `POST /staff/notification-wordings/{event}/proposals` | Staff with `wordings.change` | Proposes new words, with a reason |
 | `POST /staff/notification-wordings/proposals/{id}/decision` | Staff with `wordings.change` | `approved` or `rejected` by someone else, `withdrawn` by the proposer |
+| `POST /webhooks/resend` | The hooks.fidiba.com router, by Svix signature | One Resend delivery event. See "Email delivery events". |

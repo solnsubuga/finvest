@@ -22,6 +22,7 @@ from app.modules.kyc.jobs import ProviderJobs, sweep_unanswered
 from app.modules.kyc.service import SWEEP_UNANSWERED
 from app.modules.kyc.settings import KycSettings
 from app.modules.notifications import jobs as notification_jobs
+from app.modules.notifications.email_delivery import DeliveryEventJobs
 from app.modules.payments.bank_transfers import BankTransferJobs
 from app.modules.payments.jobs import DepositJobs
 from app.modules.payments.settings import PaymentsSettings
@@ -63,6 +64,7 @@ def handlers(database: Database, clock: Clock) -> dict[str, JobHandler | Handler
             database, clock, EmailSettings().transport(), SmsSettings().transport()
         )
     )
+    kinds.update(DeliveryEventJobs(database, clock).handlers())
     return kinds
 
 
