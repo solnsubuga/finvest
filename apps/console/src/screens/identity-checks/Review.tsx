@@ -1,4 +1,4 @@
-import { useId, useState, type FormEvent, type ReactNode } from "react";
+import { useEffect, useId, useRef, useState, type FormEvent, type ReactNode } from "react";
 import { Button } from "@/components/ui/button.tsx";
 import { Input } from "@/components/ui/input.tsx";
 import { Label } from "@/components/ui/label.tsx";
@@ -31,6 +31,8 @@ interface ReviewProps {
   onDecide: (input: DecisionInput) => void;
   /** Reads the whole document number. Each call is an audit event. */
   onShowNumber: () => Promise<string>;
+  /** Whether this person holds `identity_checks.review`. Without it they only look. */
+  canDecide?: boolean;
 }
 
 const MAX_MESSAGE = 300;
@@ -67,7 +69,7 @@ function problems(input: DecisionInput): FieldErrors {
 
 const NOT_GIVEN = "Not given yet";
 
-export function Review({ check, busy, error, onDecide, onShowNumber }: ReviewProps) {
+export function Review({ check, busy, error, onDecide, onShowNumber, canDecide = true }: ReviewProps) {
   const fullName = check.surname && check.givenNames ? `${check.surname} ${check.givenNames}` : null;
   const flag = flagLabel(check.reviewFlags);
   // The whole number, once asked for. It is kept only while this check is open.
@@ -111,7 +113,7 @@ export function Review({ check, busy, error, onDecide, onShowNumber }: ReviewPro
             >
               {photo.url ? (
                 <a href={photo.url} target="_blank" rel="noreferrer" className="block size-full">
-                  <img src={photo.url} alt={label} className="size-full object-cover" />
+                  <img src={photo.url} alt={label} referrerPolicy="no-referrer" className="size-full object-cover" />
                 </a>
               ) : (
                 <figcaption>{label}</figcaption>
@@ -177,8 +179,13 @@ export function Review({ check, busy, error, onDecide, onShowNumber }: ReviewPro
       </div>
 
       <Outcome check={check} />
-      {check.allowed.length > 0 ? (
+      {check.allowed.length > 0 && canDecide ? (
         <DecisionForm key={`${check.id}:${check.status}`} check={check} busy={busy} error={error} onDecide={onDecide} />
+      ) : check.allowed.length > 0 ? (
+        <p className="m-0 border-t border-divider pt-4 text-md leading-normal text-muted">
+          You can look at this check. Deciding it needs the identity check review permission, held by Admin, Operations
+          and Compliance.
+        </p>
       ) : null}
     </article>
   );
@@ -247,13 +254,18 @@ function Outcome({ check }: { check: CheckDetail }) {
   );
 }
 
-function DecisionForm({ check, busy, error, onDecide }: Omit<ReviewProps, "onShowNumber">) {
+function DecisionForm({ check, busy, error, onDecide }: Omit<ReviewProps, "onShowNumber" | "canDecide">) {
   const ids = useId();
   const [reason, setReason] = useState("");
   const [clientMessage, setClientMessage] = useState("");
   const [photos, setPhotos] = useState<readonly PhotoKind[]>([]);
   const [errors, setErrors] = useState<FieldErrors>({});
   const [confirming, setConfirming] = useState<Decision | null>(null);
+  const confirmButton = useRef<HTMLButtonElement>(null);
+  // Keyboard and screen reader users land on the question, not on a button that just vanished.
+  useEffect(() => {
+    if (confirming) confirmButton.current?.focus();
+  }, [confirming]);
 
   function attempt(decision: Decision, confirmed = false) {
     const input = { decision, reason: reason.trim(), clientMessage: clientMessage.trim(), photos };
@@ -350,7 +362,7 @@ function DecisionForm({ check, busy, error, onDecide }: Omit<ReviewProps, "onSho
         <div role="alertdialog" aria-label="Confirm" className="flex flex-col gap-3 rounded-md bg-warning-surface p-3.5">
           <p className="m-0 text-md font-semibold text-warning-text">{confirmation.text}</p>
           <div className="flex flex-wrap gap-2.5">
-            <Button disabled={busy} onClick={() => attempt(confirming, true)}>
+            <Button ref={confirmButton} disabled={busy} onClick={() => attempt(confirming, true)}>
               {busy ? "Saving" : confirmation.confirm}
             </Button>
             <Button variant="secondary" disabled={busy} onClick={() => setConfirming(null)}>

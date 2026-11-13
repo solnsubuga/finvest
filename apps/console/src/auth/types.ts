@@ -74,6 +74,8 @@ export const ACTION_PERMISSIONS = [
   "email_suppressions.lift",
   // Preparing, approving, sending back or withdrawing a dealing order, and recording, confirming or rejecting its result.
   "dealing_orders.change",
+  // Approving, rejecting, asking for new photos or escalating an identity check. One person decides.
+  "identity_checks.review",
 ] as const;
 
 export const PERMISSIONS = [...SCREEN_PERMISSIONS, ...ACTION_PERMISSIONS] as const;
