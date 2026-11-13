@@ -1048,6 +1048,44 @@
         "title": "CheckStatus",
         "type": "string"
       },
+      "ClaimComplete": {
+        "additionalProperties": false,
+        "properties": {
+          "challenge_id": {
+            "maxLength": 20,
+            "minLength": 20,
+            "pattern": "^[-0-9A-Z_a-z]{20}$",
+            "title": "Challenge Id",
+            "type": "string"
+          },
+          "code": {
+            "maxLength": 7,
+            "minLength": 6,
+            "title": "Code",
+            "type": "string"
+          },
+          "password": {
+            "maxLength": 1024,
+            "minLength": 1,
+            "title": "Password",
+            "type": "string"
+          },
+          "token": {
+            "maxLength": 128,
+            "minLength": 1,
+            "title": "Token",
+            "type": "string"
+          }
+        },
+        "required": [
+          "token",
+          "challenge_id",
+          "code",
+          "password"
+        ],
+        "title": "ClaimComplete",
+        "type": "object"
+      },
       "ClaimProgressView": {
         "additionalProperties": false,
         "properties": {
@@ -1081,6 +1119,76 @@
         ],
         "title": "ClaimProgressView",
         "type": "object"
+      },
+      "ClaimStart": {
+        "additionalProperties": false,
+        "properties": {
+          "token": {
+            "maxLength": 128,
+            "minLength": 1,
+            "title": "Token",
+            "type": "string"
+          }
+        },
+        "required": [
+          "token"
+        ],
+        "title": "ClaimStart",
+        "type": "object"
+      },
+      "ClaimStarted": {
+        "additionalProperties": false,
+        "description": "A code was texted to the phone on file for the account the link belongs to.",
+        "properties": {
+          "challenge_id": {
+            "maxLength": 20,
+            "minLength": 20,
+            "pattern": "^[-0-9A-Z_a-z]{20}$",
+            "title": "Challenge Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "challenge_id"
+        ],
+        "title": "ClaimStarted",
+        "type": "object"
+      },
+      "ClaimStateView": {
+        "additionalProperties": false,
+        "description": "Where the signed-in client is in claiming their account. Nothing from Finvest 1.0.",
+        "properties": {
+          "identity_step": {
+            "$ref": "#/components/schemas/IdentityStep"
+          },
+          "problem_reported": {
+            "title": "Problem Reported",
+            "type": "boolean"
+          },
+          "status": {
+            "$ref": "#/components/schemas/ClaimStatus"
+          }
+        },
+        "required": [
+          "status",
+          "identity_step",
+          "problem_reported"
+        ],
+        "title": "ClaimStateView",
+        "type": "object"
+      },
+      "ClaimStatus": {
+        "enum": [
+          "not_invited",
+          "invited",
+          "signed_in",
+          "identity_submitted",
+          "identity_confirmed",
+          "confirmed",
+          "problem_reported"
+        ],
+        "title": "ClaimStatus",
+        "type": "string"
       },
       "ClientCardView": {
         "additionalProperties": false,
@@ -4086,6 +4194,14 @@
         "title": "IdentityCheckView",
         "type": "object"
       },
+      "IdentityStep": {
+        "enum": [
+          "selfie",
+          "full_id_check"
+        ],
+        "title": "IdentityStep",
+        "type": "string"
+      },
       "Inbox": {
         "additionalProperties": false,
         "properties": {
@@ -6657,6 +6773,22 @@
           "categories"
         ],
         "title": "Preferences",
+        "type": "object"
+      },
+      "ProblemReport": {
+        "additionalProperties": false,
+        "properties": {
+          "description": {
+            "maxLength": 1000,
+            "minLength": 1,
+            "title": "Description",
+            "type": "string"
+          }
+        },
+        "required": [
+          "description"
+        ],
+        "title": "ProblemReport",
         "type": "object"
       },
       "ProblemView": {
@@ -12318,6 +12450,324 @@
         "summary": "Stop Plan",
         "tags": [
           "autoinvest"
+        ]
+      }
+    },
+    "/client/claim": {
+      "get": {
+        "description": "The signed-in client's claim. `not_found` for a client who signed up in Finvest 2.0.",
+        "operationId": "my_claim_client_claim_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ClaimStateView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "410": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Gone"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          }
+        },
+        "summary": "My Claim",
+        "tags": [
+          "account claim"
+        ]
+      }
+    },
+    "/client/claim/complete": {
+      "post": {
+        "description": "The texted code and a new password. The account becomes the client's and is signed in.\n\nThe link is checked again first, so one that expired or was replaced since `start` is\nrefused before anything changes.",
+        "operationId": "claim_complete_client_claim_complete_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ClaimComplete"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ClientSignedIn"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "410": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Gone"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          }
+        },
+        "summary": "Claim Complete",
+        "tags": [
+          "account claim"
+        ]
+      }
+    },
+    "/client/claim/problem": {
+      "post": {
+        "description": "The client says something carried over is wrong. Staff look into it.",
+        "operationId": "report_problem_client_claim_problem_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ProblemReport"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ClaimStateView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "410": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Gone"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          }
+        },
+        "summary": "Report Problem",
+        "tags": [
+          "account claim"
+        ]
+      }
+    },
+    "/client/claim/start": {
+      "post": {
+        "description": "Open the link and text a code to the phone on file. Nothing is changed yet.",
+        "operationId": "claim_start_client_claim_start_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ClaimStart"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ClaimStarted"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "410": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Gone"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          }
+        },
+        "summary": "Claim Start",
+        "tags": [
+          "account claim"
         ]
       }
     },

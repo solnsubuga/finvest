@@ -66,6 +66,37 @@ export type CategoryChannels = z.infer<typeof CategoryChannels>;
 export const CheckStatus = z.enum(["draft", "submitted", "needs_review", "with_compliance", "awaiting_client", "approved", "rejected"]);
 export type CheckStatus = z.infer<typeof CheckStatus>;
 
+export const ClaimComplete = z.object({
+  challenge_id: z.string(),
+  code: z.string(),
+  password: z.string(),
+  token: z.string(),
+});
+export type ClaimComplete = z.infer<typeof ClaimComplete>;
+
+export const ClaimStart = z.object({
+  token: z.string(),
+});
+export type ClaimStart = z.infer<typeof ClaimStart>;
+
+export const ClaimStarted = z.object({
+  challenge_id: z.string(),
+});
+export type ClaimStarted = z.infer<typeof ClaimStarted>;
+
+export const ClaimStatus = z.enum(["not_invited", "invited", "signed_in", "identity_submitted", "identity_confirmed", "confirmed", "problem_reported"]);
+export type ClaimStatus = z.infer<typeof ClaimStatus>;
+
+export const IdentityStep = z.enum(["selfie", "full_id_check"]);
+export type IdentityStep = z.infer<typeof IdentityStep>;
+
+export const ClaimStateView = z.object({
+  identity_step: IdentityStep,
+  problem_reported: z.boolean(),
+  status: ClaimStatus,
+});
+export type ClaimStateView = z.infer<typeof ClaimStateView>;
+
 export const ConversationItem = z.object({
   created_at: z.string(),
   id: z.string(),
@@ -725,6 +756,11 @@ export const Preferences = z.object({
 });
 export type Preferences = z.infer<typeof Preferences>;
 
+export const ProblemReport = z.object({
+  description: z.string(),
+});
+export type ProblemReport = z.infer<typeof ProblemReport>;
+
 export const ProductKind = z.enum(["treasury_bill", "fixed_income"]);
 export type ProductKind = z.infer<typeof ProductKind>;
 
@@ -996,6 +1032,50 @@ export const operations = {
     idempotent: false,
     status: 200,
     response: AutoinvestApiPlanView,
+  },
+  "GET /client/claim": {
+    method: "GET",
+    path: "/client/claim",
+    params: z.object({}),
+    query: z.object({}),
+    body: null,
+    bodyKind: null,
+    idempotent: false,
+    status: 200,
+    response: ClaimStateView,
+  },
+  "POST /client/claim/complete": {
+    method: "POST",
+    path: "/client/claim/complete",
+    params: z.object({}),
+    query: z.object({}),
+    body: ClaimComplete,
+    bodyKind: "json",
+    idempotent: false,
+    status: 200,
+    response: ClientSignedIn,
+  },
+  "POST /client/claim/problem": {
+    method: "POST",
+    path: "/client/claim/problem",
+    params: z.object({}),
+    query: z.object({}),
+    body: ProblemReport,
+    bodyKind: "json",
+    idempotent: false,
+    status: 200,
+    response: ClaimStateView,
+  },
+  "POST /client/claim/start": {
+    method: "POST",
+    path: "/client/claim/start",
+    params: z.object({}),
+    query: z.object({}),
+    body: ClaimStart,
+    bodyKind: "json",
+    idempotent: false,
+    status: 200,
+    response: ClaimStarted,
   },
   "GET /client/complaints": {
     method: "GET",
