@@ -103,6 +103,7 @@ A running log. Add a row when a decision is made, and move an open question up w
 | 2026-11-13 | Decided for now, by the payouts and reconciliation thread: a fee the provider keeps on a sweep between pots is booked, when a second person approves the transfer, to an expense account named per provider, `fees.provider.iotec` for ioTec. A transfer that leaves the trust bank account cannot carry a fee yet, because no bank charges account is agreed. See [reconciliation.md](reconciliation.md#transfers-between-pots). |
 | 2026-11-13 | The external penetration test runs on staging, switched on for the test weeks only and off again afterwards, so the testers' accounts, payments and ledger entries never land in production's ledger. Owner's choice on a decision card in the launch readiness thread, over testing production before any client data. See [security.md](security.md). |
 | 2026-11-13 | Decided for now, by the console admin thread: reading and exporting the audit trail needs a new permission, `audit.view`, held by admin and compliance only. Operations and finance keep `reports.view` for reports but do not see the trail. Exports are capped at 10,000 events and each export is recorded on the trail. The owner can change who holds it here, in `permissions.py` and in the console's table. |
+| 2026-11-13 | Closing a complaint takes two people: one proposes the outcome and a different one confirms it, and whoever logged the complaint never confirms it. Proposing needs `complaints.manage`, so support can propose; confirming needs `complaints.close`. From the owner's rule that staff operations that can be maker and checker are. |
 
 ## Open
 
@@ -157,7 +158,6 @@ A running log. Add a row when a decision is made, and move an open question up w
 | Investing: tax on interest is recorded as owed to URA each day as interest is earned. If URA treats it as due only when interest is paid, the liability should move at payment instead. | Owner, counsel |
 | Complaints: how many days does the regulator give Finvest to answer a complaint, and must public holidays be left out? Built: 5 working days, Monday to Friday. | Counsel |
 | Complaints: does the regulator need a periodic complaints return, and in what form? Built: the register's quarterly figures only. | Counsel |
-| Complaints: should closing a complaint as not upheld need a second person, or be refused for whoever logged it or is named in it? Built: one person with `complaints.close`, which the support role does not hold. | Owner, counsel |
 | Complaints: should chat messages and complaint details be sealed field by field like identity details? Built: fenced by row policies and disk encryption only. | Owner |
 | Investing: the design canvas also offers "roll over the principal and pay out the interest" and "move to a goal" at maturity. Built so far: roll over everything, or pay out everything. Are the other two wanted for launch? | Owner |
 | Investing: proposing and approving a rate change use the `rates.view` permission, because the catalogue has only view permissions. Should there be a separate `rates.change` held by fewer roles? | Owner |

@@ -46,7 +46,6 @@ ComplaintsStaff = Annotated[StaffSession, Depends(require_permission("complaints
 # Looking is the `.view` permissions. Every route that writes needs its own.
 SupportReplier = Annotated[StaffSession, Depends(require_permission("support.reply"))]
 ComplaintsManager = Annotated[StaffSession, Depends(require_permission("complaints.manage"))]
-ComplaintsCloser = Annotated[StaffSession, Depends(require_permission("complaints.close"))]
 
 
 def _database(request: Request) -> Database:
@@ -345,7 +344,12 @@ class ClientComplaints(Contract):
     complaints: list[ClientComplaint]
 
 
+# Sent with every new complaint. A request repeated after a lost answer logs it once.
+ClientKey = Annotated[str, Field(pattern=r"^[A-Za-z0-9._:-]{8,64}$")]
+
+
 class MakeComplaint(Contract):
+    client_key: ClientKey
     category: Category
     summary: Annotated[str, Field(min_length=1, max_length=MAX_SUMMARY * 2)]
     details: Annotated[str, Field(min_length=1, max_length=MAX_DETAILS * 2)]
@@ -383,9 +387,21 @@ class ComplaintHistoryItem(Contract):
     occurred_at: datetime
 
 
+class PendingOutcome(Contract):
+    """An outcome one member of staff proposed. A different one confirms or rejects it."""
+
+    id: PushId
+    outcome: Outcome
+    resolution: str
+    client_accepted: bool
+    proposed_by: PushId
+    proposed_at: datetime
+
+
 class ComplaintDetail(Contract):
     complaint: StaffComplaint
     history: list[ComplaintHistoryItem]
+    pending_outcome: PendingOutcome | None
 
 
 class ComplaintSummary(Contract):
@@ -405,6 +421,7 @@ class Register(Contract):
 
 
 class LogComplaint(Contract):
+    client_key: ClientKey
     client_id: PushId
     category: Category
     received_via: Literal["chat", "phone", "email", "in_person", "letter"]
@@ -428,11 +445,19 @@ class ComplaintNote(Contract):
     note: Annotated[str, Field(min_length=1, max_length=MAX_NOTE * 2)]
 
 
-class CloseComplaint(Contract):
+class ProposeOutcome(Contract):
     outcome: Outcome
-    # What was done about it. The client reads this.
+    # What was done about it. The client reads this once the outcome is confirmed.
     resolution: Annotated[str, Field(min_length=1, max_length=MAX_RESOLUTION * 2)]
     client_accepted: bool
+
+
+class DecideOutcome(Contract):
+    # The proposal being decided, so a newer one is never confirmed by mistake.
+    proposal_id: PushId
+    decision: Literal["confirmed", "rejected", "withdrawn"]
+    # Required to reject.
+    reason: Annotated[str | None, Field(default=None, max_length=MAX_NOTE * 2)] = None
 
 
 def _new(
@@ -520,7 +545,9 @@ async def make_complaint(
     """Make a formal complaint. It goes on the register and gets a reference and a reply date."""
     new = _new(body.category, body.summary, body.details, "app")
     async with database.actor_transaction(client.actor) as session:
-        return _for_client(await complaints.log_by_client(session, client.actor, new, clock))
+        return _for_client(
+            await complaints.log_by_client(session, client.actor, new, body.client_key, clock)
+        )
 
 
 @client_router.get("/complaints/{complaint_id}")
@@ -576,6 +603,7 @@ async def log_complaint(
                 staff.actor,
                 body.client_id,
                 new,
+                body.client_key,
                 clock,
                 conversation_id=body.conversation_id,
                 owner_id=body.owner_id,
@@ -591,7 +619,20 @@ async def complaint_detail(
         view, history = await complaints.complaint_for_staff(
             session, complaint_id, business_date(clock.now())
         )
+        pending = await complaints.pending_outcome(session, complaint_id)
     return ComplaintDetail(
+        pending_outcome=(
+            PendingOutcome(
+                id=pending.id,
+                outcome=pending.outcome,
+                resolution=pending.resolution,
+                client_accepted=pending.client_accepted,
+                proposed_by=pending.proposed_by,
+                proposed_at=pending.proposed_at,
+            )
+            if pending
+            else None
+        ),
         complaint=_for_staff(view),
         history=[
             ComplaintHistoryItem(
@@ -640,16 +681,49 @@ async def note_complaint(
         )
 
 
-@staff_router.post("/complaints/{complaint_id}/close")
-async def close_complaint(
-    complaint_id: PushId, body: CloseComplaint, staff: ComplaintsCloser, database: Db, clock: Time
-) -> StaffComplaint:
-    """Record the outcome, what was done and whether the client accepted it. This is final."""
+@staff_router.post("/complaints/{complaint_id}/outcome", status_code=201)
+async def propose_outcome(
+    complaint_id: PushId, body: ProposeOutcome, staff: ComplaintsManager, database: Db, clock: Time
+) -> PendingOutcome:
+    """Propose the outcome. A different member of staff confirms it, which closes the complaint."""
     try:
         closure = Closure(body.outcome, body.resolution, body.client_accepted)
     except InvalidComplaint as error:
         raise _invalid(error) from None
     async with database.actor_transaction(staff.actor) as session:
+        proposal = await complaints.propose_outcome(
+            session, staff.actor, complaint_id, closure, clock
+        )
+    return PendingOutcome(
+        id=proposal.id,
+        outcome=proposal.outcome,
+        resolution=proposal.resolution,
+        client_accepted=proposal.client_accepted,
+        proposed_by=proposal.proposed_by,
+        proposed_at=proposal.proposed_at,
+    )
+
+
+@staff_router.post("/complaints/{complaint_id}/outcome/decision")
+async def decide_outcome(
+    complaint_id: PushId, body: DecideOutcome, staff: ComplaintsManager, database: Db, clock: Time
+) -> StaffComplaint:
+    """Confirm or reject someone else's proposed outcome, or withdraw your own.
+
+    Confirming closes the complaint for good and needs `complaints.close`. Neither the proposer
+    nor whoever logged the complaint may confirm it.
+    """
+    if body.decision != "withdrawn" and "complaints.close" not in staff.permissions:
+        raise ApplicationError("forbidden")
+    async with database.actor_transaction(staff.actor) as session:
         return _for_staff(
-            await complaints.close(session, staff.actor, complaint_id, closure, clock)
+            await complaints.decide_outcome(
+                session,
+                staff.actor,
+                complaint_id,
+                body.proposal_id,
+                body.decision,
+                body.reason,
+                clock,
+            )
         )

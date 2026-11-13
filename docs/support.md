@@ -38,27 +38,30 @@ A complaint is a regulated record. It gets a reference such as `C-1001`, a deadl
 | Route | Who | Use |
 | --- | --- | --- |
 | `GET /client/complaints` | Client | The client's own complaints. |
-| `POST /client/complaints` | Client | Make a complaint from the app. |
+| `POST /client/complaints` | Client | Make a complaint from the app, with a `client_key`. |
 | `GET /client/complaints/{id}` | Client | One complaint with its status, deadline and outcome. |
 | `GET /staff/complaints` | `complaints.view` | The register and its figures. `show` is `open`, `closed` or `all`. |
-| `POST /staff/complaints` | `complaints.manage` | Log a complaint that came by chat, phone, email, letter or in person. |
-| `GET /staff/complaints/{id}` | `complaints.view` | One complaint with its history. |
+| `POST /staff/complaints` | `complaints.manage` | Log a complaint that came by chat, phone, email, letter or in person, with a `client_key`. |
+| `GET /staff/complaints/{id}` | `complaints.view` | One complaint with its history and any outcome waiting to be confirmed (`pending_outcome`). |
 | `PUT /staff/complaints/{id}/owner` | `complaints.manage` | Give it to a member of staff. |
 | `POST /staff/complaints/{id}/status` | `complaints.manage` | Move it to `investigating`, `waiting_for_client` or `escalated`, with a note. |
 | `POST /staff/complaints/{id}/notes` | `complaints.manage` | Record what was found or done. |
-| `POST /staff/complaints/{id}/close` | `complaints.close` | Record the outcome and close it. |
+| `POST /staff/complaints/{id}/outcome` | `complaints.manage` | Propose the outcome, what was done and whether the client accepted it. |
+| `POST /staff/complaints/{id}/outcome/decision` | `complaints.close` to confirm or reject, `complaints.manage` to withdraw | `confirmed` closes the complaint. `rejected` needs a `reason`. Only the proposer sends `withdrawn`. Names the `proposal_id`. |
 
 Rules:
 
 - **Deadline.** Finvest answers within 5 working days of receiving a complaint. Working days are Monday to Friday. Public holidays are not counted yet, so a deadline can fall on one. The number is a working default until counsel confirms what the regulator requires (see [decisions.md](decisions.md)).
 - **Statuses.** `new`, `investigating`, `waiting_for_client`, `escalated`, `closed`. Any open status can move to any other open status or to closed. Closed is final.
 - **Closing needs an outcome.** `upheld`, `partly_upheld` or `not_upheld`, what was done about it, and whether the client accepted it. The client reads the outcome and what was done.
+- **Closing takes two people.** One member of staff proposes the outcome. A different one confirms it, which closes the complaint, or rejects it with a reason. Whoever logged the complaint never confirms its outcome. One proposal waits at a time, and the proposer may withdraw it. A decided proposal never changes. PostgreSQL holds all of this, and refuses a close that does not match an outcome the closer confirmed (migration 0101).
+- **Logged once.** The app and the console send a `client_key` with each new complaint. The same key from the same person returns the complaint it logged the first time, so a request repeated after a lost answer never enters a complaint twice.
 - **What the client said never changes.** The category, summary, details, amount, how it arrived, when it arrived and the deadline are fixed once logged. The database refuses a change, and the API role is not granted one.
-- **Closed by the person acting.** The database refuses a close that names another member of staff.
+- **Closed by the person acting.** The database refuses a close that names another member of staff, and the person closing is the one who confirmed the outcome.
 - **The client is told twice.** `complaint_received` with the reference and the deadline when it is logged, and `complaint_closed` when it is closed.
 - **The client never sees staff notes.** The history, the owner and whether staff marked the outcome as accepted are for staff. A row policy keeps `complaint_events` from clients entirely.
 - **Your place in the queue.** A client's own update can only move their chat forward in time: the time of the last message never goes back and a waiting time, once set, stays until staff reply. The database refuses anything else.
-- **Every staff action is in the audit trail**, under `complaints.logged`, `complaints.assigned`, `complaints.status`, `complaints.escalated` and `complaints.closed`. The audit record holds the reference, the status and the reason staff gave, never what the client wrote.
+- **Every staff action is in the audit trail**, under `complaints.logged`, `complaints.assigned`, `complaints.status`, `complaints.escalated`, `complaints.outcome_proposed`, `complaints.outcome_rejected`, `complaints.outcome_withdrawn` and `complaints.closed`. The audit record holds the reference, the status and the reason staff gave, never what the client wrote.
 - **An amount** is optional and is the sum the client says is in question, in whole shillings or cents. It is a note for staff. It moves no money: a refund or correction goes through the ledger's own process.
 
 The register's figures are open, overdue, received this quarter, closed this quarter, upheld this quarter and the average working days to close, in tenths of a day.
@@ -72,10 +75,10 @@ Looking needs a `.view` permission. Every route that writes needs its own.
 | `support.view` | The inbox, a chat, saved replies | Admin, operations, support |
 | `support.reply` | Replying, solving, setting the topic, keeping saved replies | Admin, operations, support |
 | `complaints.view` | The register and a complaint's history | Admin, operations, compliance, support |
-| `complaints.manage` | Logging a complaint for a client, assigning, moving, notes | Admin, operations, compliance, support |
-| `complaints.close` | Recording the outcome and closing | Admin, operations, compliance |
+| `complaints.manage` | Logging a complaint for a client, assigning, moving, notes, proposing an outcome | Admin, operations, compliance, support |
+| `complaints.close` | Confirming or rejecting someone else's proposed outcome | Admin, operations, compliance |
 
-Support works complaints but does not close them, so the front line does not decide its own complaints.
+Support works complaints and proposes their outcome but does not confirm one, so the front line does not decide its own complaints.
 
 ## Who can see what
 
@@ -86,7 +89,7 @@ Row policies in PostgreSQL enforce this, as well as the routes.
 | `support_conversations`, `support_messages` | Their own | All | None |
 | `support_saved_replies` | None | All | None |
 | `complaints` | Their own, read and log | All | None |
-| `complaint_events` | None | All | None |
+| `complaint_events`, `complaint_outcome_proposals` | None | All | None |
 
 ## Not built yet
 
