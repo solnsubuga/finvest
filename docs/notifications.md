@@ -115,7 +115,16 @@ An edited wording must pass these rules:
 
 A notification keeps the words it was written with. Changing the words later does not rewrite what a client was already told. Notifications are never deleted.
 
-An announcement carries the words staff wrote when sending it, so it has no wording to edit. Sending announcements is not built yet. When it is, an announcement's words are held to the same link rule and need two people, like a change of wording.
+An announcement carries the words staff wrote when sending it, so it has no wording to edit.
+
+## Announcements
+
+Staff can tell every client something, such as an office closure, as an `announcement` notification in the news category. Each client's channel choices for news apply.
+
+- **Two people.** One member of staff with `wordings.change` proposes a title and a message, with a reason. A different one approves or rejects it, and a rejection says why. The proposer can withdraw their own. PostgreSQL enforces that the person who decides is never the person who proposed, that a rejection has a reason, and that a decided announcement never changes. Every step is written to the audit trail.
+- **The same word rules as a wording.** The title is at most 60 characters. The message is at most 291 characters, so that "Finvest: " and the message fit one SMS send. Both may link only to finvestug.com, contain no percent sign and no braces, and the message uses only basic letters, digits and punctuation.
+- **Sending.** Approving queues the sending in the same transaction. The worker tells active clients 500 at a time, in ID order, with one job per page. Each page commits together with its job and queues the next page. The notification key is the announcement's ID, so a page that runs twice tells nobody twice. Clients who are locked or closed, and accounts carried over from Finvest 1.0 that have not been claimed, are not told.
+- **Nothing is deleted.** The list shows the latest 50 announcements with how many clients each has reached.
 
 ## Routes
 
@@ -128,4 +137,7 @@ An announcement carries the words staff wrote when sending it, so it has no word
 | `GET /staff/notification-wordings` | Staff with `settings.view` | Every message, its words, a preview with sample values, and any change waiting |
 | `POST /staff/notification-wordings/{event}/proposals` | Staff with `wordings.change` | Proposes new words, with a reason |
 | `POST /staff/notification-wordings/proposals/{id}/decision` | Staff with `wordings.change` | `approved` or `rejected` by someone else, `withdrawn` by the proposer |
+| `GET /staff/announcements` | Staff with `settings.view` | The latest announcements, any waiting for a second person, and how many clients each has reached |
+| `POST /staff/announcements` | Staff with `wordings.change` | Proposes a title and a message, with a reason |
+| `POST /staff/announcements/{id}/decision` | Staff with `wordings.change` | `approved`, which starts sending, or `rejected` with a reason, by someone else, or `withdrawn` by the proposer |
 | `POST /webhooks/resend` | The hooks.fidiba.com router, by Svix signature | One Resend delivery event. See "Email delivery events". |

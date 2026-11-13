@@ -465,6 +465,22 @@ async def client_contact(session: AsyncSession, client_id: str) -> ClientContact
     return ClientContact(row.phone, row.email, claimed=row.status == "active")
 
 
+async def active_client_ids(session: AsyncSession, *, after: str | None, limit: int) -> list[str]:
+    """Active clients in ID order after `after`, for the worker to tell every one of them.
+
+    Other modules call this instead of reading identity tables. It leaves out locked and
+    closed clients, and those carried over from Finvest 1.0 who have not claimed the account.
+    """
+    rows = await session.execute(
+        text(
+            "SELECT id FROM identity_clients WHERE status = 'active' "
+            "AND (CAST(:after AS text) IS NULL OR id > :after) ORDER BY id LIMIT :limit"
+        ),
+        {"after": after, "limit": limit},
+    )
+    return [row.id for row in rows]
+
+
 def _staff_only(actor: Actor) -> None:
     if actor.kind != "staff":
         raise ValueError("Only a member of staff does this")
