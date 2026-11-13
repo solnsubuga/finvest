@@ -131,6 +131,83 @@
         "title": "AmountView",
         "type": "object"
       },
+      "ApprovalItemOut": {
+        "additionalProperties": false,
+        "properties": {
+          "can_decide": {
+            "title": "Can Decide",
+            "type": "boolean"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "kind": {
+            "enum": [
+              "wording_change",
+              "ledger_correction",
+              "pot_transfer",
+              "bank_transfer_match",
+              "day_close",
+              "dealing_order",
+              "dealing_result",
+              "rate_change",
+              "migration_totals",
+              "migration_sign_off"
+            ],
+            "title": "Kind",
+            "type": "string"
+          },
+          "proposed_at": {
+            "format": "date-time",
+            "title": "Proposed At",
+            "type": "string"
+          },
+          "proposed_by": {
+            "maxLength": 20,
+            "minLength": 20,
+            "pattern": "^[-0-9A-Z_a-z]{20}$",
+            "title": "Proposed By",
+            "type": "string"
+          },
+          "subject": {
+            "title": "Subject",
+            "type": "string"
+          },
+          "yours": {
+            "title": "Yours",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "kind",
+          "id",
+          "subject",
+          "proposed_by",
+          "proposed_at",
+          "yours",
+          "can_decide"
+        ],
+        "title": "ApprovalItemOut",
+        "type": "object"
+      },
+      "ApprovalsOut": {
+        "additionalProperties": false,
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/ApprovalItemOut"
+            },
+            "title": "Items",
+            "type": "array"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "title": "ApprovalsOut",
+        "type": "object"
+      },
       "AskForPhotosBody": {
         "additionalProperties": false,
         "properties": {
@@ -17080,6 +17157,58 @@
         "summary": "Public Quote",
         "tags": [
           "public investing"
+        ]
+      }
+    },
+    "/staff/approvals": {
+      "get": {
+        "description": "Everything waiting for a second person that this member of staff may see, oldest first.",
+        "operationId": "approvals_staff_approvals_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApprovalsOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          }
+        },
+        "summary": "Approvals",
+        "tags": [
+          "staff approvals"
         ]
       }
     },

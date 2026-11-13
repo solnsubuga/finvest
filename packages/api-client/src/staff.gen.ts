@@ -34,6 +34,22 @@ export const AmountView = z.object({
 });
 export type AmountView = z.infer<typeof AmountView>;
 
+export const ApprovalItemOut = z.object({
+  can_decide: z.boolean(),
+  id: z.string(),
+  kind: z.enum(["wording_change", "ledger_correction", "pot_transfer", "bank_transfer_match", "day_close", "dealing_order", "dealing_result", "rate_change", "migration_totals", "migration_sign_off"]),
+  proposed_at: z.string(),
+  proposed_by: z.string(),
+  subject: z.string(),
+  yours: z.boolean(),
+});
+export type ApprovalItemOut = z.infer<typeof ApprovalItemOut>;
+
+export const ApprovalsOut = z.object({
+  items: z.array(ApprovalItemOut),
+});
+export type ApprovalsOut = z.infer<typeof ApprovalsOut>;
+
 export const PhotoKind = z.enum(["front", "back", "selfie"]);
 export type PhotoKind = z.infer<typeof PhotoKind>;
 
@@ -1065,6 +1081,17 @@ export type WordingList = z.infer<typeof WordingList>;
 
 /** Every route, by method and path, with what it takes and what it answers. */
 export const operations = {
+  "GET /staff/approvals": {
+    method: "GET",
+    path: "/staff/approvals",
+    params: z.object({}),
+    query: z.object({}),
+    body: null,
+    bodyKind: null,
+    idempotent: false,
+    status: 200,
+    response: ApprovalsOut,
+  },
   "GET /staff/audit/events": {
     method: "GET",
     path: "/staff/audit/events",
