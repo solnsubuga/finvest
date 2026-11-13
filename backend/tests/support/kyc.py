@@ -7,6 +7,7 @@ from datetime import date
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.infrastructure.database import Database
 from app.infrastructure.sealing import KEY_BYTES, Sealer
 from app.modules.kyc import service as kyc
 from app.modules.kyc.domain.checks import DocumentType, IdentityDetails, PhotoKind, required_photos
@@ -20,8 +21,10 @@ from app.modules.kyc.domain.provider import (
     Refused,
     Verdict,
 )
+from app.modules.kyc.providers import ManualProvider
 from app.shared.actors import Actor
 from app.shared.clock import Clock
+from app.shared.push_ids import push_id
 
 SHA256 = "ab" * 32
 # A fresh key for every test run. No key is ever written into the repository.
@@ -100,3 +103,17 @@ async def ready_draft(
     await kyc.choose_document(session, SEALER, client, document_type, "UG", clock)
     await add_photos(session, client, clock, *sorted(required_photos(document_type)))
     return await kyc.confirm_details(session, SEALER, client, details(document_number), clock)
+
+
+# The name `verify` gives a client, as `kyc.verified_name` reads it back.
+VERIFIED_NAME = "NAKATO Amara"
+
+
+async def verify(database: Database, client: Actor, clock: Clock) -> None:
+    """Take the client through an identity check that a member of staff approved."""
+    async with database.actor_transaction(client) as session:
+        await ready_draft(session, client, clock)
+        check = await kyc.submit(session, SEALER, client, ManualProvider(), clock)
+    reviewer = Actor("staff", push_id())
+    async with database.actor_transaction(reviewer) as session:
+        await kyc.approve(session, SEALER, reviewer, check.id, "Documents match", clock)

@@ -23,6 +23,7 @@ from app.modules.payouts.domain.destinations import (
     confirm_code,
     payable_from,
     proof_fits,
+    record_check,
     record_first_payout,
     reject,
     remove,
@@ -42,8 +43,15 @@ def in_review(kind: DestinationKind = DestinationKind.BANK) -> Destination:
     return submit_proof(confirm_code(Destination.new(kind)), proof)
 
 
+CHECKER, APPROVER = "-Nabc0000000000000S1", "-Nabc0000000000000S2"
+
+
+def checked(destination: Destination | None = None, check: ProofCheck = LETTER) -> Destination:
+    return record_check(destination or in_review(), check, CHECKER, NOW)
+
+
 def approved(at: datetime = NOW) -> Destination:
-    return approve(in_review(), LETTER, at)
+    return approve(checked(), LETTER, APPROVER, at)
 
 
 # --- Mobile money numbers ---------------------------------------------------------------------
@@ -261,9 +269,36 @@ def test_a_new_destination_walks_every_step_before_it_is_approved() -> None:
     assert destination.status is DestinationStatus.AWAITING_PROOF
     destination = submit_proof(destination, ProofKind.BANK_CARD)
     assert destination.status is DestinationStatus.IN_REVIEW
-    destination = approve(destination, ProofCheck(ProofKind.BANK_CARD, NameMatch.EXACT), NOW)
+    card = ProofCheck(ProofKind.BANK_CARD, NameMatch.EXACT)
+    destination = record_check(destination, card, CHECKER, NOW)
+    assert (destination.status, destination.checked_by) == (DestinationStatus.IN_REVIEW, CHECKER)
+    destination = approve(destination, card, APPROVER, NOW)
     assert destination.status is DestinationStatus.APPROVED
     assert destination.approved_at == NOW
+
+
+def test_approval_takes_a_check_and_a_second_person() -> None:
+    with pytest.raises(DestinationError) as unchecked:
+        approve(in_review(), LETTER, APPROVER, NOW)
+    assert unchecked.value.code == "destination_not_checked"
+    with pytest.raises(DestinationError) as same:
+        approve(checked(), LETTER, CHECKER, NOW)
+    assert same.value.code == "checked_by_you"
+    # A check made again by someone else replaces the first, and its maker cannot approve it.
+    again = record_check(checked(), LETTER, APPROVER, NOW)
+    with pytest.raises(DestinationError):
+        approve(again, LETTER, APPROVER, NOW)
+    assert approve(again, LETTER, CHECKER, NOW).status is DestinationStatus.APPROVED
+
+
+def test_new_proof_after_a_refusal_needs_a_new_check() -> None:
+    refused = reject(checked(), RejectionReason.PROOF_UNREADABLE, APPROVER)
+    assert refused.checked_by == APPROVER
+    again = submit_proof(refused, ProofKind.BANK_LETTER)
+    assert again.checked_by is None
+    with pytest.raises(DestinationError) as unchecked:
+        approve(again, LETTER, CHECKER, NOW)
+    assert unchecked.value.code == "destination_not_checked"
 
 
 def test_no_step_can_be_skipped() -> None:
@@ -271,7 +306,9 @@ def test_no_step_can_be_skipped() -> None:
     confirmed = confirm_code(new)
     for skipped in (new, confirmed, approved(), remove(new)):
         with pytest.raises(DestinationError):
-            approve(skipped, LETTER, NOW)
+            record_check(skipped, LETTER, CHECKER, NOW)
+        with pytest.raises(DestinationError):
+            approve(skipped, LETTER, APPROVER, NOW)
     for not_ready in (new, in_review(), approved(), remove(new)):
         with pytest.raises(DestinationError):
             submit_proof(not_ready, ProofKind.BANK_LETTER)
@@ -280,37 +317,54 @@ def test_no_step_can_be_skipped() -> None:
             confirm_code(not_new)
     for not_reviewable in (new, confirmed, approved(), remove(new)):
         with pytest.raises(DestinationError):
-            reject(not_reviewable, RejectionReason.PROOF_UNREADABLE)
+            reject(not_reviewable, RejectionReason.PROOF_UNREADABLE, CHECKER)
 
 
 def test_a_different_name_can_never_be_approved() -> None:
+    different = ProofCheck(ProofKind.BANK_LETTER, NameMatch.DIFFERENT)
     with pytest.raises(DestinationError) as refused:
-        approve(in_review(), ProofCheck(ProofKind.BANK_LETTER, NameMatch.DIFFERENT), NOW)
+        checked(check=different)
     assert refused.value.code == "name_different"
+    # Nor by a second person, whatever the first recorded.
+    with pytest.raises(DestinationError) as approved_anyway:
+        approve(checked(), different, APPROVER, NOW)
+    assert approved_anyway.value.code == "name_different"
 
 
 def test_a_partial_name_can_be_approved_by_a_person() -> None:
     check = ProofCheck(ProofKind.BANK_LETTER, NameMatch.PARTIAL)
-    assert approve(in_review(), check, NOW).status is DestinationStatus.APPROVED
+    assert approve(checked(check=check), check, APPROVER, NOW).status is (
+        DestinationStatus.APPROVED
+    )
 
 
 def test_a_statement_needs_a_recent_date() -> None:
     def check(statement_date: date | None) -> ProofCheck:
         return ProofCheck(ProofKind.BANK_STATEMENT, NameMatch.EXACT, statement_date)
 
+    statement = submit_proof(
+        confirm_code(Destination.new(DestinationKind.BANK)), ProofKind.BANK_STATEMENT
+    )
     with pytest.raises(DestinationError) as missing:
-        approve(in_review(), check(None), NOW)
+        checked(statement, check(None))
     assert missing.value.code == "statement_date_required"
     with pytest.raises(DestinationError) as old:
-        approve(in_review(), check(date(2026, 8, 12)), NOW)
+        checked(statement, check(date(2026, 8, 12)))
     assert old.value.code == "statement_too_old"
-    assert approve(in_review(), check(date(2026, 8, 13)), NOW).status is DestinationStatus.APPROVED
+    recent = check(date(2026, 8, 13))
+    assert approve(checked(statement, recent), recent, APPROVER, NOW).status is (
+        DestinationStatus.APPROVED
+    )
+    # Approved a day later, the same statement has grown too old.
+    with pytest.raises(DestinationError) as stale:
+        approve(checked(statement, recent), recent, APPROVER, NOW + timedelta(days=1))
+    assert stale.value.code == "statement_too_old"
 
 
 def test_a_bank_account_is_not_approved_on_mobile_money_proof() -> None:
     check = ProofCheck(ProofKind.NETWORK_REGISTERED_NAME, NameMatch.EXACT)
     with pytest.raises(DestinationError) as refused:
-        approve(in_review(), check, NOW)
+        checked(check=check)
     assert refused.value.code == "proof_kind_not_accepted"
     with pytest.raises(DestinationError):
         submit_proof(
@@ -319,7 +373,7 @@ def test_a_bank_account_is_not_approved_on_mobile_money_proof() -> None:
 
 
 def test_a_rejected_destination_can_be_proved_again() -> None:
-    rejected = reject(in_review(), RejectionReason.PROOF_UNREADABLE)
+    rejected = reject(in_review(), RejectionReason.PROOF_UNREADABLE, CHECKER)
     assert rejected.status is DestinationStatus.REJECTED
     assert rejected.rejection_reason is RejectionReason.PROOF_UNREADABLE
     again = submit_proof(rejected, ProofKind.BANK_STATEMENT)
@@ -328,14 +382,14 @@ def test_a_rejected_destination_can_be_proved_again() -> None:
 
 
 def test_a_rejection_for_suspected_fraud_cannot_be_proved_again() -> None:
-    rejected = reject(in_review(), RejectionReason.SUSPECTED_FRAUD)
+    rejected = reject(in_review(), RejectionReason.SUSPECTED_FRAUD, CHECKER)
     with pytest.raises(DestinationError) as refused:
         submit_proof(rejected, ProofKind.BANK_STATEMENT)
     assert refused.value.code == "destination_rejected_final"
     assert remove(rejected).status is DestinationStatus.REMOVED
     for reason in RejectionReason:
         if reason is not RejectionReason.SUSPECTED_FRAUD:
-            again = submit_proof(reject(in_review(), reason), ProofKind.BANK_LETTER)
+            again = submit_proof(reject(in_review(), reason, CHECKER), ProofKind.BANK_LETTER)
             assert again.status is DestinationStatus.IN_REVIEW
 
 
@@ -350,7 +404,9 @@ def test_a_removed_destination_stays_removed() -> None:
 def test_times_must_carry_a_zone() -> None:
     naive = datetime(2026, 11, 13, 9, 0)
     with pytest.raises(ValueError):
-        approve(in_review(), LETTER, naive)
+        record_check(in_review(), LETTER, CHECKER, naive)
+    with pytest.raises(ValueError):
+        approve(checked(), LETTER, APPROVER, naive)
     with pytest.raises(ValueError):
         why_not_payable(approved(), naive)
 

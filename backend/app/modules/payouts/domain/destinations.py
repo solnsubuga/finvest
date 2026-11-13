@@ -244,7 +244,7 @@ class DestinationError(Exception):
 
 @dataclass(frozen=True, slots=True)
 class ProofCheck:
-    """What the staff member recorded when approving. All of it goes to the audit trail."""
+    """What the first member of staff recorded from the proof. A second one approves it."""
 
     proof: ProofKind
     name_match: NameMatch
@@ -261,6 +261,8 @@ class Destination:
     approved_at: datetime | None = None
     first_paid_at: datetime | None = None
     rejection_reason: RejectionReason | None = None
+    # Who recorded the check of the current proof, or who refused it.
+    checked_by: str | None = None
 
     @classmethod
     def new(cls, kind: DestinationKind) -> Destination:
@@ -282,17 +284,46 @@ def submit_proof(destination: Destination, proof: ProofKind) -> Destination:
         raise DestinationError("destination_rejected_final")
     if not proof_fits(destination.kind, proof):
         raise DestinationError("proof_kind_not_accepted")
-    return replace(destination, status=DestinationStatus.IN_REVIEW, rejection_reason=None)
+    # New proof is checked afresh: nothing of an earlier check carries over.
+    return replace(
+        destination, status=DestinationStatus.IN_REVIEW, rejection_reason=None, checked_by=None
+    )
 
 
-def approve(destination: Destination, check: ProofCheck, now: datetime) -> Destination:
-    """A staff member checked the proof against the ID name. Starts the 24-hour safety wait.
+def record_check(
+    destination: Destination, check: ProofCheck, checker: str, now: datetime
+) -> Destination:
+    """The first member of staff read the proof and compared it with the ID name.
 
-    Refused unless the names are the same or the staff member judged a partial match to be the
-    same person. A different name can never be approved, whoever asks.
+    The account stays in review until a different member of staff approves the check. Refused
+    unless the names are the same or the checker judged a partial match to be the same person.
+    A different name can never be approved, whoever asks.
     """
     _require(destination, DestinationStatus.IN_REVIEW)
     _aware(now)
+    _evidence_holds(destination, check, now)
+    return replace(destination, checked_by=checker)
+
+
+def approve(
+    destination: Destination, check: ProofCheck, approver: str, now: datetime
+) -> Destination:
+    """A second member of staff approves the recorded check. Starts the 24-hour safety wait.
+
+    The check is tested again as it stands now, so a statement that has grown too old since it
+    was checked is not approved.
+    """
+    _require(destination, DestinationStatus.IN_REVIEW)
+    _aware(now)
+    if destination.checked_by is None:
+        raise DestinationError("destination_not_checked")
+    if destination.checked_by == approver:
+        raise DestinationError("checked_by_you")
+    _evidence_holds(destination, check, now)
+    return replace(destination, status=DestinationStatus.APPROVED, approved_at=now)
+
+
+def _evidence_holds(destination: Destination, check: ProofCheck, now: datetime) -> None:
     if not proof_fits(destination.kind, check.proof):
         raise DestinationError("proof_kind_not_accepted")
     if check.name_match is NameMatch.DIFFERENT:
@@ -302,12 +333,17 @@ def approve(destination: Destination, check: ProofCheck, now: datetime) -> Desti
             raise DestinationError("statement_date_required")
         if not statement_is_recent(check.statement_date, now.date()):
             raise DestinationError("statement_too_old")
-    return replace(destination, status=DestinationStatus.APPROVED, approved_at=now)
 
 
-def reject(destination: Destination, reason: RejectionReason) -> Destination:
+def reject(destination: Destination, reason: RejectionReason, checker: str) -> Destination:
+    """One member of staff may refuse: a refusal lets no money out."""
     _require(destination, DestinationStatus.IN_REVIEW)
-    return replace(destination, status=DestinationStatus.REJECTED, rejection_reason=reason)
+    return replace(
+        destination,
+        status=DestinationStatus.REJECTED,
+        rejection_reason=reason,
+        checked_by=checker,
+    )
 
 
 def remove(destination: Destination) -> Destination:

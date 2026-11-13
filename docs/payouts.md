@@ -10,8 +10,11 @@ A client is paid only to their own mobile money number or bank account. A new de
 | --- | --- | --- |
 | Add it and confirm the SMS code | Client | Awaiting proof |
 | Upload proof of ownership | Client | In review |
-| Check the proof against the name on the ID | Staff | Approved, or rejected with a reason |
+| Check the proof against the name on the ID | One member of staff | Still in review, with the check recorded, or rejected with a reason |
+| Approve the check | A different member of staff | Approved |
 | Wait 24 hours from the approval | Nobody | Payable |
+
+Approving takes two people, from the owner's rule that a staff step that can have a maker and a checker has one: the first records what they read on the proof, and a second approves that check as it was recorded. Whoever recorded it cannot approve it, and a check made again replaces the one before. Refusing takes one person, because it lets no money out, and anyone may refuse, the checker included.
 
 A rejected destination can be proved again with a better document, unless it was rejected for suspected fraud, which is final. A removed one is never used again. Staff who remove a destination must give a reason, which is recorded as an operator control.
 
@@ -40,10 +43,12 @@ Migration 0030 adds `payout_destinations`. These hold even if application code i
 
 | Rule | How |
 | --- | --- |
-| Who may take which step | A trigger allows a client transaction only the client's steps, a staff transaction only approve, reject and remove, and the worker only the note of the first payout |
+| Who may take which step | A trigger allows a client transaction only the client's steps, a staff transaction only check, approve, reject and remove, and the worker only the note of the first payout |
 | A client cannot approve their own destination | The same trigger, and an insert policy that admits only a new row at the first step |
 | A different name is never approved | An approved row must carry an exact or partial match, the staff member who checked it, and the approval time |
-| A check is signed by who made it | `checked_by` must be the staff member of the transaction |
+| A check is signed by who made it | `checked_by` must be the staff member of the transaction, and `checked_at` within five minutes of the database clock |
+| Two people approve | An approval needs a recorded check, is signed `approved_by` the staff member of the transaction, who must not be `checked_by`, and cannot change the check (migration 0035) |
+| New proof, new check | A client who sends new proof after a refusal must clear every field of the last check, so an old check is never approved against a new document |
 | The account never changes | Owner, kind, number and holder name are fixed at creation |
 | Nothing is deleted, and removed is final | Triggers refuse DELETE and TRUNCATE for every role, and any change to a removed row |
 | One account, one client | An account approved for one client cannot be approved for another (migration 0032). The check is made at approval, so a client learns nothing about anyone else's accounts. Staff see `account_in_use` and look at both. |
@@ -53,7 +58,7 @@ Migration 0030 adds `payout_destinations`. These hold even if application code i
 
 Every step writes an audit event in the same transaction. Account numbers never enter the audit trail.
 
-Two things belong to other modules and are passed in by the caller: the SMS code is checked by the identity module before the code step, and the ID name comes from the clients module.
+The SMS code belongs to the identity module and is checked before the code step. The ID name is read by `check` itself from the identity checks module (`kyc.verified_name`), never from the caller. A client with no approved identity check cannot have an account checked (`client_not_verified`).
 
 ### When a destination can be paid
 
