@@ -123,6 +123,7 @@ jobs:
       CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
       GITHUB_TOKEN: ${{ secrets.TERRAFORM_GITHUB_TOKEN }}
       DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+      DEPLOY_HOST_KEY: ${{ vars.DEPLOY_HOST_KEY }}
       REVIEWED_PLAN_HASH: ${{ needs.plan.outputs.plan_hash }}
     defaults:
       run:
@@ -161,8 +162,7 @@ jobs:
         if: env.TARGET != 'shared'
         run: |
           set -euo pipefail
-          address=$(curl -fsS --retry 3 https://api.ipify.org)
-          [[ $address =~ ^[0-9]+(\.[0-9]+){3}$ ]]
+          address=$(bash "$GITHUB_WORKSPACE/infra/deployment/runner-address.sh")
           echo "PROVISIONER_ADDRESS=$address" >> "$GITHUB_ENV"
           terraform apply -no-color -auto-approve -target=digitalocean_firewall.app \
             -var-file="environments/$TARGET.tfvars" -var-file="$RUNNER_TEMP/settings.tfvars.json" \
@@ -175,15 +175,39 @@ jobs:
           host=$(terraform output -raw deploy_host)
           key="$RUNNER_TEMP/deploy_key"
           printf '%s\n' "$DEPLOY_SSH_KEY" > "$key"
-          # A new host has a new key; the reserved IP is ours, so the first key seen is trusted.
-          ssh_opts=(-i "$key" -o BatchMode=yes -o ConnectTimeout=10
-            -o StrictHostKeyChecking=accept-new -o UserKnownHostsFile="$RUNNER_TEMP/known_hosts")
+          known="$RUNNER_TEMP/known_hosts"
+          ssh_opts=(-i "$key" -o IdentitiesOnly=yes -o BatchMode=yes -o ConnectTimeout=10
+            -o HostKeyAlgorithms=ssh-ed25519 -o HashKnownHosts=no
+            -o UserKnownHostsFile="$known" -o GlobalKnownHostsFile=/dev/null)
+          key_pattern='^ssh-ed25519 [A-Za-z0-9+/]+=*$'
+          if [[ -n $DEPLOY_HOST_KEY ]]; then
+            # The host key recorded by the first Provision run is the only one accepted.
+            [[ $DEPLOY_HOST_KEY =~ $key_pattern ]] || { echo 'DEPLOY_HOST_KEY is not valid' >&2; exit 1; }
+            printf '%s %s\n' "$host" "$DEPLOY_HOST_KEY" > "$known"
+            ssh_opts+=(-o StrictHostKeyChecking=yes)
+          else
+            # First contact with a host this run just created at our own reserved IP. DigitalOcean
+            # publishes no host key to check against, so this one time the key seen is trusted,
+            # then recorded below for every later Provision run and deploy.
+            : > "$known"
+            ssh_opts+=(-o StrictHostKeyChecking=accept-new)
+          fi
           target="deploy@$host"
           for attempt in $(seq 1 30); do
             ssh "${ssh_opts[@]}" "$target" true && break
-            [[ $attempt == 30 ]] && { echo "Host $host never accepted SSH" >&2; exit 1; }
+            if [[ $attempt == 30 ]]; then
+              echo "Host $host never accepted SSH. If the server was rebuilt, delete the DEPLOY_HOST_KEY variable of the $TARGET environment and run Provision again." >&2
+              exit 1
+            fi
             sleep 10
           done
+          if [[ -z $DEPLOY_HOST_KEY ]]; then
+            host_key=$(awk '$2 == "ssh-ed25519" { print $2, $3; exit }' "$known")
+            [[ $host_key =~ $key_pattern ]] || { echo 'The host key was not recorded' >&2; exit 1; }
+            GH_TOKEN="$GITHUB_TOKEN" gh api --method POST "repos/$GITHUB_REPOSITORY/environments/$TARGET/variables" \
+              -f name=DEPLOY_HOST_KEY -f value="$host_key" > /dev/null
+            echo "Recorded the host key as DEPLOY_HOST_KEY in the $TARGET environment: \`$host_key\`" >> "$GITHUB_STEP_SUMMARY"
+          fi
           ssh "${ssh_opts[@]}" "$target" 'cloud-init status --wait >/dev/null || true; mkdir -p ~/provision'
           scp "${ssh_opts[@]}" "$GITHUB_WORKSPACE/infra/deployment/prepare-host.sh" \
             "$GITHUB_WORKSPACE/infra/deployment/create-roles.sh" "$target:provision/"
