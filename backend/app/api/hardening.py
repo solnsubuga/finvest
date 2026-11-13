@@ -28,6 +28,8 @@ BODY_LIMITS: dict[str, int] = {
     # A bank transfer's receipt: at most 10 MiB, plus the form fields and multipart framing.
     # The edge allows 12 MiB on the same path.
     "/client/investments/*/payments/bank-transfer": 11 * 1024 * 1024,
+    # Proof that a bank account is the client's: the same 10 MiB file limit and framing.
+    "/client/payout-destinations/*/proof": 11 * 1024 * 1024,
 }
 
 

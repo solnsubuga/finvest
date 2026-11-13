@@ -10,6 +10,7 @@ from sqlalchemy import text
 
 from app.api.app import create_app
 from app.infrastructure.database import Database
+from app.infrastructure.storage import FileStorage
 from app.modules.identity.api import COOKIES
 from app.modules.identity.hashing import PasswordHasher
 from app.modules.identity.service import IdentityService
@@ -79,7 +80,9 @@ class Api:
 
 
 @asynccontextmanager
-async def running_api(test_database: TestDatabase, database: Database) -> AsyncIterator[Api]:
+async def running_api(
+    test_database: TestDatabase, database: Database, *, storage: FileStorage | None = None
+) -> AsyncIterator[Api]:
     settings = test_database.settings("finvest_app").model_copy(
         update={
             "client_allowed_origins": [CLIENT_ORIGIN],
@@ -87,7 +90,7 @@ async def running_api(test_database: TestDatabase, database: Database) -> AsyncI
         }
     )
     clock = FakeClock()
-    app = create_app(settings, database, clock, HASHER)
+    app = create_app(settings, database, clock, HASHER, storage=storage)
     transport = httpx.ASGITransport(app=app, raise_app_exceptions=False, client=("127.0.0.1", 1))
     async with httpx.AsyncClient(transport=transport, base_url="https://api") as http:
         yield Api(http, app.state.identity, clock, database)
