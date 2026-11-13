@@ -14,7 +14,7 @@ import {
   type Rules,
   type RulesProposal,
 } from "./buffer.ts";
-import { bufferNote, formatDay, formatExact, formatShort, formatTime, parseAmount } from "./format.ts";
+import { bufferNote, formatDay, formatExact, formatShort, formatWhen, majorText, parseAmount } from "./format.ts";
 import { FIELD, Field, FormButtons, NoteForm } from "./Orders.tsx";
 import { Row } from "./Position.tsx";
 
@@ -177,7 +177,7 @@ export function BufferSection({ api, directory, me, currency = "UGX", canChange,
               </h3>
               <p className="m-0 text-[28px] font-extrabold tabular-nums">{formatExact(screen.finvestMoney)}</p>
               <p className="m-0 text-sm text-muted">
-                Buffer today {formatShort(screen.buffer)}. {bufferNote(screen.level, screen.inForce.target, screen.inForce.floor)}
+                Buffer after this week {formatShort(screen.buffer)}. {bufferNote(screen.level, screen.inForce.target, screen.inForce.floor)}
               </p>
             </div>
             {canChange && form === null ? (
@@ -210,6 +210,7 @@ export function BufferSection({ api, directory, me, currency = "UGX", canChange,
             <ul aria-label="Money paid in and taken out" className="m-0 flex list-none flex-col gap-3 p-0">
               {screen.movements.map((movement) => (
                 <MovementItem
+                  today={today()}
                   key={`${movement.id}:${movement.status}`}
                   movement={movement}
                   who={who}
@@ -298,6 +299,7 @@ function ErrorLine({ message }: { message: string | null }) {
 
 interface MovementItemProps {
   movement: Movement;
+  today: string;
   who: (id: string) => string;
   busy: boolean;
   error: string | null;
@@ -306,7 +308,7 @@ interface MovementItemProps {
   onCancel: () => void;
 }
 
-function MovementItem({ movement, who, busy, error, onApprove, onDecline, onCancel }: MovementItemProps) {
+function MovementItem({ movement, today, who, busy, error, onApprove, onDecline, onCancel }: MovementItemProps) {
   const [declining, setDeclining] = useState(false);
   const [confirming, setConfirming] = useState(false);
   const paysIn = movement.direction === "in";
@@ -322,7 +324,7 @@ function MovementItem({ movement, who, busy, error, onApprove, onDecline, onCanc
       <dl className="m-0 flex flex-col gap-2">
         {paysIn ? <Row name="Bank reference" value={movement.bankReference ?? ""} /> : <Row name="Transfer reference" value={movement.id} />}
         {movement.valueDate ? <Row name={paysIn ? "Arrived" : "Leaves"} value={formatDay(movement.valueDate)} /> : null}
-        <Row name="Recorded by" value={`${who(movement.proposedBy)}, ${formatTime(movement.proposedAt)}`} />
+        <Row name="Recorded by" value={`${who(movement.proposedBy)}, ${formatWhen(movement.proposedAt)}`} />
         {movement.decidedBy ? <Row name={movement.status === "declined" ? "Declined by" : "Approved by"} value={who(movement.decidedBy)} /> : null}
       </dl>
       <p className="m-0 text-sm leading-[1.45] text-muted">{movement.reason}</p>
@@ -334,7 +336,7 @@ function MovementItem({ movement, who, busy, error, onApprove, onDecline, onCanc
       {waiting && movement.allowed.length === 0 ? (
         <p className="m-0 text-sm text-muted">You recorded this, so someone else has to approve it.</p>
       ) : null}
-      {!paysIn && movement.status === "approved" ? (
+      {!paysIn && movement.status === "approved" && movement.valueDate === today ? (
         <p className="m-0 text-sm text-muted">Make the transfer from the trust account today, quoting the transfer reference.</p>
       ) : null}
       <ErrorLine message={error} />
@@ -412,7 +414,7 @@ function ProposalItem({ proposal, who, busy, error, onApprove, onWithdraw, onSen
         <p className="m-0 text-xs font-bold text-muted">{PROPOSAL_STATUS[proposal.status]}</p>
       </div>
       <RulesRows rules={proposal.rules} />
-      <Row name="Proposed by" value={`${who(proposal.proposedBy)}, ${formatTime(proposal.proposedAt)}`} />
+      <Row name="Proposed by" value={`${who(proposal.proposedBy)}, ${formatWhen(proposal.proposedAt)}`} />
       <p className="m-0 text-sm leading-[1.45] text-muted">{proposal.reason}</p>
       {proposal.decisionNote ? (
         <p className="m-0 rounded-md bg-surface-sunken px-3 py-2 text-sm leading-[1.45]">
@@ -541,15 +543,14 @@ interface RulesFormProps {
 
 type RulesErrors = Partial<Record<"effectiveFrom" | "target" | "floor" | "upTo" | "days" | "reason", string>>;
 
-const major = (minor: number, currency: Currency) => String(currency === "USD" ? minor / 100 : minor);
 
 function RulesForm({ current, today, busy, error, onCancel, onSubmit }: RulesFormProps) {
   const id = useId();
   const currency = current.target.currency;
   const [effectiveFrom, setEffectiveFrom] = useState("");
-  const [target, setTarget] = useState(major(current.target.minor, currency));
-  const [floor, setFloor] = useState(major(current.floor.minor, currency));
-  const [upTo, setUpTo] = useState(major(current.fromBufferUpTo.minor, currency));
+  const [target, setTarget] = useState(majorText(current.target.minor, currency));
+  const [floor, setFloor] = useState(majorText(current.floor.minor, currency));
+  const [upTo, setUpTo] = useState(majorText(current.fromBufferUpTo.minor, currency));
   const [days, setDays] = useState(String(current.payWithinWorkingDays));
   const [reason, setReason] = useState("");
   const [errors, setErrors] = useState<RulesErrors>({});

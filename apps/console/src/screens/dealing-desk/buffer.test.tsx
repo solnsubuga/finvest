@@ -5,8 +5,10 @@ import { ApiError, type Http } from "@/api/http.ts";
 import type { Directory } from "@/directory/api.ts";
 import { emptyDirectory } from "@/directory/api.ts";
 import { BufferSection } from "./Buffer.tsx";
-import { BufferError, notConnectedBufferApi, type BufferApi } from "./buffer.ts";
+import type { Currency } from "./api.ts";
+import { BufferError, notConnectedBufferApi, type BufferApi, type Movement } from "./buffer.ts";
 import { createHttpBufferApi, toBufferError, type BufferScreenJson } from "./bufferHttp.ts";
+import { majorText } from "./format.ts";
 import { BUFFER_COLLEAGUE, createStubBufferApi } from "./bufferStub.ts";
 
 const ME = "-Nstaffme00000000000";
@@ -31,10 +33,10 @@ describe("liquidity buffer", () => {
     renderBuffer();
     await movements();
     expect(within(money()).getByText("UGX 120,000,000")).toBeInTheDocument();
-    expect(screen.getByText(/Buffer today UGX 112.0m/)).toBeInTheDocument();
+    expect(screen.getByText(/Buffer after this week UGX 118.5m/)).toBeInTheDocument();
     const waiting = await item("Paid in UGX 40,000,000");
     expect(within(waiting).getByText("Waiting for a second person")).toBeInTheDocument();
-    expect(await within(waiting).findByText("Daniel Okello, 11:40")).toBeInTheDocument();
+    expect(await within(waiting).findByText("Daniel Okello, 13 Nov 2026, 11:40")).toBeInTheDocument();
     expect(within(waiting).getByText("FT26317KX2Q4")).toBeInTheDocument();
     const rules = screen.getByRole("region", { name: "Buffer rules" });
     expect(within(rules).getByText("UGX 150,000,000")).toBeInTheDocument();
@@ -73,7 +75,7 @@ describe("liquidity buffer", () => {
     await movements();
     await user.click(screen.getByRole("button", { name: "Take money out" }));
     const form = screen.getByRole("form", { name: "Take money out" });
-    await user.type(within(form).getByLabelText("Amount (UGX)"), "115,000,000");
+    await user.type(within(form).getByLabelText("Amount (UGX)"), "119,000,000");
     await user.type(within(form).getByLabelText("Reason"), "Back to operating account");
     await user.click(within(form).getByRole("button", { name: "Propose for approval" }));
     expect(await within(form).findByRole("alert")).toHaveTextContent("That is more than the buffer holds now. Client money never leaves with it.");
@@ -104,6 +106,35 @@ describe("liquidity buffer", () => {
     expect(within(proposed).getByRole("button", { name: "Withdraw" })).toBeInTheDocument();
   });
 
+  it("asks for the transfer out only on the day it was approved", async () => {
+    const stub = createStubBufferApi({ id: ME }, "sample", NOW);
+    const out = (id: string, valueDate: string): Movement => ({
+      id,
+      direction: "out",
+      amount: { minor: 5_000_000, currency: "UGX" },
+      bankReference: null,
+      valueDate,
+      reason: `Back to operating account ${id}`,
+      status: "approved",
+      proposedBy: BUFFER_COLLEAGUE.id,
+      proposedAt: `${valueDate}T07:00:00Z`,
+      decidedBy: ME,
+      decidedAt: `${valueDate}T08:00:00Z`,
+      decisionReason: null,
+      allowed: [],
+    });
+    const getBuffer = async (currency: Currency) => {
+      const screen = await stub.getBuffer(currency);
+      return { ...screen, movements: [out("-Nmoveout00000today", TODAY), out("-Nmoveout000earlier", "2026-10-02"), ...screen.movements] };
+    };
+    renderBuffer({ ...stub, getBuffer });
+    const todays = (await screen.findByText("Back to operating account -Nmoveout00000today")).closest("li") as HTMLElement;
+    const earlier = (await screen.findByText("Back to operating account -Nmoveout000earlier")).closest("li") as HTMLElement;
+    expect(within(todays).getByText(/Make the transfer from the trust account today/)).toBeInTheDocument();
+    expect(within(earlier).queryByText(/Make the transfer/)).toBeNull();
+    expect(await within(earlier).findByText("Daniel Okello, 2 Oct 2026, 10:00")).toBeInTheDocument();
+  });
+
   it("shows a reader the buffer with nothing to change", async () => {
     renderBuffer(undefined, false);
     await movements();
@@ -124,6 +155,14 @@ describe("liquidity buffer", () => {
     getBuffer.mockImplementation(createStubBufferApi({ id: ME }, "sample", NOW).getBuffer);
     await user.click(screen.getByRole("button", { name: "Try again" }));
     await waitFor(() => expect(within(money()).getByText("UGX 120,000,000")).toBeInTheDocument());
+  });
+});
+
+describe("starting figures in the rules form", () => {
+  it("are whole major units, or empty when the amount has a fraction", () => {
+    expect(majorText(150_000_000, "UGX")).toBe("150000000");
+    expect(majorText(500_000, "USD")).toBe("5000");
+    expect(majorText(500_050, "USD")).toBe("");
   });
 });
 
