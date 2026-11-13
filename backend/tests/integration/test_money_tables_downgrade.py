@@ -1,6 +1,7 @@
 """A downgrade must never delete the books, the issued numbers, the audit trail, the job
 history, the receipts that stop a command running twice, the identity records, the payout
-destinations, the withdrawal limits, the payouts or the migration checks."""
+destinations, the withdrawal limits, the payouts, the migration checks or the imported
+statements."""
 
 import os
 from collections.abc import Iterator
@@ -136,6 +137,13 @@ ROWS = {
         "INSERT INTO migration_control_totals (id, as_of, totals, entered_by, entered_at) "
         "VALUES ('-Nabc0000000000000A1', DATE '2026-11-13', '{}', '-Nabc0000000000000S1', now())",
         "refusing to drop migration checks",
+    ),
+    "0040_reconciliation_statements": (
+        "INSERT INTO reconciliation_statements (id, source, account_reference, business_date, "
+        "currency, opening_minor, closing_minor, line_count, file_sha256, imported_by, "
+        "imported_at) VALUES ('-Nabc0000000000000A1', 'bank', 'trust', DATE '2026-11-10', "
+        "'UGX', 100, 100, 0, repeat('0', 64), '-Nabc0000000000000B1', now())",
+        "refusing to drop imported statements",
     ),
 }
 
