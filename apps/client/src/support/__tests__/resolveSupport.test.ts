@@ -1,8 +1,17 @@
+import { API_URL } from "@/api/config";
+import { setFetch } from "@/api/http";
 import { DEMO_PHONE, DEMO_PHONE_AUTHENTICATOR } from "@/auth/stubAuthClient";
 
 import { resolveSupportClient, supportPhone } from "../resolveSupport";
 import * as stub from "../stubSupportClient";
 import { SupportError } from "../types";
+
+jest.mock("expo-secure-store", () => ({
+  WHEN_UNLOCKED_THIS_DEVICE_ONLY: "x",
+  getItemAsync: jest.fn(async () => null),
+  setItemAsync: jest.fn(async () => {}),
+  deleteItemAsync: jest.fn(async () => {}),
+}));
 
 describe("resolveSupportClient", () => {
   it("loads the demo in development, which is how the tests run", async () => {
@@ -28,18 +37,22 @@ describe("resolveSupportClient", () => {
     );
   });
 
-  it("fails closed without the demo: nothing is shown and nothing reads as sent", async () => {
-    const client = resolveSupportClient(DEMO_PHONE, null);
-    const unavailable = new SupportError("unavailable");
-    await expect(client.listNotifications()).rejects.toEqual(unavailable);
-    await expect(client.getChat()).rejects.toEqual(unavailable);
-    await expect(
-      client.sendMessage({ body: "Hello", key: "key-00000001", topic: "other" }),
-    ).rejects.toEqual(unavailable);
-    await expect(
-      client.makeComplaint({ category: "other", summary: "s", details: "d" }),
-    ).rejects.toEqual(unavailable);
-    await expect(client.listComplaints()).rejects.toEqual(unavailable);
+  it("talks to the API when the demo is off, so nothing made up is ever shown", async () => {
+    const seen: string[] = [];
+    setFetch(async (url) => {
+      seen.push(String(url).replace(API_URL, ""));
+      return new Response(JSON.stringify({ items: [], unread: 0, next_before: null }), { status: 200 });
+    });
+    try {
+      await expect(resolveSupportClient(DEMO_PHONE, null).listNotifications()).resolves.toEqual({
+        items: [],
+        unread: 0,
+        nextBefore: null,
+      });
+      expect(seen).toEqual(["/client/notifications"]);
+    } finally {
+      setFetch(null);
+    }
   });
 });
 
