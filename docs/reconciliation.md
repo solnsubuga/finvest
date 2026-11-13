@@ -56,6 +56,20 @@ Everything else is an exception:
 
 Every line and every movement comes out exactly once, in a match or in an exception. Each exception knows how far it puts the statement above or below the books, and the exceptions together always equal the whole gap. Both properties are tested over generated cases.
 
+### How matches are kept
+
+`reconciliation.day_close.refresh` copies the ledger's movements on each pot into `reconciliation_movements`, read through `ledger.statements.account_movements`, and pairs what the references pair. A movement's reference is the `source_id` of its journal entry. Pairs are rows in `reconciliation_matches` (migration `0041_reconciliation_day_close`). Exceptions are not stored: an exception is whatever is still unpaired on either side, worked out each time, so it can never disagree with the matches.
+
+| Rule | How the database holds it |
+| --- | --- |
+| One line, one movement | A line is matched once and a movement is matched once |
+| Same money | A pair from different pots, for different amounts or going different ways is refused |
+| By reference means by reference | A match marked `reference` must carry the same reference on both sides |
+| A person gives a reason | Any other match is `staff`, in the name of the signed-in member of staff, with a reason |
+| Nothing changes afterwards | Movements and matches are insert only |
+
+`match_by_hand` is the person's pairing. An exception that is a real difference (a bank fee, a deposit nobody claimed) is put right by a ledger entry made by the owning module. That entry is a new movement, and it is then matched like any other.
+
 Reconciliation never moves money and never retries a provider call. Resolving an exception calls the owning module (payments or payouts), which reads the status back from the provider and posts through the ledger.
 
 ## The day close
@@ -72,3 +86,24 @@ A day can be closed only when all of these hold:
 It takes two people. One staff member prepares the close and a different one approves it. The figures are checked again at approval, and if anything changed since the first signature the close goes back to be prepared again.
 
 A closed day is never reopened, and no ledger entry may be dated on a closed day. A later correction is a new entry on a later day.
+
+### How the close is kept
+
+| Step | Command | What happens |
+| --- | --- | --- |
+| First signature | `day_close.prepare` | Refreshes the matches, works out every pot, refuses with the first blocker, and saves the close as `prepared` with each pot's figures |
+| Second signature | `day_close.approve` | A different person. Closes the ledger through the day first (`ledger.closing.close_through`), then works the figures out again. If they are the figures that were prepared, the close becomes `closed`. If not, it raises `close_changed_since_prepared` and the ledger close is undone with it |
+| Send back | `day_close.send_back` | Declines or withdraws a prepared close, with a reason, so it can be prepared again |
+
+The ledger is closed before the figures are read at approval, so no entry can slip into the day behind the check. A pot's first statement sets its own opening balance, but the close compares the closing balance with the ledger, so a first statement that opens away from the books shows as an unexplained difference and stops the close.
+
+| Rule | How the database holds it |
+| --- | --- |
+| Two people | A close cannot be closed by the person who prepared it, nor by anyone who imported one of the day's statements, and only in the name of the signed-in member of staff |
+| Every shilling explained | A pot's figures cannot be saved unless statement minus ledger minus open exceptions is zero |
+| The figures are the ones signed | Positions are saved with the close and never added to or changed |
+| Days in order | Once a day is closed, the next close is for the next day |
+| Never reopened | A closed or sent back close never changes, and nothing is deleted |
+| Who | Only staff prepare and decide. The worker reads. Clients see nothing |
+
+The pots closed today are the two ioTec wallets and the trust bank account (`domain/pots.py`). The custodian joins when the dealing desk can report holdings.
