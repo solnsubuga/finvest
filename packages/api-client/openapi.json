@@ -280,6 +280,40 @@
         "title": "CategoryChannels",
         "type": "object"
       },
+      "ClaimProgressView": {
+        "additionalProperties": false,
+        "properties": {
+          "cannot_be_invited": {
+            "title": "Cannot Be Invited",
+            "type": "integer"
+          },
+          "claimed_and_confirmed": {
+            "title": "Claimed And Confirmed",
+            "type": "integer"
+          },
+          "invited": {
+            "title": "Invited",
+            "type": "integer"
+          },
+          "not_yet_claimed": {
+            "title": "Not Yet Claimed",
+            "type": "integer"
+          },
+          "said_something_is_wrong": {
+            "title": "Said Something Is Wrong",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "invited",
+          "claimed_and_confirmed",
+          "said_something_is_wrong",
+          "not_yet_claimed",
+          "cannot_be_invited"
+        ],
+        "title": "ClaimProgressView",
+        "type": "object"
+      },
       "ClientChat": {
         "additionalProperties": false,
         "properties": {
@@ -2711,6 +2745,16 @@
             "title": "Blockers",
             "type": "array"
           },
+          "claims": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ClaimProgressView"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "differences": {
             "items": {
               "$ref": "#/components/schemas/DifferenceView"
@@ -2757,6 +2801,7 @@
           "lines",
           "differences",
           "blockers",
+          "claims",
           "allowed"
         ],
         "title": "OverviewView",
