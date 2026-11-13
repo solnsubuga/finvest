@@ -56,7 +56,8 @@ A running log. Add a row when a decision is made, and move an open question up w
 | Is api.finvestug.com the backend address? | Owner |
 | Confirm the role to screen table for the console. In use as the working default since 2026-11-13 (see Decided). It decides who can open Money Movement, Reconciliation and the other screens. | Owner |
 | Card payments. Stripe is not available to Ugandan businesses. A local card acquirer, capped, is a possible later addition. | Owner |
-| Payouts: is the UGX 5,000,000 mobile money limit per payout (built so far) or per day? Are there daily limits, bank limits, or an amount above which staff must approve a withdrawal? | Owner |
+| Payouts: is the UGX 5,000,000 mobile money limit per payout (built so far) or per day? Are there daily limits or bank limits? A payout above UGX 10,000,000 is held for staff approval, as a working default. Confirm the amount. | Owner |
+| Payouts: is a bank payout sent by ioTec taken from the ioTec wallet or from the trust bank account? Built so far: the books show it leaving `bank.trust`. | ioTec |
 | Payouts: does the 24 hour wait on a new destination run from the staff approval (built so far) or from when the client added it? | Owner |
 | Payouts: is a mobile money number proved by the name the network holds for it (built so far), and can ioTec return that name? | Owner, ioTec |
 | Payouts: staff may approve a partial name match, meaning a missing middle name when two names agree, or one name spelt slightly differently when the rest agree (built so far). Confirm. | Owner |
