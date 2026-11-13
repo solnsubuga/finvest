@@ -57,6 +57,10 @@ Permission = Literal[
     # Proposing or deciding to email again an address that bounced for good or complained.
     # Seeing the suppression list is `clients.view`. Not a screen.
     "email_suppressions.lift",
+    # Proposing or deciding an announcement to every active client. A bigger act than changing
+    # a wording, so it is a permission of its own and can be given to fewer people. Seeing
+    # announcements is `settings.view`.
+    "announcements.send",
     "migration.view",
     # Matching a client's bank transfer to the statement, refusing it, or approving someone
     # else's match: this confirms money. Seeing the transfers is `reconciliation.view`. Not a
