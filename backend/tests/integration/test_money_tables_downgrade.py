@@ -1,10 +1,10 @@
 """A downgrade must never delete the books, the issued numbers, the audit trail, the job
 history, the receipts that stop a command running twice, the identity records, the payout
-destinations, the withdrawal limits, the payouts and their send attempts, the migration
-checks, the imported statements, the day closes, the pot transfers, the help chat, the
-complaints register, the goals, the email delivery records, the unclaimed accounts, the
-complaint outcomes, the suppression lifts, the client locks, the announcements or the team
-changes."""
+destinations and their two-person checks, the withdrawal limits, the payouts and their send
+attempts, the migration checks, the imported statements, the day closes, the pot transfers,
+the help chat, the complaints register, the goals, the email delivery records, the unclaimed
+accounts, the complaint outcomes, the suppression lifts, the client locks, the announcements
+or the team changes."""
 
 import os
 from collections.abc import Iterator
@@ -255,6 +255,14 @@ ROWS = {
         "'sms', '+256772123456', '-Nabc0000000000000B1', '-Nabc0000000000000C1', "
         "decode(repeat('00', 32), 'hex'), now(), now())",
         "refusing to drop payout account codes",
+    ),
+    "0035_payout_account_two_people": (
+        "INSERT INTO payout_destinations (id, client_id, kind, network, account_number, "
+        "holder_name, status, proof_kind, proof_name, name_match, checked_by, checked_at, "
+        "created_at, updated_at) VALUES ('-Nabc0000000000000D1', '-Nabc0000000000000B1', "
+        "'mobile_money', 'mtn', '256772000000', 'Test', 'in_review', 'network_registered_name', "
+        "'Test', 'exact', '-Nabc0000000000000S1', now(), now(), now())",
+        "refusing to drop the checks and approvals of payout destinations",
     ),
     "0051_kyc_sealed_details": (
         "INSERT INTO kyc_checks (id, client_id, document_type, document_country, "

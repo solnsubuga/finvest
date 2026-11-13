@@ -1,6 +1,5 @@
 """Payout destination steps: a client adds a number, proves it, and staff check the name."""
 
-from app.modules.kyc import service as kyc
 from app.modules.payouts import destinations
 from app.modules.payouts.domain.destinations import MobileMoneyNumber, ProofKind
 from tests.support.journey import Person, World
@@ -29,22 +28,29 @@ async def add_number(world: World, client: Person, number: str, holder_name: str
 
 
 async def check_name(
-    world: World, checker: Person, client: Person, destination_id: str, proof_name: str
+    world: World, checker: Person, destination_id: str, proof_name: str
 ) -> destinations.DestinationView:
     """Staff compare the name the network holds for the number with the name on the ID.
 
-    The ID name is the one KYC verified, read from KYC, as the console route will.
+    The service reads the ID name KYC verified itself, as the console route does.
     """
     async with world.api_database.actor_transaction(checker.actor) as session:
-        id_name = await kyc.verified_name(session, client.id)
-        assert id_name is not None
-        return await destinations.approve(
+        return await destinations.check(
             session,
             checker.actor,
             destination_id,
-            id_name=id_name,
             proof_name=proof_name,
             statement_date=None,
             reason="Checked against the network's registered name",
             clock=world.clock,
+        )
+
+
+async def approve_check(
+    world: World, approver: Person, destination_id: str
+) -> destinations.DestinationView:
+    """A second member of staff approves the check."""
+    async with world.api_database.actor_transaction(approver.actor) as session:
+        return await destinations.approve(
+            session, approver.actor, destination_id, reason="Second check", clock=world.clock
         )
