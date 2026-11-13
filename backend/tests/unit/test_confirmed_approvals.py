@@ -31,7 +31,11 @@ DECISIONS = {
     "POST /staff/migration/sign-offs/{sign_off_id}/decision",
     "POST /staff/rate-proposals/{proposal_id}/approve",
     "POST /staff/clients/locks/{lock_id}/decision",
+    "POST /staff/dealing/orders/{order_id}/approve",
+    "POST /staff/dealing/orders/{order_id}/confirm-result",
 }
+# A staff route whose path ends like this approves or decides something, so it must ask.
+DECIDING_ENDINGS = ("approve", "approval", "decision", "confirmation", "confirm-result")
 
 
 def _routes(routes: list[Any], prefix: str = "") -> list[tuple[str, APIRoute]]:
@@ -65,3 +69,12 @@ def test_each_decision_route_needs_a_recent_second_step() -> None:
         for method in route.methods or ()
     }
     assert confirmed == DECISIONS
+    # Found without the list, so the next module's approval route fails here until it asks.
+    deciding = {
+        f"{method} {path}"
+        for path, route in routes
+        if path.startswith("/staff/") and path.rstrip("/").endswith(DECIDING_ENDINGS)
+        for method in route.methods or ()
+        if method == "POST"
+    }
+    assert deciding <= confirmed, sorted(deciding - confirmed)
