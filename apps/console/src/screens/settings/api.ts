@@ -78,6 +78,7 @@ export type WordingsErrorCode =
   /** The change went through but the message could not be read back. The list is reloaded. */
   | "stale"
   | "not_connected"
+  | "not_confirmed"
   | "unavailable";
 
 export class WordingsError extends Error {
@@ -99,6 +100,7 @@ const MESSAGES: Record<WordingsErrorCode, string> = {
   not_found: "This change has already been decided.",
   stale: "Your change went through. Here is the list as it now stands.",
   not_connected: "Client messages are not connected to the Finvest service yet.",
+  not_confirmed: "Not done. Confirm it is you with your passkey or authenticator app, then try again.",
   unavailable: "We could not reach Finvest. Check your connection and try again.",
 };
 

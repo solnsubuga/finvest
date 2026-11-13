@@ -32,6 +32,7 @@ from app.modules.identity.service import (
     ClientSession,
     IdentityService,
     IssuedSession,
+    StaffSession,
 )
 from app.shared.actors import Actor
 from app.shared.clock import Clock
@@ -178,6 +179,14 @@ class AuthenticatorService:
         )
         await self._clear_attempts(actor.id)
         return issued
+
+    async def reconfirm(self, staff: StaffSession, code: str) -> datetime:
+        """Check a code from this person's app on this session. Returns when it stops counting."""
+        self._require()
+        await self._count_attempt(staff.staff_id)
+        await self._accept(staff.actor, code)
+        await self._clear_attempts(staff.staff_id)
+        return await self.identity.confirm_staff(staff, "authenticator")
 
     async def _accept(self, actor: Actor, code: str) -> None:
         """Accept `code` for this person's confirmed app once, or raise `invalid_code`."""

@@ -65,6 +65,54 @@ describe("the HTTP client", () => {
   });
 });
 
+describe("confirm it is you", () => {
+  const refused = () => respond(403, envelope("confirm_it_is_you"));
+
+  it("asks once, then sends the refused request again with the same key", async () => {
+    const fetchMock = vi
+      .fn<typeof fetch>()
+      .mockResolvedValueOnce(refused())
+      .mockResolvedValueOnce(respond(200, { done: true }));
+    const confirm = vi.fn().mockResolvedValue(true);
+    const http = createHttp("https://api.test", fetchMock, confirm);
+    expect(await http.request("POST", "/staff/x/decide", { d: 1 }, { idempotencyKey: "key-1" })).toEqual({
+      done: true,
+    });
+    expect(confirm).toHaveBeenCalledTimes(1);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    const [, second] = fetchMock.mock.calls[1]!;
+    expect(second?.body).toBe('{"d":1}');
+    expect((second?.headers as Record<string, string>)["Idempotency-Key"]).toBe("key-1");
+  });
+
+  it("gives the screen the refusal when the person closes the dialog", async () => {
+    const fetchMock = vi.fn<typeof fetch>().mockResolvedValueOnce(refused());
+    const http = createHttp("https://api.test", fetchMock, () => Promise.resolve(false));
+    await expect(http.request("POST", "/staff/x/decide")).rejects.toMatchObject({ code: "confirm_it_is_you" });
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("sends again only once, even if the API refuses the second time", async () => {
+    const fetchMock = vi.fn<typeof fetch>().mockResolvedValueOnce(refused()).mockResolvedValueOnce(refused());
+    const confirm = vi.fn().mockResolvedValue(true);
+    const http = createHttp("https://api.test", fetchMock, confirm);
+    await expect(http.request("POST", "/staff/x/decide")).rejects.toMatchObject({ code: "confirm_it_is_you" });
+    expect(confirm).toHaveBeenCalledTimes(1);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it("does not ask for any other refusal", async () => {
+    const confirm = vi.fn().mockResolvedValue(true);
+    const http = createHttp(
+      "https://api.test",
+      vi.fn<typeof fetch>().mockResolvedValue(respond(403, envelope("forbidden"))),
+      confirm,
+    );
+    await expect(http.request("POST", "/staff/x/decide")).rejects.toMatchObject({ code: "forbidden" });
+    expect(confirm).not.toHaveBeenCalled();
+  });
+});
+
 describe("staff sign-in over HTTP", () => {
   it("reads the session, keeping only permissions this console knows", async () => {
     const { auth } = api([respond(200, SESSION)]);
@@ -73,7 +121,13 @@ describe("staff sign-in over HTTP", () => {
       name: "Grace Auma",
       role: "admin",
       permissions: ["team.view"],
+      secondSteps: [],
     });
+  });
+
+  it("reads the second steps the person holds, keeping only ones this console offers", async () => {
+    const { auth } = api([respond(200, { ...SESSION, second_steps: ["passkey", "sms", "authenticator"] })]);
+    expect((await auth.getSession())?.secondSteps).toEqual(["passkey", "authenticator"]);
   });
 
   it("treats 401 on the session as nobody signed in", async () => {

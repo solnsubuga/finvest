@@ -50,6 +50,8 @@ ACCOUNT_FROM_ADDRESS_ATTEMPTS = 5
 ACCOUNT_ATTEMPTS = 20
 ADDRESS_ATTEMPTS = 50
 TOUCH_INTERVAL = timedelta(minutes=1)
+# Approving another person's change needs a second step this recent.
+CONFIRMATION_WINDOW = timedelta(minutes=10)
 
 logger = structlog.get_logger()
 
@@ -82,6 +84,9 @@ class StaffSession:
     name: str
     role: Role
     permissions: list[Permission]
+    # When this person last used their passkey or authenticator app on this session: signing
+    # in, or confirming it is them again since.
+    confirmed_at: datetime
 
     @property
     def actor(self) -> Actor:
@@ -241,24 +246,7 @@ class IdentityService:
                     text(f"UPDATE {table} SET password_hash = :hash WHERE id = :id"),  # noqa: S608
                     {"hash": await self.hasher.hash(password), "id": account.id},
                 )
-            has_passkey = await session.scalar(
-                text(
-                    "SELECT EXISTS (SELECT 1 FROM identity_passkeys WHERE actor_kind = :kind "
-                    "AND actor_id = :actor AND removed_at IS NULL)"
-                ),
-                {"kind": kind, "actor": account.id},
-            )
-            has_app = await session.scalar(
-                text(
-                    "SELECT EXISTS (SELECT 1 FROM identity_authenticators WHERE actor_kind = "
-                    ":kind AND actor_id = :actor AND confirmed_at IS NOT NULL "
-                    "AND removed_at IS NULL)"
-                ),
-                {"kind": kind, "actor": account.id},
-            )
-            methods: list[SecondStep] = ["passkey"] if has_passkey else []
-            if has_app:
-                methods.append("authenticator")
+            methods = await _devices_held(session, Actor(kind, account.id))
             if kind == "client":
                 # A texted or emailed code is the backup for clients. Staff never have one.
                 methods.append("code")
@@ -393,29 +381,38 @@ class IdentityService:
         ).one()
         if seen.sessions == 0 or seen.here > 0:
             return
-        table = "identity_clients" if actor.kind == "client" else "identity_staff"
-        phone_column = "phone" if actor.kind == "client" else "NULL"
-        contact = (
-            await session.execute(
-                text(f"SELECT email, {phone_column} AS phone FROM {table} WHERE id = :id"),  # noqa: S608
-                {"id": actor.id},
+        if actor.kind == "client":
+            contact = (
+                await session.execute(
+                    text(
+                        "SELECT phone, CASE WHEN email_verified_at IS NOT NULL THEN email END "
+                        "AS email FROM identity_clients WHERE id = :id"
+                    ),
+                    {"id": actor.id},
+                )
+            ).one_or_none()
+            # The phone is the client's proved contact, so the notice always goes there. An
+            # email goes only to an address they proved; the worker skips a suppressed one.
+            sends: list[tuple[Channel, str | None]] = (
+                [("sms", contact.phone), ("email", contact.email)] if contact else []
             )
-        ).one_or_none()
-        if contact is None:
-            return
-        channel: Channel = "email" if contact.email else "sms"
-        recipient = contact.email or contact.phone
-        if not recipient:
-            return
-        await queue_message(
-            session,
-            channel=channel,
-            recipient=recipient,
-            template="new_sign_in",
-            variables={"device": device, "when": kampala_time(now)},
-            idempotency_key=f"new-sign-in:{session_id}",
-            now=now,
-        )
+        else:
+            email = await session.scalar(
+                text("SELECT email FROM identity_staff WHERE id = :id"), {"id": actor.id}
+            )
+            sends = [("email", email)]
+        for channel, recipient in sends:
+            if not recipient:
+                continue
+            await queue_message(
+                session,
+                channel=channel,
+                recipient=recipient,
+                template="new_sign_in",
+                variables={"device": device, "when": kampala_time(now)},
+                idempotency_key=f"new-sign-in:{session_id}:{channel}",
+                now=now,
+            )
 
     async def _touch(self, token: str, kind: AccountKind):  # type: ignore[no-untyped-def]
         """Find a live session by token and push its idle expiry forward."""
@@ -424,8 +421,8 @@ class IdentityService:
             row = (
                 await session.execute(
                     text(
-                        "SELECT id, actor_id, transport, created_at, idle_expires_at "
-                        "FROM identity_sessions "
+                        "SELECT id, actor_id, transport, created_at, idle_expires_at, "
+                        "reverified_at FROM identity_sessions "
                         "WHERE token_hash = :hash AND actor_kind = :kind AND revoked_at IS NULL "
                         "AND idle_expires_at > :now AND absolute_expires_at > :now"
                     ),
@@ -475,8 +472,44 @@ class IdentityService:
         if row is None or account is None:
             return None
         return StaffSession(
-            row.id, account.id, account.name, account.role, permissions_for(account.role)
+            row.id,
+            account.id,
+            account.name,
+            account.role,
+            permissions_for(account.role),
+            row.reverified_at or row.created_at,
         )
+
+    async def staff_second_steps(self, staff: StaffSession) -> list[SecondStep]:
+        """The passkeys and authenticator app this person can confirm it is them with."""
+        async with self.database.transaction() as session:
+            return await _devices_held(session, staff.actor)
+
+    async def confirm_staff(self, staff: StaffSession, second_step: SecondStep) -> datetime:
+        """Note that this person just used their second step again on this session."""
+        now = self.clock.now()
+        async with self.database.transaction() as session:
+            confirmed = await session.scalar(
+                text(
+                    "UPDATE identity_sessions SET reverified_at = :now WHERE id = :id "
+                    "AND actor_kind = 'staff' AND actor_id = :staff AND revoked_at IS NULL "
+                    "RETURNING true"
+                ),
+                {"now": now, "id": staff.session_id, "staff": staff.staff_id},
+            )
+            if not confirmed:
+                raise ApplicationError("unauthorized")
+            await trail.note(
+                session,
+                self.clock,
+                staff.actor,
+                "identity.session.reconfirmed",
+                resource_type="session",
+                resource_id=staff.session_id,
+                details={"second_step": second_step},
+            )
+        logger.info("staff_reconfirmed", second_step=second_step)
+        return now + CONFIRMATION_WINDOW
 
     async def sign_out(self, token: str, kind: AccountKind) -> None:
         async with self.database.transaction() as session:
@@ -710,3 +743,23 @@ def _invalid(field: str, code: str) -> ApplicationError:
     return ApplicationError(
         error_code, fields=[FieldProblem(field_path=["body", field], code=code)]
     )
+
+
+async def _devices_held(session: AsyncSession, actor: Actor) -> list[SecondStep]:
+    """Which of passkey and authenticator app this person has set up, passkey first."""
+    row = (
+        await session.execute(
+            text(
+                "SELECT EXISTS (SELECT 1 FROM identity_passkeys WHERE actor_kind = :kind "
+                "AND actor_id = :actor AND removed_at IS NULL) AS passkey, "
+                "EXISTS (SELECT 1 FROM identity_authenticators WHERE actor_kind = :kind "
+                "AND actor_id = :actor AND confirmed_at IS NOT NULL "
+                "AND removed_at IS NULL) AS app"
+            ),
+            {"kind": actor.kind, "actor": actor.id},
+        )
+    ).one()
+    methods: list[SecondStep] = ["passkey"] if row.passkey else []
+    if row.app:
+        methods.append("authenticator")
+    return methods

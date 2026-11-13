@@ -78,7 +78,7 @@ export interface KycApi {
   escalate(id: string, reason: string): Promise<CheckDetail>;
 }
 
-export type KycErrorCode = "invalid" | "not_found" | "conflict" | "duplicate_document" | "forbidden" | "not_connected" | "unavailable";
+export type KycErrorCode = "invalid" | "not_found" | "conflict" | "duplicate_document" | "forbidden" | "not_connected" | "not_confirmed" | "unavailable";
 
 export class KycError extends Error {
   readonly code: KycErrorCode;
@@ -97,6 +97,7 @@ const MESSAGES: Record<KycErrorCode, string> = {
   duplicate_document: "Another approved client already holds this identity document. Escalate to compliance.",
   forbidden: "You are not allowed to decide identity checks.",
   not_connected: "Identity checks are not connected to the Finvest service yet.",
+  not_confirmed: "Not done. Confirm it is you with your passkey or authenticator app, then try again.",
   unavailable: "We could not reach Finvest. Check your connection and try again.",
 };
 

@@ -135,6 +135,7 @@ export type ComplaintsErrorCode =
   /** The change was saved but could not be read back. The screen reloads; it never asks for the change again. */
   | "stale"
   | "not_connected"
+  | "not_confirmed"
   | "unavailable";
 
 export class ComplaintsError extends Error {
@@ -151,6 +152,7 @@ const MESSAGES: Record<ComplaintsErrorCode, string> = {
   forbidden: "That needs a different person or a role you do not have. Ask compliance or an admin.",
   stale: "Saved. Finvest could not show the result straight away, so it has been loaded again.",
   not_connected: "Complaints are not connected to the Finvest service yet.",
+  not_confirmed: "Not done. Confirm it is you with your passkey or authenticator app, then try again.",
   unavailable: "We could not reach Finvest. Check your connection and try again.",
 };
 

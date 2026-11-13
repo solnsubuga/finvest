@@ -120,6 +120,7 @@ export type ClientsErrorCode =
   | "forbidden"
   | "not_found"
   | "not_connected"
+  | "not_confirmed"
   | "unavailable";
 
 export class ClientsError extends Error {
@@ -150,6 +151,8 @@ export function clientsErrorMessage(error: unknown): string {
         return "That client or proposal is no longer there.";
       case "not_connected":
         return "This console is not connected to Finvest yet.";
+      case "not_confirmed":
+        return "Not done. Confirm it is you with your passkey or authenticator app, then try again.";
       case "unavailable":
         return "Finvest could not be reached. Check your connection and try again.";
     }
@@ -165,6 +168,8 @@ export function toClientsError(error: unknown, deciding = false): ClientsError {
     if (field === "already_locked" || field === "not_locked" || field === "closed") return new ClientsError(field);
     if (error.code === "validation_failed") return new ClientsError("invalid");
     if (error.code === "conflict") return new ClientsError("waiting");
+    // The person closed the "confirm it is you" dialog, so nothing was done.
+    if (error.code === "confirm_it_is_you") return new ClientsError("not_confirmed");
     if (error.code === "forbidden") return new ClientsError(deciding ? "same_person" : "forbidden");
     if (error.code === "not_found") return new ClientsError("not_found");
   }
