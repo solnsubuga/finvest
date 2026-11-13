@@ -1,7 +1,7 @@
 """A second member of staff confirms every approval and rejection.
 
 Revision ID: 0052_kyc_two_person_decisions
-Revises: 0022_bank_transfer_deposits
+Revises: 0080_dealing_orders
 
 One person proposes approving or rejecting a check, with a reason, and a different person
 confirms it. The proposal is kept on the check, so the approved or rejected row names both. The
@@ -16,7 +16,7 @@ from collections.abc import Sequence
 from alembic import op
 
 revision: str = "0052_kyc_two_person_decisions"
-down_revision: str | None = "0022_bank_transfer_deposits"
+down_revision: str | None = "0080_dealing_orders"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 
