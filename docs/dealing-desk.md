@@ -147,6 +147,29 @@ Both the buffer and secondary market sales fund early withdrawals. One withdrawa
 
 When the buffer pays, the bills behind that investment stay with the desk as a surplus, and the next client money takes them over. That is how the buffer refills without a sale.
 
+### How a withdrawal is funded
+
+`dealing.withdrawals` (migration 0084) records how each early withdrawal is funded, once per investment.
+
+1. Investing hands the withdrawal over: the client's money is already in their payout pending account, and it publishes `investments.withdrawn_early` with `investment_id`, `currency` and `amount_minor`, naming the consumer `dealing.events.FUND_EARLY_WITHDRAWAL`.
+2. The worker reads the buffer and decides, one decision per currency at a time. The buffer it reads already counts this withdrawal as owed, so the buffer before it is that figure plus the withdrawal. Up to the buffer's limit with the buffer before it on or above the floor and nobody queued ahead, it is funded at once. Up to the limit otherwise, it queues. Above the limit, it waits for a sale.
+3. Every 15 minutes the worker funds the queue in the order asked, while the buffer allows, and stops at the first it cannot pay so nobody goes ahead of an earlier request.
+4. A member of staff funds the withdrawals waiting for a sale from a settled secondary sale, in the order asked, up to what the sale raised and no withdrawal has used yet.
+
+A funded withdrawal is announced as `dealing.withdrawal_funded` with `funding_id`, `investment_id`, `source` (`buffer` or `sale`), `amount_minor` and `currency`, and investing pays the client on it.
+
+The buffer is read from the ledger with `ledger.statements.total_balance`:
+
+| Figure | Accounts |
+| --- | --- |
+| Cash | `bank.trust` and `iotec.wallet` |
+| Owed from that cash | `client.awaiting_start`, `client.payout_pending`, `client.payout_in_flight`, `tax.withholding_payable` |
+| To place | For each product, the principal of running investments less the cost of the bills held, never below zero |
+
+`dealing.withdrawals.buffer_now` gives these figures with the level, what waits for the buffer and for a sale, and what to raise by selling.
+
+The database holds these rules whatever the code does. Only the worker records a funding and funds one from the buffer. A withdrawal waiting for a sale is funded by the person signed in, from a settled sale in its currency, and the withdrawals funded from one sale never add up to more than it raised. A funding is never removed, and once funded never changes.
+
 ### The rules
 
 | Rule | Starting value |
@@ -175,10 +198,10 @@ The database holds these rules whatever the code does. Nobody approves or sends 
 Agreed with the investing, and the payouts and reconciliation, threads on 13 November 2026. The reconciliation part is built. The rest is not yet.
 
 - **Investments.** The desk reads `investments.service.owed_by_product`, `running_investments` and `maturing`. It keeps allocations in its own tables, keyed by investment ID, and follows `investments.started`, `investments.matured`, `investments.rolled_over` and `investments.withdrawn_early`.
-- **Early withdrawal.** Investments owns the request, the pricing and the client's ledger entries. It calls `dealing.service.fund_early_withdrawal`, and creates the payout at once or when the desk reports `dealing.withdrawal_funded`.
+- **Early withdrawal.** Investments owns the request, the pricing and the client's ledger entries. It names `dealing.events.FUND_EARLY_WITHDRAWAL` as a consumer of `investments.withdrawn_early`, and creates the payout when the desk reports `dealing.withdrawal_funded`, which for a withdrawal the buffer pays at once follows within the same job.
 - **Payouts.** Payouts knows nothing about the buffer. The desk's cash is in the same trust bank account that payouts leave from.
 - **Reconciliation.** Every purchase, sale and maturity is a ledger entry on `bank.trust`, effective on its value date. The desk exposes `dealing.holdings.holdings_on(session, on)`, with face value, cost and custodian references for each instrument in minor units, and `dealing.holdings.expected_bank_movements(session, date_from=, date_to=)` so the day close can match the bank statement and the custodian statement.
 
 ## Not built yet
 
-HTTP routes for the order commands, allocations, the buffer rules changes, the custodian statement comparison and the allocation report. The console screen runs on sample data until the routes exist.
+HTTP routes for the order commands, allocations, the buffer rules changes, funding withdrawals from a sale, the custodian statement comparison and the allocation report. The console screen runs on sample data until the routes exist.
