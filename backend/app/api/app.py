@@ -16,6 +16,7 @@ from app.infrastructure.database import Database
 from app.infrastructure.email.webhooks import ResendHookSettings, WebhookVerifier
 from app.infrastructure.settings import Settings
 from app.infrastructure.storage import FileStorage, StorageSettings
+from app.modules.dealing import api as dealing_api
 from app.modules.documents import api as documents_api
 from app.modules.goals import api as goals_api
 from app.modules.identity import api as identity_api
@@ -126,4 +127,5 @@ def create_app(
     app.include_router(payment_routes.staff_router)
     app.include_router(migration_api.router)
     app.include_router(insights_api.router)
+    app.include_router(dealing_api.router)
     return app
