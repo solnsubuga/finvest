@@ -30,6 +30,7 @@ from app.modules.kyc import service as kyc
 from app.modules.ledger import statements as ledger
 from app.modules.payments import service as payments
 from app.modules.payouts import payouts
+from app.shared.business_day import business_date
 from app.shared.errors import ApplicationError
 from app.shared.money import Currency, Money
 
@@ -252,6 +253,12 @@ async def _holdings(
                     maturity_date=investment.maturity_date,
                     rolled_into_id=investment.rolled_into_id,
                     payout_id=investment.payout_id,
+                    withdrawn_on=(
+                        business_date(investment.withdrawn_at)
+                        if investment.withdrawn_at is not None
+                        else None
+                    ),
+                    withdrawal_payout_id=investment.withdrawal_payout_id,
                 ),
                 period=period,
                 value_at_end=at_end.get(reference, Money.zero(currency)),
