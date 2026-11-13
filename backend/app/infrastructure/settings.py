@@ -1,5 +1,6 @@
 """Process configuration from the environment. Secrets arrive here and nowhere else."""
 
+import ipaddress
 import ssl
 from pathlib import Path
 from typing import Literal, Self
@@ -29,11 +30,56 @@ class Settings(BaseSettings):
     database_timeout_seconds: float = Field(default=5.0, gt=0, le=30)
     database_pool_size: int = Field(default=5, ge=1, le=20)
 
+    # Sign-in. Browsers may call the API only from these exact origins, and a cookie session is
+    # honoured for an unsafe request only when its Origin is one of them.
+    client_allowed_origins: list[str] = Field(default_factory=list)
+    staff_allowed_origins: list[str] = Field(default_factory=list)
+    # Off only for local development over plain http.
+    cookie_secure: bool = True
+    # Client on the web, client on a phone (the app's PIN guards it between uses), and staff.
+    client_web_session_idle_minutes: int = Field(default=15, ge=5, le=120)
+    client_web_session_absolute_hours: int = Field(default=12, ge=1, le=24)
+    client_app_session_idle_days: int = Field(default=30, ge=1, le=90)
+    client_app_session_absolute_days: int = Field(default=90, ge=1, le=365)
+    staff_session_idle_minutes: int = Field(default=30, ge=5, le=240)
+    staff_session_absolute_hours: int = Field(default=12, ge=1, le=24)
+    password_memory_kib: int = Field(default=65_536, ge=19_456, le=1_048_576)
+    password_time_cost: int = Field(default=3, ge=2, le=10)
+    # Reverse proxies whose X-Forwarded-For names the caller, as IP addresses or networks.
+    # Attempt limits key on that address, so the header is believed from nobody else.
+    trusted_proxies: list[str] = Field(default_factory=list)
+
     # `/docs` and `/openapi.json`. Off unless turned on: a deployed API hands no route catalogue
     # to anonymous visitors.
     api_docs: bool = False
     log_format: Literal["json", "console"] = "json"
     log_level: Literal["DEBUG", "INFO", "WARNING", "ERROR"] = "INFO"
+
+    @field_validator("client_allowed_origins", "staff_allowed_origins")
+    @classmethod
+    def exact_origins(cls, value: list[str]) -> list[str]:
+        for origin in value:
+            scheme, _, rest = origin.partition("://")
+            if (
+                scheme not in ("http", "https")
+                or not rest
+                or "/" in rest
+                or origin != origin.strip()
+            ):
+                raise ValueError("Allowed origins are exact scheme://host[:port] values")
+        return value
+
+    @field_validator("trusted_proxies")
+    @classmethod
+    def proxy_addresses(cls, value: list[str]) -> list[str]:
+        for proxy in value:
+            try:
+                network = ipaddress.ip_network(proxy, strict=False)
+            except ValueError:
+                raise ValueError("Trusted proxies are IP addresses or networks") from None
+            if network.prefixlen == 0:
+                raise ValueError("Trusting every address as a proxy is not allowed")
+        return value
 
     @field_validator("database_url")
     @classmethod

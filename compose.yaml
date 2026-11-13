@@ -70,6 +70,10 @@ services:
       <<: *backend-environment
       FINVEST_DATABASE_URL: postgresql+asyncpg://finvest_app:local-app@db:5432/finvest
       FINVEST_API_DOCS: "true"
+      # The client app on Expo web and the console on Vite, over plain http.
+      FINVEST_CLIENT_ALLOWED_ORIGINS: '["http://localhost:8081"]'
+      FINVEST_STAFF_ALLOWED_ORIGINS: '["http://localhost:5174"]'
+      FINVEST_COOKIE_SECURE: "false"
     ports:
       - "127.0.0.1:${FINVEST_API_PORT:-8000}:8000"
     healthcheck:

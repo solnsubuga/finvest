@@ -47,7 +47,7 @@ The worker runs the handlers registered in `app/worker_main.py`. Register a hand
 app/
   shared/            Pure building blocks: clock, push IDs, actors, contracts, error envelope
   infrastructure/    Settings, logging, database engine and roles, process plumbing
-  api/               The FastAPI application: request IDs, error handling, health
+  api/               The FastAPI application: request IDs, error handling, health, CORS
   modules/<name>/    One package per business module
     domain/          Pure rules. No FastAPI, SQLAlchemy, network or infrastructure imports.
     service.py       Commands and queries that open transactions and call the domain
@@ -76,5 +76,17 @@ import-linter enforces the purity of `app/shared` and of every `app/modules/*/do
 - **Errors.** Raise `ApplicationError(code)`. Every failure leaves the API as the same envelope with a request ID and a code, and never echoes a submitted value.
 - **Migrations.** Hand-write SQL with `op.execute`. Grant each table and each function to `finvest_app` and `finvest_worker` explicitly, with only the privileges they need. Nothing is granted by default, including `EXECUTE` on new functions. A test fails if the history has two heads.
 - **Logs.** Log an event name, the request ID (bound automatically) and codes. Never personal data, account details or amounts.
+
+## Sign-in and who is calling
+
+The identity module (`app/modules/identity`) owns client and staff accounts, sessions and staff permissions.
+
+- **Two steps.** `POST /client/login/start` and `POST /staff/login/start` check the mobile number or work email and the password, and return a `login_id` with the second steps on offer. They never open a session. The second step (a passkey, or a code for clients) turns the `login_id` into a session through `IdentityService.open_session`. Staff sessions can only come from a passkey, and the database enforces it.
+- **Sessions.** A browser gets an HttpOnly, SameSite=Strict cookie. The phone app gets a token and sends `Authorization: Bearer`. Only a SHA-256 digest of the token is stored. Every session has an idle limit and an absolute limit, set per audience in the settings.
+- **Knowing the caller.** Depend on `CurrentClient`, `CurrentStaff` or `require_permission("clients.view")` from `app.modules.identity.api`. Every staff route declares a permission. Pass `session.actor` to `Database.actor_transaction`.
+- **Origins.** Browsers may call only from `FINVEST_CLIENT_ALLOWED_ORIGINS` and `FINVEST_STAFF_ALLOWED_ORIGINS` (JSON lists of exact origins). A cookie on an unsafe request is honoured only with one of those origins.
+- **Attempt limits.** Wrong guesses are counted in PostgreSQL per account, per account and address, and per address, over 15 minutes. The caller's address is read from `X-Forwarded-For` only when the request comes from a proxy listed in `FINVEST_TRUSTED_PROXIES`.
+- **Passwords.** Argon2id, at least 10 characters, refused when common or built from the account's own number or address. Every sign-in failure is the same `invalid_credentials` after the same work.
+- **Roles.** `domain/permissions.py` is the one catalogue of roles and permissions. The mapping is a default that the owner has not confirmed yet.
 
 See [docs/architecture.md](../docs/architecture.md), [docs/engineering-patterns.md](../docs/engineering-patterns.md) and [docs/rules.md](../docs/rules.md).
