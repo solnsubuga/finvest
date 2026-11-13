@@ -6673,6 +6673,7 @@
                 "finance.view",
                 "products.view",
                 "rates.view",
+                "rates.change",
                 "compliance.view",
                 "team.view",
                 "reports.view",
@@ -11163,7 +11164,7 @@
     },
     "/client/investments/{investment_id}/pay-out": {
       "post": {
-        "description": "Send on the money of a matured investment that is waiting for a destination.\n\nSafe to repeat: the same destination asked twice is the same payout.",
+        "description": "Send on the money of a matured investment that is waiting for a destination.\n\nSafe to repeat without an idempotency key: the payout's key is\n`maturity:<investment id>:<destination id>`, so the same destination asked twice is the\nsame payout.",
         "operationId": "pay_out_matured_client_investments__investment_id__pay_out_post",
         "parameters": [
           {

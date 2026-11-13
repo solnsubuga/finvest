@@ -87,6 +87,13 @@ def test_support_cannot_see_money_movement_or_the_team() -> None:
     assert not allows("operations", "team.view")
 
 
+def test_only_admin_and_finance_change_rates() -> None:
+    assert {role for role in ROLES if allows(role, "rates.change")} == {"admin", "finance"}
+    for role in ROLES:
+        if allows(role, "rates.change"):
+            assert allows(role, "rates.view")
+
+
 def test_a_session_ends_when_idle_and_at_its_absolute_limit() -> None:
     policy = SessionPolicy(timedelta(minutes=15), timedelta(hours=12))
     idle, absolute = policy.expiry(NOW, NOW)
