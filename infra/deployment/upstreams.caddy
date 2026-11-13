@@ -9,3 +9,6 @@
 (console_upstream) {
 	reverse_proxy console-blue:8080
 }
+(site_upstream) {
+	reverse_proxy site-blue:8080
+}

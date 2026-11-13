@@ -2,7 +2,7 @@
 # (that is the root compose.yaml).
 #
 # Two kinds of project share this file (deploy.sh). Each release runs as a colour, blue or green:
-# the project <name>-<colour> with api, worker, scheduler and console. The project <name> itself
+# the project <name>-<colour> with api, worker, scheduler, console and site. The project <name> itself
 # runs only Caddy (the `edge` profile), which outlives releases and sends traffic to the colour
 # named in its upstreams.caddy, so a deployment starts the new colour beside the old one and
 # switches over without a gap.
@@ -94,6 +94,15 @@ services:
       edge:
         aliases: ["console-${FINVEST_COLOUR:-blue}"]
 
+  # The public website, built for this environment's addresses (site.Dockerfile).
+  site:
+    <<: *hardened
+    image: ${SITE_IMAGE:?Set the immutable site image reference}
+    networks:
+      default:
+      edge:
+        aliases: ["site-${FINVEST_COLOUR:-blue}"]
+
   caddy:
     image: caddy:2.11.4-alpine@sha256:6aeddd44c3078b0f9a35206472a11420648a79c184603ef95957d0a20044cb2b
     profiles: [edge]
@@ -118,7 +127,7 @@ services:
     logging: *logs
 
 networks:
-  # Caddy reaches each colour's api and console here, by their colour's alias. deploy.sh creates
+  # Caddy reaches each colour's api, console and site here, by their colour's alias. deploy.sh creates
   # it with a fixed subnet, which the API trusts for X-Forwarded-For (FINVEST_TRUSTED_PROXIES).
   edge:
     name: ${FINVEST_DEPLOY_PROJECT}-edge
