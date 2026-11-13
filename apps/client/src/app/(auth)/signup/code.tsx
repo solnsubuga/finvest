@@ -4,7 +4,7 @@ import { Redirect, Stack, useRouter } from "expo-router";
 
 import { useAuth } from "@/auth/AuthProvider";
 import { formatE164 } from "@/auth/phone";
-import { describeAuthError } from "@/auth/types";
+import { AuthError, describeAuthError } from "@/auth/types";
 import { BackButton } from "@/components/BackButton";
 import { Card, Notice, StepProgress } from "@/components/Blocks";
 import { Button, TextLink } from "@/components/Button";
@@ -34,6 +34,7 @@ export default function SignupCode() {
   const [code, setCode] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [taken, setTaken] = useState(false);
 
   if (!signup) {
     return <Redirect href="/signup" />;
@@ -47,6 +48,7 @@ export default function SignupCode() {
       router.push("/signup/password");
     } catch (caught) {
       setError(describeAuthError(caught));
+      setTaken(caught instanceof AuthError && caught.code === "phone_taken");
       setCode("");
     } finally {
       setBusy(false);
@@ -56,13 +58,17 @@ export default function SignupCode() {
   return (
     <Screen
       footer={
-        <Button
-          label="Continue"
-          onPress={submit}
-          loading={busy}
-          disabled={code.length < CODE_LENGTH}
-          testID="code-submit"
-        />
+        taken ? (
+          <Button label="Log in" onPress={() => router.replace("/login")} testID="go-to-login" />
+        ) : (
+          <Button
+            label="Continue"
+            onPress={submit}
+            loading={busy}
+            disabled={code.length < CODE_LENGTH}
+            testID="code-submit"
+          />
+        )
       }
     >
       <Stack.Screen options={{ title: "Enter your code" }} />
@@ -84,11 +90,14 @@ export default function SignupCode() {
             setCode(next);
             setError(null);
           }}
-          invalid={Boolean(error)}
+          invalid={Boolean(error) && !taken}
         />
         {error ? <Notice tone="danger">{error}</Notice> : null}
         <View style={{ alignItems: "flex-start" }}>
-          <TextLink label="Change number" onPress={() => router.replace("/signup")} />
+          <TextLink
+            label="Change number"
+            onPress={() => (router.canGoBack() ? router.back() : router.replace("/signup"))}
+          />
         </View>
       </View>
       <View style={{ marginTop: 16 }}>

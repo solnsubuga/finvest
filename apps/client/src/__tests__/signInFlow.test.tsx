@@ -103,5 +103,27 @@ describe("the shell, from the first screen", () => {
     await fireEvent.press(screen.getByTestId("password-submit"));
 
     await waitFor(() => expect(screen.getByText("Welcome to Finvest")).toBeTruthy());
+    // The signed-in shell keeps saying it is a demo.
+    expect(screen.getByText(/Demo\. Not connected to Finvest yet/)).toBeTruthy();
+  });
+
+  it("tells only the owner of a number that it already has an account", async () => {
+    await openApp();
+    await press("Create an account");
+    await screen.findByText("Create your account");
+    await fireEvent.changeText(screen.getByTestId("phone-input"), "772123456");
+    await fireEvent.changeText(screen.getByTestId("email-input"), "amara@example.com");
+    await fireEvent.press(screen.getByTestId("terms-checkbox"));
+    await fireEvent.press(screen.getByTestId("signup-submit"));
+
+    // The first step goes ahead exactly as it does for a new number.
+    await screen.findByText("Enter the code we sent you");
+    expect(screen.queryByText(/already has a Finvest account/)).toBeNull();
+
+    await fireEvent.changeText(screen.getByTestId("code-input"), DEMO_CODE);
+    await fireEvent.press(screen.getByTestId("code-submit"));
+    await screen.findByText("This number already has a Finvest account. Log in instead.");
+    await fireEvent.press(screen.getByTestId("go-to-login"));
+    await screen.findByText("Welcome back");
   });
 });

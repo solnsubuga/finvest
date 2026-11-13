@@ -27,10 +27,18 @@ describe("sign up", () => {
     expect(session).toEqual({ phone: NEW_PHONE, displayName: null, restricted: false });
   });
 
-  it("refuses a number that already has an account", async () => {
-    expect(await codeOf(client().startSignup({ ...signupInput, phone: DEMO_PHONE }))).toBe(
-      "phone_taken",
-    );
+  it("does not reveal that a number has an account until the code proves ownership", async () => {
+    const auth = client();
+    const taken = await auth.startSignup({ ...signupInput, phone: DEMO_PHONE });
+    const fresh = await auth.startSignup(signupInput);
+    expect(Object.keys(taken).sort()).toEqual(Object.keys(fresh).sort());
+
+    // A wrong code gets the same answer for both numbers.
+    expect(await codeOf(auth.confirmSignupCode(taken.challengeId, "000000"))).toBe("invalid_code");
+    expect(await codeOf(auth.confirmSignupCode(fresh.challengeId, "000000"))).toBe("invalid_code");
+
+    // Only the right code, which only the owner has, says the account exists.
+    expect(await codeOf(auth.confirmSignupCode(taken.challengeId, DEMO_CODE))).toBe("phone_taken");
   });
 
   it("refuses a wrong code and lets the client try again", async () => {

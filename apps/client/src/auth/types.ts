@@ -49,8 +49,16 @@ export type LoginChallenge = {
 };
 
 export interface AuthClient {
-  /** Sign up, step 1: sends a code by SMS to prove the number. */
+  /**
+   * Sign up, step 1: sends a code by SMS to prove the number. It answers the
+   * same way whether or not the number already has an account, so it cannot
+   * be used to find out who is a client.
+   */
   startSignup(input: SignupStart): Promise<SignupChallenge>;
+  /**
+   * Fails with `phone_taken` when the code is right and the number already
+   * has an account. Only the owner of the number can learn that.
+   */
   confirmSignupCode(challengeId: string, code: string): Promise<SignupTicket>;
   /** Sign up, step 2: sets the password and opens the first session. */
   completeSignup(ticket: string, password: string): Promise<Session>;
@@ -69,7 +77,7 @@ export interface AuthClient {
 const messages: Record<AuthErrorCode, string> = {
   invalid_credentials: "That number and password do not match. Check both and try again.",
   invalid_code: "That code is not right. Check the SMS and try again.",
-  phone_taken: "This number already has an account. Log in instead.",
+  phone_taken: "This number already has a Finvest account. Log in instead.",
   leaked_password:
     "This password has appeared in a known leak, so it is not safe to use. Choose a different one.",
   expired: "That took too long, so we stopped for your safety. Please start again.",

@@ -1,6 +1,7 @@
 import { Pressable, StyleSheet, View } from "react-native";
 import { useRouter } from "expo-router";
 
+import { useAuth } from "@/auth/AuthProvider";
 import { formatE164 } from "@/auth/phone";
 import { Session } from "@/auth/types";
 import { Logo } from "@/components/Logo";
@@ -14,6 +15,7 @@ type Props = { activeName: string; session: Session };
 /** The black left sidebar for wide screens. */
 export function Sidebar({ activeName, session }: Props) {
   const router = useRouter();
+  const { demo } = useAuth();
   return (
     <View style={styles.sidebar} accessibilityRole="navigation" accessibilityLabel="Main">
       <View style={styles.logo}>
@@ -41,6 +43,11 @@ export function Sidebar({ activeName, session }: Props) {
         );
       })}
       <View style={styles.account}>
+        {demo ? (
+          <Txt size={12} weight="bold" color={colors.lime}>
+            Demo account
+          </Txt>
+        ) : null}
         <Txt size={12} color={colors.onBlackMuted}>
           Signed in as
         </Txt>

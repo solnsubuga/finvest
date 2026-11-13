@@ -48,7 +48,11 @@ Until the backend sign-in API exists, the only implementation is the in-memory s
 - Any SMS code is `123456`. One account exists already: `772 123 456` with the password `correcthorse1`. These are demo values, not credentials for any real system.
 - Nothing is stored. Reloading the app signs you out.
 
+`startSignup` answers the same way whether or not the number already has an account. Only `confirmSignupCode`, after the SMS code proves ownership, may say `phone_taken`. The backend must keep that property.
+
 What the stub does not cover yet, each with a screen on the design canvas: the app PIN, passkey setup, the ID check, password reset, log in by email, and company or group accounts. Links to those lead to a short "not ready yet" screen.
+
+Still outstanding on the sign up screen: "the terms" and "the privacy notice" are not links yet, because neither document exists. They must link to the real documents before launch.
 
 ## Notes
 
@@ -56,4 +60,6 @@ What the stub does not cover yet, each with a screen on the design canvas: the a
 - There is no wallet screen and no spendable balance.
 - Clients never see tax rates, only net figures.
 - The app PIN or fingerprint unlocks a phone that is already signed in and approves payments. It never signs in a new device.
+- `app.json` cannot import the tokens, so its two `#0D0D0D` values (Android icon and splash background) are written by hand. Keep them equal to `colors.black`.
+- Screenshots in `docs/screenshots/` keep stable file names. Replace them in place when a screen changes.
 - Build to the [design canvas](../../docs/design.md). Every PR that adds or changes a screen includes screenshots.

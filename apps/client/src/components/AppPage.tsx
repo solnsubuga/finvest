@@ -7,6 +7,7 @@ import { colors, fontSizes, spacing } from "@/theme";
 import { useIsWide } from "@/theme/useIsWide";
 
 import { Notice } from "./Blocks";
+import { DemoLabel } from "./DemoLabel";
 import { Txt } from "./Txt";
 
 type Props = { title: string; subtitle?: string; children?: ReactNode };
@@ -24,6 +25,7 @@ export function AppPage({ title, subtitle, children }: Props) {
       ]}
     >
       <StatusBar style="dark" />
+      <DemoLabel signedIn />
       <View style={{ gap: 4 }}>
         <Txt
           accessibilityRole="header"

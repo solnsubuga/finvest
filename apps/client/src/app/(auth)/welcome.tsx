@@ -27,6 +27,11 @@ export default function Welcome() {
 
       {/* An illustration of the product, not the client's own figures. */}
       <View style={styles.cards} accessible accessibilityLabel="Example: a 91 day Treasury bill growing every day, paid for from mobile money">
+        <View style={styles.example}>
+          <Txt size={11} weight="bold" color={colors.white} style={{ letterSpacing: 0.6 }}>
+            EXAMPLE
+          </Txt>
+        </View>
         <View style={styles.billCard}>
           <Txt size={fontSizes.xs} weight="semibold" color={colors.muted}>
             91 Day Treasury Bill
@@ -70,7 +75,15 @@ export default function Welcome() {
 }
 
 const styles = StyleSheet.create({
-  cards: { marginTop: 40, gap: 12 },
+  cards: { marginTop: 32, gap: 12 },
+  example: {
+    alignSelf: "flex-start",
+    borderWidth: 1,
+    borderColor: colors.onBlackBorder,
+    borderRadius: 999,
+    paddingVertical: 3,
+    paddingHorizontal: 10,
+  },
   billCard: {
     width: 260,
     backgroundColor: colors.white,

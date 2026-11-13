@@ -3,12 +3,10 @@ import { KeyboardAvoidingView, Platform, ScrollView, StyleSheet, View } from "re
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { StatusBar } from "expo-status-bar";
 
-import { useAuth } from "@/auth/AuthProvider";
-import { DEMO_CODE } from "@/auth/stubAuthClient";
 import { colors, COLUMN_WIDTH, spacing } from "@/theme";
 import { useIsWide } from "@/theme/useIsWide";
 
-import { Txt } from "./Txt";
+import { DemoLabel } from "./DemoLabel";
 
 type Props = {
   children: ReactNode;
@@ -26,7 +24,6 @@ type Props = {
 export function Screen({ children, footer, dark = false }: Props) {
   const insets = useSafeAreaInsets();
   const wide = useIsWide();
-  const { demo } = useAuth();
   const background = dark ? colors.black : colors.paper;
 
   return (
@@ -48,18 +45,9 @@ export function Screen({ children, footer, dark = false }: Props) {
       >
         <View style={styles.column}>
           <View>
-            {demo ? (
-              <View
-                style={[
-                  styles.demo,
-                  { backgroundColor: dark ? colors.onBlackSurface : colors.surfaceSunken },
-                ]}
-              >
-                <Txt size={12} weight="semibold" color={dark ? colors.white : colors.ink}>
-                  {`Demo sign-in, not connected to Finvest yet. Any SMS code is ${DEMO_CODE}.`}
-                </Txt>
-              </View>
-            ) : null}
+            <View style={styles.demo}>
+              <DemoLabel onDark={dark} />
+            </View>
             {children}
           </View>
           {footer ? <View style={styles.footer}>{footer}</View> : null}
@@ -80,5 +68,5 @@ const styles = StyleSheet.create({
     gap: spacing[6],
   },
   footer: { gap: 6 },
-  demo: { borderRadius: 10, paddingVertical: 8, paddingHorizontal: 12, marginBottom: 16 },
+  demo: { marginBottom: 16 },
 });
