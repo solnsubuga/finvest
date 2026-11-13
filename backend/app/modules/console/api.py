@@ -140,6 +140,22 @@ class SearchResult(Contract):
     clients: list[AccountView]
 
 
+class ClientCardView(Contract):
+    id: PushId
+    # The name on the approved identity document. None until the check is approved.
+    verified_name: str | None
+    account_number: str | None
+    status: client_locks.ClientStatus
+    created_at: datetime
+
+
+class ClientCards(Contract):
+    cards: list[ClientCardView]
+
+
+MAX_CARDS = 100
+
+
 class ProposeLock(Contract):
     kind: client_locks.LockKind
     reason: Reason
@@ -158,6 +174,30 @@ async def search(
     async with database.actor_transaction(staff.actor) as session:
         found = await clients.find_client(session, q)
     return SearchResult(clients=[_account(found)] if found else [])
+
+
+@router.get("/cards")
+async def cards(
+    staff: ClientViewer,
+    database: Db,
+    ids: Annotated[list[PushId], Query(min_length=1, max_length=MAX_CARDS)],
+) -> ClientCards:
+    """Who these clients are, by ID: name once verified, account number, status and when they
+    joined. For screens that list clients by ID, so they need not read each whole page."""
+    async with database.actor_transaction(staff.actor) as session:
+        found = await clients.client_cards(session, ids)
+    return ClientCards(
+        cards=[
+            ClientCardView(
+                id=card.account.id,
+                verified_name=card.verified_name,
+                account_number=card.account_number,
+                status=card.account.status,
+                created_at=card.account.created_at,
+            )
+            for card in found
+        ]
+    )
 
 
 @router.get("/{client_id}")

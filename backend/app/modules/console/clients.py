@@ -43,6 +43,35 @@ class ClientPage:
     complaints: list[ComplaintView] | None
 
 
+@dataclass(frozen=True, slots=True)
+class ClientCard:
+    """Who a client is, for a screen that holds only their ID, such as a chat or a complaint."""
+
+    account: ClientAccount
+    # The name on the approved identity document. None until the check is approved.
+    verified_name: str | None
+    # Issued when the identity check is approved.
+    account_number: str | None
+
+
+async def client_cards(session: AsyncSession, client_ids: list[str]) -> list[ClientCard]:
+    """A card for each of these clients. An ID with no client is left out."""
+    cards: list[ClientCard] = []
+    for client_id in dict.fromkeys(client_ids):
+        account = await client_account(session, client_id)
+        if account is None:
+            continue
+        check = await check_summary(session, client_id)
+        cards.append(
+            ClientCard(
+                account=account,
+                verified_name=await kyc_verified_name(session, client_id),
+                account_number=check.account_number if check else None,
+            )
+        )
+    return cards
+
+
 async def find_client(session: AsyncSession, query: str) -> ClientAccount | None:
     """A client by ID, by ten-digit account number, or by mobile number."""
     cleaned = query.strip()

@@ -216,6 +216,20 @@ export const ClaimProgressView = z.object({
 });
 export type ClaimProgressView = z.infer<typeof ClaimProgressView>;
 
+export const ClientCardView = z.object({
+  account_number: z.string().nullable(),
+  created_at: z.string(),
+  id: z.string(),
+  status: z.enum(["active", "locked", "closed"]),
+  verified_name: z.string().nullable(),
+});
+export type ClientCardView = z.infer<typeof ClientCardView>;
+
+export const ClientCards = z.object({
+  cards: z.array(ClientCardView),
+});
+export type ClientCards = z.infer<typeof ClientCards>;
+
 export const ConversationSummary = z.object({
   id: z.string(),
   last_message_at: z.string(),
@@ -1392,6 +1406,19 @@ export const operations = {
     idempotent: false,
     status: 200,
     response: Facets,
+  },
+  "GET /staff/clients/cards": {
+    method: "GET",
+    path: "/staff/clients/cards",
+    params: z.object({}),
+    query: z.object({
+    ids: z.array(z.string()),
+  }),
+    body: null,
+    bodyKind: null,
+    idempotent: false,
+    status: 200,
+    response: ClientCards,
   },
   "POST /staff/clients/locks/{lock_id}/decision": {
     method: "POST",
