@@ -117,6 +117,14 @@ export const NAV_GROUPS: readonly NavGroup[] = [
         phase: 4,
       },
       {
+        path: "goals",
+        label: "Goals",
+        title: "Goals",
+        summary: "What clients are saving towards, and the investments each goal is made of.",
+        permission: "goals.view",
+        phase: 4,
+      },
+      {
         path: "dealing-desk",
         label: "Dealing Desk",
         title: "Dealing desk",
