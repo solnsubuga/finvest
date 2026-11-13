@@ -151,3 +151,33 @@ def test_a_downgrade_refuses_to_drop_a_table_that_holds_rows(
         f"DO $$ BEGIN IF NOT EXISTS (SELECT FROM {table}) THEN "
         "RAISE EXCEPTION 'row was lost'; END IF; END $$",
     )
+
+
+def test_details_saved_in_plain_columns_are_never_dropped_by_the_sealing_upgrade(
+    scratch_database: TestDatabase,
+) -> None:
+    sealed = "0051_kyc_sealed_details"
+    assert harness.alembic(scratch_database, "upgrade", sealed).returncode == 0
+    assert harness.alembic(scratch_database, "downgrade", "-1").returncode == 0
+    migrator = scratch_database.admin.set(
+        username="finvest_migrator",
+        password=harness.PASSWORDS["finvest_migrator"],
+        database=scratch_database.name,
+    )
+    harness.psql(
+        migrator,
+        "-c",
+        "INSERT INTO kyc_checks (id, client_id, document_type, document_country, "
+        "document_number, created_at, updated_at) VALUES ('-Nabc0000000000000A1', "
+        "'-Nabc0000000000000B1', 'passport', 'UG', 'B1234567', now(), now())",
+    )
+
+    result = harness.alembic(scratch_database, "upgrade", sealed)
+    assert result.returncode != 0
+    assert "refusing to drop identity details that were saved unsealed" in result.stderr
+    harness.psql(
+        migrator,
+        "-c",
+        "DO $$ BEGIN IF NOT EXISTS (SELECT FROM kyc_checks WHERE document_number = 'B1234567') "
+        "THEN RAISE EXCEPTION 'details were lost'; END IF; END $$",
+    )
