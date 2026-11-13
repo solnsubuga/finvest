@@ -1,11 +1,9 @@
 /**
  * The console's view of announcements: words sent to every active client.
  *
- * A stand-in for the generated client in packages/api-client, like
- * WordingsApi. The shapes follow the announcement routes in
- * docs/notifications.md. When the backend client is wired in, an
- * implementation that calls them replaces the stub and the screen does not
- * change.
+ * The shapes follow the announcement routes in docs/notifications.md.
+ * `http.ts` calls them; `announcementsStub.ts` is the sample for `pnpm dev`
+ * and previews.
  */
 
 import { outsideLinks } from "./rules.ts";

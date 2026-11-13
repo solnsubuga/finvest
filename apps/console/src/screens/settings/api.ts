@@ -1,10 +1,8 @@
 /**
  * The console's view of the words in client messages.
  *
- * A stand-in for the generated client in packages/api-client, like AuthApi.
- * The shapes follow the wording routes in docs/notifications.md. When the
- * backend client is wired in, an implementation that calls them replaces the
- * stub in index.tsx and the screen does not change.
+ * The shapes follow the wording routes in docs/notifications.md. `http.ts`
+ * calls them; `stub.ts` is the sample for `pnpm dev` and previews.
  */
 
 export type Category = "money" | "investments" | "earnings" | "account" | "security" | "support" | "news";

@@ -1,9 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useAuth } from "@/auth/context.ts";
+import { apiBaseUrl, createHttp } from "@/api/http.ts";
 import { isStubAuth } from "@/auth/index.ts";
 import { can } from "@/auth/types.ts";
 import { Button } from "@/components/ui/button.tsx";
 import { emptyDirectory, type Directory } from "@/directory/api.ts";
+import { createHttpDirectory } from "@/directory/http.ts";
 import { createStubDirectory } from "@/directory/stub.ts";
 import { PageHeader } from "@/pages/PageHeader.tsx";
 import {
@@ -19,6 +21,7 @@ import {
 import { AnnouncementsSection } from "./Announcements.tsx";
 import { notConnectedAnnouncementsApi, type AnnouncementsApi } from "./announcements.ts";
 import { createStubAnnouncementsApi } from "./announcementsStub.ts";
+import { createHttpAnnouncementsApi, createHttpWordingsApi } from "./http.ts";
 import { CATEGORIES, CATEGORY_LABELS } from "./labels.ts";
 import { createStubWordingsApi } from "./stub.ts";
 import { WordingPanel, WordingRow } from "./Wordings.tsx";
@@ -222,7 +225,7 @@ export function SettingsScreen({ api, announcements, directory, canChange, canSe
 
 export default function SettingsPage() {
   const { session } = useAuth();
-  // Sample messages under `pnpm dev` or a preview build, like sign-in. Otherwise nothing until the API client exists.
+  // Sample messages under `pnpm dev` or a preview build, like sign-in. Otherwise the real API.
   const [{ api, announcements, directory }] = useState<{ api: WordingsApi; announcements: AnnouncementsApi; directory: Directory }>(() => {
     if (isStubAuth() && session) {
       const me = { id: session.staffId, name: session.name };
@@ -237,7 +240,10 @@ export default function SettingsPage() {
         directory: createStubDirectory(me),
       };
     }
-    return { api: notConnectedWordingsApi, announcements: notConnectedAnnouncementsApi, directory: emptyDirectory };
+    const base = apiBaseUrl();
+    if (!base) return { api: notConnectedWordingsApi, announcements: notConnectedAnnouncementsApi, directory: emptyDirectory };
+    const http = createHttp(base);
+    return { api: createHttpWordingsApi(http), announcements: createHttpAnnouncementsApi(http), directory: createHttpDirectory(http) };
   });
   return (
     <SettingsScreen
