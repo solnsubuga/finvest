@@ -105,4 +105,17 @@ All email goes through Resend, and only the worker sends it.
 - **Content.** Templates live in `app/modules/notifications/domain/templates.py`. The variables, which can hold a one-time code, are emptied when the message is sent or given up on. Addresses are removed after 30 days by an hourly scheduled job. Job payloads carry the key only.
 - **Settings, worker only.** `FINVEST_EMAIL_BACKEND=resend`, `FINVEST_EMAIL_FROM="Finvest <no-reply@finvestug.com>"` and `FINVEST_EMAIL_RESEND_API_KEY`. With the backend unset, nothing is sent and queued email waits and then expires.
 
+## Files
+
+Receipts, identity document photos and proofs of account ownership go to one private bucket per environment, through `app.infrastructure.storage`. Build the store once per process with `StorageSettings().storage()` and pass it in, like the clock.
+
+- **Uploading.** The API receives the file and stores it: `await storage.put(NewFile(key, data, content_type))`. Browsers never upload to the bucket. Store the file before you open the transaction, then record the returned `key`, `content_type`, `byte_size` and `sha256` in your module's own table in the transaction that records why the file exists. A stored file whose transaction then fails is a harmless orphan under a key nothing points to. A committed row without its file would be worse.
+- **Keys.** `<module>/<record id>/<file id>` with push IDs, for example `kyc/<check id>/<photo id>`. A key is written once. A new version of a file gets a new key and a new row. Writing the same key with the same bytes again, as a retry does, is harmless.
+- **Showing a file to staff.** `storage.read_link(key, content_type=..., lifetime=timedelta(minutes=5), now=clock.now())` returns a link that opens the file inline for at most 15 minutes. It makes no network call. Return it only to staff whose permission covers that record, and never log it: anyone holding it can open the file until it expires. The console's content policy allows images and frames from the bucket.
+- **Reading a file on the server.** `await storage.read(key, sha256=recorded)` checks the bytes against the digest your table holds and raises `FileMismatch` if they differ.
+- **Failures.** `StorageUnavailable` is safe to retry. `StorageRefused`, `FileNotFound` and `InvalidFile` are not. Their messages never contain keys, contents or credentials. Like any network call, none of these runs inside a database transaction.
+- **Size.** The API refuses request bodies over 256 KiB by default. A route that takes a file adds its path prefix and limit to `BODY_LIMITS` in `app/api/hardening.py`, and the edge needs the same raise in `infra/deployment/Caddyfile` (ask the infrastructure thread). The store takes at most 25 MiB.
+- **Tests.** Use `MemoryStorage()`, which keeps files in the process and refuses a second, different file under one key. It is refused anywhere `FINVEST_ENVIRONMENT` is set.
+- **Settings, API and worker.** `FINVEST_OBJECT_STORAGE_BACKEND` (`none`, `memory` or `s3`), `_BUCKET`, `_ENDPOINT`, `_REGION`, `_ACCESS_KEY_ID`, `_SECRET_ACCESS_KEY`, and `_PATH_STYLE` for a local S3-compatible server. Terraform writes them and the deploy sets the backend to `s3`. With the backend unset, every call fails closed.
+
 See [docs/architecture.md](../docs/architecture.md), [docs/engineering-patterns.md](../docs/engineering-patterns.md) and [docs/rules.md](../docs/rules.md).

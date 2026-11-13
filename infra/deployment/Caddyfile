@@ -79,7 +79,9 @@ import /etc/caddy/upstreams.caddy
 	encode zstd gzip
 	# Scripts and styles come from this origin; Cloudflare Web Analytics, which Cloudflare may add
 	# to the pages it serves, reports to cloudflareinsights.com. Data comes only from the API.
-	header ?Content-Security-Policy "default-src 'self'; script-src 'self' https://static.cloudflareinsights.com; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self' data:; connect-src 'self' https://{$FINVEST_API_DOMAIN} https://cloudflareinsights.com; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'"
+	# Uploaded files (receipts, identity photos) open from the private bucket through short-lived
+	# read links, as images or in a frame.
+	header ?Content-Security-Policy "default-src 'self'; script-src 'self' https://static.cloudflareinsights.com; style-src 'self' 'unsafe-inline'; img-src 'self' data: {$FINVEST_STORAGE_ORIGIN}; frame-src {$FINVEST_STORAGE_ORIGIN}; object-src 'none'; font-src 'self' data:; connect-src 'self' https://{$FINVEST_API_DOMAIN} https://cloudflareinsights.com; base-uri 'self'; form-action 'self'; frame-ancestors 'none'"
 	route {
 		import private_paths
 		import console_upstream
