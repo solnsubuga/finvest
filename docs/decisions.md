@@ -49,6 +49,7 @@ A running log. Add a row when a decision is made, and move an open question up w
 | 2026-11-13 | Decided for now, by the migration thread with the investing thread. A migrated investment is opened in the ledger with the interest the new formula gives for its original start date, rate and tax, not with the old system's figure. A difference between the two is listed in the finance check and signed off with a reason before the switch. It is never posted. |
 | 2026-11-13 | All work reaches `main` through pull requests. UI work includes screenshots. Commits on `main` carry no AI attribution. |
 | 2026-11-13 | A payout account whose name differs from the client's ID is never approved, not even by two staff. The same holds for a mobile money number: a different registered name is refused outright. |
+| 2026-11-13 | Decided for now: once a day is reconciled and signed off, the ledger is closed through it and the database refuses any entry dated on or before it. A closed day is never reopened. A mistake found later is corrected by an entry dated in an open day. Today and future days cannot be closed. See [ledger.md](ledger.md#closing-a-day). Asked for in review and built without waiting for the owner, who can revisit it. |
 
 ## Open
 

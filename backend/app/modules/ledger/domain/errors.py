@@ -59,3 +59,15 @@ class SecondPersonRequired(LedgerError):
     """A correction must be decided by a staff member other than the one who proposed it."""
 
     code = "ledger_second_person_required"
+
+
+class DayClosed(LedgerError):
+    """The entry is dated on or before the day the ledger is closed through."""
+
+    code = "ledger_day_closed"
+
+
+class DayNotEnded(LedgerError):
+    """Only a day that has ended in Kampala can be closed."""
+
+    code = "ledger_day_not_ended"

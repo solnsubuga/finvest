@@ -588,6 +588,8 @@ async def test_application_roles_hold_only_the_documented_privileges(
         ("ledger_accounts", "finvest_worker", "INSERT,SELECT"),
         ("ledger_balances", "finvest_app", "SELECT"),
         ("ledger_balances", "finvest_worker", "SELECT"),
+        ("ledger_closed_days", "finvest_app", "INSERT,SELECT"),
+        ("ledger_closed_days", "finvest_worker", "SELECT"),
         ("ledger_correction_decisions", "finvest_app", "INSERT,SELECT"),
         ("ledger_correction_decisions", "finvest_worker", "SELECT"),
         ("ledger_correction_proposals", "finvest_app", "INSERT,SELECT"),
