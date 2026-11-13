@@ -239,9 +239,19 @@ Agreed with the investing, and the payouts and reconciliation, threads on 13 Nov
 | `POST /staff/dealing/orders/{id}/result` | Record the custodian's note, or a fill of null for nothing dealt |
 | `POST /staff/dealing/orders/{id}/confirm-result` | Confirm, as a person other than the recorder, which settles the order |
 | `POST /staff/dealing/orders/{id}/reject-result` | Reject a recorded result with a note |
+| `GET /staff/dealing/buffer?currency=UGX` | The buffer today, the rules in force, every version, the rules changes, Finvest's money in the buffer and its movements, each with the steps the reader may take (`allowed`) |
+| `POST /staff/dealing/buffer/rules` | Propose a new version of the rules, from a later day |
+| `POST /staff/dealing/buffer/rules/{id}/approve` | Approve it, as the second person |
+| `POST /staff/dealing/buffer/rules/{id}/send-back` | Send it back with a note |
+| `POST /staff/dealing/buffer/rules/{id}/withdraw` | Withdraw it, by whoever proposed it |
+| `POST /staff/dealing/buffer/capital` | Record Finvest's money paid in, or propose taking some out |
+| `POST /staff/dealing/buffer/capital/{id}/approve` | Approve it, as the second person, which posts it |
+| `POST /staff/dealing/buffer/capital/{id}/decline` | Decline it with a reason |
+
+The buffer commands take `dealing_orders.change` too, and both approvals ask for a recent passkey or app code. Every command takes an `Idempotency-Key` and answers with the buffer screen. A pay-in whose day closes between recording and approval is refused with `day_closed_decline_and_record_again`: the second person declines it, and it is recorded again on an open day. Reasons and notes are staff free text and never reach the logs.
 
 The audit event for a recorded result carries its figures, so a result later rejected can still be read.
 
 ## Not built yet
 
-HTTP routes for allocations, the buffer rules changes, the custodian statement comparison and the allocation report. The console screen runs on sample data until the routes exist.
+HTTP routes for allocations, the custodian statement comparison and the allocation report. The buffer rules changes and Finvest's money have routes but no console screen yet. The console screen runs on sample data until the routes exist.

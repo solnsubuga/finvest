@@ -32,7 +32,7 @@ from app.modules.dealing.domain.capital import (
 from app.modules.ledger import closing as ledger_closing
 from app.modules.ledger import service as ledger
 from app.modules.ledger import statements
-from app.modules.ledger.domain.errors import InsufficientFunds
+from app.modules.ledger.domain.errors import DayClosed, InsufficientFunds
 from app.shared.actors import Actor
 from app.shared.business_day import business_date
 from app.shared.clock import Clock
@@ -204,6 +204,10 @@ async def approve(
             posted = await ledger.post_entry(session, draft, clock)
         except InsufficientFunds:
             raise _refused(Refusal.MORE_THAN_PAID_IN) from None
+        except DayClosed:
+            # The day the money arrived closed after it was recorded. It cannot be posted on
+            # that day any more: decline this one and record it again on an open day.
+            raise _invalid("value_date", "day_closed_decline_and_record_again") from None
         await session.execute(
             _DECIDE,
             {

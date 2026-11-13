@@ -200,6 +200,70 @@ export const BufferOut = z.object({
 });
 export type BufferOut = z.infer<typeof BufferOut>;
 
+export const Direction = z.enum(["in", "out"]);
+export type Direction = z.infer<typeof Direction>;
+
+export const MovementStatus = z.enum(["proposed", "approved", "declined"]);
+export type MovementStatus = z.infer<typeof MovementStatus>;
+
+export const Step = z.enum(["approve", "send_back", "decline", "withdraw"]);
+export type Step = z.infer<typeof Step>;
+
+export const MovementOut = z.object({
+  allowed: z.array(Step),
+  amount: AmountOut,
+  bank_reference: z.string().nullable(),
+  decided_at: z.string().nullable(),
+  decided_by: z.string().nullable(),
+  decision_reason: z.string().nullable(),
+  direction: Direction,
+  id: z.string(),
+  proposed_at: z.string(),
+  proposed_by: z.string(),
+  reason: z.string(),
+  status: MovementStatus,
+  value_date: z.string().nullable(),
+});
+export type MovementOut = z.infer<typeof MovementOut>;
+
+export const RulesOut = z.object({
+  effective_from: z.string(),
+  floor: AmountOut,
+  from_buffer_up_to: AmountOut,
+  pay_within_working_days: z.number().int(),
+  target: AmountOut,
+});
+export type RulesOut = z.infer<typeof RulesOut>;
+
+export const ProposalStatus = z.enum(["proposed", "approved", "sent_back", "withdrawn"]);
+export type ProposalStatus = z.infer<typeof ProposalStatus>;
+
+export const RulesProposalOut = z.object({
+  allowed: z.array(Step),
+  decided_at: z.string().nullable(),
+  decided_by: z.string().nullable(),
+  decision_note: z.string().nullable(),
+  id: z.string(),
+  proposed_at: z.string(),
+  proposed_by: z.string(),
+  reason: z.string(),
+  rules: RulesOut,
+  status: ProposalStatus,
+});
+export type RulesProposalOut = z.infer<typeof RulesProposalOut>;
+
+export const BufferScreenOut = z.object({
+  buffer: AmountOut,
+  currency: Currency,
+  finvest_money: AmountOut,
+  in_force: RulesOut,
+  level: BufferLevel,
+  movements: z.array(MovementOut),
+  proposals: z.array(RulesProposalOut),
+  versions: z.array(RulesOut),
+});
+export type BufferScreenOut = z.infer<typeof BufferScreenOut>;
+
 export const ChangeView = z.object({
   about_you: z.boolean(),
   current_role: z.enum(["admin", "operations", "finance", "compliance", "support"]).nullable(),
@@ -479,6 +543,11 @@ export const DecisionRequest = z.object({
   reason: z.string().nullable().optional(),
 });
 export type DecisionRequest = z.infer<typeof DecisionRequest>;
+
+export const DeclineIn = z.object({
+  reason: z.string(),
+});
+export type DeclineIn = z.infer<typeof DeclineIn>;
 
 export const FillOut = z.object({
   amount: AmountOut,
@@ -818,6 +887,16 @@ export const MoveComplaint = z.object({
 });
 export type MoveComplaint = z.infer<typeof MoveComplaint>;
 
+export const MovementIn = z.object({
+  amount_minor: z.number().int(),
+  bank_reference: z.string().nullable().optional(),
+  currency: Currency,
+  direction: Direction,
+  reason: z.string(),
+  value_date: z.string().nullable().optional(),
+});
+export type MovementIn = z.infer<typeof MovementIn>;
+
 export const NewCheck = z.object({
   proof_name: z.string(),
   reason: z.string(),
@@ -992,9 +1071,6 @@ export const ProposalIn = z.object({
 });
 export type ProposalIn = z.infer<typeof ProposalIn>;
 
-export const ProposalStatus = z.enum(["proposed", "approved", "sent_back", "withdrawn"]);
-export type ProposalStatus = z.infer<typeof ProposalStatus>;
-
 export const RateOut = z.object({
   annual_rate_bps: z.number().int(),
   client_rate_percent: z.string(),
@@ -1156,6 +1232,17 @@ export const RoleView = z.object({
   role: z.enum(["admin", "operations", "finance", "compliance", "support"]),
 });
 export type RoleView = z.infer<typeof RoleView>;
+
+export const RulesIn = z.object({
+  currency: Currency,
+  effective_from: z.string(),
+  floor_minor: z.number().int(),
+  from_buffer_up_to_minor: z.number().int(),
+  pay_within_working_days: z.number().int(),
+  reason: z.string(),
+  target_minor: z.number().int(),
+});
+export type RulesIn = z.infer<typeof RulesIn>;
 
 export const SavedReplyItem = z.object({
   body: z.string(),
@@ -1768,6 +1855,106 @@ export const operations = {
     idempotent: false,
     status: 200,
     response: StaffComplaint,
+  },
+  "GET /staff/dealing/buffer": {
+    method: "GET",
+    path: "/staff/dealing/buffer",
+    params: z.object({}),
+    query: z.object({
+    currency: Currency.optional(),
+  }),
+    body: null,
+    bodyKind: null,
+    idempotent: false,
+    status: 200,
+    response: BufferScreenOut,
+  },
+  "POST /staff/dealing/buffer/capital": {
+    method: "POST",
+    path: "/staff/dealing/buffer/capital",
+    params: z.object({}),
+    query: z.object({}),
+    body: MovementIn,
+    bodyKind: "json",
+    idempotent: true,
+    status: 200,
+    response: BufferScreenOut,
+  },
+  "POST /staff/dealing/buffer/capital/{movement_id}/approve": {
+    method: "POST",
+    path: "/staff/dealing/buffer/capital/{movement_id}/approve",
+    params: z.object({
+    movement_id: z.string(),
+  }),
+    query: z.object({}),
+    body: null,
+    bodyKind: null,
+    idempotent: true,
+    status: 200,
+    response: BufferScreenOut,
+  },
+  "POST /staff/dealing/buffer/capital/{movement_id}/decline": {
+    method: "POST",
+    path: "/staff/dealing/buffer/capital/{movement_id}/decline",
+    params: z.object({
+    movement_id: z.string(),
+  }),
+    query: z.object({}),
+    body: DeclineIn,
+    bodyKind: "json",
+    idempotent: true,
+    status: 200,
+    response: BufferScreenOut,
+  },
+  "POST /staff/dealing/buffer/rules": {
+    method: "POST",
+    path: "/staff/dealing/buffer/rules",
+    params: z.object({}),
+    query: z.object({}),
+    body: RulesIn,
+    bodyKind: "json",
+    idempotent: true,
+    status: 200,
+    response: BufferScreenOut,
+  },
+  "POST /staff/dealing/buffer/rules/{proposal_id}/approve": {
+    method: "POST",
+    path: "/staff/dealing/buffer/rules/{proposal_id}/approve",
+    params: z.object({
+    proposal_id: z.string(),
+  }),
+    query: z.object({}),
+    body: null,
+    bodyKind: null,
+    idempotent: true,
+    status: 200,
+    response: BufferScreenOut,
+  },
+  "POST /staff/dealing/buffer/rules/{proposal_id}/send-back": {
+    method: "POST",
+    path: "/staff/dealing/buffer/rules/{proposal_id}/send-back",
+    params: z.object({
+    proposal_id: z.string(),
+  }),
+    query: z.object({}),
+    body: NoteIn,
+    bodyKind: "json",
+    idempotent: true,
+    status: 200,
+    response: BufferScreenOut,
+  },
+  "POST /staff/dealing/buffer/rules/{proposal_id}/withdraw": {
+    method: "POST",
+    path: "/staff/dealing/buffer/rules/{proposal_id}/withdraw",
+    params: z.object({
+    proposal_id: z.string(),
+  }),
+    query: z.object({}),
+    body: null,
+    bodyKind: null,
+    idempotent: true,
+    status: 200,
+    response: BufferScreenOut,
   },
   "GET /staff/dealing/desk": {
     method: "GET",
