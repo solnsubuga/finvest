@@ -6,6 +6,7 @@ import { useSecondSteps } from "@/auth/useSecondSteps";
 import { AppPage } from "@/components/AppPage";
 import { Notice } from "@/components/Blocks";
 import { Icon } from "@/components/Icon";
+import { LinkCard } from "@/components/LinkCard";
 import { Txt } from "@/components/Txt";
 import { colors } from "@/theme";
 import { useIsWide } from "@/theme/useIsWide";
@@ -32,12 +33,14 @@ export default function Home() {
   return (
     <AppPage
       title={firstName ? `Welcome, ${firstName}` : "Welcome to Finvest"}
-      subtitle={wide ? "The same account as your phone, on a bigger screen." : undefined}
+      subtitle={
+        wide ? "The same account as your phone, on a bigger screen." : undefined
+      }
     >
       {session?.restricted ? (
         <Notice tone="warning">
-          You signed in with an SMS code, so for 24 hours withdrawals only go to accounts you have used
-          before.
+          You signed in with an SMS code, so for 24 hours withdrawals only go to
+          accounts you have used before.
         </Notice>
       ) : null}
       {onlySms ? (
@@ -53,16 +56,34 @@ export default function Home() {
           <View style={{ flex: 1 }}>
             <Txt weight="bold">Make signing in safer</Txt>
             <Txt size={13} color={colors.muted}>
-              Add a passkey or an authenticator app, so you do not depend on SMS codes.
+              Add a passkey or an authenticator app, so you do not depend on SMS
+              codes.
             </Txt>
           </View>
           <Icon name="chevron" size={16} strokeWidth={2.2} />
         </Pressable>
       ) : null}
       <Notice tone="neutral">
-        Nothing here yet. Your investments, goals and activity will appear on this screen as soon as
-        you start.
+        Nothing here yet. Your investments, goals and activity will appear on
+        this screen as soon as you start.
       </Notice>
+      <LinkCard
+        icon="repeat"
+        title="Invest automatically"
+        description="The same amount every week or month, from your mobile money"
+        onPress={() => router.push("/autoinvest")}
+        testID="home-autoinvest"
+      />
+      {wide ? null : (
+        // The sidebar has Insights on a wide screen. On a phone it lives here.
+        <LinkCard
+          icon="insights"
+          title="Insights"
+          description="What your money earned, month by month"
+          onPress={() => router.navigate("/insights")}
+          testID="home-insights"
+        />
+      )}
       {wide ? null : (
         // The sidebar has Profile on a wide screen. On a phone it lives here.
         <Pressable

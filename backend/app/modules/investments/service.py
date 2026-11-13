@@ -41,11 +41,20 @@ from app.modules.investments.holdings import (
     request_investment,
     start_investment,
 )
+from app.modules.investments.maturity import (
+    MATURED_TOPIC,
+    ROLLED_OVER_TOPIC,
+    choose_at_maturity,
+    mature_investment,
+    pay_out_matured,
+)
 
 __all__ = [
+    "MATURED_TOPIC",
     "MAX_PROPOSALS",
     "PROPOSAL_RESOURCE",
     "REQUEST_OPERATION",
+    "ROLLED_OVER_TOPIC",
     "STARTED_TOPIC",
     "ClientInvestment",
     "ClientProduct",
@@ -58,6 +67,7 @@ __all__ = [
     "accrue_investment",
     "approve_rate",
     "cancel_unpaid",
+    "choose_at_maturity",
     "client_investment",
     "client_investments",
     "client_products",
@@ -68,6 +78,8 @@ __all__ = [
     "list_investments",
     "list_products",
     "list_proposals",
+    "mature_investment",
+    "pay_out_matured",
     "payable_investment",
     "propose_rate",
     "rate_history",

@@ -1,5 +1,6 @@
 """Investment fixtures: a client who passed the identity check, and a payment for an investment."""
 
+import secrets
 from datetime import UTC, date, datetime, timedelta
 
 from app.infrastructure.database import Database
@@ -10,6 +11,8 @@ from app.modules.kyc import service as kyc
 from app.modules.kyc.providers import ManualProvider
 from app.modules.ledger import service as ledger
 from app.modules.ledger.domain.entries import AccountKind, AccountSpec, EntryDraft, credit, debit
+from app.modules.payouts import destinations
+from app.modules.payouts.domain.destinations import MobileMoneyNumber, ProofKind
 from app.shared.actors import SYSTEM, Actor
 from app.shared.business_day import business_date
 from app.shared.clock import Clock
@@ -154,3 +157,35 @@ async def account_balance(database: Database, investment: investments.Investment
             FakeClock(),
         )
         return (await ledger.get_balance(session, account.id)).minor
+
+
+async def approved_destination(
+    app_database: Database, client: Actor, clock: Clock, *, number: str | None = None
+) -> str:
+    """A mobile money number of the client's that staff approved. Returns its ID.
+
+    Staff approve by the real time, so pass a clock at or near now. A number may belong to
+    one client only, so each call takes a fresh one unless told otherwise.
+    """
+    number = number or f"0772{secrets.randbelow(1_000_000):06d}"
+    async with app_database.actor_transaction(client) as session:
+        view = await destinations.add_destination(
+            session, client, MobileMoneyNumber.parse(number), "Sarah Nakato", clock
+        )
+        await destinations.confirm_code(session, client, view.id, clock)
+        await destinations.submit_proof(
+            session, client, view.id, ProofKind.NETWORK_REGISTERED_NAME, "doc-1", clock
+        )
+    checker = new_staff()
+    async with app_database.actor_transaction(checker) as session:
+        await destinations.approve(
+            session,
+            checker,
+            view.id,
+            id_name="Sarah Nakato",
+            proof_name="Nakato Sarah",
+            statement_date=None,
+            reason="Checked",
+            clock=clock,
+        )
+    return view.id

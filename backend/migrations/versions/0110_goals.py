@@ -1,7 +1,7 @@
 """Add goals and the savings made towards them.
 
 Revision ID: 0110_goals
-Revises: 0061_investments
+Revises: 0071_migration_totals_confirmed
 
 A goal holds no money. It is a target attached to the client's investments: each saving towards
 it is an investment of its own, and `goal_savings` records which goal an investment was made
@@ -21,7 +21,7 @@ from collections.abc import Sequence
 from alembic import op
 
 revision: str = "0110_goals"
-down_revision: str | None = "0061_investments"
+down_revision: str | None = "0071_migration_totals_confirmed"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 

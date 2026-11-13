@@ -45,12 +45,25 @@ ROWS = {
         "VALUES (DATE '2026-11-14', 'UGX', now())",
         "refusing to drop interest runs",
     ),
-    "0061_investments": (
+    "0063_investment_maturity": (
+        "BEGIN; SELECT set_config('finvest.actor_kind', 'client', true); "
+        "SELECT set_config('finvest.actor_id', '-Nabc0000000000000B1', true); "
         "INSERT INTO investments (id, client_id, product_id, currency, principal_minor, "
         "annual_rate_bps, tax_bps, term_days, at_maturity, created_at, pay_by, updated_at) "
         "VALUES ('-Nabc0000000000000A1', '-Nabc0000000000000B1', 'FvProduct1TREA91_001', "
         "'UGX', 1000000, 1250, 1500, 91, 'roll_over', now(), now() + interval '72 hours', "
-        "now())",
+        "now()); UPDATE investments SET at_maturity = 'pay_out', "
+        "payout_destination_id = '-Nabc0000000000000D1'; COMMIT",
+        "refusing to drop the record of matured investments",
+    ),
+    "0061_investments": (
+        "BEGIN; SELECT set_config('finvest.actor_kind', 'client', true); "
+        "SELECT set_config('finvest.actor_id', '-Nabc0000000000000B1', true); "
+        "INSERT INTO investments (id, client_id, product_id, currency, principal_minor, "
+        "annual_rate_bps, tax_bps, term_days, at_maturity, created_at, pay_by, updated_at) "
+        "VALUES ('-Nabc0000000000000A1', '-Nabc0000000000000B1', 'FvProduct1TREA91_001', "
+        "'UGX', 1000000, 1250, 1500, 91, 'roll_over', now(), now() + interval '72 hours', "
+        "now()); COMMIT",
         "refusing to drop investments",
     ),
     "0110_goals": (
@@ -176,6 +189,13 @@ ROWS = {
         "INSERT INTO support_conversations (id, client_id, created_at, last_message_at) "
         "VALUES ('-Nabc0000000000000A1', '-Nabc0000000000000B1', now(), now())",
         "refusing to drop help chat or complaints",
+    ),
+    "0071_migration_totals_confirmed": (
+        "INSERT INTO migration_control_totals (id, as_of, totals, entered_by, entered_at) "
+        "VALUES ('-Nabc0000000000000A1', DATE '2026-11-13', '{}', '-Nabc0000000000000S1', "
+        "now()); INSERT INTO migration_control_totals_confirmations (totals_id, confirmed_by, "
+        "confirmed_at) VALUES ('-Nabc0000000000000A1', '-Nabc0000000000000S2', now())",
+        "refusing to drop confirmations of migration totals",
     ),
 }
 

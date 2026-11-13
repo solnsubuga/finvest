@@ -34,6 +34,7 @@ from app.modules.investments.domain.investments import (
     InvestmentStatus,
     can_be_cancelled,
     can_be_paid,
+    can_choose_maturity,
     check_start,
     pay_by,
     start,
@@ -82,6 +83,15 @@ class Investment:
     accrued_through: date | None
     accrued_gross: Money
     accrued_tax: Money
+    # Where the client asked to be paid at maturity. A destination ID from the payouts module.
+    payout_destination_id: str | None = None
+    matured_at: datetime | None = None
+    # The investment this one became, or came from, when a term was rolled over.
+    rolled_into_id: str | None = None
+    rolled_from_id: str | None = None
+    payout_id: str | None = None
+    # Why the money is waiting in payouts instead of on its way. None when it is not waiting.
+    payout_refusal: str | None = None
 
     @property
     def amount(self) -> Money:
@@ -125,13 +135,23 @@ class ClientInvestment:
     value: Money
     # Interest and total at maturity. None for an open term.
     at_maturity_returns: ClientReturns | None
+    # Where it pays out at maturity, if the client chose. A destination ID from payouts.
+    payout_destination_id: str | None
+    # Whether the client may still change what happens at maturity.
+    can_change_maturity: bool
+    # Once matured: the investment it was rolled into, or the payout that carries the money.
+    rolled_into_id: str | None
+    payout_id: str | None
+    # Matured, and the money is waiting for the client to say where to send it.
+    waiting_for_destination: bool
 
 
 _COLUMNS = (
     "i.id, i.client_id, p.code AS product_code, p.name AS product_name, i.currency, "
     "i.principal_minor, i.annual_rate_bps, i.tax_bps, i.term_days, i.at_maturity, i.status, "
     "i.created_at, i.pay_by, i.start_date, i.maturity_date, i.accrued_through, "
-    "i.accrued_gross_minor, i.accrued_tax_minor"
+    "i.accrued_gross_minor, i.accrued_tax_minor, i.payout_destination_id, i.matured_at, "
+    "i.rolled_into_id, i.rolled_from_id, i.payout_id, i.payout_refusal"
 )
 _FROM = "FROM investments i JOIN investment_products p ON p.id = i.product_id"
 
@@ -508,6 +528,12 @@ def investment_from_row(row: Row[Any]) -> Investment:
         accrued_through=row.accrued_through,
         accrued_gross=Money(row.accrued_gross_minor, currency),
         accrued_tax=Money(row.accrued_tax_minor, currency),
+        payout_destination_id=row.payout_destination_id,
+        matured_at=row.matured_at,
+        rolled_into_id=row.rolled_into_id,
+        rolled_from_id=row.rolled_from_id,
+        payout_id=row.payout_id,
+        payout_refusal=row.payout_refusal,
     )
 
 
@@ -542,4 +568,13 @@ def _client_view(investment: Investment, today: date) -> ClientInvestment:
         at_maturity_returns=None
         if investment.term_days is None
         else client_returns(terms, investment.term_days),
+        payout_destination_id=investment.payout_destination_id,
+        can_change_maturity=can_choose_maturity(
+            investment.status, investment.term_days, investment.maturity_date, today
+        ),
+        rolled_into_id=investment.rolled_into_id,
+        payout_id=investment.payout_id,
+        waiting_for_destination=investment.status is InvestmentStatus.MATURED
+        and investment.payout_id is None
+        and investment.rolled_into_id is None,
     )

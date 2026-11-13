@@ -132,7 +132,7 @@ async def accrue_batch(
         investment = investment_from_row(row)
         try:
             async with session.begin_nested():
-                amount = await _accrue(session, investment, run_date, clock)
+                amount = await accrue_locked(session, investment, run_date, clock)
         except Exception as error:
             failed += 1
             logger.error(
@@ -183,7 +183,7 @@ async def accrue_investment(
     ).one_or_none()
     if row is None:
         raise ApplicationError("not_found")
-    return await _accrue(session, investment_from_row(row), run_date, clock)
+    return await accrue_locked(session, investment_from_row(row), run_date, clock)
 
 
 async def finish_run(session: AsyncSession, run_date: date, clock: Clock) -> dict[str, int]:
@@ -253,7 +253,7 @@ def _nothing(currency: Currency) -> Accrual:
     return Accrual(gross=Money.zero(currency), tax=Money.zero(currency))
 
 
-async def _accrue(
+async def accrue_locked(
     session: AsyncSession, investment: Investment, run_date: date, clock: Clock
 ) -> Accrual | None:
     """Post what `investment`, already locked, is due for `run_date`."""

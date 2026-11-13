@@ -92,9 +92,25 @@ The switch cannot be scheduled while the import has an error, or while any total
 
 ### What is kept
 
-Every trial run is kept in `migration_trials`: the "as of" date, a fingerprint of each file, the counts, the totals, the investments that differ and the list of problems. The files themselves and their cell values are not kept, so the record holds no personal data. The newest run is the one the checks read. The old system's totals are kept in `migration_control_totals` each time finance enters them, and the newest entry counts.
+Every trial run is kept in `migration_trials`: the "as of" date, a fingerprint of each file, the counts, the totals, the investments that differ and the list of problems. The files themselves and their cell values are not kept, so the record holds no personal data. The newest run is the one the checks read. The old system's totals are kept in `migration_control_totals` each time finance enters them. The newest entry for a date is the one that counts, and only once a different member of staff has confirmed it in `migration_control_totals_confirmations`. Until then no total line is compared and the switch is blocked. So one person can never change what the trial is compared with, which would otherwise make a difference disappear without a sign-off.
 
-A sign-off is two rows. `migration_sign_offs` holds the proposal with the figures read from the newest trial, never figures sent by the browser. `migration_sign_off_decisions` holds the approval or rejection. The database refuses a decision by the person who proposed it, a second decision, and any change or deletion of these rows. The code is in `backend/app/modules/migration/service.py`.
+A sign-off is two rows. `migration_sign_offs` holds the proposal with the figures read from the newest trial, never figures sent by the browser. `migration_sign_off_decisions` holds the approval or rejection. The database refuses a decision by the person who proposed it, a second decision, a confirmation of totals by the person who entered them, and any change or deletion of these rows. The code is in `backend/app/modules/migration/service.py`.
+
+### Routes and who may use them
+
+The console calls these under `/staff/migration`. The code is in `backend/app/modules/migration/api.py`.
+
+| Route | What it does | Permission |
+| --- | --- | --- |
+| `GET /staff/migration` | The latest trial, the comparison, what differs with its sign-off, and what blocks the switch | `migration.view` |
+| `GET /staff/migration/trials?date_from=&date_to=` | Every trial for "as of" days in the range, oldest first, with its counts, file fingerprints and how many totals and investments differ. For following a parallel run day by day | `migration.view` |
+| `POST /staff/migration/trials` | Run a trial import from the two sheets and an "as of" date | `migration.import` |
+| `PUT /staff/migration/control-totals` | Enter the old system's totals for a date | `migration.sign_off` |
+| `POST /staff/migration/control-totals/{id}/confirmation` | Confirm the totals someone else entered | `migration.sign_off` |
+| `POST /staff/migration/sign-offs` | Propose a sign-off for one difference, with a reason | `migration.sign_off` |
+| `POST /staff/migration/sign-offs/{id}/decision` | Approve or reject a sign-off someone else proposed | `migration.sign_off` |
+
+Operations and admins hold `migration.import`. Finance and admins hold `migration.sign_off`, so a sign-off takes two of them. Counts and amounts travel as whole numbers in the smallest unit.
 
 At the switch each investment is opened with one ledger entry: the principal to the client's holding, interest after tax to the client's accrued interest, the tax to the tax payable account, and the three together against a migration opening balances account, which finance clears against the custodian and bank position.
 

@@ -19,7 +19,7 @@ from app.infrastructure.jobs.worker import default_worker_id
 from app.infrastructure.logging import configure_logging
 from app.infrastructure.process import keep_heartbeat, stop_on_signals
 from app.infrastructure.settings import Settings
-from app.modules.investments.jobs import ACCRUE_KIND, CANCEL_UNPAID_KIND
+from app.modules.investments.jobs import ACCRUE_KIND, CANCEL_UNPAID_KIND, MATURE_KIND
 from app.modules.kyc.service import SWEEP_UNANSWERED
 from app.modules.notifications.service import PURGE_MESSAGES
 from app.modules.payments import service as payments
@@ -58,6 +58,14 @@ def schedules() -> list[Schedule]:
             catch_up="all",
             max_catch_up=31,
             max_age=timedelta(days=7),
+        ),
+        # Closes investments whose term has ended: rolled over, or handed to payouts. One run
+        # closes everything due, so a missed day needs no run of its own.
+        Schedule(
+            name="investments.mature",
+            trigger=CronTrigger(hour=1, minute=0, timezone=KAMPALA),
+            kind=MATURE_KIND,
+            max_age=timedelta(days=1),
         ),
     ]
     payments_settings = PaymentsSettings()
