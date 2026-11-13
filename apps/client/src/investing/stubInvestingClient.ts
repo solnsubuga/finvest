@@ -136,6 +136,10 @@ export type StubOptions = {
   now?: () => number;
   /** "empty" starts with no investments, as a new client does. */
   sample?: "default" | "empty";
+  /** "none" has no approved accounts, to show that state. */
+  accounts?: "default" | "none";
+  /** True loses the answer to the first withdrawal request, to show that state. */
+  loseFirstWithdrawal?: boolean;
 };
 
 export function createStubInvestingClient(options: StubOptions = {}): InvestingClient {
@@ -144,6 +148,7 @@ export function createStubInvestingClient(options: StubOptions = {}): InvestingC
   const stored = new Map<string, Stored>();
   const byKey = new Map<string, { id: string; request: string }>();
   const withdrawalKeys = new Map<string, string>();
+  let loseNextWithdrawal = options.loseFirstWithdrawal ?? false;
 
   const pause = () =>
     delayMs > 0 ? new Promise<void>((resolve) => setTimeout(resolve, delayMs)) : Promise.resolve();
@@ -185,10 +190,9 @@ export function createStubInvestingClient(options: StubOptions = {}): InvestingC
     const maturity = start && product.termDays !== null ? addDays(start, product.termDays) : null;
     const lapsed = !start && now() > entry.createdAtMs + PAY_WINDOW_MS;
     const matured = maturity !== null && today >= maturity;
-    const withdrawn = entry.withdrawnAtMs !== null;
-    const status: Investment["status"] = withdrawn
-      ? "withdrawn"
-      : lapsed
+    // Like the API: asking to withdraw early leaves it `active` with the request recorded. The
+    // backend's worker moves it to `withdrawn` later; the demo never does, so both read alike.
+    const status: Investment["status"] = lapsed
         ? "cancelled"
         : !start
           ? "awaiting_payment"
@@ -226,7 +230,7 @@ export function createStubInvestingClient(options: StubOptions = {}): InvestingC
       rolledIntoId: null,
       payoutId: null,
       waitingForDestination: false,
-      canWithdraw: status === "active" && (maturity === null || today < maturity),
+      canWithdraw: status === "active" && entry.withdrawnAtMs === null && (maturity === null || today < maturity),
       withdrawalRequestedAt: entry.withdrawnAtMs === null ? null : new Date(entry.withdrawnAtMs).toISOString(),
     };
   }
@@ -328,7 +332,7 @@ export function createStubInvestingClient(options: StubOptions = {}): InvestingC
 
     async listPayoutAccounts() {
       await pause();
-      return demoAccounts(now());
+      return options.accounts === "none" ? [] : demoAccounts(now());
     },
 
     async withdrawEarly(request) {
@@ -356,6 +360,11 @@ export function createStubInvestingClient(options: StubOptions = {}): InvestingC
       }
       entry.withdrawnAtMs = now();
       withdrawalKeys.set(request.idempotencyKey, details);
+      if (loseNextWithdrawal) {
+        // Saved, but the answer never arrived: a retry with the same key gets it.
+        loseNextWithdrawal = false;
+        throw new InvestingError("unavailable");
+      }
       return view(entry);
     },
   };

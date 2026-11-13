@@ -7,7 +7,7 @@ import { Notice } from "@/components/Blocks";
 import { Button } from "@/components/Button";
 import { Screen } from "@/components/Screen";
 import { Eyebrow, Title, Txt } from "@/components/Txt";
-import { atMaturityLabel, formatAmount, formatDay, statusLabel } from "@/investing/format";
+import { atMaturityLabel, formatAmount, formatDay, investmentLabel } from "@/investing/format";
 import { useInvesting } from "@/investing/InvestingProvider";
 import { Failed } from "@/investing/Parts";
 import { Investment } from "@/investing/types";
@@ -87,7 +87,7 @@ function Body({ investment }: { investment: Investment }) {
   return (
     <View style={{ marginTop: 20, gap: 16 }}>
       <View style={{ gap: 6 }}>
-        <Eyebrow>{statusLabel[investment.status]}</Eyebrow>
+        <Eyebrow>{investmentLabel(investment)}</Eyebrow>
         <Title>{investment.productName}</Title>
       </View>
       <View style={{ backgroundColor: colors.black, borderRadius: 22, padding: 20, gap: 4 }}>
@@ -95,7 +95,7 @@ function Body({ investment }: { investment: Investment }) {
           {investment.status === "awaiting_payment"
             ? "To pay"
             : investment.withdrawalRequestedAt
-              ? "Being paid to you"
+              ? "You get"
               : "Worth today"}
         </Txt>
         <Txt size={36} weight="extrabold" lineHeight={42} color={colors.white} style={{ letterSpacing: -0.8 }}>
@@ -105,7 +105,7 @@ function Body({ investment }: { investment: Investment }) {
           {investment.status === "awaiting_payment"
             ? `Pay by ${formatDateTime(investment.payBy)} to keep this rate`
             : investment.withdrawalRequestedAt
-              ? `Withdrawn early on ${formatDateTime(investment.withdrawalRequestedAt)}, after ${investment.daysEarned} days`
+              ? `Asked for on ${formatDateTime(investment.withdrawalRequestedAt)}, after ${investment.daysEarned} days`
               : investment.interestToday.minor > 0
               ? `+${formatAmount(investment.interestToday)} today, ${investment.daysEarned} days earned`
               : `${investment.daysEarned} days earned`}
@@ -114,7 +114,7 @@ function Body({ investment }: { investment: Investment }) {
       <DetailList rows={rows} />
       {investment.withdrawalRequestedAt ? (
         <Notice tone="neutral">
-          {`You asked to withdraw this early, so interest stopped then. We will send ${formatAmount(investment.value)} to your account and tell you when it is sent.`}
+          {`You asked to withdraw this early, so interest stopped then. ${formatAmount(investment.value)} goes to your account, and we tell you when it is sent.`}
         </Notice>
       ) : null}
       {investment.waitingForDestination ? (

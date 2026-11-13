@@ -152,7 +152,7 @@ const messages: Record<InvestingErrorCode, string> = {
   too_many_unpaid: "You have investments waiting to be paid for. Pay for one of those, or let it lapse, before starting another.",
   not_found: "We could not find that.",
   key_reused: "Something changed since you last tried. Go back and review your investment again.",
-  invalid: "We could not accept that investment. Go back, check the details and try again.",
+  invalid: "We could not accept that. Go back, check the details and try again.",
   cannot_withdraw: "This investment cannot be withdrawn early now. It may already be on its way to you, or it matures too soon.",
   account_not_ready: "That account cannot be paid yet. A new account can be paid one day after it is approved.",
   unavailable: "We could not reach Finvest. Check your connection and try again.",

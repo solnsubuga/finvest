@@ -6,7 +6,7 @@ import { Icon } from "@/components/Icon";
 import { Txt } from "@/components/Txt";
 import { colors, fontSizes, radii } from "@/theme";
 
-import { formatAmount, formatDay, kindLabel, statusLabel, termLabel } from "./format";
+import { formatAmount, formatDay, investmentLabel, kindLabel, termLabel } from "./format";
 import { Investment, Product } from "./types";
 
 /** One product in the list: its name, the rate after tax and the terms. */
@@ -73,14 +73,14 @@ export function InvestmentCard({ investment, onPress }: { investment: Investment
   return (
     <Pressable
       accessibilityRole="button"
-      accessibilityLabel={`${investment.productName}, ${statusLabel[investment.status]}, worth ${formatAmount(investment.value)}`}
+      accessibilityLabel={`${investment.productName}, ${investmentLabel(investment)}, worth ${formatAmount(investment.value)}`}
       onPress={onPress}
       testID={`investment-${investment.id}`}
       style={({ pressed }) => [styles.card, { alignItems: "flex-start" }, pressed && { opacity: 0.85 }]}
     >
       <View style={{ flex: 1, gap: 4 }}>
         <Txt size={fontSizes.xs} weight="bold" color={waiting ? colors.warningText : colors.muted}>
-          {statusLabel[investment.status]}
+          {investmentLabel(investment)}
         </Txt>
         <Txt size={fontSizes.lg} weight="bold">
           {investment.productName}

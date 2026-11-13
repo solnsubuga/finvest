@@ -19,7 +19,13 @@ function loadStub(): StubModule | null {
 
 /** Chooses what the investing screens talk to: the demo when it is switched on, otherwise the API. */
 export function resolveInvestingClient(stub: StubModule | null = loadStub()): InvestingClient {
-  return stub ? stub.createStubInvestingClient({ sample: demoSample() }) : createApiInvestingClient();
+  return stub ? stub.createStubInvestingClient({ sample: demoSample(), ...demoWithdrawal() }) : createApiInvestingClient();
+}
+
+/** On the web, `?accounts=none` has no approved accounts and `?withdraw=lost` loses the first withdrawal's answer. */
+function demoWithdrawal(): { accounts: "default" | "none"; loseFirstWithdrawal: boolean } {
+  const search = typeof window !== "undefined" ? (window.location?.search ?? "") : "";
+  return { accounts: search.includes("accounts=none") ? "none" : "default", loseFirstWithdrawal: search.includes("withdraw=lost") };
 }
 
 /** On the web, opening the demo at `/?sample=empty` starts as a new client with no investments. */

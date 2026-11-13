@@ -243,8 +243,9 @@ describe("withdrawing early", () => {
 
     await fireEvent.press(screen.getByTestId("confirm-withdraw"));
 
-    expect(await screen.findByText("Being paid to you")).toBeTruthy();
-    expect(screen.getByText(/We will send UGX 5,123,715 to your account/)).toBeTruthy();
+    expect(await screen.findByText(/UGX 5,123,715 goes to your account, and we tell you when it is sent/)).toBeTruthy();
+    expect(screen.getByText("Withdrawn early")).toBeTruthy();
+    expect(screen.queryByText("Running")).toBeNull();
     expect(screen.queryByTestId("withdraw-early")).toBeNull();
     expect(mockWithdraw).toHaveBeenCalledTimes(1);
     expect(mockWithdraw.mock.calls[0][0]).toMatchObject({ destinationId: "demo-account-mtn" });
@@ -258,8 +259,26 @@ describe("withdrawing early", () => {
     expect(screen.getByTestId("account-demo-account-mtn").props.accessibilityState).toMatchObject({ disabled: true });
 
     await fireEvent.press(screen.getByTestId("confirm-withdraw"));
-    expect(await screen.findByText("Being paid to you")).toBeTruthy();
+    expect(await screen.findByText(/goes to your account, and we tell you when it is sent/)).toBeTruthy();
     const [first, second] = mockWithdraw.mock.calls.map((call) => call[0].idempotencyKey);
     expect(second).toBe(first);
+  });
+});
+
+describe("after an early withdrawal", () => {
+  it("lists the investment as withdrawn early in the portfolio", async () => {
+    mockSample.value = "default";
+    await signIn();
+    await act(async () => {
+      router.push("/portfolio");
+    });
+    await fireEvent.press(await screen.findByLabelText(/^91 Day Treasury Bill, Running/));
+    await fireEvent.press(await screen.findByTestId("withdraw-early"));
+    await fireEvent.press(await screen.findByTestId("confirm-withdraw"));
+    await screen.findByText(/goes to your account/);
+    await act(async () => {
+      router.push("/portfolio");
+    });
+    expect(await screen.findByLabelText(/^91 Day Treasury Bill, Withdrawn early/)).toBeTruthy();
   });
 });
