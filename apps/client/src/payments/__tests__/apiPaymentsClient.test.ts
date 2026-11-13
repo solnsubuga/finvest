@@ -253,11 +253,49 @@ describe("the payments client for the real API", () => {
     await expect(createApiPaymentsClient().getBankTransfer(PAYMENT)).rejects.toEqual(new PaymentError("not_found"));
   });
 
-  it("says the bank details are not in the app yet, without asking the API", async () => {
-    const seen = serve({});
+  it("shows where to send a bank transfer, from the API", async () => {
+    serve({
+      [`GET /client/investments/${INVESTMENT}/bank-transfer-details`]: json({
+        bank_name: "Stanbic Bank Uganda",
+        account_name: "Finvest Client Trust Account",
+        account_number: "9030012345678",
+        branch: null,
+        reference: "1001004827",
+        amount: { minor: 1_000_000, currency: "UGX" },
+      }),
+      [`GET /client/investments/${INVESTMENT}`]: json(investment()),
+    });
+    await expect(createApiPaymentsClient().getBankInstructions(INVESTMENT)).resolves.toEqual({
+      payable: { id: INVESTMENT, kind: "investment", title: "91 Day Treasury Bill", amount: { minor: 1_000_000, currency: "UGX" } },
+      bankName: "Stanbic Bank Uganda",
+      accountName: "Finvest Client Trust Account",
+      accountNumber: "9030012345678",
+      branch: null,
+      reference: "1001004827",
+    });
+  });
+
+  it("says the bank details are not set up yet when the API has no account for them", async () => {
+    serve({ [`GET /client/investments/${INVESTMENT}/bank-transfer-details`]: refused("unavailable", 503) });
     await expect(createApiPaymentsClient().getBankInstructions(INVESTMENT)).rejects.toEqual(
       new PaymentError("bank_details_missing"),
     );
-    expect(seen).toEqual([]);
   });
+
+  it("opens the payment under way instead of showing bank details for a second one", async () => {
+    const path = `GET /client/investments/${INVESTMENT}/bank-transfer-details`;
+    const live = `GET /client/investments/${INVESTMENT}/payment`;
+    const client = createApiPaymentsClient();
+    serve({ [path]: refused("conflict", 409), [live]: json(payment({ status: "awaiting_approval" })) });
+    expect(openPaymentHref(await client.getBankInstructions(INVESTMENT).catch((error: unknown) => error))).toBe(
+      `/pay/deposit/${PAYMENT}`,
+    );
+    serve({ [path]: refused("not_found", 404) });
+    await expect(client.getBankInstructions(INVESTMENT)).rejects.toEqual(new PaymentError("not_payable"));
+    setFetch(async () => {
+      throw new TypeError("Network request failed");
+    });
+    await expect(client.getBankInstructions(INVESTMENT)).rejects.toEqual(new PaymentError("unavailable"));
+  });
+
 });
