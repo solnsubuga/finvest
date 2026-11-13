@@ -174,6 +174,13 @@ ROWS = {
         "'Test', '-Nabc0000000000000B1', now()); COMMIT",
         "refusing to drop buffer rules that staff proposed or approved",
     ),
+    "0084_dealing_withdrawal_funding": (
+        "BEGIN; SELECT set_config('finvest.actor_kind', 'system', true); "
+        "INSERT INTO dealing_withdrawal_fundings (id, investment_id, currency, amount_minor, "
+        "source, status, asked_at) VALUES ('-Nabc0000000000000A1', '-Nabc0000000000000B1', "
+        "'UGX', 100000, 'sale', 'waiting', now()); COMMIT",
+        "refusing to drop withdrawal fundings",
+    ),
     "0050_kyc": (
         "INSERT INTO kyc_checks (id, client_id, document_type, document_country, created_at, "
         "updated_at) VALUES ('-Nabc0000000000000A1', '-Nabc0000000000000B1', 'passport', 'UG', "

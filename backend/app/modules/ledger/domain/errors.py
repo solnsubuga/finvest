@@ -77,3 +77,9 @@ class StaffSourceNotAllowed(LedgerError):
     """A staff transaction may post only the source types listed in the database."""
 
     code = "ledger_staff_source_not_allowed"
+
+
+class MixedAccountKinds(LedgerError):
+    """Accounts that share a code are of more than one kind, so their balances cannot be added."""
+
+    code = "ledger_mixed_account_kinds"
