@@ -1,16 +1,17 @@
-import { GoalError, GoalsClient } from "./types";
+import { createApiGoalsClient } from "./apiGoalsClient";
+import { GoalsClient } from "./types";
 
 type StubModule = typeof import("./stubGoalsClient");
 
 /**
  * The in-memory demo shows goals and savings that never happened, so it must
- * never be what a real client reaches. It follows the demo sign-in and the
- * demo payments: loaded in development, and in a production build only when
- * EXPO_PUBLIC_DEMO_AUTH=1 was set on purpose. Written inline, so the bundler
- * leaves the stub out of a normal production build.
+ * never be what a real client reaches. It follows the demo sign-in: loaded in
+ * tests, and in a build only when EXPO_PUBLIC_DEMO_AUTH=1 was set on purpose.
+ * Written inline, so the bundler leaves the stub out of a normal production
+ * build.
  */
 function loadStub(): StubModule | null {
-  if (__DEV__ || process.env.EXPO_PUBLIC_DEMO_AUTH === "1") {
+  if (process.env.EXPO_PUBLIC_DEMO_AUTH === "1" || process.env.NODE_ENV === "test") {
     // eslint-disable-next-line @typescript-eslint/no-require-imports
     return require("./stubGoalsClient") as StubModule;
   }
@@ -20,7 +21,7 @@ function loadStub(): StubModule | null {
 /** The demo account that starts with the canvas's goals. */
 export const SEEDED_DEMO_PHONE = "+256772123456";
 
-/** Chooses what the goal screens talk to. Without the stub, every call is refused. */
+/** Chooses what the goal screens talk to: the demo when it is switched on, otherwise the API. */
 export function resolveGoalsClient(
   phone: string | null,
   stub: StubModule | null = loadStub(),
@@ -28,18 +29,5 @@ export function resolveGoalsClient(
   if (stub) {
     return stub.createStubGoalsClient({ seeded: phone === SEEDED_DEMO_PHONE });
   }
-  return unavailableGoalsClient;
+  return createApiGoalsClient();
 }
-
-const refuse = async (): Promise<never> => {
-  throw new GoalError("unavailable");
-};
-
-export const unavailableGoalsClient: GoalsClient = {
-  getPlan: refuse,
-  createGoal: refuse,
-  listGoals: refuse,
-  getGoal: refuse,
-  closeGoal: refuse,
-  saveToGoal: refuse,
-};

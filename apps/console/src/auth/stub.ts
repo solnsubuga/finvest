@@ -44,6 +44,7 @@ export const STUB_ROLE_PERMISSIONS: Record<Role, readonly Permission[]> = {
     "support.reply",
     "complaints.manage",
     "complaints.close",
+    "bank_transfers.change",
   ],
   finance: [
     "overview.view",
@@ -59,9 +60,11 @@ export const STUB_ROLE_PERMISSIONS: Record<Role, readonly Permission[]> = {
     "finance.view",
     "products.view",
     "rates.view",
+    "rates.change",
     "reports.view",
     "migration.view",
     "migration.sign_off",
+    "bank_transfers.change",
   ],
   compliance: [
     "overview.view",

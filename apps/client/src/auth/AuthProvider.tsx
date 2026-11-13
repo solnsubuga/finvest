@@ -1,5 +1,8 @@
 import { createContext, ReactNode, useContext, useEffect, useMemo, useState } from "react";
-import { AppState } from "react-native";
+import { View } from "react-native";
+
+import { onUnauthorized } from "@/api/http";
+import { colors } from "@/theme";
 
 import { resolveAuthClient } from "./resolveClient";
 import {
@@ -57,28 +60,45 @@ export function AuthProvider({
 }) {
   const [resolved] = useState(() => (client ? { client, demo: false, demoCode: null } : resolveAuthClient()));
   const [session, setSession] = useState<Session | null>(null);
+  // Until the device's existing session has been looked up, no screen decides
+  // whether the client is signed in.
+  const [restoring, setRestoring] = useState(true);
   const [signup, setSignup] = useState<SignupChallenge | null>(null);
   const [ticket, setTicket] = useState<SignupTicket | null>(null);
   const [login, setLogin] = useState<LoginChallenge | null>(null);
   const [returnTo, setReturnTo] = useState<ReturnTo | null>(null);
 
-  // The return address is dropped after a few minutes, and when the app is
-  // put away, so a much later log in goes Home and not to a set-up screen.
+  // The return address is dropped after a few minutes, so a much later log in
+  // goes Home and not to a set-up screen. It survives the app going to the
+  // background, because reading an SMS or an authenticator code does that.
   useEffect(() => {
     if (!returnTo) {
       return undefined;
     }
     const timer = setTimeout(() => setReturnTo(null), RETURN_TO_LIFETIME_MS);
-    const subscription = AppState.addEventListener("change", (state) => {
-      if (state === "background") {
-        setReturnTo(null);
-      }
-    });
-    return () => {
-      clearTimeout(timer);
-      subscription.remove();
-    };
+    return () => clearTimeout(timer);
   }, [returnTo]);
+
+  useEffect(() => {
+    let live = true;
+    resolved.client
+      .restoreSession()
+      .then((restored) => {
+        if (live && restored) setSession((current) => current ?? restored);
+      })
+      .catch(() => {
+        // Offline or the API is down: start signed out. Logging in says why it cannot go on.
+      })
+      .finally(() => {
+        if (live) setRestoring(false);
+      });
+    return () => {
+      live = false;
+    };
+  }, [resolved]);
+
+  // The API says the session has ended (it timed out, or was ended elsewhere).
+  useEffect(() => onUnauthorized(() => setSession(null)), []);
 
   const value = useMemo(
     () => ({
@@ -98,6 +118,10 @@ export function AuthProvider({
     }),
     [resolved, session, signup, ticket, login, returnTo],
   );
+
+  if (restoring) {
+    return <View testID="auth-restoring" style={{ flex: 1, backgroundColor: colors.paper }} />;
+  }
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }

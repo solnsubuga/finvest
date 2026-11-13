@@ -11,7 +11,8 @@ interface LogFormProps {
   directory: Directory;
   busy: boolean;
   error: string | null;
-  onSubmit: (complaint: NewComplaint) => void;
+  /** The screen adds the key that makes a retry log it once. */
+  onSubmit: (complaint: Omit<NewComplaint, "clientKey">) => void;
   onCancel: () => void;
 }
 

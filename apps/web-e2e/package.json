@@ -1,0 +1,18 @@
+{
+  "name": "@finvest/web-e2e",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "pnpm build:client && pnpm build:console",
+    "build:client": "EXPO_PUBLIC_DEMO_AUTH=1 pnpm --dir ../client exec expo export --platform web --output-dir ../web-e2e/.builds/client",
+    "build:console": "VITE_STUB_API=true pnpm --dir ../console exec vite build --outDir ../web-e2e/.builds/console --emptyOutDir",
+    "test": "playwright test",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.63.0",
+    "@types/node": "^22.10.0",
+    "typescript": "^5.9.0"
+  }
+}

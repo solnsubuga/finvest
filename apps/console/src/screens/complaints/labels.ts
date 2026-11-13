@@ -61,6 +61,9 @@ export const ACTION_LABELS: Record<EventAction, string> = {
   status: "Moved",
   note: "Note",
   escalated: "Escalated",
+  proposed: "Outcome proposed",
+  rejected: "Outcome rejected",
+  withdrawn: "Outcome withdrawn",
   closed: "Closed",
 };
 

@@ -11,7 +11,7 @@
  */
 
 /** An amount in the smallest unit of its currency. Whole shillings for UGX. Always an integer. */
-export type Money = { currency: "UGX"; minor: number };
+export type Money = { currency: "UGX" | "USD"; minor: number };
 
 export type Network = "mtn" | "airtel";
 

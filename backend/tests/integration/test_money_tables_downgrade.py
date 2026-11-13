@@ -312,6 +312,17 @@ ROWS = {
         "'-Nabc0000000000000B1', now(), 'Sweep')",
         "refusing to drop pot transfers",
     ),
+    "0009_claims": (
+        "INSERT INTO identity_clients (id, phone, status, created_at) VALUES "
+        "('-Nabc0000000000000A1', '+256772123456', 'unclaimed', now())",
+        "refusing to drop unclaimed accounts or claim codes",
+    ),
+    "0072_migration_claims": (
+        "INSERT INTO migration_claims (client_id, legacy_client_ref, needs_id_check, status, "
+        "created_at, updated_at) VALUES ('-Nabc0000000000000A1', 'CL-1', false, 'not_invited', "
+        "now(), now())",
+        "refusing to drop migration claims",
+    ),
 }
 
 

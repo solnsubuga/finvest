@@ -67,3 +67,8 @@ tmp/
 
 # Astro
 .astro/
+
+# Browser tests: the web builds they serve, and their reports.
+apps/web-e2e/.builds/
+apps/web-e2e/test-results/
+apps/web-e2e/playwright-report/
