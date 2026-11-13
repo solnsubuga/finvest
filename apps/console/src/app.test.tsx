@@ -133,6 +133,28 @@ describe("console shell", () => {
     expect(screen.queryByRole("navigation", { name: "Console" })).not.toBeInTheDocument();
   });
 
+  it("blocks an account that has no passkey or authenticator app", async () => {
+    const { user } = renderApp("/sign-in");
+    await user.type(await screen.findByLabelText("Work email"), "invited@finvest.test");
+    await user.type(screen.getByLabelText("Password"), "not-a-real-password");
+    await user.click(screen.getByRole("button", { name: "Continue" }));
+
+    expect(await screen.findByRole("alert")).toHaveTextContent("no passkey or authenticator app yet");
+    expect(screen.queryByRole("heading", { name: "Confirm it is you" })).not.toBeInTheDocument();
+  });
+
+  it("never offers step 2 if the service returns no second step at all", async () => {
+    const stub = createStubAuthApi();
+    const api: AuthApi = { ...stub, startSignIn: () => Promise.resolve({ challengeId: "x", methods: [] }) };
+    const { user } = renderApp("/sign-in", api);
+    await user.type(await screen.findByLabelText("Work email"), "admin@finvest.test");
+    await user.type(screen.getByLabelText("Password"), "not-a-real-password");
+    await user.click(screen.getByRole("button", { name: "Continue" }));
+
+    expect(await screen.findByRole("alert")).toHaveTextContent("no passkey or authenticator app yet");
+    expect(screen.queryByRole("heading", { name: "Confirm it is you" })).not.toBeInTheDocument();
+  });
+
   it("shows the menu for the person's role only", async () => {
     const { user } = renderApp("/sign-in");
     await signIn(user, "support@finvest.test");

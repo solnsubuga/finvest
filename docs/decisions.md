@@ -20,6 +20,7 @@ A running log. Add a row when a decision is made, and move an open question up w
 | 2026-11-13 | Account numbers are 10 digits: 2 for type, 7 random, 1 Luhn check digit. See [account-numbers.md](account-numbers.md). |
 | 2026-11-13 | An SMS code alone never signs a client in. Password plus a second step, passkey first. Staff use password and passkey with no SMS option. |
 | 2026-11-13 | Staff second step is a passkey or an authenticator app code, whichever the member of staff has set up. This replaces "password and passkey" for staff in the sign-in row above. Still no SMS option for staff. |
+| 2026-11-13 | A second step is mandatory for every staff account. Either a passkey or an authenticator app counts, and passkeys are not required for any role. An account with neither is blocked from the console. |
 | 2026-11-13 | Clients save their own payout bank accounts and mobile money numbers, with proof of ownership. |
 | 2026-11-13 | Domains: finvestug.com for the website, app.finvestug.com for the client app, admin.finvestug.com for the back office. |
 | 2026-11-13 | Infrastructure is Terraform on DigitalOcean and Cloudflare. |

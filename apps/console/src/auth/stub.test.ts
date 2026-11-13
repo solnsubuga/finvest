@@ -40,6 +40,14 @@ describe("stub sign-in", () => {
     expect((await api.startSignIn("compliance@finvest.test", "anything")).methods).toEqual(["passkey"]);
   });
 
+  it("refuses an account with no second step, with no challenge and no session", async () => {
+    const api = createStubAuthApi();
+    await expect(api.startSignIn("invited@finvest.test", "anything")).rejects.toEqual(
+      new AuthError("second_step_missing"),
+    );
+    expect(await api.getSession()).toBeNull();
+  });
+
   it("refuses a second step the person has not set up", async () => {
     const api = createStubAuthApi();
     const challenge = await api.startSignIn("compliance@finvest.test", "anything");

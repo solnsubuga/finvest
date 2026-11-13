@@ -80,6 +80,8 @@ export const STUB_STAFF: readonly StubStaff[] = [
   { email: "finance@finvest.test", staffId: "stub-finance", name: "Daniel Opio", role: "finance", methods: ["authenticator"] },
   { email: "compliance@finvest.test", staffId: "stub-compliance", name: "Miriam Atim", role: "compliance", methods: ["passkey"] },
   { email: "support@finvest.test", staffId: "stub-support", name: "Tom Byaruhanga", role: "support", methods: BOTH },
+  // Invited but has not set up a second step, so cannot sign in.
+  { email: "invited@finvest.test", staffId: "stub-invited", name: "Sample Invitee", role: "support", methods: [] },
 ];
 
 const STORAGE_KEY = "finvest.console.stub-session";
@@ -108,6 +110,9 @@ export function createStubAuthApi(storage: Storage = window.sessionStorage): Aut
       const staff = STUB_STAFF.find((s) => s.email === email.trim().toLowerCase());
       if (!staff || password.length === 0) {
         return Promise.reject(new AuthError("invalid_credentials"));
+      }
+      if (staff.methods.length === 0) {
+        return Promise.reject(new AuthError("second_step_missing"));
       }
       const challenge: SignInChallenge = {
         challengeId: `stub-${nextChallenge++}`,

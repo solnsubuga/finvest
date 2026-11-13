@@ -1,6 +1,6 @@
 import { useId, useState, type FormEvent } from "react";
 import { Navigate, useLocation } from "react-router";
-import { authErrorMessage, type SecondStepMethod, type SignInChallenge } from "@/auth/api.ts";
+import { AuthError, authErrorMessage, type SecondStepMethod, type SignInChallenge } from "@/auth/api.ts";
 import { useAuth } from "@/auth/context.ts";
 import { LogoMark } from "@/components/Logo.tsx";
 import { Button } from "@/components/ui/button.tsx";
@@ -46,6 +46,10 @@ export function SignInPage() {
     setError(null);
     try {
       const next = await startSignIn(email, password);
+      if (next.methods.length === 0) {
+        // A second step is required for every staff account. Never go on without one.
+        throw new AuthError("second_step_missing");
+      }
       setChallenge(next);
       // Offer the passkey first when the person has one.
       setMethod(next.methods.includes("passkey") ? "passkey" : "authenticator");

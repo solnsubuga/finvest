@@ -31,6 +31,7 @@ The backend's sign-in is not built yet, so `pnpm dev` uses sample staff from `sr
 | finance@finvest.test | Finance | Authenticator app only |
 | compliance@finvest.test | Compliance | Passkey only |
 | support@finvest.test | Support | Passkey and authenticator app |
+| invited@finvest.test | Support | Neither, so sign-in is refused |
 
 The stub is not security. It runs only under `pnpm dev`, or in a build made with `VITE_STUB_API=true`. A normal production build has no working sign-in until the real API client is wired in.
 
@@ -66,7 +67,7 @@ The role to screen table in `src/auth/stub.ts` is a proposal, read from the role
 
 ## Notes
 
-- Staff sign in with a password and then a passkey or an authenticator app code, whichever they have set up. There is no SMS option.
+- Every staff account must have a second step. Staff sign in with a password and then a passkey or an authenticator app code, whichever they have set up. An account with neither cannot sign in. There is no SMS option.
 - Permissions are by role. Sensitive actions are maker and checker: one person proposes, another approves.
 - Every staff action is written to the audit trail with a reason.
 - The console is never linked from the public website and opens only for staff on allowed networks.

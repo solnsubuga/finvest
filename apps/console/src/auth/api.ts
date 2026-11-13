@@ -33,7 +33,10 @@ export type SecondStepMethod = (typeof SECOND_STEP_METHODS)[number];
 
 export interface SignInChallenge {
   challengeId: string;
-  /** The second steps this person has set up. Never empty. */
+  /**
+   * The second steps this person has set up. Every staff account must have at
+   * least one. If this is empty the console refuses to go on.
+   */
   methods: readonly SecondStepMethod[];
 }
 
@@ -43,6 +46,7 @@ export type AuthErrorCode =
   | "invalid_credentials"
   | "passkey_failed"
   | "code_invalid"
+  | "second_step_missing"
   | "not_connected"
   | "unavailable";
 
@@ -61,6 +65,8 @@ export const AUTH_ERROR_MESSAGES: Record<AuthErrorCode, string> = {
   invalid_credentials: "That email and password do not match a staff account.",
   passkey_failed: "We could not confirm your passkey. Try again.",
   code_invalid: "That code is not right. Check your authenticator app and try again.",
+  second_step_missing:
+    "Your account has no passkey or authenticator app yet, so you cannot sign in. Use your set-up link, or ask an admin for a new one.",
   not_connected: "Sign-in is not connected to the Finvest service yet.",
   unavailable: "We could not reach Finvest. Check your connection and try again.",
 };
