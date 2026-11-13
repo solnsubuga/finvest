@@ -3,9 +3,8 @@
  *
  * The shapes follow the client routes in backend/app/modules/investments/api.py
  * (`/client/products`, `/client/products/{code}/quote`, `/client/investments`).
- * Today the only implementation is the in-memory demo in
- * `stubInvestingClient.ts`. A client backed by `packages/api-client` replaces
- * it when the generated types exist, and the screens do not change.
+ * `apiInvestingClient.ts` answers it from the API through `packages/api-client`;
+ * `stubInvestingClient.ts` is the in-memory demo.
  *
  * A client never sees a tax rate or a figure before tax. Every rate here is
  * the rate after tax, and every amount is the net amount the backend worked

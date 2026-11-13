@@ -2,7 +2,7 @@
 
 The Finvest client app. One codebase for Android, iPhone and the web at app.finvestug.com.
 
-**Status:** app shell. Navigation, theme, the welcome, sign up and log in screens, Sign in and security (add a passkey, set up an authenticator app), investing (products, a calculator, review and confirm, the portfolio and each investment), paying for an investment by mobile money or bank transfer, and notifications, help chat and complaints. Sign-in talks to the real API. The other areas still run against in-memory demos until they are connected one by one.
+**Status:** app shell. Navigation, theme, the welcome, sign up and log in screens, Sign in and security (add a passkey, set up an authenticator app), investing (products, a calculator, review and confirm, the portfolio and each investment), paying for an investment by mobile money or bank transfer, and notifications, help chat and complaints. Sign-in and investing talk to the real API. The other areas still run against in-memory demos until they are connected one by one.
 
 ## Stack
 
@@ -92,12 +92,12 @@ The goal screens live in `src/app/goals/` and talk to the `GoalsClient` interfac
 
 ## Investing
 
-The investing screens talk to the `InvestingClient` interface in `src/investing/types.ts`, shaped to the client routes in `backend/app/modules/investments/api.py`. A client sees only the yearly rate after tax and net amounts, never a tax rate or a figure before tax, and every figure comes from the backend's quote or investment. The app adds nothing up.
+The investing screens talk to the `InvestingClient` interface in `src/investing/types.ts`. `src/investing/apiInvestingClient.ts` answers it from the client routes in `backend/app/modules/investments/api.py`, through `packages/api-client`. A client sees only the yearly rate after tax and net amounts, never a tax rate or a figure before tax, and every figure comes from the backend's quote or investment. The app adds nothing up.
 
 - `/invest` lists the products. `/invest/[code]` shows one, with a calculator: the amount typed is quoted after a short pause, and Review opens once the quote is back.
-- `/invest/review` saves the investment at today's rate with one idempotency key per visit, so a double tap saves one investment, then replaces itself with the pay screen for that investment. A fixed term asks what happens at the end: roll over (the default) or pay out.
+- `/invest/review` saves the investment at today's rate under one idempotency key per request, so a double tap saves one investment, then replaces itself with the pay screen for that investment. After a try whose answer was lost, the choices are locked and the key is kept, so trying again is the same request. After a definite refusal nothing was saved, and the next try gets a new key. A fixed term asks what happens at the end: roll over (the default) or pay out.
 - `/portfolio` lists the client's investments with what each is worth today. `/investment/[id]` shows one, with interest so far, what it pays at maturity, and a Pay button while it waits for payment.
-- The demo (`src/investing/stubInvestingClient.ts`) has two investments already running, works interest out as the backend does, and starts a term when the demo payment for it is confirmed (`src/demo/payables.ts` joins the two demos). Open `/?sample=empty` on the web to start as a client with no investments.
+- The demo (`src/investing/stubInvestingClient.ts`) loads only in tests and in a build with `EXPO_PUBLIC_DEMO_AUTH=1`. It has two investments already running, works interest out as the backend does, and starts a term when the demo payment for it is confirmed (`src/demo/payables.ts` joins the two demos). Open `/?sample=empty` on the web to start as a client with no investments.
 
 Not built yet: changing what happens at maturity from the investment screen (it needs the payout destinations screens), withdrawing early, and statements.
 
