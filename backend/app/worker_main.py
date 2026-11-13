@@ -27,6 +27,7 @@ from app.modules.kyc.jobs import ProviderJobs, sweep_unanswered
 from app.modules.kyc.service import SWEEP_UNANSWERED
 from app.modules.kyc.settings import KycSettings
 from app.modules.notifications import jobs as notification_jobs
+from app.modules.notifications.announcements import AnnouncementJobs
 from app.modules.notifications.delivery import DeliveryJobs
 from app.modules.notifications.email_delivery import DeliveryEventJobs
 from app.modules.payments.bank_transfers import BankTransferJobs
@@ -89,6 +90,7 @@ def handlers(
     kinds.update(
         DeliveryJobs(database, clock, PushSettings().transport(), client_contact).handlers()
     )
+    kinds.update(AnnouncementJobs(database, clock).handlers())
     return kinds
 
 

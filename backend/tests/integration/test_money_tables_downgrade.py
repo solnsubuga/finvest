@@ -3,7 +3,7 @@ history, the receipts that stop a command running twice, the identity records, t
 destinations, the withdrawal limits, the payouts and their send attempts, the migration
 checks, the imported statements, the day closes, the pot transfers, the help chat, the
 complaints register, the goals, the email delivery records, the unclaimed accounts, the
-complaint outcomes, the suppression lifts or the client locks."""
+complaint outcomes, the suppression lifts, the client locks or the announcements."""
 
 import os
 from collections.abc import Iterator
@@ -262,6 +262,15 @@ ROWS = {
         "INSERT INTO notification_preferences (client_id, category, channels, updated_at) "
         "VALUES ('-Nabc0000000000000B1', 'money', ARRAY['push'], now())",
         "refusing to drop notifications",
+    ),
+    "0102_announcements": (
+        # The guard admits only a member of staff proposing in their own name.
+        "WITH acting AS (SELECT set_config('finvest.actor_kind', 'staff', true), "
+        "set_config('finvest.actor_id', '-Nabc0000000000000A1', true)) "
+        "INSERT INTO notification_announcements (id, title, message, reason, proposed_by, "
+        "proposed_at) SELECT '-Nabc0000000000000A1', 'T', 'M', 'R', '-Nabc0000000000000A1', now() "
+        "FROM acting",
+        "refusing to drop announcements",
     ),
     "0092_email_delivery": (
         "INSERT INTO notification_email_events (svix_id, delivery, email_id, recipients, "
