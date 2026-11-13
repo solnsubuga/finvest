@@ -130,6 +130,8 @@ A plan collects the same amount every week or every month from the client's own 
 
 The schedule rules in `src/autoinvest/schedule.ts` mirror the backend's (`docs/automatic-investing.md`) so the screen can say the first day before the plan is sent. The server is still the judge.
 
+`src/autoinvest/apiAutoinvestClient.ts` answers the screens from `/client/autoinvest/plans` and its pause, resume and stop routes. A new plan is sent under the screen's key without a number: the API takes the account's own from the session. The products offered are the live shilling products with a fixed term from `GET /client/products`, because mobile money collects shillings only and the plan asks what happens at maturity. A refused detail says the plan was not accepted, never that Finvest could not be reached. The demo (`src/autoinvest/stubAutoinvestClient.ts`) loads only in tests and with `EXPO_PUBLIC_DEMO_AUTH=1`.
+
 ## Insights
 
 `/insights` shows what the client's money earned each month for the last six months, what is invested now, what has been earned so far, this month's money in, earned and paid out, and the next maturities. Every figure is after tax, and no tax rate is shown. On a wide screen it has two columns.

@@ -84,6 +84,10 @@ export type AutoinvestErrorCode =
   | "not_verified"
   | "not_found"
   | "key_reused"
+  /** The plan has stopped, so it can no longer be paused or resumed. */
+  | "stopped"
+  /** A detail was refused for a reason the screen does not name. Nothing was saved. */
+  | "invalid"
   | "unavailable";
 
 export class AutoinvestError extends Error {
@@ -115,6 +119,8 @@ const messages: Record<AutoinvestErrorCode, string> = {
   too_many_plans: "You already have 10 plans. Stop one to start another.",
   not_verified: "You can start a plan once your identity check is approved.",
   not_found: "We could not find that plan.",
+  stopped: "This plan has stopped, so it cannot be changed.",
+  invalid: "We could not accept that plan. Go back, check the details and try again.",
   key_reused: "This plan was already sent with other details. Go back and start a new plan.",
   unavailable: "We could not reach Finvest. Check your connection and try again.",
 };
