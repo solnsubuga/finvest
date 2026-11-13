@@ -4,21 +4,30 @@ from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
+from starlette.middleware.cors import CORSMiddleware
+from uvicorn.middleware.proxy_headers import ProxyHeadersMiddleware
 
 from app.api import health
 from app.api.errors import UnexpectedErrorMiddleware, install_error_handlers
 from app.api.request_id import RequestIdMiddleware
 from app.infrastructure.database import Database
 from app.infrastructure.settings import Settings
+from app.modules.identity import api as identity_api
+from app.modules.identity.hashing import PasswordHasher
+from app.modules.identity.service import IdentityService
 from app.shared.clock import Clock, SystemClock
 from app.shared.errors import ErrorEnvelope
 
 
 def create_app(
-    settings: Settings, database: Database | None = None, clock: Clock | None = None
+    settings: Settings,
+    database: Database | None = None,
+    clock: Clock | None = None,
+    hasher: PasswordHasher | None = None,
 ) -> FastAPI:
     owned = database is None
     database = database or Database(settings)
+    clock = clock or SystemClock()
 
     @asynccontextmanager
     async def lifespan(_: FastAPI) -> AsyncIterator[None]:
@@ -37,10 +46,38 @@ def create_app(
     )
     app.state.settings = settings
     app.state.database = database
-    app.state.clock = clock or SystemClock()
+    app.state.clock = clock
+    app.state.identity = IdentityService(
+        database,
+        clock,
+        settings,
+        hasher
+        or PasswordHasher(
+            memory_kib=settings.password_memory_kib, time_cost=settings.password_time_cost
+        ),
+    )
     install_error_handlers(app)
     # The last middleware added is the outermost, so the request ID exists before anything runs.
+    origins = sorted({*settings.client_allowed_origins, *settings.staff_allowed_origins})
+    if origins:
+        # Browsers only. The exact origins, with cookies, and nothing else.
+        app.add_middleware(
+            CORSMiddleware,
+            allow_origins=origins,
+            allow_credentials=True,
+            allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE"],
+            allow_headers=["Authorization", "Content-Type", "Idempotency-Key"],
+            expose_headers=["X-Request-ID", "Retry-After"],
+            max_age=600,
+        )
     app.add_middleware(UnexpectedErrorMiddleware)
     app.add_middleware(RequestIdMiddleware)
+    # Attempt limits count by caller address. X-Forwarded-For is believed only from our own
+    # proxy; with none configured, only from this machine.
+    app.add_middleware(
+        ProxyHeadersMiddleware, trusted_hosts=settings.trusted_proxies or ["127.0.0.1"]
+    )
     app.include_router(health.router)
+    for router in identity_api.routers:
+        app.include_router(router)
     return app

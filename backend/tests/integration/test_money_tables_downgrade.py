@@ -62,6 +62,11 @@ ROWS = {
         "COMMIT",
         "refusing to drop ledger corrections",
     ),
+    "0005_identity": (
+        "INSERT INTO identity_staff (id, email, name, role, created_at) "
+        "VALUES ('-Nabc0000000000000A1', 'ada@example.com', 'Ada Nakato', 'admin', now())",
+        "refusing to drop sign-in tables",
+    ),
 }
 
 

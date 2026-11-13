@@ -1,0 +1,94 @@
+"""Staff roles and what each may do. The API checks a permission on every staff route.
+
+The names match the console's screens. The console hides what a role cannot open, but that is
+display only: this catalogue is the authority.
+"""
+
+from typing import Literal, get_args
+
+Role = Literal["admin", "operations", "finance", "compliance", "support"]
+ROLES: tuple[Role, ...] = get_args(Role)
+
+Permission = Literal[
+    "overview.view",
+    "review_queue.view",
+    "identity_checks.view",
+    "maturities.view",
+    "support.view",
+    "complaints.view",
+    "clients.view",
+    "money_movement.view",
+    "reconciliation.view",
+    "investments.view",
+    "dealing_desk.view",
+    "finance.view",
+    "products.view",
+    "rates.view",
+    "compliance.view",
+    "team.view",
+    "reports.view",
+    "settings.view",
+    "migration.view",
+]
+PERMISSIONS: tuple[Permission, ...] = get_args(Permission)
+
+# The working default recorded in docs/decisions.md, the same table as the console's
+# `apps/console/src/auth/stub.ts`. The owner can change it at any time: change it here, in one
+# place, and in the console's table.
+ROLE_PERMISSIONS: dict[Role, frozenset[Permission]] = {
+    "admin": frozenset(PERMISSIONS),
+    "operations": frozenset(
+        {
+            "overview.view",
+            "review_queue.view",
+            "identity_checks.view",
+            "maturities.view",
+            "support.view",
+            "complaints.view",
+            "clients.view",
+            "money_movement.view",
+            "reconciliation.view",
+            "investments.view",
+            "reports.view",
+            "migration.view",
+        }
+    ),
+    "finance": frozenset(
+        {
+            "overview.view",
+            "review_queue.view",
+            "maturities.view",
+            "clients.view",
+            "money_movement.view",
+            "reconciliation.view",
+            "investments.view",
+            "dealing_desk.view",
+            "finance.view",
+            "products.view",
+            "rates.view",
+            "reports.view",
+        }
+    ),
+    "compliance": frozenset(
+        {
+            "overview.view",
+            "review_queue.view",
+            "identity_checks.view",
+            "complaints.view",
+            "clients.view",
+            "compliance.view",
+            "reports.view",
+        }
+    ),
+    "support": frozenset({"overview.view", "support.view", "complaints.view", "clients.view"}),
+}
+
+
+def permissions_for(role: Role) -> list[Permission]:
+    """The role's permissions in catalogue order, so a session always lists them the same way."""
+    granted = ROLE_PERMISSIONS[role]
+    return [permission for permission in PERMISSIONS if permission in granted]
+
+
+def allows(role: Role, permission: Permission) -> bool:
+    return permission in ROLE_PERMISSIONS[role]

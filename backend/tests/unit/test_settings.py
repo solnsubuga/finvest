@@ -74,3 +74,30 @@ def test_a_missing_root_certificate_fails_instead_of_falling_back(tmp_path: Path
     )
     with pytest.raises(FileNotFoundError):
         value.database_connect_args()
+
+
+URL = "postgresql://finvest_app:unused@db/finvest"
+
+
+def test_allowed_origins_are_exact() -> None:
+    value = Settings(
+        database_url=URL,
+        client_allowed_origins=["https://app.finvestug.com", "http://localhost:8081"],
+    )
+    assert value.client_allowed_origins[0] == "https://app.finvestug.com"
+    for bad in ["*", "app.finvestug.com", "https://app.finvestug.com/", "ftp://x"]:
+        with pytest.raises(ValidationError):
+            Settings(database_url=URL, staff_allowed_origins=[bad])
+
+
+def test_trusted_proxies_are_addresses_and_never_everyone() -> None:
+    assert Settings(database_url=URL, trusted_proxies=["10.0.0.5", "172.16.0.0/12"])
+    for bad in ["caddy", "0.0.0.0/0", "::/0"]:
+        with pytest.raises(ValidationError):
+            Settings(database_url=URL, trusted_proxies=[bad])
+
+
+def test_origins_are_read_from_the_environment(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("FINVEST_DATABASE_URL", URL)
+    monkeypatch.setenv("FINVEST_STAFF_ALLOWED_ORIGINS", '["https://admin.finvestug.com"]')
+    assert Settings().staff_allowed_origins == ["https://admin.finvestug.com"]
