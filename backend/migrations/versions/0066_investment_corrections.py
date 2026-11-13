@@ -24,6 +24,7 @@ depends_on: str | Sequence[str] | None = None
 
 APP_ROLE = "finvest_app"
 WORKER_ROLE = "finvest_worker"
+STAFF = "public.finvest_actor_kind() = 'staff'"
 
 TABLE = """
 CREATE TABLE investment_corrections (
@@ -352,6 +353,19 @@ RULES = [
     f"GRANT SELECT, UPDATE (status, done_at, entry_id, payout_id, failure_code) "
     f"ON investment_corrections TO {WORKER_ROLE}",
     f"GRANT UPDATE (unwound_at, unwind_entry_id) ON investments TO {WORKER_ROLE}",
+    # Staff only on the API's role, so a client transaction reads no correction, however the
+    # code asks. The worker reads and records outcomes.
+    "ALTER TABLE investment_corrections ENABLE ROW LEVEL SECURITY",
+    f"CREATE POLICY investment_corrections_app_read ON investment_corrections FOR SELECT "
+    f"TO {APP_ROLE} USING ({STAFF})",
+    f"CREATE POLICY investment_corrections_app_insert ON investment_corrections FOR INSERT "
+    f"TO {APP_ROLE} WITH CHECK ({STAFF})",
+    f"CREATE POLICY investment_corrections_app_update ON investment_corrections FOR UPDATE "
+    f"TO {APP_ROLE} USING ({STAFF}) WITH CHECK ({STAFF})",
+    f"CREATE POLICY investment_corrections_worker_read ON investment_corrections FOR SELECT "
+    f"TO {WORKER_ROLE} USING (true)",
+    f"CREATE POLICY investment_corrections_worker_update ON investment_corrections FOR UPDATE "
+    f"TO {WORKER_ROLE} USING (true) WITH CHECK (true)",
 ]
 
 

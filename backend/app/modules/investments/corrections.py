@@ -140,6 +140,7 @@ _FINISH = text(
 )
 _INVESTMENT_LOCKED = select_investments("WHERE i.id = :id FOR UPDATE OF i")
 _INVESTMENT = select_investments("WHERE i.id = :id")
+_CARRIED_OVER = text("SELECT legacy_reference IS NOT NULL FROM investments WHERE id = :id")
 _UNWIND = text(
     "UPDATE investments SET status = 'unwound', unwound_at = :now, unwind_entry_id = :entry_id, "
     "updated_at = :now WHERE id = :id"
@@ -180,6 +181,10 @@ async def propose_correction(
         ):
             raise ApplicationError("conflict")
         amount = investment.amount
+        # A carried-over investment was never paid for here, so its principal has no deposit
+        # to go back to. A mistake in the migration is put right by the migration.
+        if (await session.execute(_CARRIED_OVER, {"id": investment.id})).scalar_one():
+            raise invalid("investment_id", "carried_over")
     else:
         if destination_id is None:
             raise invalid("destination_id", "required")
@@ -421,6 +426,10 @@ async def _unwind(
                 ),
                 clock,
             )
+            # The tax is held in one pool for URA. If what is left in it no longer covers this
+            # investment's tax, it was paid over, and staff put that right with URA first.
+            if (await ledger.get_balance(session, payable.id)) < tax:
+                return None, None, "tax_already_remitted"
             lines.append(debit(payable.id, tax))
         lines.append(credit(expense.id, gross))
     now = clock.now()

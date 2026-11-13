@@ -15,9 +15,12 @@ from app.modules.investments import service as investments
 from app.modules.investments.domain.investments import InvestmentStatus
 from app.modules.investments.holdings import AWAITING_START, HOLDING
 from app.modules.ledger import service as ledger
+from app.modules.ledger.domain.entries import AccountKind, AccountSpec
 from app.modules.payouts import payouts
 from app.shared.actors import SYSTEM, Actor
 from app.shared.errors import ApplicationError
+from app.shared.money import Currency
+from app.shared.push_ids import push_id
 from tests.support.clock import AsyncBarrier, FakeClock
 from tests.support.investments import (
     PRESENT,
@@ -308,3 +311,47 @@ async def test_the_database_holds_everyone_to_their_part(
                 ),
                 {"entry": proposed.id, "id": investment.id},
             )
+
+
+async def test_a_client_reads_no_correction(
+    app_database: Database, worker_database: Database
+) -> None:
+    investment = await running_with_interest(app_database, worker_database)
+    await propose(app_database, new_staff(), investment.id, Kind.UNWIND)
+    # Even the client the correction is about, asking the table directly.
+    client = Actor("client", investment.client_id)
+    async with app_database.actor_transaction(client) as session:
+        seen = (
+            await session.execute(text("SELECT count(*) FROM investment_corrections"))
+        ).scalar_one()
+    assert seen == 0
+
+
+async def test_a_carried_over_investment_is_never_unwound(
+    app_database: Database, worker_database: Database
+) -> None:
+    async with worker_database.actor_transaction(SYSTEM) as session:
+        carried = await investments.open_existing_investment(
+            session,
+            SYSTEM,
+            client_id=push_id(),
+            product_code="TREA-91",
+            principal=ugx(1_000_000),
+            start_date=DAY - timedelta(days=30),
+            annual_rate_bps=1300,
+            tax_bps=1500,
+            interest_through=DAY - timedelta(days=1),
+            opened_on=DAY,
+            legacy_reference=f"FV1-INV-{push_id()[-8:].replace('-', 'x').replace('_', 'y')}",
+            opening_account=AccountSpec(
+                "migration.opening_balances",
+                AccountKind.ASSET,
+                Currency.UGX,
+                "Finvest 1.0 balances carried over",
+            ),
+            clock=PRESENT,
+        )
+    with pytest.raises(ApplicationError) as refused:
+        await propose(app_database, new_staff(), carried.id, Kind.UNWIND)
+    assert refused.value.code == "validation_failed"
+    assert refused.value.fields[0].code == "carried_over"
