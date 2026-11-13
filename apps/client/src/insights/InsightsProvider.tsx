@@ -2,13 +2,14 @@ import { createContext, ReactNode, useContext, useMemo } from "react";
 
 import { useAuth } from "@/auth/AuthProvider";
 
-import { InsightsClient, InsightsError } from "./types";
+import { createApiInsightsClient } from "./apiInsightsClient";
+import { InsightsClient } from "./types";
 
 type StubModule = typeof import("./stubInsightsClient");
 
-/** The demo follows the payments demo: development, or EXPO_PUBLIC_DEMO_AUTH=1 on purpose. */
+/** The demo follows the demo sign-in: tests, or EXPO_PUBLIC_DEMO_AUTH=1 on purpose. */
 function loadStub(): StubModule | null {
-  if (__DEV__ || process.env.EXPO_PUBLIC_DEMO_AUTH === "1") {
+  if (process.env.EXPO_PUBLIC_DEMO_AUTH === "1" || process.env.NODE_ENV === "test") {
     // eslint-disable-next-line @typescript-eslint/no-require-imports
     return require("./stubInsightsClient") as StubModule;
   }
@@ -22,11 +23,7 @@ export function resolveInsightsClient(
   if (stub) {
     return stub.createStubInsightsClient(phone);
   }
-  return {
-    getInsights: async () => {
-      throw new InsightsError();
-    },
-  };
+  return createApiInsightsClient();
 }
 
 const InsightsContext = createContext<InsightsClient | null>(null);
