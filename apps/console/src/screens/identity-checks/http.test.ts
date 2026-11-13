@@ -73,6 +73,20 @@ describe("identity checks over HTTP", () => {
     expect(check).toMatchObject({ documentNumberMasked: "CM90••••••••4PL", givenNames: "David", automaticChecks: [{ score: 62 }] });
   });
 
+  it("reuses the links while they are good, so one look is one audit event", async () => {
+    const fetch = vi.fn<typeof globalThis.fetch>((url) => (String(url).endsWith("/photo-links") ? reply(200, LINKS) : reply(200, CHECK)));
+    let clock = Date.parse("2026-11-13T07:40:00Z");
+    const api = createHttpKycApi(createHttp("https://api.test", fetch), () => clock);
+    await api.getCheck(CHECK.id);
+    await api.escalate(CHECK.id, "Possible duplicate");
+    const linkCalls = () => fetch.mock.calls.filter((call) => String(call[0]).endsWith("/photo-links")).length;
+    expect(linkCalls()).toBe(1);
+    // Within a minute of running out, new links are asked for.
+    clock = Date.parse("2026-11-13T07:44:30Z");
+    await api.getCheck(CHECK.id);
+    expect(linkCalls()).toBe(2);
+  });
+
   it("still opens the check when its photos cannot be linked", async () => {
     const fetch = vi
       .fn<typeof globalThis.fetch>()

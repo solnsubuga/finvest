@@ -99,14 +99,27 @@ export function toKycError(error: unknown): KycError {
   }
 }
 
-export function createHttpKycApi(http: Http): KycApi {
+export function createHttpKycApi(http: Http, now: () => number = Date.now): KycApi {
   const path = (id: string, action = "") => `/staff/identity-checks/${encodeURIComponent(id)}${action}`;
+
+  // Links already given for a check. Each request for links is an audit event, so one look at a
+  // check, and the decision after it, ask once while the links are still good.
+  const given = new Map<string, { photos: string; links: PhotoLinksJson }>();
+  const photoIds = (json: CheckJson) => json.photos.map((photo) => photo.id).join(",");
+
+  async function linksFor(json: CheckJson): Promise<PhotoLinksJson | null> {
+    const known = given.get(json.id);
+    // The same photos as last time, with a minute to spare so a link never runs out on screen.
+    if (known && known.photos === photoIds(json) && Date.parse(known.links.expires_at) - now() > 60_000) return known.links;
+    // Without links the photos show as their names, and the rest of the check still loads.
+    const links = await http.request<PhotoLinksJson>("POST", path(json.id, "/photo-links")).catch(() => null);
+    if (links) given.set(json.id, { photos: photoIds(json), links });
+    return links;
+  }
 
   async function withPhotos(json: CheckJson): Promise<CheckDetail> {
     if (json.photos.length === 0) return toCheck(json, null);
-    // Without links the photos show as their names, and the rest of the check still loads.
-    const links = await http.request<PhotoLinksJson>("POST", path(json.id, "/photo-links")).catch(() => null);
-    return toCheck(json, links);
+    return toCheck(json, await linksFor(json));
   }
 
   async function act(id: string, action: string, body: Record<string, unknown>): Promise<CheckDetail> {
