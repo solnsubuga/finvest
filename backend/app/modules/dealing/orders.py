@@ -296,7 +296,7 @@ async def record_result(
         },
     )
     action = "dealing.order.unsuccessful" if fill is None else "dealing.order.result_recorded"
-    await _audit(session, staff, "change", action, view.id, clock)
+    await _audit(session, staff, "change", action, view.id, clock, fill=fill)
     return await get_order(session, view.id)
 
 
@@ -522,10 +522,22 @@ async def _audit(
     *,
     reason: str | None = None,
     order: Order | None = None,
+    fill: Fill | None = None,
 ) -> None:
+    # "product", not "product_code": the audit trail redacts any key with the word "code".
     details: dict[str, object] = (
-        {} if order is None else {"kind": order.kind.value, "product_code": order.product_code}
+        {} if order is None else {"kind": order.kind.value, "product": order.product_code}
     )
+    if fill is not None:
+        # The result as recorded, so a result later rejected can still be read.
+        details |= {
+            "face_minor": fill.face.minor,
+            "amount_minor": fill.amount.minor,
+            "currency": fill.face.currency.value,
+            "settled_on": fill.settled_on.isoformat(),
+            "matures_on": fill.matures_on.isoformat(),
+            "custodian_reference": fill.custodian_reference,
+        }
     await audit.record(
         session,
         AuditEvent(
