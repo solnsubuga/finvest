@@ -2,7 +2,7 @@
 
 The Finvest back office console at admin.finvestug.com.
 
-**Status:** the shell is built: staff sign-in, the menu that follows the person's role, and a placeholder for each screen. The identity checks review screen is built on sample data (`src/screens/identity-checks`, behind the `KycApi` interface) until the backend publishes its routes. The screens themselves arrive phase by phase (see [docs/roadmap.md](../../docs/roadmap.md)).
+**Status:** the shell is built: staff sign-in, the menu that follows the person's role, and a placeholder for each screen. The identity checks review screen is built on sample data (`src/screens/identity-checks`, behind the `KycApi` interface) until the backend publishes its routes. The dealing desk is built the same way (`src/screens/dealing-desk`, behind the `DealingApi` interface, see [docs/dealing-desk.md](../../docs/dealing-desk.md)): the position, the liquidity buffer, and orders that one person prepares and another approves. The screens themselves arrive phase by phase (see [docs/roadmap.md](../../docs/roadmap.md)).
 
 ## Stack
 
