@@ -381,29 +381,38 @@ class IdentityService:
         ).one()
         if seen.sessions == 0 or seen.here > 0:
             return
-        table = "identity_clients" if actor.kind == "client" else "identity_staff"
-        phone_column = "phone" if actor.kind == "client" else "NULL"
-        contact = (
-            await session.execute(
-                text(f"SELECT email, {phone_column} AS phone FROM {table} WHERE id = :id"),  # noqa: S608
-                {"id": actor.id},
+        if actor.kind == "client":
+            contact = (
+                await session.execute(
+                    text(
+                        "SELECT phone, CASE WHEN email_verified_at IS NOT NULL THEN email END "
+                        "AS email FROM identity_clients WHERE id = :id"
+                    ),
+                    {"id": actor.id},
+                )
+            ).one_or_none()
+            # The phone is the client's proved contact, so the notice always goes there. An
+            # email goes only to an address they proved; the worker skips a suppressed one.
+            sends: list[tuple[Channel, str | None]] = (
+                [("sms", contact.phone), ("email", contact.email)] if contact else []
             )
-        ).one_or_none()
-        if contact is None:
-            return
-        channel: Channel = "email" if contact.email else "sms"
-        recipient = contact.email or contact.phone
-        if not recipient:
-            return
-        await queue_message(
-            session,
-            channel=channel,
-            recipient=recipient,
-            template="new_sign_in",
-            variables={"device": device, "when": kampala_time(now)},
-            idempotency_key=f"new-sign-in:{session_id}",
-            now=now,
-        )
+        else:
+            email = await session.scalar(
+                text("SELECT email FROM identity_staff WHERE id = :id"), {"id": actor.id}
+            )
+            sends = [("email", email)]
+        for channel, recipient in sends:
+            if not recipient:
+                continue
+            await queue_message(
+                session,
+                channel=channel,
+                recipient=recipient,
+                template="new_sign_in",
+                variables={"device": device, "when": kampala_time(now)},
+                idempotency_key=f"new-sign-in:{session_id}:{channel}",
+                now=now,
+            )
 
     async def _touch(self, token: str, kind: AccountKind):  # type: ignore[no-untyped-def]
         """Find a live session by token and push its idle expiry forward."""
