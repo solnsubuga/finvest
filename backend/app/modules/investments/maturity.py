@@ -25,6 +25,7 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.infrastructure.jobs import publish
+from app.modules.goals.events import FOLLOW_ROLLOVER
 from app.modules.investments import accrual
 from app.modules.investments.catalogue import invalid, product_from_row, product_row, rates_for
 from app.modules.investments.domain.interest import maturity_date
@@ -349,7 +350,7 @@ async def _roll_over(
             "principal_minor": proceeds.minor,
             "currency": proceeds.currency.value,
         },
-        consumers=[],
+        consumers=[FOLLOW_ROLLOVER],
         now=now,
     )
     logger.info("investment_rolled_over", investment_id=investment.id, new_investment_id=new_id)
