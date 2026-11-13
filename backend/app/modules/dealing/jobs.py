@@ -1,5 +1,5 @@
-"""The worker's side of the dealing desk: record the bills the issuer has paid at maturity, and
-fund early withdrawals from the buffer.
+"""The worker's side of the dealing desk: record the bills the issuer has paid at maturity,
+fund early withdrawals from the buffer, and allocate bills to investments.
 
 No handler here calls a provider, so each does all its work in the fenced transaction that also
 completes the job. A run repeated, or two at once, records each maturity and each funding once.
@@ -11,7 +11,7 @@ import structlog
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.infrastructure.jobs import ClaimedJob, Handler, JobContext, JobHandler, PermanentJobError
-from app.modules.dealing import maturities, withdrawals
+from app.modules.dealing import allocations, maturities, withdrawals
 from app.modules.dealing.events import FUND_WITHDRAWAL_KIND
 from app.shared.clock import Clock
 from app.shared.errors import ApplicationError
@@ -19,6 +19,7 @@ from app.shared.money import Currency, Money, MoneyError
 
 MATURITIES_KIND = "dealing.record_maturities"
 RELEASE_KIND = "dealing.release_withdrawal_queue"
+ALLOCATE_KIND = "dealing.allocate"
 logger = structlog.get_logger()
 
 
@@ -31,6 +32,7 @@ class DealingJobs:
             MATURITIES_KIND: self.record_maturities,
             FUND_WITHDRAWAL_KIND: self.fund_early_withdrawal,
             RELEASE_KIND: self.release_queue,
+            ALLOCATE_KIND: self.allocate,
         }
 
     async def record_maturities(self, job: ClaimedJob, context: JobContext) -> None:
@@ -78,6 +80,20 @@ class DealingJobs:
 
         result = await context.apply(effect)
         logger.info("dealing_withdrawal_queue_released", count=result.get("released"))
+
+    async def allocate(self, job: ClaimedJob, context: JobContext) -> None:
+        """Bring the allocations of bills to investments up to date."""
+
+        async def effect(session: AsyncSession) -> Mapping[str, object]:
+            run = await allocations.allocate_all(session, self._clock)
+            return {"allocated": run.allocated, "released": run.released}
+
+        result = await context.apply(effect)
+        logger.info(
+            "dealing_allocations_updated",
+            allocated=result.get("allocated"),
+            released=result.get("released"),
+        )
 
 
 def _withdrawal(payload: Mapping[str, object]) -> tuple[str, Money]:
