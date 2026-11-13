@@ -4,6 +4,7 @@ import { useAuth } from "@/auth/context.ts";
 import { can } from "@/auth/types.ts";
 import { AppShell } from "@/components/AppShell.tsx";
 import { homePath, NAV_ITEMS, type NavItem } from "@/nav/nav.ts";
+import { EnrolPage } from "@/pages/EnrolPage.tsx";
 import { NoAccessPage } from "@/pages/NoAccessPage.tsx";
 import { NotFoundPage } from "@/pages/NotFoundPage.tsx";
 import { PlaceholderPage } from "@/pages/PlaceholderPage.tsx";
@@ -31,6 +32,7 @@ function Home() {
 
 export const routes: RouteObject[] = [
   { path: "/sign-in", element: <SignInPage /> },
+  { path: "/enrol", element: <EnrolPage /> },
   {
     path: "/",
     element: <AppShell />,

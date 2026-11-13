@@ -1,5 +1,5 @@
 import { createContext, useContext } from "react";
-import type { SecondStepAnswer, SignInChallenge } from "./api.ts";
+import type { AuthenticatorSetup, Enrolment, SecondStepAnswer, SignInChallenge } from "./api.ts";
 import type { StaffSession } from "./types.ts";
 
 export interface AuthState {
@@ -9,6 +9,10 @@ export interface AuthState {
   startSignIn(email: string, password: string): Promise<SignInChallenge>;
   finishSignIn(challenge: SignInChallenge, answer: SecondStepAnswer): Promise<void>;
   signOut(): Promise<void>;
+  getEnrolment(token: string): Promise<Enrolment>;
+  enrolWithPasskey(token: string, password: string): Promise<void>;
+  startAuthenticatorEnrolment(token: string): Promise<AuthenticatorSetup>;
+  enrolWithAuthenticator(token: string, password: string, code: string): Promise<void>;
 }
 
 export const AuthContext = createContext<AuthState | null>(null);

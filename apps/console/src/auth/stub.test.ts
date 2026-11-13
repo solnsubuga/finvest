@@ -52,7 +52,7 @@ describe("stub sign-in", () => {
     const api = createStubAuthApi();
     const challenge = await api.startSignIn("compliance@finvest.test", "anything");
     await expect(api.finishSignIn(challenge, { method: "authenticator", code: "123456" })).rejects.toEqual(
-      new AuthError("code_invalid"),
+      new AuthError("invalid_code"),
     );
     expect(await api.getSession()).toBeNull();
   });
@@ -62,7 +62,7 @@ describe("stub sign-in", () => {
     const challenge = await api.startSignIn("finance@finvest.test", "anything");
     for (const code of [STUB_WRONG_CODE, "12345", "abcdef", ""]) {
       await expect(api.finishSignIn(challenge, { method: "authenticator", code })).rejects.toEqual(
-        new AuthError("code_invalid"),
+        new AuthError("invalid_code"),
       );
     }
     expect(await api.getSession()).toBeNull();

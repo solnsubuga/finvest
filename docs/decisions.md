@@ -41,4 +41,5 @@ A running log. Add a row when a decision is made, and move an open question up w
 | Identity check provider: Smile ID coverage and pricing for Uganda. | Provider |
 | Will passkeys become compulsory for clients? | Owner |
 | Is api.finvestug.com the backend address? | Owner |
+| Confirm the role to screen table for the console. In use as the working default since 2026-11-13 (see Decided). It decides who can open Money Movement, Reconciliation and the other screens. | Owner |
 | Card payments. Stripe is not available to Ugandan businesses. A local card acquirer, capped, is a possible later addition. | Owner |
