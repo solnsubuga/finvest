@@ -42,6 +42,7 @@ A running log. Add a row when a decision is made, and move an open question up w
 | 2026-11-13 | Decided for now. Only running investments and orders awaiting payment are imported. Redeemed investments and past transactions stay in Finvest 1.0, kept read-only. Payout bank accounts are not imported: a client adds them in the new app, with proof of ownership, like everyone else. |
 | 2026-11-13 | Decided for now. A migrated client with no phone number, an unverified identity or an expired document does not block the switch. Their money comes across and keeps earning, and staff follow up. Two clients sharing a phone number or an identity document do block it. |
 | 2026-11-13 | Decided for now (the owner was asked on a decision card and had said not to wait). An identity that Finvest 1.0 verified is carried over as approved at the switch, with a new account number, and the client proves who they are with a selfie matched to the ID on file when they claim. A client who was not verified, or whose document has expired, redoes the ID check. |
+| 2026-11-13 | Decided for now, by the migration thread with the investing thread. A migrated investment is opened in the ledger with the interest the new formula gives for its original start date, rate and tax, not with the old system's figure. A difference between the two is listed in the finance check and signed off with a reason before the switch. It is never posted. |
 | 2026-11-13 | All work reaches `main` through pull requests. UI work includes screenshots. Commits on `main` carry no AI attribution. |
 | 2026-11-13 | A payout account whose name differs from the client's ID is never approved, not even by two staff. The same holds for a mobile money number: a different registered name is refused outright. |
 
@@ -69,6 +70,7 @@ A running log. Add a row when a decision is made, and move an open question up w
 | Migration: a sample Finvest 1.0 export, or the old database tables, to check the import columns against. | Owner |
 | Migration: Finvest 1.0 identity documents with no expiry date on file are treated as still valid (built so far). Should those clients redo the ID check instead? | Owner, counsel |
 | Migration: should payout accounts and past transactions from Finvest 1.0 be brought across? Built: no. | Owner |
+| Migration: when Finvest 1.0 shows a client more interest than the formula gives, is the old figure honoured? Built: no, the investment opens with the formula's figure and finance signs off the difference. | Owner, counsel |
 | Investing: confirm the tax on interest (built: 15% on Treasury bills, 5% on the dollar product, from the design canvas) against what URA requires Finvest to withhold. | Owner, counsel |
 | Investing: confirm the minimums. The canvas shows $500 for the dollar product in one place and $100 in another. Built: $500. | Owner |
 | Investing: if the tax rate changes by law during a term, should running investments change with it? Built: no, terms are fixed at the start. | Owner, counsel |

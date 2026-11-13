@@ -18,6 +18,7 @@ Clients whose identity documents are missing or out of date are asked to redo th
 
 One format covers Finvest 1.0 exports and records kept by hand. It is two sheets, each saved as CSV (in Excel, "CSV UTF-8"): one row per client and one row per investment. The rules are in `backend/app/modules/migration/domain/sheet.py`.
 
+- References are compared without regard to case, so `c1` and `C1` are the same client.
 - The columns are fixed and can come in any order. A missing, unknown or repeated column refuses the whole sheet.
 - Dates are `YYYY-MM-DD` only. A date like 03/04/2026 is refused, because it reads as March in one country and April in another.
 - Amounts are plain numbers in the product's currency, with or without thousands commas: `1,000,000` for shillings, `1,500.50` for dollars. Nothing is rounded, and a fraction of a shilling is refused.
@@ -78,6 +79,16 @@ An **error** must be fixed in the spreadsheet, and the final import is refused w
 | A verified identity with no document type, number or date of birth | A client under 18 |
 
 A row with an error is left out of the trial's totals, together with the investments of a client whose row has one. The totals are the number of clients, verified identities, clients who will redo the ID check, clients with no phone, running investments, pending orders, money invested and interest before tax, per currency. The finance check compares them with the old system.
+
+## The finance check
+
+Finance enters the old system's own totals for the "as of" date: clients, verified identities, running investments, pending orders, and money invested and interest before tax per currency. Each is compared with the trial import, and each line either agrees or differs. The rules are in `backend/app/modules/migration/domain/finance.py`.
+
+Interest is also checked investment by investment. The new system opens every running investment with what its own formula says was earned by the "as of" date, using the investment's original start date, rate and tax. That keeps the daily postings equal to the formula on every later day. Where the old system's interest or tax figure differs from the formula, the investment is listed with both figures. The difference is never posted to the ledger. An investment whose tax rate is not the one its product withholds is listed in the same way.
+
+The switch cannot be scheduled while the import has an error, or while any total or investment that differs has no sign-off. A sign-off names the line or the investment, gives a reason, and records who signed. A sign-off left over for something that no longer differs also blocks the switch, so a reason written for an earlier file is never carried forward by accident.
+
+At the switch each investment is opened with one ledger entry: the principal to the client's holding, interest after tax to the client's accrued interest, the tax to the tax payable account, and the three together against a migration opening balances account, which finance clears against the custodian and bank position.
 
 ## What Finvest 1.0 was
 
