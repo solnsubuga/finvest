@@ -73,3 +73,8 @@ jobs:
             echo "The demo goals or a rate before tax were bundled into a production build" >&2
             exit 1
           fi
+          # Nor the demo notifications and help chat, which show alerts and replies nobody sent.
+          if grep -rIl -e "no one at Finvest has seen your message" -e "You earned UGX 2,416 today" dist; then
+            echo "The demo notifications or help chat were bundled into a production build" >&2
+            exit 1
+          fi
