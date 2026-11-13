@@ -2,7 +2,7 @@
 
 The Finvest back office console at admin.finvestug.com.
 
-**Status:** the shell is built: staff sign-in, the menu that follows the person's role, and a placeholder for each screen. The identity checks review screen is built on sample data (`src/screens/identity-checks`, behind the `KycApi` interface) until the backend publishes its routes. The screens themselves arrive phase by phase (see [docs/roadmap.md](../../docs/roadmap.md)).
+**Status:** the shell is built: staff sign-in, the menu that follows the person's role, and a placeholder for each screen. The identity checks review screen is built on sample data (`src/screens/identity-checks`, behind the `KycApi` interface) until the backend publishes its routes. The migration screen (`src/screens/migration`, behind the `MigrationApi` interface) is built the same way: a trial import with its list of problems, the comparison with Finvest 1.0 and what still blocks the switch. Open `/migration?sample=empty` to see it before any trial has run. The screens themselves arrive phase by phase (see [docs/roadmap.md](../../docs/roadmap.md)).
 
 ## Stack
 
