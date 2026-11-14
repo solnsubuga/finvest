@@ -33,6 +33,8 @@ BODY_LIMITS: dict[str, int] = {
     # An identity document photo: at most 10 MiB, plus the multipart framing. The edge allows
     # 12 MiB on the same path.
     "/client/identity-check/photos/": 11 * 1024 * 1024,
+    # A guided selfie's pose frame: the same 10 MiB file limit and framing as a photo.
+    "/client/identity-check/poses/": 11 * 1024 * 1024,
 }
 
 
