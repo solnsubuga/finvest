@@ -182,6 +182,12 @@ DEFAULTS: dict[str, Wording] = {
         "the app.",
         "Finvest: your monthly saving towards {goal} is due on {date}. Pay in the app.",
     ),
+    "goal_payday": Wording(
+        "It's payday",
+        "Today is the payday you chose for {goal}. Put something towards it while the money is "
+        "in. See how much to save in the app.",
+        "Finvest: it's payday. Put something towards {goal} today. Save in the app.",
+    ),
     "goal_reached": Wording(
         "You reached your goal",
         "Well done. {goal} has reached its target. It keeps earning until its investments "

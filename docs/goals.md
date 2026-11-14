@@ -50,6 +50,7 @@ Closing a goal is final. Its investments carry on as the client's ordinary inves
 The worker runs `goals.send_reminders` every morning at 08:00 Kampala time, so no text arrives at night. It reads every active goal and raises two notices through the notifications contract, with the goal as the link:
 
 - **`goal_top_up_due`**, three days before a monthly saving is due. Savings fall on the day of the month the goal was set up, the 28th at the latest, as the plan assumes. Only a goal with a date has a plan, so a goal with no date gets no reminder. There is none once the goal is reached, none for a saving on or after the goal's date, and none if the client saved towards the goal since the last saving date. A rollover is not a saving. Each saving date is keyed (`goal-top-up:<goal>:<date>`), so a second run tells nobody twice and a missed morning is caught up the next one, while the saving is still ahead.
+- **`goal_payday`**, on the client's payday, when they named one (`PUT /client/goals/{id}/payday` with `{day}`, 1 to 31, or `null` to stop). It replaces `goal_top_up_due` for that goal, and a goal with no date is nudged too, since payday is when there is money to save. A day past the end of a shorter month falls on its last day. A missed morning is caught up for two more days. There is none once the goal is reached, none on or after the goal's date, none if the client saved towards it in the three days before payday or since, and none while a saving rule's plan is active. Each payday is keyed (`goal-payday:<goal>:<date>`). Migration 0302 adds the column, checked to 1 to 31. The rule is `payday_to_remind` in `domain/reminders.py`.
 - **`goal_reached`**, the first morning the goal's value, after tax, is at its target. Keyed by the goal and its target, so a client is told once even if the value later dips and comes back, and told again when they reach a target they raised after reaching the first.
 
 The words name the goal and the date, never an amount. The rule is in `domain/reminders.py`.
@@ -124,6 +125,7 @@ The database holds these, in migration 0112:
 | `POST /client/goals` | Set up a goal. Takes an `Idempotency-Key`. |
 | `GET /client/goals`, `GET /client/goals/{id}` | The client's goals with progress, plan and savings |
 | `PUT /client/goals/{id}` | Change the name, what it is for, the target or the date |
+| `PUT /client/goals/{id}/payday` | `{day}`: the day of the month the client is paid, 1 to 31, or `null`. They are nudged to save that morning. |
 | `POST /client/goals/{id}/close` | Close it |
 | `POST /client/goals/{id}/saving-rule` | Set up the monthly saving rule from `amount_minor`, `currency`, `day` and `network` (`mtn` or `airtel`). Takes an `Idempotency-Key`. Answers 201 with the goal, whose `saving_rule` has `plan_id`, `amount_minor`, `currency`, `day`, `network`, `payer_msisdn`, `status`, `next_run_on` and `created_at`. |
 | `POST /client/goals/{id}/saving-rule/stop` | End the rule and stop its plan. Sending it again changes nothing. |

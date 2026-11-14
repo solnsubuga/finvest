@@ -638,6 +638,7 @@ export const GoalView = z.object({
   currency: Currency,
   goal_id: z.string(),
   name: z.string(),
+  payday: z.number().int().nullable(),
   plan: GoalsApiPlanView.nullable(),
   product_code: z.string(),
   progress: ProgressView,
@@ -981,6 +982,11 @@ export const PayOutRequest = z.object({
   pin_confirmation: z.string().nullable().optional(),
 });
 export type PayOutRequest = z.infer<typeof PayOutRequest>;
+
+export const Payday = z.object({
+  day: z.number().int().nullable(),
+});
+export type Payday = z.infer<typeof Payday>;
 
 export const ReceiptView = z.object({
   bank_name: z.string(),
@@ -1972,6 +1978,19 @@ export const operations = {
     query: z.object({}),
     body: null,
     bodyKind: null,
+    idempotent: false,
+    status: 200,
+    response: GoalView,
+  },
+  "PUT /client/goals/{goal_id}/payday": {
+    method: "PUT",
+    path: "/client/goals/{goal_id}/payday",
+    params: z.object({
+    goal_id: z.string(),
+  }),
+    query: z.object({}),
+    body: Payday,
+    bodyKind: "json",
     idempotent: false,
     status: 200,
     response: GoalView,
