@@ -137,6 +137,7 @@ A payout is funded from one place only: the client's own `client.payout_pending`
 | `payout.settle` | Payout in flight | `iotec.wallet` (reference the network) for mobile money, `bank.trust` for a bank account | `payout:<id>:settle` |
 | `payout.park` | Payout in flight | `client.payout_pending` | `payout:<id>:park` |
 | `payout.release` | Payout in flight | `client.payout_pending`, reference the investment | `payout:<id>:release` |
+| `payout.returned` | `iotec.wallet` (reference the network) or `bank.trust`, the pot it was paid from | `client.payout_pending`, reference the investment | `payout:<id>:returned` |
 
 A bank payout settles and parks with the same entries, posted when two members of staff settle it from the trust statement (see "Paying bank payouts").
 
@@ -172,7 +173,8 @@ In `backend/app/modules/payouts/api.py`. Every route needs a signed-in client an
 | `DELETE /client/payout-destinations/{id}` | Remove it for good. 204 |
 | `POST /client/payout-destinations/{id}/proof` | Bank accounts only. A form with `proof_kind` (`bank_statement`, `bank_letter` or `bank_card`) and `file` (PDF, JPEG or PNG, at most 10 MiB). Sends it to staff |
 | `GET /client/payouts` | The client's payouts, newest first, at most 50 |
-| `GET /client/payouts/{id}` | One payout |
+| `GET /client/payouts/{id}` | One payout. `returned_at` is set when a paid payout came back |
+| `POST /client/payouts/{id}/resend` | `{destination_id}`. Send a payout that came back again, to an approved account: a new payout for the same amount from the same handover, 201. Asking again is the same payout. 409 `payout_not_returned`; 422 on `destination_id` with a new payout's refusal codes; 422 `idempotency_key_reused` once it was sent again to another account |
 | `GET /client/withdrawal-limits` | The limits in force today, without the review threshold |
 | `GET /client/banks` | The banks a client may be paid to, as `{code, name}`, from `domain/banks.py`: 22 banks licensed by the Bank of Uganda, taken from the client app's list. The app and the console name banks from this list |
 
@@ -351,3 +353,36 @@ What the database enforces:
 | Nothing changes afterwards | A decided batch or settlement never changes, and nothing is deleted. Only staff and the worker can read them |
 
 Not built yet: a bank that debits a whole batch as one statement line (each payout needs its own line for now), matching the settle entries with their lines in the day close automatically, and the console screen.
+
+## A payout that came back
+
+A payout the provider or bank confirmed can still come back: a bank account closed after the transfer left, or a mobile money reversal. The statement shows the money coming in again, and Finvest owes it to the client again (`backend/app/modules/payouts/returns.py`, routes in `staff_returns_api.py`, migration 0044). A paid payout never changes, so the return is a record of its own, and the ledger entry is never deleted or reversed: the return is an entry of its own.
+
+1. One member of staff proposes it with a reason, naming the statement line that brought the money back: on the pot the payout was paid from (the trust account for a bank payout, the network's ioTec wallet for mobile money), coming in, for the payout's amount and currency, dated on or after the day it was paid, and named by no other open or approved return.
+2. A different member of staff approves it. In the same transaction the ledger posts `payout.returned` (debit the pot, credit the client's "payout pending" account for the payout's source), and the client is told `payout_returned`, naming where it was sent, never the amount or the number. They may instead decline it, or the proposer may withdraw it; nothing is posted and it can be proposed again.
+3. The client sees `returned_at` on the payout and sends it again to an approved account of theirs (`POST /client/payouts/{id}/resend`). It is a new payout under the request key `return:<return id>`, so a lost answer can be tried again, and the client sends a returned payout again once. If that one fails, its money is parked for staff like any failed payout. Until the client sends it, the money waits in "payout pending" and shows in the staff queue of non-empty pending accounts.
+
+Insights take a returned payout off "paid out" in the month it came back ([insights.md](insights.md)).
+
+Seeing returns needs `money_movement.view`. Proposing and deciding need `bank_payouts.change`, and approving and declining need the second step in the last ten minutes. Proposing and approving take an `Idempotency-Key`.
+
+| Route | What it does |
+| --- | --- |
+| `GET /staff/payout-returns` | Returns waiting for a second person, oldest first, at most 100 |
+| `GET /staff/payout-returns/{id}` | One return, with the entry its approval posted |
+| `POST /staff/payouts/{id}/returns` | `{statement_line_id, reason}`. 201. 409 `payout_not_paid`, `return_already_recorded`, `statement_line_in_use` or `statement_line_not_this_payout` |
+| `POST /staff/payout-returns/{id}/approve` | `{reason}`. Posts the return and tells the client. 403 `proposed_by_you`; 409 `return_already_decided` |
+| `POST /staff/payout-returns/{id}/decline` | `{reason}`. 403 `proposed_by_you`; 409 `return_already_decided` |
+| `POST /staff/payout-returns/{id}/withdraw` | `{reason}`, by the proposer only (403 `not_proposed_by_you`) |
+
+What the database enforces:
+
+| Rule | How |
+| --- | --- |
+| The statement is the evidence | The line is checked against the payout's pot, direction, amount, currency and paid date at the proposal and again at approval |
+| Two people | A different signed-in member of staff approves or declines; only the proposer withdraws |
+| The approval carries its entry | An approved return must name the `payout.returned` entry with this payout's fixed key that credits the client's pending account for the payout's source with its amount, and only an approved return names an entry |
+| Once | One open or approved return per payout, and a statement line takes back one payout |
+| Nothing changes afterwards | A decided return never changes, and nothing is deleted. A client sees only their own approved returns |
+
+Not built yet: the console screen for returns, and the client app's resend screen.

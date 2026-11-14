@@ -1662,6 +1662,28 @@ export const ResultIn = z.object({
 });
 export type ResultIn = z.infer<typeof ResultIn>;
 
+export const ReturnIn = z.object({
+  reason: z.string(),
+  statement_line_id: z.string(),
+});
+export type ReturnIn = z.infer<typeof ReturnIn>;
+
+export const ReturnOut = z.object({
+  client_id: z.string(),
+  decided_at: z.string().nullable(),
+  decided_by: z.string().nullable(),
+  decision_reason: z.string().nullable(),
+  id: z.string(),
+  ledger_entry_id: z.string().nullable(),
+  payout_id: z.string(),
+  proposed_at: z.string(),
+  proposed_by: z.string(),
+  reason: z.string(),
+  statement_line_id: z.string(),
+  status: z.enum(["proposed", "approved", "declined", "withdrawn"]),
+});
+export type ReturnOut = z.infer<typeof ReturnOut>;
+
 export const ReviewIn = z.object({
   reason: z.string(),
 });
@@ -3649,6 +3671,69 @@ export const operations = {
     status: 200,
     response: ResolutionOut,
   },
+  "GET /staff/payout-returns": {
+    method: "GET",
+    path: "/staff/payout-returns",
+    params: z.object({}),
+    query: z.object({}),
+    body: null,
+    bodyKind: null,
+    idempotent: false,
+    status: 200,
+    response: z.array(ReturnOut),
+  },
+  "GET /staff/payout-returns/{return_id}": {
+    method: "GET",
+    path: "/staff/payout-returns/{return_id}",
+    params: z.object({
+    return_id: z.string(),
+  }),
+    query: z.object({}),
+    body: null,
+    bodyKind: null,
+    idempotent: false,
+    status: 200,
+    response: ReturnOut,
+  },
+  "POST /staff/payout-returns/{return_id}/approve": {
+    method: "POST",
+    path: "/staff/payout-returns/{return_id}/approve",
+    params: z.object({
+    return_id: z.string(),
+  }),
+    query: z.object({}),
+    body: ReasonIn,
+    bodyKind: "json",
+    idempotent: true,
+    status: 200,
+    response: ReturnOut,
+  },
+  "POST /staff/payout-returns/{return_id}/decline": {
+    method: "POST",
+    path: "/staff/payout-returns/{return_id}/decline",
+    params: z.object({
+    return_id: z.string(),
+  }),
+    query: z.object({}),
+    body: ReasonIn,
+    bodyKind: "json",
+    idempotent: false,
+    status: 200,
+    response: ReturnOut,
+  },
+  "POST /staff/payout-returns/{return_id}/withdraw": {
+    method: "POST",
+    path: "/staff/payout-returns/{return_id}/withdraw",
+    params: z.object({
+    return_id: z.string(),
+  }),
+    query: z.object({}),
+    body: ReasonIn,
+    bodyKind: "json",
+    idempotent: false,
+    status: 200,
+    response: ReturnOut,
+  },
   "GET /staff/payouts/bank/sent": {
     method: "GET",
     path: "/staff/payouts/bank/sent",
@@ -3757,6 +3842,19 @@ export const operations = {
     idempotent: true,
     status: 201,
     response: ResolutionOut,
+  },
+  "POST /staff/payouts/{payout_id}/returns": {
+    method: "POST",
+    path: "/staff/payouts/{payout_id}/returns",
+    params: z.object({
+    payout_id: z.string(),
+  }),
+    query: z.object({}),
+    body: ReturnIn,
+    bodyKind: "json",
+    idempotent: true,
+    status: 201,
+    response: ReturnOut,
   },
   "GET /staff/people": {
     method: "GET",

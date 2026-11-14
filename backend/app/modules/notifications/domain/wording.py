@@ -102,6 +102,13 @@ DEFAULTS: dict[str, Wording] = {
         "Finvest: we could not send your withdrawal to {destination}. Your money is safe and our "
         "team is on it.",
     ),
+    "payout_returned": Wording(
+        "Withdrawal came back",
+        "Your withdrawal to {destination} came back to us. Your money is safe with us. Choose an "
+        "account in the app to send it again.",
+        "Finvest: your withdrawal to {destination} came back to us. Your money is safe. Open the "
+        "app to send it again.",
+    ),
     "payout_declined": Wording(
         "Withdrawal not sent",
         "We did not send your withdrawal to {destination}. Our team declined it after review. "
