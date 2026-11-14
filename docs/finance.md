@@ -81,7 +81,7 @@ The file headers follow each system's published import template. The first impor
 
 A system's file names the system's accounts, so each system has an account code map: for each Finvest ledger code, the account it is posted to there. A map lives in the console's Settings under Accounting system codes and is kept in `finance_code_maps` and `finance_code_map_lines` (migration 0290).
 
-* One member of staff proposes a whole map for one system, with a reason, and a different one approves or rejects it with a note. Only the proposer can withdraw it. PostgreSQL refuses the proposer deciding their own, a decided map changing, accounts being added by anyone but the proposer or after the proposal is decided, and any row being removed.
+* One member of staff proposes a whole map for one system, with a reason, and a different one approves or rejects it with a note. Only the proposer can withdraw it. PostgreSQL refuses the proposer deciding their own, a decided map changing, accounts being added by anyone but the proposer, or outside the transaction that proposed the map (so the approver decides on the whole map they read), and any row being removed.
 * One proposal waits per system at a time. Exports keep using the map in use until a new one is approved.
 * Seeing the maps needs `settings.view`. Proposing and deciding need `account_codes.change`, held by the admin role only for now. Deciding also needs a passkey or app code from the last ten minutes.
 * Each step is an audit event: `finance.code_map_proposed` with how many codes it adds, changes and removes, then `finance.code_map_approved`, `_rejected` or `_withdrawn`. The accounts themselves are in the map, kept for good.

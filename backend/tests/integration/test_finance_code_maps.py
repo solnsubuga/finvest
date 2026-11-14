@@ -269,6 +269,17 @@ async def test_postgresql_refuses_one_person_deciding_their_own_map(api: Api) ->
             "UPDATE finance_code_maps SET status = 'approved', decided_by = :maker, "
             "decided_at = now(), decision_reason = 'Mine' WHERE id = :id",
         ),
+        # The proposer adds an account after the approver may have read the map.
+        (
+            maker,
+            "INSERT INTO finance_code_map_lines (map_id, ledger_code, account) "
+            "VALUES (:id, 'client.awaiting_start', 'Client funds')",
+        ),
+        # Or claims a later transaction proposed it.
+        (
+            maker,
+            "UPDATE finance_code_maps SET created_xact = pg_current_xact_id() WHERE id = :id",
+        ),
         # Someone else adds an account to it.
         (
             other,
