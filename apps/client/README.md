@@ -19,7 +19,7 @@ Run `pnpm install` once at the repository root, then from `apps/client`:
 | `pnpm lint` | ESLint with the Expo rules |
 | `pnpm typecheck` | `tsc --noEmit` |
 | `pnpm test` | Jest unit tests and the flow tests for sign-in and for Sign in and security |
-| `pnpm build:web` | Exports the static web build to `dist/` |
+| `pnpm build:web` | Exports the static web build to `dist/`, then lists its screen files in `index.html` (`scripts/route-chunks.mjs`) |
 
 Add Expo packages with `npx expo install <package>` so the version matches the SDK.
 
@@ -167,6 +167,7 @@ Not built yet: sending an investment to another client, changing a plan's amount
 
 ## Notes
 
+- On the web, Expo Router puts each screen's code in its own file, fetched the first time the screen opens, and the page is blank until it arrives. So once the first screen is up, `src/navigation/RoutePrefetch.tsx` asks the browser to fetch the other screens' files in the background, at its lowest priority, from the list `scripts/route-chunks.mjs` writes into `index.html`. It does not in light mode or when the browser asks to save data; screens then load when opened. The files are cached for a year and change only with a release.
 - The web version ships at launch. About five screens have wide layouts (home, invest, portfolio, activity, documents). Everything else reuses the phone screen in a centred column.
 - There is no wallet screen and no spendable balance.
 - Clients never see tax rates, only net figures.

@@ -20,6 +20,7 @@ import { PayoutsProvider } from "@/payouts/PayoutsProvider";
 import { OrganisationsProvider } from "@/organisations/OrganisationsProvider";
 import { ProfileProvider } from "@/profile/ProfileProvider";
 import { SupportProvider } from "@/support/SupportProvider";
+import { RoutePrefetch } from "@/navigation/RoutePrefetch";
 import { colors, fontAssets } from "@/theme";
 
 void SplashScreen.preventAutoHideAsync();
@@ -41,6 +42,7 @@ export default function RootLayout() {
   return (
     <SafeAreaProvider>
       <DataSavingProvider>
+        <RoutePrefetch />
         <AuthProvider>
           <IdentityProvider>
             <ClaimProvider>
