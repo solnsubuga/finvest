@@ -827,6 +827,7 @@ export type PasskeyOptions = z.infer<typeof PasskeyOptions>;
 
 export const PayOutRequest = z.object({
   destination_id: z.string(),
+  pin_confirmation: z.string().nullable().optional(),
 });
 export type PayOutRequest = z.infer<typeof PayOutRequest>;
 
@@ -1119,6 +1120,7 @@ export type Unread = z.infer<typeof Unread>;
 
 export const WithdrawalRequest = z.object({
   destination_id: z.string(),
+  pin_confirmation: z.string().nullable().optional(),
 });
 export type WithdrawalRequest = z.infer<typeof WithdrawalRequest>;
 
