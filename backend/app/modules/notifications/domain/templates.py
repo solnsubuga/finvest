@@ -9,9 +9,17 @@ so nothing a person typed can add markup or a link. Every email is drawn with th
 `app.shared.email_layout`, the look the statement and receipt emails share.
 
 This file owns only the messages that carry a secret or guard an account: sign-in, signup,
-reset and claim codes, the notices of a new sign-in, of a request for help getting in and of a
-changed number, the link that proves an email address, the link that invites a Finvest 1.0
-client to claim their account, and the staff set-up link. They are fixed in code so that nobody
+reset and claim codes, the notices of a new sign-in, of a request for help getting in, of a
+changed number, of an app PIN reset by staff and of a withdrawal staff started, the link that
+proves an email address, the link that invites a Finvest 1.0 client to claim their account, and
+the staff set-up link. They are
+fixed in code so that nobody can edit them into a phishing message, and so that they work before
+anything else is set up. Every other client notice is worded in `domain/wording.py`, which staff
+edit with a second person approving. Neither file adds text of the other kind.
+reset, claim and number change codes, the notices of a new sign-in, of a request for help
+getting in, of a changed number and of a password or email address the client changed, the link
+that proves an email address, the link that invites a Finvest 1.0 client to claim their account,
+and the staff set-up link. They are fixed in code so that nobody
 can edit them into a phishing message, and so that they work before anything else is set up. Every
 other client notice is worded in `domain/wording.py`, which staff edit with a second person
 approving. Neither file adds text of the other kind.
@@ -29,7 +37,13 @@ Template = Literal[
     "password_reset_code",
     "claim_code",
     "payout_account_code",
+    "phone_change_code",
     "phone_changed",
+    "app_signed_out",
+    "staff_withdrawal_started",
+    "own_phone_changed",
+    "password_changed",
+    "email_changed",
     "email_verification",
     "new_sign_in",
     "recovery_requested",
@@ -45,7 +59,18 @@ _VARIABLES: dict[Template, frozenset[str]] = {
     "password_reset_code": frozenset({"code", "minutes"}),
     "claim_code": frozenset({"code", "minutes"}),
     "payout_account_code": frozenset({"code", "minutes"}),
+    # Texted to the new number a client is moving their account to.
+    "phone_change_code": frozenset({"code", "minutes"}),
     "phone_changed": frozenset({"ending"}),
+    # Two members of staff reset the client's app PIN, which signs the phone app out.
+    "app_signed_out": frozenset(),
+    # Two members of staff started an early withdrawal the client asked for in help chat.
+    "staff_withdrawal_started": frozenset(),
+    # The client changed it themselves, after a passkey or authenticator app.
+    "own_phone_changed": frozenset({"ending", "when"}),
+    "password_changed": frozenset({"when"}),
+    # Sent to the address that was replaced.
+    "email_changed": frozenset({"when"}),
     "email_verification": frozenset({"link", "hours"}),
     "new_sign_in": frozenset({"device", "when"}),
     # Someone said they cannot get in and asked us to call them back.
@@ -107,6 +132,17 @@ _SMS: dict[str, str] = {
     "it is you.",
     "phone_changed": "The mobile number on your Finvest account was changed to one ending "
     "{ending}. If you did not ask for this, contact Finvest support now.",
+    "app_signed_out": "Finvest signed your phone app out and reset its PIN. Log in again with "
+    "your password to choose a new PIN. If you did not ask for this, contact Finvest support now.",
+    "staff_withdrawal_started": "Finvest started the withdrawal you asked for in Help. The money "
+    "goes only to your own approved account. If you did not ask for this, contact Finvest "
+    "support now.",
+    "phone_change_code": "Your Finvest code to move your account to this number is {code}. It "
+    "works for {minutes} minutes. Never share it. Finvest staff will never ask for it.",
+    "own_phone_changed": "The mobile number on your Finvest account was changed in the app to "
+    "one ending {ending}, {when}. If this was not you, contact Finvest support now.",
+    "password_changed": "The password for your Finvest account was changed in the app, {when}. "
+    "If this was not you, contact Finvest support now.",
     "claim_invitation": "Finvest has a new app, and your investments are in it. Claim your "
     "account with this link: {link} It works once, for {hours} hours. Finvest staff will never "
     "ask for this link.",
@@ -269,6 +305,96 @@ def _phone_changed(values: dict[str, str], links: layout.Links) -> Rendered:
     )
 
 
+def _app_signed_out(values: dict[str, str], links: layout.Links) -> Rendered:
+    lines = [
+        "Finvest staff signed the Finvest app out on your phone and reset its PIN.",
+        "Log in again with your password and a second step, then choose a new PIN. Your money "
+        "and your investments stay as they are.",
+    ]
+    warning = ("Not you?", "If you did not ask for this, contact Finvest support now.")
+    return _email(
+        links=links,
+        subject="Your Finvest app PIN was reset",
+        preheader="Log in again to choose a new PIN.",
+        title="Your app PIN was reset",
+        html=layout.paragraphs(lines) + layout.callout(*warning),
+        text=[*lines, " ".join(warning)],
+    )
+
+
+def _staff_withdrawal_started(values: dict[str, str], links: layout.Links) -> Rendered:
+    lines = [
+        "Finvest staff started the early withdrawal you asked for in Help in the app.",
+        "The money goes only to your own approved payout account. You can follow it in the app "
+        "under Activity.",
+    ]
+    warning = ("Not you?", "If you did not ask for this, contact Finvest support now.")
+    return _email(
+        links=links,
+        subject="We started the withdrawal you asked for",
+        preheader="It goes only to your own approved account.",
+        title="Your withdrawal has started",
+        html=layout.paragraphs(lines) + layout.callout(*warning),
+        text=[*lines, " ".join(warning)],
+    )
+
+
+_NOT_YOU = (
+    "Not you?",
+    "Contact Finvest support now, through Help in the app or at finvestug.com/help.",
+)
+
+
+def _own_phone_changed(values: dict[str, str], links: layout.Links) -> Rendered:
+    lines = [
+        f"The mobile number on your Finvest account was changed in the app, {values['when']}. "
+        f"It now ends {values['ending']}.",
+        "Your other devices were signed out, and for the next 24 hours money can be paid out "
+        "only to accounts you already use.",
+    ]
+    return _email(
+        links=links,
+        subject="Your Finvest mobile number was changed",
+        preheader=f"It now ends {values['ending']}.",
+        title="Your mobile number was changed",
+        html=layout.status("Number changed", f"Now ending {values['ending']}")
+        + layout.paragraphs(lines)
+        + layout.callout(*_NOT_YOU),
+        text=[*lines, " ".join(_NOT_YOU)],
+    )
+
+
+def _password_changed(values: dict[str, str], links: layout.Links) -> Rendered:
+    lines = [
+        f"The password for your Finvest account was changed in the app, {values['when']}.",
+        "Your other devices were signed out. If this was you, you do not need to do anything.",
+    ]
+    return _email(
+        links=links,
+        subject="Your Finvest password was changed",
+        preheader=f"Changed {values['when']}.",
+        title="Your password was changed",
+        html=layout.paragraphs(lines) + layout.callout(*_NOT_YOU),
+        text=[*lines, " ".join(_NOT_YOU)],
+    )
+
+
+def _email_changed(values: dict[str, str], links: layout.Links) -> Rendered:
+    lines = [
+        f"The email address on your Finvest account was changed in the app, {values['when']}. "
+        "We will no longer send anything to this address.",
+        "If this was you, you do not need to do anything.",
+    ]
+    return _email(
+        links=links,
+        subject="Your Finvest email address was changed",
+        preheader=f"Changed {values['when']}.",
+        title="Your email address was changed",
+        html=layout.paragraphs(lines) + layout.callout(*_NOT_YOU),
+        text=[*lines, " ".join(_NOT_YOU)],
+    )
+
+
 def _email_verification(values: dict[str, str], links: layout.Links) -> Rendered:
     link = values["link"]
     lines = [
@@ -370,6 +496,11 @@ _EMAILS: dict[str, Callable[[dict[str, str], layout.Links], Rendered]] = {
     "new_sign_in": _new_sign_in,
     "recovery_requested": _recovery_requested,
     "phone_changed": _phone_changed,
+    "app_signed_out": _app_signed_out,
+    "staff_withdrawal_started": _staff_withdrawal_started,
+    "own_phone_changed": _own_phone_changed,
+    "password_changed": _password_changed,
+    "email_changed": _email_changed,
     "email_verification": _email_verification,
     "claim_invitation": _claim_invitation,
     "staff_enrolment": _staff_enrolment,

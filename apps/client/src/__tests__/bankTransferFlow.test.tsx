@@ -1,3 +1,4 @@
+import { Share } from "react-native";
 import { act, fireEvent, screen } from "@testing-library/react-native";
 import { renderRouter } from "expo-router/testing-library";
 
@@ -129,6 +130,21 @@ describe("paying for an investment by bank transfer", () => {
     expect(screen.getByText(/Send from a bank account in your own name/)).toBeTruthy();
     await fireEvent.press(screen.getByLabelText("Copy account number"));
     await screen.findByText("Copied");
+  });
+
+  it("shares the bank details, or copies them where there is no share sheet", async () => {
+    await openUpload();
+    const share = jest.spyOn(Share, "share").mockResolvedValueOnce({ action: "sharedAction", activityType: undefined });
+    await fireEvent.press(screen.getByTestId("bank-share"));
+    const message = (share.mock.calls[0]![0] as { message: string }).message;
+    expect(message).toMatch(/^Send UGX 1,000,000 to Finvest by bank transfer/);
+    expect(message).toContain("Account number: 0000 0000 0000");
+    expect(message).toContain("Reference: 1001004827");
+
+    share.mockRejectedValueOnce(new Error("Share is not supported in this browser"));
+    await fireEvent.press(screen.getByTestId("bank-share"));
+    await screen.findByText("Copied. Paste it wherever you want to send it.");
+    share.mockRestore();
   });
 
   it("goes from the receipt to confirmed once it is matched", async () => {

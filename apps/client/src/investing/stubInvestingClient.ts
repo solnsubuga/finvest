@@ -291,6 +291,11 @@ export function createStubInvestingClient(options: StubOptions = {}): InvestingC
     const yesterday = days > 0 ? netInterest(amount.minor, product, days - 1) : 0;
     const atMaturityInterest = product.termDays === null ? null : netInterest(amount.minor, product, product.termDays);
     const money = (minor: number): Amount => ({ currency: amount.currency, minor });
+    const waiting = () =>
+      status === "matured" &&
+      (entry.atMaturity === "pay_out" || entry.atMaturity === "pay_interest") &&
+      entry.payoutId === null &&
+      entry.destinationId === null;
     return {
       id: entry.id,
       productCode: product.code,
@@ -300,7 +305,7 @@ export function createStubInvestingClient(options: StubOptions = {}): InvestingC
       ratePercent: product.ratePercent,
       termDays: product.termDays,
       atMaturity: entry.atMaturity,
-      payoutDestinationId: entry.atMaturity === "pay_out" ? entry.destinationId : null,
+      payoutDestinationId: entry.atMaturity === "pay_out" || entry.atMaturity === "pay_interest" ? entry.destinationId : null,
       canChangeMaturity: product.termDays !== null && (status === "awaiting_payment" || (status === "active" && maturity !== null && today < addDays(maturity, -1))),
       payBy: new Date(entry.createdAtMs + PAY_WINDOW_MS).toISOString(),
       startDate: start,
@@ -313,7 +318,8 @@ export function createStubInvestingClient(options: StubOptions = {}): InvestingC
       totalAtMaturity: atMaturityInterest === null ? null : money(amount.minor + atMaturityInterest),
       rolledIntoId: null,
       payoutId: entry.payoutId,
-      waitingForDestination: status === "matured" && entry.atMaturity === "pay_out" && entry.payoutId === null && entry.destinationId === null,
+      waitingForDestination: waiting(),
+      waiting: waiting() ? (entry.atMaturity === "pay_interest" ? money(soFar) : money(amount.minor + soFar)) : null,
       canWithdraw: status === "active" && entry.withdrawnAtMs === null && (maturity === null || today < maturity),
       withdrawalRequestedAt: entry.withdrawnAtMs === null ? null : new Date(entry.withdrawnAtMs).toISOString(),
       canSend:
@@ -321,6 +327,8 @@ export function createStubInvestingClient(options: StubOptions = {}): InvestingC
         entry.withdrawnAtMs === null &&
         (maturity === null || today < maturity) &&
         ![...transfers.values()].some((transfer) => transfer.investmentId === entry.id && OPEN.includes(transfer.status)),
+      // The demo goals keep their own lock (stubGoalsClient.ts); the demo investments are never locked.
+      lockedUntil: null,
     };
   }
 
@@ -470,7 +478,7 @@ export function createStubInvestingClient(options: StubOptions = {}): InvestingC
       if (!view(entry).canChangeMaturity) {
         throw new InvestingError("cannot_change_maturity");
       }
-      if (choice.atMaturity === "pay_out") {
+      if (choice.atMaturity === "pay_out" || choice.atMaturity === "pay_interest") {
         // Like the backend: any approved account, even one still in its first day.
         const accounts = options.accounts === "none" ? [] : demoAccounts(now());
         if (!accounts.some((account) => account.id === choice.destinationId)) {
@@ -502,7 +510,7 @@ export function createStubInvestingClient(options: StubOptions = {}): InvestingC
       if (!account || !account.ready) {
         throw new InvestingError("account_not_ready");
       }
-      if (account.kind === "mobile_money" && shown.value.minor > MOBILE_MONEY_PER_PAYOUT) {
+      if (account.kind === "mobile_money" && (shown.waiting ?? shown.value).minor > MOBILE_MONEY_PER_PAYOUT) {
         throw new InvestingError("over_mobile_money_limit");
       }
       nextId += 1;
@@ -525,12 +533,15 @@ export function createStubInvestingClient(options: StubOptions = {}): InvestingC
       await pause();
       // Like the backend: a known key returns its transfer, and the same key for anything
       // else is refused.
-      const details = JSON.stringify([request.investmentId, request.toAccountNumber, request.amount, request.message, request.whole]);
+      const details = JSON.stringify([request.investmentId, request.toAccountNumber, request.amount, request.message, request.purpose, request.purposeNote, request.whole]);
       const known = sendKeys.get(request.idempotencyKey);
       if (known) {
         if (known.request !== details) throw new InvestingError("key_reused");
         return transfers.get(known.id) as Transfer;
       }
+      // Like the backend: words with "other", and only with it.
+      const note = request.purposeNote?.trim() || null;
+      if ((request.purpose === "other") !== (note !== null)) throw new InvestingError("invalid");
       const entry = stored.get(request.investmentId);
       if (!entry) throw new InvestingError("not_found");
       const shown = view(entry);

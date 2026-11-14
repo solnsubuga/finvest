@@ -13,6 +13,24 @@ import type { Amount } from "./api.ts";
 
 export type TransferAction = "propose" | "approve" | "withdraw" | "decline";
 
+export type TransferPurpose = "family_support" | "gift" | "loan_repayment" | "business" | "other";
+
+/** How staff read each reason. */
+export const PURPOSE_WORDS: Record<TransferPurpose, string> = {
+  family_support: "Family support",
+  gift: "A gift",
+  loan_repayment: "Paying back a loan",
+  business: "Business",
+  other: "Something else",
+};
+
+/** The reason as one line: the sender's own words after "Something else". */
+export function describePurpose(transfer: Pick<HeldTransfer, "purpose" | "purposeNote">): string {
+  if (transfer.purpose === null) return "Not asked: sent before senders were asked why";
+  const words = PURPOSE_WORDS[transfer.purpose];
+  return transfer.purpose === "other" && transfer.purposeNote ? `${words}: ${transfer.purposeNote}` : words;
+}
+
 export interface HeldTransfer {
   id: string;
   investmentId: string;
@@ -25,6 +43,10 @@ export interface HeldTransfer {
   /** Everything was asked for, including interest added before it moves. */
   whole: boolean;
   message: string | null;
+  /** Why the sender sends it, for anti money laundering. None only on transfers asked for before it was asked. */
+  purpose: TransferPurpose | null;
+  /** The sender's own words, with `other`. */
+  purposeNote: string | null;
   status: "held" | "release_proposed" | "waiting" | "declined" | "done" | "failed" | "cancelled";
   requestedAt: string;
   release: { proposedBy: string; proposedAt: string; reason: string } | null;
@@ -88,6 +110,8 @@ export interface TransferJson {
   currency: "UGX" | "USD";
   whole: boolean;
   message: string | null;
+  purpose: TransferPurpose | null;
+  purpose_note: string | null;
   status: HeldTransfer["status"];
   requested_at: string;
   release_proposed_by: string | null;
@@ -106,6 +130,8 @@ export function toHeldTransfer(json: TransferJson): HeldTransfer {
     amount: { minor: json.amount_minor, currency: json.currency },
     whole: json.whole,
     message: json.message,
+    purpose: json.purpose,
+    purposeNote: json.purpose_note,
     status: json.status,
     requestedAt: json.requested_at,
     release:
@@ -190,6 +216,8 @@ export function createStubTransfersApi(me: string, clock: () => number = Date.no
             amount: { minor: 15_000_000, currency: "UGX" },
             whole: false,
             message: "For the land in Mukono",
+            purpose: "other",
+            purposeNote: "Her share of the plot we bought together",
             status: "held",
             requestedAt: new Date(now - 3 * HOUR).toISOString(),
             release: null,
@@ -204,6 +232,8 @@ export function createStubTransfersApi(me: string, clock: () => number = Date.no
             amount: { minor: 24_310_455, currency: "UGX" },
             whole: true,
             message: null,
+            purpose: "family_support",
+            purposeNote: null,
             status: "release_proposed",
             requestedAt: new Date(now - 26 * HOUR).toISOString(),
             release: {

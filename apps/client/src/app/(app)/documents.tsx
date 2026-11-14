@@ -18,7 +18,6 @@ import {
   QUICK_PICKS,
   quickPeriod,
   QuickPick,
-  receiptReference,
   taxYearLabel,
 } from "@/documents/periods";
 import { STATEMENT_POLL_LIMIT, STATEMENT_POLL_MS } from "@/documents/poll";
@@ -476,6 +475,7 @@ function DocumentLists({ items }: { items: DocumentItem[] }) {
   const certificates = items.filter(
     (item) => item.kind === "tax_certificate" && item.status === "ready",
   );
+  const notes = items.filter((item) => item.kind === "investment_note" && item.status === "ready");
 
   return (
     <View style={{ gap: 20 }}>
@@ -502,6 +502,11 @@ function DocumentLists({ items }: { items: DocumentItem[] }) {
       {certificates.length > 0 ? (
         <Section title="Tax certificates">
           <Rows items={certificates} />
+        </Section>
+      ) : null}
+      {notes.length > 0 ? (
+        <Section title="Investment notes">
+          <Rows items={notes} />
         </Section>
       ) : null}
       <Section title="Receipts">
@@ -540,10 +545,15 @@ function Rows({ items }: { items: DocumentItem[] }) {
 
 function rowText(document: DocumentItem): { title: string; subtitle: string } {
   if (document.kind === "receipt") {
-    const reference = receiptReference(document);
     return {
-      title: reference ? `Receipt ${reference}` : "Receipt",
+      title: `Receipt ${document.reference}`,
       subtitle: `Payment confirmed on ${formatDateTime(document.requestedAt)}`,
+    };
+  }
+  if (document.kind === "investment_note") {
+    return {
+      title: `Investment note ${document.reference}`,
+      subtitle: `${document.note === "ended" ? "Investment ended" : "Investment started"}. Note made on ${formatDateTime(document.finishedAt ?? document.requestedAt)}`,
     };
   }
   if (document.kind === "tax_certificate" && document.dateFrom && document.dateTo) {

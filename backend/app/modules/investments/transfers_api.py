@@ -36,7 +36,13 @@ from app.infrastructure.throttling import reserve_attempts, throttle_key
 from app.modules.identity.api import CurrentClient, require_confirmed, require_permission
 from app.modules.identity.service import StaffSession
 from app.modules.investments import transfers
-from app.modules.investments.domain.transfers import MAX_MESSAGE_LENGTH, HeldFor, TransferStatus
+from app.modules.investments.domain.transfers import (
+    MAX_MESSAGE_LENGTH,
+    MAX_PURPOSE_NOTE_LENGTH,
+    HeldFor,
+    TransferPurpose,
+    TransferStatus,
+)
 from app.shared.clock import Clock
 from app.shared.contracts import Contract, PushId
 from app.shared.errors import ErrorEnvelope
@@ -93,6 +99,10 @@ class SendRequest(Contract):
     amount_minor: AmountMinor
     currency: Currency
     message: Annotated[str, Field(max_length=MAX_MESSAGE_LENGTH)] | None = None
+    # Why the client sends it, kept for anti money laundering and shown only to staff.
+    purpose: TransferPurpose
+    # A few words of the client's own: required with `other`, refused with anything else.
+    purpose_note: Annotated[str, Field(max_length=MAX_PURPOSE_NOTE_LENGTH)] | None = None
     # Send everything: the whole value when the request is saved, and the interest added before
     # it moves. `amount_minor` is then the value the client was shown.
     whole: bool = False
@@ -129,6 +139,9 @@ class StaffTransferOut(Contract):
     currency: Currency
     whole: bool
     message: str | None
+    # Why the sender sent it. None only on transfers asked for before the reason was asked.
+    purpose: TransferPurpose | None
+    purpose_note: str | None
     status: TransferStatus
     held: bool
     # Why it was held: `size` or `screening`. Never shown to either client.
@@ -184,6 +197,8 @@ def _staff_out(transfer: transfers.Transfer) -> StaffTransferOut:
         currency=transfer.amount.currency,
         whole=transfer.whole,
         message=transfer.message,
+        purpose=transfer.purpose,
+        purpose_note=transfer.purpose_note,
         status=transfer.status,
         held=transfer.held,
         held_for=transfer.held_for,
@@ -240,8 +255,9 @@ async def send_investment(
 
     422 on `amount_minor` with `below_product_minimum`, `more_than_investment_value`,
     `remainder_below_product_minimum`, `currency_not_the_investments` or `matures_today`; on
-    `to` with `no_such_client` or `to_yourself`. 409 when the investment is not running, an
-    early withdrawal was asked for, or a transfer of it is already open. 403 with
+    `to` with `no_such_client` or `to_yourself`; on `purpose_note` with `required` (for
+    `other`), `only_for_other` or `too_long`. 409 when the investment is not running, an early
+    withdrawal was asked for, or a transfer of it is already open. 403 with
     `restricted_after_code_sign_in` for a day after signing in with a code or a password reset.
     """
     async with database.actor_transaction(client.actor) as session:
@@ -252,6 +268,8 @@ async def send_investment(
             to_account_number=body.to_account_number,
             amount=Money(body.amount_minor, body.currency),
             message=body.message,
+            purpose=body.purpose,
+            purpose_note=body.purpose_note,
             restricted_until=client.restricted_until,
             idempotency_key=key,
             clock=clock,

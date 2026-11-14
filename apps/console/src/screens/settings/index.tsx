@@ -18,6 +18,9 @@ import {
   type WordingText,
   type WordingsApi,
 } from "./api.ts";
+import { AccountCodesSection } from "./AccountCodes.tsx";
+import { createHttpAccountCodesApi, notConnectedAccountCodesApi, type AccountCodesApi } from "./accountCodes.ts";
+import { createStubAccountCodesApi } from "./accountCodesStub.ts";
 import { AnnouncementsSection } from "./Announcements.tsx";
 import { BankAccountsSection } from "./BankAccounts.tsx";
 import { notConnectedBankAccountsApi, type BankAccountsApi } from "./bankAccounts.ts";
@@ -27,6 +30,10 @@ import { notConnectedAnnouncementsApi, type AnnouncementsApi } from "./announcem
 import { createStubAnnouncementsApi } from "./announcementsStub.ts";
 import { createHttpAnnouncementsApi, createHttpWordingsApi } from "./http.ts";
 import { CATEGORIES, CATEGORY_LABELS } from "./labels.ts";
+import { notConnectedLimitsApi, notConnectedPlatformSettingsApi, type LimitsApi, type PlatformSettingsApi } from "./platform.ts";
+import { createHttpLimitsApi, createHttpPlatformSettingsApi } from "./platformHttp.ts";
+import { PlatformSections } from "./PlatformSections.tsx";
+import { createStubLimitsApi, createStubPlatformSettingsApi, type PlatformSample } from "./platformStub.ts";
 import { createStubWordingsApi } from "./stub.ts";
 import { WordingPanel, WordingRow } from "./Wordings.tsx";
 
@@ -38,6 +45,8 @@ interface SettingsScreenProps {
   api: WordingsApi;
   announcements: AnnouncementsApi;
   bankAccounts: BankAccountsApi;
+  platform: PlatformSettingsApi;
+  limits: LimitsApi;
   directory: Directory;
   /** `wordings.change`: propose and decide changes. The API checks it again. */
   canChange: boolean;
@@ -45,9 +54,24 @@ interface SettingsScreenProps {
   canSend: boolean;
   /** `bank_accounts.change`: propose and decide the account clients pay into. The API checks it again. */
   canChangeBankAccount: boolean;
+  codes?: AccountCodesApi;
+  /** `account_codes.change`: propose and decide accounting system codes. The API checks it again. */
+  canChangeCodes?: boolean;
 }
 
-export function SettingsScreen({ api, announcements, bankAccounts, directory, canChange, canSend, canChangeBankAccount }: SettingsScreenProps) {
+export function SettingsScreen({
+  api,
+  announcements,
+  bankAccounts,
+  platform,
+  limits,
+  directory,
+  canChange,
+  canSend,
+  canChangeBankAccount,
+  codes = notConnectedAccountCodesApi,
+  canChangeCodes = false,
+}: SettingsScreenProps) {
   const [load, setLoad] = useState<Load>({ state: "loading" });
   const [selected, setSelected] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -128,11 +152,13 @@ export function SettingsScreen({ api, announcements, bankAccounts, directory, ca
     return (
       <>
         <PageHeader title="Settings" summary={SUMMARY} />
+        <PlatformSections settings={platform} limits={limits} directory={directory} />
         <BankAccountsSection api={bankAccounts} directory={directory} canChange={canChangeBankAccount} />
         <p role="status" className="m-0 text-md text-muted">
           Loading settings
         </p>
         <AnnouncementsSection api={announcements} directory={directory} canChange={canSend} />
+        <AccountCodesSection api={codes} canChange={canChangeCodes} />
       </>
     );
   }
@@ -140,6 +166,7 @@ export function SettingsScreen({ api, announcements, bankAccounts, directory, ca
     return (
       <>
         <PageHeader title="Settings" summary={SUMMARY} />
+        <PlatformSections settings={platform} limits={limits} directory={directory} />
         <BankAccountsSection api={bankAccounts} directory={directory} canChange={canChangeBankAccount} />
         <section role="alert" className="flex max-w-[640px] flex-col items-start gap-3 rounded-xl border border-border bg-surface p-5">
           <h2 className="m-0 text-xl font-extrabold">Client messages could not be loaded</h2>
@@ -155,6 +182,7 @@ export function SettingsScreen({ api, announcements, bankAccounts, directory, ca
           </Button>
         </section>
         <AnnouncementsSection api={announcements} directory={directory} canChange={canSend} />
+        <AccountCodesSection api={codes} canChange={canChangeCodes} />
       </>
     );
   }
@@ -167,6 +195,7 @@ export function SettingsScreen({ api, announcements, bankAccounts, directory, ca
   return (
     <>
       <PageHeader title="Settings" summary={SUMMARY} />
+        <PlatformSections settings={platform} limits={limits} directory={directory} />
         <BankAccountsSection api={bankAccounts} directory={directory} canChange={canChangeBankAccount} />
       <section aria-labelledby="client-messages" className="flex flex-col gap-4">
         <div className="flex flex-col gap-1">
@@ -229,6 +258,7 @@ export function SettingsScreen({ api, announcements, bankAccounts, directory, ca
         )}
       </section>
       <AnnouncementsSection api={announcements} directory={directory} canChange={canSend} />
+        <AccountCodesSection api={codes} canChange={canChangeCodes} />
     </>
   );
 }
@@ -236,11 +266,14 @@ export function SettingsScreen({ api, announcements, bankAccounts, directory, ca
 export default function SettingsPage() {
   const { session } = useAuth();
   // Sample messages under `pnpm dev` or a preview build, like sign-in. Otherwise the real API.
-  const [{ api, announcements, bankAccounts, directory }] = useState<{
+  const [{ api, announcements, bankAccounts, platform, limits, directory, codes }] = useState<{
     api: WordingsApi;
     announcements: AnnouncementsApi;
     bankAccounts: BankAccountsApi;
+    platform: PlatformSettingsApi;
+    limits: LimitsApi;
     directory: Directory;
+    codes: AccountCodesApi;
   }>(() => {
     if (isStubAuth() && session) {
       const me = { id: session.staffId, name: session.name };
@@ -252,15 +285,23 @@ export default function SettingsPage() {
           api: notConnectedWordingsApi,
           announcements: notConnectedAnnouncementsApi,
           bankAccounts: notConnectedBankAccountsApi,
+          platform: notConnectedPlatformSettingsApi,
+          limits: notConnectedLimitsApi,
           directory: createStubDirectory(me),
+          codes: notConnectedAccountCodesApi,
         };
       }
+      const reader = { id: session.staffId, permissions: session.permissions };
+      const platformSeed: PlatformSample = sample === "empty" ? "empty" : sample === "mine" ? "mine" : "sample";
       const seed: BankAccountsSample = sample === "empty" ? "empty" : sample === "mine" ? "mine" : "sample";
       return {
         api: createStubWordingsApi(me),
         announcements: createStubAnnouncementsApi(me, Date.now, sample === "empty" ? "empty" : "sample"),
         bankAccounts: createStubBankAccountsApi(me, Date.now, seed),
+        platform: createStubPlatformSettingsApi(reader, Date.now, platformSeed),
+        limits: createStubLimitsApi(reader, Date.now, platformSeed),
         directory: createStubDirectory(me),
+        codes: createStubAccountCodesApi(me, Date.now, sample === "empty" ? "empty" : "sample"),
       };
     }
     const base = apiBaseUrl();
@@ -269,7 +310,10 @@ export default function SettingsPage() {
         api: notConnectedWordingsApi,
         announcements: notConnectedAnnouncementsApi,
         bankAccounts: notConnectedBankAccountsApi,
+        platform: notConnectedPlatformSettingsApi,
+        limits: notConnectedLimitsApi,
         directory: emptyDirectory,
+        codes: notConnectedAccountCodesApi,
       };
     }
     const http = createHttp(base);
@@ -277,7 +321,10 @@ export default function SettingsPage() {
       api: createHttpWordingsApi(http),
       announcements: createHttpAnnouncementsApi(http),
       bankAccounts: createHttpBankAccountsApi(http),
+      platform: createHttpPlatformSettingsApi(http),
+      limits: createHttpLimitsApi(http),
       directory: createHttpDirectory(http),
+      codes: createHttpAccountCodesApi(http),
     };
   });
   return (
@@ -285,10 +332,14 @@ export default function SettingsPage() {
       api={api}
       announcements={announcements}
       bankAccounts={bankAccounts}
+      platform={platform}
+      limits={limits}
       directory={directory}
       canChange={session ? can(session, "wordings.change") : false}
       canSend={session ? can(session, "announcements.send") : false}
       canChangeBankAccount={session ? can(session, "bank_accounts.change") : false}
+      codes={codes}
+      canChangeCodes={session ? can(session, "account_codes.change") : false}
     />
   );
 }

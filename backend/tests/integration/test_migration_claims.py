@@ -152,7 +152,9 @@ async def test_reminders_go_weekly_and_stop_after_eight(
     for sent in range(1, 9):
         clock.advance(days=7)
         async with worker_database.actor_transaction(SYSTEM) as session:
-            assert client_id in await claims.reminders_due(session, clock, limit=100_000)
+            assert (
+                client_id in (await claims.reminders_due(session, clock, limit=100_000)).client_ids
+            )
         await invite(worker_database, clock, client_id)
         async with worker_database.actor_transaction(SYSTEM) as session:
             view = await claims.claim_for(session, client_id)
@@ -160,7 +162,9 @@ async def test_reminders_go_weekly_and_stop_after_eight(
 
     clock.advance(days=7)
     async with worker_database.actor_transaction(SYSTEM) as session:
-        assert client_id not in await claims.reminders_due(session, clock, limit=100_000)
+        assert (
+            client_id not in (await claims.reminders_due(session, clock, limit=100_000)).client_ids
+        )
     with pytest.raises(ApplicationError):
         await invite(worker_database, clock, client_id)
     # Staff can still send one by hand, after calling the client.

@@ -74,11 +74,13 @@ class Maturities:
 _DAYS = text(
     "SELECT i.maturity_date AS day, i.currency, count(*) AS investments, "
     "CAST(sum(i.principal_minor) AS bigint) AS principal_minor, "
-    "count(*) FILTER (WHERE i.status = 'matured' AND i.rolled_into_id IS NOT NULL) "
-    "AS rolled_over, "
+    # Each matured term counts once. One whose principal was kept invested counts by what
+    # became of its interest: paid out, or held.
+    "count(*) FILTER (WHERE i.status = 'matured' AND i.rolled_into_id IS NOT NULL "
+    "AND i.payout_id IS NULL AND i.payout_refusal IS NULL) AS rolled_over, "
     "count(*) FILTER (WHERE i.status = 'matured' AND i.payout_id IS NOT NULL) AS paid_out, "
-    "count(*) FILTER (WHERE i.status = 'matured' AND i.rolled_into_id IS NULL "
-    "AND i.payout_id IS NULL) AS held, "
+    "count(*) FILTER (WHERE i.status = 'matured' AND i.payout_id IS NULL "
+    "AND (i.rolled_into_id IS NULL OR i.payout_refusal IS NOT NULL)) AS held, "
     "count(*) FILTER (WHERE i.status = 'active' AND i.at_maturity IS DISTINCT FROM 'pay_out') "
     "AS open_roll_over, "
     "count(*) FILTER (WHERE i.status = 'active' AND i.at_maturity = 'pay_out') AS open_pay_out "
@@ -91,8 +93,11 @@ _NOT_CLOSED = select_investments(
     "WHERE i.status = 'active' AND i.withdrawal_requested_at IS NULL "
     "AND i.maturity_date < :today ORDER BY i.maturity_date, i.id LIMIT :limit"
 )
+# Money that waits for the client: all of it, or the interest when the principal was kept
+# invested and the interest could not be paid (`payout_refusal` says why).
 _HELD = select_investments(
-    "WHERE i.status = 'matured' AND i.rolled_into_id IS NULL AND i.payout_id IS NULL "
+    "WHERE i.status = 'matured' AND i.payout_id IS NULL "
+    "AND (i.rolled_into_id IS NULL OR i.payout_refusal IS NOT NULL) "
     "ORDER BY i.maturity_date, i.id LIMIT :limit"
 )
 

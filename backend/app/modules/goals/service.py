@@ -14,7 +14,7 @@ They are the only ones a client-facing route may use.
 
 import hashlib
 from dataclasses import dataclass
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from typing import Any
 
 import structlog
@@ -35,6 +35,7 @@ from app.modules.goals.domain.goals import (
     progress,
 )
 from app.modules.goals.domain.plans import Plan, PlanProduct, best_plan, product_for_goal
+from app.modules.goals.saving_rules import ClientSavingRule, client_rule, end_rule
 from app.modules.investments import service as investments
 from app.modules.investments.domain.investments import InvestmentStatus
 from app.modules.investments.domain.products import ProductStatus
@@ -67,6 +68,15 @@ class Goal:
     created_at: datetime
     updated_at: datetime
     closed_at: datetime | None
+    # The day of the month the client is paid, 1 to 31, when they named one.
+    payday: int | None = None
+    # The first day its savings may be taken out early again, if the client locked it, and
+    # when they asked to unlock it. A lock on a day already past has lapsed.
+    locked_until: date | None = None
+    unlock_requested_at: datetime | None = None
+
+    def is_locked(self, today: date) -> bool:
+        return self.locked_until is not None and today < self.locked_until
 
 
 @dataclass(frozen=True, slots=True)
@@ -108,6 +118,15 @@ class ClientGoal:
     plan: ClientPlan | None
     # The investments made for this goal, newest first, without cancelled ones.
     savings: list[investments.ClientInvestment]
+    # The monthly saving collected by itself, if the client set one up and has not ended it.
+    saving_rule: ClientSavingRule | None = None
+    # The day of the month the client is nudged to save, when they named their payday.
+    payday: int | None = None
+    # While locked: the first day its savings may be taken out early again, and when the
+    # client asked to unlock it, which brings that day to seven days after asking. Both None
+    # when it is not locked, or the lock has lapsed.
+    locked_until: date | None = None
+    unlock_requested_at: datetime | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -119,7 +138,7 @@ class StaffGoal:
 
 _COLUMNS = (
     "id, client_id, name, category, currency, target_minor, target_date, product_code, status, "
-    "created_at, updated_at, closed_at"
+    "created_at, updated_at, closed_at, payday, locked_until, unlock_requested_at"
 )
 _BY_ID = text(f"SELECT {_COLUMNS} FROM goals WHERE id = :id")  # noqa: S608
 _BY_ID_LOCKED = text(f"SELECT {_COLUMNS} FROM goals WHERE id = :id FOR UPDATE")  # noqa: S608
@@ -353,6 +372,104 @@ async def update_goal(
     return await client_goal(session, client, goal.id, clock)
 
 
+_SET_PAYDAY = text("UPDATE goals SET payday = :payday, updated_at = :now WHERE id = :id")
+
+
+async def set_payday(
+    session: AsyncSession, client: Actor, goal_id: str, payday: int | None, clock: Clock
+) -> ClientGoal:
+    """Name the day of the month the client is paid, or clear it with None.
+
+    On that morning the client is nudged to save towards the goal (`reminders.py`). A day past
+    the end of a shorter month falls on its last day. A closed goal is refused with `conflict`.
+    """
+    if payday is not None and not 1 <= payday <= 31:
+        raise ApplicationError(
+            "validation_failed", fields=[FieldProblem(field_path=["day"], code="invalid_day")]
+        )
+    goal = await _own_goal(session, client, goal_id, lock=True)
+    if goal.status is not GoalStatus.ACTIVE:
+        raise ApplicationError("conflict")
+    await session.execute(_SET_PAYDAY, {"id": goal.id, "payday": payday, "now": clock.now()})
+    return await client_goal(session, client, goal.id, clock)
+
+
+_LOCK_GOAL = text(
+    "UPDATE goals SET locked_until = :until, unlock_requested_at = NULL, updated_at = :now "
+    "WHERE id = :id"
+)
+# Never sooner than seven days from the database's own today, which its guard counts from.
+_START_UNLOCK = text(
+    "UPDATE goals SET locked_until = least(locked_until, greatest(CAST(:until AS date), "
+    "(clock_timestamp() AT TIME ZONE 'Africa/Kampala')::date + 7)), "
+    "unlock_requested_at = :now, updated_at = :now WHERE id = :id"
+)
+
+
+async def lock_goal(session: AsyncSession, client: Actor, goal_id: str, clock: Clock) -> ClientGoal:
+    """Lock the goal's savings until its date, so none is taken out early or sent on.
+
+    Every saving waiting for payment or running is locked, and so is each new one, until the
+    goal's date. Undoing it takes seven days (`unlock_goal`). Locking again after asking to
+    unlock cancels the ask. A lock is never shortened here: if the date was moved sooner since
+    the goal was locked, the lock keeps its later day.
+
+    `validation_failed` on `target_date` for a goal with no date, or a date already reached.
+    `conflict` for a closed goal. Locking a locked goal again changes nothing.
+    """
+    goal = await _own_goal(session, client, goal_id, lock=True)
+    if goal.status is not GoalStatus.ACTIVE:
+        raise ApplicationError("conflict")
+    today = business_date(clock.now())
+    if goal.target_date is None or goal.target_date <= today:
+        raise ApplicationError(
+            "validation_failed",
+            fields=[FieldProblem(field_path=["target_date"], code="no_date_to_lock")],
+        )
+    until = goal.target_date
+    if goal.locked_until is not None and goal.is_locked(today):
+        if goal.unlock_requested_at is None and goal.locked_until >= until:
+            return await client_goal(session, client, goal.id, clock)
+        until = max(until, goal.locked_until)
+    now = clock.now()
+    await session.execute(_LOCK_GOAL, {"id": goal.id, "until": until, "now": now})
+    await investments.lock_withdrawals(
+        session,
+        client_id=goal.client_id,
+        investment_ids=await _saving_ids(session, goal.id),
+        until=until,
+        now=now,
+    )
+    logger.info("goal_locked", goal_id=goal.id)
+    return await client_goal(session, client, goal.id, clock)
+
+
+async def unlock_goal(
+    session: AsyncSession, client: Actor, goal_id: str, clock: Clock
+) -> ClientGoal:
+    """Ask to unlock the goal: its savings are free seven days from today (Solo's rule).
+
+    A lock that ends sooner than that ends on its own day. Asking again changes nothing.
+    `conflict` for a goal that is not locked, or is closed (closing a goal asks for it).
+    """
+    goal = await _own_goal(session, client, goal_id, lock=True)
+    if goal.status is not GoalStatus.ACTIVE or not goal.is_locked(business_date(clock.now())):
+        raise ApplicationError("conflict")
+    if goal.unlock_requested_at is None:
+        await _start_unlock(session, goal, clock)
+        logger.info("goal_unlock_requested", goal_id=goal.id)
+    return await client_goal(session, client, goal.id, clock)
+
+
+async def _start_unlock(session: AsyncSession, goal: Goal, clock: Clock) -> None:
+    now = clock.now()
+    on = business_date(now) + timedelta(days=investments.UNLOCK_WAIT_DAYS)
+    await session.execute(_START_UNLOCK, {"id": goal.id, "until": on, "now": now})
+    await investments.unlock_withdrawals(
+        session, investment_ids=await _saving_ids(session, goal.id), on=on, now=now
+    )
+
+
 async def close_goal(
     session: AsyncSession, client: Actor, goal_id: str, clock: Clock
 ) -> ClientGoal:
@@ -370,6 +487,13 @@ async def close_goal(
                 raise ApplicationError("conflict")
             # A closed goal takes no saving, so it leaves its group.
             await session.execute(_LEAVE_GROUP, {"goal_id": goal.id, "now": clock.now()})
+        # Nor does it take its monthly saving: the rule ends and its plan stops.
+        await end_rule(session, client, goal.id, clock)
+        # Its savings become ordinary investments again, but a lock is still undone only after
+        # the wait, so closing counts as asking to unlock. Done before it closes, as a closed
+        # goal never changes.
+        if goal.is_locked(business_date(clock.now())) and goal.unlock_requested_at is None:
+            await _start_unlock(session, goal, clock)
         await session.execute(_CLOSE, {"id": goal.id, "now": clock.now()})
         logger.info("goal_closed", goal_id=goal.id)
     return await client_goal(session, client, goal.id, clock)
@@ -397,7 +521,9 @@ async def save_to_goal(
     client_id = _client_id(client)
 
     async def command() -> Receipt:
-        goal = await _own_goal(session, client, goal_id, lock=False)
+        # Locked, so an unlock asked for at the same moment cannot leave this saving locked
+        # for longer than the others.
+        goal = await _own_goal(session, client, goal_id, lock=True)
         if goal.status is not GoalStatus.ACTIVE:
             raise ApplicationError("conflict")
         if amount.currency is not goal.target.currency:
@@ -423,6 +549,15 @@ async def save_to_goal(
                 "now": clock.now(),
             },
         )
+        if goal.locked_until is not None and goal.is_locked(business_date(clock.now())):
+            # A locked goal's new savings are locked with it, until the same day.
+            await investments.lock_withdrawals(
+                session,
+                client_id=client_id,
+                investment_ids=[investment.id],
+                until=goal.locked_until,
+                now=clock.now(),
+            )
         logger.info("goal_saving_confirmed", goal_id=goal.id, investment_id=investment.id)
         return Receipt(201, {"investment_id": investment.id})
 
@@ -458,6 +593,14 @@ async def client_goals(
     goals = [_goal(row) for row in rows.all()]
     products = await plan_products(session, clock) if goals else []
     return [await _client_view(session, client, goal, clock, products) for goal in goals]
+
+
+async def active_goals(session: AsyncSession, client: Actor) -> list[Goal]:
+    """The client's active goals, newest first, without their figures. For insights' list of
+    what comes up; their row policy fences out everyone else's."""
+    client_id = _client_id(client)
+    rows = await session.execute(_FOR_CLIENT, {"client_id": client_id, "limit": MAX_PAGE_SIZE})
+    return [goal for goal in map(_goal, rows.all()) if goal.status is GoalStatus.ACTIVE]
 
 
 async def client_goal(
@@ -721,6 +864,10 @@ async def _client_view(
         progress=standing,
         plan=plan,
         savings=savings,
+        saving_rule=await client_rule(session, goal.id),
+        payday=goal.payday,
+        locked_until=goal.locked_until if goal.is_locked(today) else None,
+        unlock_requested_at=goal.unlock_requested_at if goal.is_locked(today) else None,
     )
 
 
@@ -755,7 +902,22 @@ def _goal(row: Row[Any]) -> Goal:
         created_at=row.created_at,
         updated_at=row.updated_at,
         closed_at=row.closed_at,
+        payday=row.payday,
+        locked_until=row.locked_until,
+        unlock_requested_at=row.unlock_requested_at,
     )
+
+
+_OPEN_SAVINGS_FOR_CLIENT = text(
+    "SELECT s.investment_id, s.goal_id FROM goal_savings s JOIN goals g ON g.id = s.goal_id "
+    "WHERE s.client_id = :client_id AND g.status = 'active'"
+)
+
+
+async def open_goal_savings(session: AsyncSession, client_id: str) -> dict[str, str]:
+    """The investments saved to the client's open goals, each mapped to its goal's ID."""
+    rows = await session.execute(_OPEN_SAVINGS_FOR_CLIENT, {"client_id": client_id})
+    return {str(row.investment_id): str(row.goal_id) for row in rows.all()}
 
 
 _OPEN_FOR_CLIENT = text(

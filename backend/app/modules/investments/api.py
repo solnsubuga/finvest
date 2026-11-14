@@ -152,12 +152,18 @@ class ClientInvestmentOut(Contract):
     rolled_into_id: PushId | None
     payout_id: PushId | None
     waiting_for_destination: bool
+    # What waits for the client to say where to send it: all of it, or only the interest when
+    # they chose to keep the principal invested. Null when nothing waits.
+    waiting_minor: int | None = None
     # Whether the client may ask to withdraw it early now, and when they did. An early
     # withdrawal pays `value_minor`: interest stops when it is asked for.
     can_withdraw: bool
     withdrawal_requested_at: datetime | None
     # Whether the client may send part or all of it to another client now.
     can_send: bool = False
+    # Locked through a goal: the first day it may be withdrawn early or sent on again. Null
+    # when it is not locked.
+    withdrawal_locked_until: date | None = None
 
 
 class RateOut(Contract):
@@ -303,6 +309,68 @@ class CorrectionOut(Contract):
     entry_id: PushId | None
     payout_id: PushId | None
     failure_code: str | None
+
+
+class BookingIn(Contract):
+    """An investment to set up for a client who asked, for a second person to approve."""
+
+    client_id: PushId
+    product_code: ProductCode
+    amount_minor: AmountMinor
+    currency: CurrencyIn
+    # Fixed terms only. Rolling over is the default. The client names any payout account in
+    # the app, as for their own.
+    at_maturity: AtMaturityIn | None = None
+    reason: Note
+
+
+class BookingOut(Contract):
+    """An investment booked for a client. Once a different person approves it, the worker saves
+    it unpaid on the day's terms and the client pays for it as usual."""
+
+    id: PushId
+    client_id: PushId
+    product_code: str
+    product_name: str
+    amount_minor: int
+    currency: Currency
+    at_maturity: AtMaturity | None
+    reason: str
+    status: Literal["proposed", "approved", "sent_back", "withdrawn", "done", "failed"]
+    proposed_by: PushId
+    proposed_at: datetime
+    decided_by: PushId | None
+    decided_at: datetime | None
+    decision_note: str | None
+    # The investment saved, once done.
+    investment_id: PushId | None
+    # Why it could not be saved: a client's own refusal, such as `below_minimum`,
+    # `product_not_open`, `too_many_unpaid`, `closing` or `client_not_able`.
+    failure_code: str | None
+    finished_at: datetime | None
+
+
+class RunRequestIn(Contract):
+    kind: service.RunKind = Field(strict=False)
+    run_date: date = Field(strict=False)
+    reason: Note
+
+
+class RunRequestOut(Contract):
+    """A request to run a day's interest again, or today's maturities. It waits for a
+    different person to approve it, and approving queues the run."""
+
+    id: PushId
+    kind: service.RunKind
+    run_date: date
+    reason: str
+    status: Literal["proposed", "approved", "declined", "withdrawn"]
+    proposed_by: PushId
+    proposed_at: datetime
+    decided_by: PushId | None
+    decided_at: datetime | None
+    decision_note: str | None
+    job_id: PushId | None
 
 
 class StaffInvestmentOut(Contract):
@@ -469,9 +537,11 @@ def _client_out(view: service.ClientInvestment, request: Request) -> ClientInves
         rolled_into_id=view.rolled_into_id,
         payout_id=view.payout_id,
         waiting_for_destination=view.waiting_for_destination,
+        waiting_minor=None if view.waiting is None else view.waiting.minor,
         can_withdraw=view.can_withdraw and _withdrawals_open(request),
         withdrawal_requested_at=view.withdrawal_requested_at,
         can_send=view.can_send,
+        withdrawal_locked_until=view.withdrawal_locked_until,
     )
 
 
@@ -1195,6 +1265,316 @@ async def staff_maturities(
         ],
         not_closed=[_staff_investment_out(investment) for investment in found.not_closed],
         held=[_staff_investment_out(investment) for investment in found.held],
+    )
+
+
+def _run_request_out(request: service.RunRequest) -> RunRequestOut:
+    return RunRequestOut(
+        id=request.id,
+        kind=request.kind,
+        run_date=request.run_date,
+        reason=request.reason,
+        status=request.status,
+        proposed_by=request.proposed_by,
+        proposed_at=request.proposed_at,
+        decided_by=request.decided_by,
+        decided_at=request.decided_at,
+        decision_note=request.decision_note,
+        job_id=request.job_id,
+    )
+
+
+@staff_router.get("/investment-run-requests")
+async def staff_run_requests(
+    request: Request,
+    staff: InvestmentsViewer,
+    status: Literal["proposed", "approved", "declined", "withdrawn"] | None = None,
+    limit: Annotated[int, Query(ge=1, le=200)] = 50,
+) -> list[RunRequestOut]:
+    """Requests to run interest or maturities again, newest first."""
+    async with _transaction(request, staff.actor) as session:
+        found = await service.list_runs(session, staff.actor, status=status, limit=limit)
+    return [_run_request_out(found_request) for found_request in found]
+
+
+async def _run_command(
+    request: Request,
+    staff: StaffSession,
+    clock: Clock,
+    *,
+    operation: str,
+    key: str,
+    body: dict[str, object],
+    command: Callable[[AsyncSession], Awaitable[service.RunRequest]],
+) -> RunRequestOut:
+    """Run one run-request command once per key, and answer with the request as it is now."""
+    async with _transaction(request, staff.actor) as session:
+
+        async def run() -> Receipt:
+            found = await command(session)
+            return Receipt(200, {"run_request_id": found.id})
+
+        outcome = await run_once(
+            session,
+            actor=staff.actor,
+            operation=operation,
+            key=key,
+            request=body,
+            now=clock.now(),
+            command=run,
+        )
+        request_id = outcome.receipt.response.get("run_request_id")
+        assert isinstance(request_id, str)
+        return _run_request_out(await service.get_run(session, staff.actor, request_id))
+
+
+@staff_router.post("/investment-run-requests", status_code=201)
+async def staff_propose_run(
+    request: Request,
+    staff: CorrectionsChanger,
+    clock: AppClock,
+    key: IdempotencyKey,
+    body: RunRequestIn,
+) -> RunRequestOut:
+    """Ask for a day's interest run, or today's maturity run, again. A second person must
+    approve it before it runs."""
+    return await _run_command(
+        request,
+        staff,
+        clock,
+        operation="investments.propose_run",
+        key=key,
+        body=body.model_dump(mode="json"),
+        command=lambda session: service.propose_run(
+            session,
+            staff.actor,
+            kind=body.kind,
+            run_date=body.run_date,
+            reason=body.reason,
+            clock=clock,
+        ),
+    )
+
+
+@staff_router.post("/investment-run-requests/{request_id}/approve")
+async def staff_approve_run(
+    request: Request,
+    staff: CorrectionsApprover,
+    clock: AppClock,
+    key: IdempotencyKey,
+    request_id: PushId,
+) -> RunRequestOut:
+    """Approve someone else's request. The run is queued at once."""
+    return await _run_command(
+        request,
+        staff,
+        clock,
+        operation="investments.approve_run",
+        key=key,
+        body={"run_request_id": request_id},
+        command=lambda session: service.approve_run(session, staff.actor, request_id, clock),
+    )
+
+
+@staff_router.post("/investment-run-requests/{request_id}/decline")
+async def staff_decline_run(
+    request: Request,
+    staff: CorrectionsApprover,
+    clock: AppClock,
+    key: IdempotencyKey,
+    request_id: PushId,
+    body: SendBack,
+) -> RunRequestOut:
+    return await _run_command(
+        request,
+        staff,
+        clock,
+        operation="investments.decline_run",
+        key=key,
+        body={"run_request_id": request_id, "note": body.note},
+        command=lambda session: service.decline_run(
+            session, staff.actor, request_id, body.note, clock
+        ),
+    )
+
+
+@staff_router.post("/investment-run-requests/{request_id}/withdraw")
+async def staff_withdraw_run(
+    request: Request,
+    staff: CorrectionsChanger,
+    clock: AppClock,
+    key: IdempotencyKey,
+    request_id: PushId,
+) -> RunRequestOut:
+    return await _run_command(
+        request,
+        staff,
+        clock,
+        operation="investments.withdraw_run",
+        key=key,
+        body={"run_request_id": request_id},
+        command=lambda session: service.withdraw_run(session, staff.actor, request_id, clock),
+    )
+
+
+def _booking_out(booking: service.Booking) -> BookingOut:
+    return BookingOut(
+        id=booking.id,
+        client_id=booking.client_id,
+        product_code=booking.product_code,
+        product_name=booking.product_name,
+        amount_minor=booking.amount.minor,
+        currency=booking.amount.currency,
+        at_maturity=booking.at_maturity,
+        reason=booking.reason,
+        status=booking.status,
+        proposed_by=booking.proposed_by,
+        proposed_at=booking.proposed_at,
+        decided_by=booking.decided_by,
+        decided_at=booking.decided_at,
+        decision_note=booking.decision_note,
+        investment_id=booking.investment_id,
+        failure_code=booking.failure_code,
+        finished_at=booking.finished_at,
+    )
+
+
+@staff_router.get("/investment-bookings")
+async def staff_bookings(
+    request: Request,
+    staff: InvestmentsViewer,
+    status: Literal["proposed", "approved", "sent_back", "withdrawn", "done", "failed"]
+    | None = None,
+    client_id: PushId | None = None,
+    limit: Annotated[int, Query(ge=1, le=200)] = 50,
+) -> list[BookingOut]:
+    """Investments booked for clients, newest first."""
+    async with _transaction(request, staff.actor) as session:
+        found = await service.list_bookings(
+            session, staff.actor, status=status, client_id=client_id, limit=limit
+        )
+    return [_booking_out(booking) for booking in found]
+
+
+async def _booking_command(
+    request: Request,
+    staff: StaffSession,
+    clock: Clock,
+    *,
+    operation: str,
+    key: str,
+    body: dict[str, object],
+    command: Callable[[AsyncSession], Awaitable[service.Booking]],
+) -> BookingOut:
+    """Run one booking command once per key, and answer with the booking as it is now."""
+    async with _transaction(request, staff.actor) as session:
+
+        async def run() -> Receipt:
+            found = await command(session)
+            return Receipt(200, {"booking_id": found.id})
+
+        outcome = await run_once(
+            session,
+            actor=staff.actor,
+            operation=operation,
+            key=key,
+            request=body,
+            now=clock.now(),
+            command=run,
+        )
+        booking_id = outcome.receipt.response.get("booking_id")
+        assert isinstance(booking_id, str)
+        return _booking_out(await service.get_booking(session, staff.actor, booking_id))
+
+
+@staff_router.post("/investment-bookings", status_code=201)
+async def staff_propose_booking(
+    request: Request,
+    staff: CorrectionsChanger,
+    clock: AppClock,
+    key: IdempotencyKey,
+    body: BookingIn,
+) -> BookingOut:
+    """Book an investment a client asked for. A second person must approve it before it is
+    saved, and the client then pays for it as usual."""
+    return await _booking_command(
+        request,
+        staff,
+        clock,
+        operation="investments.propose_booking",
+        key=key,
+        body=body.model_dump(mode="json"),
+        command=lambda session: service.propose_booking(
+            session,
+            staff.actor,
+            client_id=body.client_id,
+            product_code=body.product_code,
+            amount=_money(body.amount_minor, body.currency),
+            at_maturity=body.at_maturity,
+            reason=body.reason,
+            clock=clock,
+        ),
+    )
+
+
+@staff_router.post("/investment-bookings/{booking_id}/approve")
+async def staff_approve_booking(
+    request: Request,
+    staff: CorrectionsApprover,
+    clock: AppClock,
+    key: IdempotencyKey,
+    booking_id: PushId,
+) -> BookingOut:
+    """Approve someone else's booking. The worker saves the investment straight away."""
+    return await _booking_command(
+        request,
+        staff,
+        clock,
+        operation="investments.approve_booking",
+        key=key,
+        body={"booking_id": booking_id},
+        command=lambda session: service.approve_booking(session, staff.actor, booking_id, clock),
+    )
+
+
+@staff_router.post("/investment-bookings/{booking_id}/send-back")
+async def staff_send_back_booking(
+    request: Request,
+    staff: CorrectionsApprover,
+    clock: AppClock,
+    key: IdempotencyKey,
+    booking_id: PushId,
+    body: SendBack,
+) -> BookingOut:
+    return await _booking_command(
+        request,
+        staff,
+        clock,
+        operation="investments.send_back_booking",
+        key=key,
+        body={"booking_id": booking_id, "note": body.note},
+        command=lambda session: service.send_back_booking(
+            session, staff.actor, booking_id, body.note, clock
+        ),
+    )
+
+
+@staff_router.post("/investment-bookings/{booking_id}/withdraw")
+async def staff_withdraw_booking(
+    request: Request,
+    staff: CorrectionsChanger,
+    clock: AppClock,
+    key: IdempotencyKey,
+    booking_id: PushId,
+) -> BookingOut:
+    return await _booking_command(
+        request,
+        staff,
+        clock,
+        operation="investments.withdraw_booking",
+        key=key,
+        body={"booking_id": booking_id},
+        command=lambda session: service.withdraw_booking(session, staff.actor, booking_id, clock),
     )
 
 

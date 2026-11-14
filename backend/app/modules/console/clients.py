@@ -17,6 +17,8 @@ from app.modules.identity.client_locks import (
     client_by_phone,
     lock_history,
 )
+from app.modules.identity.freezes import Freeze
+from app.modules.identity.freezes import freezes as client_freezes
 from app.modules.kyc.service import (
     CheckSummary,
     check_summary,
@@ -44,6 +46,8 @@ class ClientPage:
     owed: list[ClientOwed]
     destinations: list[DestinationView]
     locks: list[LockChange]
+    # Each time the client froze their own account, newest first.
+    freezes: list[Freeze]
     # None when the member of staff may not see support or complaints.
     conversation: ConversationView | None
     complaints: list[ComplaintView] | None
@@ -119,6 +123,7 @@ async def client_page(
         ],
         destinations=await destinations_for_client(session, client_id),
         locks=await lock_history(session, client_id),
+        freezes=await client_freezes(session, client_id),
         conversation=await conversation_for_client(session, client_id) if with_support else None,
         complaints=await complaints_for_client(session, client_id, today)
         if with_complaints

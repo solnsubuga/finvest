@@ -19,7 +19,8 @@ export type Amount = { currency: Currency; minor: number };
 export type ProductKind = "treasury_bill" | "fixed_income";
 export type ProductStatus = "live" | "paused";
 export type InterestPaid = "at_maturity" | "monthly";
-export type AtMaturity = "roll_over" | "pay_out";
+/** `pay_interest`: keep what was put in invested for another term, and pay the interest out. */
+export type AtMaturity = "roll_over" | "pay_out" | "pay_interest";
 export type InvestmentStatus = "awaiting_payment" | "active" | "matured" | "cancelled" | "withdrawn" | "unwound" | "transferred";
 
 export type Product = {
@@ -77,12 +78,19 @@ export type Investment = {
   payoutId: string | null;
   /** Matured, and waiting for the client to say where to send the money. */
   waitingForDestination: boolean;
+  /** What waits: all of it, or only the interest when the rest was kept invested. */
+  waiting: Amount | null;
   /** Running, and the client may ask to withdraw it early now. */
   canWithdraw: boolean;
   /** When the client asked to withdraw early. ISO 8601, UTC. Interest stopped then. */
   withdrawalRequestedAt: string | null;
   /** Running, and part or all of it may be sent to another client now. */
   canSend: boolean;
+  /**
+   * Locked through a goal, YYYY-MM-DD: the first day it may be withdrawn early or
+   * sent on again. Null when it is not locked.
+   */
+  lockedUntil: string | null;
 };
 
 /** Another client, found by their Finvest account number or mobile number. */
@@ -116,12 +124,30 @@ export type Transfer = {
   failureCode: string | null;
 };
 
+/** Why a client sends an investment, kept for anti money laundering and shown only to Finvest. */
+export type TransferPurpose = "family_support" | "gift" | "loan_repayment" | "business" | "other";
+
+/** In the order the Send screen offers them, with the words it shows. */
+export const TRANSFER_PURPOSES: { value: TransferPurpose; label: string }[] = [
+  { value: "family_support", label: "Family support" },
+  { value: "gift", label: "A gift" },
+  { value: "loan_repayment", label: "Paying back a loan" },
+  { value: "business", label: "Business" },
+  { value: "other", label: "Something else" },
+];
+
+/** The longest few words a client gives with "Something else". */
+export const MAX_PURPOSE_NOTE = 140;
+
 export type SendInvestment = {
   investmentId: string;
   /** As `findRecipient` returned it. */
   toAccountNumber: string;
   amount: Amount;
   message: string | null;
+  purpose: TransferPurpose;
+  /** The client's own words, only with `other`, where they are needed. */
+  purposeNote: string | null;
   /**
    * Send everything. The server sends the value when it saves the request, so interest added
    * after the screen loaded `amount` is included rather than refused.
@@ -155,7 +181,7 @@ export type EarlyWithdrawal = {
 export type MaturityChoice = {
   investmentId: string;
   atMaturity: AtMaturity;
-  /** Required to be paid out, and only then: one of the client's approved accounts. */
+  /** Required to be paid out, all of it or the interest, and only then: one of the client's approved accounts. */
   destinationId: string | null;
 };
 

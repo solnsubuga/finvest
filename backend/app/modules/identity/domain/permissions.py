@@ -87,10 +87,31 @@ Permission = Literal[
     # Proposing or deciding to email again an address that bounced for good or complained.
     # Seeing the suppression list is `clients.view`. Not a screen.
     "email_suppressions.lift",
+    # Proposing or deciding which ways of paying in and paying out are open, on the Settings
+    # screen. Seeing them is `settings.view`. Not a screen.
+    "payment_channels.change",
+    # Proposing or deciding the withdrawal limits and the size above which a payout or a
+    # transfer to another client waits for staff, on the Settings screen. Seeing them is
+    # `settings.view`. Approving always takes a second person. Not a screen.
+    "withdrawal_limits.change",
+    # Proposing or deciding the public holidays, the bank payout cut-off and the maturity
+    # reminders, on the Settings screen. Seeing them is `settings.view`. Not a screen.
+    "calendar.change",
+    # Proposing or deciding the office networks staff may use the console from and how long an
+    # idle staff session lasts. Admin only: a wrong value can lock every member of staff out.
+    # Not a screen.
+    "staff_security.change",
+    # Proposing or deciding the column layouts of providers' statement exports, on the Settings
+    # screen. Seeing them is `settings.view`. Not a screen.
+    "statement_layouts.change",
     # Proposing or deciding an announcement to every active client. A bigger act than changing
     # a wording, so it is a permission of its own and can be given to fewer people. Seeing
     # announcements is `settings.view`.
     "announcements.send",
+    # Proposing or deciding the account code map of an accounting system: which of its accounts
+    # each Finvest ledger code is posted to in the daily journal. Seeing the maps is
+    # `settings.view`. A map takes effect only once a second person approves it.
+    "account_codes.change",
     "migration.view",
     # Matching a client's bank transfer to the statement, refusing it, or approving someone
     # else's match: this confirms money. Seeing the transfers is `reconciliation.view`. Not a
@@ -128,6 +149,22 @@ Permission = Literal[
     # sending one back or rejecting it. Approving always takes a second person. Not a screen:
     # applications are in the review queue.
     "organisations.review",
+    # Writing a staff note on a client's page. Notes are kept as written and only staff read
+    # them. Seeing them is `clients.view`. One person: a note changes nothing. Not a screen.
+    "client_notes.write",
+    # Proposing or deciding to reset a client's app PIN, which signs the phone app out so the
+    # client logs in again and chooses a new one. Always takes a second person. Not a screen.
+    "client_pins.reset",
+    # Proposing or deciding a client's own stricter withdrawal limits, or clearing them. They
+    # only ever lower the shared limits. Always takes a second person. Not a screen.
+    "client_limits.change",
+    # Proposing or deciding to send a client a statement of chosen dates, which reaches the app
+    # and their proved email as one they asked for. Always takes a second person. Not a screen.
+    "client_statements.send",
+    # Proposing or deciding an early withdrawal for a client who asked for it in writing in
+    # their own help chat, to an approved account of their own. Moves money, so it always takes
+    # a second person. Not a screen.
+    "client_withdrawals.start",
 ]
 PERMISSIONS: tuple[Permission, ...] = get_args(Permission)
 
@@ -166,6 +203,16 @@ ROLE_PERMISSIONS: dict[Role, frozenset[Permission]] = {
             "organisations.review",
             "migration.import",
             "client_phones.change",
+            "client_notes.write",
+            "client_pins.reset",
+            "client_limits.change",
+            "client_statements.send",
+            "client_withdrawals.start",
+            # Operations runs the day: it pauses a payment channel during an outage and keeps
+            # the calendar. The rest of Settings is read only for it.
+            "settings.view",
+            "payment_channels.change",
+            "calendar.change",
         }
     ),
     "finance": frozenset(
@@ -195,10 +242,17 @@ ROLE_PERMISSIONS: dict[Role, frozenset[Permission]] = {
             "migration.view",
             "migration.sign_off",
             "investment_corrections.change",
+            "client_notes.write",
+            "client_limits.change",
             # The trust account clients pay into is finance's to keep right. Settings is where
-            # it is set, so finance can open Settings, read only apart from that account.
+            # it is set, so finance can open Settings. Finance also keeps the payment channels,
+            # the calendar and the statement layouts, but not staff security.
             "settings.view",
             "bank_accounts.change",
+            "payment_channels.change",
+            "calendar.change",
+            "statement_layouts.change",
+            "withdrawal_limits.change",
         }
     ),
     "compliance": frozenset(
@@ -220,6 +274,10 @@ ROLE_PERMISSIONS: dict[Role, frozenset[Permission]] = {
             "payout_accounts.change",
             "investment_transfers.change",
             "organisations.review",
+            "client_notes.write",
+            "client_pins.reset",
+            "client_limits.change",
+            "client_statements.send",
         }
     ),
     # Support answers clients and logs and works complaints. Closing one is for operations and
@@ -233,6 +291,9 @@ ROLE_PERMISSIONS: dict[Role, frozenset[Permission]] = {
             "complaints.manage",
             "clients.view",
             "email_suppressions.lift",
+            "client_notes.write",
+            "client_pins.reset",
+            "client_statements.send",
         }
     ),
 }

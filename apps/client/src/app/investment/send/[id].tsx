@@ -5,6 +5,7 @@ import { Stack, useLocalSearchParams, useRouter } from "expo-router";
 import { BackButton } from "@/components/BackButton";
 import { Notice } from "@/components/Blocks";
 import { Button } from "@/components/Button";
+import { Choice } from "@/components/Choice";
 import { Field, Input, TextField } from "@/components/Field";
 import { Icon } from "@/components/Icon";
 import { Screen } from "@/components/Screen";
@@ -12,7 +13,16 @@ import { Eyebrow, Title, Txt } from "@/components/Txt";
 import { formatAmount, formatDay, groupDigits, parseWholeAmount } from "@/investing/format";
 import { useInvesting } from "@/investing/InvestingProvider";
 import { Failed } from "@/investing/Parts";
-import { Amount, describeInvestingError, Investment, InvestingError, Recipient } from "@/investing/types";
+import {
+  Amount,
+  describeInvestingError,
+  Investment,
+  InvestingError,
+  MAX_PURPOSE_NOTE,
+  Recipient,
+  TRANSFER_PURPOSES,
+  TransferPurpose,
+} from "@/investing/types";
 import { useLoaded } from "@/investing/useLoaded";
 import { newIdempotencyKey } from "@/payments/idempotency";
 import { Loading } from "@/payments/Parts";
@@ -39,6 +49,9 @@ export default function Send() {
   const [amountText, setAmountText] = useState("");
   const [everything, setEverything] = useState(false);
   const [message, setMessage] = useState("");
+  // Why they send it: asked of every sender, for anti money laundering. Only Finvest sees it.
+  const [purpose, setPurpose] = useState<TransferPurpose | null>(null);
+  const [purposeNote, setPurposeNote] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   // One key per request. After a try whose outcome is unknown the details are locked, so
@@ -54,7 +67,8 @@ export default function Send() {
       ? investment.value
       : parseWholeAmount(amountText, investment.value.currency)
     : null;
-  const canConfirm = Boolean(investment?.canSend && recipient && amount);
+  const purposeGiven = purpose !== null && (purpose !== "other" || purposeNote.trim() !== "");
+  const canConfirm = Boolean(investment?.canSend && recipient && amount && purposeGiven);
 
   const find = async () => {
     if (!to.trim()) return;
@@ -70,7 +84,7 @@ export default function Send() {
   };
 
   const confirm = async () => {
-    if (!investment || !recipient || !amount) return;
+    if (!investment || !recipient || !amount || !purpose) return;
     setBusy(true);
     setError(null);
     try {
@@ -79,6 +93,8 @@ export default function Send() {
         toAccountNumber: recipient.accountNumber,
         amount,
         message: message.trim() || null,
+        purpose,
+        purposeNote: purpose === "other" ? purposeNote.trim() : null,
         whole: everything,
         idempotencyKey,
       });
@@ -223,10 +239,44 @@ export default function Send() {
                 hint={`${MAX_MESSAGE - message.length} characters left`}
                 testID="send-message"
               />
+              <View style={{ gap: 8 }} role="radiogroup" aria-label="Why are you sending it?">
+                <Txt size={fontSizes.sm} weight="bold">
+                  Why are you sending it?
+                </Txt>
+                {TRANSFER_PURPOSES.map((choice) => (
+                  <Choice
+                    key={choice.value}
+                    label={choice.label}
+                    selected={purpose === choice.value}
+                    onPress={() => setPurpose(choice.value)}
+                    disabled={locked || confirming}
+                    testID={`send-purpose-${choice.value}`}
+                  />
+                ))}
+                {purpose === "other" ? (
+                  <TextField
+                    label="In a few words"
+                    value={purposeNote}
+                    onChangeText={(typed) => setPurposeNote(typed.slice(0, MAX_PURPOSE_NOTE))}
+                    editable={!locked && !confirming}
+                    placeholder="Paying for a shared plot"
+                    hint={purposeNote.trim() ? `${MAX_PURPOSE_NOTE - purposeNote.length} characters left` : "Needed before you can send: say why in a few words."}
+                    testID="send-purpose-note"
+                  />
+                ) : null}
+                <Txt size={fontSizes.xs} color={colors.muted}>
+                  Finvest asks everyone who sends, as the law on money laundering expects. Only Finvest sees your answer.
+                </Txt>
+              </View>
               {confirming && amount ? (
                 <View style={{ backgroundColor: colors.limeSurface, borderRadius: 18, padding: 16, gap: 6 }} testID="send-confirm">
                   <Txt weight="bold">{`You are sending ${everything ? "everything, " : ""}${formatAmount(amount)} to ${recipient.name}`}</Txt>
                   <Txt size={fontSizes.sm}>{`Finvest account ${recipient.accountNumber}, from your ${loaded.value.productName}.`}</Txt>
+                  {purpose ? (
+                    <Txt size={fontSizes.sm}>{`Why: ${
+                      purpose === "other" ? purposeNote.trim() : TRANSFER_PURPOSES.find((choice) => choice.value === purpose)?.label
+                    }`}</Txt>
+                  ) : null}
                   {everything ? (
                     <Txt size={fontSizes.sm}>Interest added before it is sent goes with it.</Txt>
                   ) : null}

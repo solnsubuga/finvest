@@ -1,7 +1,7 @@
 """Let staff create, edit, pause and open products, each change approved by a second person.
 
 Revision ID: 0360_investment_product_changes
-Revises: 0270_payout_wallet_short
+Revises: 0370_kyc_phone_names
 
 Until now products were seeded by migration 0060 and read-only for the application. A change is
 now a row in `investment_product_changes`: one member of staff proposes the whole product as it
@@ -25,7 +25,7 @@ from collections.abc import Sequence
 from alembic import op
 
 revision: str = "0360_investment_product_changes"
-down_revision: str | None = "0270_payout_wallet_short"
+down_revision: str | None = "0370_kyc_phone_names"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 

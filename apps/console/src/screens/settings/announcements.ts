@@ -52,7 +52,18 @@ export interface AnnouncementProblem {
   code: AnnouncementProblemCode;
 }
 
+/** Who an announcement approved now would reach. */
+export interface AnnouncementReach {
+  /** Active clients. Every one gets it in the app, and by push where they have the app. */
+  clients: number;
+  /** Of those, how many also get it by SMS and by email, as each chose for news. */
+  sms: number;
+  email: number;
+}
+
 export interface AnnouncementsApi {
+  /** How many clients an announcement approved now would reach, so the approver knows first. */
+  reach(): Promise<AnnouncementReach>;
   /** The latest announcements, newest first. */
   list(): Promise<Announcement[]>;
   /** `idempotencyKey` is chosen once per new announcement and sent again on every retry of it. */
@@ -92,6 +103,7 @@ const notConnected = () => Promise.reject(new AnnouncementsError("not_connected"
 /** Used in builds with no backend client and the stub turned off. */
 export const notConnectedAnnouncementsApi: AnnouncementsApi = {
   list: notConnected,
+  reach: notConnected,
   propose: notConnected,
   decide: notConnected,
 };

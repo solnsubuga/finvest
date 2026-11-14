@@ -82,6 +82,17 @@ class SendResult:
     status: int | None = None
 
 
+# One file in a form: its name, its bytes and its content type.
+Upload = tuple[str, bytes, str]
+
+
+@dataclass(frozen=True, slots=True)
+class _Content:
+    json: Mapping[str, object] | None = None
+    data: Mapping[str, str] | None = None
+    files: Mapping[str, Upload] | None = None
+
+
 class VerifyUnavailable(Exception):
     """A read could not be answered. Reading changes nothing at ioTec, so it can be tried again.
 
@@ -109,16 +120,26 @@ class IotecVerifyClient:
     async def send(self, path: str, body: Mapping[str, object]) -> SendResult:
         """POST a JSON request. One that certainly never arrived is sent once more, after a
         pause, so a dropped connection does not leave the check out."""
-        result = await self._send_once(path, body)
+        return await self._send(path, _Content(json=body))
+
+    async def send_form(
+        self, path: str, fields: Mapping[str, str], files: Mapping[str, Upload]
+    ) -> SendResult:
+        """POST a `multipart/form-data` request, such as a face match's two photos. Sorted and
+        sent again exactly as `send` is."""
+        return await self._send(path, _Content(data=fields, files=files))
+
+    async def _send(self, path: str, content: "_Content") -> SendResult:
+        result = await self._send_once(path, content)
         if result.sent is Sent.NOT_RECEIVED:
             await asyncio.sleep(self.retry_pause)
-            result = await self._send_once(path, body)
+            result = await self._send_once(path, content)
         return result
 
     async def read(self, path: str) -> Mapping[str, object]:
         """GET a request's current state, as a JSON object."""
         try:
-            response = await self._request("GET", path, None)
+            response = await self._request("GET", path, _Content())
         except httpx.HTTPError:
             raise VerifyUnavailable("ioTec Verify is unreachable") from None
         if response.status_code != 200:
@@ -128,9 +149,9 @@ class IotecVerifyClient:
             raise VerifyUnavailable("ioTec Verify answered with something that is not JSON")
         return body
 
-    async def _send_once(self, path: str, body: Mapping[str, object]) -> SendResult:
+    async def _send_once(self, path: str, content: "_Content") -> SendResult:
         try:
-            response = await self._request("POST", path, body)
+            response = await self._request("POST", path, content)
         except (httpx.ConnectError, httpx.ConnectTimeout):
             return SendResult(Sent.NOT_RECEIVED)
         except httpx.HTTPError:
@@ -150,9 +171,7 @@ class IotecVerifyClient:
             return SendResult(Sent.UNCERTAIN, status=status)
         return SendResult(Sent.REFUSED, status=status)
 
-    async def _request(
-        self, method: str, path: str, body: Mapping[str, object] | None
-    ) -> httpx.Response:
+    async def _request(self, method: str, path: str, content: "_Content") -> httpx.Response:
         headers = {
             "Client-Id": self.client_id,
             "X-Api-Key": self.api_key.get_secret_value(),
@@ -161,10 +180,23 @@ class IotecVerifyClient:
         url = self.base_url.rstrip("/") + path
         if self.http is not None:
             return await self.http.request(
-                method, url, headers=headers, json=body, timeout=self.timeout
+                method,
+                url,
+                headers=headers,
+                json=content.json,
+                data=content.data,
+                files=content.files,
+                timeout=self.timeout,
             )
         async with httpx.AsyncClient(timeout=self.timeout) as client:
-            return await client.request(method, url, headers=headers, json=body)
+            return await client.request(
+                method,
+                url,
+                headers=headers,
+                json=content.json,
+                data=content.data,
+                files=content.files,
+            )
 
 
 def is_request_id(value: str) -> bool:

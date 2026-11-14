@@ -56,10 +56,22 @@ export const ACTION_PERMISSIONS = [
   "complaints.close",
   // Proposing or deciding a change to the words of a client message.
   "wordings.change",
+  // Proposing or deciding which accounting system account each ledger code is posted to.
+  "account_codes.change",
   // Proposing or deciding an announcement to every active client. Apart from wordings, so fewer people can do it.
   "announcements.send",
   // Proposing or deciding the bank account clients pay into by transfer, on Settings. Approving always takes a second person.
   "bank_accounts.change",
+  // Proposing or deciding which ways of paying in and paying out are open, on Settings.
+  "payment_channels.change",
+  // Proposing or deciding the public holidays, the bank payout cut-off and the maturity reminders, on Settings.
+  "calendar.change",
+  // Proposing or deciding the office networks and the idle sign-out for staff, on Settings. Admin only.
+  "staff_security.change",
+  // Proposing or deciding the column layouts of providers' statement exports, on Settings.
+  "statement_layouts.change",
+  // Proposing or deciding the withdrawal limits and the review threshold, on Settings. Approving always takes a second person.
+  "withdrawal_limits.change",
   // Matching a bank transfer to a statement line, refusing it, and approving someone else's match.
   "bank_transfers.change",
   // Importing a statement, pairing by hand, signing a day close, and settling a payout the
@@ -98,6 +110,16 @@ export const ACTION_PERMISSIONS = [
   "tax_remittances.change",
   // Proposing a new mobile number for a client, or approving or rejecting someone else's.
   "client_phones.change",
+  // Writing a staff note on a client, by one person. Every member of staff reads them.
+  "client_notes.write",
+  // Proposing to sign a client out of the phone app so they choose a new PIN, or approving or rejecting someone else's.
+  "client_pins.reset",
+  // Proposing stricter withdrawal limits for one client, or approving or rejecting someone else's.
+  "client_limits.change",
+  // Proposing to send a client a statement, or approving or rejecting someone else's.
+  "client_statements.send",
+  // Proposing an early withdrawal a client asked for in writing, or approving or rejecting someone else's.
+  "client_withdrawals.start",
   // Proposing how a screening or monitoring case closes, approving or sending back someone else's, withdrawing your own, and screening a client again.
   "compliance_cases.change",
 ] as const;

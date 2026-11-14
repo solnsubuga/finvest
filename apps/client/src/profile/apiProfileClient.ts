@@ -14,7 +14,6 @@ export function toNextOfKin(view: NextOfKinView): NextOfKin {
       relationship: p.relationship,
       phone: p.phone,
       idNumber: p.id_number,
-      shareBps: p.share_bps,
     })),
     updatedAt: view.updated_at,
   };
@@ -95,7 +94,6 @@ function body(person: Person) {
     relationship: person.relationship,
     phone: person.phone,
     id_number: person.idNumber,
-    share_bps: person.shareBps,
   };
 }
 
@@ -124,6 +122,11 @@ export function createApiProfileClient(): ProfileClient {
       wrap(async () => {
         const day = new Date().toISOString().slice(0, 10);
         await saveMyData(`finvest-my-data-${day}.json`);
+      }),
+    freezeAccount: (reason) =>
+      wrap(async () => {
+        const view = await api("POST /client/account-freeze", { body: { reason } });
+        return { frozenAt: view.frozen_at };
       }),
   };
 }
