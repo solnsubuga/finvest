@@ -20,6 +20,7 @@ from app.infrastructure.storage import FileStorage, StorageSettings
 from app.modules.approvals import api as approvals_api
 from app.modules.audit import api as audit_api
 from app.modules.autoinvest import api as autoinvest_api
+from app.modules.client_data import api as client_data_api
 from app.modules.closures import api as closures_api
 from app.modules.console import api as console_api
 from app.modules.dealing import allocations_api as dealing_allocations_api
@@ -243,4 +244,5 @@ def create_app(
     app.include_router(dealing_allocations_api.router)
     app.include_router(tax_api.create_router(identity_sealer))
     app.include_router(finance_api.create_router())
+    app.include_router(client_data_api.create_router(identity_sealer))
     return app

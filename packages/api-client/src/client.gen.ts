@@ -1415,6 +1415,17 @@ export const operations = {
     status: 200,
     response: ClientComplaint,
   },
+  "GET /client/data-export": {
+    method: "GET",
+    path: "/client/data-export",
+    params: z.object({}),
+    query: z.object({}),
+    body: null,
+    bodyKind: null,
+    idempotent: false,
+    status: 200,
+    response: null,
+  },
   "GET /client/documents": {
     method: "GET",
     path: "/client/documents",
