@@ -85,6 +85,8 @@ export const ACTION_PERMISSIONS = [
   "identity_checks.review",
   // Recording a payment of withholding tax to URA, approving someone else's, or declining it.
   "tax_remittances.change",
+  // Proposing a new mobile number for a client, or approving or rejecting someone else's.
+  "client_phones.change",
 ] as const;
 
 export const PERMISSIONS = [...SCREEN_PERMISSIONS, ...ACTION_PERMISSIONS] as const;

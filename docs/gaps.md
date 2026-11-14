@@ -50,7 +50,7 @@ Four screens are still the placeholder page. The Review Queue is connected to `/
 | Finance | Day close, fee income, withholding tax owed and the accounting export | Reconciliation routes below; tax in the tax certificates thread |
 | Compliance | Screening results and monitoring alerts | Nothing built (see below) |
 
-Staff routes with no screen at all: `/staff/phone-changes` (three; the Clients screen does not show pending phone changes) and `/staff/sessions` (three).
+~~Staff routes with no screen at all: `/staff/phone-changes` (three; the Clients screen does not show pending phone changes) and `/staff/sessions` (three).~~ Closed by the mobile number and devices PR: the client page has a Mobile number section, and every member of staff has Your devices.
 
 ### Backend
 

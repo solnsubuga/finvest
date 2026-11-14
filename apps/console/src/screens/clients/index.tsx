@@ -5,10 +5,13 @@ import { useAuth } from "@/auth/context.ts";
 import { isStubAuth } from "@/auth/index.ts";
 import { can } from "@/auth/types.ts";
 import { Button } from "@/components/ui/button.tsx";
+import { createHttpDirectory } from "@/directory/http.ts";
 import { PageHeader } from "@/pages/PageHeader.tsx";
 import { ClientsError, clientsErrorMessage, notConnectedClientsApi, type ClientPage, type ClientsApi, type Decision, type Lock, type LockKind } from "./api.ts";
 import { createHttpClientsApi } from "./http.ts";
 import { ClientDetails, ClientHeader, INPUT, LockSection } from "./Parts.tsx";
+import { PhoneSection } from "./Phone.tsx";
+import { createHttpPhoneChangesApi, createStubPhoneChangesApi, notConnectedPhoneChangesApi, type PhoneChangesApi } from "./phone.ts";
 import { createStubClientsApi } from "./stub.ts";
 import { ClientEmailStatus, SuppressionsSection } from "./Suppressions.tsx";
 import { createHttpSuppressionsApi, notConnectedSuppressionsApi, type SuppressionsApi } from "./suppressions.ts";
@@ -24,9 +27,11 @@ interface ClientsScreenProps {
   suppressions: SuppressionsApi;
   /** `email_suppressions.lift`. The API checks it again. */
   canLift: boolean;
+  /** Null without `client_phones.change`: the mobile number section is not shown. */
+  phones?: PhoneChangesApi | null;
 }
 
-export function ClientsScreen({ api, suppressions, canLift }: ClientsScreenProps) {
+export function ClientsScreen({ api, suppressions, canLift, phones = null }: ClientsScreenProps) {
   const [params, setParams] = useSearchParams();
   const clientId = params.get("client");
   const [query, setQuery] = useState("");
@@ -89,7 +94,7 @@ export function ClientsScreen({ api, suppressions, canLift }: ClientsScreenProps
         ) : null}
       </form>
       {clientId ? (
-        <ClientView key={clientId} api={api} clientId={clientId} suppressions={suppressions} canLift={canLift} />
+        <ClientView key={clientId} api={api} clientId={clientId} suppressions={suppressions} canLift={canLift} phones={phones} />
       ) : (
         <>
           <p className="m-0 max-w-[720px] rounded-xl border border-border bg-surface p-5 text-md text-muted">
@@ -102,7 +107,19 @@ export function ClientsScreen({ api, suppressions, canLift }: ClientsScreenProps
   );
 }
 
-function ClientView({ api, clientId, suppressions, canLift }: { api: ClientsApi; clientId: string; suppressions: SuppressionsApi; canLift: boolean }) {
+function ClientView({
+  api,
+  clientId,
+  suppressions,
+  canLift,
+  phones,
+}: {
+  api: ClientsApi;
+  clientId: string;
+  suppressions: SuppressionsApi;
+  canLift: boolean;
+  phones: PhoneChangesApi | null;
+}) {
   const [load, setLoad] = useState<Load>({ state: "loading" });
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -206,6 +223,14 @@ function ClientView({ api, clientId, suppressions, canLift }: { api: ClientsApi;
       <ClientHeader page={page} />
       {page.account.email ? <ClientEmailStatus api={suppressions} email={page.account.email} canLift={canLift} /> : null}
       <ClientDetails page={page} />
+      {phones && page.account.status !== "closed" ? (
+        <PhoneSection
+          api={phones}
+          clientId={page.account.id}
+          currentPhone={page.account.phone}
+          onChanged={() => void fetchPage().then((fresh) => fresh.state === "ready" && setLoad(fresh))}
+        />
+      ) : null}
       <LockSection page={page} busy={busy} error={error} onPropose={propose} onDecide={decide} />
     </>
   );
@@ -214,11 +239,12 @@ function ClientView({ api, clientId, suppressions, canLift }: { api: ClientsApi;
 export default function ClientsPage() {
   const { session } = useAuth();
   const canLift = session ? can(session, "email_suppressions.lift") : false;
-  const [{ api, suppressions }] = useState<{ api: ClientsApi; suppressions: SuppressionsApi }>(() => {
+  const canChangePhones = session ? can(session, "client_phones.change") : false;
+  const [{ api, suppressions, phones }] = useState<{ api: ClientsApi; suppressions: SuppressionsApi; phones: PhoneChangesApi | null }>(() => {
     if (isStubAuth() && session) {
       // Under the stub, `?sample=offline` shows the screen as if Finvest could not be reached.
       if (new URLSearchParams(window.location.search).get("sample") === "offline") {
-        return { api: notConnectedClientsApi, suppressions: notConnectedSuppressionsApi };
+        return { api: notConnectedClientsApi, suppressions: notConnectedSuppressionsApi, phones: canChangePhones ? notConnectedPhoneChangesApi : null };
       }
       const me = { id: session.staffId, name: session.name };
       return {
@@ -228,12 +254,17 @@ export default function ClientsPage() {
           seesComplaints: can(session, "complaints.view"),
         }),
         suppressions: createStubSuppressionsApi(me, Date.now, canLift),
+        phones: canChangePhones ? createStubPhoneChangesApi(me) : null,
       };
     }
     const base = apiBaseUrl();
-    if (!base) return { api: notConnectedClientsApi, suppressions: notConnectedSuppressionsApi };
+    if (!base) return { api: notConnectedClientsApi, suppressions: notConnectedSuppressionsApi, phones: null };
     const http = createHttp(base);
-    return { api: createHttpClientsApi(http), suppressions: createHttpSuppressionsApi(http) };
+    return {
+      api: createHttpClientsApi(http),
+      suppressions: createHttpSuppressionsApi(http),
+      phones: canChangePhones && session ? createHttpPhoneChangesApi(http, createHttpDirectory(http), session.staffId) : null,
+    };
   });
-  return <ClientsScreen api={api} suppressions={suppressions} canLift={canLift} />;
+  return <ClientsScreen api={api} suppressions={suppressions} canLift={canLift} phones={phones} />;
 }
