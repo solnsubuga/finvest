@@ -24,6 +24,7 @@ from app.modules.documents.service import EXPIRE_EMAILS_KIND, MONTHLY_KIND
 from app.modules.goals.jobs import REFRESH_GROUPS_KIND, SEND_REMINDERS_KIND
 from app.modules.investments.jobs import ACCRUE_KIND, CANCEL_UNPAID_KIND, MATURE_KIND
 from app.modules.kyc.service import SWEEP_UNANSWERED
+from app.modules.migration.jobs import CLAIM_REMINDERS_KIND, CLAIM_REMINDERS_MAX_AGE
 from app.modules.notifications.keyed_backfill import KEY_HASHES
 from app.modules.notifications.service import PURGE_MESSAGES
 from app.modules.payments import service as payments
@@ -110,6 +111,14 @@ def schedules() -> list[Schedule]:
             trigger=CronTrigger(hour=8, minute=0, timezone=KAMPALA),
             kind=SEND_REMINDERS_KIND,
             max_age=timedelta(hours=10),
+        ),
+        # A fresh claim link for migrated clients whose last one is a week old and unused, in
+        # the morning so no text arrives at night. One run covers every client due.
+        Schedule(
+            name="migration.claim_reminders",
+            trigger=CronTrigger(hour=9, minute=0, timezone=KAMPALA),
+            kind=CLAIM_REMINDERS_KIND,
+            max_age=CLAIM_REMINDERS_MAX_AGE,
         ),
         # Last month's statement for every client. It runs every morning and asks for a month
         # only once the ledger is closed through its last day; each client is asked once.
