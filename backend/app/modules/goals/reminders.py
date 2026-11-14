@@ -18,7 +18,7 @@ from datetime import date
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.modules.goals import service
+from app.modules.goals import saving_rules, service
 from app.modules.goals.domain.goals import GoalStatus
 from app.modules.goals.domain.reminders import top_up_to_remind
 from app.modules.investments import service as investments
@@ -81,6 +81,8 @@ async def send_page(
     goal_ids = list(
         (await session.execute(_ACTIVE, {"after": after, "limit": limit})).scalars().all()
     )
+    # A goal saved by its own monthly rule needs no reminder to pay by hand.
+    ruled = await saving_rules.goals_with_rules(session, goal_ids)
     for goal_id in goal_ids:
         goal = await service.get_goal(session, goal_id)
         if goal.status is not GoalStatus.ACTIVE:
@@ -97,12 +99,16 @@ async def send_page(
             now=now,
         ):
             told["reached"] += 1
-        due = top_up_to_remind(
-            set_up_on=business_date(goal.created_at),
-            target_date=goal.target_date,
-            today=today,
-            reached=reached,
-            saved_on=await _saved_on(session, goal.id),
+        due = (
+            None
+            if goal.id in ruled
+            else top_up_to_remind(
+                set_up_on=business_date(goal.created_at),
+                target_date=goal.target_date,
+                today=today,
+                reached=reached,
+                saved_on=await _saved_on(session, goal.id),
+            )
         )
         if due is not None and await notifications.notify(
             session,

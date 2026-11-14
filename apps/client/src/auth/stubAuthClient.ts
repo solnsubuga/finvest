@@ -2,6 +2,7 @@ import {
   AuthClient,
   AuthError,
   AuthenticatorSetup,
+  ClaimChallenge,
   Device,
   LoginChallenge,
   Passkey,
@@ -14,6 +15,8 @@ import {
   SignupStart,
   SignupTicket,
 } from "./types";
+import { DEMO_CLAIMS } from "@/claim/demo";
+
 import { MAX_WRONG_PINS, pinProblem } from "./pin";
 
 /**
@@ -175,6 +178,11 @@ export function createStubAuthClient(options: StubOptions = {}): AuthClient {
   const emailLinks = new Map<string, string>();
   /** Reset challenges and the number each was for. A number with no account gets one too. */
   const resets = new Map<string, string>();
+  /** Claim links not used yet, by token, and the open claim challenges with their token. */
+  const claimLinks = new Map<string, { phone: string; displayName: string }>(
+    DEMO_CLAIMS.map((demo) => [demo.token, { phone: demo.phone, displayName: demo.displayName }]),
+  );
+  const claimChallenges = new Map<string, string>();
   const recoveryAsks = new Map<string, number>();
   /** A set-up that was started and not yet confirmed, for this session only. */
   let pendingAuthenticatorAt: number | null = null;
@@ -315,6 +323,52 @@ export function createStubAuthClient(options: StubOptions = {}): AuthClient {
       });
       confirmedWith = "signup";
       return sessionFor(signup.phone, false);
+    },
+
+    async startClaim(token): Promise<ClaimChallenge> {
+      await wait();
+      if (!claimLinks.has(token)) {
+        throw new AuthError("not_found");
+      }
+      // A new code replaces any older one for the same link.
+      for (const [id, held] of claimChallenges) {
+        if (held === token) claimChallenges.delete(id);
+      }
+      const challengeId = nextId("claim");
+      claimChallenges.set(challengeId, token);
+      return { challengeId };
+    },
+
+    async completeClaim(token, challengeId, code, password): Promise<Session> {
+      await wait();
+      const link = claimLinks.get(token);
+      if (!link) {
+        throw new AuthError("not_found");
+      }
+      if (claimChallenges.get(challengeId) !== token) {
+        throw new AuthError("expired");
+      }
+      if (code !== DEMO_CODE) {
+        throw new AuthError("invalid_code");
+      }
+      if (LEAKED.has(password.toLowerCase())) {
+        throw new AuthError("leaked_password");
+      }
+      claimChallenges.delete(challengeId);
+      // A link works once.
+      claimLinks.delete(token);
+      accounts.set(link.phone, {
+        password,
+        displayName: link.displayName,
+        hasPasskey: false,
+        hasAuthenticator: false,
+        passkeys: [],
+        otherDevices: [],
+        email: null,
+        emailVerified: false,
+      });
+      confirmedWith = "signup";
+      return sessionFor(link.phone, false);
     },
 
     async startLogin(identifier, password): Promise<LoginChallenge> {

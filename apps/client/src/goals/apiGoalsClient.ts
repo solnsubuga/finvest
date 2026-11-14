@@ -141,6 +141,23 @@ export function createApiGoalsClient(): GoalsClient {
 
     getGoal: (goalId) => wrap(async () => toGoal(await api("GET /client/goals/{goal_id}", { params: { goal_id: goalId } }))),
 
+    updateGoal: (goalId, details) =>
+      // Sending the same details twice changes nothing, so no idempotency key is needed.
+      wrap(async () =>
+        toGoal(
+          await api("PUT /client/goals/{goal_id}", {
+            params: { goal_id: goalId },
+            body: {
+              name: details.name,
+              category: details.category,
+              target_minor: details.target.minor,
+              currency: details.target.currency,
+              target_date: details.targetDate,
+            },
+          }),
+        ),
+      ),
+
     closeGoal: (goalId) =>
       wrap(async () => {
         try {

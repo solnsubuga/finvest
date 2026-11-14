@@ -21,6 +21,7 @@ from app.modules.autoinvest.domain.plans import (
     due_run,
     may_prompt_at,
 )
+from app.modules.autoinvest.requests import tell_missed
 from app.modules.closures.pending import closing
 from app.shared.business_day import business_date
 from app.shared.clock import Clock
@@ -47,7 +48,7 @@ _ADVANCE = text(
     "UPDATE autoinvest_plans SET next_run_on = :next_run_on, updated_at = :now WHERE id = :id"
 )
 _RETRIES = text(
-    "SELECT r.id, r.plan_id, r.client_id, r.retry_on, p.status AS plan_status "
+    "SELECT r.id, r.plan_id, r.client_id, r.due_on, r.retry_on, p.status AS plan_status "
     "FROM autoinvest_runs r "
     "JOIN autoinvest_plans p ON p.id = r.plan_id "
     "WHERE r.status = 'failed' AND r.retry_on <= :today ORDER BY r.retry_on, r.id "
@@ -128,6 +129,15 @@ async def open_due_runs(session: AsyncSession, clock: Clock, *, limit: int = BAT
         )
         if code:
             missed += 1
+            await tell_missed(
+                session,
+                run_id=run.id,
+                plan_id=run.plan_id,
+                client_id=run.client_id,
+                due_on=run.due_on,
+                code=code,
+                now=now,
+            )
         else:
             due.append(run.id)
     if due or missed:
@@ -144,10 +154,11 @@ async def _insert(
     now: datetime,
     run_id: str | None = None,
 ) -> int:
+    run_id = run_id or push_id()
     result = await session.execute(
         _INSERT_RUN,
         {
-            "id": run_id or push_id(),
+            "id": run_id,
             "plan_id": plan.id,
             "client_id": plan.client_id,
             "due_on": due_on,
@@ -156,4 +167,15 @@ async def _insert(
             "now": now,
         },
     )
-    return int(result.rowcount)  # type: ignore[attr-defined]
+    inserted = int(result.rowcount)  # type: ignore[attr-defined]
+    if inserted and status is RunStatus.MISSED and code is not None:
+        await tell_missed(
+            session,
+            run_id=run_id,
+            plan_id=plan.id,
+            client_id=plan.client_id,
+            due_on=due_on,
+            code=code,
+            now=now,
+        )
+    return inserted

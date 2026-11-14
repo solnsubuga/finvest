@@ -9,6 +9,7 @@ from app.infrastructure.database import Database
 from app.modules.identity.api import CurrentClient
 from app.modules.insights import service
 from app.modules.insights.domain.months import DEFAULT_MONTHS, MAX_MONTHS
+from app.modules.insights.service import UpcomingKind
 from app.modules.investments.domain.investments import AtMaturity
 from app.shared.clock import Clock
 from app.shared.contracts import Contract, PushId
@@ -30,9 +31,16 @@ class MonthView(Contract):
 
 
 class UpcomingView(Contract):
+    """One thing coming up. `amount_minor` is, by `kind`: what a maturity pays back after tax,
+    what a run or a goal saving asks for, or a goal's target."""
+
+    kind: UpcomingKind
     on: date
-    investment_id: PushId
-    product_name: str
+    investment_id: PushId | None
+    plan_id: PushId | None
+    goal_id: PushId | None
+    product_name: str | None
+    goal_name: str | None
     at_maturity: AtMaturity | None
     amount_minor: int
 
@@ -76,12 +84,111 @@ async def client_insights(
         earned_so_far_minor=insights.earned_so_far.minor,
         upcoming=[
             UpcomingView(
+                kind=item.kind,
                 on=item.on,
                 investment_id=item.investment_id,
+                plan_id=item.plan_id,
+                goal_id=item.goal_id,
                 product_name=item.product_name,
+                goal_name=item.goal_name,
                 at_maturity=item.at_maturity,
                 amount_minor=item.amount.minor,
             )
             for item in insights.upcoming
         ],
+    )
+
+
+class PortfolioPartView(Contract):
+    worth_minor: int
+    count: int
+
+
+class PortfolioProductView(Contract):
+    product_code: str
+    product_name: str
+    worth_minor: int
+    count: int
+    # A whole-number share of everything invested. The shares add up to 100.
+    percent: int
+
+
+class PortfolioMaturityView(Contract):
+    investment_id: PushId
+    product_name: str
+    on: date
+    at_maturity: AtMaturity | None
+    term_days: int
+    days_earned: int
+    days_left: int
+
+
+class PortfolioView(Contract):
+    """The totals on Home and Portfolio. Amounts are integers in the smallest unit of
+    `currency`, all after tax. Only running investments count."""
+
+    currency: str
+    invested_minor: int
+    worth_minor: int
+    interest_so_far_minor: int
+    earning_per_day_minor: int
+    interest_today_minor: int
+    active_count: int
+    awaiting_payment_count: int
+    outside_goals: PortfolioPartView
+    in_goals: PortfolioPartView
+    open_goals: int
+    products: list[PortfolioProductView]
+    next_maturity: PortfolioMaturityView | None
+
+
+@router.get("/portfolio")
+async def client_portfolio(
+    request: Request,
+    client: CurrentClient,
+    # One currency per answer. Figures in different currencies are never added together.
+    currency: Currency = Currency.UGX,
+) -> PortfolioView:
+    database: Database = request.app.state.database
+    clock: Clock = request.app.state.clock
+    async with database.actor_transaction(client.actor) as session:
+        portfolio = await service.client_portfolio(session, client.actor, clock, currency=currency)
+    upcoming = portfolio.next_maturity
+    return PortfolioView(
+        currency=portfolio.currency.value,
+        invested_minor=portfolio.invested.minor,
+        worth_minor=portfolio.worth.minor,
+        interest_so_far_minor=portfolio.interest_so_far.minor,
+        earning_per_day_minor=portfolio.earning_per_day.minor,
+        interest_today_minor=portfolio.interest_today.minor,
+        active_count=portfolio.active_count,
+        awaiting_payment_count=portfolio.awaiting_payment_count,
+        outside_goals=PortfolioPartView(
+            worth_minor=portfolio.outside_goals.worth.minor, count=portfolio.outside_goals.count
+        ),
+        in_goals=PortfolioPartView(
+            worth_minor=portfolio.in_goals.worth.minor, count=portfolio.in_goals.count
+        ),
+        open_goals=portfolio.open_goals,
+        products=[
+            PortfolioProductView(
+                product_code=share.product_code,
+                product_name=share.product_name,
+                worth_minor=share.worth.minor,
+                count=share.count,
+                percent=share.percent,
+            )
+            for share in portfolio.products
+        ],
+        next_maturity=None
+        if upcoming is None
+        else PortfolioMaturityView(
+            investment_id=upcoming.investment_id,
+            product_name=upcoming.product_name,
+            on=upcoming.on,
+            at_maturity=upcoming.at_maturity,
+            term_days=upcoming.term_days,
+            days_earned=upcoming.days_earned,
+            days_left=upcoming.days_left,
+        ),
     )

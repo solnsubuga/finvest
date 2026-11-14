@@ -12,6 +12,7 @@ from typing import Annotated, Literal
 import structlog
 from fastapi import APIRouter, Depends, File, Request, UploadFile
 from pydantic import Field
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.infrastructure.database import Database
 from app.infrastructure.sealing import Sealer
@@ -30,6 +31,8 @@ from app.modules.kyc.domain.checks import (
 )
 from app.modules.kyc.domain.liveness import LivenessProvider, LivenessStatus
 from app.modules.kyc.domain.provider import AutomaticCheck, IdentityProvider, Verdict
+from app.modules.screening import contract as screening
+from app.modules.screening.contract import Outcome as ScreeningOutcome
 from app.shared.clock import Clock
 from app.shared.contracts import Contract, PushId
 from app.shared.errors import ApplicationError, ErrorEnvelope, FieldProblem
@@ -183,6 +186,9 @@ class StaffCheck(QueueEntry):
     carried_over: bool
     # What staff may do to the check in this state. The database enforces the same table.
     allowed: list[Decision]
+    # Where the client stands with sanctions and PEP screening, or null if never screened.
+    # Anything but `clear` is a reason to look before approving.
+    screening: ScreeningOutcome | None
 
 
 class DocumentNumber(Contract):
@@ -250,7 +256,13 @@ def _name(surname: str | None, given_names: str | None) -> str | None:
     return f"{given_names} {surname.title()}" if surname and given_names else None
 
 
-def _staff_check(view: service.CheckView) -> StaffCheck:
+async def _staff_check_now(session: AsyncSession, view: service.CheckView) -> StaffCheck:
+    """The staff view with the client's screening standing, read in the same transaction."""
+    standing = await screening.latest_outcome(session, view.client_id)
+    return _staff_check(view, None if standing is None else standing.outcome)
+
+
+def _staff_check(view: service.CheckView, screening_outcome: ScreeningOutcome | None) -> StaffCheck:
     details = view.details
     return StaffCheck(
         id=view.id,
@@ -280,6 +292,7 @@ def _staff_check(view: service.CheckView) -> StaffCheck:
             for status, decision in _DECISIONS.items()
             if status in staff_moves(view.status)
         ],
+        screening=screening_outcome,
     )
 
 
@@ -491,7 +504,8 @@ def create_routers(
     @staff_router.get("/{check_id}")
     async def one_check(check_id: PushId, staff: Viewer, request: Request) -> StaffCheck:
         async with database(request).actor_transaction(staff.actor) as session:
-            return _staff_check(await service.check_for_staff(session, seal(), check_id))
+            view = await service.check_for_staff(session, seal(), check_id)
+            return await _staff_check_now(session, view)
 
     @staff_router.post("/{check_id}/document-number")
     async def show_document_number(
@@ -538,7 +552,7 @@ def create_routers(
             view = await service.approve(
                 session, seal(), staff.actor, check_id, body.reason, clock(request)
             )
-        return _staff_check(view)
+            return await _staff_check_now(session, view)
 
     @staff_router.post("/{check_id}/reject")
     async def reject(
@@ -555,7 +569,7 @@ def create_routers(
                 clock(request),
                 client_message=body.client_message,
             )
-        return _staff_check(view)
+            return await _staff_check_now(session, view)
 
     @staff_router.post("/{check_id}/ask-for-photos")
     async def ask_for_photos(
@@ -572,7 +586,7 @@ def create_routers(
                 body.client_message,
                 clock(request),
             )
-        return _staff_check(view)
+            return await _staff_check_now(session, view)
 
     @staff_router.post("/{check_id}/escalate")
     async def escalate(
@@ -583,7 +597,7 @@ def create_routers(
             view = await service.escalate(
                 session, seal(), staff.actor, check_id, body.reason, clock(request)
             )
-        return _staff_check(view)
+            return await _staff_check_now(session, view)
 
     return [client_router, staff_router]
 

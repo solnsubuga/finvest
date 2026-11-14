@@ -17,6 +17,8 @@ const SIGNED_IN = [
   "/invest",
   "/goals",
   "/goals/new",
+  "/goals/demo-goal-1",
+  "/goals/edit/demo-goal-1",
   "/insights",
   "/documents",
   "/help",
@@ -25,6 +27,10 @@ const SIGNED_IN = [
   "/account/investing-questions",
   "/account/language",
   "/account/close",
+  "/account/organisations",
+  "/account/organisations/new",
+  "/account/organisations/org-kira-road",
+  "/account/organisations/org-nakato-traders",
   "/notifications",
   "/notifications/settings",
   "/security",
@@ -185,4 +191,78 @@ test("the PIN and passkey offer at the end of sign up meet WCAG 2.1 AA", async (
   await page.getByTestId("offer-add-passkey").click();
   await expect(page.getByText("Passkey added").last()).toBeVisible();
   expect(await violations(page), "passkey added").toEqual([]);
+});
+
+test("sending an investment to someone meets WCAG 2.1 AA at every step", async ({ page }) => {
+  test.setTimeout(120_000);
+  await page.goto("/");
+  await page.getByText("Log in", { exact: true }).first().click();
+  await page.getByTestId("phone-input").fill(DEMO_PHONE);
+  await page.getByTestId("password-input").fill(DEMO_PASSWORD);
+  await page.getByTestId("login-submit").click();
+  await page.getByTestId("use-passkey").click();
+  await typePin(page, DEMO_PIN);
+  await typePin(page, DEMO_PIN);
+  await expect(page.getByText("Welcome, Amara")).toBeVisible();
+  await visit(page, "/portfolio");
+  await page.getByLabel(/^91 Day Treasury Bill, Running/).first().click();
+  await page.getByTestId("send-investment").click();
+  await expect(page.getByTestId("send-to")).toBeVisible();
+  const found: string[] = [];
+  const check = async (step: string) => found.push(...(await violations(page)).map((line) => `${step} ${line}`));
+  await check("empty");
+  await page.getByTestId("send-to").fill("1009999999");
+  await page.getByTestId("find-recipient").click();
+  await expect(page.getByText(/could not find a Finvest client/)).toBeVisible();
+  await check("not found");
+  await page.getByTestId("send-to").fill("1001005170");
+  await page.getByTestId("find-recipient").click();
+  await expect(page.getByTestId("recipient")).toBeVisible();
+  await page.getByTestId("send-amount").fill("1000000");
+  await check("filled in");
+  await page.getByTestId("review-send").click();
+  await expect(page.getByTestId("send-confirm")).toBeVisible();
+  await check("confirm");
+  await page.getByTestId("confirm-send").click();
+  await expect(page.getByTestId("transfer-amount")).toBeVisible();
+  await check("sent");
+  expect(found).toEqual([]);
+});
+
+// The demo's account moved from Finvest 1.0 (apps/client/src/claim/demo.ts).
+const DEMO_CLAIM_TOKEN = "demo-claim-selfie-link-not-a-real-token";
+
+test("claiming an account moved from Finvest 1.0 meets WCAG 2.1 AA", async ({ page }) => {
+  await page.goto(`/claim#${DEMO_CLAIM_TOKEN}`);
+  await expect(page.getByText("Your account has moved to Finvest 2.0")).toBeVisible();
+  expect(await violations(page), "claim link").toEqual([]);
+  await page.getByTestId("claim-start").click();
+  await expect(page.getByText("Enter the code and choose a password")).toBeVisible();
+  expect(await violations(page), "claim code and password").toEqual([]);
+  await page.getByTestId("code-input").fill("123456");
+  await page.getByTestId("password-input").fill("green matooke sunday");
+  await page.getByTestId("password-confirm-input").fill("green matooke sunday");
+  await page.getByTestId("claim-complete").click();
+  await typePin(page, DEMO_PIN);
+  await typePin(page, DEMO_PIN);
+  const offer = page.getByTestId("offer-not-now");
+  if (await offer.isVisible().catch(() => false)) await offer.click();
+  await expect(page.getByTestId("home-claim")).toBeVisible();
+  expect(await violations(page), "home with the move").toEqual([]);
+  await visit(page, "/moving");
+  await expect(page.getByTestId("claim-photos-start").filter({ visible: true })).toBeVisible();
+  expect(await violations(page), "moving: confirm it is you").toEqual([]);
+  await page.getByTestId("claim-photos-start").filter({ visible: true }).click();
+  await expect(page.getByTestId("photo-take").filter({ visible: true })).toBeVisible();
+  expect(await violations(page), "moving: photo of the ID").toEqual([]);
+});
+
+test("a claim link that no longer works meets WCAG 2.1 AA", async ({ page }) => {
+  await page.goto("/claim#an-old-link-that-was-replaced-long");
+  await page.getByTestId("claim-start").click();
+  await expect(page.getByText(/This link no longer works/)).toBeVisible();
+  expect(await violations(page), "claim link gone").toEqual([]);
+  await page.goto("/claim");
+  await expect(page.getByText("Open the link from our message")).toBeVisible();
+  expect(await violations(page), "claim without a link").toEqual([]);
 });

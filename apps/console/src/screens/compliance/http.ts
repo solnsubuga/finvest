@@ -202,7 +202,8 @@ export function createHttpComplianceApi(http: Http): ComplianceApi {
     rules: () => read("/rules", toRules),
     exportRegister: async () => {
       try {
-        return { file: await http.download(`${PATH}/cases.csv`), filename: registerFilename() };
+        // A POST: every export is recorded on the audit trail.
+        return { file: await http.download(`${PATH}/cases.csv`, { method: "POST" }), filename: registerFilename() };
       } catch (error) {
         throw toComplianceError(error);
       }

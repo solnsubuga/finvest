@@ -461,7 +461,7 @@ Seeing returns needs `money_movement.view`. Proposing and deciding need `bank_pa
 | --- | --- |
 | `GET /staff/payout-returns/returnable?amount_minor=&currency=UGX` | Paid payouts from the last 120 days that no open or approved return names, newest paid first, at most 100, each with when it was paid and where it went (bank or network, holder, masked account). With `amount_minor`, only payouts of that amount, to find the one a line coming in is |
 | `GET /staff/payouts/{id}/return-lines` | Statement lines that could be this payout coming back: on the pot it was paid from, coming in, for its amount and currency, within 120 days of the day it was paid, and named by no open or approved return. 409 `payout_not_paid` |
-| `GET /staff/payout-returns` | Returns waiting for a second person, oldest first, at most 100 |
+| `GET /staff/payout-returns` | Returns waiting for a second person, oldest first, at most 100. Every return carries what the second person checks: the payout's amount and where it went (bank or network, holder, masked account), and the statement line itself (date, amount, reference, narrative) |
 | `GET /staff/payout-returns/{id}` | One return, with the entry its approval posted |
 | `POST /staff/payouts/{id}/returns` | `{statement_line_id, reason}`. 201. 409 `payout_not_paid`, `return_already_recorded`, `statement_line_in_use` or `statement_line_not_this_payout` |
 | `POST /staff/payout-returns/{id}/approve` | `{reason}`. Posts the return and tells the client. 403 `proposed_by_you`; 409 `return_already_decided` |

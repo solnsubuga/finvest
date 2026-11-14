@@ -15,6 +15,13 @@ describe("hrefFor", () => {
     });
   });
 
+  it("opens the plan an automatic investing notification names", () => {
+    expect(hrefFor({ kind: "autoinvest_plan", id: "P1" })).toEqual({
+      pathname: "/autoinvest/[planId]",
+      params: { planId: "P1" },
+    });
+  });
+
   it("opens nothing for a notification with no link", () => {
     expect(hrefFor(null)).toBeNull();
   });

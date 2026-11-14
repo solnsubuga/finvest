@@ -1,8 +1,8 @@
-"""A client's next of kin: who Finvest contacts if it cannot reach them, and their shares.
+"""A client's next of kin: who Finvest contacts if it cannot reach them.
 
 Every function works inside the caller's transaction. Names, mobile numbers and ID numbers are
 sealed with the identity data key, each bound to its row and column. A save replaces the whole
-list, and migration 0230 checks at commit that the shares add up to 100%.
+list, and the database checks at commit that the list says how many people it holds.
 """
 
 from dataclasses import dataclass
@@ -31,7 +31,6 @@ class SavedPerson:
     relationship: Relationship
     phone: str
     id_number: str
-    share_bps: int
 
 
 @dataclass(frozen=True, slots=True)
@@ -42,7 +41,7 @@ class NextOfKin:
 
 
 _PEOPLE = text(
-    "SELECT id, relationship, share_bps, full_name_sealed, phone_sealed, id_number_sealed "
+    "SELECT id, relationship, full_name_sealed, phone_sealed, id_number_sealed "
     "FROM kyc_next_of_kin WHERE client_id = :client_id ORDER BY position"
 )
 _LIST = text("SELECT updated_at FROM kyc_next_of_kin_lists WHERE client_id = :client_id")
@@ -54,9 +53,9 @@ _CLAIM = text(
 )
 _CLEAR = text("DELETE FROM kyc_next_of_kin WHERE client_id = :client_id")
 _ADD = text(
-    "INSERT INTO kyc_next_of_kin (id, client_id, position, relationship, share_bps, "
+    "INSERT INTO kyc_next_of_kin (id, client_id, position, relationship, "
     "full_name_sealed, phone_sealed, id_number_sealed, created_at) VALUES (:id, :client_id, "
-    ":position, :relationship, :share_bps, :full_name, :phone, :id_number, :now)"
+    ":position, :relationship, :full_name, :phone, :id_number, :now)"
 )
 
 
@@ -101,7 +100,6 @@ async def save(
                 "client_id": client.id,
                 "position": position,
                 "relationship": person.relationship.value,
-                "share_bps": person.share_bps,
                 "full_name": _seal(sealer, person_id, "full_name", person.full_name),
                 "phone": _seal(sealer, person_id, "phone", person.phone),
                 "id_number": _seal(sealer, person_id, "id_number", person.id_number),
@@ -143,5 +141,4 @@ def _person(sealer: Sealer, row: Row[Any]) -> SavedPerson:
         relationship=Relationship(row.relationship),
         phone=_open(sealer, row.id, "phone", row.phone_sealed),
         id_number=_open(sealer, row.id, "id_number", row.id_number_sealed),
-        share_bps=row.share_bps,
     )

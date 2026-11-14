@@ -16,6 +16,7 @@ SIGNALS = (
     "jobs_failed",
     "schedules_late",
     "payouts_waiting_on_wallet",
+    "interest_behind",
 )
 
 

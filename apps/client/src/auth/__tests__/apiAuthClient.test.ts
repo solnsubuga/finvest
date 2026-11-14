@@ -56,6 +56,24 @@ afterEach(async () => {
 });
 
 describe("the sign-in client for the real API", () => {
+  it("claims a moved account with the link's token, the code and a new password", async () => {
+    const seen = serve({
+      "POST /client/claim/start": { status: 200, body: { challenge_id: "C1" } },
+      "POST /client/claim/complete": signedIn("phone-token"),
+    });
+    const auth = createApiAuthClient();
+    expect(await auth.startClaim("T".repeat(43))).toEqual({ challengeId: "C1" });
+    const session = await auth.completeClaim("T".repeat(43), "C1", "123456", "a long new password");
+    expect(session.phone).toBe("+256772123456");
+    expect(seen[1]?.body).toEqual({ token: "T".repeat(43), challenge_id: "C1", code: "123456", password: "a long new password" });
+    expect(await readToken()).toBe("phone-token");
+  });
+
+  it("says a used or replaced claim link is not found", async () => {
+    serve({ "POST /client/claim/start": refused(404, "not_found") });
+    await expect(createApiAuthClient().startClaim("T".repeat(43))).rejects.toMatchObject({ code: "not_found" });
+  });
+
   it("keeps the phone's token after sign up and sends it from then on", async () => {
     const seen = serve({
       "POST /client/signup/start": { status: 200, body: { challenge_id: ID, phone: "+256772123456" } },

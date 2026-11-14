@@ -13,13 +13,14 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.modules.audit import service as audit
 from app.modules.audit.domain.events import AuditActor, AuditEvent
+from app.modules.finance import code_maps
 from app.modules.finance.domain.books import CodeLine, IncomeAndCosts, income_and_costs
+from app.modules.finance.domain.formats import Format, render, system_of
 from app.modules.finance.domain.journal import (
     JournalLine,
     balanced,
     check_days,
     debit_total,
-    journal_csv,
 )
 from app.modules.ledger import closing, statements
 from app.shared.clock import Clock
@@ -52,6 +53,8 @@ class ExportRecord:
     debit_total_minor: int
     exported_by: str
     exported_at: datetime
+    format: Format = Format.CSV
+    code_map_id: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -61,7 +64,8 @@ class Journal:
 
 
 _SELECT_EXPORTS = text(
-    "SELECT id, currency, date_from, date_to, lines, debit_total_minor, exported_by, exported_at "
+    "SELECT id, currency, date_from, date_to, lines, debit_total_minor, exported_by, exported_at, "
+    "format, code_map_id "
     "FROM finance_journal_exports WHERE currency = :currency "
     "ORDER BY exported_at DESC, id DESC LIMIT :limit"
 )
@@ -70,8 +74,9 @@ _SELECT_SENT_THROUGH = text(
 )
 _INSERT_EXPORT = text(
     "INSERT INTO finance_journal_exports (id, currency, date_from, date_to, lines, "
-    "debit_total_minor, exported_by, exported_at) VALUES (:id, :currency, :date_from, :date_to, "
-    ":lines, :debit_total_minor, :exported_by, :exported_at)"
+    "debit_total_minor, exported_by, exported_at, format, code_map_id) VALUES (:id, :currency, "
+    ":date_from, :date_to, :lines, :debit_total_minor, :exported_by, :exported_at, :format, "
+    ":code_map_id)"
 )
 
 
@@ -111,6 +116,8 @@ async def recent_exports(
             debit_total_minor=int(row.debit_total_minor),
             exported_by=row.exported_by,
             exported_at=row.exported_at,
+            format=Format(row.format),
+            code_map_id=row.code_map_id,
         )
         for row in rows.all()
     ]
@@ -124,10 +131,14 @@ async def export_journal(
     date_from: date,
     date_to: date,
     clock: Clock,
+    format_: Format = Format.CSV,
 ) -> Journal:
-    """The daily journals from `date_from` to `date_to`, all closed days, as one CSV file.
+    """The daily journals from `date_from` to `date_to`, all closed days, as one file in
+    `format_`: Finvest's generic CSV or an accounting system's journal import.
 
-    Raises ExportRefused for days that are not all closed, run backwards or are too many.
+    Raises ExportRefused for days that are not all closed, run backwards or are too many, and
+    for a system's format when the currency is not shillings or a code is not in the system's
+    approved code map (CodesNotMapped names them).
     Records the export and an audit event in the caller's transaction, which must be the
     exporting staff member's own.
     """
@@ -138,6 +149,9 @@ async def export_journal(
     ]
     if not balanced(lines):
         raise JournalDoesNotBalance("A day's debits and credits differ")
+    system = system_of(format_)
+    in_use = await code_maps.active_map(session, system) if system is not None else None
+    content = render(format_, currency, lines, in_use.as_code_map() if in_use else None)
     record = ExportRecord(
         id=push_id(clock),
         currency=currency,
@@ -147,6 +161,8 @@ async def export_journal(
         debit_total_minor=debit_total(lines),
         exported_by=exporter_id,
         exported_at=clock.now(),
+        format=format_,
+        code_map_id=in_use.id if in_use else None,
     )
     await session.execute(
         _INSERT_EXPORT,
@@ -159,6 +175,8 @@ async def export_journal(
             "debit_total_minor": record.debit_total_minor,
             "exported_by": record.exported_by,
             "exported_at": record.exported_at,
+            "format": format_.value,
+            "code_map_id": record.code_map_id,
         },
     )
     await audit.record(
@@ -174,8 +192,9 @@ async def export_journal(
                 "date_from": date_from.isoformat(),
                 "date_to": date_to.isoformat(),
                 "lines": record.lines,
+                "format": format_.value,
             },
         ),
         clock,
     )
-    return Journal(record, journal_csv(currency, lines))
+    return Journal(record, content)

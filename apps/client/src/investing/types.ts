@@ -81,6 +81,54 @@ export type Investment = {
   canWithdraw: boolean;
   /** When the client asked to withdraw early. ISO 8601, UTC. Interest stopped then. */
   withdrawalRequestedAt: string | null;
+  /** Running, and part or all of it may be sent to another client now. */
+  canSend: boolean;
+};
+
+/** Another client, found by their Finvest account number or mobile number. */
+export type Recipient = {
+  accountNumber: string;
+  /** Their first given name and the initial of their surname, "Brian K.". Never a full name. */
+  name: string;
+};
+
+export type TransferStatus = "waiting" | "held" | "release_proposed" | "done" | "failed" | "declined" | "cancelled";
+
+/** Part or all of an investment sent to another client, or received from one. */
+export type Transfer = {
+  id: string;
+  direction: "sent" | "received";
+  /** The other client, shown as "Brian K.". */
+  otherName: string;
+  status: TransferStatus;
+  amount: Amount;
+  /** Everything was sent, including interest earned after the request. */
+  whole: boolean;
+  message: string | null;
+  /** ISO 8601, UTC. */
+  requestedAt: string;
+  finishedAt: string | null;
+  /** Sent: the investment it came from. Received: the new investment. */
+  investmentId: string | null;
+  /** Sent: the new investment holding what the sender kept, if any. */
+  keptInvestmentId: string | null;
+  /** Why it could not be made, for the sender. */
+  failureCode: string | null;
+};
+
+export type SendInvestment = {
+  investmentId: string;
+  /** As `findRecipient` returned it. */
+  toAccountNumber: string;
+  amount: Amount;
+  message: string | null;
+  /**
+   * Send everything. The server sends the value when it saves the request, so interest added
+   * after the screen loaded `amount` is included rather than refused.
+   */
+  whole: boolean;
+  /** Made once when the screen opens and sent with every try, so a double tap sends once. */
+  idempotencyKey: string;
 };
 
 /** One of the client's approved accounts that money can be paid to. */
@@ -147,6 +195,15 @@ export interface InvestingClient {
    * the same account asked twice is the same payout, so it needs no idempotency key.
    */
   payOutMatured(request: MaturedPayOut): Promise<Investment>;
+  /** Who a Finvest account number or a mobile number belongs to. Only approved clients. */
+  findRecipient(to: string): Promise<Recipient>;
+  /** Send part or all of a running investment to another client. Nothing is cashed out. */
+  sendInvestment(request: SendInvestment): Promise<Transfer>;
+  /** What the client sent, and what they received once it arrived. Newest first. */
+  listTransfers(): Promise<Transfer[]>;
+  getTransfer(transferId: string): Promise<Transfer>;
+  /** Cancel a transfer that is waiting for Finvest to check it. */
+  cancelTransfer(transferId: string): Promise<Transfer>;
 }
 
 export type InvestingErrorCode =
@@ -167,6 +224,16 @@ export type InvestingErrorCode =
   | "account_closing"
   /** The PIN confirmation ran out or was already used. */
   | "pin_required"
+  | "no_such_client"
+  | "not_an_account_number"
+  | "to_yourself"
+  | "below_product_minimum"
+  | "more_than_value"
+  | "remainder_below_minimum"
+  | "cannot_send"
+  | "cannot_cancel"
+  | "restricted"
+  | "too_many_lookups"
   | "unavailable";
 
 export class InvestingError extends Error {
@@ -195,6 +262,16 @@ const messages: Record<InvestingErrorCode, string> = {
   over_mobile_money_limit: "That is more than mobile money can take in one payout. Choose a bank account instead.",
   over_limit: "That is more than your withdrawal limit allows today. Choose a bank account, or try again tomorrow.",
   pin_required: "Your PIN confirmation ran out or was already used. Try again and enter your PIN.",
+  no_such_client: "We could not find a Finvest client with that number. Check it with them and try again.",
+  not_an_account_number: "Enter a 10 digit Finvest account number or a Ugandan mobile number.",
+  to_yourself: "That is your own account. Send to someone else.",
+  below_product_minimum: "That is below the smallest amount for this product, so they could not hold it.",
+  more_than_value: "That is more than this investment is worth today.",
+  remainder_below_minimum: "What you would keep is below the smallest amount for this product. Send everything, or a little less.",
+  cannot_send: "This investment cannot be sent now. It may be maturing, being withdrawn, or already on its way to someone.",
+  cannot_cancel: "This can no longer be cancelled. Finvest has already let it through or turned it down.",
+  restricted: "For your safety, you can send an investment one day after signing in with a code or resetting your password.",
+  too_many_lookups: "You have looked up a lot of numbers. Wait a few minutes and try again.",
   unavailable: "We could not reach Finvest. Check your connection and try again.",
 };
 

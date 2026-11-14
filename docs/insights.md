@@ -13,11 +13,27 @@ What a client put in, earned and was paid, month by month, and what comes next f
 | Paid out in a month | Debits from the client's `client.payout_in_flight` accounts by `payout.settle` entries: money the provider confirmed reached the client's mobile money or bank account. Less credits to `client.payout_pending` by `payout.returned` entries, in the month the payout came back: a paid payout the bank or network sent back is not paid out. |
 | Invested now | The principal of the client's active investments. |
 | Earned so far | Interest earned after tax on those investments, as posted to the ledger. |
-| Coming up | The next five maturities, with what comes back after tax and whether it rolls over or pays out. |
+| Coming up | The next five things to happen to the client's money, soonest first, each with a `kind`: a `maturity` (what comes back after tax, and whether it rolls over or pays out), an `autoinvest_run` (the next payment an active automatic plan asks for), a `goal_saving` (the next monthly saving of a goal's saving rule, named by the goal) or a `goal_date` (an active goal's date, with its target). A paused plan asks for nothing and is left out. Read from the investments, autoinvest and goals modules' own views. |
 
 A month is a Kampala calendar month, counted by the effective date of each ledger entry. A daily interest run that posts several days late in one entry counts them in the month of the day it is dated.
 
 Each month is a net figure. A reversal of one of these entries counts against it in the month the reversal is dated, as it does on the statement, so a correction found next month lowers next month. A month whose reversals outweigh what it added shows as negative.
+
+## Home and Portfolio totals
+
+`GET /client/portfolio?currency=UGX` gives the totals the client app shows on Home and Portfolio, for the signed-in client only, in one currency. Every figure is a sum of the investments module's `client_` views, so it agrees to the shilling with the list of investments. Only running investments count: one waiting for payment has earned nothing and may lapse, so it is only counted in `awaiting_payment_count`.
+
+| Figure | What it is |
+| --- | --- |
+| `invested_minor` | The principal of the running investments |
+| `worth_minor` | What they are worth today: principal plus interest so far, after tax |
+| `interest_so_far_minor` | Interest earned after tax, as posted to the ledger |
+| `earning_per_day_minor` | What one more day of interest adds across them, after tax: each investment's next posted day. Zero for one that has stopped earning or whose early withdrawal was asked for. Home shows it as "Earning UGX 2,416 a day". |
+| `interest_today_minor` | What today's daily run added, once it has run |
+| `outside_goals`, `in_goals` | `worth_minor` and a count, split by whether the investment is saved to an open goal (`goals.open_goal_savings`). The two add up to `worth_minor`. A closed goal's savings count as outside goals. |
+| `open_goals` | Open goals, whether or not anything is saved to them yet |
+| `products` | One row per product, biggest first, with a whole-number `percent` of `worth_minor`. The percentages add up to exactly 100 by the largest remainder method (`insights/domain/shares.py`), so the app draws the split without working anything out. |
+| `next_maturity` | The running fixed-term investment that matures soonest, with its term, days earned and days left, or null |
 
 ## What it never shows
 
@@ -27,6 +43,8 @@ No tax rate, tax amount or rate before tax. Interest comes only from the after-t
 
 The route opens the client's own transaction, so the ledger's row policies show only that client's accounts. `ledger.statements.client_month_totals` filters by the client too, so asking for another client's figures in a client transaction returns nothing. Staff and the system get `forbidden`: there is no staff view of a client's insights.
 
+Each item of `upcoming` has `kind`, `on`, `amount_minor`, and whichever of `investment_id`, `plan_id`, `goal_id`, `product_name`, `goal_name` and `at_maturity` its kind has; the rest are `null`. A goal's name is the client's own words.
+
 ## Not built yet
 
-Upcoming runs of automatic investing plans and goal due dates in "coming up". The client app screen runs on a demo until this route is deployed.
+The client app shows only maturities under "Coming up" until its screen shows the other kinds.

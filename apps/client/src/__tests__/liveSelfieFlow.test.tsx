@@ -15,6 +15,11 @@ jest.mock("@/auth/stubAuthClient", () => {
 /** The demo identity clients the app made, so a test can make one of their reads fail. */
 const made: IdentityClient[] = [];
 
+jest.mock("@/claim/stubClaimClient", () => {
+  const actual = jest.requireActual("@/claim/stubClaimClient");
+  return { ...actual, createStubClaimClient: (options: object) => actual.createStubClaimClient({ ...options, delayMs: 0 }) };
+});
+
 jest.mock("@/identity/stubIdentityClient", () => {
   const actual = jest.requireActual("@/identity/stubIdentityClient");
   return {

@@ -47,20 +47,20 @@ describe("the profile client for the real API", () => {
     const seen = serve({
       "PUT /client/next-of-kin": json({
         people: [
-          { id: "P".repeat(20), full_name: "Joseph Nakato", relationship: "spouse", phone: "+256772000111", id_number: "CM900", share_bps: 10_000 },
+          { id: "P".repeat(20), full_name: "Joseph Nakato", relationship: "spouse", phone: "+256772000111", id_number: "CM900" },
         ],
         updated_at: "2026-11-14T08:00:00Z",
       }),
     });
     const saved = await createApiProfileClient().saveNextOfKin([
-      { fullName: "Joseph Nakato", relationship: "spouse", phone: "+256772000111", idNumber: "CM900", shareBps: 10_000 },
+      { fullName: "Joseph Nakato", relationship: "spouse", phone: "+256772000111", idNumber: "CM900" },
     ]);
     expect(seen[0]?.body).toEqual({
       people: [
-        { full_name: "Joseph Nakato", relationship: "spouse", phone: "+256772000111", id_number: "CM900", share_bps: 10_000 },
+        { full_name: "Joseph Nakato", relationship: "spouse", phone: "+256772000111", id_number: "CM900" },
       ],
     });
-    expect(saved.people[0]?.shareBps).toBe(10_000);
+    expect(saved.people[0]?.fullName).toBe("Joseph Nakato");
   });
 
   it("names each refused field without the body prefix", async () => {

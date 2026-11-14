@@ -35,6 +35,19 @@ describe("the demo goals", () => {
     expect(await goals.listGoals()).toHaveLength(1);
   });
 
+  it("changes a goal, works out its plan again, and refuses a closed goal", async () => {
+    const goals = client();
+    const made = await goals.createGoal(school, "key-0000000010");
+    const changed = await goals.updateGoal(made.id, { ...school, name: "  University   fees ", target: ugx(4_000_000) });
+    expect(changed.name).toBe("University fees");
+    expect(changed.plan?.saving.minor).toBeGreaterThan(made.plan?.saving.minor ?? 0);
+    await expect(goals.updateGoal(made.id, { ...school, targetDate: "2027-01-01" })).rejects.toEqual(
+      new GoalError("sooner_than_every_term"),
+    );
+    await goals.closeGoal(made.id);
+    await expect(goals.updateGoal(made.id, school)).rejects.toEqual(new GoalError("closed"));
+  });
+
   it("refuses a date sooner than every term", async () => {
     await expect(
       client().createGoal({ ...school, targetDate: "2027-01-01" }, "key-0000000002"),

@@ -15,6 +15,7 @@ from sqlalchemy import Row, text
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.modules.identity import service as identity
 from app.modules.notifications import contract as notifications
 from app.modules.support.domain.chat import (
     MAX_SAVED_TITLE,
@@ -235,6 +236,48 @@ async def send_as_staff(
         now=now,
     )
     return message
+
+
+async def write_to_client(
+    session: AsyncSession,
+    staff: Actor,
+    staff_name: str,
+    client_id: str,
+    body: str,
+    key: str,
+    now: datetime,
+    *,
+    topic: Topic = "other",
+) -> MessageView:
+    """Write to a client first, in their open chat, opening one if there is none.
+
+    For staff following something up, such as money waiting after a maturity. The client is
+    told there is a message, as for any reply. `not_found` for a client who is not active or
+    carried over: nobody is messaged after closing their account. Sending the same `key` again
+    returns the message already stored.
+    """
+    staff_id = _person(staff, "staff")
+    cleaned, key = _checked(body, key)
+    if topic not in TOPICS:
+        raise _invalid("topic", "unknown")
+    repeat = (await session.execute(_BY_KEY, {"author": staff_id, "key": key})).one_or_none()
+    if repeat is not None:
+        return _message(repeat)
+    if await identity.client_contact(session, client_id) is None:
+        raise ApplicationError("not_found")
+    conversation = (await session.execute(_OPEN_FOR_CLIENT, {"client_id": client_id})).one_or_none()
+    if conversation is None:
+        try:
+            async with session.begin_nested():
+                await session.execute(
+                    _OPEN_CONVERSATION,
+                    {"id": push_id(), "client_id": client_id, "topic": topic, "now": now},
+                )
+        except IntegrityError:
+            # The client opened their chat a moment ago. Write into that one.
+            pass
+        conversation = (await session.execute(_OPEN_FOR_CLIENT, {"client_id": client_id})).one()
+    return await send_as_staff(session, staff, staff_name, conversation.id, cleaned, key, now)
 
 
 async def conversation_for_client(session: AsyncSession, client_id: str) -> ConversationView | None:
