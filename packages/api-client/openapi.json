@@ -1517,6 +1517,29 @@
         "title": "BufferScreenOut",
         "type": "object"
       },
+      "CaseAmountOut": {
+        "additionalProperties": false,
+        "properties": {
+          "currency": {
+            "enum": [
+              "UGX",
+              "USD"
+            ],
+            "title": "Currency",
+            "type": "string"
+          },
+          "minor": {
+            "title": "Minor",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "minor",
+          "currency"
+        ],
+        "title": "CaseAmountOut",
+        "type": "object"
+      },
       "CaseDetailOut": {
         "additionalProperties": false,
         "properties": {
@@ -1607,6 +1630,16 @@
       "CaseOut": {
         "additionalProperties": false,
         "properties": {
+          "amount": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CaseAmountOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "client": {
             "$ref": "#/components/schemas/ClientOut"
           },
@@ -1692,7 +1725,8 @@
           "status",
           "outcome",
           "closed_at",
-          "waiting"
+          "waiting",
+          "amount"
         ],
         "title": "CaseOut",
         "type": "object"
@@ -8114,6 +8148,90 @@
           "currency"
         ],
         "title": "MoneyView",
+        "type": "object"
+      },
+      "MonitoringRulesOut": {
+        "additionalProperties": false,
+        "description": "The transaction monitoring rules as they run, read from the rules themselves.",
+        "properties": {
+          "currency": {
+            "enum": [
+              "UGX",
+              "USD"
+            ],
+            "title": "Currency",
+            "type": "string"
+          },
+          "large_deposit_minor": {
+            "title": "Large Deposit Minor",
+            "type": "integer"
+          },
+          "many_deposits_count": {
+            "title": "Many Deposits Count",
+            "type": "integer"
+          },
+          "many_deposits_hours": {
+            "title": "Many Deposits Hours",
+            "type": "integer"
+          },
+          "quick_withdrawal_days": {
+            "title": "Quick Withdrawal Days",
+            "type": "integer"
+          },
+          "quick_withdrawal_floor_minor": {
+            "title": "Quick Withdrawal Floor Minor",
+            "type": "integer"
+          },
+          "quick_withdrawal_share_denominator": {
+            "title": "Quick Withdrawal Share Denominator",
+            "type": "integer"
+          },
+          "quick_withdrawal_share_numerator": {
+            "title": "Quick Withdrawal Share Numerator",
+            "type": "integer"
+          },
+          "rescreen_every_days": {
+            "title": "Rescreen Every Days",
+            "type": "integer"
+          },
+          "split_deposits_days": {
+            "title": "Split Deposits Days",
+            "type": "integer"
+          },
+          "unusual_floor_minor": {
+            "title": "Unusual Floor Minor",
+            "type": "integer"
+          },
+          "unusual_history": {
+            "title": "Unusual History",
+            "type": "integer"
+          },
+          "unusual_lookback_days": {
+            "title": "Unusual Lookback Days",
+            "type": "integer"
+          },
+          "unusual_multiple": {
+            "title": "Unusual Multiple",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "currency",
+          "large_deposit_minor",
+          "split_deposits_days",
+          "many_deposits_count",
+          "many_deposits_hours",
+          "unusual_multiple",
+          "unusual_floor_minor",
+          "unusual_history",
+          "unusual_lookback_days",
+          "quick_withdrawal_days",
+          "quick_withdrawal_share_numerator",
+          "quick_withdrawal_share_denominator",
+          "quick_withdrawal_floor_minor",
+          "rescreen_every_days"
+        ],
+        "title": "MonitoringRulesOut",
         "type": "object"
       },
       "MonthOut": {
@@ -16540,6 +16658,10 @@
             "title": "Provider",
             "type": "string"
           },
+          "reports_to_fia_this_year": {
+            "title": "Reports To Fia This Year",
+            "type": "integer"
+          },
           "screened_last_30_days": {
             "title": "Screened Last 30 Days",
             "type": "integer"
@@ -16569,7 +16691,8 @@
           "not_run_last_30_days",
           "pending",
           "last_screened_at",
-          "payouts_waiting"
+          "payouts_waiting",
+          "reports_to_fia_this_year"
         ],
         "title": "SummaryOut",
         "type": "object"
@@ -33040,6 +33163,74 @@
         ]
       }
     },
+    "/staff/compliance/cases.csv": {
+      "get": {
+        "description": "Newest first, with each client's account number and name. Every export is on the audit\ntrail. More than 10,000 cases is refused with `too_many_cases`.",
+        "operationId": "export_register_staff_compliance_cases_csv_get",
+        "responses": {
+          "200": {
+            "content": {
+              "text/csv": {}
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          }
+        },
+        "summary": "Every compliance case as a CSV file: the register",
+        "tags": [
+          "staff compliance"
+        ]
+      }
+    },
     "/staff/compliance/cases/{case_id}": {
       "get": {
         "description": "One case: what raised it, what the screen found, and every proposal to close it.",
@@ -33768,6 +33959,78 @@
           }
         },
         "summary": "Withdraw",
+        "tags": [
+          "staff compliance"
+        ]
+      }
+    },
+    "/staff/compliance/rules": {
+      "get": {
+        "description": "The monitoring rules that open cases, and how often clients are screened again.",
+        "operationId": "monitoring_rules_staff_compliance_rules_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MonitoringRulesOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          }
+        },
+        "summary": "Monitoring Rules",
         "tags": [
           "staff compliance"
         ]

@@ -403,6 +403,12 @@ export const BufferScreenOut = z.object({
 });
 export type BufferScreenOut = z.infer<typeof BufferScreenOut>;
 
+export const CaseAmountOut = z.object({
+  currency: z.enum(["UGX", "USD"]),
+  minor: z.number().int(),
+});
+export type CaseAmountOut = z.infer<typeof CaseAmountOut>;
+
 export const CaseProposalOut = z.object({
   decided_at: z.string().nullable(),
   decided_by: z.string().nullable(),
@@ -426,6 +432,7 @@ export const ClientOut = z.object({
 export type ClientOut = z.infer<typeof ClientOut>;
 
 export const CaseOut = z.object({
+  amount: CaseAmountOut.nullable(),
   client: ClientOut,
   closed_at: z.string().nullable(),
   code: z.string(),
@@ -1397,6 +1404,24 @@ export const MoneyIn = z.object({
   minor: z.number().int(),
 });
 export type MoneyIn = z.infer<typeof MoneyIn>;
+
+export const MonitoringRulesOut = z.object({
+  currency: z.enum(["UGX", "USD"]),
+  large_deposit_minor: z.number().int(),
+  many_deposits_count: z.number().int(),
+  many_deposits_hours: z.number().int(),
+  quick_withdrawal_days: z.number().int(),
+  quick_withdrawal_floor_minor: z.number().int(),
+  quick_withdrawal_share_denominator: z.number().int(),
+  quick_withdrawal_share_numerator: z.number().int(),
+  rescreen_every_days: z.number().int(),
+  split_deposits_days: z.number().int(),
+  unusual_floor_minor: z.number().int(),
+  unusual_history: z.number().int(),
+  unusual_lookback_days: z.number().int(),
+  unusual_multiple: z.number().int(),
+});
+export type MonitoringRulesOut = z.infer<typeof MonitoringRulesOut>;
 
 export const MonthOut = z.object({
   due_on: z.string(),
@@ -2434,6 +2459,7 @@ export const SummaryOut = z.object({
   payouts_waiting: z.number().int(),
   pending: z.number().int(),
   provider: z.string(),
+  reports_to_fia_this_year: z.number().int(),
   screened_last_30_days: z.number().int(),
   screening_on: z.boolean(),
   unavailable_last_30_days: z.number().int(),
@@ -3078,6 +3104,17 @@ export const operations = {
     status: 200,
     response: z.array(CaseOut),
   },
+  "GET /staff/compliance/cases.csv": {
+    method: "GET",
+    path: "/staff/compliance/cases.csv",
+    params: z.object({}),
+    query: z.object({}),
+    body: null,
+    bodyKind: null,
+    idempotent: false,
+    status: 200,
+    response: null,
+  },
   "GET /staff/compliance/cases/{case_id}": {
     method: "GET",
     path: "/staff/compliance/cases/{case_id}",
@@ -3179,6 +3216,17 @@ export const operations = {
     idempotent: false,
     status: 200,
     response: CaseDetailOut,
+  },
+  "GET /staff/compliance/rules": {
+    method: "GET",
+    path: "/staff/compliance/rules",
+    params: z.object({}),
+    query: z.object({}),
+    body: null,
+    bodyKind: null,
+    idempotent: false,
+    status: 200,
+    response: MonitoringRulesOut,
   },
   "GET /staff/compliance/summary": {
     method: "GET",

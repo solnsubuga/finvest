@@ -18,6 +18,8 @@ import {
   type CaseStatus,
   type ComplianceApi,
   type Proposal,
+  type RegisterFile,
+  type Rules,
   type Summary,
   type WaitingPayout,
 } from "./api.ts";
@@ -109,6 +111,11 @@ function Cards({ summary }: { summary: Summary }) {
             : `${summary.notRunLast30Days} recorded as not run`
         }
       />
+      <Card
+        title="Reports to the FIA this year"
+        value={String(summary.reportsToFiaThisYear)}
+        note="Cases closed with a report owed"
+      />
     </div>
   );
 }
@@ -172,8 +179,8 @@ function CasesTable({ cases, selected, onSelect }: { cases: readonly Case[]; sel
         <caption className="sr-only">Compliance cases</caption>
         <thead>
           <tr className="text-left text-xs text-muted">
-            {["Case", "Client", "Source", "Status"].map((heading) => (
-              <th key={heading} scope="col" className="px-3 py-3.5 font-bold">
+            {["Case", "Client", "Source", "Amount", "Status"].map((heading) => (
+              <th key={heading} scope="col" className={cn("px-3 py-3.5 font-bold", heading === "Amount" && "text-right")}>
                 {heading}
               </th>
             ))}
@@ -198,6 +205,9 @@ function CasesTable({ cases, selected, onSelect }: { cases: readonly Case[]; sel
                 <div className="text-xs text-muted tabular-nums">{item.client.accountNumber ?? "No account number yet"}</div>
               </td>
               <td className="px-3 py-3">{SOURCE_LABELS[item.source]}</td>
+              <td className="whitespace-nowrap px-3 py-3 text-right tabular-nums">
+                {item.amount ? formatExact(item.amount) : <span className="text-muted">{item.source === "screening" ? "Not a payment" : "None"}</span>}
+              </td>
               <td className="px-3 py-3">
                 <CaseState item={item} />
               </td>
@@ -267,7 +277,86 @@ function Cases({ api, me, canChange, onChanged }: { api: ComplianceApi; me: stri
             </p>
           </Panel>
         )}
+        <RulesPanel api={api} />
       </aside>
+    </div>
+  );
+}
+
+function share([numerator, denominator]: readonly [number, number]): string {
+  if (numerator * 2 === denominator) return "Half";
+  return `${numerator} in ${denominator}`;
+}
+
+function RulesPanel({ api }: { api: ComplianceApi }) {
+  const fetch = useCallback(() => api.rules(), [api]);
+  const [load, reload] = useLoad<Rules>(fetch);
+  if (load.state === "loading") {
+    return (
+      <p role="status" className="m-0 text-md text-muted">
+        Loading the rules
+      </p>
+    );
+  }
+  if (load.state === "failed") return <Failed title="The rules could not be loaded" message={load.message} onRetry={reload} />;
+  const rules = load.value;
+  const money = (minor: number) => formatExact({ minor, currency: rules.currency });
+  return (
+    <Panel title="Rules that are on">
+      <PanelRow name="One deposit of" value={`${money(rules.largeDepositMinor)} or more`} />
+      <PanelRow name="Deposits that add up to that" value={`Within ${rules.splitDepositsDays} days`} />
+      <PanelRow name="Many deposits" value={`${rules.manyDepositsCount} or more in ${rules.manyDepositsHours} hours`} />
+      <PanelRow
+        name="Unusually large deposit"
+        value={`${rules.unusualMultiple} times the usual, at least ${money(rules.unusualFloorMinor)}`}
+      />
+      <PanelRow
+        name="Quick in and out"
+        value={`${share(rules.quickWithdrawalShare)} of what came in paid out within ${rules.quickWithdrawalDays} days, from ${money(rules.quickWithdrawalFloorMinor)}`}
+      />
+      <PanelRow name="Clients screened again" value={`Every ${rules.rescreenEveryDays} days`} />
+      <p className="m-0 text-sm leading-normal text-muted">
+        These are read from the rules as they run. The usual deposit is worked out from the last {rules.unusualLookbackDays} days, once a client has made{" "}
+        {rules.unusualHistory}. Only {rules.currency} payments are checked.
+      </p>
+    </Panel>
+  );
+}
+
+/** Hands the browser the exported file. */
+function saveFile({ file, filename }: RegisterFile) {
+  const url = URL.createObjectURL(file);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = filename;
+  link.click();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+function ExportRegister({ api, save }: { api: ComplianceApi; save: (file: RegisterFile) => void }) {
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  async function run() {
+    setBusy(true);
+    setError(null);
+    try {
+      save(await api.exportRegister());
+    } catch (failure) {
+      setError(complianceErrorMessage(failure));
+    } finally {
+      setBusy(false);
+    }
+  }
+  return (
+    <div className="flex flex-col items-end gap-1.5">
+      <Button variant="secondary" disabled={busy} onClick={() => void run()}>
+        {busy ? "Preparing the register" : "Export register"}
+      </Button>
+      {error ? (
+        <p role="alert" className="m-0 text-sm font-bold text-danger">
+          {error}
+        </p>
+      ) : null}
     </div>
   );
 }
@@ -624,7 +713,17 @@ function WaitingPayouts({ api, round }: { api: ComplianceApi; round: number }) {
   );
 }
 
-export function ComplianceScreen({ api, me, canChange }: { api: ComplianceApi; me: string; canChange: boolean }) {
+export function ComplianceScreen({
+  api,
+  me,
+  canChange,
+  save = saveFile,
+}: {
+  api: ComplianceApi;
+  me: string;
+  canChange: boolean;
+  save?: (file: RegisterFile) => void;
+}) {
   const [round, setRound] = useState(0);
   // eslint-disable-next-line react-hooks/exhaustive-deps -- `round` reloads the figures after a case changes.
   const fetchSummary = useCallback(() => api.summary(), [api, round]);
@@ -640,7 +739,10 @@ export function ComplianceScreen({ api, me, canChange }: { api: ComplianceApi; m
   }
   return (
     <>
-      <PageHeader title="Compliance" summary={SUMMARY} />
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <PageHeader title="Compliance" summary={SUMMARY} />
+        <ExportRegister api={api} save={save} />
+      </div>
       {summary.state === "loading" ? (
         <p role="status" className="m-0 text-md text-muted">
           Loading compliance

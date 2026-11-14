@@ -7,10 +7,12 @@ import {
   type ComplianceApi,
   type Match,
   type Proposal,
+  type Rules,
   type Run,
   type Summary,
   type WaitingPayout,
 } from "./api.ts";
+import { registerFilename } from "./http.ts";
 
 /**
  * Sample compliance cases for `pnpm dev` and previews. Not real clients,
@@ -64,7 +66,7 @@ function samples(me: { id: string; name: string }): Sample[] {
     provider: "development-stub",
     failureCode: null,
   });
-  const base = { status: "open" as const, outcome: null, closedAt: null, waiting: null };
+  const base = { status: "open" as const, outcome: null, closedAt: null, waiting: null, amount: null };
   const records: Sample[] = [
     {
       case: {
@@ -208,6 +210,23 @@ const PAYOUTS: WaitingPayout[] = [
   },
 ];
 
+// The rules as backend/app/modules/screening/domain/monitoring.py has them.
+const RULES: Rules = {
+  currency: "UGX",
+  largeDepositMinor: 20_000_000,
+  splitDepositsDays: 7,
+  manyDepositsCount: 5,
+  manyDepositsHours: 24,
+  unusualMultiple: 5,
+  unusualFloorMinor: 5_000_000,
+  unusualHistory: 3,
+  unusualLookbackDays: 180,
+  quickWithdrawalDays: 7,
+  quickWithdrawalShare: [1, 2],
+  quickWithdrawalFloorMinor: 5_000_000,
+  rescreenEveryDays: 30,
+};
+
 export function createStubComplianceApi(me: { id: string; name: string }, sample: StubCase = "default", now: () => string = () => new Date().toISOString()): ComplianceApi {
   const records = sample === "default" ? samples(me) : [];
   const payouts = sample === "default" ? PAYOUTS : [];
@@ -218,7 +237,8 @@ export function createStubComplianceApi(me: { id: string; name: string }, sample
 
   function detail(record: Sample): CaseDetail {
     const waiting = record.proposals.find((p) => p.status === "proposed") ?? null;
-    record.case = { ...record.case, waiting };
+    const amount = record.detail.amount_minor ?? record.detail.total_minor;
+    record.case = { ...record.case, waiting, amount: typeof amount === "number" ? { minor: amount, currency: "UGX" } : null };
     const open = record.case.status === "open";
     return structuredClone({
       case: record.case,
@@ -266,11 +286,23 @@ export function createStubComplianceApi(me: { id: string; name: string }, sample
       pending: sample === "default" ? 1 : 0,
       lastScreenedAt: sample === "default" ? "2026-11-14T02:15:00Z" : null,
       payoutsWaiting: payouts.length,
+      reportsToFiaThisYear: sample === "default" ? records.filter((r) => r.case.outcome === "report_to_fia").length + 2 : 0,
     };
   };
 
   if (sample === "error") {
-    return { summary: fail, listCases: fail, getCase: fail, waitingPayouts: fail, propose: fail, approve: fail, sendBack: fail, withdraw: fail };
+    return {
+      summary: fail,
+      listCases: fail,
+      getCase: fail,
+      waitingPayouts: fail,
+      rules: fail,
+      exportRegister: fail,
+      propose: fail,
+      approve: fail,
+      sendBack: fail,
+      withdraw: fail,
+    };
   }
   return {
     summary: () => Promise.resolve(counted()),
@@ -286,6 +318,12 @@ export function createStubComplianceApi(me: { id: string; name: string }, sample
       return record ? Promise.resolve(detail(record)) : Promise.reject(new ComplianceError("not_found"));
     },
     waitingPayouts: () => Promise.resolve(structuredClone(payouts)),
+    rules: () => Promise.resolve(structuredClone(RULES)),
+    exportRegister: () =>
+      Promise.resolve({
+        file: new Blob(["Case ID,Opened,Source,Raised by,Amount (UGX),Client account number,Client name,Status,Outcome,Closed\r\n"], { type: "text/csv" }),
+        filename: registerFilename(new Date(now())),
+      }),
     propose: (caseId, outcome, reason) => {
       const record = find(caseId);
       if (!record) return Promise.reject(new ComplianceError("not_found"));
