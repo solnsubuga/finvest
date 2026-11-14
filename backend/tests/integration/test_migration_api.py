@@ -129,14 +129,14 @@ async def test_the_checks_run_from_a_trial_to_a_sign_off_by_two_people(console: 
         }
     ]
     assert seen["blockers"] == ["totals_not_entered", "difference_not_signed_off"]
-    assert seen["allowed"] == ["run_trial"]
+    assert seen["allowed"] == ["run_trial", "propose_switch"]
     # Nothing in the answer comes from a cell of the spreadsheet.
     assert "Nakato" not in ran.text and "+256" not in ran.text
 
     finance = await console.sign_in("finance")
     entered = await console.put("/control-totals", totals(11_643))
     assert entered.status_code == 200
-    assert entered.json()["allowed"] == ["enter_totals", "sign_off"]
+    assert entered.json()["allowed"] == ["enter_totals", "sign_off", "decide_switch"]
     # The totals are shown for checking, and are not used until someone else confirms them.
     entry = entered.json()["totals"]
     assert (entry["entered_by"], entry["confirmed_by"]) == (finance, None)
@@ -188,7 +188,13 @@ async def test_the_checks_run_from_a_trial_to_a_sign_off_by_two_people(console: 
     state = await console.overview()
     assert state["blockers"] == []
     assert state["differences"][0]["sign_off"]["state"] == "approved"
-    assert state["allowed"] == ["run_trial", "enter_totals", "sign_off"]
+    assert state["allowed"] == [
+        "run_trial",
+        "propose_switch",
+        "enter_totals",
+        "sign_off",
+        "decide_switch",
+    ]
 
 
 async def test_each_route_checks_its_own_permission(console: Console) -> None:

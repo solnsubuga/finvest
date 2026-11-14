@@ -618,6 +618,17 @@ ROWS = {
         "'-Nabc0000000000000S1', now())",
         "refusing to drop the sheet rows of migration differences",
     ),
+    "0074_migration_switch": (
+        "INSERT INTO migration_trials (id, as_of, clients_sha256, investments_sha256, "
+        "error_count, warning_count, problems, summary, new_totals, differing, ran_by, ran_at) "
+        "VALUES ('-Nabc0000000000000A1', DATE '2026-11-13', repeat('0', 64), repeat('0', 64), "
+        "0, 0, '[]', '{}', '{}', '{}', '-Nabc0000000000000S1', now()); "
+        "INSERT INTO migration_switches (id, trial_id, as_of, clients_sha256, "
+        "investments_sha256, proposed_by, proposed_at) VALUES ('-Nabc0000000000000W1', "
+        "'-Nabc0000000000000A1', DATE '2026-11-13', repeat('0', 64), repeat('0', 64), "
+        "'-Nabc0000000000000S1', now())",
+        "refusing to drop the record of the switch",
+    ),
     "0152_client_locks": (
         "BEGIN; SELECT set_config('finvest.actor_kind', 'staff', true); "
         "SELECT set_config('finvest.actor_id', '-Nabc0000000000000S1', true); "
