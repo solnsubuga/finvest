@@ -1,82 +1,17 @@
 /** Custodian statement checks over `/staff/reconciliation/custodian-checks`. */
 
+import type { CheckDetailOut, ChecksOut, ReconciliationCustodianApiCheckOut } from "@finvest/api-client/staff";
 import { ApiError, type Http } from "@/api/http.ts";
 import {
   CustodianError,
   type CheckDetail,
-  type CheckItem,
   type CheckSummary,
   type CustodianChecksApi,
   type CustodianErrorCode,
-  type StatementRow,
 } from "./api.ts";
 
-interface CheckJson {
-  id: string;
-  statement_date: string;
-  status: CheckSummary["status"];
-  file_content_type: string;
-  file_bytes: number;
-  uploaded_by: string;
-  uploaded_at: string;
-  reader: string | null;
-  read_statement_date: string | null;
-  custodian_name: string | null;
-  account_reference: string | null;
-  amount_scale: CheckSummary["amountScale"];
-  failure_code: string | null;
-  submitted_by: string | null;
-  submit_note: string | null;
-  signed_off_by: string | null;
-  signed_off_at: string | null;
-  sign_off_note: string | null;
-  sent_back_by: string | null;
-  sent_back_note: string | null;
-  allowed: CheckSummary["allowed"];
-}
-
-interface RowJson {
-  id: string;
-  line_no: number;
-  instrument: string;
-  code: string | null;
-  face_value_text: string;
-  currency_text: string | null;
-  matures_on_text: string | null;
-  location: string;
-  source_text: string;
-  currency: StatementRow["currency"];
-  face_minor: number | null;
-  matures_on: string | null;
-  problem: string | null;
-  corrected_face_minor: number | null;
-  corrected_matures_on: string | null;
-  left_out: boolean;
-  corrected_by: string | null;
-  correction_reason: string | null;
-}
-
-interface ItemJson {
-  key: string;
-  kind: CheckItem["kind"];
-  currency: CheckItem["currency"];
-  matures_on: string | null;
-  finvest_face_minor: number;
-  custodian_face_minor: number;
-  difference_minor: number;
-  product_codes: string[];
-  row_ids: string[];
-  problem: string | null;
-  needs_note: boolean;
-  note: string | null;
-}
-
-interface DetailJson {
-  check: CheckJson;
-  rows: RowJson[];
-  items: ItemJson[];
-  unexplained: number;
-}
+type CheckJson = ReconciliationCustodianApiCheckOut;
+type DetailJson = CheckDetailOut;
 
 export function toCheck(json: CheckJson): CheckSummary {
   return {
@@ -194,7 +129,7 @@ export function createHttpCustodianChecksApi(http: Http): CustodianChecksApi {
   return {
     list: () =>
       call(async () => {
-        const json = await http.request<{ reading_on: boolean; checks: CheckJson[] }>("GET", base);
+        const json = await http.request<ChecksOut>("GET", base);
         return { readingOn: json.reading_on, checks: json.checks.map(toCheck) };
       }),
     get: (id) => call(async () => toDetail(await http.request<DetailJson>("GET", one(id)))),
