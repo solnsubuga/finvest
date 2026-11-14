@@ -2,7 +2,7 @@ import { createContext, ReactNode, useContext, useEffect, useMemo, useRef, useSt
 import { AppState, View } from "react-native";
 
 import { onLocked, onUnauthorized } from "@/api/http";
-import { UnlockScreen } from "@/components/pin/UnlockScreen";
+import { SignedOutForPins, UnlockScreen } from "@/components/pin/UnlockScreen";
 import { colors } from "@/theme";
 
 import { appPinApplies, LOCK_AFTER_MS } from "./pin";
@@ -49,6 +49,12 @@ type AuthState = {
   /** The app is locked: only the PIN screen shows until it is entered. */
   locked: boolean;
   setLocked: (locked: boolean) => void;
+  /**
+   * Too many wrong PINs ended the session. The screen that says so stays up after the session
+   * is gone, until the client chooses to log in again.
+   */
+  signedOutForPins: boolean;
+  setSignedOutForPins: (signedOut: boolean) => void;
   /** Set by finishing sign up, so the set-up screens that follow can offer a passkey. */
   justSignedUp: boolean;
   setJustSignedUp: (justSignedUp: boolean) => void;
@@ -90,6 +96,12 @@ export function AuthProvider({
   const [reset, setReset] = useState<PasswordReset | null>(null);
   const [returnTo, setReturnTo] = useState<ReturnTo | null>(null);
   const [locked, setLocked] = useState(false);
+  const [signedOutForPins, setSignedOutForPins] = useState(false);
+  // Read by the unauthorized listener, which is set up once.
+  const lockedNow = useRef(false);
+  useEffect(() => {
+    lockedNow.current = Boolean(session) && locked;
+  }, [session, locked]);
   const [justSignedUp, setJustSignedUp] = useState(false);
   const pinApplies = appPinApplies(resolved.demo);
   const backgroundSince = useRef<number | null>(null);
@@ -152,6 +164,8 @@ export function AuthProvider({
   useEffect(
     () =>
       onUnauthorized(() => {
+        // A 401 while the PIN screen is up is the fifth wrong PIN: say so, not just Log in.
+        if (lockedNow.current) setSignedOutForPins(true);
         setSession(null);
         setLocked(false);
       }),
@@ -178,10 +192,12 @@ export function AuthProvider({
       pinApplies,
       locked,
       setLocked,
+      signedOutForPins,
+      setSignedOutForPins,
       justSignedUp,
       setJustSignedUp,
     }),
-    [resolved, session, signup, ticket, login, reset, returnTo, pinApplies, locked, justSignedUp],
+    [resolved, session, signup, ticket, login, reset, returnTo, pinApplies, locked, signedOutForPins, justSignedUp],
   );
 
   if (restoring) {
@@ -190,7 +206,7 @@ export function AuthProvider({
 
   return (
     <AuthContext.Provider value={value}>
-      {session && locked ? <UnlockScreen /> : children}
+      {signedOutForPins ? <SignedOutForPins /> : session && locked ? <UnlockScreen /> : children}
     </AuthContext.Provider>
   );
 }

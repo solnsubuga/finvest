@@ -15,7 +15,7 @@ import { Screen } from "../Screen";
 import { Title, Txt } from "../Txt";
 import { PinDots, PinPad } from "./PinPad";
 
-type Stage = "pin" | "forgot" | "signed-out";
+type Stage = "pin" | "forgot";
 
 /**
  * Unlock with PIN, from the design canvas. Shown in place of the whole app
@@ -23,7 +23,7 @@ type Stage = "pin" | "forgot" | "signed-out";
  * leads to Reset your PIN, which is logging in again.
  */
 export function UnlockScreen() {
-  const { client, session, setSession, setLocked } = useAuth();
+  const { client, session, setSession, setLocked, setSignedOutForPins } = useAuth();
   const [pin, setPin] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -48,7 +48,9 @@ export function UnlockScreen() {
     } catch (caught) {
       setPin("");
       if (caught instanceof AuthError && caught.code === "signed_out") {
-        setStage("signed-out");
+        setSignedOutForPins(true);
+        setLocked(false);
+        setSession(null);
       } else {
         setError(describeAuthError(caught));
       }
@@ -131,35 +133,6 @@ export function UnlockScreen() {
     );
   }
 
-  if (stage === "signed-out") {
-    return (
-      <Screen
-        dark
-        footer={
-          <Button
-            label="Log in"
-            variant="lime"
-            onPress={logInAgain}
-            loading={busy}
-            testID="pin-log-in-again"
-          />
-        }
-      >
-        <View style={styles.center}>
-          <View style={styles.lockBadge}>
-            <Icon name="shield" size={34} color={colors.black} />
-          </View>
-          <Title onDark center>
-            Signed out for your safety
-          </Title>
-          <Txt color={colors.onBlackMuted} center>
-            {describeAuthError(new AuthError("signed_out"))}
-          </Txt>
-        </View>
-      </Screen>
-    );
-  }
-
   return (
     <Screen
       dark
@@ -235,3 +208,33 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
 });
+
+/**
+ * After the fifth wrong PIN. The server has ended the session, so this shows with no session
+ * at all and stays until the client chooses to log in again.
+ */
+export function SignedOutForPins() {
+  const { setSignedOutForPins } = useAuth();
+  const logIn = () => {
+    setSignedOutForPins(false);
+    router.replace("/login");
+  };
+  return (
+    <Screen
+      dark
+      footer={<Button label="Log in" variant="lime" onPress={logIn} testID="pin-log-in-again" />}
+    >
+      <View style={styles.center}>
+        <View style={styles.lockBadge}>
+          <Icon name="shield" size={34} color={colors.black} />
+        </View>
+        <Title onDark center>
+          Signed out for your safety
+        </Title>
+        <Txt color={colors.onBlackMuted} center>
+          {describeAuthError(new AuthError("signed_out"))}
+        </Txt>
+      </View>
+    </Screen>
+  );
+}
