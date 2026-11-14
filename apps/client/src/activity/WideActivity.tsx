@@ -158,7 +158,18 @@ function Details({ item }: { item: ActivityItem }) {
             testID="detail-investment"
           />
         ) : null}
-        <Button label="Something wrong with this?" variant="secondary" height={48} onPress={() => router.navigate("/help")} testID="detail-help" />
+        <Button
+          label="Something wrong with this?"
+          variant="secondary"
+          height={48}
+          onPress={() =>
+            // A payment's own ID is its Finvest reference, so the complaint is about that payment.
+            item.kind === "payment"
+              ? router.push({ pathname: "/support/complaints/new", params: { payment: item.key.slice("payment:".length) } })
+              : router.navigate("/help")
+          }
+          testID="detail-help"
+        />
       </View>
     </Panel>
   );

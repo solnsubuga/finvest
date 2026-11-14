@@ -48,6 +48,25 @@ jest.mock("expo-crypto", () => ({
   randomUUID: () => jest.requireActual("node:crypto").randomUUID(),
 }));
 
+const mockComplain = jest.fn();
+
+jest.mock("@/support/stubSupportClient", () => {
+  const actual = jest.requireActual("@/support/stubSupportClient");
+  return {
+    ...actual,
+    createStubSupportClient: () => {
+      const client = actual.createStubSupportClient({ delayMs: 0, now: () => mockClock.ms });
+      return {
+        ...client,
+        makeComplaint: async (complaint: unknown) => {
+          mockComplain(complaint);
+          return client.makeComplaint(complaint);
+        },
+      };
+    },
+  };
+});
+
 jest.mock("@/payments/pollInterval", () => ({ POLL_MS: 25 }));
 
 jest.mock("expo-font", () => ({
@@ -122,6 +141,28 @@ describe("paying for an investment by mobile money", () => {
 
     await fireEvent.press(screen.getByTestId("receipt-done"));
     await screen.findByTestId("home");
+  });
+
+  it("opens a complaint about this payment from its receipt, with the reference added", async () => {
+    await openPayScreen();
+    await fireEvent.press(screen.getByTestId("pay-submit"));
+    await screen.findByText("Approve on your phone");
+    await advance(8_000);
+    await screen.findByText("Completed");
+    const reference = screen.getByText(/^FV-DEMO-/).props.children as string;
+
+    await fireEvent.press(screen.getByTestId("receipt-complain"));
+    await screen.findByText(`This complaint is about your payment with Finvest reference ${reference}. We add the reference for you.`);
+    expect(screen.getByTestId("category-payments")).toBeChecked();
+    await fireEvent.changeText(screen.getByTestId("complaint-summary"), "The amount looks wrong");
+    await fireEvent.changeText(screen.getByTestId("complaint-details"), "I meant to pay less.");
+    await fireEvent.press(screen.getByTestId("send-complaint"));
+    await screen.findByText("The amount looks wrong");
+    expect(mockComplain.mock.calls[0][0]).toMatchObject({
+      category: "payments",
+      summary: "The amount looks wrong",
+      details: `About my payment with Finvest reference ${reference}.\n\nI meant to pay less.`,
+    });
   });
 
   it("repeats the same request under the same key after a lost try", async () => {
