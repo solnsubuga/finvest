@@ -226,3 +226,41 @@ test("sending an investment to someone meets WCAG 2.1 AA at every step", async (
   await check("sent");
   expect(found).toEqual([]);
 });
+
+// The demo's account moved from Finvest 1.0 (apps/client/src/claim/demo.ts).
+const DEMO_CLAIM_TOKEN = "demo-claim-selfie-link-not-a-real-token";
+
+test("claiming an account moved from Finvest 1.0 meets WCAG 2.1 AA", async ({ page }) => {
+  await page.goto(`/claim#${DEMO_CLAIM_TOKEN}`);
+  await expect(page.getByText("Your account has moved to Finvest 2.0")).toBeVisible();
+  expect(await violations(page), "claim link").toEqual([]);
+  await page.getByTestId("claim-start").click();
+  await expect(page.getByText("Enter the code and choose a password")).toBeVisible();
+  expect(await violations(page), "claim code and password").toEqual([]);
+  await page.getByTestId("code-input").fill("123456");
+  await page.getByTestId("password-input").fill("green matooke sunday");
+  await page.getByTestId("password-confirm-input").fill("green matooke sunday");
+  await page.getByTestId("claim-complete").click();
+  await typePin(page, DEMO_PIN);
+  await typePin(page, DEMO_PIN);
+  const offer = page.getByTestId("offer-not-now");
+  if (await offer.isVisible().catch(() => false)) await offer.click();
+  await expect(page.getByTestId("home-claim")).toBeVisible();
+  expect(await violations(page), "home with the move").toEqual([]);
+  await visit(page, "/moving");
+  await expect(page.getByTestId("claim-photos-start").filter({ visible: true })).toBeVisible();
+  expect(await violations(page), "moving: confirm it is you").toEqual([]);
+  await page.getByTestId("claim-photos-start").filter({ visible: true }).click();
+  await expect(page.getByTestId("photo-take").filter({ visible: true })).toBeVisible();
+  expect(await violations(page), "moving: photo of the ID").toEqual([]);
+});
+
+test("a claim link that no longer works meets WCAG 2.1 AA", async ({ page }) => {
+  await page.goto("/claim#an-old-link-that-was-replaced-long");
+  await page.getByTestId("claim-start").click();
+  await expect(page.getByText(/This link no longer works/)).toBeVisible();
+  expect(await violations(page), "claim link gone").toEqual([]);
+  await page.goto("/claim");
+  await expect(page.getByText("Open the link from our message")).toBeVisible();
+  expect(await violations(page), "claim without a link").toEqual([]);
+});
