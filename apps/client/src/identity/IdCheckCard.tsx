@@ -8,7 +8,7 @@ import { colors } from "@/theme";
 import { beingChecked, IdentityCheck } from "./types";
 import { useIdentityCheck } from "./useIdentityCheck";
 
-function copyFor(check: IdentityCheck | null): { title: string; detail: string } | null {
+export function copyFor(check: IdentityCheck | null): { title: string; detail: string } | null {
   if (!check) return { title: "Confirm who you are", detail: "Needed before you invest. It takes about two minutes." };
   if (check.status === "draft") return { title: "Finish your ID check", detail: "Pick up where you left off. What you did is saved." };
   if (check.status === "awaiting_client") {

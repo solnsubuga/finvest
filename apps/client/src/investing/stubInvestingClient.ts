@@ -8,6 +8,7 @@ import {
   InvestingError,
   NewInvestment,
   PayoutAccount,
+  Portfolio,
   Product,
   Quote,
   Recipient,
@@ -182,6 +183,8 @@ export type StubOptions = {
   accounts?: "default" | "none";
   /** True loses the answer to the first withdrawal request, to show that state. */
   loseFirstWithdrawal?: boolean;
+  /** True fails every read of the totals, to show the error state on Home and Portfolio. */
+  failPortfolio?: boolean;
   /** True adds an investment that matured to be paid out with no account chosen, to show that state. */
   maturedWaiting?: boolean;
   /** "none" starts with nothing sent or received; the default shows one of each. */
@@ -204,19 +207,26 @@ export function createStubInvestingClient(options: StubOptions = {}): InvestingC
     delayMs > 0 ? new Promise<void>((resolve) => setTimeout(resolve, delayMs)) : Promise.resolve();
 
   const find = (code: string) => PRODUCTS.find((product) => product.code === code);
+  // The demo's savings to goals, standing in for the goals module's records.
+  const savedToGoals = new Set<string>();
+  const demoOpenGoals = options.sample === "empty" ? 0 : 2;
 
   if (options.sample !== "empty") {
     const today = kampalaDay(now());
+    let seeded = 0;
     const seed = (
       code: string,
       minor: number,
       startedDaysAgo: number,
       atMaturity: Stored["atMaturity"],
       destinationId: string | null = null,
+      toGoal = false,
     ) => {
       const product = find(code) as Product & Terms;
-      nextId += 1;
-      const id = `demo-investment-${nextId}`;
+      // Seeds are numbered on their own, so other demo areas can name them: Documents holds
+      // the note for the first. They are running already, so no payment ever uses their IDs.
+      seeded += 1;
+      const id = `demo-investment-seed-${seeded}`;
       stored.set(id, {
         id,
         product,
@@ -229,10 +239,11 @@ export function createStubInvestingClient(options: StubOptions = {}): InvestingC
         withdrawnAtMs: null,
         transferredAtMs: null,
       });
+      if (toGoal) savedToGoals.add(id);
       return id;
     };
     seed("TREA-91", 5_000_000, 85, "roll_over");
-    const gift = seed("TREA-182", 2_000_000, 40, "pay_out", "demo-account-mtn");
+    const gift = seed("TREA-182", 2_000_000, 40, "pay_out", "demo-account-mtn", true);
     if (options.transfers !== "none") {
       // Received from another client 12 days ago, on that client's rate and maturity date.
       transfers.set("demo-transfer-received", {
@@ -346,7 +357,81 @@ export function createStubInvestingClient(options: StubOptions = {}): InvestingC
     return product;
   }
 
+  /** Adds the demo's views up the way the backend's `GET /client/portfolio` does. */
+  function portfolio(currency: Amount["currency"]): Portfolio {
+    const all = [...stored.values()].filter((entry) => entry.amount.currency === currency);
+    const views = all.map((entry) => ({ entry, view: view(entry) }));
+    const running = views.filter(({ view: item }) => item.status === "active");
+    const money = (minor: number): Amount => ({ currency, minor });
+    const sum = (items: typeof running, pick: (item: Investment) => Amount) =>
+      money(items.reduce((total, { view: item }) => total + pick(item).minor, 0));
+    const today = kampalaDay(now());
+    const earningPerDay = (entry: Stored, item: Investment) =>
+      item.status === "active" && item.withdrawalRequestedAt === null && (item.termDays === null || item.daysEarned < item.termDays)
+        ? netInterest(entry.amount.minor, entry.product, item.daysEarned + 1) - netInterest(entry.amount.minor, entry.product, item.daysEarned)
+        : 0;
+    const inGoals = running.filter(({ entry }) => savedToGoals.has(entry.id));
+    const outside = running.filter(({ entry }) => !savedToGoals.has(entry.id));
+    const groups = new Map<string, typeof running>();
+    for (const item of running) {
+      groups.set(item.view.productCode, [...(groups.get(item.view.productCode) ?? []), item]);
+    }
+    const worth = sum(running, (item) => item.value).minor;
+    const ordered = [...groups.values()].sort((a, b) => sum(b, (i) => i.value).minor - sum(a, (i) => i.value).minor);
+    // Largest remainder, as the backend does it, so the demo's shares add up to 100 too.
+    const floors = ordered.map((items) => (worth ? Math.floor((sum(items, (i) => i.value).minor * 100) / worth) : 0));
+    const remainders = ordered.map((items) => (worth ? (sum(items, (i) => i.value).minor * 100) % worth : 0));
+    let left = worth ? 100 - floors.reduce((a, b) => a + b, 0) : 0;
+    for (const index of remainders.map((r, i) => [r, i] as const).sort((a, b) => b[0] - a[0] || a[1] - b[1]).map(([, i]) => i)) {
+      if (left <= 0) break;
+      floors[index] = (floors[index] ?? 0) + 1;
+      left -= 1;
+    }
+    const maturing = running
+      .filter(({ view: item }) => item.maturityDate !== null && item.termDays !== null && item.maturityDate >= today && item.withdrawalRequestedAt === null)
+      .sort((a, b) => (a.view.maturityDate ?? "").localeCompare(b.view.maturityDate ?? ""));
+    const first = maturing[0]?.view;
+    return {
+      currency,
+      invested: sum(running, (item) => item.amount),
+      worth: money(worth),
+      interestSoFar: sum(running, (item) => item.interestSoFar),
+      earningPerDay: money(running.reduce((total, { entry, view: item }) => total + earningPerDay(entry, item), 0)),
+      interestToday: sum(running, (item) => item.interestToday),
+      activeCount: running.length,
+      awaitingPaymentCount: views.filter(({ view: item }) => item.status === "awaiting_payment").length,
+      outsideGoals: { worth: sum(outside, (item) => item.value), count: outside.length },
+      inGoals: { worth: sum(inGoals, (item) => item.value), count: inGoals.length },
+      openGoals: currency === "UGX" ? demoOpenGoals : 0,
+      products: ordered.map((items, index) => ({
+        productCode: items[0]?.view.productCode ?? "",
+        productName: items[0]?.view.productName ?? "",
+        worth: sum(items, (item) => item.value),
+        count: items.length,
+        percent: floors[index] ?? 0,
+      })),
+      nextMaturity:
+        first && first.maturityDate && first.termDays !== null
+          ? {
+              investmentId: first.id,
+              productName: first.productName,
+              on: first.maturityDate,
+              atMaturity: first.atMaturity,
+              termDays: first.termDays,
+              daysEarned: first.daysEarned,
+              daysLeft: daysBetween(today, first.maturityDate),
+            }
+          : null,
+    };
+  }
+
   return {
+    async getPortfolio(currency = "UGX") {
+      await pause();
+      if (options.failPortfolio) throw new InvestingError("unavailable");
+      return portfolio(currency);
+    },
+
     async listProducts() {
       await pause();
       return PRODUCTS.map(({ rateBps: _rate, taxBps: _tax, ...product }) => product);

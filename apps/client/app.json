@@ -33,7 +33,13 @@
           "imageWidth": 160
         }
       ],
-      "expo-notifications"
+      "expo-notifications",
+      [
+        "expo-local-authentication",
+        {
+          "faceIDPermission": "Finvest uses Face ID to open the app on this phone instead of your PIN."
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true

@@ -82,7 +82,7 @@ async function signIn(phone: string) {
 
 async function openGoals() {
   await signIn("772123456");
-  await screen.findByText("Welcome, Amara");
+  await screen.findByTestId("home");
   await fireEvent.press(screen.getByLabelText("Goals"));
 }
 

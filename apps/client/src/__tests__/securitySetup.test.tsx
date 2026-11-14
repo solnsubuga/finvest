@@ -47,7 +47,7 @@ async function signUp() {
   await fireEvent.changeText(await screen.findByTestId("password-input"), NEW_PASSWORD);
   await fireEvent.changeText(screen.getByTestId("password-confirm-input"), NEW_PASSWORD);
   await fireEvent.press(screen.getByTestId("password-submit"));
-  await screen.findByText("Welcome to Finvest");
+  await screen.findByTestId("home");
 }
 
 async function logOutAndStartLogIn(password: string) {
@@ -94,7 +94,7 @@ describe("Sign in and security", () => {
     await logOutAndStartLogIn(NEW_PASSWORD);
     expect(screen.getByText("Your passkey")).toBeTruthy();
     await fireEvent.press(screen.getByTestId("use-passkey"));
-    await screen.findByText("Welcome to Finvest");
+    await screen.findByTestId("home");
     expect(screen.queryByText(/You signed in with a code/)).toBeNull();
   });
 
@@ -129,7 +129,7 @@ describe("Sign in and security", () => {
     await fireEvent.press(screen.getByTestId("use-authenticator"));
     await fireEvent.changeText(await screen.findByTestId("code-input"), DEMO_CODE);
     await fireEvent.press(screen.getByTestId("code-submit"));
-    await screen.findByText("Welcome to Finvest");
+    await screen.findByTestId("home");
   });
 
   it("asks for a fresh log in when the session is too old, and adds nothing", async () => {
@@ -165,7 +165,7 @@ describe("Sign in and security", () => {
     await fireEvent.press(screen.getByTestId("done"));
     await screen.findByTestId("on-passkey");
     await fireEvent.press(screen.getByLabelText("Back"));
-    await screen.findByText("Welcome to Finvest");
+    await screen.findByTestId("home");
     await fireEvent.press(screen.getByLabelText("Profile"));
     await fireEvent.press(await screen.findByTestId("sign-out"));
     await screen.findByText("Your money, working every day.");
@@ -174,7 +174,7 @@ describe("Sign in and security", () => {
     await fireEvent.changeText(screen.getByTestId("password-input"), NEW_PASSWORD);
     await fireEvent.press(screen.getByTestId("login-submit"));
     await fireEvent.press(await screen.findByTestId("use-passkey"));
-    await screen.findByText("Welcome to Finvest");
+    await screen.findByTestId("home");
   });
 
   it("gives a new key when the set-up ran out of time, and never re-shows the old one", async () => {

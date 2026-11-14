@@ -45,6 +45,7 @@ export const KINDS = [
   "organisation",
   "investment_correction",
   "investment_run",
+  "investment_booking",
   "client_pin_reset",
   "client_limits",
   "client_statement",

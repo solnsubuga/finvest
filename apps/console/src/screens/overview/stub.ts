@@ -45,6 +45,7 @@ const SOURCES: Record<Kind, { view: Permission; decide: Permission }> = {
   organisation: { view: "review_queue.view", decide: "organisations.review" },
   investment_correction: { view: "investments.view", decide: "investment_corrections.change" },
   investment_run: { view: "investments.view", decide: "investment_corrections.change" },
+  investment_booking: { view: "investments.view", decide: "investment_corrections.change" },
   client_pin_reset: { view: "clients.view", decide: "client_pins.reset" },
   client_limits: { view: "clients.view", decide: "client_limits.change" },
   client_statement: { view: "clients.view", decide: "client_statements.send" },

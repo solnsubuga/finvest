@@ -46,7 +46,7 @@ test("a new client signs up with a texted code and a password", async ({ page })
   await expect(page.getByText("4 of 4")).toBeVisible();
   await id(page, "offer-not-now").click();
 
-  await expect(page.getByText("Welcome to Finvest")).toBeVisible();
+  await expect(page.getByTestId("home")).toBeVisible();
 });
 
 test("a wrong password does not sign in", async ({ page }) => {
@@ -65,13 +65,13 @@ test("a client signs in with the password and an authenticator code", async ({ p
   await id(page, "code-input").fill("000000");
   await id(page, "code-submit").click();
   await expect(page.getByText("That code is not right. Check it and try again.")).toBeVisible();
-  await expect(page.getByText("Welcome, Amara")).toHaveCount(0);
+  await expect(page.getByTestId("home")).toHaveCount(0);
   // A wrong code clears the field for the next try.
   await expect(id(page, "code-input")).toHaveValue("");
   await id(page, "code-input").fill(DEMO_CODE);
   await id(page, "code-submit").click();
   await createPin(page);
-  await expect(page.getByText("Welcome, Amara")).toBeVisible();
+  await expect(page.getByTestId("home")).toBeVisible();
 });
 
 test("a client pays for an investment by mobile money from their own number", async ({
@@ -80,7 +80,7 @@ test("a client pays for an investment by mobile money from their own number", as
   await logIn(page);
   await id(page, "use-passkey").click();
   await createPin(page);
-  await expect(page.getByText("Welcome, Amara")).toBeVisible();
+  await expect(page.getByTestId("home")).toBeVisible();
   // The phone's tab bar and the wide sidebar both name it Invest.
   await page
     .getByRole("link", { name: "Invest", exact: true })
@@ -104,7 +104,7 @@ test("a client adds a mobile money number to be paid to, and enters the texted c
   await logIn(page);
   await id(page, "use-passkey").click();
   await createPin(page);
-  await expect(page.getByText("Welcome, Amara")).toBeVisible();
+  await expect(page.getByTestId("home")).toBeVisible();
   // The phone's tab bar and the wide sidebar both name it Profile.
   await page
     .getByRole("link", { name: "Profile", exact: true })
@@ -148,7 +148,7 @@ test("a PIN that is too simple is refused, and two that differ start again", asy
   await typePin(page, "48152");
   await expect(page.getByText("Those PINs did not match. Choose your PIN again.")).toBeVisible();
   await createPin(page);
-  await expect(page.getByText("Welcome, Amara")).toBeVisible();
+  await expect(page.getByTestId("home")).toBeVisible();
 });
 
 test("the app locks in the background and opens with the PIN, after a wrong one", async ({ page }) => {
@@ -156,17 +156,44 @@ test("the app locks in the background and opens with the PIN, after a wrong one"
   await logIn(page);
   await id(page, "use-passkey").click();
   await createPin(page);
-  await expect(page.getByText("Welcome, Amara")).toBeVisible();
+  await expect(page.getByTestId("home")).toBeVisible();
 
   await leaveForSixMinutes(page);
   await expect(page.getByText("Enter your PIN to open the app on this phone")).toBeVisible();
-  await expect(page.getByText("Welcome, Amara")).toHaveCount(0);
+  await expect(page.getByTestId("home")).toHaveCount(0);
   await typePin(page, "90817");
   await expect(
     page.getByText("That PIN is not right. 4 tries left before this phone is signed out."),
   ).toBeVisible();
   await typePin(page, DEMO_PIN);
-  await expect(page.getByText("Welcome, Amara")).toBeVisible();
+  await expect(page.getByTestId("home")).toBeVisible();
+});
+
+test("a client turns on fingerprint or face unlock, and the locked app opens with it", async ({ page }) => {
+  await page.clock.install();
+  await logIn(page);
+  await id(page, "use-passkey").click();
+  await createPin(page);
+  await expect(page.getByTestId("home")).toBeVisible();
+
+  // In the app, so the demo keeps its session: a fresh page load would start it again.
+  await page.evaluate(() => {
+    window.history.pushState({}, "", "/security");
+    window.dispatchEvent(new PopStateEvent("popstate"));
+  });
+  await id(page, "open-fingerprint").click();
+  await id(page, "fingerprint-on").click();
+  await expect(page.getByText("Enter your PIN to turn on fingerprint or face unlock")).toBeVisible();
+  await typePin(page, DEMO_PIN);
+  await expect(page.getByText("Fingerprint or face unlock is on")).toBeVisible();
+  await id(page, "done").click();
+  await expect(page.getByLabel("Fingerprint or face unlock: on")).toBeVisible();
+
+  await leaveForSixMinutes(page);
+  // The demo's fingerprint answers after a moment; meanwhile the lock screen offers the button.
+  await expect(id(page, "unlock-biometric")).toBeVisible();
+  await page.clock.runFor(2000);
+  await expect(page.getByText("Enter your PIN to open the app on this phone")).toHaveCount(0);
 });
 
 test("five wrong PINs sign the phone out, and the client logs in again", async ({ page }) => {
@@ -174,7 +201,7 @@ test("five wrong PINs sign the phone out, and the client logs in again", async (
   await logIn(page);
   await id(page, "use-passkey").click();
   await createPin(page);
-  await expect(page.getByText("Welcome, Amara")).toBeVisible();
+  await expect(page.getByTestId("home")).toBeVisible();
 
   await leaveForSixMinutes(page);
   for (let tries = 5; tries > 1; tries -= 1) {
@@ -231,7 +258,7 @@ async function upToTheSelfie(page: Page) {
   await id(page, "code-submit").click();
   await createPin(page);
 
-  await id(page, "home-id-check").click();
+  await id(page, "set-up-id").click();
   await expect(page.getByText("Which ID will you use?")).toBeVisible();
   await shown(page, "document-continue").click();
 
@@ -286,14 +313,13 @@ test("a client sends part of an investment to another client after checking the 
   await logIn(page);
   await id(page, "use-passkey").click();
   await createPin(page);
-  await expect(page.getByText("Welcome, Amara")).toBeVisible();
+  await expect(page.getByTestId("home")).toBeVisible();
   // Portfolio opens from Profile; the app's router keeps the sample session.
   await page.evaluate(() => {
     window.history.pushState({}, "", "/portfolio");
     window.dispatchEvent(new PopStateEvent("popstate"));
   });
-  await page.getByLabel(/^91 Day Treasury Bill, Running/).first().click();
-  await id(page, "send-investment").click();
+  await openToSend(page);
 
   await id(page, "send-to").fill("0772 555 170");
   await id(page, "find-recipient").click();
@@ -311,3 +337,17 @@ test("a client sends part of an investment to another client after checking the 
   // The new investment holds what was kept. Screens left behind in the stack stay hidden.
   await expect(page.locator("text=You invested >> visible=true")).toBeVisible();
 });
+
+/** A phone opens the investment's own screen to send; a wide Portfolio has Send in the detail beside its table. */
+async function openToSend(page: Page) {
+  const card = page.getByLabel(/^91 Day Treasury Bill, Running/).first();
+  const row = page.getByLabel(/^91 Day Treasury Bill, worth/).first();
+  await card.or(row).first().waitFor();
+  if (await card.count()) {
+    await card.click();
+    await page.getByTestId("send-investment").click();
+  } else {
+    await row.click();
+    await page.getByTestId("detail-send").click();
+  }
+}

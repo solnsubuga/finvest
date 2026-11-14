@@ -171,6 +171,8 @@ Approving queues `investments.carry_out_booking`, keyed `booking:<booking id>`. 
 
 The database refuses a decision by the one who booked it, any change to what was booked, any change after a decision except the worker finishing an approved booking, and finishing it as done with an investment other than the one saved for that client, product and amount from that booking. Only staff read the table on the API's role. Nothing is deleted.
 
+Several bookings can come in one spreadsheet. The console reads a CSV file with the columns `account_number`, `product_code`, `amount` in whole units and an optional `at_maturity`, up to 200 rows (`apps/console/src/screens/investments/bookings/sheet.ts`). It finds each client by their exact account number, checks each row against the product as the backend would, and shows what it found for every row before anything is sent. The rows that pass become ordinary bookings, one request each with its own idempotency key, all with the reason staff give for the sheet plus the row number. Each is approved on its own by someone else. There is no separate upload route: the backend sees only bookings.
+
 Audit events on resource `investment_booking`: `investments.booking.proposed`, `.approved`, `.sent_back`, `.withdrawn`, `.done` and `.failed`. The investment's own `investments.requested` names the booking and is recorded for the system.
 
 ## HTTP routes

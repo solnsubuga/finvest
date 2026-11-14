@@ -77,6 +77,8 @@ export const KIND_INFO: Record<Kind, KindInfo> = {
     label: "Run again",
     path: (item) => (item.subject.startsWith("maturity") ? "/maturities" : "/investments"),
   },
+  // An investment staff booked for a client who asked. The subject is the product's code.
+  investment_booking: { label: "Investment booked for a client", path: at("/investments") },
 };
 
 const RECEIVABLE_STEPS: Record<string, string> = { open: "Record what is owed", recover: "Money arrived", write_off: "Write off" };

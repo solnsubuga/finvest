@@ -62,7 +62,7 @@ async function openPayScreen() {
   await fireEvent.changeText(screen.getByTestId("password-input"), DEMO_PASSWORD);
   await fireEvent.press(screen.getByTestId("login-submit"));
   await fireEvent.press(await screen.findByTestId("use-passkey"));
-  await screen.findByText("Welcome, Amara");
+  await screen.findByTestId("home");
   await fireEvent.press(screen.getByLabelText("Invest"));
   await fireEvent.press(await screen.findByTestId("demo-pay"));
   await screen.findByText("Pay UGX 1,000,000");
@@ -108,6 +108,8 @@ describe("paying for an investment by mobile money", () => {
     expect(screen.getByText("13 Nov 2026, 15:31")).toBeTruthy();
     expect(screen.getByText("MTN Mobile Money")).toBeTruthy();
     expect(screen.getByText("+256 77• ••• •56")).toBeTruthy();
+    // Its PDF receipt is in Documents, so the receipt offers it.
+    expect(await screen.findByTestId("receipt-pdf")).toHaveTextContent(/Receipt \(PDF\).*Signed PDF, saved in Documents/);
 
     const share = jest.spyOn(Share, "share").mockResolvedValue({ action: "sharedAction", activityType: undefined });
     await fireEvent.press(screen.getByTestId("receipt-share"));
@@ -119,7 +121,7 @@ describe("paying for an investment by mobile money", () => {
     share.mockRestore();
 
     await fireEvent.press(screen.getByTestId("receipt-done"));
-    await screen.findByText("Welcome, Amara");
+    await screen.findByTestId("home");
   });
 
   it("repeats the same request under the same key after a lost try", async () => {

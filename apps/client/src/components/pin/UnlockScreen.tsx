@@ -1,8 +1,9 @@
-import { useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { StyleSheet, View } from "react-native";
 import { router } from "expo-router";
 
 import { useAuth } from "@/auth/AuthProvider";
+import { biometricOnThisPhone, forgetUnlockKey, readUnlockKey, unlockKeyKept } from "@/auth/biometric";
 import { PIN_LENGTH } from "@/auth/pin";
 import { AuthError, describeAuthError } from "@/auth/types";
 import { colors, fontSizes } from "@/theme";
@@ -28,6 +29,9 @@ export function UnlockScreen() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [stage, setStage] = useState<Stage>("pin");
+  /** True when this phone keeps an unlock key behind its fingerprint or face. */
+  const [biometric, setBiometric] = useState(false);
+  const asked = useRef(false);
 
   const firstName = session?.displayName?.split(/\s+/)[0];
 
@@ -48,9 +52,8 @@ export function UnlockScreen() {
     } catch (caught) {
       setPin("");
       if (caught instanceof AuthError && caught.code === "signed_out") {
-        setSignedOutForPins(true);
-        setLocked(false);
-        setSession(null);
+        await forgetUnlockKey();
+        signedOut();
       } else {
         setError(describeAuthError(caught));
       }
@@ -59,10 +62,64 @@ export function UnlockScreen() {
     }
   };
 
+  const signedOut = useCallback(() => {
+    setSignedOutForPins(true);
+    setLocked(false);
+    setSession(null);
+  }, [setLocked, setSession, setSignedOutForPins]);
+
+  /** Asks for the fingerprint or face. Cancelling it leaves the PIN pad, as before. */
+  const openWithBiometric = useCallback(async () => {
+    const key = await readUnlockKey();
+    if (key === null) {
+      setBiometric(await unlockKeyKept());
+      return;
+    }
+    setBusy(true);
+    try {
+      const checked = await client.unlockWithKey(key);
+      if (checked.unlocked) {
+        setLocked(false);
+        return;
+      }
+      // The server no longer knows the key, for instance after a new PIN, and has turned it off.
+      await forgetUnlockKey();
+      setBiometric(false);
+      setError("Fingerprint or face unlock is off for this phone. Enter your PIN.");
+    } catch (caught) {
+      if (caught instanceof AuthError && caught.code === "signed_out") {
+        await forgetUnlockKey();
+        signedOut();
+      } else {
+        setError(describeAuthError(caught));
+      }
+    } finally {
+      setBusy(false);
+    }
+  }, [client, setLocked, signedOut]);
+
+  // Offers the fingerprint or face once, as the screen opens.
+  useEffect(() => {
+    let live = true;
+    void (async () => {
+      const ready = (await biometricOnThisPhone()) && (await unlockKeyKept());
+      if (!live) return;
+      setBiometric(ready);
+      if (ready && !asked.current) {
+        asked.current = true;
+        void openWithBiometric();
+      }
+    })();
+    return () => {
+      live = false;
+    };
+  }, [openWithBiometric]);
+
   /** Logging in again is how a PIN is reset. The app then asks for a new one. */
   const logInAgain = async () => {
     setBusy(true);
     try {
+      await forgetUnlockKey();
       await client.signOut();
     } finally {
       setLocked(false);
@@ -138,12 +195,23 @@ export function UnlockScreen() {
       dark
       signedIn
       footer={
-        <TextLink
-          label="Forgot your PIN?"
-          onDark
-          onPress={() => setStage("forgot")}
-          testID="pin-forgot"
-        />
+        <>
+          {biometric ? (
+            <Button
+              label="Use fingerprint or face"
+              variant="lime"
+              onPress={() => void openWithBiometric()}
+              disabled={busy}
+              testID="unlock-biometric"
+            />
+          ) : null}
+          <TextLink
+            label="Forgot your PIN?"
+            onDark
+            onPress={() => setStage("forgot")}
+            testID="pin-forgot"
+          />
+        </>
       }
     >
       <View style={styles.center}>

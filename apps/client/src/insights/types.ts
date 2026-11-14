@@ -20,7 +20,9 @@ export type InsightsMonth = {
   paidOut: Money;
 };
 
-export type Upcoming = {
+/** An investment reaching the end of its term. */
+export type UpcomingMaturity = {
+  kind: "maturity";
   /** YYYY-MM-DD. */
   on: string;
   investmentId: string;
@@ -29,6 +31,42 @@ export type Upcoming = {
   /** What comes back at maturity, after tax. */
   amount: Money;
 };
+
+/** The next payment of an automatic investing plan, or of a goal's monthly saving. */
+export type UpcomingRun = {
+  kind: "autoinvest_run" | "goal_saving";
+  on: string;
+  planId: string;
+  productName: string;
+  /** Only for a goal's saving. */
+  goalId: string | null;
+  goalName: string | null;
+  /** What the client's phone will be asked to pay. */
+  amount: Money;
+};
+
+/** The date a goal is to be reached by. */
+export type UpcomingGoalDate = {
+  kind: "goal_date";
+  on: string;
+  goalId: string;
+  goalName: string;
+  /** The goal's target. */
+  amount: Money;
+};
+
+export type Upcoming = UpcomingMaturity | UpcomingRun | UpcomingGoalDate;
+
+export function upcomingKey(item: Upcoming): string {
+  switch (item.kind) {
+    case "maturity":
+      return `maturity:${item.investmentId}`;
+    case "goal_date":
+      return `goal_date:${item.goalId}`;
+    default:
+      return `${item.kind}:${item.planId}`;
+  }
+}
 
 export type Insights = {
   /** Every amount below is in this currency. */

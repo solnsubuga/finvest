@@ -31,6 +31,8 @@ export function fromApi(item: ApiDocument): DocumentItem {
     notFinalFrom: item.not_final_from,
     reference: item.reference,
     note: item.note,
+    investmentId: item.investment_id,
+    depositId: item.deposit_id,
   };
 }
 

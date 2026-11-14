@@ -42,6 +42,23 @@ describe("the insights client for the real API", () => {
     expect(insights.upcoming[0]).toMatchObject({ on: "2027-02-12", atMaturity: "roll_over", amount: { minor: 513000 } });
   });
 
+  it("passes automatic runs, goal savings and goal dates through", async () => {
+    const id = "P".repeat(20);
+    const goal = "G".repeat(20);
+    const coming = [
+      { kind: "autoinvest_run", on: "2026-12-01", investment_id: null, plan_id: id, goal_id: null, product_name: "91 Day Treasury Bill", goal_name: null, at_maturity: null, amount_minor: 200000 },
+      { kind: "goal_saving", on: "2026-12-05", investment_id: null, plan_id: id, goal_id: goal, product_name: "91 Day Treasury Bill", goal_name: "School fees", at_maturity: null, amount_minor: 150000 },
+      { kind: "goal_date", on: "2027-01-15", investment_id: null, plan_id: null, goal_id: goal, product_name: null, goal_name: "School fees", at_maturity: null, amount_minor: 3000000 },
+    ];
+    setFetch(async () => new Response(JSON.stringify({ ...view, upcoming: coming }), { status: 200 }));
+    const insights = await createApiInsightsClient().getInsights(6, "UGX");
+    expect(insights.upcoming).toEqual([
+      { kind: "autoinvest_run", on: "2026-12-01", planId: id, productName: "91 Day Treasury Bill", goalId: null, goalName: null, amount: { minor: 200000, currency: "UGX" } },
+      { kind: "goal_saving", on: "2026-12-05", planId: id, productName: "91 Day Treasury Bill", goalId: goal, goalName: "School fees", amount: { minor: 150000, currency: "UGX" } },
+      { kind: "goal_date", on: "2027-01-15", goalId: goal, goalName: "School fees", amount: { minor: 3000000, currency: "UGX" } },
+    ]);
+  });
+
   it("fails as one error the screen can retry, offline or not", async () => {
     setFetch(async () => {
       throw new TypeError("Network request failed");
