@@ -7487,6 +7487,17 @@
             ],
             "title": "Proposed By"
           },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason"
+          },
           "resolution_id": {
             "anyOf": [
               {
@@ -7519,7 +7530,8 @@
           "noted_at",
           "state",
           "resolution_id",
-          "proposed_by"
+          "proposed_by",
+          "reason"
         ],
         "title": "NotCarriedView",
         "type": "object"

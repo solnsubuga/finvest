@@ -83,7 +83,11 @@ async def test_a_retry_refused_again_is_noted_as_the_next_attempt(
     decision = f"/switch/resolutions/{proposed.json()['id']}/decision"
     assert code(await console.post(decision, {"approve": True})) == (403, "forbidden")
     [shown] = await not_carried(console)
-    assert (shown["state"], shown["resolution_id"]) == ("retry_proposed", proposed.json()["id"])
+    assert (shown["state"], shown["resolution_id"], shown["reason"]) == (
+        "retry_proposed",
+        proposed.json()["id"],
+        "Checked with the client by phone",
+    )
 
     await console.sign_in("finance")
     decided = await console.post(decision, {"approve": True})

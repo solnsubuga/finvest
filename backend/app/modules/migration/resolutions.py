@@ -106,6 +106,8 @@ class NotCarried:
     # The proposal awaiting a decision, or the approved retry. Null while only noted.
     resolution_id: str | None
     proposed_by: str | None
+    # Why it was proposed, for the person who decides.
+    reason: str | None
 
 
 @dataclass(frozen=True, slots=True)
@@ -134,6 +136,7 @@ async def not_carried(session: AsyncSession, switch_id: str) -> list[NotCarried]
                 state=state,
                 resolution_id=row.resolution_id,
                 proposed_by=row.proposed_by,
+                reason=row.reason,
             )
         )
     return shown

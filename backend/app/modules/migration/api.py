@@ -170,6 +170,8 @@ class NotCarriedView(Contract):
     # The proposal awaiting a decision, or the approved retry. Null while only noted.
     resolution_id: PushId | None
     proposed_by: PushId | None
+    # Why it was proposed, for the person who decides.
+    reason: str | None
 
 
 class ResolutionView(Contract):
@@ -363,6 +365,7 @@ def _switch(
                 state=client.state,
                 resolution_id=client.resolution_id,
                 proposed_by=client.proposed_by,
+                reason=client.reason,
             )
             for client in not_carried or []
         ],
