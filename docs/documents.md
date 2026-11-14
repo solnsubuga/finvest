@@ -2,9 +2,9 @@
 
 What Finvest sends a client in writing about their money: a statement after every month, a statement for any dates the client picks in the app, and a receipt for every payment received. Each one is a PDF, sent by email through Resend and kept in the app under Documents.
 
-The code is `backend/app/modules/documents`. Tax certificates and transaction notes will join this module later.
+The code is `backend/app/modules/documents`. It also draws and sends the yearly withholding tax certificate, from figures the tax module gives it ([tax.md](tax.md)). Transaction notes will join this module later.
 
-**Status:** statements are asked for, built from the ledger, stored, downloadable and emailed with the PDF attached, and the monthly run asks for every client's. Every confirmed payment gets a receipt, built and emailed the same way. The app's Documents screen arrives in its own pull request. The tables are migrations `0140_documents` and `0141_document_emails`.
+**Status:** statements are asked for, built from the ledger, stored, downloadable and emailed with the PDF attached, and the monthly run asks for every client's. Every confirmed payment gets a receipt, built and emailed the same way. The app's Documents screen arrives in its own pull request. The tables are migrations `0140_documents` and `0141_document_emails`, and `0142_tax_certificates` lets `documents` hold a certificate.
 
 The designs are in `/mnt/project-files/screenshots/statements/` in the project folder: the statement PDF, the receipt PDF, the three emails at phone and wide sizes, and the app's Documents screen in every state.
 
@@ -30,6 +30,22 @@ One statement is for one client and covers every investment under their account 
 ## A receipt
 
 One receipt for each confirmed payment. It shows the amount, what it paid for, when it was received, how it was paid, the payer's number by its last three digits only (`number ending 456`), the provider's reference, the Finvest payment reference and the receipt number. It never shows a full mobile money or bank account number.
+
+## A tax certificate
+
+One certificate per client per tax year, 1 July to 30 June, keyed by the year's label (`2026-27`). It is the one document that shows a tax amount, and like every other it never shows a rate.
+
+| Part | What it shows |
+| --- | --- |
+| Heading | The client's name, account number, the TIN they gave (or "Not given"), the tax year, the issue date and the certificate number (`TC-<document id>`) |
+| Summary | For each currency: interest earned before tax, withholding tax deducted, and interest earned after tax |
+| Interest by investment | Each investment that earned in the year, including one that matured, rolled over or was withdrawn: product, reference, start and maturity dates, and the three figures |
+
+The figures come from `tax.service.certificate_figures`, read from the ledger. It checks that before tax less tax is after tax on every line and total, and that the totals are the sums of the lines. If not, the certificate fails with `does_not_add_up`, is never drawn or sent, and staff see the error. A line can be negative when an investment undone this year earned in the last one.
+
+**When.** The monthly run for June, which starts only once the ledger is closed through 30 June, also asks for every client's certificate for the year that June ends. A year in which a client earned nothing is recorded as `empty` and never shown or sent. The certificate is emailed like a statement, with no figure in the email.
+
+**The TIN.** The certificate prints the TIN, which only the identity data key opens. A worker started without `FINVEST_IDENTITY_DATA_KEY` leaves certificates pending and retries them with `identity_key_missing`, logged as an error, instead of drawing one without the TIN.
 
 ## The PDFs
 
@@ -59,6 +75,7 @@ A document is asked for first and built later, so no request waits on the ledger
 | --- | --- | --- |
 | The client, in the app | `requested_statement` | The client's `Idempotency-Key` |
 | The monthly run, for every client with a ledger account | `monthly_statement` | The month, `2026-10` |
+| The monthly run for June, for every client with a ledger account | `tax_certificate` | The tax year, `2026-27` |
 | A confirmed payment, through the `documents.receipt_from_deposit` consumer of `payments.deposit_confirmed` | `receipt` | The deposit ID, also unique on its own |
 
 1. **Ask.** `service.ask` writes a `pending` row and queues `documents.build` naming only the document's ID, in the same transaction. Asking again with the same key writes nothing and returns the first row, so two taps or a retried run ask once.

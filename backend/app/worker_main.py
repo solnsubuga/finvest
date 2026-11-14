@@ -54,10 +54,18 @@ def handlers(
         **InvestmentJobs(database, clock).handlers(),
         **AutoinvestJobs(database, clock).handlers(),
         **DealingJobs(clock).handlers(),
-        **DocumentJobs(database, clock, email=EmailSettings().transport()).handlers(),
         **GoalJobs(database, clock).handlers(),
     }
     identity = KycSettings()
+    kinds.update(
+        DocumentJobs(
+            database,
+            clock,
+            email=EmailSettings().transport(),
+            # Tax certificates print the TIN a client gave, which only this key opens.
+            sealer=identity.sealer() if identity.identity_data_key is not None else None,
+        ).handlers()
+    )
     if identity.identity_provider != "manual":
         # The manual provider sends every client to a person and queues no provider jobs.
         kinds.update(
