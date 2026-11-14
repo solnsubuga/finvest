@@ -14,6 +14,8 @@ function ago(minutes: number, now: Date): string {
 }
 
 export function createStubReturnsApi(me: string, delay = 150, which: ReturnsStubCase = "sample", now = new Date()): ReturnsApi {
+  const ugx = (minor: number) => ({ minor, currency: "UGX" as const });
+  const day = (minutes: number) => ago(minutes, now).slice(0, 10);
   const items: PayoutReturn[] =
     which === "sample"
       ? [
@@ -26,6 +28,14 @@ export function createStubReturnsApi(me: string, delay = 150, which: ReturnsStub
             status: "proposed",
             proposedBy: OTHER,
             proposedAt: ago(35, now),
+            payout: { kind: "bank", amount: ugx(1_200_000), bankName: "Stanbic Bank", network: null, maskedAccount: "•••• 7731", holderName: "Joan Namutebi" },
+            line: {
+              id: "-OdTrustLine00000031",
+              valueDate: day(24 * 60),
+              amount: ugx(1_200_000),
+              reference: "RTN 0412 FINVEST -OdBankPay00000000P1",
+              narrative: "Returned: account closed",
+            },
           },
           {
             id: "-OdReturn00000000002",
@@ -36,11 +46,11 @@ export function createStubReturnsApi(me: string, delay = 150, which: ReturnsStub
             status: "proposed",
             proposedBy: me,
             proposedAt: ago(10, now),
+            payout: { kind: "mobile_money", amount: ugx(350_000), bankName: null, network: "mtn", maskedAccount: "•••• 5520", holderName: "Peter Okello" },
+            line: { id: "-OdIotecLine00000044", valueDate: day(3 * 60), amount: ugx(350_000), reference: "REV 88412", narrative: "MTN reversal" },
           },
         ]
       : [];
-  const ugx = (minor: number) => ({ minor, currency: "UGX" as const });
-  const day = (minutes: number) => ago(minutes, now).slice(0, 10);
   const paid: ReturnablePayout[] =
     which === "sample"
       ? [
@@ -126,15 +136,20 @@ export function createStubReturnsApi(me: string, delay = 150, which: ReturnsStub
         if (!payoutId.startsWith("-Od")) refuse("not_found");
         if (items.some((each) => each.statementLineId === statementLineId && each.status === "proposed")) refuse("statement_line_in_use");
         made += 1;
+        const chosen = paid.find((each) => each.id === payoutId);
         items.push({
           id: `-OdReturn000000000${String(made).padStart(2, "0")}`,
           payoutId,
-          clientId: paid.find((each) => each.id === payoutId)?.clientId ?? "-OdClient00000000029",
+          clientId: chosen?.clientId ?? "-OdClient00000000029",
           statementLineId,
           reason,
           status: "proposed",
           proposedBy: me,
           proposedAt: new Date().toISOString(),
+          payout: chosen
+            ? { kind: chosen.kind, amount: chosen.amount, bankName: chosen.bankName, network: chosen.network, maskedAccount: chosen.maskedAccount, holderName: chosen.holderName }
+            : { kind: "bank", amount: ugx(1_000_000), bankName: null, network: null, maskedAccount: "•••• 0000", holderName: "A client" },
+          line: (lines[payoutId] ?? []).find((each) => each.id === statementLineId) ?? null,
         });
       }),
     approve: (_key, id) =>
