@@ -68,6 +68,13 @@ export interface Lock {
   yours: boolean;
 }
 
+/** The client froze their own account from the app (docs/client-profile.md). */
+export interface Freeze {
+  id: string;
+  frozenAt: string;
+  reason: string | null;
+}
+
 export interface Conversation {
   id: string;
   topic: string;
@@ -95,6 +102,8 @@ export interface ClientPage {
   destinations: Destination[];
   /** Newest first. At most one is `proposed`. */
   locks: Lock[];
+  /** Each time the client froze the account themselves, newest first. */
+  freezes: Freeze[];
   /** Null when the reader's role does not see support chats. */
   conversation: Conversation | null;
   /** Null when the reader's role does not see complaints. */

@@ -7,6 +7,7 @@ import {
 
 import { colors, fontSizes } from "@/theme";
 
+import { Icon, IconName } from "./Icon";
 import { Txt } from "./Txt";
 
 type Variant = "primary" | "lime" | "secondary" | "outlineOnDark";
@@ -18,6 +19,8 @@ type Props = {
   disabled?: boolean;
   loading?: boolean;
   height?: number;
+  /** A line icon before the words. Decorative: the label names the button. */
+  icon?: IconName;
   testID?: string;
 };
 
@@ -46,6 +49,7 @@ export function Button({
   disabled = false,
   loading = false,
   height = 56,
+  icon,
   testID,
 }: Props) {
   const fill = fills[variant];
@@ -77,9 +81,12 @@ export function Button({
       {loading ? (
         <ActivityIndicator color={fill.text} aria-hidden />
       ) : (
-        <Txt size={fontSizes.lg} weight="bold" color={fill.text}>
-          {label}
-        </Txt>
+        <>
+          {icon ? <Icon name={icon} size={18} color={fill.text} /> : null}
+          <Txt size={fontSizes.lg} weight="bold" color={fill.text}>
+            {label}
+          </Txt>
+        </>
       )}
     </Pressable>
   );
@@ -121,7 +128,7 @@ export function TextLink({
 }
 
 const styles = StyleSheet.create({
-  base: { alignItems: "center", justifyContent: "center", flexShrink: 0 },
+  base: { flexDirection: "row", gap: 8, alignItems: "center", justifyContent: "center", flexShrink: 0 },
   disabled: { opacity: 0.4 },
   pressed: { opacity: 0.75 },
   link: { minHeight: 44, justifyContent: "center", alignItems: "center" },

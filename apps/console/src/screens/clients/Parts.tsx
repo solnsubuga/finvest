@@ -67,7 +67,7 @@ export function ClientHeader({ page }: { page: ClientPage }) {
       </p>
       {account.status === "locked" ? (
         <p className="m-0 max-w-[720px] rounded-md bg-danger-surface px-3 py-2.5 text-sm font-semibold">
-          This account is locked. The client cannot sign in, and every session they had ended when the lock was approved.
+          This account is locked. The client cannot sign in, and every session they had ended when it was locked.
         </p>
       ) : null}
       {account.status === "unclaimed" ? (
@@ -257,6 +257,14 @@ export function LockSection({
 }) {
   const [form, setForm] = useState<"propose" | Decision | null>(null);
   const waiting = page.locks.find((lock) => lock.status === "proposed");
+  // A locked account was frozen by the client when their latest freeze came after the latest
+  // approved lock. Both lists are newest first.
+  const latestFreeze = page.freezes[0];
+  const latestLock = page.locks.find((lock) => lock.kind === "lock" && lock.status === "approved");
+  const frozenBy =
+    latestFreeze && (!latestLock?.decidedAt || Date.parse(latestFreeze.frozenAt) > Date.parse(latestLock.decidedAt))
+      ? latestFreeze
+      : null;
   const past = page.locks.filter((lock) => lock.status !== "proposed");
   const status = page.account.status;
   const kind: LockKind | null = status === "active" ? "lock" : status === "locked" ? "unlock" : null;
@@ -271,9 +279,22 @@ export function LockSection({
           Lock and unlock
         </h2>
         <p className="m-0 max-w-[720px] text-md leading-normal text-muted">
-          A lock stops the client signing in and ends every session they have. One person proposes it with a reason and a different person approves it.
+          A lock stops the client signing in and ends every session they have. One person proposes it with a reason and a different person approves it. A client can also freeze their own account from the app; unfreezing it is an unlock.
         </p>
       </div>
+
+      {status === "locked" && frozenBy ? (
+        <article aria-label="Frozen by the client" className="flex max-w-[720px] flex-col gap-2 rounded-xl border border-border bg-surface p-4">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <h3 className="m-0 text-[17px] font-extrabold">Frozen by the client</h3>
+            <span className="rounded-pill bg-surface-sunken px-2 py-0.5 text-2xs font-bold">{formatTime(frozenBy.frozenAt)}</span>
+          </div>
+          <p className="m-0 text-md">{frozenBy.reason ? `“${frozenBy.reason}”` : "They gave no reason."}</p>
+          <p className="m-0 text-sm text-muted">
+            The client froze their own account in the app, which ended every session. Before proposing an unlock, check it is really them, for example by calling back on the number on file.
+          </p>
+        </article>
+      ) : null}
 
       {waiting ? (
         <article aria-label={`${KIND_WORDS[waiting.kind].title}, waiting`} className="flex max-w-[720px] flex-col gap-3 rounded-xl border border-border bg-surface p-4">

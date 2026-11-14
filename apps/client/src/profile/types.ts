@@ -1,7 +1,7 @@
 /**
  * The contract between the client's profile screens and the backend:
  * next of kin and the investing questions (docs/client-profile.md), closing
- * the account (docs/account-closure.md) and a copy of the client's data.
+ * the account (docs/account-closure.md), freezing it, and a copy of the client's data.
  */
 
 import { Money } from "@/payments/types";
@@ -113,6 +113,11 @@ export interface ProfileClient {
   cancelClosure(requestId: string): Promise<Closure>;
   /** Saves the copy of the client's data to the device or the browser's downloads. */
   downloadMyData(): Promise<void>;
+  /**
+   * Freezes the account at once: every session ends, this one too, and nobody can log in until
+   * two people at Finvest unfreeze it (docs/client-profile.md).
+   */
+  freezeAccount(reason: string | null): Promise<{ frozenAt: string }>;
 }
 
 export function describeProfileError(error: unknown): string {
