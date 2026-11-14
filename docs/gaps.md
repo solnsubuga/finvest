@@ -75,7 +75,7 @@ Four screens were still the placeholder page. The Review Queue is connected to `
 
 The backend reviewer keeps a list of follow-ups asked for in reviews (team memory "finvest-review-followups"). The ones that touch money before launch: the investing sweep must not cancel while a deposit is open; stop the interest run after repeated failures and show it to staff; an idempotency key on `prepare_order` and a second person to settle a dealing order; the payouts closer must not be the importer, enforced in the database; the second signature for a day close enforced in the database; caching `/health/operations`.
 
-Transfers of investments between clients: screening holds are built (see [investing.md](investing.md)). Transaction monitoring of transfers is owed by the screening thread once #393 is on `main`: `screening.contract.watch_transfer`, called from the worker transaction that makes a transfer, new kinds `transfer_sent` and `transfer_received` (migration 0183), and the rules that read them. Investing already exposes `transfers.for_monitoring`.
+Transfers of investments between clients: screening holds and transaction monitoring are both built (see [investing.md](investing.md) and [screening.md](screening.md#transaction-monitoring)).
 
 Company and group accounts: the signatories are screened as clients, but nothing screens the organisation itself, its name and registration number, against sanctions lists. That is acceptable while an organisation cannot invest ([organisations.md](organisations.md)), and must be built before investing as an organisation opens.
 

@@ -46,6 +46,7 @@ from app.modules.investments.corrections import (
     send_back_correction,
     withdraw_correction,
 )
+from app.modules.investments.domain.runs import RunKind
 from app.modules.investments.holdings import (
     REQUEST_OPERATION,
     STARTED_TOPIC,
@@ -72,6 +73,15 @@ from app.modules.investments.maturity import (
     choose_at_maturity,
     mature_investment,
     pay_out_matured,
+)
+from app.modules.investments.run_requests import (
+    RunRequest,
+    approve_run,
+    decline_run,
+    get_run,
+    list_runs,
+    propose_run,
+    withdraw_run,
 )
 from app.modules.investments.transfers import (
     TRANSFERRED_TOPIC,
@@ -114,11 +124,14 @@ __all__ = [
     "ProductOwed",
     "ProductView",
     "ProposalView",
+    "RunKind",
+    "RunRequest",
     "RunningInvestment",
     "Transfer",
     "accrue_investment",
     "approve_correction",
     "approve_rate",
+    "approve_run",
     "cancel_unpaid",
     "choose_at_maturity",
     "client_investment",
@@ -127,16 +140,19 @@ __all__ = [
     "client_products",
     "client_quote",
     "client_transfers",
+    "decline_run",
     "get_correction",
     "get_investment",
     "get_investments",
     "get_product",
+    "get_run",
     "held_transfers",
     "interest_runs",
     "list_corrections",
     "list_investments",
     "list_products",
     "list_proposals",
+    "list_runs",
     "list_transfers",
     "lock_investment",
     "mature_investment",
@@ -149,6 +165,7 @@ __all__ = [
     "payable_investment",
     "propose_correction",
     "propose_rate",
+    "propose_run",
     "public_products",
     "rate_history",
     "request_investment",
@@ -161,4 +178,5 @@ __all__ = [
     "withdraw",
     "withdraw_correction",
     "withdraw_rate",
+    "withdraw_run",
 ]

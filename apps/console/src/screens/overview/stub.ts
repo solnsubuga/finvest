@@ -34,7 +34,14 @@ const SOURCES: Record<Kind, { view: Permission; decide: Permission }> = {
   payout_resolution: { view: "reconciliation.view", decide: "reconciliation.change" },
   payout_release: { view: "review_queue.view", decide: "payout_accounts.change" },
   bank_account_change: { view: "settings.view", decide: "bank_accounts.change" },
+  payment_channels_change: { view: "settings.view", decide: "payment_channels.change" },
+  calendar_change: { view: "settings.view", decide: "calendar.change" },
+  staff_security_change: { view: "settings.view", decide: "staff_security.change" },
+  statement_layout_change: { view: "settings.view", decide: "statement_layouts.change" },
+  withdrawal_limits_change: { view: "settings.view", decide: "withdrawal_limits.change" },
   organisation: { view: "review_queue.view", decide: "organisations.review" },
+  investment_correction: { view: "investments.view", decide: "investment_corrections.change" },
+  investment_run: { view: "investments.view", decide: "investment_corrections.change" },
 };
 
 interface Reader {

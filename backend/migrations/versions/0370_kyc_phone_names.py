@@ -1,7 +1,7 @@
 """Look up the name the network holds for a client's phone number when they hand in their ID.
 
 Revision ID: 0370_kyc_phone_names
-Revises: 0261_payment_deposit_reversals
+Revises: 0183_monitoring_transfers
 
 When a client hands in their identity check, the worker asks ioTec Verify for the name the
 mobile network holds for the client's own phone number, the same lookup a mobile money payout
@@ -21,7 +21,7 @@ from collections.abc import Sequence
 from alembic import op
 
 revision: str = "0370_kyc_phone_names"
-down_revision: str | None = "0261_payment_deposit_reversals"
+down_revision: str | None = "0183_monitoring_transfers"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 

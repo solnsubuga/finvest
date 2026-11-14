@@ -114,12 +114,13 @@ What the database enforces: `screening_payout_clearance(client, at)` holds the r
 
 Migration `0182_transaction_monitoring`. The rules are `domain/monitoring.py`: pure, whole numbers only, and in Uganda shillings. Dollar transactions are recorded but no rule reads them, while the dollar product is paused.
 
-`monitoring_transactions` is screening's own record of each confirmed deposit and each payout asked for: the client, the amount, and when. The rules read a client's earlier ones from it, so screening never reads another module's tables for history.
+`monitoring_transactions` is screening's own record of each confirmed deposit, each payout asked for and each transfer between clients: the client, the amount, and when. The rules read a client's earlier ones from it, so screening never reads another module's tables for history.
 
 | What | How it arrives | When it counts from |
 | --- | --- | --- |
 | A deposit | Screening consumes `payments.deposit_confirmed` (`screening.monitor_deposit`) and reads the deposit from payments | When it was confirmed |
 | A payout | Payouts calls `contract.watch_payout` when a payout is created, which queues `screening.monitor_payout`; the worker reads the payout from payouts | When it was asked for |
+| A transfer between clients | Investments calls `contract.watch_transfer` in the worker transaction that makes the transfer, which queues `screening.monitor_transfer`; the worker reads it with `investments.transfers.for_monitoring` and records it twice, `transfer_sent` for the sender and `transfer_received` for the recipient (migration `0183_monitoring_transfers`). A transfer that was not made records nothing | When it was made |
 
 Each job carries only an ID. A transaction is recorded once, whatever the job does twice, and one client's transactions are recorded one at a time, so two deposits confirmed together see each other.
 
@@ -130,6 +131,8 @@ Each job carries only an ID. A transaction is recorded once, whatever the job do
 | Many deposits | `many_deposits` | The 5th deposit within 24 hours | Client and day |
 | Unusual deposit | `unusual_deposit` | A deposit of UGX 5,000,000 or more that is at least 5 times the client's median deposit over the last 180 days, once they have 3 earlier deposits in that time | Deposit |
 | Quick withdrawal | `quick_withdrawal` | A payout of at least half of what came in during the last 7 days, when that was UGX 5,000,000 or more | Payout |
+
+Money received by transfer counts as a deposit in the four deposit rules, and money sent by transfer counts as a payout in the quick withdrawal rule, since a transfer moves the same value between clients as paying in and taking out would. A case whose transactions include a transfer lists those IDs under `transfer_ids` in its detail, so staff know to look them up among transfers rather than deposits or payouts.
 
 The owner kept all thresholds as built on 2026-11-14 ([decisions.md](decisions.md)), and counsel reviews them later. UGX 20,000,000 follows the Financial Intelligence Authority's large cash transaction threshold, which that review confirms. The median, not the mean, is the usual deposit, so one big deposit does not hide the next.
 

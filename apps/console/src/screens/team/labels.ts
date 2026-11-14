@@ -44,6 +44,11 @@ const ACTIONS: readonly { permission: Permission; label: string; under: ScreenPe
   { permission: "announcements.send", label: "Send announcements", under: "settings.view" },
   { permission: "bank_accounts.change", label: "Change the bank account clients pay into", under: "settings.view" },
   { permission: "account_codes.change", label: "Change accounting system codes", under: "settings.view" },
+  { permission: "withdrawal_limits.change", label: "Change the withdrawal limits", under: "settings.view" },
+  { permission: "payment_channels.change", label: "Pause or open payment channels", under: "settings.view" },
+  { permission: "calendar.change", label: "Change holidays, the bank cut-off and reminders", under: "settings.view" },
+  { permission: "staff_security.change", label: "Change office networks and staff sign-out", under: "settings.view" },
+  { permission: "statement_layouts.change", label: "Change statement import layouts", under: "settings.view" },
   { permission: "migration.import", label: "Run a trial import", under: "migration.view" },
   { permission: "migration.sign_off", label: "Sign off the switch", under: "migration.view" },
 ];

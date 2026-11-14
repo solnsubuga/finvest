@@ -465,6 +465,14 @@ async def client_goals(
     return [await _client_view(session, client, goal, clock, products) for goal in goals]
 
 
+async def active_goals(session: AsyncSession, client: Actor) -> list[Goal]:
+    """The client's active goals, newest first, without their figures. For insights' list of
+    what comes up; their row policy fences out everyone else's."""
+    client_id = _client_id(client)
+    rows = await session.execute(_FOR_CLIENT, {"client_id": client_id, "limit": MAX_PAGE_SIZE})
+    return [goal for goal in map(_goal, rows.all()) if goal.status is GoalStatus.ACTIVE]
+
+
 async def client_goal(
     session: AsyncSession, client: Actor, goal_id: str, clock: Clock
 ) -> ClientGoal:
@@ -762,6 +770,18 @@ def _goal(row: Row[Any]) -> Goal:
         updated_at=row.updated_at,
         closed_at=row.closed_at,
     )
+
+
+_OPEN_SAVINGS_FOR_CLIENT = text(
+    "SELECT s.investment_id, s.goal_id FROM goal_savings s JOIN goals g ON g.id = s.goal_id "
+    "WHERE s.client_id = :client_id AND g.status = 'active'"
+)
+
+
+async def open_goal_savings(session: AsyncSession, client_id: str) -> dict[str, str]:
+    """The investments saved to the client's open goals, each mapped to its goal's ID."""
+    rows = await session.execute(_OPEN_SAVINGS_FOR_CLIENT, {"client_id": client_id})
+    return {str(row.investment_id): str(row.goal_id) for row in rows.all()}
 
 
 _OPEN_FOR_CLIENT = text(

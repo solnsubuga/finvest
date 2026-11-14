@@ -76,7 +76,7 @@ Client routes, signed in as the client. Each `POST` needs an `Idempotency-Key`.
 | Route | What it does |
 | --- | --- |
 | `POST /client/investments/{id}/payments/mobile-money` | `{"network": "mtn" or "airtel"}`. Prompts the number on the client's own account for exactly the investment's amount. The request cannot name a number or an amount. |
-| `POST /client/investments/{id}/payments/bank-transfer` | A `multipart/form-data` body: the `receipt` file (PDF, JPEG or PNG, at most 10 MiB), `amount_minor`, `sent_on`, `bank_name` and `transaction_number`. The amount must be the investment's, or it is refused with `amount_differs_from_investment`. First, `preflight_bank_receipt` runs the whole submission in a savepoint it rolls back. That covers the details, an investment already being paid, and a reused key. A replayed key gets the earlier transfer back without storing anything. The file's first bytes must match its claimed type (PDF, JPEG or PNG), or it is refused as `content_does_not_match_type`. Only then is the file stored, outside any transaction, under `payments/receipts/<deposit ID>`, and the transfer is saved pointing at it. So a saved transfer always has its file. If saving still fails, or a simultaneous identical request saved first, the stored file is deleted. If the store cannot be reached to delete it, `receipt_orphaned` is logged with the deposit ID. If storage is down when storing, the answer is `503` and nothing is saved. The body limit for this path is 11 MiB, and the edge allows 12 MiB. |
+| `POST /client/investments/{id}/payments/bank-transfer` | A `multipart/form-data` body: the `receipt` file (PDF, JPEG or PNG, at most 10 MiB), `amount_minor`, `sent_on`, `bank_name` and `transaction_number`. The amount must be the investment's, or it is refused with `amount_differs_from_investment`. First, `preflight_bank_receipt` runs the whole submission in a savepoint it rolls back. That covers the details, an investment already being paid, and a reused key. A replayed key gets the earlier transfer back without storing anything. The file's first bytes must match its claimed type (PDF, JPEG or PNG), or it is refused as `content_does_not_match_type`. Only then is the file stored, outside any transaction, under `payments/receipts/<deposit ID>`, and the transfer is saved pointing at it. So a saved transfer always has its file. If saving still fails, or a simultaneous identical request saved first, the stored file is deleted. If the store cannot be reached to delete it, `receipt_orphaned` is logged with the deposit ID. If storage is down when storing, the answer is `503` and nothing is saved. The body limit for this path is 11 MiB, and the edge allows 12 MiB. A client stores at most 10 receipts in any 24 hours, counted under a lock per client; the 11th is refused with `429` `rate_limited` before its file is stored, because a goal takes any number of payments and each file is kept for good. |
 | `GET /client/investments/{id}/bank-transfer-details` | Where to send a bank transfer: `bank_name`, `account_name`, `account_number`, `branch` (may be null), `reference` and `amount`. The `reference` is the client's Finvest account number, for the client to write on the transfer so staff can find the line on the statement. The same refusals as paying: `404` if it is not the client's, `409` if it can no longer be paid or already has a payment (fetch that one). `503` if no account is set for the investment's currency. The account is the one staff last approved on the console's Settings screen (see [The account clients pay into](#the-account-clients-pay-into)). |
 | `GET /client/investments/{id}/payment` | The investment's payment that has not failed. A `409` from either `POST` means one exists: show this one instead of asking the client to pay again. |
 | `GET /client/payments` | The client's own payments, newest first, 50 a page, for the Activity list. Each is the same shape as below without its `receipt`. Pass `next_before` back as `before` for the next page; it is null on the last. |
@@ -172,21 +172,17 @@ The client is not told by message yet, and a start job queued by the original co
 
 **The investment has started and is still running.** Staff first unwind it with `/staff/investment-corrections` (see [investing.md](investing.md)), which moves the principal back to `client.awaiting_start`, takes back the interest so far and has the desk release the bills. The deposit is then reversed as above. An unwind is refused once the money has left: the investment matured and was paid out, it was withdrawn early, or a refund went out.
 
-**The money has left**, so there is nothing to reverse. Staff propose a forward entry `payment.deposit_correction`:
+**The money has left**, for example the investment matured and was paid out or a refund went out, so there is nothing to reverse. The amount is recorded as owed by the client, then cleared once (`receivables.py`, `domain/receivables.py`, `receivable_routes.py`, migration 0262). Each step is proposed by one member of staff with a reason (`POST /staff/payments/receivables` with `kind`), and approved by a different one with a passkey or app code from the last ten minutes. The approval posts the entry in that same transaction, so a step is never approved and not yet done. Steps show in the approvals inbox as `deposit_receivable`.
 
-| Debit | Credit |
-| --- | --- |
-| Asset `receivables.deposit_correction`, owned by the client, reference the deposit ID | The cash account the deposit debited, because that money never arrived |
+| Step | Entry type | Debit | Credit |
+| --- | --- | --- | --- |
+| `open` | `payment.deposit_correction` | Asset `receivables.deposit_correction`, owned by the client, reference the deposit ID | The wallet or bank account the deposit's entry debited, because that money never arrived |
+| `recover`, the money arrives late | `payment.receivable_recovered` | That same wallet or bank account | The receivable |
+| `write_off` | `payment.receivable_written_off` | Expense `losses.deposit_correction` | The receivable |
 
-The receivable shows that the client owes the amount. It is cleared in exactly one of three ways, each with two staff:
+Every entry has source `payment.receivable` and the step's ID, key `deposit-receivable:<ID>`, and is for the deposit's whole amount. Opening is refused with `unwind_first` while the investment runs and with `reverse_instead` while the whole amount still waits for it. A receivable is opened once and cleared once, and one step waits for a second person at a time. If the wallet or bank account no longer holds the amount, opening is refused with `insufficient_funds`, a matter for finance first. The database holds each person to their part and checks each applied step's entry line by line. `GET /staff/payments/receivables/outstanding` lists every receivable not yet cleared, and `receivables.outstanding` is there for the daily close to report them until they are zero.
 
-| How | Debit | Credit |
-| --- | --- | --- |
-| The investment is unwound | The client's holding | The receivable |
-| The money does arrive late | The cash account | The receivable |
-| It is written off | Expense `losses.deposit_correction` | The receivable |
-
-An open receivable is reported by the daily close until it is zero.
+Clearing a receivable by unwinding the investment, as first sketched, is not built. A running investment is never put to a receivable: it is unwound and the deposit reversed instead.
 
 ### A transfer credited to the wrong client
 

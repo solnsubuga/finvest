@@ -704,12 +704,19 @@ export const MonthView = z.object({
 });
 export type MonthView = z.infer<typeof MonthView>;
 
+export const UpcomingKind = z.enum(["maturity", "autoinvest_run", "goal_saving", "goal_date"]);
+export type UpcomingKind = z.infer<typeof UpcomingKind>;
+
 export const UpcomingView = z.object({
   amount_minor: z.number().int(),
   at_maturity: AtMaturity.nullable(),
-  investment_id: z.string(),
+  goal_id: z.string().nullable(),
+  goal_name: z.string().nullable(),
+  investment_id: z.string().nullable(),
+  kind: UpcomingKind,
   on: z.string(),
-  product_name: z.string(),
+  plan_id: z.string().nullable(),
+  product_name: z.string().nullable(),
 });
 export type UpcomingView = z.infer<typeof UpcomingView>;
 
@@ -1079,6 +1086,49 @@ export const PlanList = z.object({
   plans: z.array(AutoinvestApiPlanView),
 });
 export type PlanList = z.infer<typeof PlanList>;
+
+export const PortfolioMaturityView = z.object({
+  at_maturity: AtMaturity.nullable(),
+  days_earned: z.number().int(),
+  days_left: z.number().int(),
+  investment_id: z.string(),
+  on: z.string(),
+  product_name: z.string(),
+  term_days: z.number().int(),
+});
+export type PortfolioMaturityView = z.infer<typeof PortfolioMaturityView>;
+
+export const PortfolioPartView = z.object({
+  count: z.number().int(),
+  worth_minor: z.number().int(),
+});
+export type PortfolioPartView = z.infer<typeof PortfolioPartView>;
+
+export const PortfolioProductView = z.object({
+  count: z.number().int(),
+  percent: z.number().int(),
+  product_code: z.string(),
+  product_name: z.string(),
+  worth_minor: z.number().int(),
+});
+export type PortfolioProductView = z.infer<typeof PortfolioProductView>;
+
+export const PortfolioView = z.object({
+  active_count: z.number().int(),
+  awaiting_payment_count: z.number().int(),
+  currency: z.string(),
+  earning_per_day_minor: z.number().int(),
+  in_goals: PortfolioPartView,
+  interest_so_far_minor: z.number().int(),
+  interest_today_minor: z.number().int(),
+  invested_minor: z.number().int(),
+  next_maturity: PortfolioMaturityView.nullable(),
+  open_goals: z.number().int(),
+  outside_goals: PortfolioPartView,
+  products: z.array(PortfolioProductView),
+  worth_minor: z.number().int(),
+});
+export type PortfolioView = z.infer<typeof PortfolioView>;
 
 export const PreferenceChange = z.object({
   category: z.enum(["money", "investments", "earnings", "account", "security", "support", "news"]),
@@ -2683,6 +2733,19 @@ export const operations = {
     idempotent: false,
     status: 200,
     response: PinChecked,
+  },
+  "GET /client/portfolio": {
+    method: "GET",
+    path: "/client/portfolio",
+    params: z.object({}),
+    query: z.object({
+    currency: Currency.optional(),
+  }),
+    body: null,
+    bodyKind: null,
+    idempotent: false,
+    status: 200,
+    response: PortfolioView,
   },
   "GET /client/products": {
     method: "GET",

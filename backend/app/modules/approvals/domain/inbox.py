@@ -31,6 +31,7 @@ Kind = Literal[
     "announcement",
     "payout_account",
     "investment_correction",
+    "investment_run",
     "payout_resolution",
     "tax_remittance",
     "deposit_reassignment",
@@ -42,6 +43,7 @@ Kind = Literal[
     "bank_account_change",
     "account_code_map",
     "deposit_reversal",
+    "deposit_receivable",
 ]
 
 
@@ -79,6 +81,8 @@ SOURCES: dict[Kind, Source] = {
     "payout_resolution": Source("reconciliation.view", "reconciliation.change"),
     "payout_account": Source("review_queue.view", "payout_accounts.change"),
     "investment_correction": Source("investments.view", "investment_corrections.change"),
+    # Running a day's interest again, or today's maturities, decided as corrections are.
+    "investment_run": Source("investments.view", "investment_corrections.change"),
     "tax_remittance": Source("finance.view", "tax_remittances.change"),
     "deposit_reassignment": Source("reconciliation.view", "deposit_reassignments.change"),
     # Releasing a payout held because it is large, decided where it is held: the review queue.
@@ -97,6 +101,8 @@ SOURCES: dict[Kind, Source] = {
     "account_code_map": Source("settings.view", "account_codes.change"),
     # Taking back a payment credited by mistake, decided as reassignments are.
     "deposit_reversal": Source("reconciliation.view", "deposit_reassignments.change"),
+    # Recording, recovering or writing off what a client owes for a mistaken payment.
+    "deposit_receivable": Source("reconciliation.view", "deposit_reassignments.change"),
 }
 
 

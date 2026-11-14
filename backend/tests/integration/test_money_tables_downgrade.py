@@ -8,7 +8,8 @@ complaint outcomes, the suppression lifts, the client locks, the announcements, 
 changes, Finvest's own money in the buffer, the payments of tax to URA, the payments moved to
 the right client, next of kin, the answers to the investing questions, the requests to close an
 account, the journals sent to the accounting system, who set the bank account clients pay
-into, why a payout send waited, the account code maps or the deposits taken back as mistakes."""
+into, why a payout send waited, the account code maps, the deposits taken back as mistakes,
+what clients owe for them or the runs staff asked for again."""
 
 import os
 from collections.abc import Iterator
@@ -21,6 +22,14 @@ from tests.support.database import TestDatabase
 pytestmark = pytest.mark.integration
 
 ROWS = {
+    "0183_monitoring_transfers": (
+        "BEGIN; SELECT set_config('finvest.actor_kind', 'system', true); "
+        "INSERT INTO monitoring_transactions (id, client_id, kind, source_id, currency, "
+        "amount_minor, occurred_at, recorded_at) VALUES ('-Nabc0000000000000A2', "
+        "'-Nabc0000000000000B1', 'transfer_received', '-Nabc0000000000000C2', 'UGX', 1000, "
+        "now(), now()); COMMIT",
+        "refusing to drop transfers from the monitoring record",
+    ),
     "0182_transaction_monitoring": (
         "BEGIN; SELECT set_config('finvest.actor_kind', 'system', true); "
         "INSERT INTO monitoring_transactions (id, client_id, kind, source_id, currency, "
@@ -655,6 +664,12 @@ ROWS = {
         "'started:-Nabc0000000000000C1', '-Nabc0000000000000C1', now())",
         "refusing to drop investment notes",
     ),
+    "0144_ended_investment_notes": (
+        "INSERT INTO documents (id, client_id, kind, idempotency_key, source_id, requested_at) "
+        "VALUES ('-Nabc0000000000000A1', '-Nabc0000000000000B1', 'investment_note', "
+        "'ended:-Nabc0000000000000C1', '-Nabc0000000000000C1', now())",
+        "refusing to drop investment notes",
+    ),
     "0141_document_emails": (
         # Only the worker queues an email, and only for a ready document. The migrator owns
         # both tables, so it sets their guards aside to write the row this test needs.
@@ -978,6 +993,19 @@ ROWS = {
         "'-Nabc0000000000000C1', 'UGX', 1000, 'Never arrived', '-Nabc0000000000000S1', now())",
         "refusing to drop the record of reversed deposits",
     ),
+    "0262_payment_receivables": (
+        # The guard admits only staff proposing in their own name, for a confirmed deposit.
+        "ALTER TABLE payment_receivable_steps DISABLE TRIGGER payment_receivable_steps_guard; "
+        "INSERT INTO payment_deposits (id, client_id, purpose_type, purpose_id, method, provider, "
+        "currency, amount_minor, status, created_at, updated_at) VALUES ('-Nabc0000000000000A1', "
+        "'-Nabc0000000000000B1', 'investment', '-Nabc0000000000000C1', 'bank_transfer', 'bank', "
+        "'UGX', 1000, 'in_review', now(), now()); "
+        "INSERT INTO payment_receivable_steps (id, deposit_id, kind, client_id, currency, "
+        "amount_minor, reason, proposed_by, proposed_at) VALUES ('-Nabc0000000000000D1', "
+        "'-Nabc0000000000000A1', 'open', '-Nabc0000000000000B1', 'UGX', 1000, 'Never arrived', "
+        "'-Nabc0000000000000S1', now())",
+        "refusing to drop the record of mistaken deposit receivables",
+    ),
     "0224_identity_recovery_asks": (
         "INSERT INTO identity_clients (id, phone, status, created_at) VALUES "
         "('-Nabc0000000000000B1', '+256772123456', 'unclaimed', now()); "
@@ -1009,6 +1037,31 @@ ROWS = {
         "('-Nabc0000000000000R1', '-Nabc0000000000000A1', '-Nabc0000000000000B1', "
         "'-Nabc0000000000000P1', now()); COMMIT",
         "refusing to drop the saving rules clients set up",
+    ),
+    "0330_investment_run_requests": (
+        "BEGIN; SELECT set_config('finvest.actor_kind', 'staff', true); "
+        "SELECT set_config('finvest.actor_id', '-Nabc0000000000000S1', true); "
+        "INSERT INTO investment_run_requests (id, kind, run_date, reason, proposed_by, "
+        "proposed_at) VALUES ('-Nabc0000000000000A1', 'interest', DATE '2026-11-10', "
+        "'The run stopped part way', '-Nabc0000000000000S1', now()); COMMIT",
+        "refusing to drop the record of runs staff asked for again",
+    ),
+    "0331_correction_pay_out_held": (
+        "BEGIN; ALTER TABLE investments DISABLE TRIGGER USER; "
+        "ALTER TABLE investment_corrections DISABLE TRIGGER USER; "
+        "INSERT INTO investments (id, client_id, product_id, currency, principal_minor, "
+        "annual_rate_bps, tax_bps, term_days, at_maturity, created_at, pay_by, updated_at) "
+        "VALUES ('-Nabc0000000000000A1', '-Nabc0000000000000B1', 'FvProduct1TREA91_001', "
+        "'UGX', 1000000, 1250, 1500, 91, 'pay_out', now(), now() + interval '72 hours', "
+        "now()); "
+        "INSERT INTO investment_corrections (id, kind, investment_id, client_id, currency, "
+        "amount_minor, destination_id, reason, proposed_by, proposed_at) "
+        "VALUES ('-Nabc0000000000000C1', 'pay_out', '-Nabc0000000000000A1', "
+        "'-Nabc0000000000000B1', 'UGX', 1026490, '-Nabc0000000000000D1', "
+        "'The client asked on the phone', '-Nabc0000000000000E1', now()); "
+        "ALTER TABLE investment_corrections ENABLE TRIGGER USER; "
+        "ALTER TABLE investments ENABLE TRIGGER USER; COMMIT",
+        "refusing to drop the record of held money staff sent on",
     ),
 }
 

@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { StyleSheet, View } from "react-native";
 import { Stack, useLocalSearchParams, useRouter } from "expo-router";
 
@@ -7,7 +8,8 @@ import { Icon } from "@/components/Icon";
 import { Screen } from "@/components/Screen";
 import { Title, Txt } from "@/components/Txt";
 import { formatDateTime, formatMoney, formatTime, mismatchCopy } from "@/payments/format";
-import { AmountCard, DetailList, Loading, Timeline } from "@/payments/Parts";
+import { AmountCard, DetailList, Loading, ShareNote, Timeline } from "@/payments/Parts";
+import { asText, shareText, ShareOutcome } from "@/payments/share";
 import { useBankTransfer } from "@/payments/useDeposit";
 import { colors, fontSizes } from "@/theme";
 
@@ -20,6 +22,7 @@ export default function BankTransferStatus() {
   const { transferId } = useLocalSearchParams<{ transferId: string }>();
   const { transfer, missing, stale } = useBankTransfer(transferId);
   const close = () => router.replace("/");
+  const [shared, setShared] = useState<ShareOutcome | null>(null);
 
   if (missing) {
     return (
@@ -46,8 +49,25 @@ export default function BankTransferStatus() {
   }
 
   if (transfer.status === "confirmed" && transfer.confirmedAt) {
+    const rows = [
+      { label: "Confirmed", value: formatDateTime(transfer.confirmedAt) },
+      { label: "Paid by", value: "Bank transfer" },
+      { label: "Reference", value: transfer.reference },
+    ];
+    const share = async () =>
+      setShared(
+        await shareText("Finvest receipt", asText(`Finvest receipt: ${formatMoney(transfer.amountSent)} paid into ${transfer.payable.title}`, rows)),
+      );
     return (
-      <Screen signedIn footer={<Button label="Done" onPress={close} testID="transfer-done" />}>
+      <Screen
+        signedIn
+        footer={
+          <>
+            <Button label="Share receipt" variant="secondary" onPress={share} testID="receipt-share" />
+            <Button label="Done" onPress={close} testID="transfer-done" />
+          </>
+        }
+      >
         <Stack.Screen options={{ title: "Receipt" }} />
         <View style={styles.top}>
           <View style={styles.tick}>
@@ -68,14 +88,9 @@ export default function BankTransferStatus() {
           <Txt color={colors.muted}>{`Paid into ${transfer.payable.title}`}</Txt>
         </View>
         <View style={{ marginTop: 24 }}>
-          <DetailList
-            rows={[
-              { label: "Confirmed", value: formatDateTime(transfer.confirmedAt) },
-              { label: "Paid by", value: "Bank transfer" },
-              { label: "Reference", value: transfer.reference },
-            ]}
-          />
+          <DetailList rows={rows} />
         </View>
+        <ShareNote outcome={shared} />
       </Screen>
     );
   }

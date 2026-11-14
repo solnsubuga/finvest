@@ -158,6 +158,7 @@ class QueueItem:
     """A row of the review queue. Names are shown to staff, so this never goes into a log."""
 
     id: str
+    client_id: str
     status: CheckStatus
     document_type: DocumentType
     surname: str | None
@@ -278,7 +279,8 @@ _INSERT_PHOTO = text(
     ":sha256, :now)"
 )
 _QUEUE = text(
-    "SELECT id, status, document_type, surname, given_names, submitted_at, review_flags "
+    "SELECT id, client_id, status, document_type, surname, given_names, submitted_at, "
+    "review_flags "
     "FROM kyc_checks WHERE status = ANY(:statuses) "
     "ORDER BY array_position(:statuses, status::text), submitted_at, id LIMIT :limit"
 )
@@ -808,6 +810,7 @@ async def review_queue(session: AsyncSession, *, limit: int = DEFAULT_PAGE_SIZE)
     return [
         QueueItem(
             id=row.id,
+            client_id=row.client_id,
             status=CheckStatus(row.status),
             document_type=DocumentType(row.document_type),
             surname=row.surname,
@@ -817,6 +820,17 @@ async def review_queue(session: AsyncSession, *, limit: int = DEFAULT_PAGE_SIZE)
         )
         for row in rows.all()
     ]
+
+
+_STATUS_COUNTS = text("SELECT status, count(*) AS checks FROM kyc_checks GROUP BY status")
+
+
+async def status_counts(session: AsyncSession) -> dict[CheckStatus, int]:
+    """How many clients' checks are in each status now, every status listed. Staff only."""
+    found = dict.fromkeys(CheckStatus, 0)
+    for row in (await session.execute(_STATUS_COUNTS)).all():
+        found[CheckStatus(row.status)] = int(row.checks)
+    return found
 
 
 async def check_for_staff(session: AsyncSession, sealer: Sealer, check_id: str) -> CheckView:

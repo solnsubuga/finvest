@@ -56,6 +56,19 @@ describe("investments: corrections over the API", () => {
     expect(JSON.parse(String(init?.body))).toEqual({ kind: "unwind", investment_id: "-Ninvestment00000001", reason: "Wrong client" });
   });
 
+  it("sends the payout account for a pay out of held maturity money", async () => {
+    const fetchImpl = respond(201, { ...CORRECTION, kind: "pay_out" });
+    const api = createHttpCorrectionsApi(createHttp("https://api.example", fetchImpl));
+    await api.propose("key-3", { kind: "pay_out", investmentId: "-Ninvestment00000001", reason: "Client called", destinationId: "-Ndestination0000001" });
+    const [, init] = fetchImpl.mock.calls[0] ?? [];
+    expect(JSON.parse(String(init?.body))).toEqual({
+      kind: "pay_out",
+      investment_id: "-Ninvestment00000001",
+      reason: "Client called",
+      destination_id: "-Ndestination0000001",
+    });
+  });
+
   it("sends a decision to its own route", async () => {
     const fetchImpl = respond(200, { ...CORRECTION, status: "sent_back" });
     const api = createHttpCorrectionsApi(createHttp("https://api.example", fetchImpl));
