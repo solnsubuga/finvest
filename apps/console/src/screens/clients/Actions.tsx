@@ -107,7 +107,13 @@ export function ActionsSection({
   const [notice, setNotice] = useState<string | null>(null);
   const id = useId();
   // The key for the form open now, chosen when it opens: a retry after a failure sends the same one, so nothing is done twice.
-  const key = useRef("");
+  const key = useRef({ value: "", sent: "" });
+  // The same request again keeps its key; a changed one, such as an edited reason, gets a new one.
+  const keyFor = (request: unknown) => {
+    const sent = JSON.stringify(request);
+    if (sent !== key.current.sent) key.current = { value: newKey(), sent };
+    return key.current.value;
+  };
 
   const fetchAll = useCallback(async (): Promise<Load> => {
     try {
@@ -133,25 +139,26 @@ export function ActionsSection({
     setNotice(null);
     try {
       await command();
+      // The page shows where things stand before it says it is done, so the notice never sits beside a stale card.
+      setLoad(await fetchAll());
       setForm(null);
       setNotice(done);
     } catch (failure) {
       setError(actionErrorMessage(failure));
       // Decided by someone else while it was on screen: show where it stands now.
-      if (!(failure instanceof ActionError) || !["not_found", "waiting", "cannot_now"].includes(failure.code)) return;
+      if (failure instanceof ActionError && ["not_found", "waiting", "cannot_now"].includes(failure.code)) setLoad(await fetchAll());
     } finally {
       setBusy(false);
     }
-    setLoad(await fetchAll());
   }
 
   const open = (next: Form) => {
-    key.current = newKey();
+    key.current = { value: "", sent: "" };
     setForm(next);
     setError(null);
     setNotice(null);
   };
-  const propose = (proposal: Proposal) => void run(() => api.propose(clientId, proposal, key.current), "Sent. Someone else must approve it before anything happens.");
+  const propose = (proposal: Proposal) => void run(() => api.propose(clientId, proposal, keyFor(proposal)), "Sent. Someone else must approve it before anything happens.");
 
   return (
     <section aria-labelledby={`${id}-title`} className="flex flex-col gap-3">
@@ -197,7 +204,7 @@ export function ActionsSection({
           onPropose={propose}
           onDecide={(action, decision, reason) =>
             void run(
-              () => api.decide(action.id, decision, reason, key.current),
+              () => api.decide(action.id, decision, reason, keyFor([action.id, decision, reason])),
               decision === "approved" ? KIND[action.kind].approved : decision === "rejected" ? "Rejected. Nothing changed." : "Withdrawn. Nothing changed.",
             )
           }
