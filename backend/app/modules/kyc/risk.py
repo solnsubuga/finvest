@@ -6,7 +6,7 @@ is the client's profile, and it is due again a year after it was given.
 
 import json
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Any
 
 from sqlalchemy import Row, text
@@ -19,6 +19,11 @@ from app.shared.actors import Actor
 from app.shared.clock import Clock
 from app.shared.errors import ApplicationError, FieldProblem
 from app.shared.push_ids import push_id
+
+# A client changes their mind a few times at most. Past this many sets in a day, a new set is
+# refused, so a loop in the app or a script cannot grow the client's record without end.
+MAX_ANSWERS_A_DAY = 5
+_A_DAY = timedelta(days=1)
 
 
 @dataclass(frozen=True, slots=True)
@@ -39,6 +44,10 @@ _HISTORY = text(
     "SELECT id, answers, score, profile, answered_at FROM kyc_risk_answers "
     "WHERE client_id = :client_id ORDER BY answered_at DESC, id DESC"
 )
+_RECENT = text(
+    "SELECT count(*) FROM kyc_risk_answers WHERE client_id = :client_id AND answered_at > :since"
+)
+_CLIENT_LOCK = text("SELECT pg_advisory_xact_lock(hashtextextended(:lock, 0))")
 _ADD = text(
     "INSERT INTO kyc_risk_answers (id, client_id, answers, score, profile, answered_at) "
     "VALUES (:id, :client_id, CAST(:answers AS jsonb), :score, :profile, :now)"
@@ -59,7 +68,7 @@ async def history(session: AsyncSession, client_id: str) -> list[RiskAnswers]:
 async def answer(
     session: AsyncSession, client: Actor, answers: dict[str, str], clock: Clock
 ) -> RiskAnswers:
-    """Record a full set of answers from the signed-in client."""
+    """Record a full set of answers from the signed-in client, at most a few a day."""
     if client.kind != "client" or client.id is None:
         raise ApplicationError("forbidden")
     try:
@@ -72,6 +81,13 @@ async def answer(
                 FieldProblem(field_path=["body", "answers", problem.question], code=problem.code)
             ],
         ) from None
+    # One set at a time per client, so two at once cannot both slip under the daily cap.
+    await session.execute(_CLIENT_LOCK, {"lock": f"kyc_risk_answers:{client.id}"})
+    recent = (
+        await session.execute(_RECENT, {"client_id": client.id, "since": clock.now() - _A_DAY})
+    ).scalar_one()
+    if recent >= MAX_ANSWERS_A_DAY:
+        raise ApplicationError("rate_limited")
     answers_id = push_id(clock)
     await session.execute(
         _ADD,
