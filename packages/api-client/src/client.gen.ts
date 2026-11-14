@@ -993,6 +993,13 @@ export const QuoteOut = z.object({
 });
 export type QuoteOut = z.infer<typeof QuoteOut>;
 
+export const RecoveryAsk = z.object({
+  contact_phone: z.string(),
+  phone: z.string(),
+  reason: z.enum(["lost_phone", "new_number", "no_codes", "other"]),
+});
+export type RecoveryAsk = z.infer<typeof RecoveryAsk>;
+
 export const Rename = z.object({
   display_name: z.string(),
 });
@@ -2393,6 +2400,17 @@ export const operations = {
     idempotent: false,
     status: 204,
     response: null,
+  },
+  "POST /client/recovery-requests": {
+    method: "POST",
+    path: "/client/recovery-requests",
+    params: z.object({}),
+    query: z.object({}),
+    body: RecoveryAsk,
+    bodyKind: "json",
+    idempotent: false,
+    status: 202,
+    response: z.record(z.string(), z.unknown()),
   },
   "GET /client/risk-profile": {
     method: "GET",

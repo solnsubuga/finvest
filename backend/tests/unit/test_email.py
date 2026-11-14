@@ -281,6 +281,7 @@ EMAILED: dict[str, dict[str, object]] = {
     "sign_in_code": {"code": "482913", "minutes": 10},
     "password_reset_code": {"code": "482913", "minutes": 10},
     "new_sign_in": {"device": "Chrome on Windows", "when": "13 Nov 2026, 15:32"},
+    "recovery_requested": {"when": "14 Nov 2026, 10:05"},
     "phone_changed": {"ending": "456"},
     "email_verification": {"link": "https://app.finvestug.com/email#abc", "hours": 24},
     "claim_invitation": {"link": "https://app.finvestug.com/claim#abc", "hours": 72},

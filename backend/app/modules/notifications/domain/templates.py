@@ -9,10 +9,10 @@ so nothing a person typed can add markup or a link. Every email is drawn with th
 `app.shared.email_layout`, the look the statement and receipt emails share.
 
 This file owns only the messages that carry a secret or guard an account: sign-in, signup,
-reset and claim codes, the notices of a new sign-in and of a changed number, the link that
-proves an email address, the link that invites a Finvest 1.0 client to claim their account, and
-the staff set-up link. They are fixed in code so that nobody can
-edit them into a phishing message, and so that they work before anything else is set up. Every
+reset and claim codes, the notices of a new sign-in, of a request for help getting in and of a
+changed number, the link that proves an email address, the link that invites a Finvest 1.0
+client to claim their account, and the staff set-up link. They are fixed in code so that nobody
+can edit them into a phishing message, and so that they work before anything else is set up. Every
 other client notice is worded in `domain/wording.py`, which staff edit with a second person
 approving. Neither file adds text of the other kind.
 """
@@ -32,6 +32,7 @@ Template = Literal[
     "phone_changed",
     "email_verification",
     "new_sign_in",
+    "recovery_requested",
     "staff_enrolment",
     "claim_invitation",
     "client_notice",
@@ -47,6 +48,8 @@ _VARIABLES: dict[Template, frozenset[str]] = {
     "phone_changed": frozenset({"ending"}),
     "email_verification": frozenset({"link", "hours"}),
     "new_sign_in": frozenset({"device", "when"}),
+    # Someone said they cannot get in and asked us to call them back.
+    "recovery_requested": frozenset({"when"}),
     "staff_enrolment": frozenset({"name", "link", "hours"}),
     # The one-time link a client carried over from Finvest 1.0 claims their account with.
     "claim_invitation": frozenset({"link", "hours"}),
@@ -99,6 +102,9 @@ _SMS: dict[str, str] = {
     "{code}. It works for {minutes} minutes. Never share it. If this was not you, call us.",
     "new_sign_in": "Your Finvest account was signed in to on {device}, {when}. If this was "
     "not you, change your password now.",
+    "recovery_requested": "Someone asked Finvest for help getting into your account, {when}. "
+    "If this was not you, you need do nothing: we never change your number without checking "
+    "it is you.",
     "phone_changed": "The mobile number on your Finvest account was changed to one ending "
     "{ending}. If you did not ask for this, contact Finvest support now.",
     "claim_invitation": "Finvest has a new app, and your investments are in it. Claim your "
@@ -216,6 +222,25 @@ def _new_sign_in(values: dict[str, str]) -> Rendered:
     )
 
 
+def _recovery_requested(values: dict[str, str]) -> Rendered:
+    lines = [
+        f"Someone asked Finvest for help getting into your account, {values['when']}.",
+        "We will call them back and check who they are against your ID before we change anything.",
+    ]
+    note = (
+        "Not you?",
+        "You need do nothing. Your number, password and money stay as they are, and nothing "
+        "changes without that check. Finvest staff will never ask you for a code or your PIN.",
+    )
+    return _email(
+        subject="Someone asked for help getting into your Finvest account",
+        preheader=f"Asked {values['when']}. Nothing changes without a check.",
+        title="Someone asked for help getting in",
+        html=layout.paragraphs(lines) + layout.callout(*note),
+        text=[*lines, " ".join(note)],
+    )
+
+
 def _phone_changed(values: dict[str, str]) -> Rendered:
     lines = [
         f"The mobile number on your Finvest account was changed to one ending {values['ending']}.",
@@ -329,6 +354,7 @@ _EMAILS: dict[str, Callable[[dict[str, str]], Rendered]] = {
     "sign_in_code": _sign_in_code,
     "password_reset_code": _password_reset_code,
     "new_sign_in": _new_sign_in,
+    "recovery_requested": _recovery_requested,
     "phone_changed": _phone_changed,
     "email_verification": _email_verification,
     "claim_invitation": _claim_invitation,

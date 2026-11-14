@@ -861,6 +861,14 @@ ROWS = {
         "VALUES ('-Nabc0000000000000A1', 'x', now())",
         "refusing to drop app PINs that are in use",
     ),
+    "0222_identity_recovery_requests": (
+        "INSERT INTO identity_clients (id, phone, status, created_at) VALUES "
+        "('-Nabc0000000000000B1', '+256772123456', 'unclaimed', now()); "
+        "INSERT INTO identity_recovery_requests (id, client_id, contact_phone, reason, status, "
+        "created_at) VALUES ('-Nabc0000000000000A1', '-Nabc0000000000000B1', '+256701555013', "
+        "'lost_phone', 'open', now())",
+        "refusing to drop recovery requests staff have not closed",
+    ),
 }
 
 
