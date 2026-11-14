@@ -129,6 +129,16 @@ The run publishes `investments.rolled_over` or `investments.matured`. The goals 
 
 The console's Maturities screen reads `GET /staff/maturities` (`investments/maturities.py`). It is worked out from the investments themselves, never from the jobs table, so it is right however the run went. For each maturity date from a week back to two weeks ahead, in each currency, it gives the number of terms and their principal, how many were rolled over, paid out or held, and how many are still open by what the client chose. It also lists every running investment past its maturity date (the run failed it or has not run) and every matured one whose money waits for the client, with the reason. It only reads: the run closes terms by itself, and only the client can send waiting money on.
 
+## Running a day again
+
+When a day's interest run failed part way, or this morning's maturity run left terms open, staff ask for that run again (`investments/run_requests.py`, table `investment_run_requests`, migration 0330). One member of staff proposes with a reason, a different one approves or declines with a note, and only the proposer withdraws it. Proposing and withdrawing need `investment_corrections.change`; approving and declining need the same and a second step from the last few minutes. Each waiting request shows in the approvals inbox as `investment_run`.
+
+Approving queues the run itself in the same transaction, as the same job the scheduler queues (`investments.accrue_interest` or `investments.mature`), keyed `staff-run:<request id>` so it never stands in for a scheduled run, with `scheduled_for` at noon in Kampala on the day. Nothing else moves money. Both runs are safe to repeat: interest posts "earned so far minus posted so far", so a day run twice pays nothing the second time, and maturity only closes terms still open.
+
+The days are limited (`domain/runs.py`). Interest may be asked for any day from today back 31 days, the same window the scheduler catches up on by itself (422 `not_yet` or `too_old` on `run_date`). Maturity is asked for today only (`maturity_today_only`), because one run closes every term due by its day, and a request proposed yesterday is refused at approval as 409 with `run_date_passed`. The database refuses a day that has not come by its own clock, a decision by the proposer, a second open request for the same run and day, and any change after a decision. Only staff read the table on the API's role, and the worker only reads it.
+
+Audit events on resource `investment_run_request`: `investments.run_request.proposed`, `.approved`, `.declined` and `.withdrawn`, with the run, the day and the job.
+
 ## HTTP routes
 
 The code is `backend/app/modules/investments/api.py`. Amounts are integers in the smallest unit (`amount_minor`), and a request that sends one as text or with a fraction is refused. Client and public responses are built only from after-tax figures, and a unit test checks that no field of those contracts names tax, a gross figure or basis points.
@@ -155,6 +165,8 @@ The code is `backend/app/modules/investments/api.py`. Amounts are integers in th
 | `GET /staff/maturities` | `maturities.view` | The maturity run around today, terms it has not closed, and money held for clients. |
 | `GET /staff/investment-corrections?status=&investment_id=&limit=` | `investments.view` | Unwinds and refunds and their state. |
 | `POST /staff/investment-corrections`, `POST /staff/investment-corrections/{id}/approve`, `/send-back`, `/withdraw` | `investment_corrections.change`, `Idempotency-Key` | Proposing and deciding an unwind or a refund. See [Undoing a mistake](#undoing-a-mistake). |
+| `GET /staff/investment-run-requests?status=&limit=` | `investments.view` | Requests to run interest or maturities again, newest first. |
+| `POST /staff/investment-run-requests`, `POST /staff/investment-run-requests/{id}/approve`, `/decline`, `/withdraw` | `investment_corrections.change`, `Idempotency-Key` | `{kind, run_date, reason}`: asking for the interest run (`interest`) or the maturity run (`maturity`) again, and deciding it. See [Running a day again](#running-a-day-again). |
 
 Seeing rates needs `rates.view`. Proposing, approving, sending back and withdrawing a rate change need `rates.change`, held by admin and finance for now. A rate still never takes effect without a second person.
 

@@ -114,7 +114,7 @@ export type Approval = z.infer<typeof Approval>;
 export const ApprovalItemOut = z.object({
   can_decide: z.boolean(),
   id: z.string(),
-  kind: z.enum(["wording_change", "ledger_correction", "pot_transfer", "bank_transfer_match", "day_close", "dealing_order", "dealing_result", "buffer_rules", "buffer_capital", "rate_change", "migration_totals", "migration_sign_off", "phone_change", "team_change", "client_lock", "suppression_lift", "complaint_outcome", "announcement", "payout_account", "investment_correction", "payout_resolution", "tax_remittance", "deposit_reassignment", "payout_release", "investment_transfer", "organisation", "account_closure", "compliance_case", "bank_account_change", "account_code_map", "deposit_reversal", "deposit_receivable"]),
+  kind: z.enum(["wording_change", "ledger_correction", "pot_transfer", "bank_transfer_match", "day_close", "dealing_order", "dealing_result", "buffer_rules", "buffer_capital", "rate_change", "migration_totals", "migration_sign_off", "phone_change", "team_change", "client_lock", "suppression_lift", "complaint_outcome", "announcement", "payout_account", "investment_correction", "investment_run", "payout_resolution", "tax_remittance", "deposit_reassignment", "payout_release", "investment_transfer", "organisation", "account_closure", "compliance_case", "bank_account_change", "account_code_map", "deposit_reversal", "deposit_receivable"]),
   proposed_at: z.string(),
   proposed_by: z.string(),
   proposed_by_name: z.string().nullable(),
@@ -2466,6 +2466,31 @@ export const RulesIn = z.object({
 });
 export type RulesIn = z.infer<typeof RulesIn>;
 
+export const RunKind = z.enum(["interest", "maturity"]);
+export type RunKind = z.infer<typeof RunKind>;
+
+export const RunRequestIn = z.object({
+  kind: RunKind,
+  reason: z.string(),
+  run_date: z.string(),
+});
+export type RunRequestIn = z.infer<typeof RunRequestIn>;
+
+export const RunRequestOut = z.object({
+  decided_at: z.string().nullable(),
+  decided_by: z.string().nullable(),
+  decision_note: z.string().nullable(),
+  id: z.string(),
+  job_id: z.string().nullable(),
+  kind: RunKind,
+  proposed_at: z.string(),
+  proposed_by: z.string(),
+  reason: z.string(),
+  run_date: z.string(),
+  status: z.enum(["proposed", "approved", "declined", "withdrawn"]),
+});
+export type RunRequestOut = z.infer<typeof RunRequestOut>;
+
 export const RunStatus = z.enum(["due", "requested", "paid", "failed", "missed"]);
 export type RunStatus = z.infer<typeof RunStatus>;
 
@@ -4422,6 +4447,70 @@ export const operations = {
     idempotent: true,
     status: 200,
     response: CorrectionOut,
+  },
+  "GET /staff/investment-run-requests": {
+    method: "GET",
+    path: "/staff/investment-run-requests",
+    params: z.object({}),
+    query: z.object({
+    status: z.enum(["proposed", "approved", "declined", "withdrawn"]).nullable().optional(),
+    limit: z.number().int().optional(),
+  }),
+    body: null,
+    bodyKind: null,
+    idempotent: false,
+    status: 200,
+    response: z.array(RunRequestOut),
+  },
+  "POST /staff/investment-run-requests": {
+    method: "POST",
+    path: "/staff/investment-run-requests",
+    params: z.object({}),
+    query: z.object({}),
+    body: RunRequestIn,
+    bodyKind: "json",
+    idempotent: true,
+    status: 201,
+    response: RunRequestOut,
+  },
+  "POST /staff/investment-run-requests/{request_id}/approve": {
+    method: "POST",
+    path: "/staff/investment-run-requests/{request_id}/approve",
+    params: z.object({
+    request_id: z.string(),
+  }),
+    query: z.object({}),
+    body: null,
+    bodyKind: null,
+    idempotent: true,
+    status: 200,
+    response: RunRequestOut,
+  },
+  "POST /staff/investment-run-requests/{request_id}/decline": {
+    method: "POST",
+    path: "/staff/investment-run-requests/{request_id}/decline",
+    params: z.object({
+    request_id: z.string(),
+  }),
+    query: z.object({}),
+    body: SendBack,
+    bodyKind: "json",
+    idempotent: true,
+    status: 200,
+    response: RunRequestOut,
+  },
+  "POST /staff/investment-run-requests/{request_id}/withdraw": {
+    method: "POST",
+    path: "/staff/investment-run-requests/{request_id}/withdraw",
+    params: z.object({
+    request_id: z.string(),
+  }),
+    query: z.object({}),
+    body: null,
+    bodyKind: null,
+    idempotent: true,
+    status: 200,
+    response: RunRequestOut,
   },
   "GET /staff/investment-transfers": {
     method: "GET",

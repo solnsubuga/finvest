@@ -473,6 +473,7 @@
               "announcement",
               "payout_account",
               "investment_correction",
+              "investment_run",
               "payout_resolution",
               "tax_remittance",
               "deposit_reassignment",
@@ -15706,6 +15707,14 @@
         "title": "RulesProposalOut",
         "type": "object"
       },
+      "RunKind": {
+        "enum": [
+          "interest",
+          "maturity"
+        ],
+        "title": "RunKind",
+        "type": "string"
+      },
       "RunOut": {
         "additionalProperties": false,
         "properties": {
@@ -15839,6 +15848,145 @@
           "new_match_count"
         ],
         "title": "RunOut",
+        "type": "object"
+      },
+      "RunRequestIn": {
+        "additionalProperties": false,
+        "properties": {
+          "kind": {
+            "$ref": "#/components/schemas/RunKind"
+          },
+          "reason": {
+            "maxLength": 500,
+            "minLength": 1,
+            "title": "Reason",
+            "type": "string"
+          },
+          "run_date": {
+            "format": "date",
+            "title": "Run Date",
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind",
+          "run_date",
+          "reason"
+        ],
+        "title": "RunRequestIn",
+        "type": "object"
+      },
+      "RunRequestOut": {
+        "additionalProperties": false,
+        "description": "A request to run a day's interest again, or today's maturities. It waits for a\ndifferent person to approve it, and approving queues the run.",
+        "properties": {
+          "decided_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Decided At"
+          },
+          "decided_by": {
+            "anyOf": [
+              {
+                "maxLength": 20,
+                "minLength": 20,
+                "pattern": "^[-0-9A-Z_a-z]{20}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Decided By"
+          },
+          "decision_note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Decision Note"
+          },
+          "id": {
+            "maxLength": 20,
+            "minLength": 20,
+            "pattern": "^[-0-9A-Z_a-z]{20}$",
+            "title": "Id",
+            "type": "string"
+          },
+          "job_id": {
+            "anyOf": [
+              {
+                "maxLength": 20,
+                "minLength": 20,
+                "pattern": "^[-0-9A-Z_a-z]{20}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Job Id"
+          },
+          "kind": {
+            "$ref": "#/components/schemas/RunKind"
+          },
+          "proposed_at": {
+            "format": "date-time",
+            "title": "Proposed At",
+            "type": "string"
+          },
+          "proposed_by": {
+            "maxLength": 20,
+            "minLength": 20,
+            "pattern": "^[-0-9A-Z_a-z]{20}$",
+            "title": "Proposed By",
+            "type": "string"
+          },
+          "reason": {
+            "title": "Reason",
+            "type": "string"
+          },
+          "run_date": {
+            "format": "date",
+            "title": "Run Date",
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "proposed",
+              "approved",
+              "declined",
+              "withdrawn"
+            ],
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "kind",
+          "run_date",
+          "reason",
+          "status",
+          "proposed_by",
+          "proposed_at",
+          "decided_by",
+          "decided_at",
+          "decision_note",
+          "job_id"
+        ],
+        "title": "RunRequestOut",
         "type": "object"
       },
       "RunStatus": {
@@ -44872,6 +45020,538 @@
           }
         },
         "summary": "Staff Withdraw Correction",
+        "tags": [
+          "staff investing"
+        ]
+      }
+    },
+    "/staff/investment-run-requests": {
+      "get": {
+        "description": "Requests to run interest or maturities again, newest first.",
+        "operationId": "staff_run_requests_staff_investment_run_requests_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "status",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "proposed",
+                    "approved",
+                    "declined",
+                    "withdrawn"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Status"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 50,
+              "maximum": 200,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/RunRequestOut"
+                  },
+                  "title": "Response Staff Run Requests Staff Investment Run Requests Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          }
+        },
+        "summary": "Staff Run Requests",
+        "tags": [
+          "staff investing"
+        ]
+      },
+      "post": {
+        "description": "Ask for a day's interest run, or today's maturity run, again. A second person must\napprove it before it runs.",
+        "operationId": "staff_propose_run_staff_investment_run_requests_post",
+        "parameters": [
+          {
+            "description": "A value the caller chooses once per intended action and sends again on every retry of it. Pattern: `[A-Za-z0-9._:-]{8,128}`.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "A value the caller chooses once per intended action and sends again on every retry of it. Pattern: `[A-Za-z0-9._:-]{8,128}`.",
+              "title": "Idempotency-Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RunRequestIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RunRequestOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          }
+        },
+        "summary": "Staff Propose Run",
+        "tags": [
+          "staff investing"
+        ]
+      }
+    },
+    "/staff/investment-run-requests/{request_id}/approve": {
+      "post": {
+        "description": "Approve someone else's request. The run is queued at once.",
+        "operationId": "staff_approve_run_staff_investment_run_requests__request_id__approve_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "request_id",
+            "required": true,
+            "schema": {
+              "maxLength": 20,
+              "minLength": 20,
+              "pattern": "^[-0-9A-Z_a-z]{20}$",
+              "title": "Request Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "A value the caller chooses once per intended action and sends again on every retry of it. Pattern: `[A-Za-z0-9._:-]{8,128}`.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "A value the caller chooses once per intended action and sends again on every retry of it. Pattern: `[A-Za-z0-9._:-]{8,128}`.",
+              "title": "Idempotency-Key"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RunRequestOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          }
+        },
+        "summary": "Staff Approve Run",
+        "tags": [
+          "staff investing"
+        ]
+      }
+    },
+    "/staff/investment-run-requests/{request_id}/decline": {
+      "post": {
+        "operationId": "staff_decline_run_staff_investment_run_requests__request_id__decline_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "request_id",
+            "required": true,
+            "schema": {
+              "maxLength": 20,
+              "minLength": 20,
+              "pattern": "^[-0-9A-Z_a-z]{20}$",
+              "title": "Request Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "A value the caller chooses once per intended action and sends again on every retry of it. Pattern: `[A-Za-z0-9._:-]{8,128}`.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "A value the caller chooses once per intended action and sends again on every retry of it. Pattern: `[A-Za-z0-9._:-]{8,128}`.",
+              "title": "Idempotency-Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SendBack"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RunRequestOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          }
+        },
+        "summary": "Staff Decline Run",
+        "tags": [
+          "staff investing"
+        ]
+      }
+    },
+    "/staff/investment-run-requests/{request_id}/withdraw": {
+      "post": {
+        "operationId": "staff_withdraw_run_staff_investment_run_requests__request_id__withdraw_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "request_id",
+            "required": true,
+            "schema": {
+              "maxLength": 20,
+              "minLength": 20,
+              "pattern": "^[-0-9A-Z_a-z]{20}$",
+              "title": "Request Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "A value the caller chooses once per intended action and sends again on every retry of it. Pattern: `[A-Za-z0-9._:-]{8,128}`.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "A value the caller chooses once per intended action and sends again on every retry of it. Pattern: `[A-Za-z0-9._:-]{8,128}`.",
+              "title": "Idempotency-Key"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RunRequestOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          }
+        },
+        "summary": "Staff Withdraw Run",
         "tags": [
           "staff investing"
         ]
