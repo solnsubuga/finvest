@@ -112,6 +112,7 @@ Rules:
 - **A shared phone.** When two clients sign in on the same phone, only the one who registered it last is sent pushes. Signing in again hands it back.
 - **A phone Expo no longer knows** (the app was removed) is marked `not_registered` and not used again until the app registers it.
 - **Nobody is messaged after closing their account.** Identity answers nothing for a client who is locked or closed, so no SMS or email is queued.
+- **An unclaimed account gets no SMS or email.** An account carried over from Finvest 1.0 that its owner has not claimed (`client_contact` says `claimed=False`) gets its notifications in the app only, security alerts included, because nobody has yet proved the number or address is still theirs. The claim invitation, a fixed template the migration sends itself, is what reaches them.
 - **A statement or receipt is not emailed twice.** The documents module emails `statement_ready` and `receipt_ready` itself, with the PDF attached, so the fan-out sends those by push and in the app only.
 - A client has at most 10 phones registered.
 

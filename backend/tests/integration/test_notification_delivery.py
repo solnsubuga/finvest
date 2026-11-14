@@ -53,6 +53,7 @@ def a_token() -> str:
 class Contact:
     phone: str | None
     email: str | None
+    claimed: bool = True
 
 
 @dataclass
@@ -264,6 +265,18 @@ async def test_nothing_is_queued_where_the_client_cannot_be_reached(
     assert await messages(rig.database, told) == {}
     # The notification is still in the app, and the fan-out finished.
     assert await jobs_of(rig.database, "notifications.fan_out", f"fan-out:{told}") == ["succeeded"]
+
+
+async def test_an_unclaimed_account_gets_no_sms_or_email(rig: Rig, app_database: Database) -> None:
+    # An account carried over from Finvest 1.0 that nobody has claimed yet. Even a security
+    # alert, which never goes unsent otherwise, waits in the app.
+    client, _ = await a_client(rig, app_database, token=False)
+    assert client.id is not None
+    rig.book.known[client.id].claimed = False
+    for event in ("payment_confirmed", "password_changed"):
+        await tell(app_database, client, rig.clock, event)
+    await rig.drain()
+    assert (rig.sms.sent, rig.email.sent) == ([], [])
 
 
 async def suppress(app_database: Database, worker_database: Database, address: str) -> None:

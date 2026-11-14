@@ -73,6 +73,11 @@ class ClientContact(Protocol):
     @property
     def email(self) -> str | None: ...
 
+    @property
+    def claimed(self) -> bool:
+        """False for an account carried over from Finvest 1.0 that its owner has not claimed."""
+        ...
+
 
 # Looks up where to reach a client, in the worker's transaction. Identity owns the answer, and
 # answers nothing for a client who is locked or closed.
@@ -163,6 +168,10 @@ class DeliveryJobs:
                     queued.append("push")
             if channels & {Channel.SMS, Channel.EMAIL}:
                 contact = await self._contacts(session, row.client_id)
+                if contact is not None and not contact.claimed:
+                    # Nobody has proved this number or address is still theirs. The claim
+                    # invitation reaches them; the notices wait in the app until they claim.
+                    contact = None
                 by_sms = Channel.SMS in channels
                 if (
                     not by_sms
