@@ -162,7 +162,7 @@ A running log. Add a row when a decision is made, and move an open question up w
 | Investing: confirm the tax on interest (built: 15% on Treasury bills, 5% on the dollar product, from the design canvas) against what URA requires Finvest to withhold. | Owner, counsel |
 | Investing: confirm the minimums. The canvas shows $500 for the dollar product in one place and $100 in another. Built: $500. | Owner |
 | Investing: if the tax rate changes by law during a term, should running investments change with it? Built: no, terms are fixed at the start. | Owner, counsel |
-| Investing and payments: how is a deposit credited to the wrong client moved to the right one? Built: an unwind puts the money back as waiting to start for the client it was credited to, and payments reverses the credit. No command moves it to another client yet. | Owner |
+| Investing and payments: a deposit credited to the wrong client. Being built in payments (PR #285): a bank transfer is moved to the right client with two people, and mobile money goes back to the number it came from. An investment it already started is undone here first (see docs/investing.md). Confirm this is the rule. | Owner |
 | Investing and dealing: should a staff refund be held to the buffer rules an early withdrawal is (the buffer up to its per-withdrawal limit, anything larger waiting for a sale)? Built: no, a refund is paid from trust cash before any bills bought for it are sold. | Owner |
 | Investing: is the tax fraction rounded down in the client's favour acceptable to URA, or must tax round up? | Owner, counsel |
 | Dealing: confirm the buffer rules (built: target UGX 150m, floor UGX 100m, up to UGX 5m from the buffer, 2 working days for a sale), and who funds the buffer at the start. | Owner |
