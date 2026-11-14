@@ -137,6 +137,38 @@ describe("acting for a client", () => {
     expect(keys).toEqual(["key-1", "key-1"]);
   });
 
+  it("chooses a new key when the request changes before a retry", async () => {
+    const stub = createStubActionsApi(ME, ACTION_KINDS, "empty", () => NOW, 0);
+    const keys: string[] = [];
+    let fail = true;
+    const api: ActionsApi = {
+      ...stub,
+      propose: (clientId, proposal, key) => {
+        keys.push(key);
+        if (fail) {
+          fail = false;
+          return Promise.reject(new ActionError("unavailable"));
+        }
+        return stub.propose(clientId, proposal, key);
+      },
+    };
+    let next = 0;
+    render(
+      <MemoryRouter>
+        <ActionsSection api={api} clientId={CLIENT} canRefund newKey={() => `key-${String(++next)}`} />
+      </MemoryRouter>,
+    );
+    const user = userEvent.setup();
+    await user.click(await screen.findByRole("button", { name: "Reset app PIN" }));
+    await user.type(screen.getByLabelText(/Why/), "Client called");
+    await user.click(screen.getByRole("button", { name: "Send for approval" }));
+    await screen.findByText(/could not reach Finvest/);
+    await user.type(screen.getByLabelText(/Why/), " from their number");
+    await user.click(screen.getByRole("button", { name: "Send for approval" }));
+    await screen.findByRole("article", { name: "Reset the app PIN, waiting" });
+    expect(keys).toEqual(["key-1", "key-2"]);
+  });
+
   it("shows when acting for a client is not connected", async () => {
     renderActions(notConnectedActionsApi);
     expect(await screen.findByRole("alert")).toHaveTextContent("not connected to the Finvest service yet");
