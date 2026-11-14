@@ -1,6 +1,7 @@
 """Staff notes on a client, and acting for a client with two people: resetting the app PIN."""
 
 import asyncio
+import uuid
 from collections.abc import AsyncIterator
 
 import httpx
@@ -45,6 +46,7 @@ async def queued(owner: Database, recipient: str) -> list[str]:
 async def propose(api: Api, client: Actor, kind: str = "pin_reset") -> httpx.Response:
     return await api.http.post(
         f"/staff/clients/{client.id}/actions",
+        headers={"Idempotency-Key": uuid.uuid4().hex},
         json={"kind": kind, "reason": "Client called: phone stolen"},
     )
 
@@ -52,6 +54,7 @@ async def propose(api: Api, client: Actor, kind: str = "pin_reset") -> httpx.Res
 async def decide(api: Api, action_id: str, decision: str = "approved") -> httpx.Response:
     return await api.http.post(
         f"/staff/clients/actions/{action_id}/decision",
+        headers={"Idempotency-Key": uuid.uuid4().hex},
         json={"decision": decision, "reason": "Called the client back"},
     )
 
@@ -336,3 +339,39 @@ async def test_each_step_is_audited_without_the_notes_words(
         "console.client.pin_reset_approved",
     ]
     assert all("Secret" not in row.details for row in rows)
+
+
+async def test_the_same_key_proposes_and_approves_once(
+    api: Api, migrator_database: Database
+) -> None:
+    # Approving a withdrawal moves money, so a retry with the same key must not act twice.
+    client = await api.client()
+    phone = await phone_of(migrator_database, client)
+    approver = await api.staff("operations")
+    await api.staff("support")
+    url = f"/staff/clients/{client.id}/actions"
+    body = {"kind": "pin_reset", "reason": "Client called: phone stolen"}
+    once = {"Idempotency-Key": uuid.uuid4().hex}
+    first = await api.http.post(url, json=body, headers=once)
+    again = await api.http.post(url, json=body, headers=once)
+    assert first.status_code == again.status_code == 201, again.text
+    assert first.json()["id"] == again.json()["id"]
+    reused = await api.http.post(url, json={**body, "reason": "Other"}, headers=once)
+    assert reused.status_code == 422 and reused.json()["error"]["code"] == "idempotency_key_reused"
+    missing = await api.http.post(url, json=body)
+    assert missing.status_code == 428
+    assert missing.json()["error"]["code"] == "idempotency_key_required"
+
+    await api.as_staff(approver)
+    decision = f"/staff/clients/actions/{first.json()['id']}/decision"
+    choice = {"decision": "approved", "reason": "Called the client back"}
+    key = {"Idempotency-Key": uuid.uuid4().hex}
+    approved = await api.http.post(decision, json=choice, headers=key)
+    replayed = await api.http.post(decision, json=choice, headers=key)
+    assert approved.status_code == replayed.status_code == 200, replayed.text
+    assert replayed.json()["status"] == "approved"
+    assert await queued(migrator_database, phone) == ["app_signed_out"]
+    fresh = await api.http.post(
+        decision, json=choice, headers={"Idempotency-Key": uuid.uuid4().hex}
+    )
+    assert fresh.status_code == 404

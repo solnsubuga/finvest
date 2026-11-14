@@ -30,7 +30,7 @@ A note is what one member of staff writes about a client for the others, such as
 
 ## Acting for a client
 
-Staff act for a client from their page with two people: one proposes with a reason, a different one approves or rejects, and the proposer may withdraw. Approving applies the action in the same transaction, through the module that owns what it changes, so nothing is ever approved and not yet done. Each kind is decided with its own permission and has its own kind in the approvals inbox. Staff act only for an active account: a locked account is unlocked first.
+Staff act for a client from their page with two people: one proposes with a reason, a different one approves or rejects, and the proposer may withdraw. Approving applies the action in the same transaction, through the module that owns what it changes, so nothing is ever approved and not yet done. Each kind is decided with its own permission and has its own kind in the approvals inbox. Staff act only for an active account: a locked account is unlocked first. Proposing and deciding take an `Idempotency-Key`, because approving a withdrawal moves money: a retry with the same key answers with the same action and does nothing twice.
 
 | Kind | Permission, held by | Inbox kind | What approving does |
 | --- | --- | --- | --- |

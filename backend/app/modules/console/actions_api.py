@@ -3,7 +3,9 @@
 Reading notes and actions is `clients.view`. Writing a note is `client_notes.write`, by one
 person. Proposing or deciding an action needs the permission its kind names (see
 `actions.PERMISSIONS`), and deciding also needs a passkey or app code from the last few minutes.
-Every action takes two people: one proposes, a different one approves.
+Every action takes two people: one proposes, a different one approves. Proposing and deciding
+take an `Idempotency-Key`, because approving a withdrawal moves money: a retry with the same key
+answers with the same action and does nothing twice.
 """
 
 from datetime import date, datetime
@@ -12,7 +14,9 @@ from typing import Annotated, Any, Literal
 from fastapi import APIRouter, Depends, Request
 from pydantic import Field
 
+from app.api.idempotency import IdempotencyKey
 from app.infrastructure.database import Database
+from app.infrastructure.idempotency import Receipt, run_once
 from app.infrastructure.settings import Settings
 from app.modules.console import actions, notes
 from app.modules.identity.api import require_confirmed, require_permission
@@ -249,16 +253,32 @@ async def propose_action(
     database: Db,
     clock: Time,
     request: Request,
+    key: IdempotencyKey,
 ) -> ActionView:
     """Ask to act for the client. A different member of staff decides."""
     if body.kind not in _allowed(staff):
         raise ApplicationError("forbidden")
     if body.kind == "withdrawal" and not _withdrawals_open(request):
         raise ApplicationError("conflict")
+    details = _details(body)
     async with database.actor_transaction(staff.actor) as session:
-        action = await actions.propose(
-            session, staff.actor, client_id, body.kind, body.reason, clock, _details(body)
+
+        async def run() -> Receipt:
+            action = await actions.propose(
+                session, staff.actor, client_id, body.kind, body.reason, clock, details
+            )
+            return Receipt(201, {"action_id": action.id})
+
+        outcome = await run_once(
+            session,
+            actor=staff.actor,
+            operation="console.client_action.propose",
+            key=key,
+            request={"client_id": client_id, **body.model_dump(mode="json")},
+            now=clock.now(),
+            command=run,
         )
+        action = await actions.get(session, str(outcome.receipt.response["action_id"]))
     return _action(action, staff)
 
 
@@ -270,19 +290,34 @@ async def decide_action(
     database: Db,
     clock: Time,
     request: Request,
+    key: IdempotencyKey,
 ) -> ActionView:
     """Approve or reject someone else's proposal, or withdraw your own."""
     async with database.actor_transaction(staff.actor) as session:
-        action = await actions.decide(
+
+        async def run() -> Receipt:
+            await actions.decide(
+                session,
+                staff.actor,
+                action_id,
+                body.decision,
+                body.reason,
+                clock,
+                permissions=staff.permissions,
+                withdrawals_open=_withdrawals_open(request),
+            )
+            return Receipt(200, {"action_id": action_id})
+
+        await run_once(
             session,
-            staff.actor,
-            action_id,
-            body.decision,
-            body.reason,
-            clock,
-            permissions=staff.permissions,
-            withdrawals_open=_withdrawals_open(request),
+            actor=staff.actor,
+            operation="console.client_action.decide",
+            key=key,
+            request={"action_id": action_id, **body.model_dump(mode="json")},
+            now=clock.now(),
+            command=run,
         )
+        action = await actions.get(session, action_id)
     return _action(action, staff)
 
 
