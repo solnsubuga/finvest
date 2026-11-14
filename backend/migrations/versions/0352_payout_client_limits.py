@@ -72,13 +72,13 @@ RULES = [
     f"GRANT SELECT, INSERT ON payout_client_limits TO {APP_ROLE}",
     f"GRANT SELECT ON payout_client_limits TO {WORKER_ROLE}",
     "ALTER TABLE payout_client_limits ENABLE ROW LEVEL SECURITY",
-    # A client reads their own, as their app shows the limits that apply to them.
+    # Staff read every client's. A client reads their own, as their app shows the limits that
+    # apply to them. Only the worker may act as the system, so it has a policy of its own.
     f"CREATE POLICY payout_client_limits_read ON payout_client_limits FOR SELECT "
     f"TO {APP_ROLE} USING (finvest_actor_kind() = 'staff' "
     "OR (finvest_actor_kind() = 'client' AND client_id = finvest_actor_id()))",
-    # Only the worker may act as the system: the API role sets its own actor settings.
-    f"CREATE POLICY payout_client_limits_worker ON payout_client_limits FOR SELECT "
-    f"TO {WORKER_ROLE} USING (true)",
+    f"CREATE POLICY payout_client_limits_worker_read ON payout_client_limits FOR SELECT "
+    f"TO {WORKER_ROLE} USING (finvest_actor_kind() = 'system')",
     f"CREATE POLICY payout_client_limits_insert ON payout_client_limits FOR INSERT "
     f"TO {APP_ROLE} WITH CHECK (finvest_actor_kind() = 'staff' AND EXISTS ("
     "SELECT FROM console_client_actions a WHERE a.id = action_id AND a.client_id = "
