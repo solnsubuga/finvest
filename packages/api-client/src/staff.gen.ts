@@ -1294,8 +1294,13 @@ export const NewSavedReply = z.object({
 export type NewSavedReply = z.infer<typeof NewSavedReply>;
 
 export const NotCarriedView = z.object({
+  attempt: z.number().int(),
   code: z.string(),
   legacy_client_ref: z.string(),
+  noted_at: z.string(),
+  proposed_by: z.string().nullable(),
+  resolution_id: z.string().nullable(),
+  state: z.enum(["noted", "retry_proposed", "close_proposed", "retrying"]),
 });
 export type NotCarriedView = z.infer<typeof NotCarriedView>;
 
@@ -1380,7 +1385,7 @@ export const TrialView = z.object({
 export type TrialView = z.infer<typeof TrialView>;
 
 export const OverviewView = z.object({
-  allowed: z.array(z.enum(["run_trial", "enter_totals", "sign_off", "propose_switch", "decide_switch"])),
+  allowed: z.array(z.enum(["run_trial", "enter_totals", "sign_off", "propose_switch", "decide_switch", "propose_resolution", "decide_resolution"])),
   blockers: z.array(z.enum(["no_trial", "import_has_errors", "totals_not_entered", "totals_not_confirmed", "difference_not_signed_off"])),
   claims: ClaimProgressView.nullable(),
   differences: z.array(DifferenceView),
@@ -1748,6 +1753,28 @@ export const ResolutionOut = z.object({
   status: z.enum(["proposed", "approved", "declined", "withdrawn"]),
 });
 export type ResolutionOut = z.infer<typeof ResolutionOut>;
+
+export const ResolutionRequest = z.object({
+  action: z.enum(["retry", "close"]),
+  legacy_client_ref: z.string(),
+  reason: z.string(),
+});
+export type ResolutionRequest = z.infer<typeof ResolutionRequest>;
+
+export const ResolutionView = z.object({
+  action: z.enum(["retry", "close"]),
+  attempt: z.number().int(),
+  decided_by: z.string().nullable(),
+  decision_reason: z.string().nullable(),
+  id: z.string(),
+  legacy_client_ref: z.string(),
+  proposed_at: z.string(),
+  proposed_by: z.string(),
+  reason: z.string(),
+  state: z.enum(["proposed", "approved", "rejected"]),
+  switch_id: z.string(),
+});
+export type ResolutionView = z.infer<typeof ResolutionView>;
 
 export const ResultIn = z.object({
   fill: FillIn.nullable(),
@@ -3361,6 +3388,19 @@ export const operations = {
     status: 201,
     response: SwitchView,
   },
+  "POST /staff/migration/switch/resolutions/{resolution_id}/decision": {
+    method: "POST",
+    path: "/staff/migration/switch/resolutions/{resolution_id}/decision",
+    params: z.object({
+    resolution_id: z.string(),
+  }),
+    query: z.object({}),
+    body: DecisionRequest,
+    bodyKind: "json",
+    idempotent: false,
+    status: 200,
+    response: ResolutionView,
+  },
   "POST /staff/migration/switch/{switch_id}/decision": {
     method: "POST",
     path: "/staff/migration/switch/{switch_id}/decision",
@@ -3373,6 +3413,19 @@ export const operations = {
     idempotent: false,
     status: 200,
     response: SwitchView,
+  },
+  "POST /staff/migration/switch/{switch_id}/resolutions": {
+    method: "POST",
+    path: "/staff/migration/switch/{switch_id}/resolutions",
+    params: z.object({
+    switch_id: z.string(),
+  }),
+    query: z.object({}),
+    body: ResolutionRequest,
+    bodyKind: "json",
+    idempotent: false,
+    status: 201,
+    response: ResolutionView,
   },
   "GET /staff/migration/trials": {
     method: "GET",

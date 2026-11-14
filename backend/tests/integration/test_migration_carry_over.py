@@ -184,7 +184,13 @@ async def test_a_client_who_cannot_be_carried_over_is_noted_and_the_rest_go_on(
     claims = await rows(migrator_database, "SELECT legacy_client_ref FROM migration_claims")
     assert [c.legacy_client_ref for c in claims] == ["2"]
     seen = await console.overview()
-    assert seen["switch"]["not_carried"] == [{"legacy_client_ref": "1", "code": "document_taken"}]
+    [noted] = seen["switch"]["not_carried"]
+    assert (noted["legacy_client_ref"], noted["code"], noted["attempt"], noted["state"]) == (
+        "1",
+        "document_taken",
+        1,
+        "noted",
+    )
     # A run again does not try the noted client a second time.
     again = await carry_over.carry_over(
         worker_database, SEALER, PRESENT, switch_id, client_app=CLIENT_APP
@@ -209,8 +215,8 @@ async def test_only_the_worker_notes_a_client_it_could_not_carry_over(
         async with app_database.actor_transaction(staff) as session:
             await session.execute(
                 text(
-                    "INSERT INTO migration_carry_problems (switch_id, legacy_client_ref, code, "
-                    "noted_at) VALUES (:id, '1', 'refused', now())"
+                    "INSERT INTO migration_carry_problems (switch_id, legacy_client_ref, attempt, "
+                    "code, noted_at) VALUES (:id, '1', 1, 'refused', now())"
                 ),
                 {"id": switch_id},
             )

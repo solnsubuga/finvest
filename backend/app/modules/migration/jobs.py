@@ -2,8 +2,8 @@
 
 No handler here calls a provider. The carry-over works in one transaction per client, each
 checking the job's lease first, and completes the job at the end. The sealed sheets are removed
-then only if every client was carried over: a client noted as not carried over is still only in
-them.
+then only if every client was carried over or closed: a client still noted is only in them.
+Approving a retry or a close queues the job again.
 A run that stops part way is run again and carries on from the first client not yet done.
 """
 
@@ -60,7 +60,12 @@ class MigrationJobs:
             # A noted client is still only in the sheets: they stay until every client is done.
             if result.problems == 0:
                 await carry_over.remove_sheets(session, switch_id)
-            return {"carried": result.carried, "problems": result.problems}
+            return {"carried": result.carried, "problems": result.problems, "closed": result.closed}
 
         await context.apply(done)
-        logger.info("migration_carried_over", carried=result.carried, problems=result.problems)
+        logger.info(
+            "migration_carried_over",
+            carried=result.carried,
+            problems=result.problems,
+            closed=result.closed,
+        )

@@ -131,7 +131,7 @@ async def test_one_person_proposes_the_switch_and_another_approves_it(
     assert code(await console.post("/switch", files)) == (409, "conflict")
     overview = await console.overview()
     assert overview["switch"] == switch
-    assert overview["allowed"] == ["run_trial", "propose_switch"]
+    assert overview["allowed"] == ["run_trial", "propose_switch", "propose_resolution"]
     # Operations cannot decide it, and nothing in the answer comes from a cell of the sheets.
     decision = f"/switch/{switch['id']}/decision"
     assert code(await console.post(decision, {"approve": True}))[0] == 403

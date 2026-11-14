@@ -12,7 +12,9 @@ transaction of its own, acting as the system:
 
 A client whose claim exists is done, so a run that stops part way carries on where it was. When
 one of those steps is refused, nothing of that client is kept, the refusal's code is noted in
-`migration_carry_problems`, and the run moves on. Orders still awaiting payment are never opened.
+`migration_carry_problems`, and the run moves on. A noted client waits until two members of staff
+approve retrying or closing them (`resolutions.py`). A retry refused again is noted as the next
+attempt. Orders still awaiting payment are never opened.
 
 Nothing here logs or audits anything from the sheets. The token of a link goes only into the
 message that carries it.
@@ -34,7 +36,7 @@ from app.modules.investments.domain.products import Product
 from app.modules.kyc import service as kyc
 from app.modules.kyc.domain.checks import IdentityDetails
 from app.modules.ledger.domain.entries import AccountKind, AccountSpec
-from app.modules.migration import claims, service, switch
+from app.modules.migration import claims, resolutions, service, switch
 from app.modules.migration.domain.claim import LINK_LIFETIME
 from app.modules.migration.domain.finance import opening_for
 from app.modules.migration.domain.sheet import ClientRow, InvestmentRow, InvestmentStatus
@@ -58,13 +60,9 @@ logger = structlog.get_logger()
 _CARRIED = text(
     "SELECT legacy_client_ref, client_id FROM migration_carried_clients WHERE switch_id = :id"
 )
-_PROBLEMS = text(
-    "SELECT legacy_client_ref, code FROM migration_carry_problems WHERE switch_id = :id "
-    "ORDER BY legacy_client_ref"
-)
 _NOTE_PROBLEM = text(
-    "INSERT INTO migration_carry_problems (switch_id, legacy_client_ref, code, noted_at) "
-    "VALUES (:switch_id, :ref, :code, :now) ON CONFLICT DO NOTHING"
+    "INSERT INTO migration_carry_problems (switch_id, legacy_client_ref, attempt, code, "
+    "noted_at) VALUES (:switch_id, :ref, :attempt, :code, :now) ON CONFLICT DO NOTHING"
 )
 _REMOVE_SHEETS = text("DELETE FROM migration_switch_files WHERE switch_id = :id")
 
@@ -87,7 +85,10 @@ class NotCarried(Exception):
 @dataclass(frozen=True, slots=True)
 class CarryResult:
     carried: int
+    # Noted and still waiting for staff: the sealed sheets stay while any is.
     problems: int
+    # Closed by two members of staff: not carried over by the switch.
+    closed: int = 0
 
 
 def opening_account(currency: Currency) -> AccountSpec:
@@ -110,8 +111,8 @@ async def carry_over(
 
     `client_app` is the client app's origin, which the links point to. `fence` runs first in
     each transaction that changes something: the worker passes its job's lease check, so a
-    worker that lost the job stops. Safe to run again: done clients and noted problems are
-    skipped.
+    worker that lost the job stops. Safe to run again: done clients, noted clients and closed
+    clients are skipped, and a client whose retry was approved is tried again.
     """
     async with database.actor_transaction(SYSTEM) as session:
         proposal = await switch.switch_by_id(session, switch_id)
@@ -122,9 +123,7 @@ async def carry_over(
             row.legacy_client_ref: row.client_id
             for row in await session.execute(_CARRIED, {"id": switch_id})
         }
-        noted = {
-            row.legacy_client_ref for row in await session.execute(_PROBLEMS, {"id": switch_id})
-        }
+        standing = await resolutions.standings(session, switch_id)
         views = await investments.list_products(session, clock)
     products = {view.product.code: view.product for view in views}
     report = run_trial(
@@ -135,8 +134,10 @@ async def carry_over(
         held.setdefault(investment.legacy_client_ref, []).append(investment)
 
     for client in report.clients:
-        if client.legacy_client_ref in noted:
+        noted = standing.get(client.legacy_client_ref)
+        if noted is not None and noted.next != "retry":
             continue
+        attempt = 1 if noted is None else noted.attempt + 1
         client_id = carried[client.legacy_client_ref]
         try:
             async with database.actor_transaction(SYSTEM) as session:
@@ -152,24 +153,20 @@ async def carry_over(
                     as_of=proposal.as_of,
                     client_app=client_app,
                 )
-        except NotCarried as refused:
-            await _note(database, clock, fence, switch_id, client.legacy_client_ref, refused.code)
-        except ApplicationError as refused:
-            await _note(database, clock, fence, switch_id, client.legacy_client_ref, refused.code)
+        except (NotCarried, ApplicationError) as refused:
+            await _note(
+                database, clock, fence, switch_id, client.legacy_client_ref, attempt, refused.code
+            )
     async with database.actor_transaction(SYSTEM) as session:
-        problems = len((await session.execute(_PROBLEMS, {"id": switch_id})).all())
-    return CarryResult(len(report.clients) - problems, problems)
+        after = await resolutions.standings(session, switch_id)
+    closed = sum(1 for noted in after.values() if noted.next == "closed")
+    problems = sum(1 for noted in after.values() if noted.next != "closed" and not noted.claimed)
+    return CarryResult(len(report.clients) - problems - closed, problems, closed)
 
 
 async def remove_sheets(session: AsyncSession, switch_id: str) -> None:
-    """Every client is carried over or noted: the sealed sheets are no longer needed."""
+    """Every client is carried over or closed: the sealed sheets are no longer needed."""
     await session.execute(_REMOVE_SHEETS, {"id": switch_id})
-
-
-async def carry_problems(session: AsyncSession, switch_id: str) -> list[tuple[str, str]]:
-    """Each client the switch could not carry over, by Finvest 1.0 reference, with the code."""
-    rows = await session.execute(_PROBLEMS, {"id": switch_id})
-    return [(row.legacy_client_ref, row.code) for row in rows]
 
 
 async def _carry_client(
@@ -313,6 +310,7 @@ async def _note(
     fence: Fence,
     switch_id: str,
     legacy_client_ref: str,
+    attempt: int,
     code: str,
 ) -> None:
     safe = code if code.replace("_", "").isalpha() and code.islower() else "refused"
@@ -323,6 +321,7 @@ async def _note(
             {
                 "switch_id": switch_id,
                 "ref": legacy_client_ref,
+                "attempt": attempt,
                 "code": safe[:64],
                 "now": clock.now(),
             },
@@ -335,6 +334,6 @@ async def _note(
             "migration_switch",
             switch_id,
             clock,
-            details={"code": safe[:64]},
+            details={"code": safe[:64], "attempt": attempt},
         )
     logger.warning("migration_client_not_carried_over", error_code=safe[:64])

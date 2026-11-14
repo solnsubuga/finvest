@@ -147,7 +147,7 @@ def create_app(
     app.state.email_checks = EmailCheckService(
         database,
         clock,
-        settings.client_allowed_origins[0] if settings.client_allowed_origins else None,
+        settings.client_app(),
     )
     install_error_handlers(app)
     # The last middleware added is the outermost, so the request ID exists before anything runs.

@@ -17,7 +17,7 @@ from app.infrastructure.database import Database
 from app.infrastructure.sealing import Sealer
 from app.modules.identity.api import require_confirmed, require_permission
 from app.modules.identity.service import StaffSession
-from app.modules.migration import carry_over, claims, service, switch
+from app.modules.migration import claims, resolutions, service, switch
 from app.modules.migration.domain.claim import Progress
 from app.modules.migration.domain.finance import ControlTotals, Figure, InvalidFinanceCheck
 from app.modules.migration.domain.sheet import Severity, Sheet
@@ -42,7 +42,15 @@ def _iso_date(value: object) -> date:
 # Contracts are strict, and JSON has no date or enum of its own: these two arrive as text.
 IsoDate = Annotated[date, BeforeValidator(_iso_date)]
 CurrencyCode = Annotated[Currency, Field(strict=False)]
-Allowed = Literal["run_trial", "enter_totals", "sign_off", "propose_switch", "decide_switch"]
+Allowed = Literal[
+    "run_trial",
+    "enter_totals",
+    "sign_off",
+    "propose_switch",
+    "decide_switch",
+    "propose_resolution",
+    "decide_resolution",
+]
 
 _REFUSALS: dict[int | str, dict[str, object]] = {
     401: {"model": ErrorEnvelope},
@@ -151,10 +159,33 @@ class ClaimProgressView(Contract):
 
 
 class NotCarriedView(Contract):
-    """A client the worker could not carry over. Staff resolve it by hand."""
+    """A client the worker could not carry over, and where resolving them stands."""
 
     legacy_client_ref: str
     code: str
+    # Which time the worker tried them: a retry refused again is the next attempt.
+    attempt: int
+    noted_at: datetime
+    state: resolutions.NotCarriedState
+    # The proposal awaiting a decision, or the approved retry. Null while only noted.
+    resolution_id: PushId | None
+    proposed_by: PushId | None
+
+
+class ResolutionView(Contract):
+    """A proposal to retry or close a client the worker could not carry over."""
+
+    id: PushId
+    switch_id: PushId
+    legacy_client_ref: str
+    attempt: int
+    action: resolutions.Action
+    reason: str
+    proposed_by: PushId
+    proposed_at: datetime
+    state: resolutions.ResolutionState
+    decided_by: PushId | None
+    decision_reason: str | None
 
 
 class SwitchView(Contract):
@@ -243,6 +274,14 @@ class SwitchRequest(Contract):
     investments_csv: str = Field(max_length=service.MAX_SHEET_BYTES)
 
 
+class ResolutionRequest(Contract):
+    """What to do about a noted client, and why. The reason is kept with the audit record."""
+
+    legacy_client_ref: str = Field(min_length=1, max_length=64)
+    action: resolutions.Action
+    reason: str = Field(min_length=1, max_length=500)
+
+
 class DecisionRequest(Contract):
     approve: bool
     reason: str | None = Field(default=None, min_length=1, max_length=500)
@@ -294,14 +333,14 @@ def _totals(view: service.TotalsView | None) -> TotalsView | None:
 def _allowed(staff: StaffSession) -> list[Allowed]:
     allowed: list[Allowed] = []
     if "migration.import" in staff.permissions:
-        allowed += ["run_trial", "propose_switch"]
+        allowed += ["run_trial", "propose_switch", "propose_resolution"]
     if "migration.sign_off" in staff.permissions:
-        allowed += ["enter_totals", "sign_off", "decide_switch"]
+        allowed += ["enter_totals", "sign_off", "decide_switch", "decide_resolution"]
     return allowed
 
 
 def _switch(
-    view: switch.SwitchView | None, not_carried: list[tuple[str, str]] | None = None
+    view: switch.SwitchView | None, not_carried: list[resolutions.NotCarried] | None = None
 ) -> SwitchView | None:
     if view is None:
         return None
@@ -316,7 +355,16 @@ def _switch(
         decision_reason=view.decision_reason,
         clients_carried=view.clients_carried,
         not_carried=[
-            NotCarriedView(legacy_client_ref=ref, code=code) for ref, code in not_carried or []
+            NotCarriedView(
+                legacy_client_ref=client.legacy_client_ref,
+                code=client.code,
+                attempt=client.attempt,
+                noted_at=client.noted_at,
+                state=client.state,
+                resolution_id=client.resolution_id,
+                proposed_by=client.proposed_by,
+            )
+            for client in not_carried or []
         ],
     )
 
@@ -345,7 +393,7 @@ def _overview(
     view: service.Overview,
     progress: Progress,
     proposal: switch.SwitchView | None,
-    not_carried: list[tuple[str, str]],
+    not_carried: list[resolutions.NotCarried],
     staff: StaffSession,
 ) -> OverviewView:
     trial = view.trial
@@ -407,7 +455,7 @@ async def _read(request: Request, staff: StaffSession) -> OverviewView:
     async with database.actor_transaction(_actor(staff)) as session:
         proposal = await switch.latest_switch(session)
         not_carried = (
-            await carry_over.carry_problems(session, proposal.id) if proposal is not None else []
+            await resolutions.not_carried(session, proposal.id) if proposal is not None else []
         )
         return _overview(
             await service.overview(session),
@@ -582,3 +630,59 @@ def _switch_view(view: switch.SwitchView) -> SwitchView:
     shown = _switch(view)
     assert shown is not None
     return shown
+
+
+def _resolution(view: resolutions.ResolutionView) -> ResolutionView:
+    return ResolutionView(
+        id=view.id,
+        switch_id=view.switch_id,
+        legacy_client_ref=view.legacy_client_ref,
+        attempt=view.attempt,
+        action=view.action,
+        reason=view.reason,
+        proposed_by=view.proposed_by,
+        proposed_at=view.proposed_at,
+        state=view.state,
+        decided_by=view.decided_by,
+        decision_reason=view.decision_reason,
+    )
+
+
+@router.post("/switch/{switch_id}/resolutions", status_code=201)
+async def propose_resolution(
+    switch_id: PushId, body: ResolutionRequest, request: Request, staff: Importer
+) -> ResolutionView:
+    """Ask a second person to approve retrying or closing a client the worker could not carry.
+
+    Put the cause right first: a retry runs the same checks again. Refused with `conflict` while
+    a proposal for that client awaits a decision or once one was approved.
+    """
+    database, clock = _state(request)
+    async with database.actor_transaction(_actor(staff)) as session:
+        view = await resolutions.propose_resolution(
+            session,
+            _actor(staff),
+            clock,
+            switch_id,
+            legacy_client_ref=body.legacy_client_ref,
+            action=body.action,
+            reason=body.reason,
+        )
+    return _resolution(view)
+
+
+@router.post("/switch/resolutions/{resolution_id}/decision")
+async def decide_resolution(
+    resolution_id: PushId, body: DecisionRequest, request: Request, staff: SignOffDecider
+) -> ResolutionView:
+    """Approve or reject retrying or closing a client, as someone other than the proposer.
+
+    An approval has the worker retry the client, or, once nobody is waiting, remove the sealed
+    sheets.
+    """
+    database, clock = _state(request)
+    async with database.actor_transaction(_actor(staff)) as session:
+        view = await resolutions.decide_resolution(
+            session, _actor(staff), clock, resolution_id, approve=body.approve, reason=body.reason
+        )
+    return _resolution(view)
