@@ -58,6 +58,7 @@ const goal = {
   progress: { value_minor: 0, interest_minor: 0, awaiting_payment_minor: 300000, percent: 0, standing: "on_track" },
   plan,
   savings: [saving],
+  saving_rule: null,
 };
 
 type Seen = { method: string; path: string; key: string | undefined; body: unknown };
