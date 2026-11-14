@@ -237,6 +237,8 @@ test("sending an investment to someone meets WCAG 2.1 AA at every step", async (
   await page.getByTestId("find-recipient").click();
   await expect(page.getByTestId("recipient")).toBeVisible();
   await page.getByTestId("send-amount").fill("1000000");
+  await page.getByTestId("send-purpose-other").click();
+  await page.getByTestId("send-purpose-note").fill("Our shared plot");
   await check("filled in");
   await page.getByTestId("review-send").click();
   await expect(page.getByTestId("send-confirm")).toBeVisible();
