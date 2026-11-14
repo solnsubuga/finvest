@@ -8,7 +8,7 @@ from datetime import timedelta
 import httpx
 import pytest
 from sqlalchemy import text
-from sqlalchemy.exc import DBAPIError
+from sqlalchemy.exc import DBAPIError, IntegrityError
 
 from app.api.app import create_app
 from app.infrastructure.database import Database
@@ -320,3 +320,24 @@ async def test_email_and_phone_share_one_budget_of_guesses(api: Api) -> None:
             )
     limited = await login_by_email(api, email)
     assert limited.status_code == 429
+
+
+async def test_the_database_holds_one_proof_per_address_whoever_writes_it(api: Api) -> None:
+    # What 0220 meets if two accounts proved one address before it ran: the index refuses it,
+    # and the migration stops until one proof is cleared by hand.
+    first, email, _ = await a_client(api)
+    assert email is not None
+    second = await api.identity.create_client(
+        phone=f"+256{next(_numbers)}", email=email, password=PASSWORD
+    )
+    async with api.owner.transaction() as session:
+        await session.execute(
+            text("UPDATE identity_clients SET email_verified_at = now() WHERE id = :id"),
+            {"id": first},
+        )
+    with pytest.raises(IntegrityError):
+        async with api.owner.transaction() as session:
+            await session.execute(
+                text("UPDATE identity_clients SET email_verified_at = now() WHERE id = :id"),
+                {"id": second},
+            )
