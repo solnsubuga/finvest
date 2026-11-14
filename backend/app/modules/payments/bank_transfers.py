@@ -340,6 +340,13 @@ async def get_bank_transfer(session: AsyncSession, deposit_id: str) -> BankTrans
     return BankTransfer(deposit, _receipt(row))
 
 
+async def find_receipt(session: AsyncSession, deposit_id: str) -> BankReceipt | None:
+    """A transfer's receipt, if it has one this transaction may see. A transfer saved by a
+    reassignment has none: the receipt is on the payment it was moved from."""
+    row = (await session.execute(_SELECT_RECEIPT, {"id": deposit_id})).one_or_none()
+    return _receipt(row) if row else None
+
+
 async def candidate_lines(
     session: AsyncSession, staff: Actor, deposit_id: str
 ) -> tuple[StatementLineView, ...]:

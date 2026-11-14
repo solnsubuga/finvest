@@ -94,11 +94,23 @@ Seeing transfers needs `reconciliation.view`. Matching, refusing and approving n
 | `POST /staff/payments/bank-transfers/{id}/review` (`bank_transfers.change`) | `{"outcome": "matched", "statement_line_id": …}` or `{"outcome": "not_matched", "reason": …}`. |
 | `POST /staff/payments/bank-transfers/{id}/approve` (`bank_transfers.change`) | A second member of staff approves a match. The matcher gets `403`. |
 
+Moving a transfer credited to the wrong client (see [below](#a-transfer-credited-to-the-wrong-client)). Seeing needs `reconciliation.view`. The `POST`s need `deposit_reassignments.change`, held by admin, operations and finance, and an `Idempotency-Key`. Opening one writes `payments.reassignment_opened` to the audit trail, because both clients are named and the narrative can name the sender.
+
+| Route | What it does |
+| --- | --- |
+| `GET /staff/payments/reassignments` | Newest first, at most 200. `?status=` and `?deposit_id=`, which finds those from or to a payment. |
+| `GET /staff/payments/reassignments/{id}` | The reassignment, both clients, the statement line, whether its reference names either client, `refusal` (why approving would be refused now, for an open one), `can_decide` and `yours`. |
+| `POST /staff/payments/reassignments` | `{"deposit_id", "to_investment_id", "reason"}`. `422` with a code if the move could not happen now: `mobile_money_refund_instead`, `not_confirmed`, `not_for_an_investment`, `not_matched_to_a_line`, `money_moved_on`, `same_client`, `not_waiting_for_payment`, `amount_differs_from_investment`, `already_has_a_payment` or `not_found`. `409` if either already has an open proposal. |
+| `POST /staff/payments/reassignments/{id}/approve` | A second member of staff approves, and the money moves. Needs a second step from the last ten minutes (`403 confirm_it_is_you`). The proposer gets `403 forbidden`. `422` with a code if anything changed. |
+| `POST /staff/payments/reassignments/{id}/send-back` | `{"note"}`. A second member of staff declines it. |
+| `POST /staff/payments/reassignments/{id}/withdraw` | The proposer takes it back. |
+
 ## Ledger entries
 
 | Event | Debit | Credit |
 | --- | --- | --- |
 | Deposit confirmed (`payment.deposit_confirmed`) | Asset `<provider>.wallet`, reference `mtn` or `airtel`. With ioTec this is `iotec.wallet`. | Liability `client.awaiting_start`, owned by the client, reference the investment or goal ID |
+| Transfer moved to the right client (`payment.deposit_reassigned`) | Liability `client.awaiting_start`, first client, reference the first investment | Liability `client.awaiting_start`, right client, reference their investment |
 | Bank transfer confirmed (`payment.deposit_confirmed`) | Asset `bank.trust`. For the trust account (statement account reference `trust`) it is the reconciled pot's own account, with no reference, the one the day close checks and dealing pays from. A statement for any other bank account gets `bank.trust` with that account reference. | Liability `client.awaiting_start`, as above |
 
 The entry's idempotency key is `deposit:<deposit ID>` and its source is the deposit, so a deposit can only ever be posted once. Payouts leave from the same wallet account, which lets reconciliation tie one ledger account to one provider statement.
@@ -141,6 +153,41 @@ The receivable shows that the client owes the amount. It is cleared in exactly o
 
 An open receivable is reported by the daily close until it is zero.
 
+### A transfer credited to the wrong client
+
+Sometimes the money is real and on the statement, but it belongs to someone else: a staff member matched one client's receipt to a statement line that was really another client's payment of the same amount, and a second person approved it. Nothing needs to be recovered. The money is moved to the client whose money it was (`reassignments.py`, `domain/reassignments.py`, migration 0171).
+
+1. **Undo first, if needed.** The whole amount must still be waiting in the first client's `client.awaiting_start` for the first investment. If that investment started, it is undone first, by two people, through investments corrections ([investing.md](investing.md)), which puts the principal back there. If the money has gone, for example refunded or paid out, a reassignment is refused with `money_moved_on`, and the receivable above is used instead.
+2. **Propose.** One member of staff names the deposit, the right client's investment and a reason. The investment must be another client's, waiting for payment, for exactly the deposit's amount, with no payment of its own. The evidence is the statement line the original review matched, recorded with the proposal. Nothing moves.
+3. **Approve.** A different member of staff checks the detail: both clients' names and Finvest account numbers, the statement line (amount, value date, reference, narrative) and whether the line's reference carries either client's account number, which clients are asked to write on a transfer. Approving needs a passkey or app code from the last ten minutes. In that same transaction every check is made again and the money moves:
+
+| Debit | Credit |
+| --- | --- |
+| Liability `client.awaiting_start`, first client, reference the first investment | Liability `client.awaiting_start`, right client, reference their investment |
+
+The entry is `payment.deposit_reassigned`, source `payment.reassignment` and the reassignment's ID, key `deposit-reassignment:<ID>`. A new confirmed bank transfer deposit is saved for the right client's investment, pointing at that entry, with no receipt of its own. `payments.deposit_confirmed` is published for it, so the investment starts and the client gets a receipt, exactly as for any other payment. The audit trail has `payments.deposit_confirmed` for it in the approver's name, with the cause `reassignment`. If anything changed since the proposal, approving is refused with a code and the proposal stays open.
+
+4. **Or not.** The second person can send it back with a note, or the proposer can withdraw it. Nothing moves either way.
+
+Choices in this design:
+
+- **Mobile money is never reassigned.** The provider took it from the first client's own number. Crediting it to anyone else would accept a payment from a number registered to someone else, which the owner's rule refuses. It is refunded to the number it came from.
+- **The whole deposit, to an investment waiting for exactly that amount.** No part moves and no money is kept as credit, because there is no wallet.
+- **Moved in the approval's transaction.** So there is never a reassignment that was approved and has not moved, and the day close needs nothing new: the move is between two client accounts, and the bank pot is untouched.
+- **The original is never changed.** The first deposit stays confirmed, its review keeps its line, and its entry stands. A reassignment that was itself a mistake is put right by reassigning the new deposit, on the same evidence.
+- **On the client's statement**, the right client sees "Payment received, Bank transfer". The first client sees a correction. Neither sees the other.
+
+The database enforces:
+
+- A reassignment starts as proposed, by the staff member signed in, for a confirmed bank transfer of exactly its amount, for another client, citing the line its approved review matched (or, for a deposit saved by a reassignment, the line that reassignment cited).
+- Only the proposer withdraws it, and only a different member of staff applies or sends it back.
+- It is applied only with its own `payment.deposit_reassigned` entry, which moves exactly the amount between exactly those two accounts. When the transaction commits, the new deposit exists.
+- A deposit, and a target investment, have at most one open or applied reassignment.
+- A deposit saved in a staff transaction is only ever the new deposit of an applied reassignment, as that reassignment says.
+- Nothing is deleted, and a decided reassignment never changes. Clients cannot read reassignments.
+
+`reassignments.reassignments_for_line(session, statement_line_id)` lists the reassignments citing a line, for reconciliation's screens.
+
 ## The provider
 
 ioTec Pay is the chosen provider. Its API details are not confirmed, so the only adapter today is a sandbox that moves no money. Any adapter implements `CollectionsProvider` in `domain/provider.py`: request a collection, read its status, and check and parse a callback. An adapter sorts every failure into rejected, deferred or uncertain and never raises. If one does raise, the deposit is treated as uncertain.
@@ -162,4 +209,4 @@ ioTec Pay is the chosen provider. Its API details are not confirmed, so the only
 - The ioTec adapter, which needs ioTec's API details, callback signature scheme and sandbox access.
 - Paying for a goal over HTTP. The routes take investments only.
 - Provider limits and fees.
-- The correction commands.
+- The receivable correction commands. Moving a transfer credited to the wrong client is built.
