@@ -75,6 +75,11 @@ const KNOWN_CODES = new Set<string>([
 /** A field the API refused, by its dotted path such as `target_date`, and why. */
 export type FieldProblem = { field: string; code: string };
 
+/** The client asked to close their account and staff have not decided, so nothing new starts. */
+export function isAccountClosing(error: ApiError): boolean {
+  return error.code === "conflict" && error.fields.some((problem) => problem.field === "account" && problem.code === "closing");
+}
+
 export class ApiError extends Error {
   readonly code: ApiErrorCode;
   readonly status: number | null;

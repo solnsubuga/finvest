@@ -99,6 +99,8 @@ export type GoalErrorCode =
   | "not_verified"
   | "not_allowed"
   | "offline"
+  /** A request to close the account is waiting for staff, so nothing new starts. */
+  | "account_closing"
   | "unavailable";
 
 export class GoalError extends Error {
@@ -123,6 +125,7 @@ export type GoalsClient = {
 };
 
 const errorCopy: Record<GoalErrorCode, string> = {
+  account_closing: "Your request to close your account is being checked, so nothing new can start. To carry on, go to Profile, then Close account, and choose Keep my account open.",
   not_found: "We could not find this goal.",
   too_many_goals: "You have 20 open goals, which is the most at once. Close one to start another.",
   closed: "This goal is closed, so nothing more can be saved to it.",

@@ -1,3 +1,4 @@
+import { demoClosing } from "@/demo/closing";
 import { addDemoPayable } from "@/payments/stubPaymentsClient";
 import { Money } from "@/payments/types";
 
@@ -260,6 +261,7 @@ export function createStubGoalsClient(options: StubOptions = {}): GoalsClient {
 
     async createGoal(details, idempotencyKey) {
       await pause();
+      if (demoClosing()) throw new GoalError("account_closing");
       const body = JSON.stringify(details);
       const known = byKey.get(idempotencyKey);
       if (known) {
