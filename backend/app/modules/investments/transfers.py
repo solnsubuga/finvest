@@ -39,7 +39,7 @@ from app.infrastructure.idempotency import Receipt, run_once
 from app.infrastructure.jobs import JobRequest, enqueue, publish
 from app.modules.audit import service as audit
 from app.modules.audit.domain.events import AuditActor, AuditCategory, AuditEvent
-from app.modules.closures import service as closures
+from app.modules.closures.pending import closing, refuse_if_closing
 from app.modules.goals.events import FOLLOW_ROLLOVER
 from app.modules.identity.client_locks import client_id_for_phone, client_status
 from app.modules.investments import accrual
@@ -734,12 +734,11 @@ async def _ask(
     if sender is None:
         # Nobody sends before their own identity check is approved.
         raise ApplicationError("forbidden")
-    asked_to_close = await closures.latest(session, sender_id)
-    if asked_to_close is not None and asked_to_close.is_open:
-        # The client asked to close their account: nothing new starts while staff decide.
-        raise ApplicationError(
-            "conflict", fields=[FieldProblem(field_path=["client"], code="closure_requested")]
-        )
+    # Nothing new starts while the sender's request to close waits for staff.
+    await refuse_if_closing(session, sender_id)
+    if await closing(session, recipient.client_id):
+        # Said the same as no such client: closing is the recipient's own business.
+        raise invalid("to", "no_such_client")
     now = clock.now()
     today = business_date(now)
     product = product_from_row(await product_row(session, investment.product_code))
@@ -842,6 +841,11 @@ async def _why_not(
         return "sender_not_available"
     recipient = await kyc.transfer_recipient(session, client_id=transfer.recipient_client_id)
     if recipient is None or await client_status(session, transfer.recipient_client_id) != "active":
+        return "recipient_not_available"
+    # Or asked to close it: nothing new reaches an account being closed.
+    if await closing(session, transfer.sender_client_id):
+        return "sender_not_available"
+    if await closing(session, transfer.recipient_client_id):
         return "recipient_not_available"
     if await _on_hold(session, transfer.sender_client_id, clock_now) or await _on_hold(
         session, transfer.recipient_client_id, clock_now
