@@ -33,7 +33,7 @@ The total gives a profile, and each profile a longest suitable term:
 | `balanced` | 4 to 7 | 364 days |
 | `long_term` | 8 to 11 | Any |
 
-There are no wrong answers and the profile refuses nothing: it is used to suggest investments that suit the client. Answers are asked again a year after they were given (`due` in the response). Every set of answers is kept (migration `0231_kyc_risk_answers`), never changed or removed by any role, so the record shows what Finvest knew when it suggested an investment. The answers are about plans, not identity, so they are not sealed.
+There are no wrong answers and the profile refuses nothing: it is used to suggest investments that suit the client. Answers are asked again a year after they were given (`due` in the response). Every set of answers is kept (migration `0231_kyc_risk_answers`), never changed or removed by any role, so the record shows what Finvest knew when it suggested an investment. The answers are about plans, not identity, so they are not sealed. A client gives at most five sets in any 24 hours (`MAX_ANSWERS_A_DAY`); the sixth is refused as `rate_limited`, so a loop in the app cannot grow the record without end. Sets are taken one at a time per client, so two sent at once cannot both pass the cap.
 
 ## Routes
 
@@ -53,4 +53,4 @@ There are no wrong answers and the profile refuses nothing: it is used to sugges
 
 `GET /client/data-export` gives the signed-in client one JSON file (`finvest-my-data-<date>.json`, format `finvest-client-data/1`) with everything Finvest holds about them that they may see: the account, the identity check and its details (including the ID number), next of kin, every set of answers to the investing questions, investments with after-tax figures, goals, automatic investing plans, payout accounts (masked), payouts, notification channels and the latest closure request. It never holds tax rates, provider answers, review flags or who on staff did what.
 
-It is put together by `backend/app/modules/client_data`, which owns no tables and reads through the owning modules' functions in the client's own transaction. It needs a sign-in from the last 10 minutes and the identity data key, is sent with `Cache-Control: no-store`, and each download is recorded as `client_data.exported`. Investments and payouts are capped at the most recent 100 each.
+It is put together by `backend/app/modules/client_data`, which owns no tables and reads through the owning modules' functions in the client's own transaction. It needs a sign-in from the last 10 minutes and the identity data key, is sent with `Cache-Control: no-store`, and each download is recorded as `client_data.exported`. The file is named for the day in Kampala. Investments and payouts are capped at the most recent 100 each, and `truncated` says `true` for a list that reached the cap, so the client knows to ask support for older ones.

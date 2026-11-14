@@ -11,9 +11,11 @@ from structlog.testing import capture_logs
 
 from app.infrastructure.database import Database
 from app.infrastructure.jobs import JobRequest, Worker, enqueue
+from app.infrastructure.operations import operations_signals
 from app.modules.payments.domain.outcomes import (
     Accepted,
     Confirmed,
+    DeferReason,
     Deferred,
     NotFound,
     Pending,
@@ -286,6 +288,82 @@ async def test_a_payout_the_provider_takes_nothing_of_for_hours_is_shown_to_staf
     await sweep(worker, world.worker, world.clock)
     assert (await reload(world, payout)).status is S.SENT
     assert await held_up() == []
+
+
+async def test_a_payout_our_wallet_cannot_pay_waits_and_is_raised_at_once(
+    world: World, provider: FakeDisbursements, worker: Worker
+) -> None:
+    short = Deferred(reason=DeferReason.WALLET_SHORT)
+    payout = await world.request(1_000_000)
+    provider.on_send(payout.id, short)
+    with capture_logs() as logs:
+        await drain(worker)
+    [warning] = [
+        log
+        for log in logs
+        if log["event"] == "payout_waiting_on_wallet" and log["payout_id"] == payout.id
+    ]
+    assert warning["error_code"] == "wallet_short"
+    assert set(warning) <= {"event", "log_level", "payout_id", "error_code"}
+    # The client's payout waits. Nothing failed and the money is still on its way to them.
+    queued = await reload(world, payout)
+    assert queued.status is S.QUEUED
+    assert queued.failure_code is None
+    assert await world.balance(payout.in_flight_account_id) == 1_000_000
+    async with world.worker.actor_transaction(SYSTEM) as session:
+        why = (
+            (
+                await session.execute(
+                    text(
+                        "SELECT deferred_for FROM payout_send_attempts WHERE payout_id = :id "
+                        "ORDER BY attempt"
+                    ),
+                    {"id": payout.id},
+                )
+            )
+            .scalars()
+            .all()
+        )
+    assert why == ["wallet_short"]
+    # Staff see it straight away, not after two hours, and the operations check fails.
+    async with world.app.actor_transaction(staff()) as session:
+        found = [
+            i for i in await payouts.held_up(session, world.clock.now()) if i.payout.id == payout.id
+        ]
+    assert [item.waiting_for for item in found] == ["wallet_short"]
+    waiting = (await operations_signals(world.app, world.clock.now()))["payouts_waiting_on_wallet"]
+    assert waiting >= 1
+
+    # The wallet is topped up and the sweep's next send pays it.
+    provider.on_send(payout.id, Accepted("IOT-11"))
+    world.clock.advance(seconds=RESEND_AFTER.total_seconds())
+    await sweep(worker, world.worker, world.clock)
+    assert (await reload(world, payout)).status is S.SENT
+    after = (await operations_signals(world.app, world.clock.now()))["payouts_waiting_on_wallet"]
+    assert after == waiting - 1
+
+
+async def test_only_a_deferred_attempt_says_it_waited_on_the_wallet(world: World) -> None:
+    payout = await world.request(1_000_000)
+    now = world.clock.now()
+    async with world.worker.actor_transaction(SYSTEM) as session:
+        first = await jobs.start_attempt(session, payout.id, "fake", now)
+    with pytest.raises(DBAPIError):
+        async with world.worker.actor_transaction(SYSTEM) as session:
+            await jobs.finish_attempt(
+                session,
+                payout.id,
+                first,
+                AttemptOutcome.ACCEPTED,
+                now,
+                "IOT-12",
+                deferred_for="wallet_short",
+            )
+    with pytest.raises(DBAPIError):
+        async with world.worker.actor_transaction(SYSTEM) as session:
+            await jobs.finish_attempt(
+                session, payout.id, first, AttemptOutcome.DEFERRED, now, deferred_for="other"
+            )
 
 
 # Uncertain: it may have gone, so it is only ever read

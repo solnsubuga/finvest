@@ -47,6 +47,9 @@ class InvestmentStatus(StrEnum):
     # Undone by two members of staff because the deposit that started it was a mistake. The
     # principal went back to money awaiting start and the interest was reversed.
     UNWOUND = "unwound"
+    # Sent to another client. Its value went into a new investment for them and, unless all
+    # of it was sent, a new one for the sender with the rest.
+    TRANSFERRED = "transferred"
 
 
 class AtMaturity(StrEnum):

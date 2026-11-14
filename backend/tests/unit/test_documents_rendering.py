@@ -306,3 +306,30 @@ def test_document_emails_link_to_the_app_and_site_they_are_given() -> None:
         assert "https://app.staging.example/documents" in mail.text
         assert 'href="https://staging.example"' in mail.html
         assert "app.finvestug.com" not in mail.html
+
+
+def test_every_document_email_says_the_pdf_opens_with_the_date_of_birth() -> None:
+    period = Period(date(2026, 10, 1), date(2026, 10, 31))
+    mails = [
+        statement_email(
+            kind=StatementKind.MONTHLY,
+            first_name="Amara",
+            period=period,
+            account_number="1001004827",
+            file_name="statement.pdf",
+        ),
+        receipt_email(first_name="Amara", receipt=receipt(), file_name="receipt.pdf"),
+        tax_certificate_email(
+            first_name="Amara",
+            tax_year="2025-26",
+            period=period,
+            account_number="1001004827",
+            file_name="certificate.pdf",
+        ),
+    ]
+    for mail in mails:
+        for body in (mail.text, mail.html):
+            assert "date of birth" in body and "05031990" in body
+            assert "Password protected" in body or "password protected" in body
+        # The client's own date of birth is never written in the email.
+        assert "1994" not in mail.text

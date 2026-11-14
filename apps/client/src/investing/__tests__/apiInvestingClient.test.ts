@@ -322,6 +322,17 @@ describe("early withdrawal through the real API", () => {
     expect(after).toMatchObject({ withdrawalRequestedAt: "2026-11-14T10:00:00Z", value: ugx(1000291) });
   });
 
+  it("sends the PIN confirmation from a phone with a PIN, and says when it is needed again", async () => {
+    const client = createApiInvestingClient();
+    const seen = serve(200, { ...investment, withdrawal_requested_at: "2026-11-14T10:00:00Z" });
+    await client.withdrawEarly({ investmentId: ID, destinationId: account.id, idempotencyKey: "w-2", pinConfirmation: "token" });
+    expect(seen[0]!.body).toEqual({ destination_id: account.id, pin_confirmation: "token" });
+    serve(428, refusal("pin_required"));
+    await expect(
+      client.payOutMatured({ investmentId: ID, destinationId: account.id, pinConfirmation: "old" }),
+    ).rejects.toMatchObject({ code: "pin_required" });
+  });
+
   it("says why a withdrawal was refused", async () => {
     const client = createApiInvestingClient();
     const request = { investmentId: ID, destinationId: account.id, idempotencyKey: "w" };

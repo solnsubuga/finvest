@@ -1,6 +1,7 @@
 """A client downloads a copy of their data: what it holds, and what it never holds."""
 
 from collections.abc import AsyncIterator
+from datetime import timedelta
 
 import pytest
 from sqlalchemy import text
@@ -77,6 +78,23 @@ async def test_a_new_client_gets_an_almost_empty_copy(api: Api) -> None:
     copy = (await api.http.get("/client/data-export")).json()
     assert copy["identity_check"] is None and copy["next_of_kin"] == []
     assert copy["investments"] == [] and copy["account_closure"] is None
+    assert copy["truncated"] == {"investments": False, "payouts": False}
+
+
+async def test_the_file_is_named_for_the_day_in_kampala(api: Api) -> None:
+    client = await api.client()
+    # 22:30 UTC is already the next morning in Kampala.
+    now = api.clock.now()
+    late = now.replace(hour=22, minute=30, second=0, microsecond=0)
+    if late <= now:
+        late += timedelta(days=1)
+    api.clock.advance(seconds=(late - now).total_seconds())
+    await api.as_client(client)
+    response = await api.http.get("/client/data-export")
+    kampala_day = (late.date() + timedelta(days=1)).isoformat()
+    assert (
+        f'filename="finvest-my-data-{kampala_day}.json"' in response.headers["content-disposition"]
+    )
 
 
 async def test_a_download_needs_a_recent_sign_in(api: Api) -> None:

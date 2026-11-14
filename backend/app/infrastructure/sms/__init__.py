@@ -1,14 +1,14 @@
 """Outgoing text messages behind one small interface, so the provider can change.
 
-ioTec Messaging is the chosen provider. Its adapter is added when its API details are in hand.
-Until then `none` fails closed, and `local-console` prints messages for local development.
+ioTec Messaging is the provider (`iotec`, in `iotec.py`). `none` fails closed, and
+`local-console` prints messages for local development.
 """
 
 import re
 from dataclasses import dataclass, field
 from typing import Literal, Protocol, Self
 
-from pydantic import Field, model_validator
+from pydantic import Field, SecretStr, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 PHONE = re.compile(r"^\+[1-9][0-9]{7,14}$")
@@ -110,7 +110,11 @@ class SmsSettings(BaseSettings):
         env_prefix="FINVEST_SMS_", extra="ignore", hide_input_in_errors=True
     )
 
-    backend: Literal["none", "local-console"] = "none"
+    backend: Literal["none", "local-console", "iotec"] = "none"
+    # From the ioTec Messaging portal: Management, Settings, Configuration.
+    iotec_client_id: str | None = None
+    iotec_api_key: SecretStr | None = None
+    iotec_base_url: str = "https://messaging-api.iotec.io"
     # `staging` or `production` where deployed (infra/README.md). Unset on a developer's machine.
     environment: str | None = Field(default=None, validation_alias="FINVEST_ENVIRONMENT")
 
@@ -120,9 +124,24 @@ class SmsSettings(BaseSettings):
         # is personal data in a log. A name this code does not know counts as deployed.
         if self.backend == "local-console" and self.environment not in (None, "", "local"):
             raise ValueError("The local-console SMS backend may only run on a developer's machine")
+        if self.backend == "iotec" and not (
+            self.iotec_client_id and self.iotec_api_key and self.iotec_api_key.get_secret_value()
+        ):
+            raise ValueError("The iotec SMS backend needs FINVEST_SMS_IOTEC_CLIENT_ID and _API_KEY")
+        if not self.iotec_base_url.startswith("https://"):
+            raise ValueError("The ioTec address must use https")
         return self
 
     def transport(self) -> SmsTransport:
+        if self.backend == "iotec":
+            from app.infrastructure.sms.iotec import IotecSms
+
+            assert self.iotec_client_id is not None and self.iotec_api_key is not None
+            return IotecSms(
+                client_id=self.iotec_client_id,
+                api_key=self.iotec_api_key,
+                base_url=self.iotec_base_url,
+            )
         return ConsoleSms() if self.backend == "local-console" else DisabledSms()
 
 

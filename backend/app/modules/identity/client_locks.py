@@ -92,6 +92,29 @@ _LOCK = text(
     "SELECT id FROM identity_client_locks WHERE id = :id AND status = 'proposed' FOR UPDATE"
 )
 _STATUS = text("SELECT status FROM identity_clients WHERE id = :id FOR UPDATE")
+# The same read without the row lock, for a transaction that only needs to know.
+_STATUS_UNLOCKED = text("SELECT status FROM identity_clients WHERE id = :id")
+_ID_FOR_PHONE = text("SELECT id FROM identity_clients WHERE phone = :phone")
+
+
+async def client_status(session: AsyncSession, client_id: str) -> str | None:
+    """`active`, `locked`, `unclaimed` or `closed`, or None if there is no such client.
+
+    Reads the account alone, so any transaction may ask, such as a client sending an
+    investment to another.
+    """
+    status = await session.scalar(_STATUS_UNLOCKED, {"id": client_id})
+    return str(status) if status is not None else None
+
+
+async def client_id_for_phone(session: AsyncSession, phone: str) -> str | None:
+    """The client with this mobile number, written any way a person might type it, or None."""
+    try:
+        normalized = normalize_phone(phone)
+    except InvalidIdentifier:
+        return None
+    found = await session.scalar(_ID_FOR_PHONE, {"phone": normalized})
+    return str(found) if found is not None else None
 
 
 async def client_account(session: AsyncSession, client_id: str) -> ClientAccount | None:

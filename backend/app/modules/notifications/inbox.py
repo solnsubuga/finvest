@@ -35,6 +35,7 @@ LinkKind = Literal[
     "complaint",
     "goal",
     "autoinvest_plan",
+    "organisation",
 ]
 LINK_KINDS: tuple[LinkKind, ...] = get_args(LinkKind)
 DEFAULT_PAGE_SIZE = 30

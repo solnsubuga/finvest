@@ -253,6 +253,22 @@ async def test_a_deposit_is_sent_approved_confirmed_and_posted_once(
             {"method": "mtn", "cause": "status_read"},
         ),
     ]
+    # The client is told once, in the same transaction as the confirmation.
+    assert await notices(worker_database, deposit) == [
+        ("payment_confirmed", "We received your payment from MTN Mobile Money.", "deposit")
+    ]
+
+
+async def notices(database: Database, deposit: Deposit) -> list[tuple[str, str, str]]:
+    async with database.actor_transaction(SYSTEM) as session:
+        rows = await session.execute(
+            text(
+                "SELECT event, body, link_kind FROM notifications "
+                "WHERE client_id = :client AND link_id = :id ORDER BY created_at, id"
+            ),
+            {"client": deposit.client_id, "id": deposit.id},
+        )
+        return [(row.event, row.body, row.link_kind) for row in rows]
 
 
 async def test_a_refused_request_fails_and_posts_nothing(
@@ -276,6 +292,8 @@ async def test_a_refused_request_fails_and_posts_nothing(
         "failed",
         {"method": "mtn", "cause": "send", "failure": "account_not_found"},
     )
+    [(event, body, _)] = await notices(worker_database, deposit)
+    assert event == "payment_failed" and "No money was taken" in body
 
 
 async def audit_trail(
@@ -323,6 +341,8 @@ async def test_a_payer_who_declines_fails_the_deposit(
         )
     assert late.status is S.FAILED
     assert await entries(worker_database, deposit) == 0
+    # Told once that it failed, and never that it was paid.
+    assert [event for event, _, _ in await notices(worker_database, deposit)] == ["payment_failed"]
 
 
 # Deferred: it certainly did not happen, so sending again is safe

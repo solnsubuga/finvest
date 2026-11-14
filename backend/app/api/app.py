@@ -53,6 +53,7 @@ from app.modules.identity.recovery import RecoveryService
 from app.modules.identity.service import IdentityService
 from app.modules.insights import api as insights_api
 from app.modules.investments import api as investments_api
+from app.modules.investments import transfers_api as investment_transfers_api
 from app.modules.kyc import api as kyc_api
 from app.modules.kyc import claims_api as kyc_claims_api
 from app.modules.kyc import profile_api as kyc_profile_api
@@ -65,6 +66,7 @@ from app.modules.notifications import api as notifications_api
 from app.modules.notifications import hooks as notification_hooks
 from app.modules.notifications import suppressions_api
 from app.modules.notifications.settings import EmailHashSettings
+from app.modules.organisations import api as organisations_api
 from app.modules.payments import api as payments_api
 from app.modules.payments import bank_account_routes, reassignment_routes
 from app.modules.payments import routes as payment_routes
@@ -75,6 +77,7 @@ from app.modules.payouts import api as payouts_api
 from app.modules.payouts import staff_api as payouts_staff_api
 from app.modules.payouts import (
     staff_bank_api,
+    staff_bulk_api,
     staff_held_api,
     staff_payouts_api,
     staff_returns_api,
@@ -222,6 +225,7 @@ def create_app(
         *staff_payouts_api.routers,
         *staff_held_api.routers,
         *staff_bank_api.routers,
+        *staff_bulk_api.routers,
         *staff_returns_api.routers,
         *reconciliation_api.routers,
         *pot_transfers_api.routers,
@@ -241,11 +245,13 @@ def create_app(
     app.include_router(migration_api.router)
     app.include_router(migration_claims_api.router)
     app.include_router(insights_api.router)
-    for router in investments_api.routers:
+    for router in (*investments_api.routers, *investment_transfers_api.routers):
         app.include_router(router)
     for router in kyc_api.create_routers(
         identity_sealer, identity_provider, storage, identity_liveness
     ):
+        app.include_router(router)
+    for router in organisations_api.create_routers(storage):
         app.include_router(router)
     for router in kyc_claims_api.create_routers(storage):
         app.include_router(router)
