@@ -385,7 +385,7 @@ async def _create(
             details={
                 "product": product.code,
                 "at_maturity": at_maturity.value if at_maturity else None,
-                "booking_id": source_id,
+                **({"booking_id": source_id} if source_id else {}),
             },
         ),
         clock,
