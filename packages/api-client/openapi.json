@@ -12470,7 +12470,7 @@
                 "type": "null"
               }
             ],
-            "description": "The line that brought the money back. Null once it leaves the search window."
+            "description": "The line that brought the money back. Null only if not on the payout's pot."
           },
           "payout": {
             "$ref": "#/components/schemas/ReturnedPayoutOut"
