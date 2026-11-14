@@ -14,7 +14,7 @@ from fpdf import FPDF
 from fpdf.enums import XPos, YPos
 
 from app.modules.documents.domain import formatting
-from app.modules.documents.domain.investment_notes import InvestmentNote
+from app.modules.documents.domain.investment_notes import EndedNote, Ending, InvestmentNote
 from app.modules.documents.domain.receipts import Receipt
 from app.modules.documents.domain.statements import (
     ActivityKind,
@@ -629,3 +629,71 @@ def _figures_box(pdf: _Page, rows: Sequence[tuple[str, str, bool]]) -> None:
         pdf.cell(CONTENT_W / 2 - 6, row_h, shown, align="R")
         y += row_h
     pdf.set_y(top + box_h + 8)
+
+
+_ENDED_TITLES = {
+    Ending.PAID_OUT: "Matured",
+    Ending.ROLLED_OVER: "Matured",
+    Ending.WAITING: "Matured",
+    Ending.WITHDRAWN: "Withdrawn early",
+}
+
+
+def ended_what_happened(note: EndedNote) -> str:
+    """Where the money went, in a line."""
+    if note.ending is Ending.ROLLED_OVER:
+        return f"Rolled over into a new investment, number {note.rolled_into_id}"
+    if note.ending is Ending.PAID_OUT:
+        return "Paid out to the account you chose"
+    if note.ending is Ending.WAITING:
+        return "Waiting for you to choose where to send it, in the app"
+    return "Paid out to the account you chose, once it is sent"
+
+
+def ended_note_pdf(note: EndedNote, *, issued_on: date) -> bytes:
+    """The note that confirms an investment ended: what was invested, the interest it earned
+    and what it came to, all after tax, and where the money went. Never a tax rate or a tax
+    amount."""
+    account = formatting.account_number(note.account_number)
+    pdf = _Page(
+        title=f"Finvest investment note {note.reference}",
+        footer_left=f"Note {note.reference}  ·  Account {account}  ·  finvestug.com",
+    )
+    _fixed_date(pdf, datetime.combine(issued_on, time(), tzinfo=UTC))
+    pdf.add_page()
+    title = _ENDED_TITLES[note.ending]
+    _band(pdf, "Investment note", f"{title} {formatting.day(note.ended_on)}")
+    _facts(
+        pdf,
+        [
+            _Fact("Prepared for", note.client_name),
+            _Fact("Account number", account),
+            _Fact("Investment", note.product_name),
+            _Fact("Investment number", note.investment_id),
+        ],
+        [
+            _Fact("Started", formatting.day(note.start_date)),
+            _Fact(title, formatting.day(note.ended_on)),
+            _Fact("Issued", formatting.day(issued_on)),
+            _Fact("Note number", note.reference),
+        ],
+    )
+    _figures_box(
+        pdf,
+        [
+            ("Amount invested", formatting.money(note.amount), False),
+            ("Interest earned, after tax", formatting.money(note.interest), False),
+            ("It came to", formatting.money(note.total), True),
+        ],
+    )
+    _facts(pdf, [_Fact("What happened", ended_what_happened(note))], [])
+    payouts = (
+        "" if note.ending is Ending.ROLLED_OVER else " A payout shows in the app under Activity."
+    )
+    _note(
+        pdf,
+        "This note confirms that your investment has ended and what it came to. Every figure "
+        f"is after tax.{payouts} This note is issued by Finvest from its own books. To check "
+        f"that it is genuine, contact Finvest and quote {note.reference}.",
+    )
+    return bytes(pdf.output())

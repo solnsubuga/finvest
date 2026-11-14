@@ -163,10 +163,18 @@ export function taxYearLabel(from: string): string {
 }
 
 /** The receipt's reference, "RC-…", from its file name. */
-/** `IN-…` from an investment note's file name, `Finvest investment note IN-….pdf`. */
+/**
+ * `IN-…` from an investment note's file name: `Finvest investment note IN-….pdf` when the
+ * investment started, `Finvest investment end note IN-….pdf` when it ended.
+ */
 export function noteReference(document: DocumentItem): string | null {
-  const match = /investment note (\S+)\.pdf$/i.exec(document.fileName ?? "");
+  const match = /investment (?:end )?note (\S+)\.pdf$/i.exec(document.fileName ?? "");
   return match?.[1] ?? null;
+}
+
+/** Whether an investment note confirms the investment ended, rather than started. */
+export function isEndNote(document: DocumentItem): boolean {
+  return /investment end note /i.test(document.fileName ?? "");
 }
 
 export function receiptReference(document: DocumentItem): string | null {
