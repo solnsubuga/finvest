@@ -18,6 +18,19 @@ from tests.support.database import TestDatabase
 pytestmark = pytest.mark.integration
 
 ROWS = {
+    "0181_payout_screening": (
+        "INSERT INTO payout_destinations (id, client_id, kind, network, account_number, "
+        "holder_name, status, created_at, updated_at) VALUES ('-Nabc0000000000000D1', "
+        "'-Nabc0000000000000B1', 'mobile_money', 'mtn', '256772000000', 'Test', "
+        "'awaiting_code', now(), now()); "
+        "INSERT INTO payouts (id, client_id, destination_id, kind, amount_minor, currency, "
+        "status, business_date, source_account_id, source_reference, in_flight_account_id, "
+        "request_key, created_at, updated_at) VALUES ('-Nabc0000000000000A1', "
+        "'-Nabc0000000000000B1', '-Nabc0000000000000D1', 'mobile_money', 1000, 'UGX', "
+        "'screening', DATE '2026-11-10', '-Nabc0000000000000E1', 'investment-1', "
+        "'-Nabc0000000000000F1', 'request-key-1', now(), now())",
+        "refusing to downgrade while payouts wait for screening",
+    ),
     "0180_screening": (
         "INSERT INTO screening_runs (id, client_id, reason, requested_at, idempotency_key) "
         "VALUES ('-Nabc0000000000000A1', '-Nabc0000000000000B1', 'rescreen', now(), 'k-0001')",

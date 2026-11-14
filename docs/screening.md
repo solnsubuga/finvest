@@ -28,7 +28,7 @@ A provider that does not answer raises `ProviderUnavailable` and the job asks ag
 
 | Setting | Values |
 | --- | --- |
-| `FINVEST_SCREENING_PROVIDER` | `none` (default): nothing is screened and each screen is recorded as not run. `development-stub`: for a developer's own machine; surname `SANCTIONED` matches a sanctions list and `POLITICIAN` a PEP list. Refused in production. The Sigma360 adapter adds `sigma360`. |
+| `FINVEST_SCREENING_PROVIDER` | `none` (default): nothing is screened and each screen is recorded as not run. `development-stub`: for a developer's own machine; surname `SANCTIONED` matches a sanctions list and `POLITICIAN` a PEP list. Refused in production. The Sigma360 adapter adds `sigma360`. Set it on the API and the worker alike: the API reads it to decide whether a payout waits for a screen. |
 
 A provider needs `FINVEST_IDENTITY_DATA_KEY`, because the date of birth is sealed with it. The worker refuses to start without it.
 
@@ -86,6 +86,10 @@ Migration `0181_payout_screening`. When a payout is created, payouts asks `contr
 A payout in `screening` has its money reserved and nothing sent. The client app shows it as processing, never as being screened, so a client is not tipped off.
 
 Whenever a client's standing may have changed (a screen finished, a case closed), screening publishes `screening.standing_changed`, and payouts' consumer `payouts.release_screened` moves the client's waiting payouts on once they are clear: to the queue, or to staff review if the payout is above the review amount in force that day. A payout still waiting can be found on the Compliance screen (`GET /staff/compliance/payouts`), and staff may decline it from the review queue's decline route, which returns the money to where it came from, as for a held payout. A person never releases one: only a clear screen does.
+
+Nothing else asks again for a screen that could not run (the provider refused, or never answered), so the worker's hourly pass `payouts.retry_screening` tries `release_screened` for every client with a payout waiting. Within a day of the failed screen the client still waits; after that the pass asks for a fresh screen, and the payout moves on once it comes back clear. A payout still waiting after 24 hours is logged as `payout_waiting_for_screening` with its ID, and staff see it on the Compliance screen with how long it has waited.
+
+A client whose identity check has no date of birth to send, such as one carried over from Finvest 1.0 without it, is recorded `no_subject` and their payouts wait once a provider is on. Staff then complete the client's identity details and screen them again from the Compliance screen.
 
 With no screening provider set up there is no screen to wait for, so `screen` counts as `clear`. An open case or a confirmed sanctions match still holds the payout. Decided for now.
 

@@ -141,6 +141,16 @@ def schedules() -> list[Schedule]:
                 max_age=timedelta(minutes=5),
             )
         )
+    # Tries again for payouts waiting for screening, so one whose screen could not run is
+    # screened afresh once that screen is a day old. Calls no provider itself.
+    runs.append(
+        Schedule(
+            name="payouts.retry_screening",
+            trigger=CronTrigger(minute=23, timezone=UTC),
+            kind=payouts.RETRY_SCREENING_KIND,
+            max_age=timedelta(hours=1),
+        )
+    )
     # Clears the content of messages that were never sent, and old addresses and numbers.
     runs.append(
         Schedule(
