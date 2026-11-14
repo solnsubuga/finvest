@@ -11,10 +11,7 @@ from app.shared.money import Currency, Money
 from tests.support.investments import PRESENT, at, started, today
 from tests.support.ledger import ugx
 
-pytestmark = pytest.mark.integration
-
-DAY = today()
-NEXT = DAY + timedelta(days=1)
+pytestmark = [pytest.mark.integration, pytest.mark.usefixtures("clear_of_midnight")]
 
 
 def owed_for(rows: list[investments.ProductOwed], code: str) -> tuple[int, int, int]:
@@ -27,8 +24,12 @@ def owed_for(rows: list[investments.ProductOwed], code: str) -> tuple[int, int, 
 async def test_what_is_owed_counts_principal_and_net_interest_by_product(
     app_database: Database, worker_database: Database
 ) -> None:
+    # Read the date in each test, so a run that crosses midnight in Kampala still agrees with
+    # the database about which day it is.
+    day = today()
+    next_day = day + timedelta(days=1)
     async with worker_database.actor_transaction(SYSTEM) as session:
-        before = owed_for(await investments.owed_by_product(session, NEXT), "TREA-182")
+        before = owed_for(await investments.owed_by_product(session, next_day), "TREA-182")
 
     first = await started(app_database, worker_database, PRESENT, product_code="TREA-182")
     await started(
@@ -36,11 +37,11 @@ async def test_what_is_owed_counts_principal_and_net_interest_by_product(
     )
     async with worker_database.actor_transaction(SYSTEM) as session:
         # Interest is earned from the day after the start.
-        await investments.accrue_investment(session, first.id, NEXT, at(NEXT))
+        await investments.accrue_investment(session, first.id, next_day, at(next_day))
         accrued = await investments.get_investment(session, first.id)
-        after = owed_for(await investments.owed_by_product(session, NEXT), "TREA-182")
+        after = owed_for(await investments.owed_by_product(session, next_day), "TREA-182")
         earlier = owed_for(
-            await investments.owed_by_product(session, DAY - timedelta(days=1)), "TREA-182"
+            await investments.owed_by_product(session, day - timedelta(days=1)), "TREA-182"
         )
 
     assert accrued.accrued_net.minor > 0
@@ -54,14 +55,15 @@ async def test_what_is_owed_counts_principal_and_net_interest_by_product(
 async def test_running_investments_are_oldest_first_and_can_be_limited_by_start(
     app_database: Database, worker_database: Database
 ) -> None:
+    day = today()
     first = await started(app_database, worker_database, PRESENT, product_code="TREA-91")
     second = await started(app_database, worker_database, PRESENT, product_code="TREA-91")
     async with worker_database.actor_transaction(SYSTEM) as session:
         running = await investments.running_investments(session, "TREA-91")
         since_yesterday = await investments.running_investments(
-            session, "TREA-91", started_after=DAY - timedelta(days=1)
+            session, "TREA-91", started_after=day - timedelta(days=1)
         )
-        after_today = await investments.running_investments(session, "TREA-91", started_after=DAY)
+        after_today = await investments.running_investments(session, "TREA-91", started_after=day)
 
     ids = [item.investment_id for item in running]
     assert {first.id, second.id} <= set(ids)
