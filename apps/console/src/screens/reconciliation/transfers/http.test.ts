@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { createHttp } from "@/api/http.ts";
 import { potTransfersErrorMessage } from "./api.ts";
-import { createHttpPotTransfersApi } from "./http.ts";
+import { createHttpPotTransfersApi, potName } from "./http.ts";
 
 function reply(status: number, body: unknown) {
   return Promise.resolve(new Response(JSON.stringify(body), { status, headers: { "Content-Type": "application/json" } }));
@@ -73,6 +73,13 @@ describe("transfers between pots over HTTP", () => {
     ]);
     expect(fetch.mock.calls.map((call) => header(call[1], "Idempotency-Key"))).toEqual(["key-1", "key-2", "key-3"]);
     expect(JSON.parse(String(fetch.mock.calls[2]?.[1]?.body))).toEqual({ reason: "Not on the statement" });
+  });
+
+  it("names each ioTec pot with its network", () => {
+    expect(potName({ source: "iotec", account_reference: "mtn", name: "ioTec wallet" })).toBe("ioTec wallet, MTN");
+    expect(potName({ source: "iotec", account_reference: "airtel", name: "ioTec wallet" })).toBe("ioTec wallet, Airtel");
+    expect(potName({ source: "iotec", account_reference: "mtn", name: "ioTec wallet, MTN" })).toBe("ioTec wallet, MTN");
+    expect(potName({ source: "bank", account_reference: "trust", name: "Trust bank account" })).toBe("Trust bank account");
   });
 
   it("words the backend's named refusals", async () => {
