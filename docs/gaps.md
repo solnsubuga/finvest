@@ -98,7 +98,7 @@ Each of these is blocked on something only the owner can get, and is listed agai
 | --- | --- |
 | **ioTec payments credentials.** The collections adapter is built (`FINVEST_PAYMENTS_PROVIDER=iotec`, see [payments.md](payments.md#iotec-pay)). It needs `FINVEST_IOTEC_CLIENT_ID`, `CLIENT_SECRET`, `WALLET_ID` and `CALLBACK_TOKEN` set in the deploy, and a first try against ioTec's test wallet. | No mobile money payment can be taken in production until they are set. |
 | **ioTec payouts adapter.** Only the sandbox exists. | No payout can be sent. |
-| **ioTec SMS adapter.** `FINVEST_SMS_BACKEND` accepts only `none` and `local-console`. | **No sign-up, SMS sign-in, payout account code or claim code can be delivered**, so nobody can sign up or claim an account. This is the most serious blocker. |
+| **ioTec SMS credentials.** The adapter is built (`FINVEST_SMS_BACKEND=iotec`), but the worker needs `FINVEST_SMS_IOTEC_CLIENT_ID` and `FINVEST_SMS_IOTEC_API_KEY` from the ioTec Messaging portal, and the FINVEST sender name set up there. | Until they are set, **no sign-up, SMS sign-in, payout account code or claim code can be delivered**, so nobody can sign up or claim an account. This is the most serious blocker. |
 | **ioTec Verify: the name a network holds for a number.** | Mobile money payout accounts wait at `awaiting_proof` for good ([payouts.md](payouts.md)). |
 | **Identity check provider.** Every client is reviewed by a person. | Works, but every sign-up needs staff time. |
 | **Public site facts.** `registeredName`, `regulator` and `licenceNumber` in `apps/site/src/data/company.ts` are empty, and `pnpm placeholders --strict` fails until they are set. The legal pages are headings only. | The site cannot be opened to search engines. |
