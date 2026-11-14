@@ -244,7 +244,7 @@ function Detail({ investment, onOpen }: { investment: Investment; onOpen: (inves
           <Button label="Pay to start" height={48} onPress={() => router.push(`/pay/${investment.id}`)} testID="detail-pay" />
         ) : null}
         {investment.status === "active" && !investment.withdrawalRequestedAt ? (
-          <Button label="Add more" height={48} onPress={() => router.push(`/invest/${encodeURIComponent(investment.productCode)}`)} testID="detail-add-more" />
+          <Button label="Add more" variant="secondary" height={48} onPress={() => router.push(`/invest/${encodeURIComponent(investment.productCode)}`)} testID="detail-add-more" />
         ) : null}
         {investment.canChangeMaturity ? (
           <Button label="Change what happens at maturity" height={48} onPress={() => router.push(`/investment/maturity/${investment.id}`)} testID="detail-maturity" />
