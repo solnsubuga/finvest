@@ -115,7 +115,7 @@ Staff change the limits on Settings, by two people (`payouts/limit_changes.py`, 
 | Rule | How |
 | --- | --- |
 | Two people | A check constraint on `withdrawal_limit_changes`, and a trigger that both are the acting member of staff |
-| The approval and the version agree | The trigger refuses an approval unless it names a `withdrawal_limits` row with exactly the proposed limits, proposer and approver |
+| The approval and the version agree | The insert policy on `withdrawal_limits` admits a version only while a matching change waits, and the trigger refuses an approval unless it names a `withdrawal_limits` row with exactly the proposed limits, proposer and approver |
 | Decided once, nothing deleted | A decided change never changes. No role may delete. A downgrade refuses to drop the table while it holds rows |
 | Staff only | Clients never see proposals. The worker reads them |
 
@@ -202,7 +202,7 @@ Settle is refused by the ledger if the pot does not hold the money, because an a
 | A large payout starts held | A new payout above the review threshold in force cannot be inserted as queued |
 | A review is signed by who made it | `reviewed_by` must be the staff member of the transaction |
 | Mobile money carries at most UGX 5,000,000 | A CHECK on `payouts` and on `withdrawal_limits` |
-| A limits version takes two people | CHECK that proposer and approver differ, and a policy that the approver is the staff member inserting it |
+| A limits version takes two people | CHECK that proposer and approver differ, and a policy that the approver is the staff member inserting it, approving a waiting change in `withdrawal_limit_changes` someone else proposed with exactly these limits (migration 0341) |
 | Clients are fenced | Row policies show a client only their own payouts |
 
 ## Client routes
