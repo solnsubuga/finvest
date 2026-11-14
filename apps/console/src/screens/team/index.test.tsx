@@ -99,4 +99,18 @@ describe("team and permissions", () => {
     expect(screen.getByText(/Changing it needs an admin/)).toBeInTheDocument();
     await waitFor(() => expect(screen.queryAllByRole("button", { name: "Propose a change" })).toHaveLength(0));
   });
+
+  it("shows Cloudflare Access for each person and lets an admin try a failed one again", async () => {
+    const { user } = renderTeam(createStubTeamApi(ME, () => NOW, "access"));
+    const ruth = await screen.findByRole("listitem", { name: "Ruth Namata" });
+    expect(within(ruth).getByText("Access not updated")).toBeInTheDocument();
+    expect(within(ruth).getByText(/refused the token/)).toBeInTheDocument();
+    expect(within(person("Peter Okello")).getByText("Adding to Access")).toBeInTheDocument();
+    expect(within(person("Amina Kintu")).getByText("Access sync is off")).toBeInTheDocument();
+    expect(within(person("Daniel Kato")).getByRole("button", { name: "Check Access now" })).toBeInTheDocument();
+    expect(within(person("Grace Auma")).getByText("Can reach the console")).toBeInTheDocument();
+    await user.click(within(ruth).getByRole("button", { name: "Try Access again" }));
+    expect(await screen.findByText(/Asked again/)).toBeInTheDocument();
+    await waitFor(() => expect(within(person("Ruth Namata")).getByText("Can reach the console")).toBeInTheDocument());
+  });
 });

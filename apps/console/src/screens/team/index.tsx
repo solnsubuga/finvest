@@ -4,7 +4,7 @@ import { useAuth } from "@/auth/context.ts";
 import { isStubAuth } from "@/auth/index.ts";
 import { Button } from "@/components/ui/button.tsx";
 import { PageHeader } from "@/pages/PageHeader.tsx";
-import { notConnectedTeamApi, teamErrorMessage, TeamError, type Change, type Decision, type NewChange, type Team, type TeamApi } from "./api.ts";
+import { notConnectedTeamApi, teamErrorMessage, TeamError, type Change, type Decision, type Member, type NewChange, type Team, type TeamApi } from "./api.ts";
 import { createHttpTeamApi } from "./http.ts";
 import { ChangeCard, InviteForm, MemberRow, RoleMatrix } from "./Parts.tsx";
 import { createStubTeamApi } from "./stub.ts";
@@ -46,7 +46,7 @@ export function TeamScreen({ api, me }: TeamScreenProps) {
     };
   }, [fetchTeam]);
 
-  async function run(on: string, command: () => Promise<Change>, done: (change: Change) => string): Promise<boolean> {
+  async function run<T>(on: string, command: () => Promise<T>, done: (result: T) => string): Promise<boolean> {
     setBusy(true);
     setFailed(null);
     setNotice(null);
@@ -73,6 +73,9 @@ export function TeamScreen({ api, me }: TeamScreenProps) {
       if (done && on === "invite") setInviting(false);
       return done;
     });
+
+  const syncAccess = (member: Member) => () =>
+    run(member.id, () => api.syncAccess(member.id), () => `Asked again. Cloudflare Access for ${member.name} updates in a minute or two.`);
 
   const decide = (change: Change) => (decision: Decision, reason: string) =>
     run(change.id, () => api.decide(change.id, decision, reason), () =>
@@ -180,6 +183,7 @@ export function TeamScreen({ api, me }: TeamScreenProps) {
               busy={busy}
               error={failed?.on === member.id ? failed.message : null}
               onPropose={propose(member.id)}
+              onSyncAccess={syncAccess(member)}
             />
           ))}
         </ul>
@@ -204,10 +208,10 @@ export default function TeamPage() {
   const { session } = useAuth();
   const [api] = useState<TeamApi>(() => {
     if (isStubAuth() && session) {
-      // Under the stub, `?sample=quiet` shows nothing waiting and `?sample=offline` as if Finvest could not be reached.
+      // Under the stub, `?sample=quiet` shows nothing waiting, `?sample=access` shows Cloudflare Access problems, and `?sample=offline` as if Finvest could not be reached.
       const sample = new URLSearchParams(window.location.search).get("sample");
       if (sample === "offline") return notConnectedTeamApi;
-      return createStubTeamApi({ id: session.staffId, name: session.name }, Date.now, sample === "quiet" ? "quiet" : "sample");
+      return createStubTeamApi({ id: session.staffId, name: session.name }, Date.now, sample === "quiet" || sample === "access" ? sample : "sample");
     }
     const base = apiBaseUrl();
     return base ? createHttpTeamApi(createHttp(base)) : notConnectedTeamApi;
