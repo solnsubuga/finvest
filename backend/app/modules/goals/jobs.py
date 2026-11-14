@@ -67,12 +67,19 @@ class GoalJobs:
         data = job.payload.get("data")
         data = data if isinstance(data, Mapping) else {}
         plan_id, investment_id = data.get("plan_id"), data.get("investment_id")
-        if not isinstance(plan_id, str) or not isinstance(investment_id, str):
+        client_id = data.get("client_id")
+        if not all(isinstance(value, str) for value in (plan_id, investment_id, client_id)):
             raise PermanentJobError(code="plan_run_missing")
+        assert isinstance(plan_id, str) and isinstance(investment_id, str)
+        assert isinstance(client_id, str)
 
         async def effect(session: AsyncSession) -> Mapping[str, object]:
             linked = await saving_rules.link_plan_run(
-                session, plan_id=plan_id, investment_id=investment_id, clock=self._clock
+                session,
+                plan_id=plan_id,
+                client_id=client_id,
+                investment_id=investment_id,
+                clock=self._clock,
             )
             return {"linked": linked}
 
