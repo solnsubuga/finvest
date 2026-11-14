@@ -140,6 +140,28 @@ describe("the goals client for the real API", () => {
     ).rejects.toMatchObject({ code: "closed" });
   });
 
+  it("locks, unlocks and names a payday, each answered with the goal", async () => {
+    const seen = serve(200, { ...goal, locked_until: "2027-11-13", unlock_requested_at: null });
+    const locked = await createApiGoalsClient().lockGoal(ID);
+    expect(seen[0]).toMatchObject({ method: "POST", path: `/client/goals/${ID}/lock`, key: undefined });
+    expect(locked).toMatchObject({ lockedUntil: "2027-11-13", unlockRequestedAt: null });
+
+    const asked = serve(200, { ...goal, locked_until: "2026-11-21", unlock_requested_at: "2026-11-14T10:00:00Z" });
+    const unlocking = await createApiGoalsClient().unlockGoal(ID);
+    expect(asked[0]).toMatchObject({ method: "POST", path: `/client/goals/${ID}/unlock` });
+    expect(unlocking).toMatchObject({ lockedUntil: "2026-11-21", unlockRequestedAt: "2026-11-14T10:00:00Z" });
+
+    const named = serve(200, { ...goal, payday: 25 });
+    const withPayday = await createApiGoalsClient().setPayday(ID, 25);
+    expect(named[0]).toMatchObject({ method: "PUT", path: `/client/goals/${ID}/payday`, body: { day: 25 } });
+    expect(withPayday.payday).toBe(25);
+  });
+
+  it("reads a goal from before locks as not locked", async () => {
+    serve(200, goal);
+    expect(await createApiGoalsClient().getGoal(ID)).toMatchObject({ payday: null, lockedUntil: null, unlockRequestedAt: null });
+  });
+
   it("saves to a goal and hands back the investment to pay for", async () => {
     const seen = serve(201, saving);
     const made = await createApiGoalsClient().saveToGoal(ID, { minor: 300000, currency: "UGX" }, "key-2");

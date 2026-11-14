@@ -86,6 +86,11 @@ export type Investment = {
   withdrawalRequestedAt: string | null;
   /** Running, and part or all of it may be sent to another client now. */
   canSend: boolean;
+  /**
+   * Locked through a goal, YYYY-MM-DD: the first day it may be withdrawn early or
+   * sent on again. Null when it is not locked.
+   */
+  lockedUntil: string | null;
 };
 
 /** Another client, found by their Finvest account number or mobile number. */
