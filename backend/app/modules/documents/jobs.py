@@ -10,8 +10,11 @@ an address or a figure.
 """
 
 import hashlib
+import secrets
 from collections.abc import Awaitable, Callable, Mapping
+from dataclasses import replace
 from datetime import date, datetime, timedelta
+from typing import NamedTuple
 
 import structlog
 from sqlalchemy import TextClause, text
@@ -40,7 +43,8 @@ from app.infrastructure.jobs import (
     is_active,
 )
 from app.infrastructure.sealing import Sealer
-from app.modules.documents import building, locking, pdf, reissues, service
+from app.modules.documents import building, checks, locking, pdf, reissues, service
+from app.modules.documents.domain.checks import new_code
 from app.modules.documents.domain.emails import (
     Rendered,
     ended_note_email,
@@ -51,6 +55,7 @@ from app.modules.documents.domain.emails import (
 )
 from app.modules.documents.domain.statements import (
     Period,
+    Statement,
     StatementDoesNotAddUp,
     StatementKind,
     month_end,
@@ -147,6 +152,15 @@ WAIT_QUIETLY_DAYS = 5
 ClosedThrough = Callable[[AsyncSession], Awaitable[date | None]]
 
 
+class _Drawn(NamedTuple):
+    status: DocumentStatus
+    failure: str | None
+    content: bytes | None
+    open_from: date | None
+    # The statement as drawn, for its check. None for every other document.
+    statement: Statement | None = None
+
+
 class DocumentJobs:
     def __init__(
         self,
@@ -157,8 +171,11 @@ class DocumentJobs:
         closed_through: ClosedThrough | None = None,
         sealer: Sealer | None = None,
         links: Links = PRODUCTION,
+        random_bytes: Callable[[int], bytes] = secrets.token_bytes,
     ) -> None:
         self._database = database
+        # Draws each statement's check code. Tests pass their own to know the code.
+        self._random_bytes = random_bytes
         # Where the email's buttons and footer point. The worker passes its settings' links.
         self._links = links
         self._clock = clock
@@ -196,7 +213,8 @@ class DocumentJobs:
                 raise PermanentJobError(code="document_missing")
             if view.status is not DocumentStatus.PENDING:
                 return {"status": view.status.value}
-            status, failure, content, open_from = await self._draw(session, view)
+            code = new_code(self._random_bytes) if view.kind in _STATEMENTS else None
+            status, failure, content, open_from, statement = await self._draw(session, view, code)
             await session.execute(
                 _FINISH,
                 {
@@ -211,6 +229,8 @@ class DocumentJobs:
                     "not_final_from": open_from,
                 },
             )
+            if statement is not None and statement.check_code is not None:
+                await checks.record(session, view.id, statement, self._clock.now())
             if status is DocumentStatus.READY and view.kind in _STATEMENTS:
                 assert view.period is not None
                 await notifications.notify(
@@ -230,8 +250,8 @@ class DocumentJobs:
         logger.info("document_built", document_id=document_id, status=result.get("status"))
 
     async def _draw(
-        self, session: AsyncSession, view: DocumentView
-    ) -> tuple[DocumentStatus, str | None, bytes | None, date | None]:
+        self, session: AsyncSession, view: DocumentView, check_code: str | None
+    ) -> _Drawn:
         open_from: date | None = None
         if view.period is not None:
             open_from = not_final_from(view.period, await self._closed_through(session))
@@ -247,7 +267,7 @@ class DocumentJobs:
                 receipt, _ = await building.receipt(
                     session, deposit_id=view.source_id, reference=view.reference
                 )
-                return DocumentStatus.READY, None, pdf.receipt_pdf(receipt), None
+                return _Drawn(DocumentStatus.READY, None, pdf.receipt_pdf(receipt), None)
             if view.kind is DocumentKind.INVESTMENT_NOTE:
                 assert view.source_id is not None
                 try:
@@ -257,8 +277,8 @@ class DocumentJobs:
                         raise
                     # Staff undid it: it started by mistake and was never really the
                     # client's. Nothing to confirm, show or send.
-                    return DocumentStatus.EMPTY, None, None, None
-                return DocumentStatus.READY, None, drawn_note, None
+                    return _Drawn(DocumentStatus.EMPTY, None, None, None)
+                return _Drawn(DocumentStatus.READY, None, drawn_note, None)
             assert view.period is not None
             drawn = await building.statement(
                 session,
@@ -272,22 +292,23 @@ class DocumentJobs:
                 not_final_from=open_from,
             )
         except building.NotReady:
-            return DocumentStatus.FAILED, "not_approved", None, None
+            return _Drawn(DocumentStatus.FAILED, "not_approved", None, None)
         except StatementDoesNotAddUp:
             # A bug or bad data, never a client's fault. Nothing is sent, and staff see it.
             logger.error(
                 "statement_does_not_add_up", document_id=view.id, error_code="does_not_add_up"
             )
-            return DocumentStatus.FAILED, "does_not_add_up", None, None
+            return _Drawn(DocumentStatus.FAILED, "does_not_add_up", None, None)
         except ApplicationError as error:
-            return DocumentStatus.FAILED, f"source_{error.code}", None, None
+            return _Drawn(DocumentStatus.FAILED, f"source_{error.code}", None, None)
         if view.kind is DocumentKind.MONTHLY_STATEMENT and drawn.is_empty:
-            return DocumentStatus.EMPTY, None, None, None
-        return DocumentStatus.READY, None, pdf.statement_pdf(drawn), open_from
+            return _Drawn(DocumentStatus.EMPTY, None, None, None)
+        # The code a bank or embassy checks on the website, printed on the statement and kept
+        # in the same transaction.
+        drawn = replace(drawn, check_code=check_code)
+        return _Drawn(DocumentStatus.READY, None, pdf.statement_pdf(drawn), open_from, drawn)
 
-    async def _draw_certificate(
-        self, session: AsyncSession, view: DocumentView
-    ) -> tuple[DocumentStatus, str | None, bytes | None, date | None]:
+    async def _draw_certificate(self, session: AsyncSession, view: DocumentView) -> _Drawn:
         if self._sealer is None:
             # Configuration, not data: the build waits for a worker that has the key.
             logger.error(
@@ -299,22 +320,22 @@ class DocumentJobs:
                 session, self._sealer, view.client_id, _tax_year(view)
             )
         except tax.NoAccount:
-            return DocumentStatus.FAILED, "not_approved", None, None
+            return _Drawn(DocumentStatus.FAILED, "not_approved", None, None)
         except tax.DoesNotAddUp:
             # A bug or bad data, never a client's fault. Nothing is sent, and staff see it.
             logger.error(
                 "tax_certificate_does_not_add_up", document_id=view.id, error_code="does_not_add_up"
             )
-            return DocumentStatus.FAILED, "does_not_add_up", None, None
+            return _Drawn(DocumentStatus.FAILED, "does_not_add_up", None, None)
         if certificate.is_empty:
             # Nothing earned in the year: nothing to certify, show or send.
-            return DocumentStatus.EMPTY, None, None, None
+            return _Drawn(DocumentStatus.EMPTY, None, None, None)
         drawn = pdf.tax_certificate_pdf(
             certificate,
             reference=view.reference,
             issued_on=business_date(self._clock.now()),
         )
-        return DocumentStatus.READY, None, drawn, None
+        return _Drawn(DocumentStatus.READY, None, drawn, None)
 
     async def monthly_run(self, job: ClaimedJob, context: JobContext) -> None:
         """Ask for each client's statement for a month once the ledger has closed that month.

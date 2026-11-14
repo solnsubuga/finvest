@@ -1301,3 +1301,119 @@ async def test_a_confirmed_payment_gets_a_receipt_that_is_built_and_emailed(
     (message,) = email.sent
     assert message.subject.startswith("Receipt: we received UGX ")
     assert [file.file_name for file in message.attachments] == [receipt.file_name]
+
+
+# Checking a statement on the website -------------------------------------------------------------
+
+
+async def check_code_of(worker_database: Database, document_id: str) -> str:
+    async with worker_database.actor_transaction(SYSTEM) as session:
+        code: str = (
+            await session.execute(
+                text("SELECT code FROM document_checks WHERE document_id = :id"),
+                {"id": document_id},
+            )
+        ).scalar_one()
+    return code
+
+
+async def test_a_statement_carries_a_code_that_the_website_checks(
+    http: tuple[httpx.AsyncClient, IdentityService],
+    app_database: Database,
+    worker_database: Database,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    api, _ = http
+    drawn = drawn_statements(monkeypatch)
+    client, _ = await invested(app_database, worker_database)
+    asked = await ask(app_database, client)
+    await run_jobs(worker_database)
+    statement = drawn[asked.reference]
+    code = await check_code_of(worker_database, asked.id)
+    assert statement.check_code == code
+    async with app_database.actor_transaction(client) as session:
+        found = await service.client_file(session, client, asked.id)
+    printed = " ".join(page.extract_text() for page in PdfReader(BytesIO(found.content)).pages)
+    shown = f"{code[:4]}-{code[4:8]}-{code[8:]}"
+    assert "finvestug.com/check" in printed
+    assert shown in printed
+
+    # Typed as a person might: lower case, spaces in place of dashes.
+    checked = await api.get(f"/public/statement-checks/{shown.lower().replace('-', ' ')}")
+    assert checked.status_code == 200
+    assert checked.headers["access-control-allow-origin"] == "*"
+    assert checked.headers["cache-control"] == "no-store"
+    body = checked.json()
+    assert body["result"] == "genuine"
+    assert body["statement"]["kind"] == "requested"
+    assert (body["statement"]["period_start"], body["statement"]["period_end"]) == (
+        asked_period().start.isoformat(),
+        asked_period().end.isoformat(),
+    )
+    assert body["statement"]["account_ending"] == statement.account_number[-4:]
+    assert body["statement"]["closing"] == [
+        {"minor": summary.closing.minor, "currency": summary.currency.value}
+        for summary in statement.summaries
+    ]
+    # Nothing about the client beyond what the statement already shows the bank.
+    assert set(body["statement"]) == {
+        "kind",
+        "period_start",
+        "period_end",
+        "issued_at",
+        "account_ending",
+        "closing",
+    }
+
+
+@pytest.mark.parametrize("typed", ["0000-0000-0000", "not a code", "K7Q2-9XMA"])
+async def test_a_code_no_statement_has_is_not_found(
+    http: tuple[httpx.AsyncClient, IdentityService], typed: str
+) -> None:
+    api, _ = http
+    answer = await api.get(f"/public/statement-checks/{quote(typed)}")
+    assert answer.status_code == 200
+    assert answer.json() == {"result": "not_found", "statement": None, "retry_after_seconds": None}
+
+
+async def test_one_caller_may_try_only_a_few_codes_in_a_while(
+    test_database: TestDatabase, app_database: Database
+) -> None:
+    app = create_app(test_database.settings("finvest_app"), app_database, later_clock(), HASHER)
+    address = f"10.{secrets.randbelow(250)}.{secrets.randbelow(250)}.{secrets.randbelow(250)}"
+    transport = httpx.ASGITransport(app=app, raise_app_exceptions=False, client=(address, 1))
+    async with httpx.AsyncClient(transport=transport, base_url="https://api") as api:
+        answers = [
+            (await api.get("/public/statement-checks/0000-0000-0000")).json()["result"]
+            for _ in range(21)
+        ]
+    assert answers[:20] == ["not_found"] * 20
+    assert answers[20] == "too_many_tries"
+
+
+async def test_a_check_is_written_once_by_the_worker_and_the_api_cannot_list_codes(
+    app_database: Database, worker_database: Database
+) -> None:
+    client, _ = await invested(app_database, worker_database)
+    asked = await ask(app_database, client)
+    await run_jobs(worker_database)
+    code = await check_code_of(worker_database, asked.id)
+    for statement in (
+        "UPDATE document_checks SET account_ending = '0000' WHERE document_id = :id",
+        "DELETE FROM document_checks WHERE document_id = :id",
+    ):
+        with pytest.raises(DBAPIError):
+            async with worker_database.actor_transaction(SYSTEM) as session:
+                await session.execute(text(statement), {"id": asked.id})
+    with pytest.raises(DBAPIError):
+        async with app_database.actor_transaction(new_staff()) as session:
+            await session.execute(text("SELECT code FROM document_checks"))
+    # The function answers one exact code, and only for a finished statement.
+    async with app_database.transaction() as session:
+        rows = (
+            await session.execute(text("SELECT kind FROM documents_check(:code)"), {"code": code})
+        ).all()
+        assert [row.kind for row in rows] == ["requested_statement"]
+        assert (
+            await session.execute(text("SELECT count(*) FROM documents_check('%')"))
+        ).scalar_one() == 0

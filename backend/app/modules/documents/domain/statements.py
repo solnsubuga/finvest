@@ -18,6 +18,7 @@ from datetime import date, timedelta
 from enum import StrEnum
 
 from app.modules.documents.domain import formatting
+from app.modules.documents.domain.checks import normalised
 from app.shared.money import Currency, Money
 
 # The longest period a client may ask for at once.
@@ -181,9 +182,14 @@ class Statement:
     # day on may still change. None when every day is final. A monthly statement is always
     # final: it is drawn only once the ledger is closed through its last day.
     not_final_from: date | None = None
+    # The code a bank or embassy enters at finvestug.com/check, without dashes. Set when the
+    # worker draws it; a statement from before codes existed has none.
+    check_code: str | None = None
 
     def __post_init__(self) -> None:
         formatting.account_number(self.account_number)
+        if self.check_code is not None and normalised(self.check_code) != self.check_code:
+            raise ValueError("Not a check code")
         if self.not_final_from is not None:
             if self.kind is StatementKind.MONTHLY:
                 raise ValueError("A monthly statement is drawn only over closed days")

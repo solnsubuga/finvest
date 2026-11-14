@@ -13,9 +13,15 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.idempotency import IdempotencyKey
 from app.infrastructure.database import Database
 from app.infrastructure.idempotency import Receipt, run_once
-from app.modules.documents import reissues, service
+from app.infrastructure.throttling import reserve_attempts, throttle_key
+from app.modules.documents import checks, reissues, service
 from app.modules.documents.service import DocumentKind, DocumentStatus, DocumentView
-from app.modules.identity.api import CurrentClient, require_confirmed, require_permission
+from app.modules.identity.api import (
+    CurrentClient,
+    caller_address,
+    require_confirmed,
+    require_permission,
+)
 from app.modules.identity.service import StaffSession
 from app.shared.clock import Clock
 from app.shared.contracts import Contract, PushId
@@ -41,7 +47,8 @@ staff_router = APIRouter(
         422: {"model": ErrorEnvelope},
     },
 )
-routers = [client_router, staff_router]
+public_router = APIRouter(prefix="/public", tags=["public documents"])
+routers = [client_router, staff_router, public_router]
 
 
 def _database(request: Request) -> Database:
@@ -432,4 +439,77 @@ async def staff_withdraw_note_reissue(
         key=key,
         body={"note_reissue_id": request_id},
         command=lambda session: reissues.withdraw_reissue(session, staff.actor, request_id, clock),
+    )
+
+
+# Checking a statement, from the website -------------------------------------------------------
+
+# Codes one caller may try in 15 minutes. A bank checks one or two; guessing needs billions.
+CHECKS_PER_CALLER = 20
+
+
+class CheckedAmount(Contract):
+    minor: int
+    currency: Literal["UGX", "USD"]
+
+
+class CheckedStatement(Contract):
+    kind: Literal["monthly", "requested"]
+    period_start: date
+    period_end: date
+    issued_at: datetime
+    # The last four digits of the account number printed on the statement.
+    account_ending: str
+    # The value at the end of the period, in each currency, as the statement prints it.
+    closing: list[CheckedAmount]
+
+
+class StatementCheckOut(Contract):
+    # `genuine`: Finvest issued a statement with this code, and `statement` says what it shows.
+    # `not_found`: no statement has this code. `too_many_tries`: wait `retry_after_seconds`.
+    result: Literal["genuine", "not_found", "too_many_tries"]
+    statement: CheckedStatement | None = None
+    retry_after_seconds: int | None = None
+
+
+@public_router.get("/statement-checks/{code}")
+async def check_statement(
+    request: Request, response: Response, database: Db, clock: Time, code: str
+) -> StatementCheckOut:
+    """Whether Finvest issued a statement with this check code, for finvestug.com/check.
+
+    Always answers 200, so the website can read every outcome from the browser. Needs no
+    sign-in and sets no cookie. Each caller may try a few codes in a while."""
+    response.headers["Access-Control-Allow-Origin"] = "*"
+    response.headers["Cache-Control"] = "no-store"
+    # Behind the proxy every request has an address. Without one, every such caller shares one
+    # count, which only makes the limit stricter.
+    address = caller_address(request) or "unknown"
+    try:
+        await reserve_attempts(
+            database, clock, [(throttle_key("statement-check", address), CHECKS_PER_CALLER)]
+        )
+    except ApplicationError as error:
+        if error.code != "rate_limited":
+            raise
+        return StatementCheckOut(
+            result="too_many_tries", retry_after_seconds=error.retry_after_seconds
+        )
+    async with database.transaction() as session:
+        found = await checks.check(session, code)
+    if found is None:
+        return StatementCheckOut(result="not_found")
+    return StatementCheckOut(
+        result="genuine",
+        statement=CheckedStatement(
+            kind="monthly" if found.monthly else "requested",
+            period_start=found.period_start,
+            period_end=found.period_end,
+            issued_at=found.issued_at,
+            account_ending=found.account_ending,
+            closing=[
+                CheckedAmount(minor=amount.minor, currency=amount.currency.value)
+                for amount in found.closing
+            ],
+        ),
     )

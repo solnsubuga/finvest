@@ -14,7 +14,7 @@ One statement is for one client and covers every investment under their account 
 
 | Part | What it shows |
 | --- | --- |
-| Heading | The client's name, account number (`1001 004 827`), the period, the issue date and the statement reference |
+| Heading | The client's name, account number (`1001 004 827`), check code (`K7Q2-9XMA-4TPD`), the period, the issue date and the statement reference |
 | Summary | Value at the start, paid in, interest earned, paid out, any correction, and value at the end. One summary per currency. |
 | Your investments | Each investment: product, reference, status, start and maturity dates, amount invested, interest earned in the period, value at the end |
 | What happened | Every payment in, payout and correction, and interest folded into one line per investment per calendar month |
@@ -72,6 +72,22 @@ The sign-up screen and the screen that claims an account moved over from paper r
 The website shows each version on the legal page ("Version of 14 November 2026") and keeps a PDF of every version at `/legal/<document>-<version>.pdf` (`apps/site/src/data/legal.ts`, with old versions in `earlierVersions`). Documents lists them under "Terms you accepted", each opening the PDF of the version the client agreed to. A backend unit test checks the API and the website name the same versions, so a change to the wording changes both in one pull request.
 
 Not built yet: asking clients who agreed to an older version to agree again when the wording changes. Clients moved over from paper records who have not claimed yet have no row, because they have not agreed to the app's terms.
+
+## Checking a statement
+
+Banks and embassies accept a statement as proof of funds, so they need to know it is real. Every statement built since migration `0432_document_checks` carries a **check code**: twelve characters from Crockford's base 32 (no I, L, O or U), shown as `K7Q2-9XMA-4TPD`, under the account number and in the closing note, which says "go to finvestug.com/check and enter the check code". The code is 60 bits from the operating system's random source (`documents/domain/checks.py`). A statement from before has no code and still says to contact Finvest with its reference.
+
+The worker draws the code in the same transaction that builds the statement, and records it in `document_checks` with what the check page shows: the last four digits of the account number and the value at the end in each currency (`documents/checks.py`). The row is insert only, written only by the worker for a statement, and never changed or deleted. The client's name is not kept there: it is personal data, and whoever checks already holds the statement.
+
+On the website, [finvestug.com/check](../apps/site/src/pages/check.astro) asks `GET /public/statement-checks/{code}` from the browser. The API reads one exact code through the `documents_check` database function, so no role can list codes, and only a `ready` statement answers. It reads what was typed as Crockford's base 32 does: case, spaces and dashes are ignored, and O, I and L count as 0, 1 and 1. It always answers 200 with `Access-Control-Allow-Origin: *` and `Cache-Control: no-store`, so the page can show every outcome:
+
+| `result` | Meaning |
+| --- | --- |
+| `genuine` | `statement` gives `kind` (`monthly` or `requested`), `period_start`, `period_end`, `issued_at`, `account_ending` and `closing` (`[{minor, currency}]`). The page tells the reader to compare each with the paper. |
+| `not_found` | No statement has this code. The page says not to rely on the statement and to tell support. |
+| `too_many_tries` | One caller may try 20 codes in 15 minutes (`CHECKS_PER_CALLER`). `retry_after_seconds` says how long to wait. |
+
+Receipts, tax certificates and investment notes do not carry a code yet. They still say to contact Finvest with their reference.
 
 ## The PDFs
 
@@ -154,6 +170,7 @@ The PDF is kept in the row. A statement is a few tens of kilobytes, and keeping 
 | `GET /client/documents` | Client | Their statements and receipts, newest first |
 | `GET /client/documents/{id}` | Client | One document, to poll until it is `ready`. `not_final_from` is the first day whose figures may still change, or null. `reference` is what the PDF and its email call the document (`ST-`, `RC-`, `TC-` or `IN-` and its ID), and `note` says whether an investment note confirms the investment `started` or `ended` (null for other kinds), so the app never reads either from the file name. |
 | `GET /client/documents/{id}/file` | Client | The PDF, as a download, never cached |
+| `GET /public/statement-checks/{code}` | Anyone | Whether a statement with this check code was issued. See [Checking a statement](#checking-a-statement). |
 | `GET /staff/note-reissues` | `investments.view` | Requests to send notes again, newest first, with how many notes each covers and how the copies went |
 | `GET /staff/note-reissues/count?issued_from=&issued_to=&client_id=` | `client_statements.send` | How many notes a request would send again |
 | `POST /staff/note-reissues`, `POST /staff/note-reissues/{id}/approve`, `/decline`, `/withdraw` | `client_statements.send`, `Idempotency-Key` | `{client_id?, issued_from, issued_to, reason}`: asking for notes to be sent again, and deciding it. See [Sending notes again](#an-investment-note). |
