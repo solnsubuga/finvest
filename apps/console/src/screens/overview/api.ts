@@ -49,6 +49,7 @@ export const KINDS = [
   "client_statement",
   "client_withdrawal",
   "report_schedule",
+  "month_close",
 ] as const;
 
 export type Kind = (typeof KINDS)[number];

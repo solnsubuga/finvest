@@ -15,7 +15,7 @@ from app.modules.dealing import buffer, capital
 from app.modules.dealing import orders as dealing
 from app.modules.dealing.domain.capital import Direction
 from app.modules.dealing.domain.orders import OrderStatus
-from app.modules.finance import code_maps
+from app.modules.finance import code_maps, month_close
 from app.modules.identity import client_locks, phone_changes, team
 from app.modules.identity.service import StaffSession
 from app.modules.investments import service as investments
@@ -128,6 +128,8 @@ async def waiting_for(session: AsyncSession, staff: StaffSession, now: datetime)
         found += await _settings(session, kinds)
     if "report_schedule" in kinds:
         found += await _report_schedules(session, staff)
+    if "month_close" in kinds:
+        found += await _month_closes(session)
     return inbox(found, staff.staff_id, staff.permissions)
 
 
@@ -515,4 +517,12 @@ async def _report_schedules(session: AsyncSession, staff: StaffSession) -> list[
         )
         for s in await report_schedules.waiting(session)
         if may_download(REPORTS[s.report_key], staff.permissions)
+    ]
+
+
+async def _month_closes(session: AsyncSession) -> list[Waiting]:
+    # The subject is the month.
+    return [
+        Waiting("month_close", c.id, f"{c.month:%Y-%m}", c.proposed_by, c.proposed_at)
+        for c in await month_close.waiting(session)
     ]
