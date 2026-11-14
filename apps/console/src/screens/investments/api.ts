@@ -17,7 +17,24 @@ export type InvestmentStatus = "awaiting_payment" | "active" | "matured" | "with
 
 /** Every status, so a list of all investments can ask for each in turn. */
 export const INVESTMENT_STATUSES: readonly InvestmentStatus[] = ["awaiting_payment", "active", "matured", "withdrawn", "unwound", "transferred", "cancelled"];
+/** What staff can book for a client. */
 export type AtMaturity = "roll_over" | "pay_out" | "pay_interest";
+/** What a client can choose on their investment: a booking's choices, or saving the interest to a goal. */
+export type InvestmentChoice = AtMaturity | "interest_to_goal";
+
+const CHOICE_LABELS: Record<InvestmentChoice, string> = {
+  roll_over: "Roll over",
+  pay_out: "Pay out",
+  pay_interest: "Pay the interest",
+  interest_to_goal: "Roll over, interest to goal",
+};
+
+/** What happens when the term ends, for a table cell: "Roll over, interest to goal: School fees". */
+export function choiceLabel(investment: Pick<Investment, "atMaturity" | "interestGoalName">): string {
+  if (!investment.atMaturity) return "Open term";
+  const label = CHOICE_LABELS[investment.atMaturity];
+  return investment.atMaturity === "interest_to_goal" && investment.interestGoalName ? `${label}: ${investment.interestGoalName}` : label;
+}
 
 export interface Investment {
   id: string;
@@ -29,7 +46,11 @@ export interface Investment {
   annualRateBps: number;
   taxBps: number;
   termDays: number | null;
-  atMaturity: AtMaturity | null;
+  atMaturity: InvestmentChoice | null;
+  /** With `interest_to_goal`: the client's goal that takes the interest, by its name. */
+  interestGoalName: string | null;
+  /** Started from another investment's interest at its maturity: that investment. */
+  interestFromId: string | null;
   createdAt: string;
   payBy: string;
   startDate: string | null;

@@ -23,6 +23,7 @@ interface Sample {
   atMaturity: Investment["atMaturity"];
   refusal?: string;
   rolledInto?: string;
+  goal?: string;
 }
 
 const PRODUCTS = {
@@ -36,7 +37,7 @@ const SAMPLES: Sample[] = [
   { id: "-InvSample00000000A2", client: "-ClientSample0000002", product: "TREA-182", amount: ugx(12_000_000), status: "active", start: "2026-05-24", maturity: "2026-11-22", through: "2026-11-13", gross: 769_644, tax: 115_440, atMaturity: "pay_out" },
   { id: "-InvSample00000000A3", client: "-ClientSample0000003", product: "TREA-91", amount: ugx(1_000_000), status: "active", start: "2026-10-02", maturity: "2027-01-01", through: "2026-11-13", gross: 14_022, tax: 2_091, atMaturity: "pay_out" },
   { id: "-InvSample00000000A4", client: "-ClientSample0000004", product: "USD-BOND", amount: usd(2_500_00), status: "active", start: "2026-09-01", maturity: null, through: "2026-11-13", gross: 3_626, tax: 181, atMaturity: null },
-  { id: "-InvSample00000000A5", client: "-ClientSample0000005", product: "TREA-182", amount: ugx(3_000_000), status: "active", start: "2026-11-02", maturity: "2027-05-03", through: "2026-11-13", gross: 11_300, tax: 1_690, atMaturity: "roll_over" },
+  { id: "-InvSample00000000A5", client: "-ClientSample0000005", product: "TREA-182", amount: ugx(3_000_000), status: "active", start: "2026-11-02", maturity: "2027-05-03", through: "2026-11-13", gross: 11_300, tax: 1_690, atMaturity: "interest_to_goal", goal: "School fees, Term 1" },
   { id: "-InvSample00000000P1", client: "-ClientSample0000006", product: "TREA-91", amount: ugx(2_000_000), status: "awaiting_payment", start: null, maturity: null, through: null, gross: 0, tax: 0, atMaturity: "pay_out" },
   { id: "-InvSample00000000M1", client: "-ClientSample0000007", product: "TREA-91", amount: ugx(1_000_000), status: "matured", start: "2026-08-13", maturity: "2026-11-12", through: "2026-11-12", gross: 31_164, tax: 4_674, atMaturity: "pay_out", refusal: "no_destination" },
   { id: "-InvSample00000000M2", client: "-ClientSample0000001", product: "TREA-91", amount: ugx(4_000_000), status: "matured", start: "2026-08-12", maturity: "2026-11-11", through: "2026-11-11", gross: 124_656, tax: 18_696, atMaturity: "roll_over", rolledInto: "-InvSample00000000R1" },
@@ -68,6 +69,8 @@ function investment(sample: Sample): Investment {
     rolledIntoId: sample.rolledInto ?? null,
     rolledFromId: null,
     payoutId: null,
+    interestGoalName: sample.goal ?? null,
+    interestFromId: null,
     payoutRefusal: sample.refusal ?? null,
   };
 }

@@ -162,6 +162,35 @@ describe("the goals client for the real API", () => {
     expect(await createApiGoalsClient().getGoal(ID)).toMatchObject({ payday: null, lockedUntil: null, unlockRequestedAt: null });
   });
 
+  it("reads the interest coming in from other investments, and savings made from interest", async () => {
+    serve(200, {
+      ...goal,
+      savings: [{ ...saving, interest_from_investment_id: "FFFFFFFFFFFFFFFFFFFF", interest_from_product_name: "182 Day Treasury Bill" }],
+      interest_coming: [
+        { investment_id: "CCCCCCCCCCCCCCCCCCCC", product_name: "91 Day Treasury Bill", maturity_date: "2026-11-20", interest_minor: 132_448 },
+        // An open term has no maturity, so nothing is coming from it on a date.
+        { investment_id: "OOOOOOOOOOOOOOOOOOOO", product_name: "Open", maturity_date: null, interest_minor: null },
+      ],
+    });
+    const found = await createApiGoalsClient().getGoal(ID);
+    expect(found.savings[0]).toMatchObject({ source: "interest", fromProductName: "182 Day Treasury Bill" });
+    expect(found.interestComing).toEqual([
+      {
+        investmentId: "CCCCCCCCCCCCCCCCCCCC",
+        productName: "91 Day Treasury Bill",
+        on: "2026-11-20",
+        amount: { currency: "UGX", minor: 132_448 },
+      },
+    ]);
+  });
+
+  it("reads a goal from before interest could be saved to it", async () => {
+    serve(200, goal);
+    const found = await createApiGoalsClient().getGoal(ID);
+    expect(found.interestComing).toEqual([]);
+    expect(found.savings[0]).toMatchObject({ source: "saving", fromProductName: null });
+  });
+
   it("saves to a goal and hands back the investment to pay for", async () => {
     const seen = serve(201, saving);
     const made = await createApiGoalsClient().saveToGoal(ID, { minor: 300000, currency: "UGX" }, "key-2");

@@ -254,6 +254,7 @@ describe("the investing client for the real API", () => {
       withdrawalRequestedAt: null,
       canSend: false,
       lockedUntil: null,
+      interestGoal: null,
     });
 
     const one = serve(200, { ...investment, interest_at_maturity_minor: null, total_at_maturity_minor: null });
@@ -429,6 +430,31 @@ describe("early withdrawal through the real API", () => {
     await expect(client.chooseAtMaturity({ investmentId: ID, atMaturity: "pay_out", destinationId: account.id })).rejects.toEqual(
       new InvestingError("account_not_ready"),
     );
+  });
+
+  it("saves the interest to a goal, names the goal, and says when the goal cannot take it", async () => {
+    const client = createApiInvestingClient();
+    const GOAL = "GGGGGGGGGGGGGGGGGGGG";
+    const seen = serve(200, { ...investment, at_maturity: "interest_to_goal", interest_goal_id: GOAL, interest_goal_name: "School fees" });
+    const after = await client.chooseAtMaturity({ investmentId: ID, atMaturity: "interest_to_goal", destinationId: null, goalId: GOAL });
+    expect(seen[0]).toEqual({
+      method: "PUT",
+      path: `/client/investments/${ID}/at-maturity`,
+      key: undefined,
+      body: { at_maturity: "interest_to_goal", destination_id: null, goal_id: GOAL },
+    });
+    expect(after).toMatchObject({ atMaturity: "interest_to_goal", interestGoal: { id: GOAL, name: "School fees" } });
+
+    // The goal closed, or the investment already saves towards it. Not an account problem.
+    serve(422, refusal("validation_failed", [{ field_path: ["goal_id"], code: "not_usable" }]));
+    await expect(
+      client.chooseAtMaturity({ investmentId: ID, atMaturity: "interest_to_goal", destinationId: null, goalId: GOAL }),
+    ).rejects.toEqual(new InvestingError("goal_not_usable"));
+  });
+
+  it("reads an investment with no goal for its interest", async () => {
+    serve(200, investment);
+    expect((await createApiInvestingClient().getInvestment(ID)).interestGoal).toBeNull();
   });
 
   it("pays out matured money to the chosen account, and says why payouts refused it", async () => {

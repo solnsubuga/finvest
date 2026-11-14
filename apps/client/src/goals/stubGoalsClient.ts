@@ -1,6 +1,7 @@
 import { demoClosing } from "@/demo/closing";
 import { addDemoPayable } from "@/payments/stubPaymentsClient";
 import { Money } from "@/payments/types";
+import { demoInterestComing } from "@/demo/interestToGoal";
 
 import { addMonths, daysBetween } from "./dates";
 import { bestPlan, DEMO_PRODUCTS, DemoProduct, netInterest } from "./plan";
@@ -36,6 +37,8 @@ type StoredSaving = {
   startDate: string | null;
   /** The day it was taken out early. It stops earning then and no longer counts. */
   withdrawnOn?: string;
+  /** Started from another investment's interest at its maturity. */
+  fromProductName?: string;
 };
 
 type StoredGoal = {
@@ -153,6 +156,8 @@ export function createStubGoalsClient(options: StubOptions = {}): GoalsClient {
         return {
           investmentId: saving.investmentId,
           productName: saving.product.name,
+          source: saving.fromProductName ? ("interest" as const) : ("saving" as const),
+          fromProductName: saving.fromProductName ?? null,
           status,
           amount: ugx(saving.amount),
           value: ugx(valueOf(saving).value),
@@ -178,6 +183,10 @@ export function createStubGoalsClient(options: StubOptions = {}): GoalsClient {
       savings,
       payday: goal.payday ?? null,
       ...lockOf(goal),
+      interestComing: [...demoInterestComing.values()]
+        .filter((coming) => coming.goalId === goal.id && goal.status === "active")
+        .map(({ investmentId, productName, on, amount }) => ({ investmentId, productName, on, amount }))
+        .sort((a, b) => a.on.localeCompare(b.on)),
     };
   }
 
@@ -254,6 +263,15 @@ export function createStubGoalsClient(options: StubOptions = {}): GoalsClient {
           amount: 200_000,
           createdOn: addDays(start, -16),
           startDate: addDays(start, -16),
+        },
+        {
+          // Interest another investment saved here when it matured, with nothing to pay.
+          investmentId: nextId("inv"),
+          product: product("TREA-91"),
+          amount: 48_312,
+          createdOn: addDays(start, -9),
+          startDate: addDays(start, -9),
+          fromProductName: "182 Day Treasury Bill",
         },
       ],
     };

@@ -123,6 +123,37 @@ export default function GoalDetail() {
             </Notice>
           ) : null}
 
+          {goal.interestComing && goal.interestComing.length > 0 ? (
+            <View style={{ gap: 8 }} testID="goal-interest-coming">
+              <Eyebrow>Interest coming in</Eyebrow>
+              <Card padded={false}>
+                {goal.interestComing.map((coming, index) => (
+                  <Pressable
+                    key={coming.investmentId}
+                    style={[styles.row, index > 0 && styles.divider]}
+                    onPress={() => router.push(`/investment/${coming.investmentId}`)}
+                    accessibilityRole="link"
+                    testID={`interest-coming-${coming.investmentId}`}
+                  >
+                    <View style={[styles.dot, { backgroundColor: colors.lime, borderWidth: 1, borderColor: colors.black }]} />
+                    <View style={{ flex: 1 }}>
+                      <Txt size={14} weight="bold">
+                        {`Interest from ${coming.productName}`}
+                      </Txt>
+                      <Txt size={12} color={colors.muted}>
+                        {`Saved here when it matures on ${formatDay(coming.on)}. Nothing to pay`}
+                      </Txt>
+                    </View>
+                    <Txt size={14} weight="bold">
+                      {`about ${formatMoney(coming.amount).replace("UGX ", "")}`}
+                    </Txt>
+                    <Icon name="chevron" size={16} strokeWidth={2.2} />
+                  </Pressable>
+                ))}
+              </Card>
+            </View>
+          ) : null}
+
           <Eyebrow>Where this money is working</Eyebrow>
           {goal.savings.length === 0 ? (
             <Notice tone="neutral">
@@ -244,7 +275,11 @@ function SavingRow({
 }) {
   const waiting = saving.status === "awaiting_payment";
   const counts = saving.status === "active";
-  const line = waiting ? "Waiting for your payment" : savingLine(saving);
+  const line = waiting
+    ? "Waiting for your payment"
+    : saving.source === "interest" && saving.status === "active"
+      ? `Interest from ${saving.fromProductName ?? "another investment"}. ${savingLine(saving)}`
+      : savingLine(saving);
   const body = (
     <>
       <View style={[styles.dot, { backgroundColor: counts ? colors.black : colors.neutral }]} />

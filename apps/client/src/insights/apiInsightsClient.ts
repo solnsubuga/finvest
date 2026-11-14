@@ -33,7 +33,7 @@ export function toInsights(view: InsightsView, asked: Currency): Insights {
                   on: item.on,
                   investmentId: item.investment_id,
                   productName: item.product_name,
-                  atMaturity: item.at_maturity === "interest_to_goal" ? "roll_over" : item.at_maturity,
+                  atMaturity: item.at_maturity,
                   amount,
                 },
               ]

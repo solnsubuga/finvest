@@ -232,6 +232,8 @@ export default function Insights() {
           ? `${next.productName} pays ${formatMoney(next.amount)} to your account on ${formatLongDay(next.on)}. You can still choose to roll it over before then.`
           : next.atMaturity === "pay_interest"
             ? `${next.productName} pays its interest to your account on ${formatLongDay(next.on)}, and what you put in starts another term.`
+            : next.atMaturity === "interest_to_goal"
+              ? `${next.productName} saves its interest to your goal on ${formatLongDay(next.on)}, and what you put in starts another term.`
             : `${next.productName} rolls over on ${formatLongDay(next.on)} with ${formatMoney(next.amount)}, so it keeps earning. You can still choose to be paid out before then.`}
       </Txt>
     </View>

@@ -21,6 +21,9 @@ function loadStub(): StubModule | null {
   return null;
 }
 
+/** On the web, opening the demo at `/?goals=none` starts with no goals, to show that state. Read once, on load. */
+const NO_DEMO_GOALS = typeof window !== "undefined" && (window.location?.search ?? "").includes("goals=none");
+
 /** The demo account that starts with the canvas's goals. */
 export const SEEDED_DEMO_PHONE = "+256772123456";
 
@@ -30,7 +33,7 @@ export function resolveGoalsClient(
   stub: StubModule | null = loadStub(),
 ): GoalsClient {
   if (stub) {
-    return stub.createStubGoalsClient({ seeded: phone === SEEDED_DEMO_PHONE });
+    return stub.createStubGoalsClient({ seeded: phone === SEEDED_DEMO_PHONE && !NO_DEMO_GOALS });
   }
   return createApiGoalsClient();
 }
