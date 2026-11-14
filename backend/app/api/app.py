@@ -101,6 +101,7 @@ from app.modules.payouts import (
 from app.modules.payouts.wiring import PayoutNameSettings
 from app.modules.platform_settings import api as platform_settings_api
 from app.modules.reconciliation import api as reconciliation_api
+from app.modules.reconciliation import custodian_api
 from app.modules.reconciliation import transfers_api as pot_transfers_api
 from app.modules.reconciliation.domain.wallet import WalletBalances
 from app.modules.reconciliation.wiring import wallet_balances
@@ -258,6 +259,7 @@ def create_app(
         *staff_returns_api.routers,
         *reconciliation_api.routers,
         *pot_transfers_api.routers,
+        *custodian_api.routers,
         *closures_api.routers,
         freeze_api.router,
         own_changes_api.router,

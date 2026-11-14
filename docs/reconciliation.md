@@ -11,7 +11,7 @@ A pot is one place real money sits, with one ledger asset account and one statem
 | ioTec wallet, MTN | `iotec.wallet`, reference `mtn` | ioTec |
 | ioTec wallet, Airtel | `iotec.wallet`, reference `airtel` | ioTec |
 | Trust bank account | `bank.trust` | The bank, as an uploaded export until there is a bank API |
-| Custodian | To be added with the investments module | The custodian |
+| Custodian | Bills, not cash: compared with the dealing desk's holdings (see [Custodian statement checks](#custodian)) | The custodian, as an uploaded statement in any layout |
 
 ## Statements
 
@@ -177,3 +177,37 @@ In `backend/app/modules/reconciliation/transfers_api.py`. Seeing transfers needs
 | `POST /staff/reconciliation/pot-transfers/{id}/decline` | `{reason}`. Nothing is posted. 403 `transfer_needs_second_person`; 409 `transfer_already_decided` |
 
 "Transfers between pots" on the console's Reconciliation screen (`apps/console/src/screens/reconciliation/transfers/`) records a transfer from one pot to another, with what was sent, what arrived, the day and the provider's reference, and shows the provider's fee as it is typed. Below it, each transfer waiting for a second person shows both pots and the three amounts. Anyone else can approve it or decline it with a reason, and the person who recorded it has nothing to press. Someone without `reconciliation.change` sees the list only.
+
+## Custodian statement checks {#custodian}
+
+The custodian holds Finvest's Treasury bills and bonds. Its statement says what it holds on a day, and must agree with what the dealing desk says Finvest holds (`dealing.holdings.holdings_on`). No sample statement exists yet, so the check reads a statement in any layout: PDF, Excel (XLSX), CSV, or a photo (PNG or JPEG), up to 10 MiB.
+
+AI only reads the statement. It never decides anything.
+
+1. **Upload.** A member of staff with `reconciliation.change` uploads the statement with the day it states holdings at. The file goes to private storage under `custodian/<check>/<file>`, and the check records its key and SHA-256 digest, so the original is kept for audit beside everything made from it.
+2. **Read.** The worker sends the file to the reader with no database transaction open. With `FINVEST_CUSTODIAN_READER=claude` that is the Claude API (`claude-opus-5-5` by default, `FINVEST_CUSTODIAN_READER_MODEL` to change it, key in `FINVEST_ANTHROPIC_API_KEY`). The model copies each holding into a fixed JSON schema (structured outputs): the instrument, its code or ISIN, the face value exactly as printed, the currency, the maturity date, where the row is on the statement, and the row as printed. It is told to calculate nothing and to treat the statement as data. A spreadsheet or CSV is turned into numbered lines of text first; a PDF or photo goes as it is. A reading longer than 500 rows, or one that does not match the schema, is refused whole. Reading is asked again at most four times; then, or when the reader refuses the file, the check is `unreadable` with a code, and staff upload again.
+3. **Compare.** Finvest's own code turns each copied face value into whole minor units with the same rules as a bank statement (`parse_amount`: no comma decimals, no fractions of a shilling), multiplied only by a scale the statement itself states ("UGX '000"). A row that cannot be parsed is shown as unreadable, never guessed. Holdings are compared by currency and maturity date, because the custodian's instrument names need not match Finvest's product codes, but a bill is paid on its maturity date. Each maturity is a `match`, `amount_differs`, `missing_at_custodian` or `not_in_finvest`. A row that could not be counted is `row_unreadable`, and a statement whose own date differs from the day staff gave, or shows none, adds `statement_date_differs` or `statement_date_unread`.
+4. **Review.** The reviewer sees every row as read beside what was made of it and can open the original file. They can correct a misread amount or maturity, or leave a row out (a cash line, a total), always with a reason; what the reader copied is kept beside the correction and the comparison is worked out again. Every item that is not a match needs a note. Sending for sign-off works the comparison out once more against the holdings as they stand.
+5. **Sign off.** A different member of staff signs it off or sends it back with a reason. Signing off and sending back need a passkey or app code from the last few minutes. The database refuses a sign-off by whoever sent the check, and a signed-off check never changes.
+
+Nothing in a check moves money. The tables are `reconciliation_custodian_checks`, `_rows`, `_items` and `_notes` (migration 0410). The worker alone writes what the reader said; staff alone review.
+
+`FINVEST_CUSTODIAN_READER=development-stub` reads one CSV layout (`instrument,code,face_value,currency,maturity_date,statement_date`), for a developer's machine and demos, and is refused in production. Unset (`none`), uploads answer `custodian_reading_off`.
+
+**Data.** With the Claude reader, the statement's contents (Finvest's own holdings, not client records) go to Anthropic's API. Whether that needs anything under Bank of Uganda rules or the Data Protection and Privacy Act is to confirm, as for ioTec. Nothing about a statement is logged.
+
+**Later.** Once the custodian's layout is known and stable, a fixed importer for it can replace the reader for that layout, with the same comparison and sign-off.
+
+### Routes
+
+| Route | Who | What |
+| --- | --- | --- |
+| `GET /staff/reconciliation/custodian-checks` | `reconciliation.view` | The latest checks, and whether reading is on |
+| `POST /staff/reconciliation/custodian-checks` | `reconciliation.change` | Upload a statement (multipart: `statement_date`, `file`), with an `Idempotency-Key` |
+| `GET /staff/reconciliation/custodian-checks/{id}` | `reconciliation.view` | The check, its rows as read and as counted, and the comparison |
+| `GET /staff/reconciliation/custodian-checks/{id}/file` | `reconciliation.view` | A five-minute link to the original file |
+| `PUT /staff/reconciliation/custodian-checks/{id}/rows/{row}` | `reconciliation.change` | Correct a row or leave it out, with a reason |
+| `PUT /staff/reconciliation/custodian-checks/{id}/notes/{item}` | `reconciliation.change` | Explain a difference |
+| `POST /staff/reconciliation/custodian-checks/{id}/submit` | `reconciliation.change` | Send for sign-off; 409 `differences_unexplained` |
+| `POST /staff/reconciliation/custodian-checks/{id}/sign-off` | `reconciliation.change`, confirmed | The second signature; 403 `check_needs_second_person` |
+| `POST /staff/reconciliation/custodian-checks/{id}/send-back` | `reconciliation.change`, confirmed | Back to review, with a reason |

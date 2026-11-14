@@ -50,6 +50,8 @@ from app.modules.payments.wiring import collections_provider
 from app.modules.payouts.jobs import PayoutJobs, release_screened
 from app.modules.payouts.name_lookup_jobs import NameLookupJobs
 from app.modules.payouts.wiring import PayoutNameSettings, disbursements_provider
+from app.modules.reconciliation.custodian_jobs import CustodianJobs
+from app.modules.reconciliation.custodian_settings import CustodianReaderSettings
 from app.modules.reports.jobs import ReportJobs
 from app.modules.screening.domain.provider import ScreeningSubject
 from app.modules.screening.jobs import ScreeningJobs
@@ -190,6 +192,12 @@ def handlers(
         DeliveryJobs(database, clock, PushSettings().transport(), client_contact).handlers()
     )
     kinds.update(AnnouncementJobs(database, clock).handlers())
+    # Runs with no reader too, so every uploaded statement is recorded as unreadable.
+    kinds.update(
+        CustodianJobs(
+            database, CustodianReaderSettings().reader(), StorageSettings().storage(), clock
+        ).handlers()
+    )
     return kinds
 
 
