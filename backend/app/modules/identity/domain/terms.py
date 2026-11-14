@@ -16,6 +16,6 @@ CURRENT_VERSIONS: Final[dict[TermsDocument, str]] = {
     "privacy": "2026-11-14",
 }
 
-# How a client came to agree: by signing up, or by claiming an account carried over from
-# Finvest 1.0, which is when they first agree to Finvest 2.0's terms.
+# How a client came to agree: by signing up, or by claiming an account moved over from paper
+# records, which is when they first agree to the app's terms.
 AcceptedVia = Literal["signup", "claim"]

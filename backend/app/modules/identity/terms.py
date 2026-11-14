@@ -1,6 +1,6 @@
 """Which terms and privacy notice each client agreed to, and when.
 
-A client agrees at sign-up, or when they claim an account carried over from Finvest 1.0. The
+A client agrees at sign-up, or when they claim an account moved over from paper records. The
 API records the version that is current at that moment, in the same transaction that creates
 or claims the account, so no account exists without its agreement. A record is never changed
 or deleted. See docs/documents.md#terms-you-accepted.

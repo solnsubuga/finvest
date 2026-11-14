@@ -70,7 +70,7 @@ class ClaimComplete(Contract):
     challenge_id: PushId
     code: Code
     password: Password
-    # The client agreed to Finvest 2.0's terms and privacy notice. The versions current now are
+    # The client agreed to the terms and privacy notice. The versions current now are
     # recorded when the account is claimed.
     accepted_terms: Literal[True]
 
