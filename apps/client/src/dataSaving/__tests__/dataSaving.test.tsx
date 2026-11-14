@@ -136,18 +136,18 @@ describe("Wi-Fi only downloads", () => {
     save({ light: false, wifiOnlyDocuments: true });
     jest.mocked(currentConnection).mockResolvedValue("mobile");
     const client = await documents();
-    await fireEvent.press(screen.getByLabelText("Download October 2026"));
+    await fireEvent.press(screen.getByLabelText("Download October 2026 as PDF"));
     expect(await screen.findByText(/You are on mobile data/)).toBeTruthy();
     expect(client.downloaded).toEqual([]);
 
-    await fireEvent.press(screen.getByLabelText("Download October 2026 on mobile data"));
+    await fireEvent.press(screen.getByLabelText("Download October 2026 as PDF on mobile data"));
     await waitFor(() => expect(client.downloaded).toEqual(["demo-monthly-1"]));
   });
 
   it("downloads straight away on Wi-Fi, or when the network cannot be told", async () => {
     save({ light: false, wifiOnlyDocuments: true });
     const client = await documents();
-    await fireEvent.press(screen.getByLabelText("Download October 2026"));
+    await fireEvent.press(screen.getByLabelText("Download October 2026 as PDF"));
     await waitFor(() => expect(client.downloaded).toEqual(["demo-monthly-1"]));
 
     jest.mocked(currentConnection).mockResolvedValue("unknown");
@@ -159,7 +159,7 @@ describe("Wi-Fi only downloads", () => {
   it("never holds a download when the choice is off", async () => {
     jest.mocked(currentConnection).mockResolvedValue("mobile");
     const client = await documents();
-    await fireEvent.press(screen.getByLabelText("Download October 2026"));
+    await fireEvent.press(screen.getByLabelText("Download October 2026 as PDF"));
     await waitFor(() => expect(client.downloaded).toEqual(["demo-monthly-1"]));
   });
 });
