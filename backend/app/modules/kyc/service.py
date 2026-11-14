@@ -25,6 +25,7 @@ from app.modules.account_numbers.domain.numbers import AccountType
 from app.modules.account_numbers.service import issue_account_number
 from app.modules.audit import service as audit
 from app.modules.audit.domain.events import AuditActor, AuditCategory, AuditEvent
+from app.modules.kyc import phone_names as phone_lookups
 from app.modules.kyc.domain.checks import (
     CLIENT_EDITABLE,
     COUNTRY,
@@ -40,6 +41,7 @@ from app.modules.kyc.domain.checks import (
     retake_problem,
     status_on_submit,
 )
+from app.modules.kyc.domain.phone_names import PhoneName
 from app.modules.kyc.domain.provider import (
     AutomaticCheck,
     CheckOutcome,
@@ -423,9 +425,19 @@ async def confirm_details(
 
 
 async def submit(
-    session: AsyncSession, sealer: Sealer, client: Actor, provider: IdentityProvider, clock: Clock
+    session: AsyncSession,
+    sealer: Sealer,
+    client: Actor,
+    provider: IdentityProvider,
+    clock: Clock,
+    *,
+    phone_names: bool = False,
 ) -> CheckView:
-    """Hand the check in. It goes to the provider, or to a person when nothing automatic applies."""
+    """Hand the check in. It goes to the provider, or to a person when nothing automatic applies.
+
+    `phone_names`: a provider reads the name the network holds for a phone number, so the
+    client's own number is looked up too (`phone_names.py`).
+    """
     row = await _editable(session, client)
     view = await _view(session, sealer, row)
     missing = view.missing
@@ -476,6 +488,10 @@ async def submit(
             idempotency_key=f"kyc:{submission_key(row.id, row.submission + 1)}",
             now=now,
         )
+    if phone_names:
+        # Asked with the hand-in, like the screen. Without a provider nothing is asked, so a
+        # check does not use up its lookups on requests nobody would send.
+        await phone_lookups.ask_at_hand_in(session, row.id, row.client_id, clock)
     await _audit(session, client, "change", "kyc.check.submitted", row.id, clock)
     return await _view_by_id(session, sealer, row.id)
 
@@ -619,6 +635,8 @@ async def record_provider_result(
         flags = ["document_expired"]
     elif decision.approve and await _document_taken(session, row):
         flags = ["duplicate_document"]
+    elif decision.approve and not await _phone_name_allows(session, row.id):
+        flags = ["phone_name_not_confirmed"]
     checks = json.dumps([_outcome_json(outcome) for outcome in outcomes], separators=(",", ":"))
     system = Actor("system")
     if not flags:
@@ -654,6 +672,14 @@ async def record_provider_result(
         details={"flags": flags},
     )
     return await _view_by_id(session, sealer, row.id)
+
+
+async def _phone_name_allows(session: AsyncSession, check_id: str) -> bool:
+    """Approval with no person: the network's name for the client's phone must be the name on
+    the ID, if it was looked up. Partly matching, different, none or no answer goes to a person.
+    """
+    looked_up = await phone_lookups.phone_name_for_check(session, check_id)
+    return looked_up is None or looked_up.status is PhoneName.MATCHES
 
 
 async def liveness_outcome(session: AsyncSession, check_id: str) -> CheckOutcome | None:
@@ -1061,6 +1087,13 @@ async def approve(
     # The document was valid when the client confirmed it. It must still be valid today.
     if row.document_expires_on < clock.now().date():
         raise _invalid("document_expires_on", "document_expired")
+    # The client's own number is registered to someone else: never approved (the owner's rule).
+    phone = await phone_lookups.phone_name_for_check(session, row.id)
+    if phone is not None and phone.blocks_approval:
+        raise ApplicationError(
+            "conflict",
+            fields=[FieldProblem(field_path=["phone_name"], code="phone_name_different")],
+        )
     approved = await _approve(
         session,
         row,

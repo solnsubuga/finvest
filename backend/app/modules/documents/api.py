@@ -10,7 +10,7 @@ from pydantic import Field
 from app.api.idempotency import IdempotencyKey
 from app.infrastructure.database import Database
 from app.modules.documents import service
-from app.modules.documents.service import DocumentStatus, DocumentView
+from app.modules.documents.service import DocumentKind, DocumentStatus, DocumentView
 from app.modules.identity.api import CurrentClient
 from app.shared.clock import Clock
 from app.shared.contracts import Contract, PushId
@@ -67,6 +67,10 @@ class DocumentItem(Contract):
     # A statement for dates the ledger has not all closed yet: the first day whose figures
     # may still change. Null when every figure is final.
     not_final_from: date | None
+    # What the document is about, so the app can offer it where that thing is shown: the
+    # investment an investment note confirms, or the payment a receipt is for. Null otherwise.
+    investment_id: str | None
+    deposit_id: str | None
 
 
 class DocumentList(Contract):
@@ -87,6 +91,8 @@ def _item(view: DocumentView) -> DocumentItem:
         file_name=view.file_name,
         byte_size=view.byte_size,
         not_final_from=view.not_final_from,
+        investment_id=view.source_id if view.kind is DocumentKind.INVESTMENT_NOTE else None,
+        deposit_id=view.source_id if view.kind is DocumentKind.RECEIPT else None,
     )
 
 

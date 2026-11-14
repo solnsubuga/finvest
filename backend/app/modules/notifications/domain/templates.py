@@ -9,12 +9,13 @@ so nothing a person typed can add markup or a link. Every email is drawn with th
 `app.shared.email_layout`, the look the statement and receipt emails share.
 
 This file owns only the messages that carry a secret or guard an account: sign-in, signup,
-reset and claim codes, the notices of a new sign-in, of a request for help getting in and of a
-changed number, the link that proves an email address, the link that invites a Finvest 1.0
-client to claim their account, and the staff set-up link. They are fixed in code so that nobody
-can edit them into a phishing message, and so that they work before anything else is set up. Every
-other client notice is worded in `domain/wording.py`, which staff edit with a second person
-approving. Neither file adds text of the other kind.
+reset and claim codes, the notices of a new sign-in, of a request for help getting in, of a
+changed number, of an app PIN reset by staff and of a withdrawal staff started, the link that
+proves an email address, the link that invites a Finvest 1.0 client to claim their account, and
+the staff set-up link. They are
+fixed in code so that nobody can edit them into a phishing message, and so that they work before
+anything else is set up. Every other client notice is worded in `domain/wording.py`, which staff
+edit with a second person approving. Neither file adds text of the other kind.
 """
 
 from collections.abc import Callable, Mapping, Sequence
@@ -30,6 +31,8 @@ Template = Literal[
     "claim_code",
     "payout_account_code",
     "phone_changed",
+    "app_signed_out",
+    "staff_withdrawal_started",
     "email_verification",
     "new_sign_in",
     "recovery_requested",
@@ -46,6 +49,10 @@ _VARIABLES: dict[Template, frozenset[str]] = {
     "claim_code": frozenset({"code", "minutes"}),
     "payout_account_code": frozenset({"code", "minutes"}),
     "phone_changed": frozenset({"ending"}),
+    # Two members of staff reset the client's app PIN, which signs the phone app out.
+    "app_signed_out": frozenset(),
+    # Two members of staff started an early withdrawal the client asked for in help chat.
+    "staff_withdrawal_started": frozenset(),
     "email_verification": frozenset({"link", "hours"}),
     "new_sign_in": frozenset({"device", "when"}),
     # Someone said they cannot get in and asked us to call them back.
@@ -107,6 +114,11 @@ _SMS: dict[str, str] = {
     "it is you.",
     "phone_changed": "The mobile number on your Finvest account was changed to one ending "
     "{ending}. If you did not ask for this, contact Finvest support now.",
+    "app_signed_out": "Finvest signed your phone app out and reset its PIN. Log in again with "
+    "your password to choose a new PIN. If you did not ask for this, contact Finvest support now.",
+    "staff_withdrawal_started": "Finvest started the withdrawal you asked for in Help. The money "
+    "goes only to your own approved account. If you did not ask for this, contact Finvest "
+    "support now.",
     "claim_invitation": "Finvest has a new app, and your investments are in it. Claim your "
     "account with this link: {link} It works once, for {hours} hours. Finvest staff will never "
     "ask for this link.",
@@ -269,6 +281,40 @@ def _phone_changed(values: dict[str, str], links: layout.Links) -> Rendered:
     )
 
 
+def _app_signed_out(values: dict[str, str], links: layout.Links) -> Rendered:
+    lines = [
+        "Finvest staff signed the Finvest app out on your phone and reset its PIN.",
+        "Log in again with your password and a second step, then choose a new PIN. Your money "
+        "and your investments stay as they are.",
+    ]
+    warning = ("Not you?", "If you did not ask for this, contact Finvest support now.")
+    return _email(
+        links=links,
+        subject="Your Finvest app PIN was reset",
+        preheader="Log in again to choose a new PIN.",
+        title="Your app PIN was reset",
+        html=layout.paragraphs(lines) + layout.callout(*warning),
+        text=[*lines, " ".join(warning)],
+    )
+
+
+def _staff_withdrawal_started(values: dict[str, str], links: layout.Links) -> Rendered:
+    lines = [
+        "Finvest staff started the early withdrawal you asked for in Help in the app.",
+        "The money goes only to your own approved payout account. You can follow it in the app "
+        "under Activity.",
+    ]
+    warning = ("Not you?", "If you did not ask for this, contact Finvest support now.")
+    return _email(
+        links=links,
+        subject="We started the withdrawal you asked for",
+        preheader="It goes only to your own approved account.",
+        title="Your withdrawal has started",
+        html=layout.paragraphs(lines) + layout.callout(*warning),
+        text=[*lines, " ".join(warning)],
+    )
+
+
 def _email_verification(values: dict[str, str], links: layout.Links) -> Rendered:
     link = values["link"]
     lines = [
@@ -370,6 +416,8 @@ _EMAILS: dict[str, Callable[[dict[str, str], layout.Links], Rendered]] = {
     "new_sign_in": _new_sign_in,
     "recovery_requested": _recovery_requested,
     "phone_changed": _phone_changed,
+    "app_signed_out": _app_signed_out,
+    "staff_withdrawal_started": _staff_withdrawal_started,
     "email_verification": _email_verification,
     "claim_invitation": _claim_invitation,
     "staff_enrolment": _staff_enrolment,

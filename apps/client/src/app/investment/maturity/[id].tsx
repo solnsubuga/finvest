@@ -17,8 +17,8 @@ import { Loading } from "@/payments/Parts";
 import { colors, fontSizes, radii } from "@/theme";
 
 /**
- * Change what happens when the term ends: roll everything into a new term, or pay it out to
- * one of the client's approved accounts. Allowed up to the day before maturity. Saving the
+ * Change what happens when the term ends: roll everything into a new term, pay it out to one
+ * of the client's approved accounts, or keep the principal invested and pay the interest there. Allowed up to the day before maturity. Saving the
  * same choice twice is harmless, so it needs no idempotency key.
  */
 export default function MaturityChoiceScreen() {
@@ -45,6 +45,7 @@ export default function MaturityChoiceScreen() {
   const destinationId = pickedDestination ?? saved ?? (ready ? firstChoosable(ready.accounts, true) : null);
   const canSave =
     ready !== null && ready.investment.canChangeMaturity && (choice === "roll_over" || destinationId !== null);
+  const paid = choice !== "roll_over";
 
   const save = async () => {
     if (!canSave) return;
@@ -54,7 +55,7 @@ export default function MaturityChoiceScreen() {
       await client.chooseAtMaturity({
         investmentId: id,
         atMaturity: choice,
-        destinationId: choice === "pay_out" ? destinationId : null,
+        destinationId: paid ? destinationId : null,
       });
       router.replace(`/investment/${id}`);
     } catch (caught) {
@@ -91,7 +92,7 @@ export default function MaturityChoiceScreen() {
               : `${loaded.value.investment.productName}. You can change this until the day before it matures.`}
           </Txt>
           <View style={{ gap: 8 }} accessibilityRole="radiogroup">
-            {(["roll_over", "pay_out"] as const).map((option) => {
+            {(["roll_over", "pay_out", "pay_interest"] as const).map((option) => {
               const on = option === choice;
               return (
                 <Pressable
@@ -113,9 +114,9 @@ export default function MaturityChoiceScreen() {
               );
             })}
           </View>
-          {choice === "pay_out" ? (
+          {paid ? (
             <View style={{ gap: 8 }}>
-              <Eyebrow>Pay it to</Eyebrow>
+              <Eyebrow>{choice === "pay_interest" ? "Pay the interest to" : "Pay it to"}</Eyebrow>
               {loaded.value.accounts.length === 0 ? (
                 <NoAccount />
               ) : (

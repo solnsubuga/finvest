@@ -109,7 +109,7 @@ async def current_client(request: Request, identity: Identity) -> ClientSession:
 
 async def current_staff(request: Request, identity: Identity) -> StaffSession:
     token = _credentials(request, "staff")
-    session = await identity.staff_session(token) if token else None
+    session = await identity.staff_session(token, caller_address(request)) if token else None
     if session is None:
         raise ApplicationError("unauthorized")
     return session

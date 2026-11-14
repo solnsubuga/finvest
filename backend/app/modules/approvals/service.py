@@ -10,6 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.modules.approvals.domain.inbox import InboxItem, Kind, Waiting, inbox, visible_kinds
 from app.modules.closures import service as closures
+from app.modules.console import actions as client_actions
 from app.modules.dealing import buffer, capital
 from app.modules.dealing import orders as dealing
 from app.modules.dealing.domain.capital import Direction
@@ -30,7 +31,9 @@ from app.modules.payments import (
     receivables,
     reversals,
 )
-from app.modules.payouts import destinations, resolutions, reviews
+from app.modules.payouts import destinations, limit_changes, resolutions, reviews
+from app.modules.platform_settings import service as platform_settings
+from app.modules.platform_settings.domain.catalogue import SECTIONS, Section
 from app.modules.reconciliation import day_close, transfers
 from app.modules.screening import service as screening
 from app.modules.support import complaints
@@ -66,6 +69,8 @@ async def waiting_for(session: AsyncSession, staff: StaffSession, now: datetime)
         found += await _team_changes(session)
     if "client_lock" in kinds:
         found += await _client_locks(session)
+    if kinds & set(_CLIENT_ACTIONS.values()):
+        found += [item for item in await _client_actions(session) if item.kind in kinds]
     if "suppression_lift" in kinds:
         found += await _suppression_lifts(session)
     if "complaint_outcome" in kinds:
@@ -102,6 +107,19 @@ async def waiting_for(session: AsyncSession, staff: StaffSession, now: datetime)
         found += await _reversals(session)
     if "deposit_receivable" in kinds:
         found += await _receivables(session)
+    if "withdrawal_limits_change" in kinds and (change := await limit_changes.waiting(session)):
+        # The start day only. The limits are shown on Settings.
+        found.append(
+            Waiting(
+                "withdrawal_limits_change",
+                change.id,
+                change.limits.effective_from.isoformat(),
+                change.proposed_by,
+                change.proposed_at,
+            )
+        )
+    if kinds & set(_SETTING_KINDS.values()):
+        found += await _settings(session, kinds)
     return inbox(found, staff.staff_id, staff.permissions)
 
 
@@ -120,6 +138,24 @@ async def _bank_accounts(session: AsyncSession) -> list[Waiting]:
         for a in await bank_accounts.list_accounts(session)
         if (p := a.proposal) is not None
     ]
+
+
+_SETTING_KINDS: dict[Section, Kind] = {
+    "channels": "payment_channels_change",
+    "calendar": "calendar_change",
+    "staff_security": "staff_security_change",
+    "statement_import": "statement_layout_change",
+}
+
+
+async def _settings(session: AsyncSession, kinds: set[Kind]) -> list[Waiting]:
+    # The setting's name only. The value is shown on Settings.
+    found = []
+    for p in await platform_settings.waiting(session):
+        kind = _SETTING_KINDS[SECTIONS[p.key]]
+        if kind in kinds:
+            found.append(Waiting(kind, p.id, p.key, p.proposed_by, p.proposed_at))
+    return found
 
 
 async def _corrections(session: AsyncSession) -> list[Waiting]:
@@ -291,6 +327,24 @@ async def _client_locks(session: AsyncSession) -> list[Waiting]:
     return [
         Waiting("client_lock", c.id, f"{c.kind} {c.client_id}", c.proposed_by, c.proposed_at)
         for c in await client_locks.open_locks(session)
+    ]
+
+
+# Each kind of action for a client is its own inbox kind, so each is decided with its own
+# permission.
+_CLIENT_ACTIONS: dict[client_actions.Kind, Kind] = {
+    "pin_reset": "client_pin_reset",
+    "withdrawal_limits": "client_limits",
+    "statement": "client_statement",
+    "withdrawal": "client_withdrawal",
+}
+
+
+async def _client_actions(session: AsyncSession) -> list[Waiting]:
+    # The subject is the client's ID, as for a lock.
+    return [
+        Waiting(_CLIENT_ACTIONS[a.kind], a.id, a.client_id, a.proposed_by, a.proposed_at)
+        for a in await client_actions.waiting(session)
     ]
 
 

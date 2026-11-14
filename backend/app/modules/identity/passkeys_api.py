@@ -285,7 +285,7 @@ async def client_authenticator_remove(
 async def _staff_signed_in(
     request: Request, response: Response, identity: IdentityService, issued: IssuedSession
 ) -> StaffSessionView:
-    session = await identity.staff_session(issued.token)
+    session = await identity.staff_session(issued.token, caller_address(request))
     if session is None:
         raise ApplicationError("unauthorized")
     set_session_cookie(request, response, "staff", issued, request.app.state.clock.now())

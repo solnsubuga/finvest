@@ -54,8 +54,12 @@ async def check_name(
 async def approve_check(
     world: World, approver: Person, destination_id: str
 ) -> destinations.DestinationView:
-    """A second member of staff approves the check."""
+    """A second member of staff approves the check, and the client is told straight away."""
     async with world.api_database.actor_transaction(approver.actor) as session:
-        return await destinations.approve(
+        approved = await destinations.approve(
             session, approver.actor, destination_id, reason="Second check", clock=world.clock
         )
+    # The worker sends the notice now, as the real one would, before the journey lets the
+    # 24 hour wait pass.
+    await world.drain()
+    return approved

@@ -25,7 +25,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.infrastructure.database import Database
 from app.infrastructure.throttling import reserve_attempts, throttle_key
-from app.modules.identity import trail
+from app.modules.identity import notices, trail
 from app.modules.identity.domain.accounts import InvalidIdentifier, normalize_email, normalize_phone
 from app.modules.identity.domain.passwords import password_problem
 from app.modules.identity.domain.sessions import RESTRICTION, Transport, new_token, token_digest
@@ -506,6 +506,7 @@ class CodeService:
                     resource_id=row.actor_id,
                     details={"channel": "sms"},
                 )
+                await notices.password_changed(session, row.actor_id, challenge_id, now)
         if row is None or row.actor_id is None:
             raise self._wrong("password_reset")
         logger.info("password_reset", client_id=row.actor_id)

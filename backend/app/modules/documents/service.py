@@ -163,6 +163,26 @@ async def request_statement(
     return view
 
 
+async def staff_statement(
+    session: AsyncSession, client_id: str, period: Period, *, action_id: str, now: datetime
+) -> DocumentView:
+    """Ask for a statement two members of staff agreed to send the client.
+
+    Called only by the console module, in the staff transaction that approved the action.
+    Migration 0353 refuses the row anywhere else. It is built, put in the app and emailed
+    exactly as one the client asked for, so the client's limit of statements a day is not
+    charged.
+    """
+    return await ask(
+        session,
+        client_id=client_id,
+        kind=DocumentKind.REQUESTED_STATEMENT,
+        key=f"staff:{action_id}",
+        period=period,
+        now=now,
+    )
+
+
 async def ask(
     session: AsyncSession,
     *,

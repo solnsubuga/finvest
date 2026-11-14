@@ -18,9 +18,12 @@ from pydantic import Field
 from app.infrastructure.database import Database
 from app.modules.identity.api import require_confirmed, require_permission
 from app.modules.identity.service import StaffSession
+from app.modules.platform_settings import service as platform_settings
+from app.modules.platform_settings.domain.catalogue import STANDARD_LAYOUT
 from app.modules.reconciliation import day_close, statements, wallet
 from app.modules.reconciliation.domain.day_close import CloseError, PotPosition
 from app.modules.reconciliation.domain.formats import FORMATS
+from app.modules.reconciliation.domain.formats import csv_format as layout_format
 from app.modules.reconciliation.domain.matching import (
     ExceptionKind,
     LedgerMovement,
@@ -266,6 +269,34 @@ async def iotec_wallet(staff: Staff, database: Db, provider: Wallet) -> WalletOu
     )
 
 
+class StatementFormatOut(Contract):
+    # What `format` is sent as when importing.
+    name: str
+    label: str
+    built_in: bool
+
+
+class StatementFormatsOut(Contract):
+    formats: list[StatementFormatOut]
+
+
+@staff_router.get("/statement-formats")
+async def statement_formats(staff: Staff, database: Db, clock: Time) -> StatementFormatsOut:
+    """The layouts a statement can be imported in: the built-in standard one, then those set on
+    Settings."""
+    async with database.actor_transaction(staff.actor) as session:
+        layouts = await platform_settings.statement_layouts(session, clock.now())
+    return StatementFormatsOut(
+        formats=[
+            StatementFormatOut(name=STANDARD_LAYOUT, label="Standard layout", built_in=True),
+            *(
+                StatementFormatOut(name=layout.name, label=layout.label, built_in=False)
+                for layout in layouts.layouts
+            ),
+        ]
+    )
+
+
 @staff_router.get("/statements")
 async def list_statements(
     staff: Staff,
@@ -301,12 +332,16 @@ async def import_statement(
     opening_balance: Annotated[str, Form(min_length=1, max_length=32)],
     closing_balance: Annotated[str, Form(min_length=1, max_length=32)],
     file: Annotated[UploadFile, File(description="CSV in a known layout, at most 2 MiB")],
-    csv_format: Annotated[Literal["standard"], Form(alias="format")] = "standard",
+    csv_format: Annotated[
+        str, Form(alias="format", pattern=r"^[a-z][a-z0-9_]{1,39}$")
+    ] = STANDARD_LAYOUT,
 ) -> StatementOut:
     """Import one pot's statement for one ended day, whole or not at all.
 
-    The balances are as the statement prints them, such as `1,500,000`. 422 names the problem
-    and, for a row, its number, never its contents. 409 `statement_already_imported`,
+    `format` is `standard` or the name of a layout set on Settings
+    (`GET /staff/reconciliation/statement-formats`); 422 `statement_format_unknown` for any
+    other. The balances are as the statement prints them, such as `1,500,000`. 422 names the
+    problem and, for a row, its number, never its contents. 409 `statement_already_imported`,
     `statement_day_out_of_order`, `statement_opening_balance_differs` or
     `statement_day_not_over`.
     """
@@ -326,10 +361,18 @@ async def import_statement(
         closing = parse_amount(closing_balance, pot.currency)
     except InvalidStatement as error:
         raise _refused("validation_failed", error.code, "closing_balance") from None
+    chosen = FORMATS.get(csv_format)
+    if chosen is None:
+        async with database.actor_transaction(staff.actor) as session:
+            layouts = await platform_settings.statement_layouts(session, clock.now())
+        layout = layouts.find(csv_format)
+        if layout is None:
+            raise _refused("validation_failed", "statement_format_unknown", "format")
+        chosen = layout_format(layout)
     try:
         parsed = parse_csv(
             text,
-            FORMATS[csv_format],
+            chosen,
             source=pot.source,
             account_reference=pot.account_reference,
             statement_date=statement_date,

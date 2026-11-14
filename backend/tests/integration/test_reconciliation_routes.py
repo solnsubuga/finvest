@@ -21,6 +21,7 @@ from app.shared.push_ids import push_id
 from tests.support.database import TestDatabase
 from tests.support.http import Api, running_api
 from tests.support.ledger import staff
+from tests.support.settings import clear_settings, set_setting
 
 pytestmark = pytest.mark.integration
 
@@ -270,3 +271,41 @@ async def test_without_ioTec_the_wallet_is_not_connected(api: Api) -> None:
     assert found["connected"] is False
     assert found["wallet_balance"] is None
     assert found["ledger_balance"]["currency"] == "UGX"
+
+
+async def test_a_statement_is_imported_in_a_layout_set_on_settings(
+    api: Api, migrator_database: Database
+) -> None:
+    await api.staff("finance")
+    listed = (await api.http.get("/staff/reconciliation/statement-formats")).json()["formats"]
+    assert listed == [{"name": "standard", "label": "Standard layout", "built_in": True}]
+    day, opening = await next_day(api.database)
+    single = "Value Date,Narration,Ref,Amount,Type\n"
+    csv = single + f'{day.strftime("%d/%m/%Y")},Collection,{push_id()},"2,000",CR\n'
+    unknown = await upload(api, day, str(opening), str(opening + 2000), csv, format="airtel_csv")
+    assert (unknown.status_code, code(unknown)) == (422, "statement_format_unknown")
+    layout = {
+        "name": "airtel_csv",
+        "label": "Airtel Money export",
+        "date_column": "Value Date",
+        "date_format": "DD/MM/YYYY",
+        "narrative": "Narration",
+        "reference": "Ref",
+        "money_in": None,
+        "money_out": None,
+        "amount": "Amount",
+        "direction": "Type",
+        "in_word": "CR",
+        "out_word": "DR",
+    }
+    await set_setting(api.database, "statement_layouts", [layout], api.clock)
+    try:
+        listed = (await api.http.get("/staff/reconciliation/statement-formats")).json()
+        assert [f["name"] for f in listed["formats"]] == ["standard", "airtel_csv"]
+        imported = await upload(
+            api, day, str(opening), str(opening + 2000), csv, format="airtel_csv"
+        )
+        assert imported.status_code == 201, imported.text
+        assert imported.json()["line_count"] == 1
+    finally:
+        await clear_settings(migrator_database)

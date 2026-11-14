@@ -284,6 +284,8 @@ EMAILED: dict[str, dict[str, object]] = {
     "new_sign_in": {"device": "Chrome on Windows", "when": "13 Nov 2026, 15:32"},
     "recovery_requested": {"when": "14 Nov 2026, 10:05"},
     "phone_changed": {"ending": "456"},
+    "app_signed_out": {},
+    "staff_withdrawal_started": {},
     "email_verification": {"link": "https://app.finvestug.com/email#abc", "hours": 24},
     "claim_invitation": {"link": "https://app.finvestug.com/claim#abc", "hours": 72},
     "staff_enrolment": {
