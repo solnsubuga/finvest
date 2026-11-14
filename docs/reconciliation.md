@@ -132,6 +132,9 @@ In `backend/app/modules/reconciliation/api.py`. Reading needs `reconciliation.vi
 | `POST /staff/reconciliation/days/{day}/prepare` | The first signature. 409 with the first blocker |
 | `POST /staff/reconciliation/days/{day}/approve` | The second signature. 409 `close_not_prepared`, `close_needs_second_person`, `close_needs_someone_who_did_not_import` or `close_changed_since_prepared` |
 | `POST /staff/reconciliation/days/{day}/send-back` | `{reason}`. Declines or withdraws a prepared close |
+| `GET /staff/reconciliation/iotec-wallet` | What ioTec says Finvest's wallet holds now, beside what the ledger says the ioTec pots (`iotec.wallet`, every network) hold now, and the difference. Changes nothing. `connected` is false where ioTec is not the provider, and the wallet figures are null when ioTec could not be read |
+
+The wallet check is the one moment-of-the-day view. The day close still compares each pot with its statement once the day is over. A difference in the wallet check is expected while a payment is on its way or an ioTec fee has not been posted, so it is a prompt to look, not a blocker.
 
 A statement line's narrative is shown only as `counterparty_hint`. Statements are uploaded in the `standard` layout (`domain/formats.py`): a header row `Date,Details,Reference,In,Out`, dates as `YYYY-MM-DD`, and money in and money out in separate columns. Each provider's own export gets a format once one of its files has been seen. Until then staff save the export in that layout.
 

@@ -76,6 +76,8 @@ from app.modules.payouts import (
 )
 from app.modules.reconciliation import api as reconciliation_api
 from app.modules.reconciliation import transfers_api as pot_transfers_api
+from app.modules.reconciliation.domain.wallet import WalletBalances
+from app.modules.reconciliation.wiring import wallet_balances
 from app.modules.support import api as support_api
 from app.modules.tax import api as tax_api
 from app.shared.clock import Clock, SystemClock
@@ -96,11 +98,13 @@ def create_app(
     identity_sealer: Sealer | None = None,
     identity_provider: IdentityProvider | None = None,
     email_hash: EmailHashSettings | None = None,
+    iotec_wallet: WalletBalances | None = None,
 ) -> FastAPI:
     owned = database is None
     database = database or Database(settings)
     clock = clock or SystemClock()
     collections = collections or collections_provider(PaymentsSettings(), clock)
+    iotec_wallet = iotec_wallet or wallet_balances(PaymentsSettings(), clock)
     storage = storage or StorageSettings().storage()
     if bank_accounts is None:
         bank_accounts = BankTransferSettings().accounts
@@ -132,6 +136,7 @@ def create_app(
     app.state.clock = clock
     app.state.email_hash_key = email_hash_key
     app.state.storage = storage
+    app.state.iotec_wallet = iotec_wallet
     hasher = hasher or PasswordHasher(
         memory_kib=settings.password_memory_kib, time_cost=settings.password_time_cost
     )

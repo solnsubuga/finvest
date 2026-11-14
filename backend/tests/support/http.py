@@ -14,6 +14,7 @@ from app.infrastructure.storage import FileStorage
 from app.modules.identity.api import COOKIES
 from app.modules.identity.hashing import PasswordHasher
 from app.modules.identity.service import IdentityService
+from app.modules.reconciliation.domain.wallet import WalletBalances
 from app.shared.actors import Actor
 from app.shared.push_ids import push_id
 from tests.support.clock import FakeClock
@@ -81,7 +82,11 @@ class Api:
 
 @asynccontextmanager
 async def running_api(
-    test_database: TestDatabase, database: Database, *, storage: FileStorage | None = None
+    test_database: TestDatabase,
+    database: Database,
+    *,
+    storage: FileStorage | None = None,
+    iotec_wallet: WalletBalances | None = None,
 ) -> AsyncIterator[Api]:
     settings = test_database.settings("finvest_app").model_copy(
         update={
@@ -90,7 +95,7 @@ async def running_api(
         }
     )
     clock = FakeClock()
-    app = create_app(settings, database, clock, HASHER, storage=storage)
+    app = create_app(settings, database, clock, HASHER, storage=storage, iotec_wallet=iotec_wallet)
     transport = httpx.ASGITransport(app=app, raise_app_exceptions=False, client=("127.0.0.1", 1))
     async with httpx.AsyncClient(transport=transport, base_url="https://api") as http:
         yield Api(http, app.state.identity, clock, database)

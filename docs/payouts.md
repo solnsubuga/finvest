@@ -273,6 +273,31 @@ What the database enforces:
 
 The sandbox provider (`FINVEST_PAYMENTS_PROVIDER=sandbox`, local and staging only) pays nobody. The last two digits of the number choose what happens: 01 refused, 02 fails after accepting, 04 uncertain with no record, 05 deferred, 06 confirmed for another amount, anything else paid after 5 seconds.
 
+### ioTec Pay
+
+With `FINVEST_PAYMENTS_PROVIDER=iotec`, mobile money payouts are sent through ioTec Pay from Finvest's ioTec wallet (`backend/app/modules/payouts/providers/iotec.py`). The credentials, wallet and addresses are the shared `FINVEST_IOTEC_*` settings in `app/infrastructure/iotec`.
+
+- A send is `POST /api/disbursements/disburse` with category `MobileMoney`, the payout's ID as `externalId`, the number as `256…`, the amount in whole shillings, and the note "Finvest payout". No name and no amount go in the note.
+- A status read uses ioTec's own ID when the send was answered, and `GET /api/disbursements/external-id/{payout id}` when it was not. A record whose `externalId` is not the payout's says nothing about it.
+- ioTec does not refuse a second request with the same `externalId`. A payout is still sent at most once, because of the send attempt rule above, not because of ioTec.
+- Amounts are read as decimals, never floats. A paid amount that is not whole, or not in the configured currency, is not believed and the status is read again.
+
+How each answer is sorted:
+
+| ioTec answered | Send | Status read |
+| --- | --- | --- |
+| No token, the connection was never made, 401 after a new token, 404, 429 | Deferred, tried again | Unavailable, read again |
+| 400 about Finvest's wallet or its balance | Deferred, so the client's payout waits and staff see it held up after two hours | |
+| Any other 400 | Rejected | |
+| No answer after sending, a dropped connection, a 5xx, or an answer that cannot be read | Uncertain, read and never sent again | Unavailable |
+| `Pending`, `SentToVendor`, `AwaitingApproval`, `Scheduled` or a status we do not know | Accepted | Pending |
+| `Success` | Accepted | Paid, if the amount is the payout's |
+| `Failed`, `Rejected`, `Cancelled`, `RolledBack` | Rejected | Failed |
+
+ioTec's statuses and refusal texts are not codes we have seen from the live service yet, so a refusal reads as `other`. ioTec's test numbers (`011177777x` paid, `011177799x` failed, `011177778x` pending) start with no network's prefix, so a payout destination cannot hold one. Against a test wallet (`FINVEST_IOTEC_CURRENCY_CODE=ITX`) they are tried by hand, not by the worker.
+
+Bank payouts do not go through ioTec. They are paid from the trust account (below).
+
 Both follow below: the two-person settlement of a stranded payout, and paying a bank payout from the trust account.
 
 ## Settling a payout the provider never answered for
