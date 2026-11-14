@@ -64,7 +64,6 @@ def handlers(
     kinds: dict[str, JobHandler | Handler] = {
         SWEEP_UNANSWERED: sweep_unanswered(clock),
         **InvestmentJobs(database, clock).handlers(),
-        **AutoinvestJobs(database, clock).handlers(),
         **DealingJobs(clock).handlers(),
         **GoalJobs(database, clock).handlers(),
         **OrganisationJobs(database, clock).handlers(),
@@ -131,6 +130,12 @@ def handlers(
     collections = collections_provider(PaymentsSettings(), clock)
     if collections is not None:
         kinds.update(DepositJobs(database, collections, clock).handlers())
+    # Runs ask for mobile money payments, so they are asked for only with a provider.
+    kinds.update(
+        AutoinvestJobs(
+            database, clock, collections.name if collections is not None else None
+        ).handlers()
+    )
     disbursements = disbursements_provider(PaymentsSettings(), clock)
     if disbursements is not None:
         kinds.update(PayoutJobs(database, disbursements, clock).handlers())

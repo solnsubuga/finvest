@@ -8389,7 +8389,8 @@
               "conversation",
               "complaint",
               "goal",
-              "organisation"
+              "organisation",
+              "autoinvest_plan"
             ],
             "title": "Kind",
             "type": "string"

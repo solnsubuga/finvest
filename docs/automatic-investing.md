@@ -1,6 +1,6 @@
 # Automatic investing
 
-A client sets up a plan to invest the same amount on a schedule, and Finvest asks for each payment on its day. The code is in `backend/app/modules/autoinvest`, and the database side is migration 0120. Other modules import only from `autoinvest/service.py`.
+A client sets up a plan to invest the same amount on a schedule, and Finvest asks for each payment on its day. The code is in `backend/app/modules/autoinvest`, and the database side is migration 0120, with 0300 for the deposit the worker saves. Other modules import only from `autoinvest/service.py`.
 
 There is no wallet, so a plan never draws on a balance. On each due day the worker saves an investment awaiting payment and sends a mobile money prompt for exactly that amount. The client approves the prompt on their phone with their mobile money PIN, as for any other payment. Each run is one ordinary investment, with the rate in force on its own day.
 
@@ -62,13 +62,51 @@ A failed first attempt is retried the next day. If the plan was paused or stoppe
 | Two tries at most | A check constraint holds the attempt to 1 or 2, and the trigger allows a failed run back to `due` only as its second attempt. |
 | Nothing is deleted | No role holds DELETE on either table. |
 
+## Asking for a run
+
+The scheduler fires `autoinvest.open_due_runs` every 15 minutes, which opens the day's runs as above and queues one `autoinvest.request_run` job for each run that is due, keyed by the run and the day. The job, in one transaction as the system acting for the client (`requests.py`):
+
+1. Leaves the run alone if it is no longer `due`, so a repeated job does nothing. Outside 08:00 to 20:00 in Kampala it sends nothing and the run waits.
+2. Records a run of a plan paused or stopped since as `missed` (`plan_not_active`).
+3. Reads the number on the client's account from identity. A locked, closed or unclaimed account fails the run (`client_not_active`). A number that is no longer the plan's payer number fails it too (`phone_changed`): a plan prompts only the account's own number, so the client sets the plan up again with the new one. Neither is retried.
+4. Saves the investment awaiting payment with `investments.service.request_system_investment`, with the same checks as one the client confirms by hand: an approved identity check, an account not closing, the product's terms that day and the cap of five investments waiting for payment. The investment records the run as its source (`source_type` `autoinvest_run`), so a run has one investment, and the retry the next day finds the same one. A refusal fails the run with `investment_<code>`, such as `investment_conflict` when five are already waiting. A retry whose investment has been cancelled or whose 72 hour window closed fails with `investment_closed`.
+5. Saves the mobile money deposit for exactly the amount, from the plan's network and number, with `payments.service.request_system_deposit`, which also queues its send job. If the investment already has a deposit that has not failed, the run follows that one and no second prompt is sent.
+6. Marks the run `requested`, with the investment and the deposit.
+
+The payments worker then prompts the phone as for any payment ([payments.md](payments.md)). The client approves with their mobile money PIN. The app PIN is not asked: it confirms money leaving, and a prompt the client did not expect can simply be declined.
+
+`autoinvest.settle_runs` runs every 5 minutes, at any hour since it sends nothing. For each `requested` run it reads the deposit and the investment, which their own modules own:
+
+| What it finds | The run |
+| --- | --- |
+| The deposit is confirmed and the investment has started | `paid`. The client already heard from investing that the investment started. |
+| The deposit is confirmed and the investment has not started yet | Waits. Investing starts it from `payments.deposit_confirmed`. |
+| The deposit failed | `failed` with the deposit's code, such as `declined` or `insufficient_funds`. A first attempt is retried the next day. |
+| The deposit is still open or uncertain | Waits. Reconciliation settles an uncertain deposit, never this sweep. The plan's next day is missed meanwhile, so the client is never prompted twice. |
+
+A run still `due` a day after it was opened lost its request job, for example because the worker was down all day. The sweep records it as `missed` with the code `late`. It is never asked for late.
+
+### What the client is told
+
+Through the notifications module, linked to the plan, naming the due day and never the amount:
+
+| Event | When |
+| --- | --- |
+| `autoinvest_run_retrying` | A first attempt failed. The prompt comes again tomorrow. |
+| `autoinvest_run_failed` | A run failed for good: its second attempt, or a reason a retry cannot fix. |
+| `autoinvest_run_missed` | A run was missed because it was late (`late`) or the previous payment was still open (`previous_run_open`). A plan the client paused or stopped, or an account they asked to close, sends nothing. |
+
+Each is sent once per run and attempt, so a repeated job tells nobody twice.
+
 ## How it joins the other modules
 
-Agreed with the investing and payments threads on 13 November 2026.
+Agreed with the investing and payments threads on 13 November 2026, and built on 14 November.
 
-- **The investment.** `investments.service.request_planned_investment` saves the investment for a run, as the system acting for the client, with the same checks as one the client confirms by hand: an approved identity check, the product's terms that day and the limit on investments waiting for payment. It is idempotent on the run. The investing module adds the column that links an investment to its run and the worker's right to insert it.
-- **The payment.** `payments.service.request_planned_deposit` saves a mobile money deposit for that investment and its send job in the same transaction. It is idempotent through the deposit for that investment, because the idempotency table belongs to clients and staff. Payments adds the worker's right to insert it, in a payments migration.
-- **The outcome.** When the deposit is confirmed, the investment starts in the usual way and the run is `paid`. When it fails, the run is `failed` and, on its first attempt, retried the next day.
+- **The investment.** `investments.service.request_system_investment(session, *, client_id, source_type, source_id, product_code, amount, at_maturity, clock)`. Idempotent on the source. The worker's right to insert an investment with a source is in investing's migration 0063.
+- **The payment.** `payments.service.request_system_deposit(session, request, *, client_id, account_phone, provider, clock)`. It is idempotent through the deposit for that investment, because the idempotency table belongs to clients and staff. Migration 0300 gives the worker INSERT on deposits, fenced by a restrictive row policy to a new mobile money deposit for an investment: `created`, MTN or Airtel, with no provider reference, ledger entry or settlement.
+- **The outcome.** Read back by the settling sweep, through `payments.service.find_deposit` and `investments.service.get_investment`. Neither module knows about runs.
+
+The jobs run only where a collections provider is configured: without one the scheduler fires none of them and the worker registers no request handler.
 
 ## Client routes
 
@@ -97,4 +135,4 @@ The console names each client through `/staff/clients/cards`; this module never 
 
 ## Not built yet
 
-Asking for the investment and the payment for each run, and settling its outcome, wait for the investing module's maturity migration and the payments module's bank transfer change, and arrive in the next pull request. Until then the scheduler does not run `autoinvest.open_due_runs`, so no run is opened in a deployed system. Also not built: telling the client about a failed or missed run (it waits for notifications), approving a new plan with the app PIN (it waits for devices and PINs), pausing a client's plans when their phone number changes. The client app screens run on a demo until they are wired to these routes.
+Pausing a client's plans when their phone number changes: until then each run of such a plan fails with `phone_changed` and the client is told. Approving a new plan with the app PIN is not planned: a plan only ever asks for money coming in, which the client approves prompt by prompt.

@@ -19,6 +19,8 @@ from app.infrastructure.jobs.worker import default_worker_id
 from app.infrastructure.logging import configure_logging
 from app.infrastructure.process import keep_heartbeat, stop_on_signals
 from app.infrastructure.settings import Settings
+from app.modules.autoinvest.jobs import OPEN_DUE_KIND as AUTOINVEST_OPEN_KIND
+from app.modules.autoinvest.jobs import SETTLE_KIND as AUTOINVEST_SETTLE_KIND
 from app.modules.dealing.jobs import ALLOCATE_KIND, MATURITIES_KIND, RELEASE_KIND
 from app.modules.documents.service import EXPIRE_EMAILS_KIND, MONTHLY_KIND
 from app.modules.goals.jobs import REFRESH_GROUPS_KIND, SEND_REMINDERS_KIND
@@ -146,6 +148,27 @@ def schedules() -> list[Schedule]:
                 trigger=IntervalTrigger(minutes=1),
                 kind=payments.SWEEP_KIND,
                 max_age=timedelta(minutes=5),
+            )
+        )
+        # Opens automatic investing runs on their due day and asks for each one's investment
+        # and payment. It sends prompts only between 08:00 and 20:00 in Kampala, and a missed
+        # fire time needs no run of its own: the next one collects a day that is at most a day
+        # late, and records an older one as missed.
+        runs.append(
+            Schedule(
+                name="autoinvest.open_due_runs",
+                trigger=IntervalTrigger(minutes=15),
+                kind=AUTOINVEST_OPEN_KIND,
+                max_age=timedelta(minutes=30),
+            )
+        )
+        # Records which automatic investing runs were paid and which failed.
+        runs.append(
+            Schedule(
+                name="autoinvest.settle_runs",
+                trigger=IntervalTrigger(minutes=5),
+                kind=AUTOINVEST_SETTLE_KIND,
+                max_age=timedelta(minutes=10),
             )
         )
         # Settles payout sends that were interrupted, and queues sends and reads that were lost.

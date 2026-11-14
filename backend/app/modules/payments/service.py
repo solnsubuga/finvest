@@ -280,6 +280,86 @@ async def request_deposit(
     return await get_deposit(session, deposit_id)
 
 
+async def request_system_deposit(
+    session: AsyncSession,
+    request: DepositRequest,
+    *,
+    client_id: str,
+    account_phone: str,
+    provider: str,
+    clock: Clock,
+) -> Deposit:
+    """Save a mobile money payment the worker asks for on a client's behalf, and its send job.
+
+    For a saving the client set going ahead of time, such as an automatic investing run, in the
+    worker's own transaction as the system. Nothing is sent here: the send job prompts the
+    payer, who approves on their phone as for any payment. `account_phone` is the number on the
+    client's account now, from identity, and the payer must still be that number.
+
+    Idempotent through the investment: while it has a deposit that has not failed, this raises
+    `DepositExists` with that deposit and saves nothing. The idempotency table belongs to
+    clients and staff, so the system has no key of its own here. Migration 0300 lets the worker
+    save only the start of a mobile money deposit for an investment.
+    """
+    if request.purpose is not Purpose.INVESTMENT:
+        raise ApplicationError("forbidden")
+    try:
+        check_mobile_money_amount(request.amount)
+        msisdn = normalise_msisdn(request.phone)
+        validate_push_id(request.purpose_id)
+        if msisdn != normalise_msisdn(account_phone):
+            raise InvalidDeposit("not_account_phone")
+    except InvalidDeposit as error:
+        field = "phone" if error.code in ("invalid_phone", "not_account_phone") else "amount"
+        raise ApplicationError(
+            "validation_failed", fields=[FieldProblem(field_path=[field], code=error.code)]
+        ) from None
+    now = clock.now()
+    deposit_id = push_id()
+    await insert_deposit(
+        session,
+        {
+            "id": deposit_id,
+            "client_id": client_id,
+            "purpose_type": request.purpose.value,
+            "purpose_id": request.purpose_id,
+            "method": request.network.value,
+            "provider": provider,
+            "currency": request.amount.currency.value,
+            "amount_minor": request.amount.minor,
+            "payer_msisdn": msisdn,
+            "status": DepositStatus.CREATED.value,
+            "now": now,
+        },
+    )
+    await record_event(session, deposit_id, None, DepositStatus.CREATED, None, "request", now)
+    await audit.record(
+        session,
+        AuditEvent(
+            category="change",
+            action="payments.deposit_requested",
+            resource_type=DEPOSIT_RESOURCE,
+            resource_id=deposit_id,
+            actor=AuditActor.system(),
+            details={"method": request.network.value},
+        ),
+        clock,
+    )
+    await enqueue(
+        session,
+        JobRequest(
+            kind=SEND_KIND,
+            idempotency_key=deposit_id,
+            payload={"deposit_id": deposit_id},
+            max_attempts=SEND_ATTEMPTS,
+            max_age=SEND_MAX_AGE,
+        ),
+        now=now,
+    )
+    logger.info("deposit_requested", deposit_id=deposit_id)
+    return await get_deposit(session, deposit_id)
+
+
 async def insert_deposit(session: AsyncSession, values: dict[str, object]) -> None:
     """Save a new deposit, or raise `DepositExists` if its investment already has a live one.
 
