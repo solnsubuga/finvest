@@ -304,6 +304,9 @@ async def test_staff_see_rates_before_tax_and_the_investments(api: Api) -> None:
     assert one.json()["tax_bps"] == 1500
     runs = await api.http.get("/staff/interest-runs", headers=cookies)
     assert runs.status_code == 200
+    maturities = await api.http.get("/staff/maturities", headers=cookies)
+    assert maturities.status_code == 200
+    assert set(maturities.json()) == {"today", "days", "not_closed", "held"}
 
 
 async def test_a_rate_change_takes_two_people_over_http(api: Api) -> None:
@@ -344,6 +347,7 @@ async def test_each_staff_route_checks_its_permission(api: Api) -> None:
         "/staff/rate-proposals",
         "/staff/investments",
         "/staff/interest-runs",
+        "/staff/maturities",
     ):
         response = await api.http.get(path, headers=support)
         assert (response.status_code, code(response)) == (403, "forbidden"), path

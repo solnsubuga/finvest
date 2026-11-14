@@ -6613,6 +6613,46 @@
         "title": "MarkRead",
         "type": "object"
       },
+      "MaturitiesOut": {
+        "additionalProperties": false,
+        "description": "The maturity run around `today` (Kampala), and every term that needs a person.",
+        "properties": {
+          "days": {
+            "items": {
+              "$ref": "#/components/schemas/MaturityDayOut"
+            },
+            "title": "Days",
+            "type": "array"
+          },
+          "held": {
+            "items": {
+              "$ref": "#/components/schemas/StaffInvestmentOut"
+            },
+            "title": "Held",
+            "type": "array"
+          },
+          "not_closed": {
+            "items": {
+              "$ref": "#/components/schemas/StaffInvestmentOut"
+            },
+            "title": "Not Closed",
+            "type": "array"
+          },
+          "today": {
+            "format": "date",
+            "title": "Today",
+            "type": "string"
+          }
+        },
+        "required": [
+          "today",
+          "days",
+          "not_closed",
+          "held"
+        ],
+        "title": "MaturitiesOut",
+        "type": "object"
+      },
       "MaturityChoice": {
         "additionalProperties": false,
         "properties": {
@@ -6638,6 +6678,60 @@
           "at_maturity"
         ],
         "title": "MaturityChoice",
+        "type": "object"
+      },
+      "MaturityDayOut": {
+        "additionalProperties": false,
+        "properties": {
+          "currency": {
+            "$ref": "#/components/schemas/Currency"
+          },
+          "day": {
+            "format": "date",
+            "title": "Day",
+            "type": "string"
+          },
+          "held": {
+            "title": "Held",
+            "type": "integer"
+          },
+          "investments": {
+            "title": "Investments",
+            "type": "integer"
+          },
+          "open_pay_out": {
+            "title": "Open Pay Out",
+            "type": "integer"
+          },
+          "open_roll_over": {
+            "title": "Open Roll Over",
+            "type": "integer"
+          },
+          "paid_out": {
+            "title": "Paid Out",
+            "type": "integer"
+          },
+          "principal_minor": {
+            "title": "Principal Minor",
+            "type": "integer"
+          },
+          "rolled_over": {
+            "title": "Rolled Over",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "day",
+          "currency",
+          "investments",
+          "principal_minor",
+          "rolled_over",
+          "paid_out",
+          "held",
+          "open_roll_over",
+          "open_pay_out"
+        ],
+        "title": "MaturityDayOut",
         "type": "object"
       },
       "MemberView": {
@@ -32761,6 +32855,78 @@
         "summary": "Staff Login Start",
         "tags": [
           "staff sign-in"
+        ]
+      }
+    },
+    "/staff/maturities": {
+      "get": {
+        "description": "The last week and next two weeks of maturities, and the terms that need a person.",
+        "operationId": "staff_maturities_staff_maturities_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MaturitiesOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          }
+        },
+        "summary": "Staff Maturities",
+        "tags": [
+          "staff investing"
         ]
       }
     },

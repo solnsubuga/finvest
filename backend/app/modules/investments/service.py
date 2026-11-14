@@ -63,6 +63,7 @@ from app.modules.investments.holdings import (
     request_investment,
     start_investment,
 )
+from app.modules.investments.maturities import Maturities, MaturityDay, maturities
 from app.modules.investments.maturity import (
     MATURED_TOPIC,
     ROLLED_OVER_TOPIC,
@@ -95,6 +96,8 @@ __all__ = [
     "Funded",
     "InterestRun",
     "Investment",
+    "Maturities",
+    "MaturityDay",
     "PayableInvestment",
     "ProductOwed",
     "ProductView",
@@ -121,6 +124,7 @@ __all__ = [
     "list_proposals",
     "mature_investment",
     "maturing",
+    "maturities",
     "open_existing_investment",
     "owed_by_product",
     "pay_funded",
