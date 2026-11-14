@@ -219,10 +219,13 @@ _COUNT_AWAITING = text(
 )
 _INSERT = text(
     "INSERT INTO investments (id, client_id, product_id, currency, principal_minor, "
-    "annual_rate_bps, tax_bps, term_days, at_maturity, created_at, pay_by, updated_at) VALUES "
+    "annual_rate_bps, tax_bps, term_days, at_maturity, created_at, pay_by, updated_at, "
+    "source_type, source_id) VALUES "
     "(:id, :client_id, :product_id, :currency, :principal_minor, :annual_rate_bps, :tax_bps, "
-    ":term_days, :at_maturity, :now, :pay_by, :now)"
+    ":term_days, :at_maturity, :now, :pay_by, :now, :source_type, :source_id)"
 )
+# What `source_type` says of an investment two members of staff booked for a client.
+BOOKING_SOURCE = "investment_booking"
 _START = text(
     "UPDATE investments SET status = 'active', start_date = :start_date, "
     "maturity_date = :maturity_date, started_at = :now, start_entry_id = :entry_id, "
@@ -264,7 +267,13 @@ async def request_investment(
 
     async def command() -> Receipt:
         investment_id = await _create(
-            session, client, client_id, product_code, amount, at_maturity, clock
+            session,
+            client_id,
+            product_code,
+            amount,
+            at_maturity,
+            clock,
+            actor=AuditActor.client(client_id),
         )
         return Receipt(201, {"investment_id": investment_id})
 
@@ -285,14 +294,42 @@ async def request_investment(
     return await get_investment(session, str(outcome.receipt.response["investment_id"]))
 
 
-async def _create(
+async def create_booked(
     session: AsyncSession,
-    client: Actor,
+    booking_id: str,
     client_id: str,
     product_code: str,
     amount: Money,
     at_maturity: AtMaturity | None,
     clock: Clock,
+) -> str:
+    """Save the investment a booking two members of staff agreed. Worker only.
+
+    Every rule of a client's own request holds, on the terms of the day it is saved, and the
+    client pays for it as for any other. Raises as `request_investment` does.
+    """
+    return await _create(
+        session,
+        client_id,
+        product_code,
+        amount,
+        at_maturity,
+        clock,
+        actor=AuditActor.system(),
+        source_id=booking_id,
+    )
+
+
+async def _create(
+    session: AsyncSession,
+    client_id: str,
+    product_code: str,
+    amount: Money,
+    at_maturity: AtMaturity | None,
+    clock: Clock,
+    *,
+    actor: AuditActor,
+    source_id: str | None = None,
 ) -> str:
     if await kyc.verified_name(session, client_id) is None:
         # Nobody invests before their identity check is approved.
@@ -333,6 +370,8 @@ async def _create(
             "at_maturity": at_maturity.value if at_maturity else None,
             "now": now,
             "pay_by": pay_by(now),
+            "source_type": BOOKING_SOURCE if source_id else None,
+            "source_id": source_id,
         },
     )
     await audit.record(
@@ -342,10 +381,11 @@ async def _create(
             action="investments.requested",
             resource_type=INVESTMENT_RESOURCE,
             resource_id=investment_id,
-            actor=AuditActor.client(client_id),
+            actor=actor,
             details={
                 "product": product.code,
                 "at_maturity": at_maturity.value if at_maturity else None,
+                "booking_id": source_id,
             },
         ),
         clock,

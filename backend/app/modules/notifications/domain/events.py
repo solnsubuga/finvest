@@ -58,6 +58,8 @@ _SPECS = (
     _event("payout_returned", Category.MONEY, "payouts", "destination"),
     # Investments.
     _event("investment_started", Category.INVESTMENTS, "investments", "amount", "product"),
+    # Two members of staff set up an investment the client asked for. It waits for payment.
+    _event("investment_booked", Category.INVESTMENTS, "investments", "product"),
     _event("investment_maturing", Category.INVESTMENTS, "investments", "product", "date"),
     _event("investment_matured", Category.INVESTMENTS, "investments", "amount", "product"),
     # Cashing out a running investment before it matures. The amount is what the client gets.

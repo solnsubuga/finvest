@@ -120,6 +120,13 @@ DEFAULTS: dict[str, Wording] = {
         "Your money is now in a {product}.",
         "Finvest: your money is now invested in a {product}.",
     ),
+    "investment_booked": Wording(
+        "Investment ready for you to pay",
+        "As you asked, we set up a {product} for you. See the amount and pay for it in the app "
+        "within 3 days to start it.",
+        "Finvest: as you asked, we set up a {product} for you. Pay for it in the app within 3 "
+        "days to start it.",
+    ),
     "investment_maturing": Wording(
         "Your investment matures soon",
         "Your {product} matures on {date}. Choose to reinvest or cash out in the app.",
