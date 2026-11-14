@@ -1829,6 +1829,16 @@ export const PhoneChangeList = z.object({
 });
 export type PhoneChangeList = z.infer<typeof PhoneChangeList>;
 
+export const PhoneName = z.enum(["checking", "matches", "partly_matches", "different", "no_name", "not_answered"]);
+export type PhoneName = z.infer<typeof PhoneName>;
+
+export const PhoneNameOut = z.object({
+  answered_at: z.string().nullable(),
+  registered_name: z.string().nullable(),
+  status: PhoneName,
+});
+export type PhoneNameOut = z.infer<typeof PhoneNameOut>;
+
 export const PhotoLink = z.object({
   id: z.string(),
   kind: PhotoKind,
@@ -2465,6 +2475,7 @@ export const StaffCheck = z.object({
   given_names: z.string().nullable(),
   id: z.string(),
   name: z.string().nullable(),
+  phone_name: PhoneNameOut.nullable(),
   photos: z.array(StaffPhoto),
   retake_photos: z.array(PhotoKind),
   review_flags: z.array(z.string()),
