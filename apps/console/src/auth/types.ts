@@ -64,6 +64,8 @@ export const ACTION_PERMISSIONS = [
   "deposit_reassignments.change",
   // Checking a client's proof of a payout account, approving someone else's check, refusing it, or removing the account.
   "payout_accounts.change",
+  // Preparing a batch of bank payouts, approving or declining someone else's, withdrawing your own, and settling each from the trust statement.
+  "bank_payouts.change",
   // Proposing a rate change, approving or sending back someone else's, and withdrawing your own.
   "rates.change",
   // Proposing an unwind or a refund of an investment, approving or sending back someone else's, and withdrawing your own.

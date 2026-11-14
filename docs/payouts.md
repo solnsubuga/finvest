@@ -138,6 +138,8 @@ A payout is funded from one place only: the client's own `client.payout_pending`
 | `payout.park` | Payout in flight | `client.payout_pending` | `payout:<id>:park` |
 | `payout.release` | Payout in flight | `client.payout_pending`, reference the investment | `payout:<id>:release` |
 
+A bank payout settles and parks with the same entries, posted when two members of staff settle it from the trust statement (see "Paying bank payouts").
+
 Every account but the wallet and the bank is a liability to the same client, so what Finvest owes the client does not change until the provider confirms. The fixed keys mean no step can post twice.
 
 Settle is refused by the ledger if the pot does not hold the money, because an asset account cannot go below zero. That is a reconciliation problem to be looked at, never something to force.
@@ -255,7 +257,7 @@ A sweep runs every minute. It marks attempts that never got their answer saved a
 
 The client is told `payout_processing` when the payout is sent or uncertain, `payout_sent` when it is paid and `payout_failed` when it fails. A message names the network, such as "MTN Mobile Money", never the number.
 
-Bank payouts are not sent by the worker. They wait for staff to pay them from the trust account. Until that path records its own send attempt, a bank payout cannot leave `queued` at all, and the database refuses marking one paid by hand.
+Bank payouts are not sent by the worker. They wait for staff to pay them from the trust account, in batches (below). The worker takes no step for a bank payout, and the database refuses one.
 
 What the database enforces:
 
@@ -269,7 +271,7 @@ What the database enforces:
 
 The sandbox provider (`FINVEST_PAYMENTS_PROVIDER=sandbox`, local and staging only) pays nobody. The last two digits of the number choose what happens: 01 refused, 02 fails after accepting, 04 uncertain with no record, 05 deferred, 06 confirmed for another amount, anything else paid after 5 seconds.
 
-Not built yet: the two-person settlement of a stranded payout, and paying a bank payout from the trust account. Both follow.
+Both follow below: the two-person settlement of a stranded payout, and paying a bank payout from the trust account.
 
 ## Settling a payout the provider never answered for
 
@@ -302,3 +304,50 @@ Open proposals wait in the approvals inbox as `payout_resolution`, with the outc
 | Nothing changes afterwards | Only a decision is written, a decided resolution never changes, and nothing is deleted |
 
 Only the worker writes a destination's note of its first payout, so a payout settled as paid by hand queues a job for it.
+
+## Paying bank payouts
+
+The worker sends mobile money only. A queued bank payout is paid by staff from the trust bank account, by uploading a transfer file in the bank's portal (`backend/app/modules/payouts/bank_payouts.py`, routes in `staff_bank_api.py`, migration 0039). Every step that moves money takes two people, from the owner's standing rule.
+
+1. **Prepare.** One member of staff chooses queued bank payouts in one currency, at most 200, and puts them in a batch with a reason. Nothing leaves.
+2. **Approve.** A different member of staff approves the batch. In the same transaction every payout in it moves from queued to sent, and each client is told `payout_processing`, naming the bank, never the number. The preparer may withdraw the batch instead, and anyone else may decline it; either way its payouts stay queued and are free for another batch.
+3. **Upload.** The approved batch's transfer file is downloaded and uploaded in the bank's portal. It is a CSV with `Reference` (the payout ID, which the bank is asked to carry), `Beneficiary name`, `Bank`, `Account number`, `Amount` (whole shillings, no separators), `Currency` and `Narrative`. It holds whole account numbers, so it exists only for an approved batch, is never stored, and every download writes a `payouts.bank_batch_file_downloaded` access event.
+4. **Settle.** Once the trust statement is imported, one member of staff proposes how each payout ended and a different one approves it. Paid settles the money from `bank.trust` (`payout.settle`), and the client is told `payout_sent`. Failed parks it in the client's "payout pending" account (`payout.park`, `failure_code=bank_refused`), and the client is told `payout_failed`. The proposer may withdraw, and anyone else may decline; the payout stays sent, to be proposed again.
+
+| Outcome | Evidence |
+| --- | --- |
+| Paid | The trust statement line that took the money: going out, for the payout's amount and currency, dated on or after the day the batch was approved, and named by no other open or approved settlement. One line per payout |
+| Failed | A trust statement dated at least two days after the batch was approved. Every day from the approval to it must be imported, and none may hold a line going out for the payout's amount that no approved settlement accounts for. A payout that did leave is never parked, so it can never be paid twice |
+
+Seeing needs `money_movement.view` (admin, operations and finance). Every step needs `bank_payouts.change` (admin and finance). Approving and declining need the second step in the last ten minutes (403 `confirm_it_is_you`). Every step needs a reason. Preparing, approving and declining a batch, and proposing and approving a settlement, take an `Idempotency-Key`: a retried request returns what the first one did, and a key reused for a different request is refused with `idempotency_key_reused`.
+
+| Route | What it does |
+| --- | --- |
+| `GET /staff/payouts/bank/waiting?currency=UGX` | Queued bank payouts in no prepared or approved batch, oldest first, at most 200 |
+| `GET /staff/payout-bank-batches?status=prepared&status=approved` | Batches in those statuses, newest first, at most 100, each with its payouts and total |
+| `GET /staff/payout-bank-batches/{id}` | One batch |
+| `POST /staff/payout-bank-batches` | `{currency, payout_ids, reason}`. 201, prepared. 422 `batch_payouts_invalid` for a payout named twice; 409 `payout_not_bank`, `payout_not_queued` or `payout_in_another_batch` |
+| `POST /staff/payout-bank-batches/{id}/approve` | `{reason}`. Sends every payout in it. 403 `prepared_by_you`; 409 `batch_already_decided` |
+| `POST /staff/payout-bank-batches/{id}/decline` | `{reason}`. 403 `prepared_by_you`; 409 `batch_already_decided` |
+| `POST /staff/payout-bank-batches/{id}/withdraw` | `{reason}`, by the preparer only (403 `not_prepared_by_you`) |
+| `GET /staff/payout-bank-batches/{id}/file` | The transfer file, `text/csv`. Needs `bank_payouts.change`. 409 `batch_not_approved` |
+| `GET /staff/payouts/bank/sent` | Bank payouts sent and not yet settled, oldest first, at most 100, each with its batch, when it was sent and any open settlement |
+| `POST /staff/payouts/{id}/bank-settlements` | `{outcome, statement_line_id?, statement_id?, reason}`. 201. 422 `statement_line_required` or `statement_required`; 409 `payout_not_bank`, `payout_not_sent`, `settlement_already_proposed`, `statement_line_in_use`, `statement_line_not_this_payout` or `statement_not_enough` |
+| `POST /staff/payout-bank-settlements/{id}/approve` | `{reason}`. The payout is paid or failed. 403 `proposed_by_you`; 409 `settlement_already_decided` or `payout_not_sent` |
+| `POST /staff/payout-bank-settlements/{id}/decline` | `{reason}`. 403 `proposed_by_you` |
+| `POST /staff/payout-bank-settlements/{id}/withdraw` | `{reason}`, by the proposer only (403 `not_proposed_by_you`) |
+
+What the database enforces:
+
+| Rule | How |
+| --- | --- |
+| Two people send a batch | A batch is decided by the signed-in member of staff, now; approving or declining by someone other than its preparer, withdrawing only by its preparer |
+| The batch moves with the approval | The payouts guard admits a staff step from queued to sent for a bank payout only in a batch the same person approved, and an approved batch with a payout still queued cannot commit |
+| An approver approves what was prepared | Items are added only in the transaction that prepared their batch, by its preparer, and are never changed or deleted |
+| One batch at a time | A payout joins a batch only while queued, a bank payout in the batch's currency, and in no other prepared or approved batch. Its row is locked, so two batches cannot both take it |
+| Settled from the statement | A settlement's evidence is checked at proposal and again at approval, and the payouts guard admits sent to paid or failed for a bank payout only with an approved settlement for that outcome by the same person |
+| One line, one payout | A statement line is named by at most one open or approved settlement |
+| The worker never moves a bank payout | The payouts guard refuses every worker step for one |
+| Nothing changes afterwards | A decided batch or settlement never changes, and nothing is deleted. Only staff and the worker can read them |
+
+Not built yet: a bank that debits a whole batch as one statement line (each payout needs its own line for now), matching the settle entries with their lines in the day close automatically, and the console screen.
