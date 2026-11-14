@@ -92,7 +92,10 @@ async def step(api: Api, organisation_id: str, name: str, note: str = "Checked")
 async def notices(api: Api, client: Actor, event: str) -> list[str]:
     async with api.database.actor_transaction(client) as session:
         rows = await session.execute(
-            text("SELECT body FROM notifications WHERE client_id = :id AND event = :event"),
+            text(
+                "SELECT title || ' ' || body AS body FROM notifications "
+                "WHERE client_id = :id AND event = :event"
+            ),
             {"id": client.id, "event": event},
         )
         return [row.body for row in rows.all()]
@@ -163,7 +166,9 @@ async def test_a_company_opens_after_its_people_join_and_two_staff_approve(
         uploaded = await upload(api, organisation_id, kind)
         assert uploaded.status_code == 200, uploaded.text
     assert await run_invitations(worker_database, api) == 1
-    assert len(await notices(api, director, "organisation_invited")) == 1
+    told = await notices(api, director, "organisation_invited")
+    # The applicant wrote the name and staff have not seen it, so the message leaves it out.
+    assert len(told) == 1 and "Kampala Traders" not in told[0]
 
     await api.as_client(director)
     listed = (await api.http.get("/client/organisations")).json()["items"]
@@ -247,6 +252,19 @@ async def test_a_group_needs_two_people_and_two_approvals(api: Api) -> None:
         f"/client/organisations/{organisation_id}", json={"approvals_needed": 3}
     )
     assert "approvals_more_than_signatories" in changed.json()["problems"]
+
+
+async def test_a_name_cannot_carry_an_address(api: Api) -> None:
+    await person(api)
+    for name in ("Win at http://x.example", "Pay finvest-help.com now", "Send to me@example"):
+        refused = await apply(api, name=name)
+        assert refused.status_code == 422, name
+        assert refused.json()["error"]["fields"][0]["code"] == "not_a_name"
+    organisation_id = (await apply(api, name="Kira Rd. Traders (U) Ltd")).json()["id"]
+    changed = await api.http.patch(
+        f"/client/organisations/{organisation_id}", json={"name": "Visit www.x.example"}
+    )
+    assert changed.json()["error"]["fields"][0]["code"] == "not_a_name"
 
 
 async def test_a_document_must_be_what_it_claims_to_be(api: Api) -> None:
