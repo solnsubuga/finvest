@@ -33,6 +33,7 @@ Kind = Literal[
     "payout_account",
     "investment_correction",
     "investment_run",
+    "note_reissue",
     "investment_booking",
     "payout_resolution",
     "tax_remittance",
@@ -97,6 +98,7 @@ SOURCES: dict[Kind, Source] = {
     "investment_correction": Source("investments.view", "investment_corrections.change"),
     # Running a day's interest again, or today's maturities, decided as corrections are.
     "investment_run": Source("investments.view", "investment_corrections.change"),
+    "note_reissue": Source("investments.view", "client_statements.send"),
     # An investment booked for a client who asked, decided as corrections are.
     "investment_booking": Source("investments.view", "investment_corrections.change"),
     "tax_remittance": Source("finance.view", "tax_remittances.change"),

@@ -14,7 +14,7 @@ from collections.abc import Awaitable, Callable, Mapping
 from datetime import date, datetime, timedelta
 
 import structlog
-from sqlalchemy import text
+from sqlalchemy import TextClause, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.infrastructure.database import Database
@@ -40,7 +40,7 @@ from app.infrastructure.jobs import (
     is_active,
 )
 from app.infrastructure.sealing import Sealer
-from app.modules.documents import building, locking, pdf, service
+from app.modules.documents import building, locking, pdf, reissues, service
 from app.modules.documents.domain.emails import (
     Rendered,
     ended_note_email,
@@ -94,7 +94,13 @@ _QUEUE_EMAIL = text(
     "INSERT INTO document_emails (document_id, client_id, queued_at) "
     "VALUES (:id, :client_id, :now) ON CONFLICT (document_id) DO NOTHING"
 )
-_EMAIL_STATUS = text("SELECT status FROM document_emails WHERE document_id = :id")
+_EMAIL_STATUS = text("SELECT status, document_id FROM document_emails WHERE document_id = :id")
+_COPY_STATUS = text("SELECT status, document_id FROM document_email_copies WHERE id = :id")
+_COPY_DONE = text(
+    "UPDATE document_email_copies SET status = :status, failure_code = :failure_code, "
+    "provider = :provider, provider_message_id = :message_id, finished_at = :now "
+    "WHERE id = :id AND status = 'queued'"
+)
 _EMAIL_DONE = text(
     "UPDATE document_emails SET status = :status, failure_code = :failure_code, "
     "provider = :provider, provider_message_id = :message_id, finished_at = :now "
@@ -107,6 +113,10 @@ EMAIL_MAX_AGE = timedelta(hours=20)
 # and the record show it was never delivered. The document stays in the app.
 EMAIL_GIVE_UP_AFTER = timedelta(days=7)
 EXPIRE_PAGE = 500
+_STALE_COPIES = text(
+    "SELECT id FROM document_email_copies WHERE status = 'queued' AND queued_at < :before "
+    "ORDER BY queued_at, id LIMIT :limit FOR UPDATE SKIP LOCKED"
+)
 _STALE_EMAILS = text(
     "SELECT document_id FROM document_emails WHERE status = 'queued' AND queued_at < :before "
     "ORDER BY queued_at, document_id LIMIT :limit FOR UPDATE SKIP LOCKED"
@@ -171,6 +181,8 @@ class DocumentJobs:
             # Sending reaches Resend. Its idempotency key makes a lost answer safe to repeat,
             # and a crash mid-send stops the job instead of sending blind.
             service.EMAIL_KIND: external_effect(self.send_email),
+            service.EMAIL_COPY_KIND: external_effect(self.send_email_copy),
+            service.REISSUE_KIND: self.reissue_notes,
         }
 
     async def build(self, job: ClaimedJob, context: JobContext) -> None:
@@ -447,6 +459,25 @@ class DocumentJobs:
                     },
                 )
                 closed += 1
+            copies = await session.execute(
+                _STALE_COPIES, {"before": now - EMAIL_GIVE_UP_AFTER, "limit": EXPIRE_PAGE}
+            )
+            for copy_id in copies.scalars().all():
+                key = f"document-email-copy:{copy_id}"
+                if await is_active(session, kind=service.EMAIL_COPY_KIND, idempotency_key=key):
+                    continue
+                await session.execute(
+                    _COPY_DONE,
+                    {
+                        "id": copy_id,
+                        "status": "failed",
+                        "failure_code": "expired",
+                        "provider": None,
+                        "message_id": None,
+                        "now": now,
+                    },
+                )
+                closed += 1
             return {"closed": closed}
 
         result = await context.apply(effect)
@@ -454,6 +485,57 @@ class DocumentJobs:
             logger.warning(
                 "document_emails_expired", count=result.get("closed"), error_code="expired"
             )
+
+    async def reissue_notes(self, job: ClaimedJob, context: JobContext) -> None:
+        """Send again the notes an approved reissue covers, a page at a time.
+
+        Each page records a copy of each note and queues its email in the same transaction,
+        then queues the next page. The last page marks the request done. Run twice, a page
+        records and queues nothing more.
+        """
+        data = job.payload.get("data")
+        data = data if isinstance(data, Mapping) else {}
+        request_id, after = data.get("reissue_id"), data.get("after", "")
+        if not isinstance(request_id, str) or not isinstance(after, str):
+            raise PermanentJobError(code="reissue_id_missing")
+
+        async def effect(session: AsyncSession) -> Mapping[str, object]:
+            now = self._clock.now()
+            copies, last = await reissues.queue_page(session, request_id, after, now)
+            for copy_id in copies:
+                await enqueue(
+                    session,
+                    JobRequest(
+                        kind=service.EMAIL_COPY_KIND,
+                        idempotency_key=f"document-email-copy:{copy_id}",
+                        payload={"copy_id": copy_id},
+                        queue=service.QUEUE,
+                        max_age=EMAIL_MAX_AGE,
+                    ),
+                    now=now,
+                )
+            if last is not None:
+                await enqueue(
+                    session,
+                    JobRequest(
+                        kind=service.REISSUE_KIND,
+                        idempotency_key=f"note-reissue:{request_id}:{last}",
+                        payload={"data": {"reissue_id": request_id, "after": last}},
+                        queue=service.QUEUE,
+                    ),
+                    now=now,
+                )
+                return {"queued": len(copies)}
+            sent = await reissues.finish(session, request_id, self._clock)
+            return {"queued": len(copies), "sent": sent}
+
+        result = await context.apply(effect)
+        logger.info(
+            "note_reissue_page",
+            note_reissue_id=request_id,
+            count=result.get("queued"),
+            total=result.get("sent"),
+        )
 
     async def receipt_from_deposit(self, job: ClaimedJob, context: JobContext) -> None:
         """A payment was confirmed: ask for its receipt, which is built and emailed next."""
@@ -525,11 +607,47 @@ class DocumentJobs:
         document_id = job.payload.get("document_id")
         if not isinstance(document_id, str):
             raise PermanentJobError(code="document_id_missing")
+        await self._deliver(
+            context,
+            status_sql=_EMAIL_STATUS,
+            row_id=document_id,
+            key=f"document:{document_id}",
+            finish=lambda status, **result: self._finish(document_id, status, **result),
+        )
+
+    async def send_email_copy(self, job: ClaimedJob, context: JobContext) -> None:
+        """Email a ready note again, for a reissue two members of staff agreed.
+
+        The same stored PDF goes, locked as before, under the same rules as the first email:
+        a proved address, not suppressed, with a date of birth on record. Each copy has its own
+        row and its own Resend key, so the first email's record is never touched.
+        """
+        copy_id = job.payload.get("copy_id")
+        if not isinstance(copy_id, str):
+            raise PermanentJobError(code="copy_id_missing")
+        await self._deliver(
+            context,
+            status_sql=_COPY_STATUS,
+            row_id=copy_id,
+            key=f"document-copy:{copy_id}",
+            finish=lambda status, **result: self._finish(copy_id, status, sql=_COPY_DONE, **result),
+        )
+
+    async def _deliver(
+        self,
+        context: JobContext,
+        *,
+        status_sql: TextClause,
+        row_id: str,
+        key: str,
+        finish: Callable[..., Callable[[AsyncSession], Awaitable[Mapping[str, object]]]],
+    ) -> None:
         async with self._database.actor_transaction(SYSTEM) as session:
-            status = (await session.execute(_EMAIL_STATUS, {"id": document_id})).scalar()
-            view = await service.get_document(session, document_id)
-            file = await service.document_file(session, document_id)
-            if status is None or view is None or file is None:
+            found = (await session.execute(status_sql, {"id": row_id})).one_or_none()
+            status, document_id = (found.status, found.document_id) if found else (None, None)
+            view = await service.get_document(session, document_id) if document_id else None
+            file = await service.document_file(session, document_id) if document_id else None
+            if status is None or view is None or file is None or document_id is None:
                 raise PermanentJobError(code="document_email_missing")
             rendered, address, skip, password = None, None, "no_email", None
             if status == "queued":
@@ -560,7 +678,7 @@ class DocumentJobs:
             await context.apply(_nothing)
             return
         if address is None or rendered is None:
-            await context.apply(self._finish(document_id, "skipped", failure_code=skip))
+            await context.apply(finish("skipped", failure_code=skip))
             logger.info("document_email_skipped", document_id=document_id, error_code=skip)
             return
         assert password is not None
@@ -571,7 +689,7 @@ class DocumentJobs:
                 subject=rendered.subject,
                 html=rendered.html,
                 text=rendered.text,
-                idempotency_key=f"document:{document_id}",
+                idempotency_key=key,
                 tags={"template": view.kind.value},
                 attachments=(Attachment(file.file_name, attached),),
             )
@@ -580,16 +698,11 @@ class DocumentJobs:
             raise RetryableJobError(error.safe_message, code=error.code) from None
         except (InvalidEmail, EmailRejected) as error:
             code = getattr(error, "code", "email_invalid")
-            await context.apply(self._finish(document_id, "failed", failure_code=code))
+            await context.apply(finish("failed", failure_code=code))
             logger.warning("document_email_refused", document_id=document_id, error_code=code)
             return
         await context.apply(
-            self._finish(
-                document_id,
-                "sent",
-                provider=sent.provider,
-                message_id=sent.provider_message_id,
-            )
+            finish("sent", provider=sent.provider, message_id=sent.provider_message_id)
         )
         logger.info("document_emailed", document_id=document_id, kind=view.kind.value)
 
@@ -612,10 +725,11 @@ class DocumentJobs:
         failure_code: str | None = None,
         provider: str | None = None,
         message_id: str | None = None,
+        sql: TextClause = _EMAIL_DONE,
     ) -> Callable[[AsyncSession], Awaitable[Mapping[str, object]]]:
         async def effect(session: AsyncSession) -> Mapping[str, object]:
             await session.execute(
-                _EMAIL_DONE,
+                sql,
                 {
                     "id": document_id,
                     "status": status,

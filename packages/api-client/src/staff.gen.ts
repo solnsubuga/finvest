@@ -162,7 +162,7 @@ export type Approval = z.infer<typeof Approval>;
 export const ApprovalItemOut = z.object({
   can_decide: z.boolean(),
   id: z.string(),
-  kind: z.enum(["wording_change", "ledger_correction", "pot_transfer", "bank_transfer_match", "day_close", "dealing_order", "dealing_result", "buffer_rules", "buffer_capital", "rate_change", "product_change", "migration_totals", "migration_sign_off", "phone_change", "team_change", "client_lock", "suppression_lift", "complaint_outcome", "announcement", "payout_account", "investment_correction", "investment_run", "investment_booking", "payout_resolution", "tax_remittance", "deposit_reassignment", "payout_release", "investment_transfer", "organisation", "account_closure", "compliance_case", "bank_account_change", "account_code_map", "deposit_reversal", "deposit_receivable", "client_pin_reset", "client_limits", "client_statement", "client_withdrawal", "payment_channels_change", "calendar_change", "staff_security_change", "statement_layout_change", "withdrawal_limits_change", "report_schedule", "month_close"]),
+  kind: z.enum(["wording_change", "ledger_correction", "pot_transfer", "bank_transfer_match", "day_close", "dealing_order", "dealing_result", "buffer_rules", "buffer_capital", "rate_change", "product_change", "migration_totals", "migration_sign_off", "phone_change", "team_change", "client_lock", "suppression_lift", "complaint_outcome", "announcement", "payout_account", "investment_correction", "investment_run", "note_reissue", "investment_booking", "payout_resolution", "tax_remittance", "deposit_reassignment", "payout_release", "investment_transfer", "organisation", "account_closure", "compliance_case", "bank_account_change", "account_code_map", "deposit_reversal", "deposit_receivable", "client_pin_reset", "client_limits", "client_statement", "client_withdrawal", "payment_channels_change", "calendar_change", "staff_security_change", "statement_layout_change", "withdrawal_limits_change", "report_schedule", "month_close"]),
   proposed_at: z.string(),
   proposed_by: z.string(),
   proposed_by_name: z.string().nullable(),
@@ -2660,6 +2660,50 @@ export const Register = z.object({
   summary: SupportApiComplaintSummary,
 });
 export type Register = z.infer<typeof Register>;
+
+export const ReissueCopies = z.object({
+  failed: z.number().int(),
+  queued: z.number().int(),
+  sent: z.number().int(),
+  skipped: z.number().int(),
+});
+export type ReissueCopies = z.infer<typeof ReissueCopies>;
+
+export const ReissueCount = z.object({
+  note_count: z.number().int(),
+});
+export type ReissueCount = z.infer<typeof ReissueCount>;
+
+export const ReissueDecline = z.object({
+  note: z.string(),
+});
+export type ReissueDecline = z.infer<typeof ReissueDecline>;
+
+export const ReissueIn = z.object({
+  client_id: z.string().nullable().optional(),
+  issued_from: z.string(),
+  issued_to: z.string(),
+  reason: z.string(),
+});
+export type ReissueIn = z.infer<typeof ReissueIn>;
+
+export const ReissueOut = z.object({
+  client_id: z.string().nullable(),
+  copies: ReissueCopies,
+  decided_at: z.string().nullable(),
+  decided_by: z.string().nullable(),
+  decision_note: z.string().nullable(),
+  finished_at: z.string().nullable(),
+  id: z.string(),
+  issued_from: z.string(),
+  issued_to: z.string(),
+  note_count: z.number().int(),
+  proposed_at: z.string(),
+  proposed_by: z.string(),
+  reason: z.string(),
+  status: z.enum(["proposed", "approved", "declined", "withdrawn", "done"]),
+});
+export type ReissueOut = z.infer<typeof ReissueOut>;
 
 export const RejectBody = z.object({
   client_message: z.string().nullable().optional(),
@@ -5590,6 +5634,85 @@ export const operations = {
     idempotent: false,
     status: 200,
     response: OverviewView,
+  },
+  "GET /staff/note-reissues": {
+    method: "GET",
+    path: "/staff/note-reissues",
+    params: z.object({}),
+    query: z.object({
+    status: z.enum(["proposed", "approved", "declined", "withdrawn", "done"]).nullable().optional(),
+    limit: z.number().int().optional(),
+  }),
+    body: null,
+    bodyKind: null,
+    idempotent: false,
+    status: 200,
+    response: z.array(ReissueOut),
+  },
+  "POST /staff/note-reissues": {
+    method: "POST",
+    path: "/staff/note-reissues",
+    params: z.object({}),
+    query: z.object({}),
+    body: ReissueIn,
+    bodyKind: "json",
+    idempotent: true,
+    status: 201,
+    response: ReissueOut,
+  },
+  "GET /staff/note-reissues/count": {
+    method: "GET",
+    path: "/staff/note-reissues/count",
+    params: z.object({}),
+    query: z.object({
+    issued_from: z.string(),
+    issued_to: z.string(),
+    client_id: z.string().nullable().optional(),
+  }),
+    body: null,
+    bodyKind: null,
+    idempotent: false,
+    status: 200,
+    response: ReissueCount,
+  },
+  "POST /staff/note-reissues/{request_id}/approve": {
+    method: "POST",
+    path: "/staff/note-reissues/{request_id}/approve",
+    params: z.object({
+    request_id: z.string(),
+  }),
+    query: z.object({}),
+    body: null,
+    bodyKind: null,
+    idempotent: true,
+    status: 200,
+    response: ReissueOut,
+  },
+  "POST /staff/note-reissues/{request_id}/decline": {
+    method: "POST",
+    path: "/staff/note-reissues/{request_id}/decline",
+    params: z.object({
+    request_id: z.string(),
+  }),
+    query: z.object({}),
+    body: ReissueDecline,
+    bodyKind: "json",
+    idempotent: true,
+    status: 200,
+    response: ReissueOut,
+  },
+  "POST /staff/note-reissues/{request_id}/withdraw": {
+    method: "POST",
+    path: "/staff/note-reissues/{request_id}/withdraw",
+    params: z.object({
+    request_id: z.string(),
+  }),
+    query: z.object({}),
+    body: null,
+    bodyKind: null,
+    idempotent: true,
+    status: 200,
+    response: ReissueOut,
   },
   "GET /staff/notification-wordings": {
     method: "GET",

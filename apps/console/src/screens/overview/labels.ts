@@ -77,6 +77,8 @@ export const KIND_INFO: Record<Kind, KindInfo> = {
   },
   // An investment staff booked for a client who asked. The subject is the product's code.
   investment_booking: { label: "Investment booked for a client", path: at("/investments") },
+  // The subject is the first and last day of notes, then the client's ID for one client.
+  note_reissue: { label: "Investment notes to send again", path: at("/investments") },
 };
 
 const RECEIVABLE_STEPS: Record<string, string> = { open: "Record what is owed", recover: "Money arrived", write_off: "Write off" };
@@ -106,6 +108,11 @@ export function describeSubject(item: ApprovalItem): string {
   if (item.kind === "investment_run") {
     const [kind, day] = item.subject.split(" ");
     return `${kind === "maturity" ? "Maturities" : "Interest"} for ${day ?? ""}`.trim();
+  }
+  if (item.kind === "note_reissue") {
+    const [from, to, client] = item.subject.split(" ");
+    const days = from === to ? `Issued ${from ?? ""}` : `Issued ${from ?? ""} to ${to ?? ""}`;
+    return client ? `${days}, client ${client}` : `${days}, every client`;
   }
   if (item.kind === "phone_change" || item.kind === "account_closure") return `Client ${item.subject}`;
   if (item.kind === "deposit_reversal") return `Payment ${item.subject}`;

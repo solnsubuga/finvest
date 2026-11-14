@@ -45,6 +45,7 @@ export const KINDS = [
   "investment_correction",
   "investment_run",
   "investment_booking",
+  "note_reissue",
   "client_pin_reset",
   "client_limits",
   "client_statement",

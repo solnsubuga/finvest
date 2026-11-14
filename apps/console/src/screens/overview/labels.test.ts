@@ -22,6 +22,16 @@ describe("overview: what each waiting item is called", () => {
     expect(describeSubject(booking)).toBe("TREA-91");
   });
 
+  it("names notes to send again with their days and whose they are", () => {
+    const every = item({ kind: "note_reissue", subject: "2026-11-01 2026-11-13" });
+    expect(kindLabel(every)).toBe("Investment notes to send again");
+    expect(linkFor(every)).toBe("/investments");
+    expect(describeSubject(every)).toBe("Issued 2026-11-01 to 2026-11-13, every client");
+    expect(describeSubject(item({ kind: "note_reissue", subject: "2026-11-13 2026-11-13 -Nclient00000000001" }))).toBe(
+      "Issued 2026-11-13, client -Nclient00000000001",
+    );
+  });
+
   it("shows a kind it does not know without a link", () => {
     const unknown = item({ subject: "x" });
     expect(kindLabel(unknown)).toBe("Approval");
