@@ -201,23 +201,38 @@ async def client_rule(session: AsyncSession, goal_id: str) -> ClientSavingRule |
 
 
 async def goals_with_rules(session: AsyncSession, goal_ids: list[str]) -> dict[str, str]:
-    """Which of these goals have an open saving rule, and its plan."""
+    """Which of these goals are being saved by their rule now, and its plan.
+
+    Only a rule whose plan is active counts. A paused plan collects nothing, and a plan stopped
+    from the automatic investing screens has ended the rule in effect, so their goals are
+    treated as having no rule: they are reminded to save by hand again.
+    """
     if not goal_ids:
         return {}
-    rows = await session.execute(_OPEN_RULES, {"goal_ids": goal_ids})
-    return {row.goal_id: row.plan_id for row in rows.all()}
+    rows = (await session.execute(_OPEN_RULES, {"goal_ids": goal_ids})).all()
+    saving: dict[str, str] = {}
+    for row in rows:
+        plan = await autoinvest.get_plan(session, row.plan_id)
+        if plan.status is autoinvest.PlanStatus.ACTIVE:
+            saving[row.goal_id] = row.plan_id
+    return saving
 
 
 async def link_plan_run(
-    session: AsyncSession, *, plan_id: str, investment_id: str, clock: Clock
+    session: AsyncSession, *, plan_id: str, client_id: str, investment_id: str, clock: Clock
 ) -> bool:
     """Record a run's investment as a saving towards the goal whose rule the plan is. Worker.
 
-    False for a plan that is no goal's rule, or whose goal is closed. Running it again, or for
-    the retry of a run, which asks for the same investment, changes nothing.
+    False for a plan that is no goal's rule, or whose goal is closed. Also False, and logged,
+    for a run said to be another client's than the rule's: nothing is linked across clients.
+    Running it again, or for the retry of a run, which asks for the same investment, changes
+    nothing.
     """
     row = (await session.execute(_RULE_OF_PLAN, {"plan_id": plan_id})).one_or_none()
     if row is None or row.status != GoalStatus.ACTIVE.value:
+        return False
+    if row.client_id != client_id:
+        logger.warning("goal_saving_rule_client_mismatch", plan_id=plan_id, error_code="mismatch")
         return False
     try:
         # A savepoint, so a goal closed since the read above leaves the job's transaction usable.
