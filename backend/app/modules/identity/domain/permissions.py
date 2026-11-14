@@ -86,6 +86,10 @@ Permission = Literal[
     # Proposing or deciding which ways of paying in and paying out are open, on the Settings
     # screen. Seeing them is `settings.view`. Not a screen.
     "payment_channels.change",
+    # Proposing or deciding the withdrawal limits and the size above which a payout or a
+    # transfer to another client waits for staff, on the Settings screen. Seeing them is
+    # `settings.view`. Approving always takes a second person. Not a screen.
+    "withdrawal_limits.change",
     # Proposing or deciding the public holidays, the bank payout cut-off and the maturity
     # reminders, on the Settings screen. Seeing them is `settings.view`. Not a screen.
     "calendar.change",
@@ -243,6 +247,7 @@ ROLE_PERMISSIONS: dict[Role, frozenset[Permission]] = {
             "payment_channels.change",
             "calendar.change",
             "statement_layouts.change",
+            "withdrawal_limits.change",
         }
     ),
     "compliance": frozenset(
