@@ -60,14 +60,14 @@ import /etc/caddy/upstreams.caddy
 	# forwarded, and by counting a body sent without one. Upload routes get 12 MiB here, above
 	# every file route's own limit (10 MiB files plus the form around them); everything else
 	# gets a million bytes. A new upload route is added to all three lists below.
-	@upload path_regexp upload ^/(client/investments/[^/]+/payments/bank-transfer|client/payout-destinations/[^/]+/proof|client/identity-check/photos|staff/reconciliation/statements)(/|$)
-	@other not path_regexp other ^/(client/investments/[^/]+/payments/bank-transfer|client/payout-destinations/[^/]+/proof|client/identity-check/photos|staff/reconciliation/statements)(/|$)
+	@upload path_regexp upload ^/(client/investments/[^/]+/payments/bank-transfer|client/payout-destinations/[^/]+/proof|client/identity-check/photos|client/claim-check/photos|staff/reconciliation/statements)(/|$)
+	@other not path_regexp other ^/(client/investments/[^/]+/payments/bank-transfer|client/payout-destinations/[^/]+/proof|client/identity-check/photos|client/claim-check/photos|staff/reconciliation/statements)(/|$)
 	@oversize {
-		not path_regexp oversize ^/(client/investments/[^/]+/payments/bank-transfer|client/payout-destinations/[^/]+/proof|client/identity-check/photos|staff/reconciliation/statements)(/|$)
+		not path_regexp oversize ^/(client/investments/[^/]+/payments/bank-transfer|client/payout-destinations/[^/]+/proof|client/identity-check/photos|client/claim-check/photos|staff/reconciliation/statements)(/|$)
 		header_regexp Content-Length ^[1-9][0-9]{6,}$
 	}
 	@upload_oversize {
-		path_regexp upload_oversize ^/(client/investments/[^/]+/payments/bank-transfer|client/payout-destinations/[^/]+/proof|client/identity-check/photos|staff/reconciliation/statements)(/|$)
+		path_regexp upload_oversize ^/(client/investments/[^/]+/payments/bank-transfer|client/payout-destinations/[^/]+/proof|client/identity-check/photos|client/claim-check/photos|staff/reconciliation/statements)(/|$)
 		expression `{header.Content-Length} != "" && int({header.Content-Length}) > 12582912`
 	}
 	request_body @upload {
