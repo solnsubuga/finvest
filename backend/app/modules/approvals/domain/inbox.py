@@ -35,6 +35,7 @@ Kind = Literal[
     "tax_remittance",
     "deposit_reassignment",
     "payout_release",
+    "investment_transfer",
     "account_closure",
     "compliance_case",
     "bank_account_change",
@@ -79,6 +80,8 @@ SOURCES: dict[Kind, Source] = {
     "deposit_reassignment": Source("reconciliation.view", "deposit_reassignments.change"),
     # Releasing a payout held because it is large, decided where it is held: the review queue.
     "payout_release": Source("review_queue.view", "payout_accounts.change"),
+    # Letting through a transfer of an investment held because it is large, in the same queue.
+    "investment_transfer": Source("review_queue.view", "investment_transfers.change"),
     # A client's request to close their account, once one member of staff has prepared it.
     "account_closure": Source("clients.view", "clients.close"),
     # Closing a screening or transaction monitoring case, decided on the Compliance screen.
