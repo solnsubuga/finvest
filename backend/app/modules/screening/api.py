@@ -19,6 +19,7 @@ from app.infrastructure.database import Database
 from app.modules.identity.api import require_confirmed, require_permission
 from app.modules.identity.service import StaffSession
 from app.modules.kyc import service as kyc
+from app.modules.payouts import payouts
 from app.modules.screening import service
 from app.modules.screening.domain.cases import (
     MAX_TEXT,
@@ -178,6 +179,24 @@ class SummaryOut(Contract):
     not_run_last_30_days: int
     pending: int
     last_screened_at: datetime | None
+    payouts_waiting: int
+
+
+class HeldAmountOut(Contract):
+    minor: int
+    currency: Literal["UGX", "USD"]
+
+
+class WaitingPayoutOut(Contract):
+    """A payout whose money is reserved and waiting for its client to be screened."""
+
+    id: PushId
+    client: ClientOut
+    kind: Literal["mobile_money", "bank"]
+    amount: HeldAmountOut
+    created_at: datetime
+    # Where the client stands: why it waits.
+    standing: StandingOut | None
 
 
 class ClientScreeningOut(Contract):
@@ -275,6 +294,7 @@ def create_router(screening_provider: str) -> APIRouter:
         """What is waiting, and whether screening is running."""
         async with database.actor_transaction(staff.actor) as session:
             found = await service.summary(session, clock.now())
+            waiting = len(await payouts.waiting_for_screening(session, limit=200))
         return SummaryOut(
             screening_on=screening_provider != "none",
             provider=screening_provider,
@@ -287,7 +307,32 @@ def create_router(screening_provider: str) -> APIRouter:
             not_run_last_30_days=found.not_run_recently,
             pending=found.pending,
             last_screened_at=found.last_screened_at,
+            payouts_waiting=waiting,
         )
+
+    @router.get("/payouts")
+    async def waiting_payouts(staff: Viewers, database: Db) -> list[WaitingPayoutOut]:
+        """Payouts waiting for their client to be screened, oldest first, at most 200. They move
+        on by themselves once the client is screened clear; staff may decline one from the
+        review queue's decline route."""
+        async with database.actor_transaction(staff.actor) as session:
+            waiting = await payouts.waiting_for_screening(session, limit=200)
+            clients = [payout.client_id for payout in waiting]
+            identities = await kyc.identities(session, clients)
+            standings = await service.standings(session, clients)
+        return [
+            WaitingPayoutOut(
+                id=payout.id,
+                client=_client(payout.client_id, identities),
+                kind=payout.kind.value,
+                amount=HeldAmountOut(
+                    minor=payout.amount.minor, currency=payout.amount.currency.value
+                ),
+                created_at=payout.created_at,
+                standing=_standing(standings.get(payout.client_id)),
+            )
+            for payout in waiting
+        ]
 
     @router.get("/cases")
     async def list_cases(

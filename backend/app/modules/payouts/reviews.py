@@ -279,7 +279,9 @@ async def _move(
     clock: Clock,
 ) -> PayoutView:
     payout = await payouts.get_payout(session, payout_id)
-    if payout.status is not PayoutStatus.HELD:
+    # A payout waiting for screening may be declined too, never released by a person.
+    declinable = event is PayoutEvent.REVIEW_DECLINED and payout.status is PayoutStatus.SCREENING
+    if payout.status is not PayoutStatus.HELD and not declinable:
         raise ReviewRefused("payout_not_held")
     try:
         return await payouts.apply_event(

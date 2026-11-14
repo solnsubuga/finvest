@@ -22,9 +22,10 @@ from sqlalchemy import CursorResult, Row, text
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.infrastructure.jobs import JobRequest, enqueue
+from app.infrastructure.jobs import JobRequest, enqueue, publish
 from app.modules.audit import service as audit
 from app.modules.audit.domain.events import AuditActor, AuditEvent
+from app.modules.payouts.events import RELEASE_SCREENED
 from app.modules.screening.domain.cases import (
     MAX_TEXT,
     SETTLES_ENTITY,
@@ -40,6 +41,7 @@ from app.modules.screening.domain.provider import Match, MatchCategory, Screenin
 from app.modules.screening.domain.standing import (
     GIVE_UP_AFTER,
     RESCREEN_EVERY,
+    Clearance,
     LastRun,
     Outcome,
     Reason,
@@ -47,12 +49,17 @@ from app.modules.screening.domain.standing import (
     standing,
     what_was_found,
 )
+from app.modules.screening.settings import ScreeningSettings
 from app.shared.actors import Actor
 from app.shared.clock import Clock
 from app.shared.errors import ApplicationError, FieldProblem
 from app.shared.push_ids import push_id
 
 SCREEN_KIND = "screening.screen_client"
+# Published whenever where a client stands may have changed: a screen finished, or a case
+# closed. Payouts waiting for the client's screen are released from it.
+STANDING_CHANGED = "screening.standing_changed"
+STANDING_CONSUMERS = (RELEASE_SCREENED,)
 RESCREEN_KIND = "screening.rescreen_due"
 SCREEN_ATTEMPTS = 8
 RESOURCE = "compliance_case"
@@ -431,6 +438,7 @@ async def record_result(
         )
         logger.info("screening_case_opened", run_id=run_id, case_id=case_id)
     logger.info("screening_finished", run_id=run_id, status=found.status.value)
+    await _standing_changed(session, row.client_id, f"run:{run_id}", now)
     return await _run(session, run_id)
 
 
@@ -464,7 +472,9 @@ async def record_failure(
     if finished.rowcount != 1:
         return None
     logger.info("screening_finished", run_id=run_id, status=status.value, error_code=failure_code)
-    return await _run(session, run_id)
+    run = await _run(session, run_id)
+    await _standing_changed(session, run.client_id, f"run:{run_id}", now)
+    return run
 
 
 async def give_up_on_stale(session: AsyncSession, now: datetime, *, limit: int = 500) -> int:
@@ -542,6 +552,36 @@ async def standings(
 async def latest_outcome(session: AsyncSession, client_id: str) -> ScreeningStanding | None:
     """Where the client stands with screening. None if they were never screened."""
     return (await standings(session, [client_id])).get(client_id)
+
+
+async def payout_clearance(session: AsyncSession, client_id: str, now: datetime) -> Clearance:
+    """Whether money may leave for the client now. Migration 0181 holds the rule.
+
+    With no screening provider set up there is no screen to wait for, so a client with no
+    recent screen is clear. An open case or a confirmed sanctions match still holds them.
+    """
+    answer = Clearance(
+        str(
+            await session.scalar(
+                text("SELECT public.screening_payout_clearance(:client_id, :now)"),
+                {"client_id": client_id, "now": now},
+            )
+        )
+    )
+    if answer is Clearance.SCREEN and not ScreeningSettings().screening_on:
+        return Clearance.CLEAR
+    return answer
+
+
+async def _standing_changed(session: AsyncSession, client_id: str, key: str, now: datetime) -> None:
+    await publish(
+        session,
+        topic=STANDING_CHANGED,
+        idempotency_key=key,
+        payload={"client_id": client_id},
+        consumers=STANDING_CONSUMERS,
+        now=now,
+    )
 
 
 # Cases.
@@ -801,6 +841,8 @@ async def decide(
         clock,
         outcome=proposal.outcome,
     )
+    if decision is Decision.APPROVED:
+        await _standing_changed(session, client_id, f"case:{case_id}", now)
     return await _proposal_by_id(session, proposal_id)
 
 

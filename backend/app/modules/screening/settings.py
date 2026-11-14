@@ -27,5 +27,9 @@ class ScreeningSettings(BaseSettings):
             raise ValueError("The development stub screens nobody and may not run in production")
         return self
 
+    @property
+    def screening_on(self) -> bool:
+        return self.screening_provider != "none"
+
     def provider(self) -> ScreeningProvider | None:
         return DevelopmentStubProvider() if self.screening_provider == "development-stub" else None

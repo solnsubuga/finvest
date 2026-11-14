@@ -86,6 +86,7 @@ The money leaves the client's holding when the payout is created and sits in a "
 
 | Status | Meaning |
 | --- | --- |
+| Screening | Waiting for the client to be screened against sanctions and politically exposed person lists. Moves on by itself once they are clear; staff may decline it. The client sees it as processing. See [screening.md](screening.md#before-a-payout). |
 | Held | Waiting for staff to approve a large withdrawal |
 | Queued | Ready for the worker. Nothing has reached the provider. |
 | Sent | The provider accepted it and has not said how it ended |
@@ -149,7 +150,7 @@ Settle is refused by the ledger if the pot does not hold the money, because an a
 
 | Rule | How |
 | --- | --- |
-| Status follows the table above | A trigger repeats the transition table per actor: a client may only cancel a held payout, staff may only approve or decline one, the worker reports the provider |
+| Status follows the table above | A trigger repeats the transition table per actor: a client may only cancel a held payout, staff may only approve or decline one (or decline one waiting for screening), the worker reports the provider and releases a payout from screening only for a client who is clear (migration 0181) |
 | A payout that may have left is never queued again | No actor has a step from sent or uncertain back to queued |
 | A finished payout never changes, and none is deleted | The same trigger, for every role including the table owner |
 | The terms never change | Client, destination, amount, currency, source and request key are fixed at creation |
