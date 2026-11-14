@@ -60,6 +60,12 @@ Migration `0340_platform_settings`:
 | Nothing deleted | No role may delete. A downgrade refuses to drop the table while it holds rows. |
 | Proposals are for staff | Clients and the worker read approved rows only, which is what they need to apply a setting. |
 
+## Where each setting applies
+
+| Setting | Read by | Effect |
+| --- | --- | --- |
+| `payment_channels` | payments `request_deposit` and the bank transfer details route; payouts `create_payout` | A paused pay in refuses a new payment with 503 `channel_paused`. A paused payout refuses a client's new withdrawal with `channel_paused`; a maturity payout the system asks for is still made |
+
 ## For other modules
 
 Read a setting through `platform_settings.service`: `payment_channels`, `public_holidays`, `bank_payout_cutoff`, `maturity_reminders`, `staff_idle_minutes`, `office_networks` and `statement_layouts`, each taking the session and the time now. Never read the table.

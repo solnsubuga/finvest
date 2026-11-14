@@ -35,6 +35,8 @@ from app.modules.payouts.domain.limits import (
 from app.modules.payouts.domain.payouts import FINAL, LedgerEffect, PayoutEvent, PayoutStatus
 from app.modules.payouts.domain.posting import PayoutTerms
 from app.modules.payouts.domain.sending import HELD_UP_AFTER, SEND_ATTEMPTS
+from app.modules.platform_settings import service as platform_settings
+from app.modules.platform_settings.domain.catalogue import PAYOUT_BY_NETWORK
 from app.modules.screening import contract as screening
 from app.shared.actors import SYSTEM, Actor
 from app.shared.business_day import business_date
@@ -245,6 +247,11 @@ async def create_payout(
     blocked = why_not_payable(destination.state, now, restricted_since=restricted_since)
     if blocked is not None:
         raise PayoutRefused(blocked.value)
+    if actor.kind == "client" and not await _channel_open(session, destination, now):
+        # Paused on Settings, during an outage. The client asks again once it reopens. A payout
+        # the system asks for, when an investment matures, is still made and waits in the
+        # queue or with staff as it always does.
+        raise PayoutRefused("channel_paused")
 
     limits = await current_limits(session, today)
     already = (
@@ -312,6 +319,17 @@ async def create_payout(
     await screening.watch_payout(session, payout_id, now)
     await _audit(session, actor, "payouts.payout_requested", payout_id, clock)
     return await get_payout(session, payout_id)
+
+
+async def _channel_open(
+    session: AsyncSession, destination: destinations.DestinationView, now: datetime
+) -> bool:
+    channels = await platform_settings.payment_channels(session, now)
+    if destination.kind is DestinationKind.BANK:
+        return channels.is_open("bank_payout")
+    return destination.network is not None and channels.is_open(
+        PAYOUT_BY_NETWORK[destination.network]
+    )
 
 
 async def apply_event(

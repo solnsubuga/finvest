@@ -47,6 +47,8 @@ from app.modules.payments.domain.deposits import (
 )
 from app.modules.payments.domain.outcomes import StatusReading
 from app.modules.payments.domain.provider import ProviderNotice
+from app.modules.platform_settings import service as platform_settings
+from app.modules.platform_settings.domain.catalogue import PAY_IN_BY_NETWORK
 from app.modules.screening.events import MONITOR_DEPOSIT
 from app.shared.actors import Actor
 from app.shared.business_day import business_date
@@ -226,6 +228,13 @@ async def request_deposit(
     now = clock.now()
 
     async def command() -> Receipt:
+        # Only a new payment is refused while its network is paused on Settings. A repeat of a
+        # request already made returns the deposit it made, as it would have.
+        channels = await platform_settings.payment_channels(session, now)
+        if not channels.is_open(PAY_IN_BY_NETWORK[request.network.value]):
+            raise ApplicationError(
+                "unavailable", fields=[FieldProblem(field_path=["network"], code="channel_paused")]
+            )
         deposit_id = push_id()
         await insert_deposit(
             session,
