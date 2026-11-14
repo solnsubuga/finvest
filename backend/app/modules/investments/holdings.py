@@ -145,6 +145,9 @@ class ClientInvestment:
     interest_so_far: Money
     # What was added by the latest daily run, if that run was for today.
     interest_today: Money
+    # What its next day of interest adds, after tax: the "a day" figure on Home. Zero once it
+    # stops earning: not started, matured, withdrawn, or asked to be withdrawn.
+    earning_per_day: Money
     value: Money
     # Interest and total at maturity. None for an open term.
     at_maturity_returns: ClientReturns | None
@@ -659,6 +662,12 @@ def _client_view(investment: Investment, today: date) -> ClientInvestment:
         interest_so_far=investment.accrued_net,
         interest_today=day_accrual(terms, earned).net
         if added_today
+        else Money.zero(terms.principal.currency),
+        earning_per_day=day_accrual(terms, earned + 1).net
+        if investment.status is InvestmentStatus.ACTIVE
+        and investment.start_date is not None
+        and investment.withdrawal_requested_at is None
+        and (investment.term_days is None or earned < investment.term_days)
         else Money.zero(terms.principal.currency),
         value=terms.principal + investment.accrued_net,
         at_maturity_returns=None

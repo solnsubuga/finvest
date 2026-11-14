@@ -1060,6 +1060,49 @@ export const PlanList = z.object({
 });
 export type PlanList = z.infer<typeof PlanList>;
 
+export const PortfolioMaturityView = z.object({
+  at_maturity: AtMaturity.nullable(),
+  days_earned: z.number().int(),
+  days_left: z.number().int(),
+  investment_id: z.string(),
+  on: z.string(),
+  product_name: z.string(),
+  term_days: z.number().int(),
+});
+export type PortfolioMaturityView = z.infer<typeof PortfolioMaturityView>;
+
+export const PortfolioPartView = z.object({
+  count: z.number().int(),
+  worth_minor: z.number().int(),
+});
+export type PortfolioPartView = z.infer<typeof PortfolioPartView>;
+
+export const PortfolioProductView = z.object({
+  count: z.number().int(),
+  percent: z.number().int(),
+  product_code: z.string(),
+  product_name: z.string(),
+  worth_minor: z.number().int(),
+});
+export type PortfolioProductView = z.infer<typeof PortfolioProductView>;
+
+export const PortfolioView = z.object({
+  active_count: z.number().int(),
+  awaiting_payment_count: z.number().int(),
+  currency: z.string(),
+  earning_per_day_minor: z.number().int(),
+  in_goals: PortfolioPartView,
+  interest_so_far_minor: z.number().int(),
+  interest_today_minor: z.number().int(),
+  invested_minor: z.number().int(),
+  next_maturity: PortfolioMaturityView.nullable(),
+  open_goals: z.number().int(),
+  outside_goals: PortfolioPartView,
+  products: z.array(PortfolioProductView),
+  worth_minor: z.number().int(),
+});
+export type PortfolioView = z.infer<typeof PortfolioView>;
+
 export const PreferenceChange = z.object({
   category: z.enum(["money", "investments", "earnings", "account", "security", "support", "news"]),
   channels: z.array(z.enum(["push", "sms", "email"])),
@@ -2637,6 +2680,19 @@ export const operations = {
     idempotent: false,
     status: 200,
     response: PinChecked,
+  },
+  "GET /client/portfolio": {
+    method: "GET",
+    path: "/client/portfolio",
+    params: z.object({}),
+    query: z.object({
+    currency: Currency.optional(),
+  }),
+    body: null,
+    bodyKind: null,
+    idempotent: false,
+    status: 200,
+    response: PortfolioView,
   },
   "GET /client/products": {
     method: "GET",

@@ -11144,6 +11144,195 @@
         "title": "PlanStatus",
         "type": "string"
       },
+      "PortfolioMaturityView": {
+        "additionalProperties": false,
+        "properties": {
+          "at_maturity": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/AtMaturity"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "days_earned": {
+            "title": "Days Earned",
+            "type": "integer"
+          },
+          "days_left": {
+            "title": "Days Left",
+            "type": "integer"
+          },
+          "investment_id": {
+            "maxLength": 20,
+            "minLength": 20,
+            "pattern": "^[-0-9A-Z_a-z]{20}$",
+            "title": "Investment Id",
+            "type": "string"
+          },
+          "on": {
+            "format": "date",
+            "title": "On",
+            "type": "string"
+          },
+          "product_name": {
+            "title": "Product Name",
+            "type": "string"
+          },
+          "term_days": {
+            "title": "Term Days",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "investment_id",
+          "product_name",
+          "on",
+          "at_maturity",
+          "term_days",
+          "days_earned",
+          "days_left"
+        ],
+        "title": "PortfolioMaturityView",
+        "type": "object"
+      },
+      "PortfolioPartView": {
+        "additionalProperties": false,
+        "properties": {
+          "count": {
+            "title": "Count",
+            "type": "integer"
+          },
+          "worth_minor": {
+            "title": "Worth Minor",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "worth_minor",
+          "count"
+        ],
+        "title": "PortfolioPartView",
+        "type": "object"
+      },
+      "PortfolioProductView": {
+        "additionalProperties": false,
+        "properties": {
+          "count": {
+            "title": "Count",
+            "type": "integer"
+          },
+          "percent": {
+            "title": "Percent",
+            "type": "integer"
+          },
+          "product_code": {
+            "title": "Product Code",
+            "type": "string"
+          },
+          "product_name": {
+            "title": "Product Name",
+            "type": "string"
+          },
+          "worth_minor": {
+            "title": "Worth Minor",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "product_code",
+          "product_name",
+          "worth_minor",
+          "count",
+          "percent"
+        ],
+        "title": "PortfolioProductView",
+        "type": "object"
+      },
+      "PortfolioView": {
+        "additionalProperties": false,
+        "description": "The totals on Home and Portfolio. Amounts are integers in the smallest unit of\n`currency`, all after tax. Only running investments count.",
+        "properties": {
+          "active_count": {
+            "title": "Active Count",
+            "type": "integer"
+          },
+          "awaiting_payment_count": {
+            "title": "Awaiting Payment Count",
+            "type": "integer"
+          },
+          "currency": {
+            "title": "Currency",
+            "type": "string"
+          },
+          "earning_per_day_minor": {
+            "title": "Earning Per Day Minor",
+            "type": "integer"
+          },
+          "in_goals": {
+            "$ref": "#/components/schemas/PortfolioPartView"
+          },
+          "interest_so_far_minor": {
+            "title": "Interest So Far Minor",
+            "type": "integer"
+          },
+          "interest_today_minor": {
+            "title": "Interest Today Minor",
+            "type": "integer"
+          },
+          "invested_minor": {
+            "title": "Invested Minor",
+            "type": "integer"
+          },
+          "next_maturity": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PortfolioMaturityView"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "open_goals": {
+            "title": "Open Goals",
+            "type": "integer"
+          },
+          "outside_goals": {
+            "$ref": "#/components/schemas/PortfolioPartView"
+          },
+          "products": {
+            "items": {
+              "$ref": "#/components/schemas/PortfolioProductView"
+            },
+            "title": "Products",
+            "type": "array"
+          },
+          "worth_minor": {
+            "title": "Worth Minor",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "currency",
+          "invested_minor",
+          "worth_minor",
+          "interest_so_far_minor",
+          "earning_per_day_minor",
+          "interest_today_minor",
+          "active_count",
+          "awaiting_payment_count",
+          "outside_goals",
+          "in_goals",
+          "open_goals",
+          "products",
+          "next_maturity"
+        ],
+        "title": "PortfolioView",
+        "type": "object"
+      },
       "PotIn": {
         "additionalProperties": false,
         "properties": {
@@ -30923,6 +31112,68 @@
         "summary": "Unlock",
         "tags": [
           "client sign-in"
+        ]
+      }
+    },
+    "/client/portfolio": {
+      "get": {
+        "operationId": "client_portfolio_client_portfolio_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "currency",
+            "required": false,
+            "schema": {
+              "$ref": "#/components/schemas/Currency",
+              "default": "UGX"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PortfolioView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          }
+        },
+        "summary": "Client Portfolio",
+        "tags": [
+          "client insights"
         ]
       }
     },
