@@ -525,7 +525,7 @@ export function createStubInvestingClient(options: StubOptions = {}): InvestingC
       await pause();
       // Like the backend: a known key returns its transfer, and the same key for anything
       // else is refused.
-      const details = JSON.stringify([request.investmentId, request.toAccountNumber, request.amount, request.message]);
+      const details = JSON.stringify([request.investmentId, request.toAccountNumber, request.amount, request.message, request.whole]);
       const known = sendKeys.get(request.idempotencyKey);
       if (known) {
         if (known.request !== details) throw new InvestingError("key_reused");
@@ -539,8 +539,9 @@ export function createStubInvestingClient(options: StubOptions = {}): InvestingC
       if (recipient === "invalid" || recipient === null) throw new InvestingError("no_such_client");
       if (recipient.accountNumber === OWN_ACCOUNT_NUMBER) throw new InvestingError("to_yourself");
       const minimum = entry.product.minimum.minor;
-      const amount = request.amount.minor;
       if (request.amount.currency !== shown.value.currency) throw new InvestingError("invalid");
+      // Everything is the value now, as the backend takes it, whatever the screen loaded.
+      const amount = request.whole ? shown.value.minor : request.amount.minor;
       if (amount < minimum) throw new InvestingError("below_product_minimum");
       if (amount > shown.value.minor) throw new InvestingError("more_than_value");
       const kept = shown.value.minor - amount;
@@ -556,7 +557,7 @@ export function createStubInvestingClient(options: StubOptions = {}): InvestingC
         direction: "sent",
         otherName: recipient.name,
         status: held ? "held" : "done",
-        amount: request.amount,
+        amount: { currency: request.amount.currency, minor: amount },
         whole: kept === 0,
         message: request.message,
         requestedAt: new Date(now()).toISOString(),

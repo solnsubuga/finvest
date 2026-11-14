@@ -243,7 +243,7 @@ describe("demo sending", () => {
   it("sends part of an investment, keeps the rest on the same maturity date, and sends once per key", async () => {
     const api = sample();
     const source = (await api.listInvestments()).find((one) => one.canSend && one.productCode === "TREA-91")!;
-    const request = { investmentId: source.id, toAccountNumber: "1001005170", amount: ugx(1_000_000), message: null, idempotencyKey: "k" };
+    const request = { investmentId: source.id, toAccountNumber: "1001005170", amount: ugx(1_000_000), message: null, whole: false, idempotencyKey: "k" };
     const sent = await api.sendInvestment(request);
     expect(sent).toMatchObject({ status: "done", otherName: "Brian K.", whole: false });
     expect(await api.sendInvestment(request)).toEqual(sent);
@@ -257,10 +257,10 @@ describe("demo sending", () => {
     const clock = { ms: Date.parse("2026-11-13T09:00:00Z") };
     const api = createStubInvestingClient({ delayMs: 0, now: () => clock.ms, transfers: "none", reviewAbove: 1_500_000 });
     const source = (await api.listInvestments()).find((one) => one.canSend && one.productCode === "TREA-91")!;
-    const first = await api.sendInvestment({ investmentId: source.id, toAccountNumber: "1001005170", amount: ugx(1_000_000), message: null, idempotencyKey: "a" });
+    const first = await api.sendInvestment({ investmentId: source.id, toAccountNumber: "1001005170", amount: ugx(1_000_000), message: null, whole: false, idempotencyKey: "a" });
     expect(first.status).toBe("done");
     // 1,000,000 already sent today, so another 1,000,000 is over the limit.
-    const second = await api.sendInvestment({ investmentId: first.keptInvestmentId as string, toAccountNumber: "1003382914", amount: ugx(1_000_000), message: null, idempotencyKey: "b" });
+    const second = await api.sendInvestment({ investmentId: first.keptInvestmentId as string, toAccountNumber: "1003382914", amount: ugx(1_000_000), message: null, whole: false, idempotencyKey: "b" });
     expect(second.status).toBe("held");
     expect((await api.getInvestment(first.keptInvestmentId as string)).canSend).toBe(false);
     expect((await api.cancelTransfer(second.id)).status).toBe("cancelled");
@@ -268,11 +268,23 @@ describe("demo sending", () => {
     expect((await api.getInvestment(first.keptInvestmentId as string)).canSend).toBe(true);
   });
 
+  it("sends everything at its value when asked, even if interest was added since the screen loaded", async () => {
+    const clock = { ms: Date.parse("2026-11-13T09:00:00Z") };
+    const api = createStubInvestingClient({ delayMs: 0, now: () => clock.ms, transfers: "none" });
+    const source = (await api.listInvestments()).find((one) => one.canSend && one.productCode === "TREA-91")!;
+    // A day passes: the value grows, but the screen still holds yesterday's.
+    clock.ms += 24 * 60 * 60 * 1000;
+    const now = await api.getInvestment(source.id);
+    expect(now.value.minor).toBeGreaterThan(source.value.minor);
+    const sent = await api.sendInvestment({ investmentId: source.id, toAccountNumber: "1001005170", amount: source.value, message: null, whole: true, idempotencyKey: "w" });
+    expect(sent).toMatchObject({ whole: true, amount: now.value, keptInvestmentId: null });
+  });
+
   it("refuses a remainder below the minimum and more than the value", async () => {
     const api = sample();
     const source = (await api.listInvestments()).find((one) => one.canSend && one.productCode === "TREA-91")!;
     const send = (minor: number) =>
-      api.sendInvestment({ investmentId: source.id, toAccountNumber: "1001005170", amount: ugx(minor), message: null, idempotencyKey: `x${minor}` });
+      api.sendInvestment({ investmentId: source.id, toAccountNumber: "1001005170", amount: ugx(minor), message: null, whole: false, idempotencyKey: `x${minor}` });
     await expect(send(source.value.minor - 50_000)).rejects.toEqual(new InvestingError("remainder_below_minimum"));
     await expect(send(source.value.minor + 1)).rejects.toEqual(new InvestingError("more_than_value"));
   });

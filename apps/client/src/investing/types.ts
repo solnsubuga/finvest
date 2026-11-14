@@ -122,6 +122,11 @@ export type SendInvestment = {
   toAccountNumber: string;
   amount: Amount;
   message: string | null;
+  /**
+   * Send everything. The server sends the value when it saves the request, so interest added
+   * after the screen loaded `amount` is included rather than refused.
+   */
+  whole: boolean;
   /** Made once when the screen opens and sent with every try, so a double tap sends once. */
   idempotencyKey: string;
 };
