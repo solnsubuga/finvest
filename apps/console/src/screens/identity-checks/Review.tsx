@@ -10,6 +10,8 @@ import {
   flagLabel,
   formatAccountNumber,
   formatDay,
+  PHONE_NAME_LABEL,
+  phoneNameVerdict,
   PHOTO_NAMES,
   photoLabel,
   STATUS_LABELS,
@@ -159,22 +161,27 @@ export function Review({ check, busy, error, onDecide, onShowNumber, canDecide =
           </dl>
         </Section>
         <Section title="Automatic checks">
-          {check.automaticChecks.length === 0 ? (
+          {check.automaticChecks.length === 0 && check.phoneName === null ? (
             <p className="m-0 py-2.5 text-md leading-normal text-muted">
               No automatic checks ran on this client. Compare the photos and the details yourself.
             </p>
           ) : (
             <ul className="m-0 list-none p-0">
               {check.automaticChecks.map((item) => (
-                <li key={item.check} className="flex items-center gap-2.5 border-b border-divider py-2.5 text-md">
-                  <span
-                    aria-hidden="true"
-                    className={cn("size-2.5 shrink-0 rounded-pill", item.verdict === "pass" ? "bg-black" : "bg-warning")}
-                  />
-                  <span className="grow">{CHECK_LABELS[item.check]}</span>
-                  <span className="font-bold">{verdictLabel(item.check, item.verdict, item.score)}</span>
-                </li>
+                <CheckRow
+                  key={item.check}
+                  label={CHECK_LABELS[item.check]}
+                  passed={item.verdict === "pass"}
+                  value={verdictLabel(item.check, item.verdict, item.score)}
+                />
               ))}
+              {check.phoneName ? (
+                <CheckRow
+                  label={PHONE_NAME_LABEL}
+                  passed={check.phoneName.status === "matches"}
+                  value={phoneNameVerdict(check.phoneName)}
+                />
+              ) : null}
             </ul>
           )}
         </Section>
@@ -190,6 +197,16 @@ export function Review({ check, busy, error, onDecide, onShowNumber, canDecide =
         </p>
       ) : null}
     </article>
+  );
+}
+
+function CheckRow({ label, passed, value }: { label: string; passed: boolean; value: string }) {
+  return (
+    <li className="flex items-center gap-2.5 border-b border-divider py-2.5 text-md">
+      <span aria-hidden="true" className={cn("size-2.5 shrink-0 rounded-pill", passed ? "bg-black" : "bg-warning")} />
+      <span className="grow">{label}</span>
+      <span className="text-right font-bold">{value}</span>
+    </li>
   );
 }
 

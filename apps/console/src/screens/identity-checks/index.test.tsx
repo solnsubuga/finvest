@@ -69,6 +69,19 @@ describe("identity checks screen", () => {
     expect(api.showDocumentNumber).not.toHaveBeenCalled();
   });
 
+  it("shows the name the network holds for the client's phone beside the other checks", async () => {
+    const { user } = renderScreen();
+    const first = await openCheck("David Mugisha");
+    const matches = within(first).getByText("Phone registered to this name").closest("li");
+    expect(matches).toHaveTextContent("Matches");
+    expect(matches).not.toHaveTextContent("David Mugisha");
+    await user.click(screen.getByRole("button", { name: /Grace Namara/ }));
+    const third = await openCheck("Grace Namara");
+    expect(within(third).getByText("Phone registered to this name").closest("li")).toHaveTextContent(
+      "Different name: Peter Okot",
+    );
+  });
+
   it("opens another check from the queue and says when no automatic checks ran", async () => {
     const { user, router } = renderScreen();
     await openCheck("David Mugisha");
@@ -234,6 +247,7 @@ describe("identity checks screen", () => {
       ["provider_not_received", "Provider never received the check"],
       ["provider_refused", "Provider refused the check"],
       ["provider_no_answer", "Provider did not answer"],
+      ["phone_name_not_confirmed", "Phone name not confirmed"],
     ] as const) {
       const api: KycApi = {
         ...stub,
