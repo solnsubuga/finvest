@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import type { ClientCard, Directory } from "@/directory/api.ts";
 
 export type Load<T> = { state: "loading" } | { state: "failed"; message: string } | { state: "ready"; value: T };
 
@@ -43,4 +44,25 @@ export function useCommandKeys(newKey: () => string) {
       pending.current = null;
     },
   };
+}
+
+/**
+ * The clients behind these IDs, looked up once each through the shared directory. A client not
+ * found yet, or not found at all, is missing from the map, and the screen shows the ID.
+ */
+export function useClients(directory: Directory, ids: readonly string[]): ReadonlyMap<string, ClientCard> {
+  const [found, setFound] = useState<ReadonlyMap<string, ClientCard>>(new Map());
+  const wanted = [...new Set(ids)].sort().join(",");
+  useEffect(() => {
+    let current = true;
+    const list = wanted ? wanted.split(",") : [];
+    void Promise.all(list.map((id) => directory.client(id).catch(() => null))).then((cards) => {
+      if (!current) return;
+      setFound(new Map(cards.flatMap((card) => (card ? [[card.clientId, card] as const] : []))));
+    });
+    return () => {
+      current = false;
+    };
+  }, [directory, wanted]);
+  return found;
 }

@@ -2,16 +2,18 @@ import { useCallback, useId, useState } from "react";
 import { Button } from "@/components/ui/button.tsx";
 import { Input } from "@/components/ui/input.tsx";
 import { Label } from "@/components/ui/label.tsx";
+import { emptyDirectory, type ClientCard, type Directory } from "@/directory/api.ts";
 import { cn } from "@/lib.ts";
 import { formatDay, formatExact, formatMoment } from "@/screens/reconciliation/format.ts";
 import { Decide, DoneNote, Empty, ErrorNote, Failure, type Decision } from "../Decide.tsx";
-import { useCommandKeys, useLoad } from "../load.ts";
+import { useClients, useCommandKeys, useLoad } from "../load.ts";
 import {
   BankPayoutsError,
   bankPayoutsErrorMessage,
   type BankPayout,
   type BankPayoutsApi,
   type Batch,
+  type BatchItem,
   type Currency,
   type Outcome,
   type SentBankPayout,
@@ -27,6 +29,22 @@ interface BankPayoutsProps {
   newKey?: () => string;
   /** Hands the browser the transfer file. */
   save?: (file: Blob, filename: string) => void;
+  /** Names the clients behind the IDs. */
+  directory?: Directory;
+}
+
+type Clients = ReadonlyMap<string, ClientCard>;
+
+/** The client's name and Finvest account number, or the ID until the directory answers. */
+function Client({ id, clients }: { id: string; clients: Clients }) {
+  const card = clients.get(id);
+  if (!card) return <span className="font-mono text-xs">{id}</span>;
+  return (
+    <span className="flex flex-col">
+      <span className="font-semibold">{card.name}</span>
+      {card.accountNumber ? <span className="text-xs text-muted tabular-nums">{card.accountNumber}</span> : null}
+    </span>
+  );
 }
 
 type Area = "waiting" | "batches" | "sent";
@@ -55,7 +73,7 @@ export function saveBlob(file: Blob, filename: string) {
 }
 
 /** Bank payouts: batches two people send, the file for the bank's portal, and settling each one. */
-export function BankPayouts({ api, me, canChange, newKey = () => crypto.randomUUID(), save = saveBlob }: BankPayoutsProps) {
+export function BankPayouts({ api, me, canChange, newKey = () => crypto.randomUUID(), save = saveBlob, directory = emptyDirectory }: BankPayoutsProps) {
   const [currency, setCurrency] = useState<Currency>("UGX");
   const [waiting, reloadWaiting] = useLoad(
     useCallback(() => api.listWaiting(currency), [api, currency]),
@@ -66,6 +84,12 @@ export function BankPayouts({ api, me, canChange, newKey = () => crypto.randomUU
   const [busy, setBusy] = useState(false);
   const [note, setNote] = useState<{ area: Area; id: string; kind: "done" | "failed"; message: string } | null>(null);
   const keys = useCommandKeys(newKey);
+
+  const clients = useClients(directory, [
+    ...(waiting.state === "ready" ? waiting.value.map((each) => each.clientId) : []),
+    ...(sent.state === "ready" ? sent.value.map((each) => each.payout.clientId) : []),
+    ...(batches.state === "ready" ? batches.value.flatMap((each) => (each.items ?? []).map((item) => item.clientId)) : []),
+  ]);
 
   const reloadAll = () => Promise.all([reloadWaiting(), reloadBatches(), reloadSent()]);
 
@@ -146,6 +170,7 @@ export function BankPayouts({ api, me, canChange, newKey = () => crypto.randomUU
             key={currency}
             currency={currency}
             items={waiting.value}
+            clients={clients}
             canChange={canChange}
             busy={busy}
             note={noteFor("waiting", currency)}
@@ -179,6 +204,7 @@ export function BankPayouts({ api, me, canChange, newKey = () => crypto.randomUU
               <li key={batch.id}>
                 <BatchCard
                   batch={batch}
+                  clients={clients}
                   me={me}
                   canChange={canChange}
                   busy={busy}
@@ -222,6 +248,7 @@ export function BankPayouts({ api, me, canChange, newKey = () => crypto.randomUU
         ) : (
           <SentList
             items={sent.value}
+            clients={clients}
             me={me}
             canChange={canChange}
             busy={busy}
@@ -284,13 +311,14 @@ function Notice({ note }: { note: Note }) {
 interface PrepareProps {
   currency: Currency;
   items: readonly BankPayout[];
+  clients: Clients;
   canChange: boolean;
   busy: boolean;
   note: Note;
   onPrepare: (ids: string[], reason: string) => void;
 }
 
-function Prepare({ currency, items, canChange, busy, note, onPrepare }: PrepareProps) {
+function Prepare({ currency, items, clients, canChange, busy, note, onPrepare }: PrepareProps) {
   const id = useId();
   const [chosen, setChosen] = useState<ReadonlySet<string>>(new Set());
   const [reason, setReason] = useState("");
@@ -324,7 +352,7 @@ function Prepare({ currency, items, canChange, busy, note, onPrepare }: PrepareP
                   />
                 </th>
               ) : null}
-              {["Amount", "Asked for", "Business day", "Payout", "Client"].map((heading) => (
+              {["Amount", "Client", "Asked for", "Business day", "Payout"].map((heading) => (
                 <th key={heading} scope="col" className="px-3 py-3.5 font-bold">
                   {heading}
                 </th>
@@ -348,10 +376,12 @@ function Prepare({ currency, items, canChange, busy, note, onPrepare }: PrepareP
                 <th scope="row" className="px-3 py-3 text-left font-bold tabular-nums">
                   {formatExact(item.amount)}
                 </th>
+                <td className="px-3 py-3">
+                  <Client id={item.clientId} clients={clients} />
+                </td>
                 <td className="px-3 py-3">{formatMoment(item.createdAt)}</td>
                 <td className="px-3 py-3">{formatDay(item.businessDate)}</td>
                 <td className="px-3 py-3 font-mono text-xs">{item.id}</td>
-                <td className="px-3 py-3 font-mono text-xs">{item.clientId}</td>
               </tr>
             ))}
           </tbody>
@@ -397,6 +427,7 @@ function Prepare({ currency, items, canChange, busy, note, onPrepare }: PrepareP
 
 interface BatchCardProps {
   batch: Batch;
+  clients: Clients;
   me: string;
   canChange: boolean;
   busy: boolean;
@@ -405,11 +436,11 @@ interface BatchCardProps {
   onDecide: (decision: Decision, reason: string) => void;
 }
 
-function BatchCard({ batch, me, canChange, busy, note, onDownload, onDecide }: BatchCardProps) {
+function BatchCard({ batch, clients, me, canChange, busy, note, onDownload, onDecide }: BatchCardProps) {
   const mine = batch.preparedBy === me;
   const count = batch.payoutIds.length;
   return (
-    <article aria-label={`Batch of ${formatExact(batch.total)}`} className="flex max-w-[760px] flex-col gap-3 rounded-xl border border-border bg-surface p-5">
+    <article aria-label={`Batch of ${formatExact(batch.total)}`} className="flex max-w-[1040px] flex-col gap-3 rounded-xl border border-border bg-surface p-5">
       <header className="flex flex-wrap items-start justify-between gap-2">
         <div className="flex flex-col gap-0.5">
           <h4 className="m-0 text-xl font-extrabold tabular-nums">{formatExact(batch.total)}</h4>
@@ -430,6 +461,7 @@ function BatchCard({ batch, me, canChange, busy, note, onDownload, onDecide }: B
       <p className="m-0 text-xs text-muted">
         Batch <span className="font-mono">{batch.id}</span>
       </p>
+      {batch.items ? <BatchItems items={batch.items} clients={clients} /> : null}
       {batch.status === "approved" ? (
         <div className="flex flex-col gap-2">
           {batch.decidedAt ? (
@@ -454,7 +486,7 @@ function BatchCard({ batch, me, canChange, busy, note, onDownload, onDecide }: B
           mine={mine}
           busy={busy}
           error={note?.kind === "failed" ? note.message : null}
-          consequence="Check each payout against the client's approved account. Approving counts every payout in the batch as sent and makes the transfer file."
+          consequence="Check each payout above: the amount, and that the account holder is the client. Approving counts every payout in the batch as sent and makes the transfer file."
           onDecide={onDecide}
         />
       ) : null}
@@ -464,6 +496,7 @@ function BatchCard({ batch, me, canChange, busy, note, onDownload, onDecide }: B
 
 interface SentListProps {
   items: readonly SentBankPayout[];
+  clients: Clients;
   me: string;
   canChange: boolean;
   busy: boolean;
@@ -472,7 +505,7 @@ interface SentListProps {
   onDecide: (item: SentBankPayout, decision: Decision, reason: string) => void;
 }
 
-function SentList({ items, me, canChange, busy, noteFor, onPropose, onDecide }: SentListProps) {
+function SentList({ items, clients, me, canChange, busy, noteFor, onPropose, onDecide }: SentListProps) {
   const [selected, setSelected] = useState<string | null>(null);
   const current = items.find((item) => item.payout.id === selected) ?? items[0] ?? null;
   return (
@@ -490,6 +523,7 @@ function SentList({ items, me, canChange, busy, noteFor, onPropose, onDecide }: 
               )}
             >
               <span className="text-md font-bold tabular-nums">{formatExact(item.payout.amount)}</span>
+              <span className="text-xs">{clients.get(item.payout.clientId)?.name ?? item.payout.clientId}</span>
               <span className="text-xs text-muted">Sent {formatMoment(item.sentAt)}</span>
               <span className={cn("mt-1 text-xs font-bold", item.settlement ? "text-muted" : "text-warning-text")}>
                 {item.settlement ? (item.settlement.proposedBy === me ? "Waiting for a second person" : "Needs a second person") : "Needs a proposal"}
@@ -503,6 +537,7 @@ function SentList({ items, me, canChange, busy, noteFor, onPropose, onDecide }: 
           <SettleBank
             key={`${current.payout.id}:${current.settlement?.id ?? "open"}`}
             item={current}
+            clients={clients}
             me={me}
             canChange={canChange}
             busy={busy}
@@ -531,6 +566,7 @@ const OUTCOMES: Record<Outcome, { label: string; evidence: string; hint: string 
 
 interface SettleBankProps {
   item: SentBankPayout;
+  clients: Clients;
   me: string;
   canChange: boolean;
   busy: boolean;
@@ -539,7 +575,7 @@ interface SettleBankProps {
   onDecide: (decision: Decision, reason: string) => void;
 }
 
-function SettleBank({ item, me, canChange, busy, note, onPropose, onDecide }: SettleBankProps) {
+function SettleBank({ item, clients, me, canChange, busy, note, onPropose, onDecide }: SettleBankProps) {
   const id = useId();
   const [outcome, setOutcome] = useState<Outcome | null>(null);
   const [evidence, setEvidence] = useState("");
@@ -552,7 +588,9 @@ function SettleBank({ item, me, canChange, busy, note, onPropose, onDecide }: Se
     <article aria-label={`Bank payout of ${formatExact(item.payout.amount)}`} className="flex flex-col gap-4 rounded-xl border border-border bg-surface p-5">
       <header className="flex flex-col gap-1">
         <h4 className="m-0 text-2xl font-extrabold tabular-nums">{formatExact(item.payout.amount)}</h4>
-        <p className="m-0 text-md text-muted">Sent {formatMoment(item.sentAt)} in batch {item.batchId}.</p>
+        <p className="m-0 text-md text-muted">
+          {clients.get(item.payout.clientId)?.name ?? "A client"}, sent {formatMoment(item.sentAt)} in batch {item.batchId}.
+        </p>
         <p className="m-0 text-xs text-muted">
           Payout <span className="font-mono">{item.payout.id}</span>, client <span className="font-mono">{item.payout.clientId}</span>
         </p>
@@ -641,5 +679,40 @@ function SettleBank({ item, me, canChange, busy, note, onPropose, onDecide }: Se
         </form>
       )}
     </article>
+  );
+}
+
+function BatchItems({ items, clients }: { items: readonly BatchItem[]; clients: Clients }) {
+  return (
+    <div className="overflow-x-auto rounded-lg border border-border" tabIndex={0} role="region" aria-label="Payouts in this batch">
+      <table className="w-full min-w-[620px] border-collapse whitespace-nowrap text-md">
+        <caption className="sr-only">Payouts in this batch</caption>
+        <thead>
+          <tr className="text-left text-xs text-muted">
+            {["Amount", "Client", "Account holder", "Bank", "Account", "Payout"].map((heading) => (
+              <th key={heading} scope="col" className="px-3 py-2.5 font-bold">
+                {heading}
+              </th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {items.map((item) => (
+            <tr key={item.payoutId} className="border-t border-divider">
+              <th scope="row" className="px-3 py-2.5 text-left font-bold tabular-nums">
+                {formatExact(item.amount)}
+              </th>
+              <td className="px-3 py-2.5">
+                <Client id={item.clientId} clients={clients} />
+              </td>
+              <td className="px-3 py-2.5">{item.holderName}</td>
+              <td className="px-3 py-2.5">{item.bankName ?? "Unknown bank"}</td>
+              <td className="px-3 py-2.5 tabular-nums">{item.maskedAccount}</td>
+              <td className="px-3 py-2.5 font-mono text-xs">{item.payoutId}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
   );
 }

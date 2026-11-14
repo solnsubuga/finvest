@@ -20,7 +20,7 @@ export function createStubReturnsApi(me: string, delay = 150, which: ReturnsStub
           {
             id: "-OdReturn00000000001",
             payoutId: "-OdBankPay00000000P1",
-            clientId: "-OdClient00000000021",
+            clientId: "sample-client-joan",
             statementLineId: "-OdTrustLine00000031",
             reason: "Stanbic returned it: account closed. The line names our reference.",
             status: "proposed",
@@ -30,7 +30,7 @@ export function createStubReturnsApi(me: string, delay = 150, which: ReturnsStub
           {
             id: "-OdReturn00000000002",
             payoutId: "-OdMobPay000000000P2",
-            clientId: "-OdClient00000000022",
+            clientId: "sample-client-peter",
             statementLineId: "-OdIotecLine00000044",
             reason: "MTN reversal on the ioTec statement for this payout.",
             status: "proposed",

@@ -40,6 +40,16 @@ interface BatchJson {
   decision_reason: string | null;
   payout_ids: string[];
   total: Amount;
+  items?: BatchItemJson[] | null;
+}
+
+interface BatchItemJson {
+  payout_id: string;
+  client_id: string;
+  amount: Amount;
+  bank_name: string | null;
+  masked_account: string;
+  holder_name: string;
 }
 
 interface SettlementJson {
@@ -87,6 +97,15 @@ export function toBatch(json: BatchJson): Batch {
     decisionReason: json.decision_reason,
     payoutIds: json.payout_ids,
     total: json.total,
+    items:
+      json.items?.map((item) => ({
+        payoutId: item.payout_id,
+        clientId: item.client_id,
+        amount: item.amount,
+        bankName: item.bank_name,
+        maskedAccount: item.masked_account,
+        holderName: item.holder_name,
+      })) ?? null,
   };
 }
 

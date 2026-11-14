@@ -2,10 +2,11 @@ import { useCallback, useId, useState } from "react";
 import { Button } from "@/components/ui/button.tsx";
 import { Input } from "@/components/ui/input.tsx";
 import { Label } from "@/components/ui/label.tsx";
+import { emptyDirectory, type Directory } from "@/directory/api.ts";
 import { cn } from "@/lib.ts";
 import { formatMoment } from "@/screens/reconciliation/format.ts";
 import { Decide, DoneNote, Empty, ErrorNote, Failure, type Decision } from "../Decide.tsx";
-import { useCommandKeys, useLoad } from "../load.ts";
+import { useClients, useCommandKeys, useLoad } from "../load.ts";
 import { ReturnsError, returnsErrorMessage, type PayoutReturn, type ReturnsApi } from "./api.ts";
 
 interface ReturnsProps {
@@ -14,6 +15,7 @@ interface ReturnsProps {
   /** Whether this person holds `bank_payouts.change`, which taking back a payout needs. */
   canChange: boolean;
   newKey?: () => string;
+  directory?: Directory;
 }
 
 const REFRESH: ReadonlySet<string> = new Set(["not_found", "refused", "return_already_decided"]);
@@ -26,12 +28,13 @@ const DONE: Record<Decision | "propose", string> = {
 };
 
 /** Payouts that came back after they were paid: one person names the line, a second approves. */
-export function Returns({ api, me, canChange, newKey = () => crypto.randomUUID() }: ReturnsProps) {
+export function Returns({ api, me, canChange, newKey = () => crypto.randomUUID(), directory = emptyDirectory }: ReturnsProps) {
   const [waiting, reload] = useLoad(useCallback(() => api.listWaiting(), [api]), returnsErrorMessage, canChange);
   const [selected, setSelected] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [note, setNote] = useState<{ id: string; kind: "done" | "failed"; message: string } | null>(null);
   const keys = useCommandKeys(newKey);
+  const clients = useClients(directory, waiting.state === "ready" ? waiting.value.map((each) => each.clientId) : []);
 
   async function run(id: string, request: unknown, command: (key: string) => Promise<void>, done: string) {
     setBusy(true);
@@ -101,7 +104,8 @@ export function Returns({ api, me, canChange, newKey = () => crypto.randomUUID()
                     item.id === current?.id ? "border-2 border-black px-[15px] py-[13px]" : "border-border",
                   )}
                 >
-                  <span className="font-mono text-xs font-bold">{item.payoutId}</span>
+                  <span className="text-md font-bold">{clients.get(item.clientId)?.name ?? "A client"}</span>
+                  <span className="font-mono text-xs">{item.payoutId}</span>
                   <span className="text-xs text-muted">Proposed {formatMoment(item.proposedAt)}</span>
                   <span className="mt-1 text-xs font-bold text-muted">{item.proposedBy === me ? "Waiting for a second person" : "Needs a second person"}</span>
                 </button>
@@ -113,6 +117,7 @@ export function Returns({ api, me, canChange, newKey = () => crypto.randomUUID()
               <ReturnCard
                 key={current.id}
                 item={current}
+                clientName={clients.get(current.clientId)?.name ?? null}
                 me={me}
                 busy={busy}
                 error={note?.id === current.id && note.kind === "failed" ? note.message : null}
@@ -140,12 +145,14 @@ export function Returns({ api, me, canChange, newKey = () => crypto.randomUUID()
 
 function ReturnCard({
   item,
+  clientName,
   me,
   busy,
   error,
   onDecide,
 }: {
   item: PayoutReturn;
+  clientName: string | null;
   me: string;
   busy: boolean;
   error: string | null;
@@ -155,7 +162,7 @@ function ReturnCard({
   return (
     <article aria-label={`Return of payout ${item.payoutId}`} className="flex flex-col gap-4 rounded-xl border border-border bg-surface p-5">
       <header className="flex flex-col gap-1">
-        <h3 className="m-0 text-lg font-extrabold">Payout came back</h3>
+        <h3 className="m-0 text-lg font-extrabold">{clientName ? `${clientName}'s payout came back` : "Payout came back"}</h3>
         <p className="m-0 text-xs text-muted">
           Payout <span className="font-mono">{item.payoutId}</span>, client <span className="font-mono">{item.clientId}</span>
         </p>

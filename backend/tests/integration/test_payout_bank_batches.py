@@ -173,6 +173,17 @@ async def test_two_people_send_a_batch_and_the_file_can_then_be_downloaded(
     assert batch.status is BatchStatus.PREPARED
     assert batch.total == ugx(AMOUNT + 1_000_000)
     assert await status_of(app_database, first.id) is PayoutStatus.QUEUED
+    # The second person sees each payout with its account masked, never the whole number.
+    async with app_database.actor_transaction(staff()) as session:
+        items = await bank_payouts.batch_items(session, batch)
+    assert [(each.payout_id, each.amount) for each in items] == [
+        (first.id, ugx(AMOUNT)),
+        (second.id, ugx(1_000_000)),
+    ]
+    assert items[0].bank_name == "Stanbic Bank"
+    assert items[0].holder_name == "Sarah Nakato"
+    assert items[0].masked_account.startswith("•••• ")
+    assert len(items[0].masked_account) == len("•••• ") + 4
     # The file is only for an approved batch.
     async with app_database.actor_transaction(maker) as session:
         assert (
