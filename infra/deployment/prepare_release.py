@@ -215,19 +215,6 @@ def prepare(output: Path, env: Mapping[str, str]) -> None:
     # Client sign-up stays closed unless this is exactly "true": production until switch day,
     # staging except during the pen test weeks (docs/launch.md).
     api["FINVEST_CLIENT_SIGNUP_OPEN"] = "true" if optional(env, "FINVEST_CLIENT_SIGNUP_OPEN") == "true" else "false"
-    # The trust account clients pay bank transfers into (backend payments). Invoice details, not a
-    # secret. Unset, the bank transfer route answers 503 and the app offers mobile money.
-    bank_accounts = optional(env, "FINVEST_BANK_TRANSFER_ACCOUNTS")
-    if bank_accounts:
-        try:
-            parsed = json.loads(bank_accounts)
-        except ValueError:
-            raise SettingError("FINVEST_BANK_TRANSFER_ACCOUNTS is not valid JSON") from None
-        if not isinstance(parsed, dict) or not parsed or not all(
-            isinstance(currency, str) and isinstance(details, dict) for currency, details in parsed.items()
-        ):
-            raise SettingError("FINVEST_BANK_TRANSFER_ACCOUNTS must be an object keyed by currency")
-        api["FINVEST_BANK_TRANSFER_ACCOUNTS"] = json.dumps(parsed, separators=(",", ":"))
     if optional(env, "FINVEST_AUTHENTICATOR_KEY"):
         api["FINVEST_AUTHENTICATOR_KEY"] = optional(env, "FINVEST_AUTHENTICATOR_KEY")
 
