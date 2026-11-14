@@ -94,6 +94,7 @@ from app.modules.payouts import (
     staff_returns_api,
 )
 from app.modules.payouts.wiring import PayoutNameSettings
+from app.modules.platform_settings import api as platform_settings_api
 from app.modules.reconciliation import api as reconciliation_api
 from app.modules.reconciliation import transfers_api as pot_transfers_api
 from app.modules.reconciliation.domain.wallet import WalletBalances
@@ -257,7 +258,7 @@ def create_app(
     app.include_router(notification_hooks.create_router(email_hooks))
     app.include_router(payment_routes.create_client_router(collections))
     app.include_router(payment_routes.staff_router)
-    for router in bank_account_routes.routers:
+    for router in (*bank_account_routes.routers, *platform_settings_api.routers):
         app.include_router(router)
     for router in reassignment_routes.routers:
         app.include_router(router)

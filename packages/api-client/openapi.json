@@ -681,7 +681,11 @@
               "client_pin_reset",
               "client_limits",
               "client_statement",
-              "client_withdrawal"
+              "client_withdrawal",
+              "payment_channels_change",
+              "calendar_change",
+              "staff_security_change",
+              "statement_layout_change"
             ],
             "title": "Kind",
             "type": "string"
@@ -1115,6 +1119,129 @@
           "name"
         ],
         "title": "BankOut",
+        "type": "object"
+      },
+      "BankPayoutCutoffProposal": {
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "maxLength": 20,
+            "minLength": 20,
+            "pattern": "^[-0-9A-Z_a-z]{20}$",
+            "title": "Id",
+            "type": "string"
+          },
+          "proposed_at": {
+            "format": "date-time",
+            "title": "Proposed At",
+            "type": "string"
+          },
+          "proposed_by": {
+            "maxLength": 20,
+            "minLength": 20,
+            "pattern": "^[-0-9A-Z_a-z]{20}$",
+            "title": "Proposed By",
+            "type": "string"
+          },
+          "reason": {
+            "title": "Reason",
+            "type": "string"
+          },
+          "value": {
+            "pattern": "^\\d{2}:\\d{2}$",
+            "title": "Value",
+            "type": "string"
+          },
+          "yours": {
+            "title": "Yours",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "id",
+          "reason",
+          "proposed_by",
+          "proposed_at",
+          "yours",
+          "value"
+        ],
+        "title": "BankPayoutCutoffProposal",
+        "type": "object"
+      },
+      "BankPayoutCutoffSetting": {
+        "additionalProperties": false,
+        "properties": {
+          "can_change": {
+            "title": "Can Change",
+            "type": "boolean"
+          },
+          "changed_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Changed At"
+          },
+          "changed_by": {
+            "anyOf": [
+              {
+                "maxLength": 20,
+                "minLength": 20,
+                "pattern": "^[-0-9A-Z_a-z]{20}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Changed By"
+          },
+          "key": {
+            "const": "bank_payout_cutoff",
+            "title": "Key",
+            "type": "string"
+          },
+          "proposal": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/BankPayoutCutoffProposal"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "section": {
+            "enum": [
+              "channels",
+              "calendar",
+              "staff_security",
+              "statement_import"
+            ],
+            "title": "Section",
+            "type": "string"
+          },
+          "value": {
+            "pattern": "^\\d{2}:\\d{2}$",
+            "title": "Value",
+            "type": "string"
+          }
+        },
+        "required": [
+          "section",
+          "changed_at",
+          "changed_by",
+          "can_change",
+          "key",
+          "value",
+          "proposal"
+        ],
+        "title": "BankPayoutCutoffSetting",
         "type": "object"
       },
       "BankPayoutOut": {
@@ -5840,6 +5967,32 @@
         "title": "DecideOutcome",
         "type": "object"
       },
+      "DecideSetting": {
+        "additionalProperties": false,
+        "properties": {
+          "decision": {
+            "enum": [
+              "approved",
+              "rejected",
+              "withdrawn"
+            ],
+            "title": "Decision",
+            "type": "string"
+          },
+          "reason": {
+            "maxLength": 500,
+            "minLength": 1,
+            "title": "Reason",
+            "type": "string"
+          }
+        },
+        "required": [
+          "decision",
+          "reason"
+        ],
+        "title": "DecideSetting",
+        "type": "object"
+      },
       "DecideWording": {
         "additionalProperties": false,
         "properties": {
@@ -8066,6 +8219,28 @@
         "title": "HoldingOut",
         "type": "object"
       },
+      "HolidayValue": {
+        "additionalProperties": false,
+        "properties": {
+          "date": {
+            "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+            "title": "Date",
+            "type": "string"
+          },
+          "name": {
+            "maxLength": 80,
+            "minLength": 1,
+            "title": "Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "date",
+          "name"
+        ],
+        "title": "HolidayValue",
+        "type": "object"
+      },
       "IdentityCheckView": {
         "additionalProperties": false,
         "properties": {
@@ -10010,6 +10185,139 @@
         "title": "MaturityDayOut",
         "type": "object"
       },
+      "MaturityRemindersProposal": {
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "maxLength": 20,
+            "minLength": 20,
+            "pattern": "^[-0-9A-Z_a-z]{20}$",
+            "title": "Id",
+            "type": "string"
+          },
+          "proposed_at": {
+            "format": "date-time",
+            "title": "Proposed At",
+            "type": "string"
+          },
+          "proposed_by": {
+            "maxLength": 20,
+            "minLength": 20,
+            "pattern": "^[-0-9A-Z_a-z]{20}$",
+            "title": "Proposed By",
+            "type": "string"
+          },
+          "reason": {
+            "title": "Reason",
+            "type": "string"
+          },
+          "value": {
+            "items": {
+              "maximum": 30.0,
+              "minimum": 1.0,
+              "type": "integer"
+            },
+            "maxItems": 3,
+            "title": "Value",
+            "type": "array"
+          },
+          "yours": {
+            "title": "Yours",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "id",
+          "reason",
+          "proposed_by",
+          "proposed_at",
+          "yours",
+          "value"
+        ],
+        "title": "MaturityRemindersProposal",
+        "type": "object"
+      },
+      "MaturityRemindersSetting": {
+        "additionalProperties": false,
+        "properties": {
+          "can_change": {
+            "title": "Can Change",
+            "type": "boolean"
+          },
+          "changed_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Changed At"
+          },
+          "changed_by": {
+            "anyOf": [
+              {
+                "maxLength": 20,
+                "minLength": 20,
+                "pattern": "^[-0-9A-Z_a-z]{20}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Changed By"
+          },
+          "key": {
+            "const": "maturity_reminders",
+            "title": "Key",
+            "type": "string"
+          },
+          "proposal": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/MaturityRemindersProposal"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "section": {
+            "enum": [
+              "channels",
+              "calendar",
+              "staff_security",
+              "statement_import"
+            ],
+            "title": "Section",
+            "type": "string"
+          },
+          "value": {
+            "items": {
+              "maximum": 30.0,
+              "minimum": 1.0,
+              "type": "integer"
+            },
+            "maxItems": 3,
+            "title": "Value",
+            "type": "array"
+          }
+        },
+        "required": [
+          "section",
+          "changed_at",
+          "changed_by",
+          "can_change",
+          "key",
+          "value",
+          "proposal"
+        ],
+        "title": "MaturityRemindersSetting",
+        "type": "object"
+      },
       "MemberView": {
         "additionalProperties": false,
         "description": "Another member: a name and when they joined. Never what they saved.",
@@ -11140,6 +11448,158 @@
         "title": "NotificationPage",
         "type": "object"
       },
+      "OfficeNetworkValue": {
+        "additionalProperties": false,
+        "properties": {
+          "label": {
+            "maxLength": 80,
+            "minLength": 1,
+            "title": "Label",
+            "type": "string"
+          },
+          "network": {
+            "maxLength": 50,
+            "minLength": 1,
+            "title": "Network",
+            "type": "string"
+          }
+        },
+        "required": [
+          "network",
+          "label"
+        ],
+        "title": "OfficeNetworkValue",
+        "type": "object"
+      },
+      "OfficeNetworksProposal": {
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "maxLength": 20,
+            "minLength": 20,
+            "pattern": "^[-0-9A-Z_a-z]{20}$",
+            "title": "Id",
+            "type": "string"
+          },
+          "proposed_at": {
+            "format": "date-time",
+            "title": "Proposed At",
+            "type": "string"
+          },
+          "proposed_by": {
+            "maxLength": 20,
+            "minLength": 20,
+            "pattern": "^[-0-9A-Z_a-z]{20}$",
+            "title": "Proposed By",
+            "type": "string"
+          },
+          "reason": {
+            "title": "Reason",
+            "type": "string"
+          },
+          "value": {
+            "items": {
+              "$ref": "#/components/schemas/OfficeNetworkValue"
+            },
+            "maxItems": 20,
+            "title": "Value",
+            "type": "array"
+          },
+          "yours": {
+            "title": "Yours",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "id",
+          "reason",
+          "proposed_by",
+          "proposed_at",
+          "yours",
+          "value"
+        ],
+        "title": "OfficeNetworksProposal",
+        "type": "object"
+      },
+      "OfficeNetworksSetting": {
+        "additionalProperties": false,
+        "properties": {
+          "can_change": {
+            "title": "Can Change",
+            "type": "boolean"
+          },
+          "changed_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Changed At"
+          },
+          "changed_by": {
+            "anyOf": [
+              {
+                "maxLength": 20,
+                "minLength": 20,
+                "pattern": "^[-0-9A-Z_a-z]{20}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Changed By"
+          },
+          "key": {
+            "const": "office_networks",
+            "title": "Key",
+            "type": "string"
+          },
+          "proposal": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/OfficeNetworksProposal"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "section": {
+            "enum": [
+              "channels",
+              "calendar",
+              "staff_security",
+              "statement_import"
+            ],
+            "title": "Section",
+            "type": "string"
+          },
+          "value": {
+            "items": {
+              "$ref": "#/components/schemas/OfficeNetworkValue"
+            },
+            "maxItems": 20,
+            "title": "Value",
+            "type": "array"
+          }
+        },
+        "required": [
+          "section",
+          "changed_at",
+          "changed_by",
+          "can_change",
+          "key",
+          "value",
+          "proposal"
+        ],
+        "title": "OfficeNetworksSetting",
+        "type": "object"
+      },
       "OptionView": {
         "additionalProperties": false,
         "properties": {
@@ -11746,6 +12206,165 @@
           "tax"
         ],
         "title": "PayeeOut",
+        "type": "object"
+      },
+      "PaymentChannelsProposal": {
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "maxLength": 20,
+            "minLength": 20,
+            "pattern": "^[-0-9A-Z_a-z]{20}$",
+            "title": "Id",
+            "type": "string"
+          },
+          "proposed_at": {
+            "format": "date-time",
+            "title": "Proposed At",
+            "type": "string"
+          },
+          "proposed_by": {
+            "maxLength": 20,
+            "minLength": 20,
+            "pattern": "^[-0-9A-Z_a-z]{20}$",
+            "title": "Proposed By",
+            "type": "string"
+          },
+          "reason": {
+            "title": "Reason",
+            "type": "string"
+          },
+          "value": {
+            "$ref": "#/components/schemas/PaymentChannelsValue"
+          },
+          "yours": {
+            "title": "Yours",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "id",
+          "reason",
+          "proposed_by",
+          "proposed_at",
+          "yours",
+          "value"
+        ],
+        "title": "PaymentChannelsProposal",
+        "type": "object"
+      },
+      "PaymentChannelsSetting": {
+        "additionalProperties": false,
+        "properties": {
+          "can_change": {
+            "title": "Can Change",
+            "type": "boolean"
+          },
+          "changed_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Changed At"
+          },
+          "changed_by": {
+            "anyOf": [
+              {
+                "maxLength": 20,
+                "minLength": 20,
+                "pattern": "^[-0-9A-Z_a-z]{20}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Changed By"
+          },
+          "key": {
+            "const": "payment_channels",
+            "title": "Key",
+            "type": "string"
+          },
+          "proposal": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PaymentChannelsProposal"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "section": {
+            "enum": [
+              "channels",
+              "calendar",
+              "staff_security",
+              "statement_import"
+            ],
+            "title": "Section",
+            "type": "string"
+          },
+          "value": {
+            "$ref": "#/components/schemas/PaymentChannelsValue"
+          }
+        },
+        "required": [
+          "section",
+          "changed_at",
+          "changed_by",
+          "can_change",
+          "key",
+          "value",
+          "proposal"
+        ],
+        "title": "PaymentChannelsSetting",
+        "type": "object"
+      },
+      "PaymentChannelsValue": {
+        "additionalProperties": false,
+        "description": "True where the channel is open. A paused channel refuses new requests only.",
+        "properties": {
+          "airtel_pay_in": {
+            "title": "Airtel Pay In",
+            "type": "boolean"
+          },
+          "airtel_payout": {
+            "title": "Airtel Payout",
+            "type": "boolean"
+          },
+          "bank_pay_in": {
+            "title": "Bank Pay In",
+            "type": "boolean"
+          },
+          "bank_payout": {
+            "title": "Bank Payout",
+            "type": "boolean"
+          },
+          "mtn_pay_in": {
+            "title": "Mtn Pay In",
+            "type": "boolean"
+          },
+          "mtn_payout": {
+            "title": "Mtn Payout",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "mtn_pay_in",
+          "airtel_pay_in",
+          "bank_pay_in",
+          "mtn_payout",
+          "airtel_payout",
+          "bank_payout"
+        ],
+        "title": "PaymentChannelsValue",
         "type": "object"
       },
       "PaymentPage": {
@@ -13213,6 +13832,34 @@
         "title": "ProposeBankAccount",
         "type": "object"
       },
+      "ProposeBankPayoutCutoff": {
+        "additionalProperties": false,
+        "properties": {
+          "key": {
+            "const": "bank_payout_cutoff",
+            "title": "Key",
+            "type": "string"
+          },
+          "reason": {
+            "maxLength": 500,
+            "minLength": 1,
+            "title": "Reason",
+            "type": "string"
+          },
+          "value": {
+            "pattern": "^\\d{2}:\\d{2}$",
+            "title": "Value",
+            "type": "string"
+          }
+        },
+        "required": [
+          "key",
+          "value",
+          "reason"
+        ],
+        "title": "ProposeBankPayoutCutoff",
+        "type": "object"
+      },
       "ProposeChange": {
         "additionalProperties": false,
         "properties": {
@@ -13430,6 +14077,70 @@
         "title": "ProposeLock",
         "type": "object"
       },
+      "ProposeMaturityReminders": {
+        "additionalProperties": false,
+        "properties": {
+          "key": {
+            "const": "maturity_reminders",
+            "title": "Key",
+            "type": "string"
+          },
+          "reason": {
+            "maxLength": 500,
+            "minLength": 1,
+            "title": "Reason",
+            "type": "string"
+          },
+          "value": {
+            "items": {
+              "maximum": 30.0,
+              "minimum": 1.0,
+              "type": "integer"
+            },
+            "maxItems": 3,
+            "title": "Value",
+            "type": "array"
+          }
+        },
+        "required": [
+          "key",
+          "value",
+          "reason"
+        ],
+        "title": "ProposeMaturityReminders",
+        "type": "object"
+      },
+      "ProposeOfficeNetworks": {
+        "additionalProperties": false,
+        "properties": {
+          "key": {
+            "const": "office_networks",
+            "title": "Key",
+            "type": "string"
+          },
+          "reason": {
+            "maxLength": 500,
+            "minLength": 1,
+            "title": "Reason",
+            "type": "string"
+          },
+          "value": {
+            "items": {
+              "$ref": "#/components/schemas/OfficeNetworkValue"
+            },
+            "maxItems": 20,
+            "title": "Value",
+            "type": "array"
+          }
+        },
+        "required": [
+          "key",
+          "value",
+          "reason"
+        ],
+        "title": "ProposeOfficeNetworks",
+        "type": "object"
+      },
       "ProposeOutcome": {
         "additionalProperties": false,
         "properties": {
@@ -13461,6 +14172,32 @@
         "title": "ProposeOutcome",
         "type": "object"
       },
+      "ProposePaymentChannels": {
+        "additionalProperties": false,
+        "properties": {
+          "key": {
+            "const": "payment_channels",
+            "title": "Key",
+            "type": "string"
+          },
+          "reason": {
+            "maxLength": 500,
+            "minLength": 1,
+            "title": "Reason",
+            "type": "string"
+          },
+          "value": {
+            "$ref": "#/components/schemas/PaymentChannelsValue"
+          }
+        },
+        "required": [
+          "key",
+          "value",
+          "reason"
+        ],
+        "title": "ProposePaymentChannels",
+        "type": "object"
+      },
       "ProposePhone": {
         "additionalProperties": false,
         "properties": {
@@ -13482,6 +14219,97 @@
           "reason"
         ],
         "title": "ProposePhone",
+        "type": "object"
+      },
+      "ProposePublicHolidays": {
+        "additionalProperties": false,
+        "properties": {
+          "key": {
+            "const": "public_holidays",
+            "title": "Key",
+            "type": "string"
+          },
+          "reason": {
+            "maxLength": 500,
+            "minLength": 1,
+            "title": "Reason",
+            "type": "string"
+          },
+          "value": {
+            "items": {
+              "$ref": "#/components/schemas/HolidayValue"
+            },
+            "maxItems": 60,
+            "title": "Value",
+            "type": "array"
+          }
+        },
+        "required": [
+          "key",
+          "value",
+          "reason"
+        ],
+        "title": "ProposePublicHolidays",
+        "type": "object"
+      },
+      "ProposeStaffIdleMinutes": {
+        "additionalProperties": false,
+        "properties": {
+          "key": {
+            "const": "staff_idle_minutes",
+            "title": "Key",
+            "type": "string"
+          },
+          "reason": {
+            "maxLength": 500,
+            "minLength": 1,
+            "title": "Reason",
+            "type": "string"
+          },
+          "value": {
+            "maximum": 240.0,
+            "minimum": 5.0,
+            "title": "Value",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "key",
+          "value",
+          "reason"
+        ],
+        "title": "ProposeStaffIdleMinutes",
+        "type": "object"
+      },
+      "ProposeStatementLayouts": {
+        "additionalProperties": false,
+        "properties": {
+          "key": {
+            "const": "statement_layouts",
+            "title": "Key",
+            "type": "string"
+          },
+          "reason": {
+            "maxLength": 500,
+            "minLength": 1,
+            "title": "Reason",
+            "type": "string"
+          },
+          "value": {
+            "items": {
+              "$ref": "#/components/schemas/StatementLayoutValue"
+            },
+            "maxItems": 10,
+            "title": "Value",
+            "type": "array"
+          }
+        },
+        "required": [
+          "key",
+          "value",
+          "reason"
+        ],
+        "title": "ProposeStatementLayouts",
         "type": "object"
       },
       "ProposeWording": {
@@ -13519,6 +14347,135 @@
           "id"
         ],
         "title": "Proposed",
+        "type": "object"
+      },
+      "PublicHolidaysProposal": {
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "maxLength": 20,
+            "minLength": 20,
+            "pattern": "^[-0-9A-Z_a-z]{20}$",
+            "title": "Id",
+            "type": "string"
+          },
+          "proposed_at": {
+            "format": "date-time",
+            "title": "Proposed At",
+            "type": "string"
+          },
+          "proposed_by": {
+            "maxLength": 20,
+            "minLength": 20,
+            "pattern": "^[-0-9A-Z_a-z]{20}$",
+            "title": "Proposed By",
+            "type": "string"
+          },
+          "reason": {
+            "title": "Reason",
+            "type": "string"
+          },
+          "value": {
+            "items": {
+              "$ref": "#/components/schemas/HolidayValue"
+            },
+            "maxItems": 60,
+            "title": "Value",
+            "type": "array"
+          },
+          "yours": {
+            "title": "Yours",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "id",
+          "reason",
+          "proposed_by",
+          "proposed_at",
+          "yours",
+          "value"
+        ],
+        "title": "PublicHolidaysProposal",
+        "type": "object"
+      },
+      "PublicHolidaysSetting": {
+        "additionalProperties": false,
+        "properties": {
+          "can_change": {
+            "title": "Can Change",
+            "type": "boolean"
+          },
+          "changed_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Changed At"
+          },
+          "changed_by": {
+            "anyOf": [
+              {
+                "maxLength": 20,
+                "minLength": 20,
+                "pattern": "^[-0-9A-Z_a-z]{20}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Changed By"
+          },
+          "key": {
+            "const": "public_holidays",
+            "title": "Key",
+            "type": "string"
+          },
+          "proposal": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PublicHolidaysProposal"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "section": {
+            "enum": [
+              "channels",
+              "calendar",
+              "staff_security",
+              "statement_import"
+            ],
+            "title": "Section",
+            "type": "string"
+          },
+          "value": {
+            "items": {
+              "$ref": "#/components/schemas/HolidayValue"
+            },
+            "maxItems": 60,
+            "title": "Value",
+            "type": "array"
+          }
+        },
+        "required": [
+          "section",
+          "changed_at",
+          "changed_by",
+          "can_change",
+          "key",
+          "value",
+          "proposal"
+        ],
+        "title": "PublicHolidaysSetting",
         "type": "object"
       },
       "PublicProducts": {
@@ -16205,6 +17162,10 @@
                 "wordings.change",
                 "bank_accounts.change",
                 "email_suppressions.lift",
+                "payment_channels.change",
+                "calendar.change",
+                "staff_security.change",
+                "statement_layouts.change",
                 "announcements.send",
                 "account_codes.change",
                 "migration.view",
@@ -17258,6 +18219,136 @@
           "topic"
         ],
         "title": "SetTopic",
+        "type": "object"
+      },
+      "SettingProposalOut": {
+        "additionalProperties": false,
+        "properties": {
+          "key": {
+            "enum": [
+              "payment_channels",
+              "public_holidays",
+              "bank_payout_cutoff",
+              "maturity_reminders",
+              "staff_idle_minutes",
+              "office_networks",
+              "statement_layouts"
+            ],
+            "title": "Key",
+            "type": "string"
+          },
+          "proposal": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PaymentChannelsProposal"
+              },
+              {
+                "$ref": "#/components/schemas/PublicHolidaysProposal"
+              },
+              {
+                "$ref": "#/components/schemas/BankPayoutCutoffProposal"
+              },
+              {
+                "$ref": "#/components/schemas/MaturityRemindersProposal"
+              },
+              {
+                "$ref": "#/components/schemas/StaffIdleMinutesProposal"
+              },
+              {
+                "$ref": "#/components/schemas/OfficeNetworksProposal"
+              },
+              {
+                "$ref": "#/components/schemas/StatementLayoutsProposal"
+              }
+            ],
+            "title": "Proposal"
+          }
+        },
+        "required": [
+          "key",
+          "proposal"
+        ],
+        "title": "SettingProposalOut",
+        "type": "object"
+      },
+      "SettingsList": {
+        "additionalProperties": false,
+        "properties": {
+          "date_formats": {
+            "items": {
+              "enum": [
+                "YYYY-MM-DD",
+                "DD/MM/YYYY",
+                "DD-MM-YYYY",
+                "DD.MM.YYYY",
+                "MM/DD/YYYY",
+                "DD MMM YYYY",
+                "DD-MMM-YYYY"
+              ],
+              "type": "string"
+            },
+            "title": "Date Formats",
+            "type": "array"
+          },
+          "settings": {
+            "items": {
+              "discriminator": {
+                "mapping": {
+                  "bank_payout_cutoff": "#/components/schemas/BankPayoutCutoffSetting",
+                  "maturity_reminders": "#/components/schemas/MaturityRemindersSetting",
+                  "office_networks": "#/components/schemas/OfficeNetworksSetting",
+                  "payment_channels": "#/components/schemas/PaymentChannelsSetting",
+                  "public_holidays": "#/components/schemas/PublicHolidaysSetting",
+                  "staff_idle_minutes": "#/components/schemas/StaffIdleMinutesSetting",
+                  "statement_layouts": "#/components/schemas/StatementLayoutsSetting"
+                },
+                "propertyName": "key"
+              },
+              "oneOf": [
+                {
+                  "$ref": "#/components/schemas/PaymentChannelsSetting"
+                },
+                {
+                  "$ref": "#/components/schemas/PublicHolidaysSetting"
+                },
+                {
+                  "$ref": "#/components/schemas/BankPayoutCutoffSetting"
+                },
+                {
+                  "$ref": "#/components/schemas/MaturityRemindersSetting"
+                },
+                {
+                  "$ref": "#/components/schemas/StaffIdleMinutesSetting"
+                },
+                {
+                  "$ref": "#/components/schemas/OfficeNetworksSetting"
+                },
+                {
+                  "$ref": "#/components/schemas/StatementLayoutsSetting"
+                }
+              ]
+            },
+            "title": "Settings",
+            "type": "array"
+          },
+          "your_address": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Your Address"
+          }
+        },
+        "required": [
+          "settings",
+          "your_address",
+          "date_formats"
+        ],
+        "title": "SettingsList",
         "type": "object"
       },
       "SettledPayoutOut": {
@@ -19266,6 +20357,131 @@
         "title": "StaffGroupView",
         "type": "object"
       },
+      "StaffIdleMinutesProposal": {
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "maxLength": 20,
+            "minLength": 20,
+            "pattern": "^[-0-9A-Z_a-z]{20}$",
+            "title": "Id",
+            "type": "string"
+          },
+          "proposed_at": {
+            "format": "date-time",
+            "title": "Proposed At",
+            "type": "string"
+          },
+          "proposed_by": {
+            "maxLength": 20,
+            "minLength": 20,
+            "pattern": "^[-0-9A-Z_a-z]{20}$",
+            "title": "Proposed By",
+            "type": "string"
+          },
+          "reason": {
+            "title": "Reason",
+            "type": "string"
+          },
+          "value": {
+            "maximum": 240.0,
+            "minimum": 5.0,
+            "title": "Value",
+            "type": "integer"
+          },
+          "yours": {
+            "title": "Yours",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "id",
+          "reason",
+          "proposed_by",
+          "proposed_at",
+          "yours",
+          "value"
+        ],
+        "title": "StaffIdleMinutesProposal",
+        "type": "object"
+      },
+      "StaffIdleMinutesSetting": {
+        "additionalProperties": false,
+        "properties": {
+          "can_change": {
+            "title": "Can Change",
+            "type": "boolean"
+          },
+          "changed_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Changed At"
+          },
+          "changed_by": {
+            "anyOf": [
+              {
+                "maxLength": 20,
+                "minLength": 20,
+                "pattern": "^[-0-9A-Z_a-z]{20}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Changed By"
+          },
+          "key": {
+            "const": "staff_idle_minutes",
+            "title": "Key",
+            "type": "string"
+          },
+          "proposal": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/StaffIdleMinutesProposal"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "section": {
+            "enum": [
+              "channels",
+              "calendar",
+              "staff_security",
+              "statement_import"
+            ],
+            "title": "Section",
+            "type": "string"
+          },
+          "value": {
+            "maximum": 240.0,
+            "minimum": 5.0,
+            "title": "Value",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "section",
+          "changed_at",
+          "changed_by",
+          "can_change",
+          "key",
+          "value",
+          "proposal"
+        ],
+        "title": "StaffIdleMinutesSetting",
+        "type": "object"
+      },
       "StaffInvestmentOut": {
         "additionalProperties": false,
         "properties": {
@@ -20314,6 +21530,10 @@
                 "wordings.change",
                 "bank_accounts.change",
                 "email_suppressions.lift",
+                "payment_channels.change",
+                "calendar.change",
+                "staff_security.change",
+                "statement_layouts.change",
                 "announcements.send",
                 "account_codes.change",
                 "migration.view",
@@ -20917,6 +22137,277 @@
           "blockers"
         ],
         "title": "StandingView",
+        "type": "object"
+      },
+      "StatementLayoutValue": {
+        "additionalProperties": false,
+        "description": "One provider's export. Give money_in and money_out, or amount, direction and its words.",
+        "properties": {
+          "amount": {
+            "anyOf": [
+              {
+                "maxLength": 60,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Amount"
+          },
+          "date_column": {
+            "maxLength": 60,
+            "minLength": 1,
+            "title": "Date Column",
+            "type": "string"
+          },
+          "date_format": {
+            "enum": [
+              "YYYY-MM-DD",
+              "DD/MM/YYYY",
+              "DD-MM-YYYY",
+              "DD.MM.YYYY",
+              "MM/DD/YYYY",
+              "DD MMM YYYY",
+              "DD-MMM-YYYY"
+            ],
+            "title": "Date Format",
+            "type": "string"
+          },
+          "direction": {
+            "anyOf": [
+              {
+                "maxLength": 60,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Direction"
+          },
+          "in_word": {
+            "anyOf": [
+              {
+                "maxLength": 60,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "In Word"
+          },
+          "label": {
+            "maxLength": 80,
+            "minLength": 1,
+            "title": "Label",
+            "type": "string"
+          },
+          "money_in": {
+            "anyOf": [
+              {
+                "maxLength": 60,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Money In"
+          },
+          "money_out": {
+            "anyOf": [
+              {
+                "maxLength": 60,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Money Out"
+          },
+          "name": {
+            "pattern": "^[a-z][a-z0-9_]{1,39}$",
+            "title": "Name",
+            "type": "string"
+          },
+          "narrative": {
+            "maxLength": 60,
+            "minLength": 1,
+            "title": "Narrative",
+            "type": "string"
+          },
+          "out_word": {
+            "anyOf": [
+              {
+                "maxLength": 60,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Out Word"
+          },
+          "reference": {
+            "anyOf": [
+              {
+                "maxLength": 60,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reference"
+          }
+        },
+        "required": [
+          "name",
+          "label",
+          "date_column",
+          "date_format",
+          "narrative"
+        ],
+        "title": "StatementLayoutValue",
+        "type": "object"
+      },
+      "StatementLayoutsProposal": {
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "maxLength": 20,
+            "minLength": 20,
+            "pattern": "^[-0-9A-Z_a-z]{20}$",
+            "title": "Id",
+            "type": "string"
+          },
+          "proposed_at": {
+            "format": "date-time",
+            "title": "Proposed At",
+            "type": "string"
+          },
+          "proposed_by": {
+            "maxLength": 20,
+            "minLength": 20,
+            "pattern": "^[-0-9A-Z_a-z]{20}$",
+            "title": "Proposed By",
+            "type": "string"
+          },
+          "reason": {
+            "title": "Reason",
+            "type": "string"
+          },
+          "value": {
+            "items": {
+              "$ref": "#/components/schemas/StatementLayoutValue"
+            },
+            "maxItems": 10,
+            "title": "Value",
+            "type": "array"
+          },
+          "yours": {
+            "title": "Yours",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "id",
+          "reason",
+          "proposed_by",
+          "proposed_at",
+          "yours",
+          "value"
+        ],
+        "title": "StatementLayoutsProposal",
+        "type": "object"
+      },
+      "StatementLayoutsSetting": {
+        "additionalProperties": false,
+        "properties": {
+          "can_change": {
+            "title": "Can Change",
+            "type": "boolean"
+          },
+          "changed_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Changed At"
+          },
+          "changed_by": {
+            "anyOf": [
+              {
+                "maxLength": 20,
+                "minLength": 20,
+                "pattern": "^[-0-9A-Z_a-z]{20}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Changed By"
+          },
+          "key": {
+            "const": "statement_layouts",
+            "title": "Key",
+            "type": "string"
+          },
+          "proposal": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/StatementLayoutsProposal"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "section": {
+            "enum": [
+              "channels",
+              "calendar",
+              "staff_security",
+              "statement_import"
+            ],
+            "title": "Section",
+            "type": "string"
+          },
+          "value": {
+            "items": {
+              "$ref": "#/components/schemas/StatementLayoutValue"
+            },
+            "maxItems": 10,
+            "title": "Value",
+            "type": "array"
+          }
+        },
+        "required": [
+          "section",
+          "changed_at",
+          "changed_by",
+          "can_change",
+          "key",
+          "value",
+          "proposal"
+        ],
+        "title": "StatementLayoutsSetting",
         "type": "object"
       },
       "StatementLineOut": {
@@ -60781,6 +62272,291 @@
         "summary": "Staff Sign Out Device",
         "tags": [
           "staff sign-in"
+        ]
+      }
+    },
+    "/staff/settings/platform": {
+      "get": {
+        "description": "Every platform setting: the value in use, and any change waiting for a decision.",
+        "operationId": "list_platform_settings_staff_settings_platform_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SettingsList"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          }
+        },
+        "summary": "List Platform Settings",
+        "tags": [
+          "staff settings"
+        ]
+      }
+    },
+    "/staff/settings/platform/proposals": {
+      "post": {
+        "description": "Put a new value forward. A different member of staff must approve it.\n\n403 without the section's permission. 409 if a change to this setting is already waiting,\nor, for the office networks, `leaves_you_out` when the list leaves out the network this\nrequest came from.",
+        "operationId": "propose_platform_setting_staff_settings_platform_proposals_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "discriminator": {
+                  "mapping": {
+                    "bank_payout_cutoff": "#/components/schemas/ProposeBankPayoutCutoff",
+                    "maturity_reminders": "#/components/schemas/ProposeMaturityReminders",
+                    "office_networks": "#/components/schemas/ProposeOfficeNetworks",
+                    "payment_channels": "#/components/schemas/ProposePaymentChannels",
+                    "public_holidays": "#/components/schemas/ProposePublicHolidays",
+                    "staff_idle_minutes": "#/components/schemas/ProposeStaffIdleMinutes",
+                    "statement_layouts": "#/components/schemas/ProposeStatementLayouts"
+                  },
+                  "propertyName": "key"
+                },
+                "oneOf": [
+                  {
+                    "$ref": "#/components/schemas/ProposePaymentChannels"
+                  },
+                  {
+                    "$ref": "#/components/schemas/ProposePublicHolidays"
+                  },
+                  {
+                    "$ref": "#/components/schemas/ProposeBankPayoutCutoff"
+                  },
+                  {
+                    "$ref": "#/components/schemas/ProposeMaturityReminders"
+                  },
+                  {
+                    "$ref": "#/components/schemas/ProposeStaffIdleMinutes"
+                  },
+                  {
+                    "$ref": "#/components/schemas/ProposeOfficeNetworks"
+                  },
+                  {
+                    "$ref": "#/components/schemas/ProposeStatementLayouts"
+                  }
+                ],
+                "title": "Body"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SettingProposalOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          }
+        },
+        "summary": "Propose Platform Setting",
+        "tags": [
+          "staff settings"
+        ]
+      }
+    },
+    "/staff/settings/platform/proposals/{proposal_id}/decision": {
+      "post": {
+        "description": "Approve or reject another person's proposal, or withdraw your own.\n\nDeciding needs the section's permission and a passkey or app code from the last few\nminutes (`confirm_it_is_you`), asked for before the proposal is looked up. An approved\nvalue is in use at once. 409 `leaves_you_out` when approving office networks that leave\nout the network this request came from.",
+        "operationId": "decide_platform_setting_staff_settings_platform_proposals__proposal_id__decision_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "proposal_id",
+            "required": true,
+            "schema": {
+              "maxLength": 20,
+              "minLength": 20,
+              "pattern": "^[-0-9A-Z_a-z]{20}$",
+              "title": "Proposal Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DecideSetting"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SettingProposalOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          }
+        },
+        "summary": "Decide Platform Setting",
+        "tags": [
+          "staff settings"
         ]
       }
     },

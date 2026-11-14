@@ -28,6 +28,7 @@
 | [client-accounts.md](client-accounts.md) | Finding a client in the console, the client page, and locking or unlocking an account with two people |
 | [console-admin.md](console-admin.md) | The team and its two-admin changes, the approvals inbox, the audit trail viewer, email suppressions and client account support |
 | [account-numbers.md](account-numbers.md) | Format, generation and lifetime of client account numbers |
+| [platform-settings.md](platform-settings.md) | The console's Settings: payment channels, the calendar, staff security and statement layouts, each changed by two people |
 | [approvals.md](approvals.md) | The approvals inbox: what waits for a second member of staff, who sees it and who may decide |
 | [review-queue.md](review-queue.md) | The review queue: every piece of work waiting for a person, by kind, and the figures above it |
 | [overview.md](overview.md) | The console Overview: client money, money in and out, floats, daily balancing, maturities, holdings and what needs attention |

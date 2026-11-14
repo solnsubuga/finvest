@@ -32,6 +32,8 @@ from app.modules.payments import (
     reversals,
 )
 from app.modules.payouts import destinations, resolutions, reviews
+from app.modules.platform_settings import service as platform_settings
+from app.modules.platform_settings.domain.catalogue import SECTIONS, Section
 from app.modules.reconciliation import day_close, transfers
 from app.modules.screening import service as screening
 from app.modules.support import complaints
@@ -105,6 +107,8 @@ async def waiting_for(session: AsyncSession, staff: StaffSession, now: datetime)
         found += await _reversals(session)
     if "deposit_receivable" in kinds:
         found += await _receivables(session)
+    if kinds & set(_SETTING_KINDS.values()):
+        found += await _settings(session, kinds)
     return inbox(found, staff.staff_id, staff.permissions)
 
 
@@ -123,6 +127,24 @@ async def _bank_accounts(session: AsyncSession) -> list[Waiting]:
         for a in await bank_accounts.list_accounts(session)
         if (p := a.proposal) is not None
     ]
+
+
+_SETTING_KINDS: dict[Section, Kind] = {
+    "channels": "payment_channels_change",
+    "calendar": "calendar_change",
+    "staff_security": "staff_security_change",
+    "statement_import": "statement_layout_change",
+}
+
+
+async def _settings(session: AsyncSession, kinds: set[Kind]) -> list[Waiting]:
+    # The setting's name only. The value is shown on Settings.
+    found = []
+    for p in await platform_settings.waiting(session):
+        kind = _SETTING_KINDS[SECTIONS[p.key]]
+        if kind in kinds:
+            found.append(Waiting(kind, p.id, p.key, p.proposed_by, p.proposed_at))
+    return found
 
 
 async def _corrections(session: AsyncSession) -> list[Waiting]:
