@@ -41,7 +41,7 @@ export function toCheck(view: ClientCheck): IdentityCheck {
           givenNames: details.given_names,
           documentNumber: details.document_number,
           dateOfBirth: details.date_of_birth,
-          // Unknown only on a check carried over from Finvest 1.0, which is already approved
+          // Unknown only on a check carried over at a switch, which is already approved
           // and never opens the details form.
           expiresOn: details.document_expires_on ?? "",
           tin: details.tin ?? null,

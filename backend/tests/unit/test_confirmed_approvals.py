@@ -32,8 +32,6 @@ DECISIONS = {
     "POST /staff/complaints/{complaint_id}/outcome/decision",
     "POST /staff/identity-checks/{check_id}/approve",
     "POST /staff/identity-checks/{check_id}/reject",
-    "POST /staff/claim-checks/{claim_check_id}/match",
-    "POST /staff/claim-checks/{claim_check_id}/no-match",
     "POST /staff/payments/bank-transfers/{payment_id}/approve",
     "POST /staff/payments/reassignments/{reassignment_id}/approve",
     "POST /staff/payments/reversals/{reversal_id}/approve",

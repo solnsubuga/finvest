@@ -62,7 +62,6 @@ from app.modules.insights import api as insights_api
 from app.modules.investments import api as investments_api
 from app.modules.investments import transfers_api as investment_transfers_api
 from app.modules.kyc import api as kyc_api
-from app.modules.kyc import claims_api as kyc_claims_api
 from app.modules.kyc import face_confirmations_api
 from app.modules.kyc import profile_api as kyc_profile_api
 from app.modules.kyc.domain.face_confirmations import FaceMatcher
@@ -300,8 +299,6 @@ def create_app(
         face_confirmations_api.create_router(identity_sealer, identity_liveness, face_matcher)
     )
     for router in organisations_api.create_routers(storage):
-        app.include_router(router)
-    for router in kyc_claims_api.create_routers(storage):
         app.include_router(router)
     for router in kyc_profile_api.create_routers(identity_sealer):
         app.include_router(router)

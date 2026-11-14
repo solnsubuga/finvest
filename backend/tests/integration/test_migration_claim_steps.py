@@ -10,22 +10,16 @@ from sqlalchemy import text
 from app.api.app import create_app
 from app.infrastructure.database import Database
 from app.infrastructure.jobs import JobRequest, Worker, enqueue
-from app.modules.kyc import claims as claim_checks
 from app.modules.kyc import service as kyc
-from app.modules.kyc.domain.checks import DocumentType, PhotoKind
 from app.modules.migration import claims
-from app.modules.migration.jobs import (
-    CLAIM_CHECK_DECIDED,
-    IDENTITY_CHECK_DECIDED,
-    MigrationJobs,
-)
+from app.modules.migration.jobs import IDENTITY_CHECK_DECIDED, MigrationJobs
 from app.shared.actors import SYSTEM, Actor
 from app.shared.push_ids import push_id
 from tests.integration.test_claims import HASHER, PASSWORD, Api, imported, texted
 from tests.support.clock import FakeClock
 from tests.support.database import TestDatabase
-from tests.support.kyc import SEALER, SHA256, details, ready_draft
-from tests.support.ledger import staff as new_staff
+from tests.support.jobs import run_due
+from tests.support.kyc import SEALER, ready_draft
 
 pytestmark = pytest.mark.integration
 
@@ -55,31 +49,18 @@ async def api(
         )
 
 
-async def signed_in(api: Api, *, needs_id_check: bool) -> tuple[Actor, dict[str, str]]:
+async def signed_in(api: Api) -> tuple[Actor, dict[str, str]]:
     """A migrated client who claimed the account from the link. Returns them and a bearer."""
     phone, client_id = await imported(api)
     client = Actor("client", client_id)
     async with api.worker.actor_transaction(SYSTEM) as session:
-        if not needs_id_check:
-            await kyc.record_carried_over_check(
-                session,
-                SEALER,
-                SYSTEM,
-                client_id=client_id,
-                document_type=DocumentType.NATIONAL_ID,
-                document_country="UG",
-                details=details(),
-                legacy_reference=f"FV1-{push_id()}",
-                reason="Carried over at the switch",
-                clock=api.clock,
-            )
         await claims.create_claim(
             session,
             SYSTEM,
             api.clock,
             client_id=client_id,
             legacy_client_ref=f"CL-{client_id[-8:]}",
-            needs_id_check=needs_id_check,
+            needs_id_check=True,
         )
         token = await claims.send_link(session, SYSTEM, api.clock, client_id)
     started = await api.http.post("/client/claim/start", json={"token": token})
@@ -95,21 +76,20 @@ async def signed_in(api: Api, *, needs_id_check: bool) -> tuple[Actor, dict[str,
     return client, {"Authorization": f"Bearer {done.json()['token']}"}
 
 
-async def photos_taken(api: Api, client: Actor) -> str:
-    """The claim check's selfie and ID front, taken. Returns the claim check."""
-    async with api.database.actor_transaction(client) as session:
-        started = await claim_checks.start(session, client, api.clock)
-        for kind in (PhotoKind.FRONT, PhotoKind.SELFIE):
-            await claim_checks.add_photo(
-                session,
-                client,
-                kind,
-                content_type="image/jpeg",
-                byte_size=2048,
-                sha256=SHA256,
-                clock=api.clock,
-            )
-    return started.id
+async def decided(api: Api, client: Actor, *, approved: bool) -> None:
+    """The identity checks module's decision on the client's full ID check, as it publishes it."""
+    assert client.id is not None
+    async with api.worker.transaction() as session:
+        await enqueue(
+            session,
+            JobRequest(
+                kind=IDENTITY_CHECK_DECIDED,
+                idempotency_key=push_id(),
+                payload={"data": {"client_id": client.id, "approved": approved}},
+            ),
+            now=api.clock.now(),
+        )
+    await drain(api)
 
 
 async def drain(api: Api) -> None:
@@ -118,8 +98,7 @@ async def drain(api: Api) -> None:
     worker = Worker(
         api.worker, MigrationJobs(api.worker, SEALER, api.clock, None).handlers(), clock=api.clock
     )
-    while await worker.run_once():
-        pass
+    await run_due(worker)
 
 
 async def state(api: Api, bearer: dict[str, str]) -> Any:
@@ -128,55 +107,15 @@ async def state(api: Api, bearer: dict[str, str]) -> Any:
     return mine.json()["status"]
 
 
-async def test_a_matched_selfie_confirms_the_client_who_then_confirms_the_investments(
+async def test_a_client_hands_the_full_check_in_with_the_claim_and_then_confirms(
     api: Api,
 ) -> None:
-    client, bearer = await signed_in(api, needs_id_check=False)
+    client, bearer = await signed_in(api)
     # Nothing to confirm before who they are is confirmed.
     assert (await api.http.post("/client/claim/confirm", headers=bearer)).status_code == 409
-    # Not ready: the photos are missing, and nothing moves.
-    async with api.database.actor_transaction(client) as session:
-        await claim_checks.start(session, client, api.clock)
-    missing = await api.http.post("/client/claim/identity", headers=bearer)
-    assert missing.status_code == 422
-    assert await state(api, bearer) == "signed_in"
+    mine = await api.http.get("/client/claim", headers=bearer)
+    assert mine.json()["identity_step"] == "full_id_check"
 
-    claim_check_id = await photos_taken(api, client)
-    handed = await api.http.post("/client/claim/identity", headers=bearer)
-    assert handed.status_code == 200, handed.text
-    assert handed.json()["status"] == "identity_submitted"
-    # Handed in once: the check waits for a person.
-    assert (await api.http.post("/client/claim/identity", headers=bearer)).status_code == 409
-
-    staff = new_staff()
-    async with api.database.actor_transaction(staff) as session:
-        await claim_checks.decide(
-            session, staff, claim_check_id, matched=True, reason="Same person", clock=api.clock
-        )
-    await drain(api)
-    assert await state(api, bearer) == "identity_confirmed"
-
-    confirmed = await api.http.post("/client/claim/confirm", headers=bearer)
-    assert confirmed.status_code == 200, confirmed.text
-    assert confirmed.json()["status"] == "confirmed"
-    assert (await api.http.post("/client/claim/confirm", headers=bearer)).status_code == 409
-
-
-async def test_a_selfie_that_does_not_match_sends_the_client_back_a_step(api: Api) -> None:
-    client, bearer = await signed_in(api, needs_id_check=False)
-    claim_check_id = await photos_taken(api, client)
-    assert (await api.http.post("/client/claim/identity", headers=bearer)).status_code == 200
-    staff = new_staff()
-    async with api.database.actor_transaction(staff) as session:
-        await claim_checks.decide(
-            session, staff, claim_check_id, matched=False, reason="Not the person", clock=api.clock
-        )
-    await drain(api)
-    assert await state(api, bearer) == "signed_in"
-
-
-async def test_a_client_who_needs_the_full_check_hands_it_in_with_the_claim(api: Api) -> None:
-    client, bearer = await signed_in(api, needs_id_check=True)
     async with api.database.actor_transaction(client) as session:
         await ready_draft(session, client, api.clock)
     handed = await api.http.post("/client/claim/identity", headers=bearer)
@@ -185,18 +124,37 @@ async def test_a_client_who_needs_the_full_check_hands_it_in_with_the_claim(api:
     async with api.database.actor_transaction(client) as session:
         check = await kyc.check_for_client(session, SEALER, client)
     assert check is not None and check.submitted_at is not None
+    # Handed in once: the check waits for a person.
+    assert (await api.http.post("/client/claim/identity", headers=bearer)).status_code == 409
+
+    await decided(api, client, approved=True)
+    assert await state(api, bearer) == "identity_confirmed"
+    confirmed = await api.http.post("/client/claim/confirm", headers=bearer)
+    assert confirmed.status_code == 200, confirmed.text
+    assert confirmed.json()["status"] == "confirmed"
+    assert (await api.http.post("/client/claim/confirm", headers=bearer)).status_code == 409
+
+
+async def test_a_check_that_is_not_approved_sends_the_client_back_a_step(api: Api) -> None:
+    client, bearer = await signed_in(api)
+    async with api.database.actor_transaction(client) as session:
+        await ready_draft(session, client, api.clock)
+    assert (await api.http.post("/client/claim/identity", headers=bearer)).status_code == 200
+    await decided(api, client, approved=False)
+    assert await state(api, bearer) == "signed_in"
 
 
 async def test_a_decision_for_anyone_else_changes_nothing(api: Api) -> None:
-    # A check decided for a client who never used Finvest 1.0, and one for a migrated client
+    # A check decided for a client who signed up in Finvest 2.0, and one for a migrated client
     # who has not handed in their identity step yet.
-    client, bearer = await signed_in(api, needs_id_check=False)
+    client, bearer = await signed_in(api)
     keys = [push_id(), push_id()]
     async with api.worker.transaction() as session:
-        for key, kind, data in [
-            (keys[0], IDENTITY_CHECK_DECIDED, {"client_id": push_id(), "approved": True}),
-            (keys[1], CLAIM_CHECK_DECIDED, {"client_id": client.id, "matched": True}),
+        for key, data in [
+            (keys[0], {"client_id": push_id(), "approved": True}),
+            (keys[1], {"client_id": client.id, "approved": True}),
         ]:
+            kind = IDENTITY_CHECK_DECIDED
             await enqueue(
                 session,
                 JobRequest(kind=kind, idempotency_key=key, payload={"data": data}),

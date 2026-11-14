@@ -47,35 +47,9 @@ A provider is asked for three things: that the document is genuine and not expir
 
 The 10-digit [account number](account-numbers.md) is issued in the transaction that approves the client. If the approval fails, the number is not kept. An approved check always has a personal account number (starting with 10) from the registry, and no other check has one. The database enforces this.
 
-## Carried over from Finvest 1.0
+## Clients with paper records
 
-At the switch (see [migration.md](migration.md)), a client whose identity Finvest 1.0 checked, on a document that has not expired, is carried over already approved. The migration module calls `record_carried_over_check(session, sealer, SYSTEM, *, client_id, document_type, document_country, details, legacy_reference, reason, clock)` in the worker, in the switch's own transaction. It issues a new personal account number and records `kyc.check.carried_over` in the audit trail with the reason and the Finvest 1.0 reference.
-
-- The check has `source = finvest1` and the client's Finvest 1.0 reference, which is used once. It was never submitted and has no photos, no provider and no automatic checks. Staff see it marked `carried_over`.
-- Finvest 1.0 did not always record when a document expires, so the expiry may be unknown. An expired document is refused with `document_expired`: that client does the full check when they claim.
-- Calling it again with the same reference for the same client returns the same check and issues nothing. The same reference for another client, a client who already has a check, and a document an approved client already holds are refused.
-- The client is not told at the switch. They hear when they claim the account.
-- Only the system on the worker's connection may insert such a check, and only approved and with no staff member as the decider. Clients still insert only their own drafts and can never set the source. Like every decided check, it never changes.
-
-## Claim checks
-
-A carried-over check has no photos. So when the client claims their account, they take a selfie and a photo of the front of the identity document on file. One member of staff with `identity_checks.review` compares the two with each other and with the carried-over check, which they open like any other identity check. They then say whether the photos match. The code is `app/modules/kyc/claims.py`, and the tables are `kyc_claim_checks` and `kyc_claim_photos` (migration 0053).
-
-- A claim check starts as a draft and goes to `needs_review` when handed in. From there staff mark it `matched` or `not_matched`, which are final, or send it back to the client (`awaiting_client`) for named photos with a message. Every decision needs a reason and is written to the audit trail.
-- Only a client whose own approved check was carried over can start one. The photos are stored and kept exactly as identity photos are, under `kyc-claims/<claim check>/<photo>`.
-- The decision is published as `kyc.claim_check_decided`, with the client, the claim check and `matched`, in the decision's own transaction. The migration module moves the claim on from that in the worker, by adding its consumer to `claims.DECIDED_CONSUMERS`. This module never writes the migration tables.
-- When staff send photos back, the client gets the same `kyc_retake_requested` notice as for an identity check, once for each hand-in. It carries no link, because notification links have no kind for a claim; the app opens the claim.
-- `not_matched` is final, and a client has one claim check. A client refused in error is not reopened here. The migration module moves their claim to staff follow-up, and staff contact the client and check their identity outside the app, as for any other claim problem (step 7 in [migration.md](migration.md)).
-- A trigger holds the same transitions and the columns each actor may change. The worker only reads.
-
-| Route | What it does |
-| --- | --- |
-| `GET /client/claim-check`, `POST /client/claim-check` | The client's claim check, or `null`; start it |
-| `PUT /client/claim-check/photos/{front,selfie}` | One photo, multipart field `photo`, the same limits as identity photos |
-| `POST /client/claim-check/submit` | Hand it in |
-| `GET /staff/claim-checks`, `GET /staff/claim-checks/{id}` | The queue and one claim check (`identity_checks.view`) |
-| `POST /staff/claim-checks/{id}/photo-links` | 5-minute links to the photos, audited |
-| `POST /staff/claim-checks/{id}/match`, `/no-match`, `/ask-for-photos` | The decisions (`identity_checks.review`; matching needs a fresh confirmation) |
+Finvest's existing clients were kept on paper, so nothing is carried over as verified. Each of them takes the full ID check when they claim their account, like any new client (the owner's decision, 2026-11-14; see [migration.md](migration.md)). The table still has the `source`, `legacy_reference` and claim check columns and tables from migrations 0052 and 0053, which are never rewritten. Nothing writes them now, and the code and routes that did were removed.
 
 ## Personal details are sealed
 
@@ -93,7 +67,7 @@ Handing a check in also asks the screening module for a sanctions and PEP screen
 
 `screening_subject(session, sealer, client_id)` gives the screening module who to screen: the names, date of birth, document type and issuing country on a check that has been handed in or approved, and never the ID number. It returns nothing for a draft or a rejected check. While staff have sent a check back for photos, it gives the details as they stand. Nationality is not recorded. The issuing country is the nationality for a passport, but for a national ID it only shows the client lives in Uganda. Only the worker and staff can read it, because a client cannot read another client's check.
 
-`approved_client_ids(session, after=, limit=)` pages through approved clients, carried-over ones included, ordered by client id. It is for the screening module's rescreening sweep, in a worker transaction.
+`approved_client_ids(session, after=, limit=)` pages through approved clients, ordered by client id. It is for the screening module's rescreening sweep, in a worker transaction.
 
 ## What the database enforces
 
@@ -174,7 +148,7 @@ How an attempt goes (`app/modules/kyc/liveness.py`, `liveness_jobs.py`, `domain/
 
 Before a signed-in client changes their own password or mobile number, a passkey or authenticator app proves the device, and a live selfie proves the person ([sign-in.md](sign-in.md#changing-how-you-sign-in)). The selfie runs on the same liveness provider, and the face it captured is compared with the face on file by the same face match the hand-in uses. Only a live person whose face matches confirms the change.
 
-The face on file (`service.approved_selfie`) is the current selfie of the client's approved check, or, for a check carried over at the switch with no photos (`source = finvest1`), the selfie on the claim check staff matched. If existing clients instead take the full ID check, as the migration thread has proposed for paper records, they are found the usual way and the claim fallback simply matches nobody. A client with neither, or with liveness off, is not asked: the passkey or app alone confirms the change. An approved check is always picked by `status = 'approved'`, since a client may also have a superseded one.
+The face on file (`service.approved_selfie`) is the current selfie of the client's approved check. A client with none, or with liveness off, is not asked: the passkey or app alone confirms the change.
 
 How an attempt goes (`app/modules/kyc/face_confirmations.py`, `face_confirmation_jobs.py`, `domain/face_confirmations.py`):
 

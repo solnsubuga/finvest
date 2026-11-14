@@ -77,7 +77,6 @@ _PASSED = text(
     "AND finished_at > :since ORDER BY finished_at DESC LIMIT 1"
 )
 _PHOTO = text("SELECT storage_key, sha256, content_type FROM kyc_photos WHERE id = :id")
-_CLAIM_PHOTO = text("SELECT storage_key, sha256, content_type FROM kyc_claim_photos WHERE id = :id")
 _INSERT = text(
     "INSERT INTO kyc_face_confirmations (id, client_id, check_id, reference_photo_id, "
     "reference_claim_photo_id, session_id, status, provider, matcher, created_at, updated_at) "
@@ -193,7 +192,7 @@ async def start(
             "client_id": client_id,
             "check_id": reference.check_id,
             "photo_id": reference.photo_id,
-            "claim_photo_id": reference.claim_photo_id,
+            "claim_photo_id": None,
             "session_id": session_id,
             "provider": provider_name,
             "matcher": matcher_name,
@@ -371,10 +370,10 @@ async def to_match(
         return None
     if await _expire_if_old(session, row, clock):
         return None
-    if row.reference_photo_id is not None:
-        on_file = (await session.execute(_PHOTO, {"id": row.reference_photo_id})).one()
-    else:
-        on_file = (await session.execute(_CLAIM_PHOTO, {"id": row.reference_claim_photo_id})).one()
+    # Every attempt names a selfie on an approved check. The claim photo column (migration 0391)
+    # was for clients carried over from Finvest 1.0, which never happened: everyone takes the
+    # full ID check.
+    on_file = (await session.execute(_PHOTO, {"id": row.reference_photo_id})).one()
     return (
         PhotoRef(row.capture_key, row.capture_sha256, row.capture_content_type),
         PhotoRef(on_file.storage_key, on_file.sha256, on_file.content_type),
