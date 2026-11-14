@@ -107,6 +107,8 @@ describe("paying for an investment by mobile money", () => {
     expect(screen.getByText("13 Nov 2026, 15:31")).toBeTruthy();
     expect(screen.getByText("MTN Mobile Money")).toBeTruthy();
     expect(screen.getByText("+256 77• ••• •56")).toBeTruthy();
+    // Its PDF receipt is in Documents, so the receipt offers it.
+    expect(await screen.findByTestId("receipt-pdf")).toHaveTextContent(/Receipt \(PDF\).*Signed PDF, saved in Documents/);
 
     await fireEvent.press(screen.getByTestId("receipt-done"));
     await screen.findByText("Welcome, Amara");
