@@ -234,3 +234,22 @@ async def test_staff_never_ask_to_withdraw_without_an_approval(
         )
     # The row policy hides the investment from a staff update with no approval.
     assert changed.rowcount == 0  # type: ignore[attr-defined]
+
+
+async def test_staff_see_what_a_withdrawal_can_name(
+    api: Api, app_database: Database, worker_database: Database
+) -> None:
+    investment, destination_id, message_id = await setting_up(api, app_database, worker_database)
+    api.clock.current = LATER.now()
+    await api.staff("operations")
+    options = await api.http.get(f"/staff/clients/{investment.client_id}/withdrawal-options")
+    assert options.status_code == 200, options.text
+    body = options.json()
+    assert [item["id"] for item in body["investments"]] == [investment.id]
+    assert body["investments"][0]["value_minor"] >= investment.amount.minor
+    assert [item["id"] for item in body["accounts"]] == [destination_id]
+    assert [item["id"] for item in body["requests"]] == [message_id]
+    assert body["open"] is True
+    await api.staff("support")
+    forbidden = await api.http.get(f"/staff/clients/{investment.client_id}/withdrawal-options")
+    assert forbidden.status_code == 403
