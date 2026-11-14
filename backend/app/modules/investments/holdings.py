@@ -564,6 +564,21 @@ async def cancel_unpaid(session: AsyncSession, clock: Clock, *, limit: int = SWE
 # Queries ----------------------------------------------------------------------------------------
 
 
+async def lock_investment(session: AsyncSession, investment_id: str) -> Investment:
+    """The investment, with its row locked for the rest of the transaction. Worker only.
+
+    Returns the Investment, or raises `not_found`.
+
+    The same lock the start of an investment takes before it reads the money waiting. Payments
+    takes it before reversing a mistaken deposit, so the money cannot start the investment
+    halfway through. It changes nothing.
+    """
+    row = (await session.execute(_BY_ID_LOCKED, {"id": investment_id})).one_or_none()
+    if row is None:
+        raise ApplicationError("not_found")
+    return investment_from_row(row)
+
+
 async def get_investment(session: AsyncSession, investment_id: str) -> Investment:
     """The investment, if this transaction may see it. For staff and the worker."""
     row = (await session.execute(_BY_ID, {"id": investment_id})).one_or_none()

@@ -23,7 +23,7 @@ from app.modules.ledger import corrections
 from app.modules.migration import service as migration
 from app.modules.notifications import announcements, suppression_lifts, wording_store
 from app.modules.organisations import service as organisations
-from app.modules.payments import bank_accounts, bank_transfers, reassignments
+from app.modules.payments import bank_accounts, bank_transfers, reassignments, reversals
 from app.modules.payouts import destinations, resolutions, reviews
 from app.modules.reconciliation import day_close, transfers
 from app.modules.screening import service as screening
@@ -90,6 +90,8 @@ async def waiting_for(session: AsyncSession, staff: StaffSession, now: datetime)
         found += await _bank_accounts(session)
     if "account_code_map" in kinds:
         found += await _code_maps(session)
+    if "deposit_reversal" in kinds:
+        found += await _reversals(session)
     return inbox(found, staff.staff_id, staff.permissions)
 
 
@@ -329,6 +331,14 @@ async def _reassignments(session: AsyncSession) -> list[Waiting]:
     return [
         Waiting("deposit_reassignment", r.id, r.deposit_id, r.proposed_by, r.proposed_at)
         for r in await reassignments.proposals_awaiting_approval(session)
+    ]
+
+
+async def _reversals(session: AsyncSession) -> list[Waiting]:
+    # The subject is the deposit's ID, never a name or an amount.
+    return [
+        Waiting("deposit_reversal", r.id, r.deposit_id, r.proposed_by, r.proposed_at)
+        for r in await reversals.proposals_awaiting_approval(session)
     ]
 
 
