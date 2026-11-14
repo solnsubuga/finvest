@@ -6724,6 +6724,25 @@
             ],
             "title": "Not Final From"
           },
+          "note": {
+            "anyOf": [
+              {
+                "enum": [
+                  "started",
+                  "ended"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note"
+          },
+          "reference": {
+            "title": "Reference",
+            "type": "string"
+          },
           "requested_at": {
             "format": "date-time",
             "title": "Requested At",
@@ -6751,7 +6770,9 @@
           "byte_size",
           "not_final_from",
           "investment_id",
-          "deposit_id"
+          "deposit_id",
+          "reference",
+          "note"
         ],
         "title": "DocumentItem",
         "type": "object"

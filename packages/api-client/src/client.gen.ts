@@ -529,6 +529,8 @@ export const DocumentItem = z.object({
   investment_id: z.string().nullable(),
   kind: z.enum(["monthly_statement", "requested_statement", "receipt", "tax_certificate", "investment_note"]),
   not_final_from: z.string().nullable(),
+  note: z.enum(["started", "ended"]).nullable(),
+  reference: z.string(),
   requested_at: z.string(),
   status: z.enum(["pending", "ready", "failed"]),
 });

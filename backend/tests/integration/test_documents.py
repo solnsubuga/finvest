@@ -883,6 +883,7 @@ async def test_a_client_asks_for_and_downloads_a_statement_over_http(
         PERIOD.start.isoformat(),
         None,
     )
+    assert (item["reference"], item["note"]) == (f"ST-{item['id']}", None)
     assert (await api.get(f"/client/documents/{item['id']}/file")).status_code == 404
     refused = await api.post(
         "/client/statements",
