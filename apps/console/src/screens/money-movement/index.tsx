@@ -18,6 +18,14 @@ import {
 import { createHttpPayoutsApi } from "./http.ts";
 import { Settle, type SettleCommand } from "./Settle.tsx";
 import { createStubPayoutsApi, type StubCase } from "./stub.ts";
+import { notConnectedBankPayoutsApi, type BankPayoutsApi } from "./bank/api.ts";
+import { BankPayouts } from "./bank/BankPayouts.tsx";
+import { createHttpBankPayoutsApi } from "./bank/http.ts";
+import { createStubBankPayoutsApi } from "./bank/stub.ts";
+import { notConnectedReturnsApi, type ReturnsApi } from "./returns/api.ts";
+import { createHttpReturnsApi } from "./returns/http.ts";
+import { Returns } from "./returns/Returns.tsx";
+import { createStubReturnsApi } from "./returns/stub.ts";
 
 type Load<T> = { state: "loading" } | { state: "failed"; message: string } | { state: "ready"; value: T };
 
@@ -291,9 +299,26 @@ function defaultApi(me: string): PayoutsApi {
   return base ? createHttpPayoutsApi(createHttp(base)) : notConnectedPayoutsApi;
 }
 
+/** Bank payouts and returns, the same way: samples under the stub, the real routes otherwise. */
+function defaultBankApis(me: string): { bank: BankPayoutsApi; returns: ReturnsApi } {
+  if (isStubAuth()) return { bank: createStubBankPayoutsApi(me, 150, stubCase()), returns: createStubReturnsApi(me, 150, stubCase()) };
+  const base = apiBaseUrl();
+  if (!base) return { bank: notConnectedBankPayoutsApi, returns: notConnectedReturnsApi };
+  const http = createHttp(base);
+  return { bank: createHttpBankPayoutsApi(http), returns: createHttpReturnsApi(http) };
+}
+
 export default function MoneyMovementPage() {
   const { session } = useAuth();
   const me = session?.staffId ?? "";
   const [api] = useState<PayoutsApi>(() => defaultApi(me));
-  return <MoneyMovementScreen api={api} me={me} canSettle={session ? can(session, "reconciliation.change") : false} />;
+  const [bank] = useState(() => defaultBankApis(me));
+  const canPayBank = session ? can(session, "bank_payouts.change") : false;
+  return (
+    <>
+      <MoneyMovementScreen api={api} me={me} canSettle={session ? can(session, "reconciliation.change") : false} />
+      <BankPayouts api={bank.bank} me={me} canChange={canPayBank} />
+      <Returns api={bank.returns} me={me} canChange={canPayBank} />
+    </>
+  );
 }
