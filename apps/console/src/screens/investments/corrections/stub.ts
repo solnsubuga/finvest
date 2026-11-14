@@ -15,8 +15,8 @@ const OTHER = "sample-staff-grace";
 /** The sample investments the stub knows, by ID, with what each holds. */
 const INVESTMENTS: Record<string, { client: string; principal: Amount; running: boolean }> = {
   "-InvSample00000000A1": { client: "-ClientSample0000001", principal: ugx(5_000_000), running: true },
-  "-InvSample00000000A3": { client: "-ClientSample0000003", principal: ugx(1_000_000), running: true },
-  "-InvSample00000000C1": { client: "-ClientSample0000008", principal: ugx(500_000), running: false },
+  "-InvSample00000000A3": { client: "sample-client-amara", principal: ugx(1_000_000), running: true },
+  "-InvSample00000000C1": { client: "sample-client-peter", principal: ugx(500_000), running: false },
 };
 
 function samples(me: string): Correction[] {
@@ -35,7 +35,7 @@ function samples(me: string): Correction[] {
       id: "-CorrSample000000001",
       kind: "unwind",
       investmentId: "-InvSample00000000A3",
-      clientId: "-ClientSample0000003",
+      clientId: "sample-client-amara",
       amount: ugx(1_000_000),
       reason: "Bank transfer FT2611130042 was matched to the wrong client. Payments is reversing the credit.",
       status: "proposed",
@@ -47,7 +47,7 @@ function samples(me: string): Correction[] {
       id: "-CorrSample000000002",
       kind: "refund",
       investmentId: "-InvSample00000000C1",
-      clientId: "-ClientSample0000008",
+      clientId: "sample-client-peter",
       amount: ugx(500_000),
       destinationId: "-DestSample000000008",
       reason: "The client paid after the payment window closed and asked for the money back.",
@@ -60,7 +60,7 @@ function samples(me: string): Correction[] {
       id: "-CorrSample000000003",
       kind: "refund",
       investmentId: "-InvSample00000000C2",
-      clientId: "-ClientSample0000009",
+      clientId: "sample-client-david",
       amount: ugx(250_000),
       destinationId: "-DestSample000000009",
       reason: "Paid twice for the same investment by mistake.",
@@ -77,7 +77,7 @@ function samples(me: string): Correction[] {
       id: "-CorrSample000000004",
       kind: "refund",
       investmentId: "-InvSample00000000C3",
-      clientId: "-ClientSample0000010",
+      clientId: "sample-client-joan",
       amount: ugx(9_000_000),
       destinationId: "-DestSample000000010",
       reason: "Investment cancelled at the client's request before it started.",
