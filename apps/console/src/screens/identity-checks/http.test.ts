@@ -73,7 +73,12 @@ describe("identity checks over HTTP", () => {
       { kind: "selfie", url: null, live: true },
     ]);
     expect(check).toMatchObject({ documentNumberMasked: "CM90••••••••4PL", givenNames: "David", automaticChecks: [{ score: 62 }] });
-    expect(check.phoneName).toEqual({ status: "partly_matches", registeredName: "MUGISHA David Okello" });
+    expect(check.phoneName).toEqual({
+      status: "partly_matches",
+      registeredName: "MUGISHA David Okello",
+      currentNumber: true,
+      blocksApproval: false,
+    });
   });
 
   it("reuses the links while they are good, so one look is one audit event", async () => {

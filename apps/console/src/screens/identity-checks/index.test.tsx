@@ -75,11 +75,16 @@ describe("identity checks screen", () => {
     const matches = within(first).getByText("Phone registered to this name").closest("li");
     expect(matches).toHaveTextContent("Matches");
     expect(matches).not.toHaveTextContent("David Mugisha");
+    expect(within(first).queryByRole("note")).toBeNull();
     await user.click(screen.getByRole("button", { name: /Grace Namara/ }));
     const third = await openCheck("Grace Namara");
     expect(within(third).getByText("Phone registered to this name").closest("li")).toHaveTextContent(
       "Different name: Peter Okot",
     );
+    // A different name blocks approval: no Approve, and the reason in words.
+    expect(within(third).queryByRole("button", { name: "Approve" })).toBeNull();
+    expect(within(third).getByRole("button", { name: "Reject" })).toBeInTheDocument();
+    expect(within(third).getByRole("note")).toHaveTextContent("their phone number is registered to Peter Okot");
   });
 
   it("opens another check from the queue and says when no automatic checks ran", async () => {
