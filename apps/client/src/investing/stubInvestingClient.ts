@@ -10,6 +10,8 @@ import {
   PayoutAccount,
   Product,
   Quote,
+  Recipient,
+  Transfer,
 } from "./types";
 
 /**
@@ -106,10 +108,42 @@ type Stored = {
   startDate: string | null;
   /** When the client asked to withdraw it early, in milliseconds. */
   withdrawnAtMs: number | null;
+  /** Set once it was sent to another client: it closed, and a new one holds what was kept. */
+  transferredAtMs: number | null;
+  /** For a new investment from a transfer: its fixed maturity date, the old one's. */
+  maturesOn?: string;
+  /** For a new investment from a transfer: what it started with, interest included. */
+  carried?: boolean;
 };
+
+/** Demo clients another can send to, by account number and by mobile number. */
+const DEMO_RECIPIENTS: (Recipient & { phone: string })[] = [
+  { accountNumber: "1001005170", name: "Brian K.", phone: "+256772555170" },
+  { accountNumber: "1003382914", name: "Amara N.", phone: "+256701382914" },
+];
+/** The demo client's own account number, which cannot be sent to. */
+const OWN_ACCOUNT_NUMBER = "1004417263";
+/** Above this, with the day's other sends, a transfer waits for two members of staff. */
+const REVIEW_ABOVE = 10_000_000;
+
+function recipientFor(to: string): Recipient | "invalid" | null {
+  const cleaned = to.replace(/[\s-]/g, "");
+  if (/^[1-9]\d{9}$/.test(cleaned)) {
+    if (cleaned === OWN_ACCOUNT_NUMBER) return { accountNumber: cleaned, name: "you" };
+    return DEMO_RECIPIENTS.find((candidate) => candidate.accountNumber === cleaned) ?? null;
+  }
+  // A Ugandan mobile number, written any of the usual ways.
+  const phone = cleaned.replace(/^\+?256/, "").replace(/^0/, "");
+  if (/^7\d{8}$/.test(phone)) {
+    return DEMO_RECIPIENTS.find((candidate) => candidate.phone === `+256${phone}`) ?? null;
+  }
+  return "invalid";
+}
 
 /** The most mobile money takes in one payout, as the launch limits set it. */
 const MOBILE_MONEY_PER_PAYOUT = 5_000_000;
+
+const OPEN: Transfer["status"][] = ["waiting", "held", "release_proposed"];
 
 /** Demo accounts: one ready, and one approved today, so still in its safety wait. */
 function demoAccounts(nowMs: number): PayoutAccount[] {
@@ -150,6 +184,10 @@ export type StubOptions = {
   loseFirstWithdrawal?: boolean;
   /** True adds an investment that matured to be paid out with no account chosen, to show that state. */
   maturedWaiting?: boolean;
+  /** "none" starts with nothing sent or received; the default shows one of each. */
+  transfers?: "default" | "none";
+  /** Above this, with the day's other sends, a transfer waits for staff. Lower it to show that state. */
+  reviewAbove?: number;
 };
 
 export function createStubInvestingClient(options: StubOptions = {}): InvestingClient {
@@ -158,6 +196,8 @@ export function createStubInvestingClient(options: StubOptions = {}): InvestingC
   const stored = new Map<string, Stored>();
   const byKey = new Map<string, { id: string; request: string }>();
   const withdrawalKeys = new Map<string, string>();
+  const transfers = new Map<string, Transfer>();
+  const sendKeys = new Map<string, { id: string; request: string }>();
   let loseNextWithdrawal = options.loseFirstWithdrawal ?? false;
 
   const pause = () =>
@@ -187,10 +227,29 @@ export function createStubInvestingClient(options: StubOptions = {}): InvestingC
         createdAtMs: now() - (startedDaysAgo + 1) * DAY_MS,
         startDate: addDays(today, -startedDaysAgo),
         withdrawnAtMs: null,
+        transferredAtMs: null,
       });
+      return id;
     };
     seed("TREA-91", 5_000_000, 85, "roll_over");
-    seed("TREA-182", 2_000_000, 40, "pay_out", "demo-account-mtn");
+    const gift = seed("TREA-182", 2_000_000, 40, "pay_out", "demo-account-mtn");
+    if (options.transfers !== "none") {
+      // Received from another client 12 days ago, on that client's rate and maturity date.
+      transfers.set("demo-transfer-received", {
+        id: "demo-transfer-received",
+        direction: "received",
+        otherName: "Amara N.",
+        status: "done",
+        amount: { currency: "UGX", minor: 2_000_000 },
+        whole: false,
+        message: "Happy birthday!",
+        requestedAt: new Date(now() - 40 * DAY_MS).toISOString(),
+        finishedAt: new Date(now() - 40 * DAY_MS + 60_000).toISOString(),
+        investmentId: gift,
+        keptInvestmentId: null,
+        failureCode: null,
+      });
+    }
     if (options.maturedWaiting) {
       // Its account was removed before it matured, so the money waits for the client to choose.
       seed("TREA-91", 3_000_000, 93, "pay_out");
@@ -209,12 +268,14 @@ export function createStubInvestingClient(options: StubOptions = {}): InvestingC
     const { product, amount } = entry;
     const today = kampalaDay(now());
     const start = startDate(entry);
-    const maturity = start && product.termDays !== null ? addDays(start, product.termDays) : null;
+    const maturity = entry.maturesOn ?? (start && product.termDays !== null ? addDays(start, product.termDays) : null);
     const lapsed = !start && now() > entry.createdAtMs + PAY_WINDOW_MS;
     const matured = maturity !== null && today >= maturity;
     // Like the API: asking to withdraw early leaves it `active` with the request recorded. The
     // backend's worker moves it to `withdrawn` later; the demo never does, so both read alike.
-    const status: Investment["status"] = lapsed
+    const status: Investment["status"] = entry.transferredAtMs !== null
+      ? "transferred"
+      : lapsed
         ? "cancelled"
         : !start
           ? "awaiting_payment"
@@ -255,6 +316,11 @@ export function createStubInvestingClient(options: StubOptions = {}): InvestingC
       waitingForDestination: status === "matured" && entry.atMaturity === "pay_out" && entry.payoutId === null && entry.destinationId === null,
       canWithdraw: status === "active" && entry.withdrawnAtMs === null && (maturity === null || today < maturity),
       withdrawalRequestedAt: entry.withdrawnAtMs === null ? null : new Date(entry.withdrawnAtMs).toISOString(),
+      canSend:
+        status === "active" &&
+        entry.withdrawnAtMs === null &&
+        (maturity === null || today < maturity) &&
+        ![...transfers.values()].some((transfer) => transfer.investmentId === entry.id && OPEN.includes(transfer.status)),
     };
   }
 
@@ -325,6 +391,7 @@ export function createStubInvestingClient(options: StubOptions = {}): InvestingC
         createdAtMs: now(),
         startDate: null,
         withdrawnAtMs: null,
+        transferredAtMs: null,
       };
       stored.set(entry.id, entry);
       byKey.set(request.idempotencyKey, { id: entry.id, request: details });
@@ -442,6 +509,107 @@ export function createStubInvestingClient(options: StubOptions = {}): InvestingC
       entry.payoutId = `demo-payout-${nextId}`;
       entry.destinationId = request.destinationId;
       return view(entry);
+    },
+
+    async findRecipient(to) {
+      await pause();
+      const found = recipientFor(to);
+      if (found === "invalid") throw new InvestingError("not_an_account_number");
+      if (found === null) throw new InvestingError("no_such_client");
+      if (found.accountNumber === OWN_ACCOUNT_NUMBER) throw new InvestingError("to_yourself");
+      // Only the number and the short name, as the API sends: never the phone.
+      return { accountNumber: found.accountNumber, name: found.name };
+    },
+
+    async sendInvestment(request) {
+      await pause();
+      // Like the backend: a known key returns its transfer, and the same key for anything
+      // else is refused.
+      const details = JSON.stringify([request.investmentId, request.toAccountNumber, request.amount, request.message, request.whole]);
+      const known = sendKeys.get(request.idempotencyKey);
+      if (known) {
+        if (known.request !== details) throw new InvestingError("key_reused");
+        return transfers.get(known.id) as Transfer;
+      }
+      const entry = stored.get(request.investmentId);
+      if (!entry) throw new InvestingError("not_found");
+      const shown = view(entry);
+      if (!shown.canSend) throw new InvestingError("cannot_send");
+      const recipient = recipientFor(request.toAccountNumber);
+      if (recipient === "invalid" || recipient === null) throw new InvestingError("no_such_client");
+      if (recipient.accountNumber === OWN_ACCOUNT_NUMBER) throw new InvestingError("to_yourself");
+      const minimum = entry.product.minimum.minor;
+      if (request.amount.currency !== shown.value.currency) throw new InvestingError("invalid");
+      // Everything is the value now, as the backend takes it, whatever the screen loaded.
+      const amount = request.whole ? shown.value.minor : request.amount.minor;
+      if (amount < minimum) throw new InvestingError("below_product_minimum");
+      if (amount > shown.value.minor) throw new InvestingError("more_than_value");
+      const kept = shown.value.minor - amount;
+      if (kept > 0 && kept < minimum) throw new InvestingError("remainder_below_minimum");
+      const sentToday = [...transfers.values()]
+        .filter((transfer) => transfer.direction === "sent" && transfer.status !== "declined" && transfer.status !== "cancelled" && transfer.status !== "failed")
+        .filter((transfer) => kampalaDay(Date.parse(transfer.requestedAt)) === kampalaDay(now()))
+        .reduce((total, transfer) => total + transfer.amount.minor, 0);
+      const held = amount + sentToday > (options.reviewAbove ?? REVIEW_ABOVE);
+      nextId += 1;
+      const transfer: Transfer = {
+        id: `demo-transfer-${nextId}`,
+        direction: "sent",
+        otherName: recipient.name,
+        status: held ? "held" : "done",
+        amount: { currency: request.amount.currency, minor: amount },
+        whole: kept === 0,
+        message: request.message,
+        requestedAt: new Date(now()).toISOString(),
+        finishedAt: held ? null : new Date(now()).toISOString(),
+        investmentId: entry.id,
+        keptInvestmentId: null,
+        failureCode: null,
+      };
+      if (!held) {
+        // The demo moves it at once, as the worker does a moment later.
+        entry.transferredAtMs = now();
+        if (kept > 0) {
+          nextId += 1;
+          const keptId = `demo-investment-${nextId}`;
+          stored.set(keptId, {
+            ...entry,
+            id: keptId,
+            amount: { currency: entry.amount.currency, minor: kept },
+            createdAtMs: now(),
+            startDate: kampalaDay(now()),
+            maturesOn: shown.maturityDate ?? undefined,
+            withdrawnAtMs: null,
+            transferredAtMs: null,
+            carried: true,
+          });
+          transfer.keptInvestmentId = keptId;
+        }
+      }
+      transfers.set(transfer.id, transfer);
+      sendKeys.set(request.idempotencyKey, { id: transfer.id, request: details });
+      return transfer;
+    },
+
+    async listTransfers() {
+      await pause();
+      return [...transfers.values()].reverse();
+    },
+
+    async getTransfer(transferId) {
+      await pause();
+      const transfer = transfers.get(transferId);
+      if (!transfer) throw new InvestingError("not_found");
+      return transfer;
+    },
+
+    async cancelTransfer(transferId) {
+      await pause();
+      const transfer = transfers.get(transferId);
+      if (!transfer || transfer.direction !== "sent") throw new InvestingError("not_found");
+      if (transfer.status !== "held" && transfer.status !== "release_proposed") throw new InvestingError("cannot_cancel");
+      transfer.status = "cancelled";
+      return transfer;
     },
   };
 }
