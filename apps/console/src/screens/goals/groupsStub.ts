@@ -27,7 +27,7 @@ interface Sample {
 
 const SAMPLES: readonly Sample[] = [
   {
-    group: { ownerClientId: "client-5", name: "Family land in Mukono", category: "land_or_home", target: "12000000", status: "active", createdDaysAgo: 89, dueInDays: 640 },
+    group: { ownerClientId: "client-5", name: "Family land in Mukono", category: "land_or_home", currency: "UGX", target: "12000000", status: "active", createdDaysAgo: 89, dueInDays: 640 },
     progress: { value: "2800000", percent: 23, standing: "on_track" },
     members: [
       { goalId: "sample-group-goal-1", clientId: "client-5", displayName: "Amara", value: "0", joinedDaysAgo: 89, countedDaysAgo: 1 },
@@ -37,7 +37,7 @@ const SAMPLES: readonly Sample[] = [
     ],
   },
   {
-    group: { ownerClientId: "client-9", name: "Wedding in Mbarara", category: "wedding", target: "15000000", status: "active", createdDaysAgo: 40, dueInDays: 230 },
+    group: { ownerClientId: "client-9", name: "Wedding in Mbarara", category: "wedding", currency: "UGX", target: "15000000", status: "active", createdDaysAgo: 40, dueInDays: 230 },
     progress: { value: "10000000", percent: 66, standing: "on_track" },
     members: [
       { goalId: "sample-group-goal-5", clientId: "client-9", displayName: "Patience", value: "6400000", joinedDaysAgo: 40, countedDaysAgo: 1 },
@@ -47,7 +47,7 @@ const SAMPLES: readonly Sample[] = [
     ],
   },
   {
-    group: { ownerClientId: "client-13", name: "Office for our shop", category: "business", target: "8000000", status: "closed", createdDaysAgo: 150, closedDaysAgo: 6, dueInDays: null },
+    group: { ownerClientId: "client-13", name: "Office for our shop", category: "business", currency: "UGX", target: "8000000", status: "closed", createdDaysAgo: 150, closedDaysAgo: 6, dueInDays: null },
     progress: { value: "0", percent: 0, standing: "no_date" },
     members: [
       { goalId: "sample-group-goal-9", clientId: "client-13", displayName: "Ivan", value: "2200000", joinedDaysAgo: 150, leftDaysAgo: 6, countedDaysAgo: 7 },
