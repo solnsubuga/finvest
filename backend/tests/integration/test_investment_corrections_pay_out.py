@@ -2,9 +2,11 @@
 PostgreSQL: one proposes another of the client's payout accounts, a different one approves,
 and the worker makes the payout the client's own request would make, under the same key."""
 
+import asyncio
 from datetime import timedelta
 
 import pytest
+from sqlalchemy import text
 
 from app.infrastructure.database import Database
 from app.modules.investments import corrections
@@ -13,6 +15,7 @@ from app.modules.investments.domain.investments import AtMaturity
 from app.modules.payouts import payouts
 from app.shared.actors import SYSTEM, Actor
 from app.shared.errors import ApplicationError
+from tests.support.clock import AsyncBarrier
 from tests.support.investments import (
     PRESENT,
     approved_client,
@@ -158,3 +161,43 @@ async def test_only_held_money_and_only_to_an_account_of_the_clients(
     with pytest.raises(ApplicationError) as someone_elses:
         await propose(app_database, investment.id, destination_id)
     assert [f.code for f in someone_elses.value.fields] == ["not_usable"]
+
+
+async def test_the_client_and_staff_sending_at_once_make_one_payout(
+    app_database: Database, worker_database: Database, concurrency_barrier: AsyncBarrier
+) -> None:
+    investment = await held(app_database, worker_database)
+    client = Actor("client", investment.client_id)
+    theirs = await approved_destination(app_database, client, PRESENT)
+    other = await approved_destination(app_database, client, PRESENT)
+    proposed = await propose(app_database, investment.id, other)
+    await approve(app_database, proposed.id)
+
+    async def by_client() -> str:
+        async with app_database.actor_transaction(client) as session:
+            await concurrency_barrier.wait()
+            try:
+                await investments.pay_out_matured(
+                    session, client, investment.id, destination_id=theirs, clock=CALLED
+                )
+            except ApplicationError as error:
+                return error.code
+        return "client_sent"
+
+    async def by_worker() -> str:
+        async with worker_database.actor_transaction(SYSTEM) as session:
+            await concurrency_barrier.wait()
+            finished = await corrections.apply_correction(session, proposed.id, CALLED)
+        return finished.failure_code or "staff_sent"
+
+    outcomes = sorted(await asyncio.gather(by_client(), by_worker()))
+
+    assert outcomes in (["client_sent", "investment_not_held"], ["conflict", "staff_sent"])
+    async with worker_database.actor_transaction(SYSTEM) as session:
+        made = (
+            await session.execute(
+                text("SELECT count(*) FROM payouts WHERE source_reference = :id"),
+                {"id": investment.id},
+            )
+        ).scalar_one()
+    assert made == 1
