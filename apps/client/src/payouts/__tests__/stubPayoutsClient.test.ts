@@ -153,7 +153,9 @@ describe("the demo name check for a mobile money number", () => {
   it("compares a name that waited for the ID, and shows a number with no name as refused for good", async () => {
     const api = createStubPayoutsClient({ sample: "empty", delayMs: 0, now: () => NOW, nameCheck: "waiting_for_id" });
     const number = (await api.listAccounts())[0]!;
-    expect(await api.checkNameAgain(number.id)).toMatchObject({ status: "in_review", nameCheck: null });
+    // As the backend does, asking again only queues the comparison: the answer still waits.
+    expect(await api.checkNameAgain(number.id)).toMatchObject({ status: "awaiting_proof", nameCheck: "waiting_for_id" });
+    expect(await api.getAccount(number.id)).toMatchObject({ status: "in_review", nameCheck: null });
 
     const refused = createStubPayoutsClient({ sample: "empty", delayMs: 0, now: () => NOW, nameCheck: "no_name" });
     const none = (await refused.listAccounts())[0]!;

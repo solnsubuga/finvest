@@ -89,6 +89,18 @@ describe("review queue: payout accounts", () => {
     expect(within(updated).queryByRole("tab", { name: "Approve the check" })).not.toBeInTheDocument();
   });
 
+  it("offers no check for a number whose network name is not read yet", async () => {
+    const api = stub();
+    const open = api.openAccount.bind(api);
+    vi.spyOn(api, "openAccount").mockImplementation(async (id) => ({ ...(await open(id)), networkName: null }));
+    const { user } = renderScreen({ api });
+    const review = await openAccount(user, "Amara Nakato");
+    expect(within(review).getByText(/The network has not given a name for this number yet/)).toBeInTheDocument();
+    expect(within(review).queryByRole("button", { name: "Record the check" })).not.toBeInTheDocument();
+    await user.click(within(review).getByRole("tab", { name: "Refuse the proof" }));
+    expect(within(review).getByLabelText("Reason for your decision")).toBeInTheDocument();
+  });
+
   it("refuses a typed name that is not the client's, and records one that is", async () => {
     const { user } = renderScreen();
     const review = await openAccount(user, "Peter Okello");
