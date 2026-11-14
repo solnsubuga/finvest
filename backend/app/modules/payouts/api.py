@@ -549,7 +549,9 @@ async def resend(
 @client_router.get("/withdrawal-limits")
 async def withdrawal_limits(client: CurrentClient, database: Db, clock: Time) -> LimitsOut:
     async with database.actor_transaction(client.actor) as session:
-        limits = await payouts.current_limits(session, business_date(clock.now()))
+        limits = await payouts.current_limits(
+            session, business_date(clock.now()), client_id=client.actor.id
+        )
 
     def optional(amount: Money | None) -> MoneyView | None:
         return None if amount is None else _money(amount)

@@ -130,6 +130,9 @@ Permission = Literal[
     # Proposing or deciding to reset a client's app PIN, which signs the phone app out so the
     # client logs in again and chooses a new one. Always takes a second person. Not a screen.
     "client_pins.reset",
+    # Proposing or deciding a client's own stricter withdrawal limits, or clearing them. They
+    # only ever lower the shared limits. Always takes a second person. Not a screen.
+    "client_limits.change",
 ]
 PERMISSIONS: tuple[Permission, ...] = get_args(Permission)
 
@@ -170,6 +173,7 @@ ROLE_PERMISSIONS: dict[Role, frozenset[Permission]] = {
             "client_phones.change",
             "client_notes.write",
             "client_pins.reset",
+            "client_limits.change",
         }
     ),
     "finance": frozenset(
@@ -199,6 +203,7 @@ ROLE_PERMISSIONS: dict[Role, frozenset[Permission]] = {
             "migration.sign_off",
             "investment_corrections.change",
             "client_notes.write",
+            "client_limits.change",
             # The trust account clients pay into is finance's to keep right. Settings is where
             # it is set, so finance can open Settings, read only apart from that account.
             "settings.view",
@@ -226,6 +231,7 @@ ROLE_PERMISSIONS: dict[Role, frozenset[Permission]] = {
             "organisations.review",
             "client_notes.write",
             "client_pins.reset",
+            "client_limits.change",
         }
     ),
     # Support answers clients and logs and works complaints. Closing one is for operations and

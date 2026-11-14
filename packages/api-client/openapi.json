@@ -166,9 +166,22 @@
             "type": "string"
           },
           "kind": {
-            "const": "pin_reset",
+            "enum": [
+              "pin_reset",
+              "withdrawal_limits"
+            ],
             "title": "Kind",
             "type": "string"
+          },
+          "limits": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/LimitsView"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "proposed_at": {
             "format": "date-time",
@@ -218,6 +231,7 @@
           "decided_by_name",
           "decided_at",
           "decision_reason",
+          "limits",
           "yours"
         ],
         "title": "ActionView",
@@ -235,7 +249,10 @@
           },
           "allowed": {
             "items": {
-              "const": "pin_reset",
+              "enum": [
+                "pin_reset",
+                "withdrawal_limits"
+              ],
               "type": "string"
             },
             "title": "Allowed",
@@ -633,7 +650,8 @@
               "account_closure",
               "compliance_case",
               "bank_account_change",
-              "client_pin_reset"
+              "client_pin_reset",
+              "client_limits"
             ],
             "title": "Kind",
             "type": "string"
@@ -3721,6 +3739,39 @@
           "withdrawal_requested_at"
         ],
         "title": "ClientInvestmentOut",
+        "type": "object"
+      },
+      "ClientLimitsView": {
+        "additionalProperties": false,
+        "properties": {
+          "applied": {
+            "$ref": "#/components/schemas/LimitsView"
+          },
+          "can_change": {
+            "title": "Can Change",
+            "type": "boolean"
+          },
+          "own": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/LimitsView"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "shared": {
+            "$ref": "#/components/schemas/LimitsView"
+          }
+        },
+        "required": [
+          "shared",
+          "own",
+          "applied",
+          "can_change"
+        ],
+        "title": "ClientLimitsView",
         "type": "object"
       },
       "ClientLoginStart": {
@@ -8245,6 +8296,86 @@
         "title": "LiftView",
         "type": "object"
       },
+      "LimitsIn": {
+        "additionalProperties": false,
+        "description": "A client's own limits in whole shillings. Null leaves that sort to the shared limit.",
+        "properties": {
+          "bank_per_day": {
+            "anyOf": [
+              {
+                "maximum": 1000000000000000.0,
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Bank Per Day"
+          },
+          "bank_per_payout": {
+            "anyOf": [
+              {
+                "maximum": 1000000000000000.0,
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Bank Per Payout"
+          },
+          "mobile_money_per_day": {
+            "anyOf": [
+              {
+                "maximum": 1000000000000000.0,
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Mobile Money Per Day"
+          },
+          "mobile_money_per_payout": {
+            "anyOf": [
+              {
+                "maximum": 5000000.0,
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Mobile Money Per Payout"
+          },
+          "review_above": {
+            "anyOf": [
+              {
+                "maximum": 1000000000000000.0,
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Review Above"
+          }
+        },
+        "required": [
+          "mobile_money_per_payout",
+          "mobile_money_per_day",
+          "bank_per_payout",
+          "bank_per_day",
+          "review_above"
+        ],
+        "title": "LimitsIn",
+        "type": "object"
+      },
       "LimitsOut": {
         "additionalProperties": false,
         "description": "The withdrawal limits in force today. A limit that is None is not set.",
@@ -8296,6 +8427,76 @@
           "bank_per_day"
         ],
         "title": "LimitsOut",
+        "type": "object"
+      },
+      "LimitsView": {
+        "additionalProperties": false,
+        "description": "Withdrawal limits in whole shillings (UGX). Null is no limit of that sort.",
+        "properties": {
+          "bank_per_day": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Bank Per Day"
+          },
+          "bank_per_payout": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Bank Per Payout"
+          },
+          "mobile_money_per_day": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Mobile Money Per Day"
+          },
+          "mobile_money_per_payout": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Mobile Money Per Payout"
+          },
+          "review_above": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Review Above"
+          }
+        },
+        "required": [
+          "mobile_money_per_payout",
+          "mobile_money_per_day",
+          "bank_per_payout",
+          "bank_per_day",
+          "review_above"
+        ],
+        "title": "LimitsView",
         "type": "object"
       },
       "LineOut": {
@@ -11930,9 +12131,22 @@
         "additionalProperties": false,
         "properties": {
           "kind": {
-            "const": "pin_reset",
+            "enum": [
+              "pin_reset",
+              "withdrawal_limits"
+            ],
             "title": "Kind",
             "type": "string"
+          },
+          "limits": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/LimitsIn"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "reason": {
             "maxLength": 500,
@@ -14423,7 +14637,8 @@
                 "investment_transfers.change",
                 "organisations.review",
                 "client_notes.write",
-                "client_pins.reset"
+                "client_pins.reset",
+                "client_limits.change"
               ],
               "type": "string"
             },
@@ -18295,7 +18510,8 @@
                 "investment_transfers.change",
                 "organisations.review",
                 "client_notes.write",
-                "client_pins.reset"
+                "client_pins.reset",
+                "client_limits.change"
               ],
               "type": "string"
             },
@@ -35836,6 +36052,92 @@
           }
         },
         "summary": "Propose Action",
+        "tags": [
+          "staff clients"
+        ]
+      }
+    },
+    "/staff/clients/{client_id}/limits": {
+      "get": {
+        "description": "The withdrawal limits that apply to the client today, and staff's own for them.",
+        "operationId": "client_withdrawal_limits_staff_clients__client_id__limits_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "client_id",
+            "required": true,
+            "schema": {
+              "maxLength": 20,
+              "minLength": 20,
+              "pattern": "^[-0-9A-Z_a-z]{20}$",
+              "title": "Client Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ClientLimitsView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          }
+        },
+        "summary": "Client Withdrawal Limits",
         "tags": [
           "staff clients"
         ]

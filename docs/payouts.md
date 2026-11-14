@@ -104,6 +104,8 @@ Limits are versioned by effective date. The version in force on the business day
 
 A new version is inserted by the staff member who approves it, names a different staff member as proposer, and is never edited afterwards. The launch version is seeded by migration 0031. The console screen for proposing and approving a change arrives with Settings.
 
+**A client's own limits.** Two members of staff can set stricter limits for one client from their page ([client-accounts.md](client-accounts.md#acting-for-a-client)), in `payout_client_limits` (migration 0352). They only ever lower the shared ones: each payout is checked against the lower of the two for each sort (`domain/limits.for_client`), and `GET /client/withdrawal-limits` shows the client what applies to them.
+
 An amount over the mobile money limit is refused with a code that tells the app to offer a bank account instead. Daily limits count every payout of the day that was not cancelled and did not fail. Amounts are never converted: a payout in another currency than the limits is refused.
 
 Every payout created is also read by screening's transaction monitoring (`screening.contract.watch_payout`, [screening.md](screening.md#transaction-monitoring)). A monitoring case does not hold the payout.
