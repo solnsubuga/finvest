@@ -268,7 +268,7 @@ describe("finance checks on the migration screen", () => {
     const confirm = await screen.findByRole("button", { name: "Confirm these totals" });
     expect(screen.getByText(/Entered by Grace Finance/)).toHaveTextContent("Check each figure against Finvest 1.0's report before confirming.");
     await user.click(confirm);
-    expect(await screen.findByText(/Checked by You\./)).toBeInTheDocument();
+    expect(await screen.findByText(/Checked by you\./)).toBeInTheDocument();
     expect(screen.getByText("1,909 of 1,912")).toBeInTheDocument();
   });
 

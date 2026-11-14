@@ -176,7 +176,7 @@ export function TotalsPanel({ totals, mayEnter, busy, onOpenForm, onConfirm }: T
           <p className="m-0 border-t border-divider pt-2.5 text-sm leading-normal text-muted">
             Entered by {totals.enteredBy} on {formatMoment(totals.enteredAt)}.{" "}
             {totals.confirmedBy
-              ? `Checked by ${totals.confirmedBy}.`
+              ? `Checked by ${totals.confirmedBy === "You" ? "you" : totals.confirmedBy}.`
               : totals.mine
                 ? "Someone else checks them against the report before they count."
                 : "Check each figure against Finvest 1.0's report before confirming."}
