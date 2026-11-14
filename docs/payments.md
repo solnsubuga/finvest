@@ -293,6 +293,10 @@ Which process needs which:
 
 ioTec's test numbers: `011177777x` succeed, `011177799x` fail, `011177778x` stay pending and `011177779x` stay with the network. A deposit is collected from the account's own number, so trying a test wallet needs a staging client whose number is one of these, such as `+256111777771`.
 
+## Pausing a channel
+
+Staff can pause MTN, Airtel or bank transfer pay ins on Settings, two people agreeing ([platform-settings.md](platform-settings.md)). While one is paused, a new mobile money payment on that network is refused with 503 and field code `channel_paused` on `network`, and the bank transfer details with 503 and `channel_paused` on `method`, so the app offers another way. A request already made returns its deposit when repeated with its key, a payment already started finishes as it would have, and a receipt for a transfer already made can still be handed in.
+
 ## Not built yet
 
 - Trying the adapter against ioTec's test wallet, which needs the credentials and a staging deploy.

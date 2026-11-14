@@ -156,7 +156,7 @@ Migration 0031 adds `withdrawal_limits` and `payouts`. The commands are in `back
 4. Checks the limits in force on the business day against what already went that day.
 5. Finds the client's handover account for `source_reference`, inserts the payout and posts the reserve entry.
 
-A refusal leaves nothing behind. The codes are `destination_not_approved`, `destination_in_safety_wait`, `destination_not_known_yet`, `amount_not_positive`, `currency_not_supported`, `over_mobile_money_limit`, `over_bank_limit`, `over_daily_limit`, `source_not_allowed` and `insufficient_funds`.
+A refusal leaves nothing behind. The codes are `destination_not_approved`, `destination_in_safety_wait`, `destination_not_known_yet`, `amount_not_positive`, `currency_not_supported`, `over_mobile_money_limit`, `over_bank_limit`, `over_daily_limit`, `source_not_allowed`, `insufficient_funds` and, for a client's own request only, `channel_paused` while staff have paused that network or bank payouts on Settings ([platform-settings.md](platform-settings.md)). A payout the system asks for when an investment matures is still made while a channel is paused, and waits in the queue as always.
 
 A payout is funded from one place only: the client's own `client.payout_pending` account for the `source_reference` the caller names, which is the investment whose money was handed over. The caller never names a ledger account, so a payout cannot be funded from another payout's in-flight money, from the money parked after a failed payout, or from another client. `source_not_allowed` is the refusal for an empty reference.
 
