@@ -101,7 +101,7 @@ Everything else is created by Terraform. These are made by hand, once:
 | --- | --- |
 | `TERRAFORM_DIGITALOCEAN_TOKEN` | API → Tokens, full access, or custom scopes with write on droplet, vpc, firewall, reserved_ip, database, project, ssh_key, monitoring, uptime, tag. Deploys also use it to open and close SSH. |
 | `SPACES_ACCESS_KEY_ID`, `SPACES_SECRET_ACCESS_KEY` | A Spaces key with full access. Terraform uses it to create buckets and keys and to keep state. |
-| `CLOUDFLARE_API_TOKEN` | Zone DNS Edit, Zone Settings Edit, Zone WAF Edit, SSL and Certificates Edit, Account Access: Apps and Policies Edit. Terraform finds the account from the zone, so there is no account ID to set. |
+| `CLOUDFLARE_API_TOKEN` | Zone DNS Edit, Zone Settings Edit, Zone WAF Edit, SSL and Certificates Edit, Account Access: Apps and Policies Edit, Account Zero Trust Edit (for the staff and office lists). Terraform finds the account from the zone, so there is no account ID to set. |
 | `TERRAFORM_GITHUB_TOKEN` | A fine-grained GitHub token for this repository, read and write on Environments, Secrets and Variables |
 
 3. **Cloudflare zone.** `finvestug.com` must already be a zone on the account.
