@@ -18,22 +18,17 @@ from app.modules.investments.holdings import AWAITING_START
 from app.modules.ledger import service as ledger
 from app.modules.payments import reversals, service
 from app.modules.payments.domain.deposits import DepositStatus, Purpose
-from app.modules.payments.domain.outcomes import Accepted, Confirmed
 from app.modules.payments.domain.reversals import ReversalStatus
 from app.shared.actors import SYSTEM, Actor
-from app.shared.clock import Clock
 from app.shared.errors import ApplicationError
 from app.shared.push_ids import push_id
 from tests.support.books import audit_for
 from tests.support.clock import FakeClock
 from tests.support.database import TestDatabase
-from tests.support.investments import PRESENT, account_balance, approved_client, request, today
+from tests.support.investments import PRESENT, account_balance, approved_client, request
 from tests.support.ledger import staff
+from tests.support.mistaken_deposits import MINOR, paid, pay_by_phone, start
 from tests.support.payments import (
-    FakeCollections,
-    deposit_worker,
-    drain,
-    phone,
     start_deposit,
     ugx,
 )
@@ -41,7 +36,6 @@ from tests.support.payments import (
 pytestmark = pytest.mark.integration
 
 Status = ReversalStatus
-MINOR = 1_000_000
 
 
 @pytest.fixture
@@ -51,42 +45,6 @@ async def pools(test_database: TestDatabase) -> AsyncIterator[list[Database]]:
     yield made
     for database in made:
         await database.close()
-
-
-async def paid(
-    app_database: Database, worker_database: Database, clock: Clock = PRESENT
-) -> tuple[investments.Investment, service.Deposit]:
-    """An investment waiting to start, with a mobile money deposit the provider confirmed."""
-    client = await approved_client(app_database, clock)
-    investment = await request(app_database, client, clock, amount=ugx(MINOR))
-    deposit = await pay_by_phone(app_database, worker_database, client, investment, clock)
-    return investment, deposit
-
-
-async def pay_by_phone(
-    app_database: Database,
-    worker_database: Database,
-    client: Actor,
-    investment: investments.Investment,
-    clock: Clock,
-) -> service.Deposit:
-    provider, msisdn, ref = FakeCollections(), phone(), f"ref-{push_id()}"
-    provider.on_send(msisdn, Accepted(ref))
-    deposit = await start_deposit(
-        app_database,
-        clock,
-        actor=client,
-        msisdn=msisdn,
-        amount=investment.amount.minor,
-        purpose_id=investment.id,
-    )
-    await drain(deposit_worker(worker_database, provider, clock))
-    async with worker_database.actor_transaction(SYSTEM) as session:
-        confirmed = await service.settle_deposit(
-            session, deposit.id, Confirmed(ref, investment.amount), clock, cause="status_read"
-        )
-    assert confirmed.status is DepositStatus.CONFIRMED
-    return confirmed
 
 
 async def propose(app_database: Database, maker: Actor, deposit_id: str) -> reversals.Reversal:
@@ -128,13 +86,6 @@ async def live(database: Database, investment_id: str) -> bool:
 async def scalar(database: Database, sql: str, **parameters: object) -> object:
     async with database.actor_transaction(SYSTEM) as session:
         return await session.scalar(text(sql), parameters)
-
-
-async def start(database: Database, investment_id: str) -> investments.Investment:
-    async with database.actor_transaction(SYSTEM) as session:
-        return await investments.start_investment(
-            session, investment_id, confirmed_on=today(), clock=PRESENT
-        )
 
 
 def code(error: pytest.ExceptionInfo[ApplicationError]) -> str:

@@ -140,6 +140,18 @@ async def client_by_phone(session: AsyncSession, phone: str) -> ClientAccount | 
     return _account(row) if row else None
 
 
+_STATUS_COUNTS = text("SELECT status, count(*) AS clients FROM identity_clients GROUP BY status")
+
+
+async def status_counts(session: AsyncSession) -> dict[str, int]:
+    """How many client accounts are in each status now: `active`, `locked`, `unclaimed` and
+    `closed`, each listed even at zero. Staff only."""
+    found = dict.fromkeys(("active", "locked", "unclaimed", "closed"), 0)
+    for row in (await session.execute(_STATUS_COUNTS)).all():
+        found[str(row.status)] = int(row.clients)
+    return found
+
+
 async def lock_history(session: AsyncSession, client_id: str) -> list[LockChange]:
     """Every lock and unlock proposed for the client, newest first."""
     return [_change(row) for row in (await session.execute(_HISTORY, {"client_id": client_id}))]

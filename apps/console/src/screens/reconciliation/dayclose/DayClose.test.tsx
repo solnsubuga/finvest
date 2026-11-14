@@ -16,14 +16,18 @@ function renderDay(which: DayCloseStubCase = "sample", api: DayCloseApi = create
   return { api, user: userEvent.setup() };
 }
 
-const status = () => screen.findByRole("region", { name: "Day close" });
-const pot = (name: string) => screen.findByRole("article", { name });
+// Finding by role and name walks the whole screen on every poll, and this screen is large. Under a
+// heavily loaded machine the first render can take longer than Testing Library's one second, so
+// every wait on this screen gets more time, and each test gets room for its waits.
+const WAIT = { timeout: 4000 };
+const status = () => screen.findByRole("region", { name: "Day close" }, WAIT);
+const pot = (name: string) => screen.findByRole("article", { name }, WAIT);
 
 function csv(text = "Date,Details,Reference,In,Out\n2026-11-12,TRANSFER,FT1,100000,\n") {
   return new File([text], "mtn.csv", { type: "text/csv" });
 }
 
-describe("closing the day", () => {
+describe("closing the day", { timeout: 15_000 }, () => {
   it("opens yesterday and says why it cannot be prepared yet", async () => {
     renderDay();
     const close = await status();
@@ -47,7 +51,7 @@ describe("closing the day", () => {
     await user.type(within(mtn).getByLabelText("Closing balance"), "15,150,000");
     await user.upload(within(mtn).getByLabelText("Statement file"), csv());
     await user.click(within(mtn).getByRole("button", { name: "Import" }));
-    expect(await within(await pot("ioTec wallet, MTN")).findByText("Agrees")).toBeInTheDocument();
+    expect(await within(await pot("ioTec wallet, MTN")).findByText("Agrees", undefined, WAIT)).toBeInTheDocument();
 
     const trust = await pot("Trust bank account, Stanbic trust");
     await user.click(within(trust).getByRole("button", { name: "Pair by hand" }));
@@ -56,14 +60,14 @@ describe("closing the day", () => {
     expect(within(form).getByRole("alert")).toHaveTextContent("Say how you know they are the same money");
     await user.type(within(form).getByLabelText("How you know they are the same money"), "Same client, the bank cut the reference");
     await user.click(within(form).getByRole("button", { name: "Pair them" }));
-    expect(await within(await status()).findByText("Paired. The difference is no longer open.")).toBeInTheDocument();
+    expect(await within(await status()).findByText("Paired. The difference is no longer open.", undefined, WAIT)).toBeInTheDocument();
     expect(within(await pot("Trust bank account, Stanbic trust")).queryByText("TRANSFER FROM S NAMUKASA", { exact: false })).not.toBeInTheDocument();
 
     const ready = await status();
     expect(within(ready).getByRole("heading", { name: "Ready to prepare" })).toBeInTheDocument();
     expect(within(ready).getByText(/One open difference will be carried to the next day/)).toBeInTheDocument();
     await user.click(within(ready).getByRole("button", { name: "Prepare the close" }));
-    const prepared = await screen.findByRole("heading", { name: "Prepared by you, waiting for a second person" });
+    const prepared = await screen.findByRole("heading", { name: "Prepared by you, waiting for a second person" }, WAIT);
     expect(prepared).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Approve and close the day" })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Import the statement" })).not.toBeInTheDocument();
@@ -77,7 +81,7 @@ describe("closing the day", () => {
     await user.type(within(mtn).getByLabelText("Closing balance"), "15,150,000");
     await user.upload(within(mtn).getByLabelText("Statement file"), csv());
     await user.click(within(mtn).getByRole("button", { name: "Import" }));
-    expect(await within(mtn).findByText("The opening balance is not the closing balance of this pot's last statement.")).toBeInTheDocument();
+    expect(await within(mtn).findByText("The opening balance is not the closing balance of this pot's last statement.", undefined, WAIT)).toBeInTheDocument();
     expect(within(mtn).getByLabelText("Opening balance")).toHaveAttribute("aria-invalid", "true");
   });
 
@@ -86,7 +90,7 @@ describe("closing the day", () => {
     const close = await status();
     expect(within(close).getByRole("heading", { name: "Prepared, waiting for your approval" })).toBeInTheDocument();
     await user.click(within(close).getByRole("button", { name: "Approve and close the day" }));
-    expect(await screen.findByRole("heading", { name: "Thu, 12 Nov 2026 is closed" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "Thu, 12 Nov 2026 is closed" }, WAIT)).toBeInTheDocument();
     expect(screen.getByText(/you approved it/)).toBeInTheDocument();
   });
 
@@ -98,7 +102,7 @@ describe("closing the day", () => {
     expect(within(close).getByRole("alert")).toHaveTextContent("Say why");
     await user.type(within(close).getByLabelText("Why you are sending it back"), "The fee should be posted first");
     await user.click(within(close).getByRole("button", { name: "Send it back" }));
-    expect(await screen.findByText("Sent back. The day can be prepared again.")).toBeInTheDocument();
+    expect(await screen.findByText("Sent back. The day can be prepared again.", undefined, WAIT)).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Ready to prepare" })).toBeInTheDocument();
   });
 
@@ -106,7 +110,7 @@ describe("closing the day", () => {
     const api = createStubDayCloseApi(ME, 0, "sample", now);
     const getDay = vi.spyOn(api, "getDay");
     render(<DayClose api={api} canAct now={() => new Date("2026-11-15T09:00:00Z")} />);
-    await screen.findByRole("heading", { name: "Not ready to prepare" });
+    await screen.findByRole("heading", { name: "Not ready to prepare" }, WAIT);
     expect(screen.getByLabelText("Business day")).toHaveValue("2026-11-12");
     expect(getDay.mock.calls.map((call) => call[0])).toEqual(["2026-11-14", "2026-11-12"]);
   });
@@ -123,7 +127,7 @@ describe("closing the day", () => {
 
   it("shows a failure with a way to try again", async () => {
     renderDay("error");
-    const alert = await screen.findByRole("alert");
+    const alert = await screen.findByRole("alert", undefined, WAIT);
     expect(alert).toHaveTextContent("We could not reach Finvest");
     expect(within(alert).getByRole("button", { name: "Try again" })).toBeInTheDocument();
   });

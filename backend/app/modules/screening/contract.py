@@ -6,12 +6,14 @@
   payout is created, and waits for a screen when it is not clear.
 * `watch_payout` asks, in the caller's transaction, for a new payout to be read by transaction
   monitoring. Payouts calls it when a payout is created.
+* `watch_transfer` does the same for a finished client-to-client transfer, for the sender and
+  the recipient. Investments calls it in the transaction that carries the transfer out.
 * `latest_outcome` says where a client stands: anything but `clear` is a reason for a person to
   look before approving an identity check.
 """
 
 from app.modules.screening.domain.standing import Clearance, Outcome, Reason
-from app.modules.screening.monitoring import watch_payout
+from app.modules.screening.monitoring import watch_payout, watch_transfer
 from app.modules.screening.service import (
     ScreeningStanding,
     latest_outcome,
@@ -28,4 +30,5 @@ __all__ = [
     "payout_clearance",
     "request_screening",
     "watch_payout",
+    "watch_transfer",
 ]

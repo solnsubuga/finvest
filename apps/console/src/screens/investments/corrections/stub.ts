@@ -13,10 +13,13 @@ const ugx = (minor: number): Amount => ({ minor, currency: "UGX" });
 const OTHER = "sample-staff-grace";
 
 /** The sample investments the stub knows, by ID, with what each holds. */
-const INVESTMENTS: Record<string, { client: string; principal: Amount; running: boolean }> = {
-  "-InvSample00000000A1": { client: "-ClientSample0000001", principal: ugx(5_000_000), running: true },
-  "-InvSample00000000A3": { client: "sample-client-amara", principal: ugx(1_000_000), running: true },
-  "-InvSample00000000C1": { client: "sample-client-peter", principal: ugx(500_000), running: false },
+type State = "running" | "unpaid" | "held";
+const INVESTMENTS: Record<string, { client: string; principal: Amount; state: State }> = {
+  "-InvSample00000000A1": { client: "-ClientSample0000001", principal: ugx(5_000_000), state: "running" },
+  "-InvSample00000000A3": { client: "sample-client-amara", principal: ugx(1_000_000), state: "running" },
+  "-InvSample00000000C1": { client: "sample-client-peter", principal: ugx(500_000), state: "unpaid" },
+  // Matured on 2026-11-11 with no payout account; principal plus the interest after tax.
+  "-InvSample00000000H1": { client: "sample-client-joan", principal: ugx(1_026_490), state: "held" },
 };
 
 function samples(me: string): Correction[] {
@@ -139,10 +142,11 @@ export function createStubCorrectionsApi(me: string, sample: "default" | "empty"
       once(key, () => {
         const investment = INVESTMENTS[input.investmentId];
         if (!investment) throw new CorrectionsError("not_found");
-        if (input.kind === "refund" && !input.destinationId) {
+        if (input.kind !== "unwind" && !input.destinationId) {
           throw new CorrectionsError("invalid", [{ field: "destination_id", code: "required" }]);
         }
-        if (input.kind === "unwind" ? !investment.running : investment.running) throw new CorrectionsError("conflict");
+        const needs: Record<NewCorrection["kind"], State> = { unwind: "running", refund: "unpaid", pay_out: "held" };
+        if (investment.state !== needs[input.kind]) throw new CorrectionsError("conflict");
         const open = items.some(
           (item) => item.investmentId === input.investmentId && item.kind === input.kind && (item.status === "proposed" || item.status === "approved"),
         );
@@ -153,7 +157,7 @@ export function createStubCorrectionsApi(me: string, sample: "default" | "empty"
           investmentId: input.investmentId,
           clientId: investment.client,
           amount: investment.principal,
-          destinationId: input.kind === "refund" ? input.destinationId : null,
+          destinationId: input.kind === "unwind" ? null : input.destinationId,
           reason: input.reason.trim(),
           status: "proposed",
           proposedBy: me,
@@ -179,7 +183,7 @@ export function createStubCorrectionsApi(me: string, sample: "default" | "empty"
             decidedBy: me,
             decidedAt: at,
             doneAt: at,
-            payoutId: item.kind === "refund" ? "-PayoutSample0000002" : null,
+            payoutId: item.kind === "unwind" ? null : "-PayoutSample0000002",
           };
         }),
       ),

@@ -5,11 +5,12 @@ import { Stack, useLocalSearchParams, useRouter } from "expo-router";
 
 import { BackButton } from "@/components/BackButton";
 import { Card, Notice } from "@/components/Blocks";
-import { Button } from "@/components/Button";
+import { Button, TextLink } from "@/components/Button";
 import { Screen } from "@/components/Screen";
 import { Title, Txt } from "@/components/Txt";
 import { formatMoney } from "@/payments/format";
-import { Loading } from "@/payments/Parts";
+import { Loading, ShareNote } from "@/payments/Parts";
+import { asText, shareText, ShareOutcome } from "@/payments/share";
 import { usePayments } from "@/payments/PaymentsProvider";
 import { BankInstructions, describePaymentError, openPaymentHref, PaymentError } from "@/payments/types";
 import { useIdentity } from "@/identity/IdentityProvider";
@@ -57,6 +58,7 @@ export default function BankDetails() {
   const [loadError, setLoadError] = useState<string | null>(null);
   const [needsId, setNeedsId] = useState(false);
   const identity = useIdentity().client;
+  const [shared, setShared] = useState<ShareOutcome | null>(null);
 
   useEffect(() => {
     let live = true;
@@ -105,11 +107,25 @@ export default function BankDetails() {
       signedIn
       footer={
         instructions ? (
-          <Button
-            label="I have sent it, upload receipt"
-            onPress={() => router.push(`/pay/bank/receipt/${instructions.payable.id}`)}
-            testID="bank-sent"
-          />
+          <>
+            <Button
+              label="I have sent it, upload receipt"
+              onPress={() => router.push(`/pay/bank/receipt/${instructions.payable.id}`)}
+              testID="bank-sent"
+            />
+            <TextLink
+              label="Share these details"
+              onPress={async () =>
+                setShared(
+                  await shareText(
+                    "Finvest bank details",
+                    asText(`Send ${formatMoney(instructions.payable.amount)} to Finvest by bank transfer`, rows),
+                  ),
+                )
+              }
+              testID="bank-share"
+            />
+          </>
         ) : null
       }
     >
@@ -141,6 +157,7 @@ export default function BankDetails() {
               <CopyRow key={row.label} label={row.label} value={row.value} first={index === 0} />
             ))}
           </Card>
+          <ShareNote outcome={shared} />
           <Notice tone="neutral">
             {`Put ${instructions.reference} as the reference. It is your Finvest account number and lets us match your money without delay.`}
           </Notice>

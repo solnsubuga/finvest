@@ -23,6 +23,18 @@ from app.shared.money import Currency
 class Kind(StrEnum):
     DEPOSIT = "deposit"
     PAYOUT = "payout"
+    # A client-to-client transfer of an investment, recorded once for each side: sent by the
+    # sender, counted as money going out, and received by the recipient, counted as money in.
+    TRANSFER_SENT = "transfer_sent"
+    TRANSFER_RECEIVED = "transfer_received"
+
+
+# What the deposit rules count as money in, and what the quick withdrawal rule counts as money
+# going out. A received transfer is money in, so a large one, or several that add up, are seen
+# as a deposit would be.
+MONEY_IN = frozenset({Kind.DEPOSIT, Kind.TRANSFER_RECEIVED})
+MONEY_OUT = frozenset({Kind.PAYOUT, Kind.TRANSFER_SENT})
+TRANSFERS = frozenset({Kind.TRANSFER_SENT, Kind.TRANSFER_RECEIVED})
 
 
 class Rule(StrEnum):
@@ -87,20 +99,37 @@ def evaluate(client_id: str, new: Transaction, earlier: Sequence[Transaction]) -
         for t in earlier
         if t.currency is Currency.UGX and t.occurred_at <= new.occurred_at and t.id != new.id
     ]
-    deposits = [t for t in before if t.kind is Kind.DEPOSIT]
-    if new.kind is Kind.DEPOSIT:
-        return tuple(
-            alert
-            for alert in (
-                _large(new),
-                _split(client_id, new, deposits),
-                _many(client_id, new, deposits),
-                _unusual(new, deposits),
-            )
-            if alert is not None
+    deposits = [t for t in before if t.kind in MONEY_IN]
+    if new.kind in MONEY_IN:
+        alerts = (
+            _large(new),
+            _split(client_id, new, deposits),
+            _many(client_id, new, deposits),
+            _unusual(new, deposits),
         )
+        return tuple(_naming_transfers(alert, [new, *deposits]) for alert in alerts if alert)
     quick = _quick(new, deposits)
-    return () if quick is None else (quick,)
+    return () if quick is None else (_naming_transfers(quick, [new, *deposits]),)
+
+
+def _naming_transfers(alert: Alert, seen: Sequence[Transaction]) -> Alert:
+    """The alert, with the IDs among those it names that are transfers rather than deposits or
+    payouts listed under `transfer_ids`, so staff know where to look each one up."""
+    named = set(_ids(alert.detail))
+    transfers = [t.id for t in _oldest_first(list(seen)) if t.kind in TRANSFERS and t.id in named]
+    if not transfers:
+        return alert
+    return Alert(alert.rule, alert.dedupe_key, {**alert.detail, "transfer_ids": transfers})
+
+
+def _ids(detail: dict[str, object]) -> list[str]:
+    ids = [
+        value for key in ("deposit_id", "payout_id") if isinstance(value := detail.get(key), str)
+    ]
+    many = detail.get("deposit_ids")
+    if isinstance(many, list):
+        ids.extend(value for value in many if isinstance(value, str))
+    return ids
 
 
 def _large(new: Transaction) -> Alert | None:

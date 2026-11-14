@@ -1,6 +1,7 @@
 /**
  * The console's view of investment corrections: undoing an investment started
- * by mistake, and refunding money that never started one.
+ * by mistake, refunding money that never started one, and sending a matured
+ * term's held money to another of the client's payout accounts.
  *
  * The shapes follow `/staff/investment-corrections` in
  * backend/app/modules/investments/api.py (see "Undoing a mistake" in
@@ -11,7 +12,7 @@
 
 import type { Amount } from "../../products/api.ts";
 
-export type CorrectionKind = "unwind" | "refund";
+export type CorrectionKind = "unwind" | "refund" | "pay_out";
 export type CorrectionStatus = "proposed" | "approved" | "sent_back" | "withdrawn" | "done" | "failed";
 
 export interface Correction {
@@ -19,9 +20,9 @@ export interface Correction {
   kind: CorrectionKind;
   investmentId: string;
   clientId: string;
-  /** The principal for an unwind, the money waiting for a refund. Fixed when proposed. */
+  /** The principal for an unwind, the money waiting for a refund or a pay out. Fixed when proposed. */
   amount: Amount;
-  /** A refund's payout account. */
+  /** A refund's or pay out's payout account. */
   destinationId: string | null;
   reason: string;
   status: CorrectionStatus;
@@ -41,7 +42,7 @@ export interface NewCorrection {
   kind: CorrectionKind;
   investmentId: string;
   reason: string;
-  /** Required for a refund, never sent for an unwind. */
+  /** Required for a refund or a pay out, never sent for an unwind. */
   destinationId: string | null;
 }
 
@@ -125,13 +126,14 @@ export function correctionProblemText(code: string): string {
 const FAILURES: Record<string, string> = {
   investment_not_running: "The investment was no longer running.",
   investment_not_refundable: "The investment was no longer in a state to refund.",
+  investment_not_held: "The money was no longer waiting: the client chose where to send it, or it was sent already.",
   amount_changed: "The amount changed after it was proposed.",
   holding_changed: "The money held for the investment changed after it was proposed.",
   interest_changed: "The interest owed changed after it was proposed.",
   tax_already_remitted: "The tax on its interest was already paid over to URA. Put that right with URA first.",
 };
 
-/** Why an approved correction moved nothing. Payouts codes for a refund fall back to the code itself. */
+/** Why an approved correction moved nothing. Payouts codes for a refund or pay out fall back to the code itself. */
 export function failureText(code: string): string {
   return FAILURES[code] ?? PROBLEMS[code] ?? `Refused by payouts: ${code}`;
 }

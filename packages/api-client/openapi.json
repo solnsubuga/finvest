@@ -127,32 +127,6 @@
         "title": "AllocationReportOut",
         "type": "object"
       },
-      "Amount-Output": {
-        "additionalProperties": false,
-        "description": "An amount in the smallest unit of its currency: whole shillings, or cents.",
-        "properties": {
-          "currency": {
-            "enum": [
-              "UGX",
-              "USD"
-            ],
-            "title": "Currency",
-            "type": "string"
-          },
-          "minor": {
-            "exclusiveMinimum": 0.0,
-            "maximum": 9.223372036854776e+18,
-            "title": "Minor",
-            "type": "integer"
-          }
-        },
-        "required": [
-          "minor",
-          "currency"
-        ],
-        "title": "Amount",
-        "type": "object"
-      },
       "AmountOut": {
         "additionalProperties": false,
         "properties": {
@@ -499,6 +473,7 @@
               "announcement",
               "payout_account",
               "investment_correction",
+              "investment_run",
               "payout_resolution",
               "tax_remittance",
               "deposit_reassignment",
@@ -509,7 +484,8 @@
               "compliance_case",
               "bank_account_change",
               "account_code_map",
-              "deposit_reversal"
+              "deposit_reversal",
+              "deposit_receivable"
             ],
             "title": "Kind",
             "type": "string"
@@ -665,6 +641,70 @@
         "title": "AtMaturity",
         "type": "string"
       },
+      "AttentionOut": {
+        "additionalProperties": false,
+        "properties": {
+          "code": {
+            "enum": [
+              "float_low",
+              "payouts_waiting_for_float",
+              "review_queue",
+              "approvals_for_you",
+              "books_not_balanced",
+              "day_close_to_approve",
+              "interest_run_behind",
+              "interest_run_missing",
+              "maturities_not_closed"
+            ],
+            "title": "Code",
+            "type": "string"
+          },
+          "count": {
+            "title": "Count",
+            "type": "integer"
+          },
+          "since": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Since"
+          },
+          "subject": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Subject"
+          },
+          "tone": {
+            "enum": [
+              "warning",
+              "info"
+            ],
+            "title": "Tone",
+            "type": "string"
+          }
+        },
+        "required": [
+          "code",
+          "tone",
+          "count",
+          "since",
+          "subject"
+        ],
+        "title": "AttentionOut",
+        "type": "object"
+      },
       "AuthenticatorSetupView": {
         "additionalProperties": false,
         "description": "Show `uri` as a QR code, and `secret` for typing in by hand. Neither is shown again.",
@@ -708,6 +748,46 @@
         ],
         "title": "AutomaticCheck",
         "type": "string"
+      },
+      "BalancingOut": {
+        "additionalProperties": false,
+        "properties": {
+          "days_behind": {
+            "title": "Days Behind",
+            "type": "integer"
+          },
+          "last_closed": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Closed"
+          },
+          "waiting_for_approval": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Waiting For Approval"
+          }
+        },
+        "required": [
+          "last_closed",
+          "waiting_for_approval",
+          "days_behind"
+        ],
+        "title": "BalancingOut",
+        "type": "object"
       },
       "BankAccountList": {
         "additionalProperties": false,
@@ -2325,6 +2405,29 @@
           "reason"
         ],
         "title": "CaseProposeIn",
+        "type": "object"
+      },
+      "CatalogueOut": {
+        "additionalProperties": false,
+        "properties": {
+          "reports": {
+            "items": {
+              "$ref": "#/components/schemas/ReportOut"
+            },
+            "title": "Reports",
+            "type": "array"
+          },
+          "today": {
+            "format": "date",
+            "title": "Today",
+            "type": "string"
+          }
+        },
+        "required": [
+          "today",
+          "reports"
+        ],
+        "title": "CatalogueOut",
         "type": "object"
       },
       "CategoryChannels": {
@@ -4422,6 +4525,16 @@
             "title": "History",
             "type": "array"
           },
+          "last_rejected": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/RejectedOutcome"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "pending_outcome": {
             "anyOf": [
               {
@@ -4436,7 +4549,8 @@
         "required": [
           "complaint",
           "history",
-          "pending_outcome"
+          "pending_outcome",
+          "last_rejected"
         ],
         "title": "ComplaintDetail",
         "type": "object"
@@ -4851,7 +4965,8 @@
       "CorrectionKind": {
         "enum": [
           "unwind",
-          "refund"
+          "refund",
+          "pay_out"
         ],
         "title": "CorrectionKind",
         "type": "string"
@@ -5116,6 +5231,29 @@
           "proposal"
         ],
         "title": "CurrencyBankAccountView",
+        "type": "object"
+      },
+      "DayFlowOut": {
+        "additionalProperties": false,
+        "properties": {
+          "day": {
+            "format": "date",
+            "title": "Day",
+            "type": "string"
+          },
+          "money_in": {
+            "$ref": "#/components/schemas/app__modules__overview__api__Amount"
+          },
+          "money_out": {
+            "$ref": "#/components/schemas/app__modules__overview__api__Amount"
+          }
+        },
+        "required": [
+          "day",
+          "money_in",
+          "money_out"
+        ],
+        "title": "DayFlowOut",
         "type": "object"
       },
       "DayOut": {
@@ -6410,6 +6548,7 @@
               "payload_too_large",
               "rate_limited",
               "unavailable",
+              "maintenance",
               "internal_error"
             ],
             "title": "Code",
@@ -6630,7 +6769,7 @@
         "additionalProperties": false,
         "properties": {
           "difference": {
-            "$ref": "#/components/schemas/MoneyOut"
+            "$ref": "#/components/schemas/app__modules__reconciliation__api__MoneyOut"
           },
           "kind": {
             "enum": [
@@ -6968,6 +7107,37 @@
           "formats"
         ],
         "title": "FinanceScreenOut",
+        "type": "object"
+      },
+      "FloatOut": {
+        "additionalProperties": false,
+        "properties": {
+          "balance": {
+            "$ref": "#/components/schemas/app__modules__overview__api__Amount"
+          },
+          "low": {
+            "title": "Low",
+            "type": "boolean"
+          },
+          "network": {
+            "enum": [
+              "mtn",
+              "airtel"
+            ],
+            "title": "Network",
+            "type": "string"
+          },
+          "warning_line": {
+            "$ref": "#/components/schemas/app__modules__overview__api__Amount"
+          }
+        },
+        "required": [
+          "network",
+          "balance",
+          "warning_line",
+          "low"
+        ],
+        "title": "FloatOut",
         "type": "object"
       },
       "Format": {
@@ -7553,6 +7723,39 @@
         "title": "HeldUpPayoutOut",
         "type": "object"
       },
+      "HoldingOut": {
+        "additionalProperties": false,
+        "properties": {
+          "clients": {
+            "title": "Clients",
+            "type": "integer"
+          },
+          "investments": {
+            "title": "Investments",
+            "type": "integer"
+          },
+          "principal": {
+            "$ref": "#/components/schemas/app__modules__overview__api__Amount"
+          },
+          "product_code": {
+            "title": "Product Code",
+            "type": "string"
+          },
+          "product_name": {
+            "title": "Product Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "product_code",
+          "product_name",
+          "investments",
+          "clients",
+          "principal"
+        ],
+        "title": "HoldingOut",
+        "type": "object"
+      },
       "IdentityCheckView": {
         "additionalProperties": false,
         "properties": {
@@ -7777,6 +7980,48 @@
           "upcoming"
         ],
         "title": "InsightsView",
+        "type": "object"
+      },
+      "InterestOut": {
+        "additionalProperties": false,
+        "properties": {
+          "behind": {
+            "title": "Behind",
+            "type": "integer"
+          },
+          "finished_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Finished At"
+          },
+          "investments": {
+            "title": "Investments",
+            "type": "integer"
+          },
+          "net": {
+            "$ref": "#/components/schemas/app__modules__overview__api__Amount"
+          },
+          "run_date": {
+            "format": "date",
+            "title": "Run Date",
+            "type": "string"
+          }
+        },
+        "required": [
+          "run_date",
+          "investments",
+          "net",
+          "finished_at",
+          "behind"
+        ],
+        "title": "InterestOut",
         "type": "object"
       },
       "InterestPaid": {
@@ -8332,7 +8577,7 @@
         "description": "A statement line still unpaired. `counterparty_hint` is the bank's narrative.",
         "properties": {
           "amount": {
-            "$ref": "#/components/schemas/MoneyOut"
+            "$ref": "#/components/schemas/app__modules__reconciliation__api__MoneyOut"
           },
           "counterparty_hint": {
             "title": "Counterparty Hint",
@@ -9450,29 +9695,6 @@
         "title": "MoneyIn",
         "type": "object"
       },
-      "MoneyOut": {
-        "additionalProperties": false,
-        "properties": {
-          "currency": {
-            "enum": [
-              "UGX",
-              "USD"
-            ],
-            "title": "Currency",
-            "type": "string"
-          },
-          "minor": {
-            "title": "Minor",
-            "type": "integer"
-          }
-        },
-        "required": [
-          "minor",
-          "currency"
-        ],
-        "title": "MoneyOut",
-        "type": "object"
-      },
       "MoneyView": {
         "additionalProperties": false,
         "properties": {
@@ -10513,6 +10735,105 @@
         "title": "OrderStatus",
         "type": "string"
       },
+      "OverviewOut": {
+        "additionalProperties": false,
+        "properties": {
+          "attention": {
+            "items": {
+              "$ref": "#/components/schemas/AttentionOut"
+            },
+            "title": "Attention",
+            "type": "array"
+          },
+          "balancing": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/BalancingOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "currency": {
+            "enum": [
+              "UGX",
+              "USD"
+            ],
+            "title": "Currency",
+            "type": "string"
+          },
+          "floats": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/FloatOut"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Floats"
+          },
+          "holdings": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/HoldingOut"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Holdings"
+          },
+          "maturities": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/WeekOut"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Maturities"
+          },
+          "money": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/app__modules__overview__api__MoneyOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "today": {
+            "format": "date",
+            "title": "Today",
+            "type": "string"
+          }
+        },
+        "required": [
+          "today",
+          "currency",
+          "money",
+          "floats",
+          "balancing",
+          "maturities",
+          "holdings",
+          "attention"
+        ],
+        "title": "OverviewOut",
+        "type": "object"
+      },
       "OverviewView": {
         "additionalProperties": false,
         "properties": {
@@ -11535,6 +11856,195 @@
         "title": "PlanStatus",
         "type": "string"
       },
+      "PortfolioMaturityView": {
+        "additionalProperties": false,
+        "properties": {
+          "at_maturity": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/AtMaturity"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "days_earned": {
+            "title": "Days Earned",
+            "type": "integer"
+          },
+          "days_left": {
+            "title": "Days Left",
+            "type": "integer"
+          },
+          "investment_id": {
+            "maxLength": 20,
+            "minLength": 20,
+            "pattern": "^[-0-9A-Z_a-z]{20}$",
+            "title": "Investment Id",
+            "type": "string"
+          },
+          "on": {
+            "format": "date",
+            "title": "On",
+            "type": "string"
+          },
+          "product_name": {
+            "title": "Product Name",
+            "type": "string"
+          },
+          "term_days": {
+            "title": "Term Days",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "investment_id",
+          "product_name",
+          "on",
+          "at_maturity",
+          "term_days",
+          "days_earned",
+          "days_left"
+        ],
+        "title": "PortfolioMaturityView",
+        "type": "object"
+      },
+      "PortfolioPartView": {
+        "additionalProperties": false,
+        "properties": {
+          "count": {
+            "title": "Count",
+            "type": "integer"
+          },
+          "worth_minor": {
+            "title": "Worth Minor",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "worth_minor",
+          "count"
+        ],
+        "title": "PortfolioPartView",
+        "type": "object"
+      },
+      "PortfolioProductView": {
+        "additionalProperties": false,
+        "properties": {
+          "count": {
+            "title": "Count",
+            "type": "integer"
+          },
+          "percent": {
+            "title": "Percent",
+            "type": "integer"
+          },
+          "product_code": {
+            "title": "Product Code",
+            "type": "string"
+          },
+          "product_name": {
+            "title": "Product Name",
+            "type": "string"
+          },
+          "worth_minor": {
+            "title": "Worth Minor",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "product_code",
+          "product_name",
+          "worth_minor",
+          "count",
+          "percent"
+        ],
+        "title": "PortfolioProductView",
+        "type": "object"
+      },
+      "PortfolioView": {
+        "additionalProperties": false,
+        "description": "The totals on Home and Portfolio. Amounts are integers in the smallest unit of\n`currency`, all after tax. Only running investments count.",
+        "properties": {
+          "active_count": {
+            "title": "Active Count",
+            "type": "integer"
+          },
+          "awaiting_payment_count": {
+            "title": "Awaiting Payment Count",
+            "type": "integer"
+          },
+          "currency": {
+            "title": "Currency",
+            "type": "string"
+          },
+          "earning_per_day_minor": {
+            "title": "Earning Per Day Minor",
+            "type": "integer"
+          },
+          "in_goals": {
+            "$ref": "#/components/schemas/PortfolioPartView"
+          },
+          "interest_so_far_minor": {
+            "title": "Interest So Far Minor",
+            "type": "integer"
+          },
+          "interest_today_minor": {
+            "title": "Interest Today Minor",
+            "type": "integer"
+          },
+          "invested_minor": {
+            "title": "Invested Minor",
+            "type": "integer"
+          },
+          "next_maturity": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PortfolioMaturityView"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "open_goals": {
+            "title": "Open Goals",
+            "type": "integer"
+          },
+          "outside_goals": {
+            "$ref": "#/components/schemas/PortfolioPartView"
+          },
+          "products": {
+            "items": {
+              "$ref": "#/components/schemas/PortfolioProductView"
+            },
+            "title": "Products",
+            "type": "array"
+          },
+          "worth_minor": {
+            "title": "Worth Minor",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "currency",
+          "invested_minor",
+          "worth_minor",
+          "interest_so_far_minor",
+          "earning_per_day_minor",
+          "interest_today_minor",
+          "active_count",
+          "awaiting_payment_count",
+          "outside_goals",
+          "in_goals",
+          "open_goals",
+          "products",
+          "next_maturity"
+        ],
+        "title": "PortfolioView",
+        "type": "object"
+      },
       "PotIn": {
         "additionalProperties": false,
         "properties": {
@@ -12531,6 +13041,29 @@
         "title": "Queue",
         "type": "object"
       },
+      "QueueAmount": {
+        "additionalProperties": false,
+        "properties": {
+          "currency": {
+            "enum": [
+              "UGX",
+              "USD"
+            ],
+            "title": "Currency",
+            "type": "string"
+          },
+          "minor": {
+            "title": "Minor",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "minor",
+          "currency"
+        ],
+        "title": "QueueAmount",
+        "type": "object"
+      },
       "QueueEntry": {
         "additionalProperties": false,
         "properties": {
@@ -12587,6 +13120,107 @@
           "review_flags"
         ],
         "title": "QueueEntry",
+        "type": "object"
+      },
+      "QueueItemOut": {
+        "additionalProperties": false,
+        "properties": {
+          "amount": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/QueueAmount"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "client_id": {
+            "anyOf": [
+              {
+                "maxLength": 20,
+                "minLength": 20,
+                "pattern": "^[-0-9A-Z_a-z]{20}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Client Id"
+          },
+          "group": {
+            "enum": [
+              "deposits",
+              "withdrawals",
+              "identity",
+              "transfers",
+              "accounts"
+            ],
+            "title": "Group",
+            "type": "string"
+          },
+          "id": {
+            "maxLength": 20,
+            "minLength": 20,
+            "pattern": "^[-0-9A-Z_a-z]{20}$",
+            "title": "Id",
+            "type": "string"
+          },
+          "kind": {
+            "enum": [
+              "bank_transfer",
+              "identity_check",
+              "payout_account",
+              "held_payout",
+              "payout_held_up",
+              "payout_unanswered",
+              "investment_transfer",
+              "organisation"
+            ],
+            "title": "Kind",
+            "type": "string"
+          },
+          "proposed_by": {
+            "anyOf": [
+              {
+                "maxLength": 20,
+                "minLength": 20,
+                "pattern": "^[-0-9A-Z_a-z]{20}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Proposed By"
+          },
+          "reason": {
+            "title": "Reason",
+            "type": "string"
+          },
+          "waiting_since": {
+            "format": "date-time",
+            "title": "Waiting Since",
+            "type": "string"
+          },
+          "yours": {
+            "title": "Yours",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "kind",
+          "group",
+          "id",
+          "client_id",
+          "amount",
+          "reason",
+          "waiting_since",
+          "proposed_by",
+          "yours"
+        ],
+        "title": "QueueItemOut",
         "type": "object"
       },
       "QuoteOut": {
@@ -13295,6 +13929,55 @@
         "title": "RejectBody",
         "type": "object"
       },
+      "RejectedOutcome": {
+        "additionalProperties": false,
+        "description": "The outcome a second person rejected last, and why, for the next proposal to start from.",
+        "properties": {
+          "client_accepted": {
+            "title": "Client Accepted",
+            "type": "boolean"
+          },
+          "decided_at": {
+            "format": "date-time",
+            "title": "Decided At",
+            "type": "string"
+          },
+          "decided_by": {
+            "maxLength": 20,
+            "minLength": 20,
+            "pattern": "^[-0-9A-Z_a-z]{20}$",
+            "title": "Decided By",
+            "type": "string"
+          },
+          "outcome": {
+            "enum": [
+              "upheld",
+              "partly_upheld",
+              "not_upheld"
+            ],
+            "title": "Outcome",
+            "type": "string"
+          },
+          "reason": {
+            "title": "Reason",
+            "type": "string"
+          },
+          "resolution": {
+            "title": "Resolution",
+            "type": "string"
+          }
+        },
+        "required": [
+          "outcome",
+          "resolution",
+          "client_accepted",
+          "decided_by",
+          "decided_at",
+          "reason"
+        ],
+        "title": "RejectedOutcome",
+        "type": "object"
+      },
       "Rejection": {
         "additionalProperties": false,
         "properties": {
@@ -13640,6 +14323,69 @@
           "display_name"
         ],
         "title": "Rename",
+        "type": "object"
+      },
+      "ReportOut": {
+        "additionalProperties": false,
+        "properties": {
+          "about": {
+            "title": "About",
+            "type": "string"
+          },
+          "by_currency": {
+            "title": "By Currency",
+            "type": "boolean"
+          },
+          "date_from": {
+            "format": "date",
+            "title": "Date From",
+            "type": "string"
+          },
+          "date_to": {
+            "format": "date",
+            "title": "Date To",
+            "type": "string"
+          },
+          "key": {
+            "enum": [
+              "daily_position",
+              "deposits_and_withdrawals",
+              "interest_and_tax",
+              "maturity_ladder",
+              "identity_and_risk",
+              "client_statements",
+              "complaints_quarterly"
+            ],
+            "title": "Key",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "period": {
+            "enum": [
+              "day",
+              "days",
+              "month",
+              "quarter",
+              "ahead",
+              "now"
+            ],
+            "title": "Period",
+            "type": "string"
+          }
+        },
+        "required": [
+          "key",
+          "name",
+          "about",
+          "period",
+          "by_currency",
+          "date_from",
+          "date_to"
+        ],
+        "title": "ReportOut",
         "type": "object"
       },
       "ResendIn": {
@@ -14703,6 +15449,64 @@
         "title": "ReviewOut",
         "type": "object"
       },
+      "ReviewQueueOut": {
+        "additionalProperties": false,
+        "properties": {
+          "cleared_automatically_today": {
+            "title": "Cleared Automatically Today",
+            "type": "integer"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/QueueItemOut"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "kinds": {
+            "items": {
+              "enum": [
+                "bank_transfer",
+                "identity_check",
+                "payout_account",
+                "held_payout",
+                "payout_held_up",
+                "payout_unanswered",
+                "investment_transfer",
+                "organisation"
+              ],
+              "type": "string"
+            },
+            "title": "Kinds",
+            "type": "array"
+          },
+          "oldest_waiting_since": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Oldest Waiting Since"
+          },
+          "waiting": {
+            "title": "Waiting",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "items",
+          "kinds",
+          "waiting",
+          "cleared_automatically_today",
+          "oldest_waiting_since"
+        ],
+        "title": "ReviewQueueOut",
+        "type": "object"
+      },
       "ReviewedPayoutOut": {
         "additionalProperties": false,
         "description": "The decision, and where the payout is now. An approved payout is `queued` to be sent, and\nmay have moved on by the time a repeated request is answered; a declined one is `cancelled`\nwith its money back.",
@@ -15025,6 +15829,14 @@
         "title": "RulesProposalOut",
         "type": "object"
       },
+      "RunKind": {
+        "enum": [
+          "interest",
+          "maturity"
+        ],
+        "title": "RunKind",
+        "type": "string"
+      },
       "RunOut": {
         "additionalProperties": false,
         "properties": {
@@ -15158,6 +15970,145 @@
           "new_match_count"
         ],
         "title": "RunOut",
+        "type": "object"
+      },
+      "RunRequestIn": {
+        "additionalProperties": false,
+        "properties": {
+          "kind": {
+            "$ref": "#/components/schemas/RunKind"
+          },
+          "reason": {
+            "maxLength": 500,
+            "minLength": 1,
+            "title": "Reason",
+            "type": "string"
+          },
+          "run_date": {
+            "format": "date",
+            "title": "Run Date",
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind",
+          "run_date",
+          "reason"
+        ],
+        "title": "RunRequestIn",
+        "type": "object"
+      },
+      "RunRequestOut": {
+        "additionalProperties": false,
+        "description": "A request to run a day's interest again, or today's maturities. It waits for a\ndifferent person to approve it, and approving queues the run.",
+        "properties": {
+          "decided_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Decided At"
+          },
+          "decided_by": {
+            "anyOf": [
+              {
+                "maxLength": 20,
+                "minLength": 20,
+                "pattern": "^[-0-9A-Z_a-z]{20}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Decided By"
+          },
+          "decision_note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Decision Note"
+          },
+          "id": {
+            "maxLength": 20,
+            "minLength": 20,
+            "pattern": "^[-0-9A-Z_a-z]{20}$",
+            "title": "Id",
+            "type": "string"
+          },
+          "job_id": {
+            "anyOf": [
+              {
+                "maxLength": 20,
+                "minLength": 20,
+                "pattern": "^[-0-9A-Z_a-z]{20}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Job Id"
+          },
+          "kind": {
+            "$ref": "#/components/schemas/RunKind"
+          },
+          "proposed_at": {
+            "format": "date-time",
+            "title": "Proposed At",
+            "type": "string"
+          },
+          "proposed_by": {
+            "maxLength": 20,
+            "minLength": 20,
+            "pattern": "^[-0-9A-Z_a-z]{20}$",
+            "title": "Proposed By",
+            "type": "string"
+          },
+          "reason": {
+            "title": "Reason",
+            "type": "string"
+          },
+          "run_date": {
+            "format": "date",
+            "title": "Run Date",
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "proposed",
+              "approved",
+              "declined",
+              "withdrawn"
+            ],
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "kind",
+          "run_date",
+          "reason",
+          "status",
+          "proposed_by",
+          "proposed_at",
+          "decided_by",
+          "decided_at",
+          "decision_note",
+          "job_id"
+        ],
+        "title": "RunRequestOut",
         "type": "object"
       },
       "RunStatus": {
@@ -16865,7 +17816,7 @@
           "amount": {
             "anyOf": [
               {
-                "$ref": "#/components/schemas/Amount-Output"
+                "$ref": "#/components/schemas/app__modules__support__api__Amount"
               },
               {
                 "type": "null"
@@ -19195,6 +20146,42 @@
         "title": "StaffTransferOut",
         "type": "object"
       },
+      "StaffWriteFirst": {
+        "additionalProperties": false,
+        "properties": {
+          "body": {
+            "maxLength": 4000,
+            "minLength": 1,
+            "title": "Body",
+            "type": "string"
+          },
+          "key": {
+            "maxLength": 64,
+            "minLength": 8,
+            "title": "Key",
+            "type": "string"
+          },
+          "topic": {
+            "default": "other",
+            "enum": [
+              "deposit",
+              "withdrawal",
+              "investment",
+              "identity",
+              "account",
+              "other"
+            ],
+            "title": "Topic",
+            "type": "string"
+          }
+        },
+        "required": [
+          "body",
+          "key"
+        ],
+        "title": "StaffWriteFirst",
+        "type": "object"
+      },
       "Standing": {
         "description": "How a goal is doing, as the app labels it.",
         "enum": [
@@ -19366,7 +20353,7 @@
             "type": "string"
           },
           "closing": {
-            "$ref": "#/components/schemas/MoneyOut"
+            "$ref": "#/components/schemas/app__modules__reconciliation__api__MoneyOut"
           },
           "id": {
             "maxLength": 20,
@@ -19380,7 +20367,7 @@
             "type": "integer"
           },
           "opening": {
-            "$ref": "#/components/schemas/MoneyOut"
+            "$ref": "#/components/schemas/app__modules__reconciliation__api__MoneyOut"
           },
           "source": {
             "enum": [
@@ -19434,6 +20421,243 @@
         ],
         "title": "Status",
         "type": "string"
+      },
+      "StepDetailOut": {
+        "additionalProperties": false,
+        "properties": {
+          "can_decide": {
+            "title": "Can Decide",
+            "type": "boolean"
+          },
+          "method": {
+            "title": "Method",
+            "type": "string"
+          },
+          "owed": {
+            "$ref": "#/components/schemas/MoneyView"
+          },
+          "refusal": {
+            "anyOf": [
+              {
+                "enum": [
+                  "not_confirmed",
+                  "not_for_an_investment",
+                  "already_reversed",
+                  "not_a_payment",
+                  "unwind_first",
+                  "reverse_instead",
+                  "already_open",
+                  "not_open",
+                  "already_cleared"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Refusal"
+          },
+          "step": {
+            "$ref": "#/components/schemas/StepOut"
+          },
+          "yours": {
+            "title": "Yours",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "step",
+          "method",
+          "owed",
+          "refusal",
+          "can_decide",
+          "yours"
+        ],
+        "title": "StepDetailOut",
+        "type": "object"
+      },
+      "StepOut": {
+        "additionalProperties": false,
+        "properties": {
+          "amount": {
+            "$ref": "#/components/schemas/MoneyView"
+          },
+          "client_id": {
+            "maxLength": 20,
+            "minLength": 20,
+            "pattern": "^[-0-9A-Z_a-z]{20}$",
+            "title": "Client Id",
+            "type": "string"
+          },
+          "decided_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Decided At"
+          },
+          "decided_by": {
+            "anyOf": [
+              {
+                "maxLength": 20,
+                "minLength": 20,
+                "pattern": "^[-0-9A-Z_a-z]{20}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Decided By"
+          },
+          "decision_note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Decision Note"
+          },
+          "deposit_id": {
+            "maxLength": 20,
+            "minLength": 20,
+            "pattern": "^[-0-9A-Z_a-z]{20}$",
+            "title": "Deposit Id",
+            "type": "string"
+          },
+          "entry_id": {
+            "anyOf": [
+              {
+                "maxLength": 20,
+                "minLength": 20,
+                "pattern": "^[-0-9A-Z_a-z]{20}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Entry Id"
+          },
+          "id": {
+            "maxLength": 20,
+            "minLength": 20,
+            "pattern": "^[-0-9A-Z_a-z]{20}$",
+            "title": "Id",
+            "type": "string"
+          },
+          "kind": {
+            "enum": [
+              "open",
+              "recover",
+              "write_off"
+            ],
+            "title": "Kind",
+            "type": "string"
+          },
+          "proposed_at": {
+            "format": "date-time",
+            "title": "Proposed At",
+            "type": "string"
+          },
+          "proposed_by": {
+            "maxLength": 20,
+            "minLength": 20,
+            "pattern": "^[-0-9A-Z_a-z]{20}$",
+            "title": "Proposed By",
+            "type": "string"
+          },
+          "reason": {
+            "title": "Reason",
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "proposed",
+              "applied",
+              "sent_back",
+              "withdrawn"
+            ],
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "kind",
+          "status",
+          "deposit_id",
+          "client_id",
+          "amount",
+          "reason",
+          "proposed_by",
+          "proposed_at",
+          "decided_by",
+          "decided_at",
+          "decision_note",
+          "entry_id"
+        ],
+        "title": "StepOut",
+        "type": "object"
+      },
+      "StepProposeIn": {
+        "additionalProperties": false,
+        "properties": {
+          "deposit_id": {
+            "maxLength": 20,
+            "minLength": 20,
+            "pattern": "^[-0-9A-Z_a-z]{20}$",
+            "title": "Deposit Id",
+            "type": "string"
+          },
+          "kind": {
+            "enum": [
+              "open",
+              "recover",
+              "write_off"
+            ],
+            "title": "Kind",
+            "type": "string"
+          },
+          "reason": {
+            "maxLength": 500,
+            "minLength": 1,
+            "title": "Reason",
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind",
+          "deposit_id",
+          "reason"
+        ],
+        "title": "StepProposeIn",
+        "type": "object"
+      },
+      "StepSendBackIn": {
+        "additionalProperties": false,
+        "properties": {
+          "note": {
+            "maxLength": 500,
+            "minLength": 1,
+            "title": "Note",
+            "type": "string"
+          }
+        },
+        "required": [
+          "note"
+        ],
+        "title": "StepSendBackIn",
+        "type": "object"
       },
       "StrandedPayoutOut": {
         "additionalProperties": false,
@@ -20216,7 +21440,7 @@
             "title": "Decided By"
           },
           "fee": {
-            "$ref": "#/components/schemas/MoneyOut"
+            "$ref": "#/components/schemas/app__modules__reconciliation__transfers_api__MoneyOut"
           },
           "from_pot": {
             "$ref": "#/components/schemas/app__modules__reconciliation__transfers_api__PotOut"
@@ -20259,10 +21483,10 @@
             "type": "string"
           },
           "received": {
-            "$ref": "#/components/schemas/MoneyOut"
+            "$ref": "#/components/schemas/app__modules__reconciliation__transfers_api__MoneyOut"
           },
           "sent": {
-            "$ref": "#/components/schemas/MoneyOut"
+            "$ref": "#/components/schemas/app__modules__reconciliation__transfers_api__MoneyOut"
           },
           "status": {
             "enum": [
@@ -20505,8 +21729,19 @@
         "title": "Unread",
         "type": "object"
       },
+      "UpcomingKind": {
+        "enum": [
+          "maturity",
+          "autoinvest_run",
+          "goal_saving",
+          "goal_date"
+        ],
+        "title": "UpcomingKind",
+        "type": "string"
+      },
       "UpcomingView": {
         "additionalProperties": false,
+        "description": "One thing coming up. `amount_minor` is, by `kind`: what a maturity pays back after tax,\nwhat a run or a goal saving asks for, or a goal's target.",
         "properties": {
           "amount_minor": {
             "title": "Amount Minor",
@@ -20522,27 +21757,87 @@
               }
             ]
           },
+          "goal_id": {
+            "anyOf": [
+              {
+                "maxLength": 20,
+                "minLength": 20,
+                "pattern": "^[-0-9A-Z_a-z]{20}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Goal Id"
+          },
+          "goal_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Goal Name"
+          },
           "investment_id": {
-            "maxLength": 20,
-            "minLength": 20,
-            "pattern": "^[-0-9A-Z_a-z]{20}$",
-            "title": "Investment Id",
-            "type": "string"
+            "anyOf": [
+              {
+                "maxLength": 20,
+                "minLength": 20,
+                "pattern": "^[-0-9A-Z_a-z]{20}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Investment Id"
+          },
+          "kind": {
+            "$ref": "#/components/schemas/UpcomingKind"
           },
           "on": {
             "format": "date",
             "title": "On",
             "type": "string"
           },
+          "plan_id": {
+            "anyOf": [
+              {
+                "maxLength": 20,
+                "minLength": 20,
+                "pattern": "^[-0-9A-Z_a-z]{20}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Plan Id"
+          },
           "product_name": {
-            "title": "Product Name",
-            "type": "string"
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Product Name"
           }
         },
         "required": [
+          "kind",
           "on",
           "investment_id",
+          "plan_id",
+          "goal_id",
           "product_name",
+          "goal_name",
           "at_maturity",
           "amount_minor"
         ],
@@ -20621,7 +21916,7 @@
           "difference": {
             "anyOf": [
               {
-                "$ref": "#/components/schemas/MoneyOut"
+                "$ref": "#/components/schemas/app__modules__reconciliation__api__MoneyOut"
               },
               {
                 "type": "null"
@@ -20629,7 +21924,7 @@
             ]
           },
           "ledger_balance": {
-            "$ref": "#/components/schemas/MoneyOut"
+            "$ref": "#/components/schemas/app__modules__reconciliation__api__MoneyOut"
           },
           "read_at": {
             "anyOf": [
@@ -20646,7 +21941,7 @@
           "wallet_balance": {
             "anyOf": [
               {
-                "$ref": "#/components/schemas/MoneyOut"
+                "$ref": "#/components/schemas/app__modules__reconciliation__api__MoneyOut"
               },
               {
                 "type": "null"
@@ -20662,6 +21957,40 @@
           "read_at"
         ],
         "title": "WalletOut",
+        "type": "object"
+      },
+      "WeekOut": {
+        "additionalProperties": false,
+        "properties": {
+          "first_day": {
+            "format": "date",
+            "title": "First Day",
+            "type": "string"
+          },
+          "investments": {
+            "title": "Investments",
+            "type": "integer"
+          },
+          "last_day": {
+            "format": "date",
+            "title": "Last Day",
+            "type": "string"
+          },
+          "pay_out_principal": {
+            "$ref": "#/components/schemas/app__modules__overview__api__Amount"
+          },
+          "principal": {
+            "$ref": "#/components/schemas/app__modules__overview__api__Amount"
+          }
+        },
+        "required": [
+          "first_day",
+          "last_day",
+          "investments",
+          "principal",
+          "pay_out_principal"
+        ],
+        "title": "WeekOut",
         "type": "object"
       },
       "WithdrawalRequest": {
@@ -21401,6 +22730,79 @@
         "title": "AmountView",
         "type": "object"
       },
+      "app__modules__overview__api__Amount": {
+        "additionalProperties": false,
+        "properties": {
+          "currency": {
+            "enum": [
+              "UGX",
+              "USD"
+            ],
+            "title": "Currency",
+            "type": "string"
+          },
+          "minor": {
+            "title": "Minor",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "minor",
+          "currency"
+        ],
+        "title": "Amount",
+        "type": "object"
+      },
+      "app__modules__overview__api__MoneyOut": {
+        "additionalProperties": false,
+        "properties": {
+          "awaiting_start": {
+            "$ref": "#/components/schemas/app__modules__overview__api__Amount"
+          },
+          "client_money_held": {
+            "$ref": "#/components/schemas/app__modules__overview__api__Amount"
+          },
+          "clients_invested": {
+            "title": "Clients Invested",
+            "type": "integer"
+          },
+          "clients_verified": {
+            "title": "Clients Verified",
+            "type": "integer"
+          },
+          "days": {
+            "items": {
+              "$ref": "#/components/schemas/DayFlowOut"
+            },
+            "title": "Days",
+            "type": "array"
+          },
+          "in_transit": {
+            "$ref": "#/components/schemas/app__modules__overview__api__Amount"
+          },
+          "interest": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/InterestOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "client_money_held",
+          "in_transit",
+          "awaiting_start",
+          "clients_invested",
+          "clients_verified",
+          "interest",
+          "days"
+        ],
+        "title": "MoneyOut",
+        "type": "object"
+      },
       "app__modules__payments__routes__MatchIn": {
         "additionalProperties": false,
         "properties": {
@@ -21462,12 +22864,35 @@
         "title": "MatchIn",
         "type": "object"
       },
+      "app__modules__reconciliation__api__MoneyOut": {
+        "additionalProperties": false,
+        "properties": {
+          "currency": {
+            "enum": [
+              "UGX",
+              "USD"
+            ],
+            "title": "Currency",
+            "type": "string"
+          },
+          "minor": {
+            "title": "Minor",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "minor",
+          "currency"
+        ],
+        "title": "MoneyOut",
+        "type": "object"
+      },
       "app__modules__reconciliation__api__MovementOut": {
         "additionalProperties": false,
         "description": "A ledger movement on the pot still unpaired. `id` is \"<entry ID>:<line number>\".",
         "properties": {
           "amount": {
-            "$ref": "#/components/schemas/MoneyOut"
+            "$ref": "#/components/schemas/app__modules__reconciliation__api__MoneyOut"
           },
           "direction": {
             "enum": [
@@ -21534,7 +22959,7 @@
             "type": "array"
           },
           "ledger_closing": {
-            "$ref": "#/components/schemas/MoneyOut"
+            "$ref": "#/components/schemas/app__modules__reconciliation__api__MoneyOut"
           },
           "name": {
             "title": "Name",
@@ -21545,7 +22970,7 @@
             "type": "integer"
           },
           "open_exceptions_total": {
-            "$ref": "#/components/schemas/MoneyOut"
+            "$ref": "#/components/schemas/app__modules__reconciliation__api__MoneyOut"
           },
           "source": {
             "enum": [
@@ -21558,7 +22983,7 @@
           "statement_closing": {
             "anyOf": [
               {
-                "$ref": "#/components/schemas/MoneyOut"
+                "$ref": "#/components/schemas/app__modules__reconciliation__api__MoneyOut"
               },
               {
                 "type": "null"
@@ -21568,7 +22993,7 @@
           "unexplained": {
             "anyOf": [
               {
-                "$ref": "#/components/schemas/MoneyOut"
+                "$ref": "#/components/schemas/app__modules__reconciliation__api__MoneyOut"
               },
               {
                 "type": "null"
@@ -21609,7 +23034,7 @@
           "last_closing": {
             "anyOf": [
               {
-                "$ref": "#/components/schemas/MoneyOut"
+                "$ref": "#/components/schemas/app__modules__reconciliation__api__MoneyOut"
               },
               {
                 "type": "null"
@@ -21650,6 +23075,29 @@
           "last_closing"
         ],
         "title": "PotOut",
+        "type": "object"
+      },
+      "app__modules__reconciliation__transfers_api__MoneyOut": {
+        "additionalProperties": false,
+        "properties": {
+          "currency": {
+            "enum": [
+              "UGX",
+              "USD"
+            ],
+            "title": "Currency",
+            "type": "string"
+          },
+          "minor": {
+            "title": "Minor",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "minor",
+          "currency"
+        ],
+        "title": "MoneyOut",
         "type": "object"
       },
       "app__modules__reconciliation__transfers_api__PotOut": {
@@ -32074,6 +33522,68 @@
         "summary": "Unlock",
         "tags": [
           "client sign-in"
+        ]
+      }
+    },
+    "/client/portfolio": {
+      "get": {
+        "operationId": "client_portfolio_client_portfolio_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "currency",
+            "required": false,
+            "schema": {
+              "$ref": "#/components/schemas/Currency",
+              "default": "UGX"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PortfolioView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          }
+        },
+        "summary": "Client Portfolio",
+        "tags": [
+          "client insights"
         ]
       }
     },
@@ -43684,6 +45194,538 @@
         ]
       }
     },
+    "/staff/investment-run-requests": {
+      "get": {
+        "description": "Requests to run interest or maturities again, newest first.",
+        "operationId": "staff_run_requests_staff_investment_run_requests_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "status",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "proposed",
+                    "approved",
+                    "declined",
+                    "withdrawn"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Status"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 50,
+              "maximum": 200,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/RunRequestOut"
+                  },
+                  "title": "Response Staff Run Requests Staff Investment Run Requests Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          }
+        },
+        "summary": "Staff Run Requests",
+        "tags": [
+          "staff investing"
+        ]
+      },
+      "post": {
+        "description": "Ask for a day's interest run, or today's maturity run, again. A second person must\napprove it before it runs.",
+        "operationId": "staff_propose_run_staff_investment_run_requests_post",
+        "parameters": [
+          {
+            "description": "A value the caller chooses once per intended action and sends again on every retry of it. Pattern: `[A-Za-z0-9._:-]{8,128}`.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "A value the caller chooses once per intended action and sends again on every retry of it. Pattern: `[A-Za-z0-9._:-]{8,128}`.",
+              "title": "Idempotency-Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RunRequestIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RunRequestOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          }
+        },
+        "summary": "Staff Propose Run",
+        "tags": [
+          "staff investing"
+        ]
+      }
+    },
+    "/staff/investment-run-requests/{request_id}/approve": {
+      "post": {
+        "description": "Approve someone else's request. The run is queued at once.",
+        "operationId": "staff_approve_run_staff_investment_run_requests__request_id__approve_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "request_id",
+            "required": true,
+            "schema": {
+              "maxLength": 20,
+              "minLength": 20,
+              "pattern": "^[-0-9A-Z_a-z]{20}$",
+              "title": "Request Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "A value the caller chooses once per intended action and sends again on every retry of it. Pattern: `[A-Za-z0-9._:-]{8,128}`.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "A value the caller chooses once per intended action and sends again on every retry of it. Pattern: `[A-Za-z0-9._:-]{8,128}`.",
+              "title": "Idempotency-Key"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RunRequestOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          }
+        },
+        "summary": "Staff Approve Run",
+        "tags": [
+          "staff investing"
+        ]
+      }
+    },
+    "/staff/investment-run-requests/{request_id}/decline": {
+      "post": {
+        "operationId": "staff_decline_run_staff_investment_run_requests__request_id__decline_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "request_id",
+            "required": true,
+            "schema": {
+              "maxLength": 20,
+              "minLength": 20,
+              "pattern": "^[-0-9A-Z_a-z]{20}$",
+              "title": "Request Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "A value the caller chooses once per intended action and sends again on every retry of it. Pattern: `[A-Za-z0-9._:-]{8,128}`.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "A value the caller chooses once per intended action and sends again on every retry of it. Pattern: `[A-Za-z0-9._:-]{8,128}`.",
+              "title": "Idempotency-Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SendBack"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RunRequestOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          }
+        },
+        "summary": "Staff Decline Run",
+        "tags": [
+          "staff investing"
+        ]
+      }
+    },
+    "/staff/investment-run-requests/{request_id}/withdraw": {
+      "post": {
+        "operationId": "staff_withdraw_run_staff_investment_run_requests__request_id__withdraw_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "request_id",
+            "required": true,
+            "schema": {
+              "maxLength": 20,
+              "minLength": 20,
+              "pattern": "^[-0-9A-Z_a-z]{20}$",
+              "title": "Request Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "A value the caller chooses once per intended action and sends again on every retry of it. Pattern: `[A-Za-z0-9._:-]{8,128}`.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "A value the caller chooses once per intended action and sends again on every retry of it. Pattern: `[A-Za-z0-9._:-]{8,128}`.",
+              "title": "Idempotency-Key"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RunRequestOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          }
+        },
+        "summary": "Staff Withdraw Run",
+        "tags": [
+          "staff investing"
+        ]
+      }
+    },
     "/staff/investment-transfers": {
       "get": {
         "operationId": "list_transfers_staff_investment_transfers_get",
@@ -46967,6 +49009,74 @@
         ]
       }
     },
+    "/staff/overview": {
+      "get": {
+        "description": "The Overview's figures that this member of staff may see. Reads only.",
+        "operationId": "overview_staff_overview_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "currency",
+            "required": false,
+            "schema": {
+              "default": "UGX",
+              "enum": [
+                "UGX",
+                "USD"
+              ],
+              "title": "Currency",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OverviewOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          }
+        },
+        "summary": "Overview",
+        "tags": [
+          "staff overview"
+        ]
+      }
+    },
     "/staff/payments/bank-accounts": {
       "get": {
         "description": "The account clients pay each currency into, and any change waiting for a decision.",
@@ -48308,6 +50418,709 @@
         "summary": "Withdraw Reassignment",
         "tags": [
           "staff deposit reassignments"
+        ]
+      }
+    },
+    "/staff/payments/receivables": {
+      "get": {
+        "description": "Receivable steps, newest first, at most 200.",
+        "operationId": "list_steps_staff_payments_receivables_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "status",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "proposed",
+                    "applied",
+                    "sent_back",
+                    "withdrawn"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Status"
+            }
+          },
+          {
+            "in": "query",
+            "name": "deposit_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 20,
+                  "minLength": 20,
+                  "pattern": "^[-0-9A-Z_a-z]{20}$",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Deposit Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/StepOut"
+                  },
+                  "title": "Response List Steps Staff Payments Receivables Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          }
+        },
+        "summary": "List Steps",
+        "tags": [
+          "staff deposit receivables"
+        ]
+      },
+      "post": {
+        "description": "Propose opening a deposit's receivable, or recovering or writing it off. Nothing moves\nuntil a different member of staff approves.\n\nOpening is refused with `unwind_first` while the investment runs and `reverse_instead`\nwhile the money still waits for it. `409` if another step for the deposit is waiting.",
+        "operationId": "propose_step_staff_payments_receivables_post",
+        "parameters": [
+          {
+            "description": "A value the caller chooses once per intended action and sends again on every retry of it. Pattern: `[A-Za-z0-9._:-]{8,128}`.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "A value the caller chooses once per intended action and sends again on every retry of it. Pattern: `[A-Za-z0-9._:-]{8,128}`.",
+              "title": "Idempotency-Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/StepProposeIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StepDetailOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          }
+        },
+        "summary": "Propose Step",
+        "tags": [
+          "staff deposit receivables"
+        ]
+      }
+    },
+    "/staff/payments/receivables/outstanding": {
+      "get": {
+        "description": "The opening step of every receivable not yet recovered or written off, oldest first.",
+        "operationId": "outstanding_staff_payments_receivables_outstanding_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/StepOut"
+                  },
+                  "title": "Response Outstanding Staff Payments Receivables Outstanding Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          }
+        },
+        "summary": "Outstanding",
+        "tags": [
+          "staff deposit receivables"
+        ]
+      }
+    },
+    "/staff/payments/receivables/{step_id}": {
+      "get": {
+        "description": "One step, what the client owes now and whether approving would go through.",
+        "operationId": "get_step_staff_payments_receivables__step_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "step_id",
+            "required": true,
+            "schema": {
+              "maxLength": 20,
+              "minLength": 20,
+              "pattern": "^[-0-9A-Z_a-z]{20}$",
+              "title": "Step Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StepDetailOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          }
+        },
+        "summary": "Get Step",
+        "tags": [
+          "staff deposit receivables"
+        ]
+      }
+    },
+    "/staff/payments/receivables/{step_id}/approve": {
+      "post": {
+        "description": "Approve someone else's step. Its entry posts now. The proposer gets `403`. `422` with a\ncode if things changed since it was proposed: the proposal stays open.",
+        "operationId": "approve_step_staff_payments_receivables__step_id__approve_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "step_id",
+            "required": true,
+            "schema": {
+              "maxLength": 20,
+              "minLength": 20,
+              "pattern": "^[-0-9A-Z_a-z]{20}$",
+              "title": "Step Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "A value the caller chooses once per intended action and sends again on every retry of it. Pattern: `[A-Za-z0-9._:-]{8,128}`.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "A value the caller chooses once per intended action and sends again on every retry of it. Pattern: `[A-Za-z0-9._:-]{8,128}`.",
+              "title": "Idempotency-Key"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StepDetailOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          }
+        },
+        "summary": "Approve Step",
+        "tags": [
+          "staff deposit receivables"
+        ]
+      }
+    },
+    "/staff/payments/receivables/{step_id}/send-back": {
+      "post": {
+        "description": "Decline someone else's step, with a note. Nothing moves. The proposer gets `403`.",
+        "operationId": "send_back_step_staff_payments_receivables__step_id__send_back_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "step_id",
+            "required": true,
+            "schema": {
+              "maxLength": 20,
+              "minLength": 20,
+              "pattern": "^[-0-9A-Z_a-z]{20}$",
+              "title": "Step Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "A value the caller chooses once per intended action and sends again on every retry of it. Pattern: `[A-Za-z0-9._:-]{8,128}`.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "A value the caller chooses once per intended action and sends again on every retry of it. Pattern: `[A-Za-z0-9._:-]{8,128}`.",
+              "title": "Idempotency-Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/StepSendBackIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StepDetailOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          }
+        },
+        "summary": "Send Back Step",
+        "tags": [
+          "staff deposit receivables"
+        ]
+      }
+    },
+    "/staff/payments/receivables/{step_id}/withdraw": {
+      "post": {
+        "description": "Take back your own step before anyone decides it. Anyone else gets `403`.",
+        "operationId": "withdraw_step_staff_payments_receivables__step_id__withdraw_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "step_id",
+            "required": true,
+            "schema": {
+              "maxLength": 20,
+              "minLength": 20,
+              "pattern": "^[-0-9A-Z_a-z]{20}$",
+              "title": "Step Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "A value the caller chooses once per intended action and sends again on every retry of it. Pattern: `[A-Za-z0-9._:-]{8,128}`.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "A value the caller chooses once per intended action and sends again on every retry of it. Pattern: `[A-Za-z0-9._:-]{8,128}`.",
+              "title": "Idempotency-Key"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StepDetailOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          }
+        },
+        "summary": "Withdraw Step",
+        "tags": [
+          "staff deposit receivables"
         ]
       }
     },
@@ -55716,6 +58529,212 @@
         ]
       }
     },
+    "/staff/reports": {
+      "get": {
+        "description": "The reports this member of staff may download.",
+        "operationId": "catalogue_staff_reports_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogueOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          }
+        },
+        "summary": "Catalogue",
+        "tags": [
+          "staff reports"
+        ]
+      }
+    },
+    "/staff/reports/{key}.csv": {
+      "get": {
+        "description": "One report for one period, as CSV. Recorded on the audit trail.",
+        "operationId": "download_staff_reports__key__csv_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "key",
+            "required": true,
+            "schema": {
+              "enum": [
+                "daily_position",
+                "deposits_and_withdrawals",
+                "interest_and_tax",
+                "maturity_ladder",
+                "identity_and_risk",
+                "client_statements",
+                "complaints_quarterly"
+              ],
+              "title": "Key",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "date_from",
+            "required": true,
+            "schema": {
+              "format": "date",
+              "title": "Date From",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "date_to",
+            "required": true,
+            "schema": {
+              "format": "date",
+              "title": "Date To",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "currency",
+            "required": false,
+            "schema": {
+              "default": "UGX",
+              "enum": [
+                "UGX",
+                "USD"
+              ],
+              "title": "Currency",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "text/csv": {}
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          }
+        },
+        "summary": "Download",
+        "tags": [
+          "staff reports"
+        ]
+      }
+    },
+    "/staff/review-queue": {
+      "get": {
+        "description": "Everything waiting for a person that this member of staff may see, longest first.",
+        "operationId": "review_queue_staff_review_queue_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReviewQueueOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          }
+        },
+        "summary": "Review Queue",
+        "tags": [
+          "staff review queue"
+        ]
+      }
+    },
     "/staff/session": {
       "get": {
         "operationId": "staff_session_staff_session_get",
@@ -56287,6 +59306,102 @@
         "summary": "Staff Sign Out",
         "tags": [
           "staff sign-in"
+        ]
+      }
+    },
+    "/staff/support/clients/{client_id}/messages": {
+      "post": {
+        "description": "Write to a client in their open chat, opening one if there is none. 404 for a client\nwho is not active.",
+        "operationId": "staff_write_first_staff_support_clients__client_id__messages_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "client_id",
+            "required": true,
+            "schema": {
+              "maxLength": 20,
+              "minLength": 20,
+              "pattern": "^[-0-9A-Z_a-z]{20}$",
+              "title": "Client Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/StaffWriteFirst"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MessageItem"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          }
+        },
+        "summary": "Staff Write First",
+        "tags": [
+          "staff support"
         ]
       }
     },

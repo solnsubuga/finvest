@@ -457,6 +457,40 @@ async def list_deposits(
     return [_deposit(row) for row in rows.all()]
 
 
+_CONFIRMED_AUTOMATICALLY = text(
+    "SELECT count(*) AS confirmed FROM payment_deposits "
+    "WHERE status = 'confirmed' AND method <> 'bank_transfer' "
+    "AND settled_at >= :since AND settled_at < :until"
+)
+
+
+async def confirmed_automatically(
+    session: AsyncSession, *, since: datetime, until: datetime
+) -> int:
+    """Mobile money deposits the provider confirmed from `since` up to `until`: money that
+    arrived and started its investment with no person involved. For the review queue's figures.
+    A staff transaction sees every deposit."""
+    row = (await session.execute(_CONFIRMED_AUTOMATICALLY, {"since": since, "until": until})).one()
+    return int(row.confirmed)
+
+
+_REQUESTED_BETWEEN = text(
+    f"SELECT {_COLUMNS} FROM payment_deposits "  # noqa: S608 - constant column list
+    "WHERE created_at >= :since AND created_at < :until ORDER BY created_at, id LIMIT :limit"
+)
+
+
+async def deposits_requested_between(
+    session: AsyncSession, *, since: datetime, until: datetime, limit: int
+) -> list[Deposit]:
+    """Deposits asked for from `since` up to `until`, oldest first, at most `limit`. For staff
+    reports: a staff transaction sees every deposit."""
+    rows = await session.execute(
+        _REQUESTED_BETWEEN, {"since": since, "until": until, "limit": max(1, limit)}
+    )
+    return [_deposit(row) for row in rows.all()]
+
+
 async def record_notice(
     session: AsyncSession, provider: str, notice: ProviderNotice, clock: Clock
 ) -> bool:

@@ -14,6 +14,13 @@ export const KIND_INFO: Record<Kind, KindInfo> = {
   // The subject is the currency, such as "UGX". The details are shown on Settings.
   bank_account_change: { label: "Bank account clients pay into", path: at("/settings") },
   account_code_map: { label: "Accounting system codes", path: at("/settings") },
+  // The subject is the setting's key, such as "public_holidays".
+  payment_channels_change: { label: "Payment channels", path: at("/settings") },
+  calendar_change: { label: "Calendar", path: at("/settings") },
+  staff_security_change: { label: "Staff security", path: at("/settings") },
+  statement_layout_change: { label: "Statement import layouts", path: at("/settings") },
+  // The subject is the day the new limits start.
+  withdrawal_limits_change: { label: "Withdrawal limits", path: at("/settings") },
   ledger_correction: { label: "Ledger correction", path: at("/finance") },
   pot_transfer: { label: "Transfer between pots", path: at("/reconciliation") },
   bank_transfer_match: { label: "Bank transfer match", path: at("/reconciliation") },
@@ -50,6 +57,13 @@ export const KIND_INFO: Record<Kind, KindInfo> = {
     label: "Company or group account to open",
     path: (item) => `/review-queue?tab=organisations&organisation=${encodeURIComponent(item.id)}`,
   },
+  // Undoing, refunding or sending on a matured term's money, decided under Corrections.
+  investment_correction: { label: "Investment correction", path: at("/investments") },
+  // The subject is "interest 2026-11-13" or "maturity 2026-11-14".
+  investment_run: {
+    label: "Run again",
+    path: (item) => (item.subject.startsWith("maturity") ? "/maturities" : "/investments"),
+  },
 };
 
 const SUBJECT_WORDS: Record<string, string> = {
@@ -62,6 +76,9 @@ const SUBJECT_WORDS: Record<string, string> = {
   bank: "Bank account",
   company: "Company",
   group: "Group or SACCO",
+  unwind: "Undo an investment",
+  refund: "Refund to the client",
+  pay_out: "Send matured money on",
 };
 
 /** The subject in words where it is a code, such as `change_role` or `lock -N…`. */
@@ -71,6 +88,10 @@ export function describeSubject(item: ApprovalItem): string {
     return `${kind === "unlock" ? "Unlock" : "Lock"} client ${client ?? ""}`.trim();
   }
   if (item.kind === "suppression_lift") return `Address ${item.subject}…`;
+  if (item.kind === "investment_run") {
+    const [kind, day] = item.subject.split(" ");
+    return `${kind === "maturity" ? "Maturities" : "Interest"} for ${day ?? ""}`.trim();
+  }
   if (item.kind === "phone_change" || item.kind === "account_closure") return `Client ${item.subject}`;
   return SUBJECT_WORDS[item.subject] ?? item.subject;
 }

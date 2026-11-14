@@ -62,6 +62,16 @@ export const ACTION_PERMISSIONS = [
   "announcements.send",
   // Proposing or deciding the bank account clients pay into by transfer, on Settings. Approving always takes a second person.
   "bank_accounts.change",
+  // Proposing or deciding which ways of paying in and paying out are open, on Settings.
+  "payment_channels.change",
+  // Proposing or deciding the public holidays, the bank payout cut-off and the maturity reminders, on Settings.
+  "calendar.change",
+  // Proposing or deciding the office networks and the idle sign-out for staff, on Settings. Admin only.
+  "staff_security.change",
+  // Proposing or deciding the column layouts of providers' statement exports, on Settings.
+  "statement_layouts.change",
+  // Proposing or deciding the withdrawal limits and the review threshold, on Settings. Approving always takes a second person.
+  "withdrawal_limits.change",
   // Matching a bank transfer to a statement line, refusing it, and approving someone else's match.
   "bank_transfers.change",
   // Importing a statement, pairing by hand, signing a day close, and settling a payout the
