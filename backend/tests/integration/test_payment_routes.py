@@ -304,6 +304,47 @@ async def test_a_client_cannot_pay_for_someone_elses_investment_or_see_their_pay
         ).status_code == 404
 
 
+async def test_a_client_lists_only_their_own_payments_newest_first_a_page_at_a_time(
+    api: Api, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from app.modules.payments import routes
+
+    monkeypatch.setattr(routes, "CLIENT_PAGE", 2)
+    async with api.http() as http, api.http() as stranger_http:
+        assert (await http.get("/client/payments")).status_code == 401
+        client, phone = await api.client(http)
+        await api.client(stranger_http)
+        assert (await stranger_http.get("/client/payments")).json() == {
+            "items": [],
+            "next_before": None,
+        }
+        paid = []
+        for n in range(3):
+            investment = await request_investment(api.database, client, api.clock)
+            api.collections.on_send(phone, Accepted(f"ref-list-{n}"))
+            answer = await http.post(
+                f"/client/investments/{investment.id}/payments/mobile-money",
+                json={"network": "mtn"},
+                headers=key(),
+            )
+            assert answer.status_code == 201, answer.text
+            paid.append(answer.json()["id"])
+
+        first = await http.get("/client/payments")
+        assert first.status_code == 200, first.text
+        body = first.json()
+        assert [item["id"] for item in body["items"]] == [paid[2], paid[1]]
+        assert body["next_before"] == paid[1]
+        item = body["items"][0]
+        assert item["method"] == "mtn" and item["receipt"] is None
+        assert phone not in str(body)
+        rest = (await http.get("/client/payments", params={"before": body["next_before"]})).json()
+        assert [item["id"] for item in rest["items"]] == [paid[0]]
+        assert rest["next_before"] is None
+        # Another client sees none of them.
+        assert (await stranger_http.get("/client/payments")).json()["items"] == []
+
+
 RECEIPT = b"%PDF-1.7\n" + secrets.token_bytes(4096)
 
 
