@@ -69,6 +69,8 @@ export type SignupChallenge = { challengeId: string; phone: string };
 export type SignupTicket = { ticket: string; phone: string };
 /** A password reset in progress: the texted code is checked only when the new password is set. */
 export type PasswordReset = { challengeId: string; phone: string };
+/** Claiming a Finvest 1.0 account from its link: a code was texted to the number on file. */
+export type ClaimChallenge = { challengeId: string };
 
 /**
  * The ways to confirm a log in. A client can use any one they have set up:
@@ -147,6 +149,18 @@ export interface AuthClient {
   confirmSignupCode(challengeId: string, code: string): Promise<SignupTicket>;
   /** Sign up, step 2: sets the password and opens the first session. */
   completeSignup(ticket: string, password: string): Promise<Session>;
+
+  /**
+   * Claiming an account moved from Finvest 1.0, step 1: the token from the
+   * link we sent. Texts a code to the number on file. A link that is used,
+   * replaced by a newer one or too old fails with `not_found`.
+   */
+  startClaim(token: string): Promise<ClaimChallenge>;
+  /**
+   * Claiming, step 2: the texted code and a new password. The account
+   * becomes the client's and the first session opens.
+   */
+  completeClaim(token: string, challengeId: string, code: string, password: string): Promise<Session>;
 
   /**
    * Log in, step 1: the number or a proved email address, and the password.

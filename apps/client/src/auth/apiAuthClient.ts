@@ -217,6 +217,21 @@ export function createApiAuthClient(): AuthClient {
         });
       }),
 
+    startClaim: (token) =>
+      wrap(async () => {
+        const result = await api("POST /client/claim/start", { body: { token } });
+        return { challengeId: result.challenge_id };
+      }),
+
+    completeClaim: (token, challengeId, code, password) =>
+      wrap(async () =>
+        signedIn(
+          await api("POST /client/claim/complete", {
+            body: { token, challenge_id: challengeId, code, password },
+          }),
+        ),
+      ),
+
     startPasswordReset: (phone) =>
       wrap(async () => {
         const result = await api("POST /client/password/reset/start", { body: { phone } });
