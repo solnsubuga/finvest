@@ -41,7 +41,7 @@ CREATE TABLE identity_pin_confirmations (
 EMPTY_GUARD = """
 DO $$
 BEGIN
-    IF EXISTS (SELECT FROM identity_pin_confirmations WHERE used_at IS NULL) THEN
+    IF EXISTS (SELECT FROM identity_pin_confirmations WHERE used_at IS NULL AND expires_at > now()) THEN
         RAISE EXCEPTION 'refusing to drop PIN confirmations that are not used yet';
     END IF;
 END

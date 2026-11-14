@@ -16,6 +16,7 @@ from typing import NamedTuple
 
 import structlog
 from sqlalchemy import text
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.infrastructure.database import Database
 from app.modules.identity import trail
@@ -162,34 +163,53 @@ class PinService:
         return PinConfirmation(confirmed=True, tries_left=MAX_WRONG_PINS, confirmation=token)
 
     async def spend(
-        self, client: ClientSession, action: PinAction, confirmation: str | None
+        self,
+        client: ClientSession,
+        action: PinAction,
+        confirmation: str | None,
+        *,
+        session: AsyncSession | None = None,
     ) -> None:
         """Use up the confirmation an action needs. Refuses with `pin_required` without one.
 
         Nothing is asked of a session that confirms nothing with a PIN (a browser, or a phone
         with no PIN yet). A confirmation works once, for its action, from its own session.
+
+        Pass the action's own `session` so the confirmation is used up only if the action
+        commits: a failed action, or a retry of the same idempotency key after a timeout, then
+        finds it still there. Call it after the idempotency replay check, so a replay that
+        answers the earlier result asks for nothing.
         """
         if not self.needs_confirmation(client):
             return
         spent = None
         if confirmation:
-            async with self.database.transaction() as session:
-                spent = await session.scalar(
-                    text(
-                        "UPDATE identity_pin_confirmations SET used_at = :now "
-                        "WHERE token_hash = :hash AND session_id = :session AND action = :action "
-                        "AND used_at IS NULL AND expires_at > :now RETURNING id"
-                    ),
-                    {
-                        "now": self.clock.now(),
-                        "hash": token_digest(confirmation),
-                        "session": client.session_id,
-                        "action": action,
-                    },
-                )
+            if session is not None:
+                spent = await self._use(session, client, action, confirmation)
+            else:
+                async with self.database.transaction() as own:
+                    spent = await self._use(own, client, action, confirmation)
         if spent is None:
             logger.info("pin_confirmation_refused", error_code="pin_required", action=action)
             raise ApplicationError("pin_required")
+
+    async def _use(
+        self, session: AsyncSession, client: ClientSession, action: PinAction, confirmation: str
+    ) -> str | None:
+        spent: str | None = await session.scalar(
+            text(
+                "UPDATE identity_pin_confirmations SET used_at = :now "
+                "WHERE token_hash = :hash AND session_id = :session AND action = :action "
+                "AND used_at IS NULL AND expires_at > :now RETURNING id"
+            ),
+            {
+                "now": self.clock.now(),
+                "hash": token_digest(confirmation),
+                "session": client.session_id,
+                "action": action,
+            },
+        )
+        return spent
 
     async def _check(self, client: ClientSession, pin: str) -> _Checked:
         """Charge a try, then compare. The fifth wrong PIN in a row ends the session (401)."""
