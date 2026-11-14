@@ -180,6 +180,8 @@ class LimitsOut(Contract):
 
 
 _CLIENT_STATUS: dict[PayoutStatus, str] = {
+    # Never told apart from processing: saying a client is being screened could tip them off.
+    PayoutStatus.SCREENING: "processing",
     PayoutStatus.HELD: "in_review",
     PayoutStatus.QUEUED: "processing",
     PayoutStatus.SENT: "processing",

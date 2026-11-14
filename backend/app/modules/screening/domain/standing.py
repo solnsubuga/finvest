@@ -110,3 +110,45 @@ def standing(
 
 def due_for_rescreen(last_finished_at: datetime | None, now: datetime) -> bool:
     return last_finished_at is None or now - last_finished_at >= RESCREEN_EVERY
+
+
+# A payout goes ahead on a clear screen finished at most this long before it is asked for.
+PAYOUT_SCREEN_FRESH = timedelta(hours=24)
+
+
+class Clearance(StrEnum):
+    """Whether money may leave for a client now."""
+
+    CLEAR = "clear"
+    # A screen is under way, a case is open, or the last screen could not tell: wait.
+    WAIT = "wait"
+    # No recent screen: ask for one, and wait for it.
+    SCREEN = "screen"
+    # Two members of staff confirmed a sanctions match. Nothing leaves.
+    BLOCKED = "blocked"
+
+
+def payout_clearance(
+    last: LastRun | None, *, open_case: bool, sanctioned: bool, now: datetime
+) -> Clearance:
+    """The rule PostgreSQL also holds (migration 0181), so a payout cannot skip it.
+
+    A screen recorded as not run, because no provider is set up, clears like a clear one: a
+    payout then waits only for the worker to record it. A screen that found only entities
+    already decided for this client is clear.
+    """
+    if sanctioned:
+        return Clearance.BLOCKED
+    if open_case:
+        return Clearance.WAIT
+    if last is None:
+        return Clearance.SCREEN
+    if last.status is RunStatus.PENDING:
+        return Clearance.WAIT
+    assert last.finished_at is not None
+    if now - last.finished_at > PAYOUT_SCREEN_FRESH:
+        return Clearance.SCREEN
+    if last.status in (RunStatus.UNAVAILABLE, RunStatus.NO_SUBJECT):
+        # Asked moments ago and could not tell: staff screen the client again by hand.
+        return Clearance.WAIT
+    return Clearance.CLEAR

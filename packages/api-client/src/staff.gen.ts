@@ -1101,6 +1101,12 @@ export type GroupProgressView = z.infer<typeof GroupProgressView>;
 export const GroupStatus = z.enum(["active", "closed"]);
 export type GroupStatus = z.infer<typeof GroupStatus>;
 
+export const HeldAmountOut = z.object({
+  currency: z.enum(["UGX", "USD"]),
+  minor: z.number().int(),
+});
+export type HeldAmountOut = z.infer<typeof HeldAmountOut>;
+
 export const ReleaseOut = z.object({
   decided_at: z.string().nullable(),
   decided_by: z.string().nullable(),
@@ -2257,6 +2263,7 @@ export const SummaryOut = z.object({
   open_cases: z.number().int(),
   open_monitoring_cases: z.number().int(),
   open_screening_cases: z.number().int(),
+  payouts_waiting: z.number().int(),
   pending: z.number().int(),
   provider: z.string(),
   screened_last_30_days: z.number().int(),
@@ -2368,6 +2375,16 @@ export const TrialRequest = z.object({
   investments_csv: z.string(),
 });
 export type TrialRequest = z.infer<typeof TrialRequest>;
+
+export const WaitingPayoutOut = z.object({
+  amount: HeldAmountOut,
+  client: ClientOut,
+  created_at: z.string(),
+  id: z.string(),
+  kind: z.enum(["mobile_money", "bank"]),
+  standing: StandingOut.nullable(),
+});
+export type WaitingPayoutOut = z.infer<typeof WaitingPayoutOut>;
 
 export const WalletOut = z.object({
   connected: z.boolean(),
@@ -2868,6 +2885,17 @@ export const operations = {
     idempotent: true,
     status: 201,
     response: RunOut,
+  },
+  "GET /staff/compliance/payouts": {
+    method: "GET",
+    path: "/staff/compliance/payouts",
+    params: z.object({}),
+    query: z.object({}),
+    body: null,
+    bodyKind: null,
+    idempotent: false,
+    status: 200,
+    response: z.array(WaitingPayoutOut),
   },
   "POST /staff/compliance/proposals/{proposal_id}/approve": {
     method: "POST",

@@ -10,6 +10,7 @@ from app.modules.payouts.domain.payouts import (
     LedgerEffect,
     PayoutEvent,
     PayoutStatus,
+    after_screening,
     apply,
     initial_status,
     may_send,
@@ -22,6 +23,9 @@ S, E, L = PayoutStatus, PayoutEvent, LedgerEffect
 # The whole machine, written out a second time on purpose. A change to the rules has to be made
 # in both places, so it cannot slip in unnoticed.
 EXPECTED: dict[tuple[PayoutStatus, PayoutEvent], tuple[PayoutStatus, LedgerEffect]] = {
+    (S.SCREENING, E.SCREENING_CLEARED): (S.QUEUED, L.NONE),
+    (S.SCREENING, E.SCREENING_CLEARED_FOR_REVIEW): (S.HELD, L.NONE),
+    (S.SCREENING, E.REVIEW_DECLINED): (S.CANCELLED, L.RELEASE),
     (S.HELD, E.REVIEW_APPROVED): (S.QUEUED, L.NONE),
     (S.HELD, E.REVIEW_DECLINED): (S.CANCELLED, L.RELEASE),
     (S.HELD, E.CLIENT_CANCELLED): (S.CANCELLED, L.RELEASE),
@@ -136,12 +140,20 @@ def test_a_payout_is_cancelled_only_before_anything_is_sent() -> None:
     into_cancelled = {
         status for (status, _), (after, _) in EXPECTED.items() if after is S.CANCELLED
     }
-    assert into_cancelled == {S.HELD}
+    assert into_cancelled == {S.SCREENING, S.HELD}
 
 
 def test_a_held_payout_reaches_the_provider_only_through_approval() -> None:
     assert initial_status(needs_review=True) is S.HELD
     assert initial_status(needs_review=False) is S.QUEUED
+    for needs_review in (True, False):
+        assert initial_status(needs_review=needs_review, screened=False) is S.SCREENING
+    assert apply(S.SCREENING, after_screening(needs_review=True)).status is S.HELD
+    assert apply(S.SCREENING, after_screening(needs_review=False)).status is S.QUEUED
+    assert not may_send(S.SCREENING)
+    for event in SEND_RESULTS:
+        with pytest.raises(IllegalTransition):
+            apply(S.SCREENING, event)
     assert not may_send(S.HELD)
     for event in SEND_RESULTS:
         with pytest.raises(IllegalTransition):
@@ -149,7 +161,7 @@ def test_a_held_payout_reaches_the_provider_only_through_approval() -> None:
 
 
 def test_every_status_can_be_reached_and_every_open_one_can_finish() -> None:
-    reachable = {S.HELD, S.QUEUED}
+    reachable = {S.SCREENING, S.HELD, S.QUEUED}
     frontier = set(reachable)
     while frontier:
         status = frontier.pop()
@@ -165,4 +177,7 @@ def test_every_status_can_be_reached_and_every_open_one_can_finish() -> None:
 
 
 def test_failed_and_cancelled_payouts_give_the_daily_allowance_back() -> None:
-    assert frozenset({S.HELD, S.QUEUED, S.SENT, S.UNCERTAIN, S.PAID}) == COUNTS_TOWARDS_LIMIT
+    assert (
+        frozenset({S.SCREENING, S.HELD, S.QUEUED, S.SENT, S.UNCERTAIN, S.PAID})
+        == COUNTS_TOWARDS_LIMIT
+    )

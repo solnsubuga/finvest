@@ -14,11 +14,14 @@ from app.modules.screening.domain.cases import (
 )
 from app.modules.screening.domain.provider import Match, MatchCategory, ScreeningSubject
 from app.modules.screening.domain.standing import (
+    PAYOUT_SCREEN_FRESH,
     RESCREEN_EVERY,
+    Clearance,
     LastRun,
     Outcome,
     RunStatus,
     due_for_rescreen,
+    payout_clearance,
     standing,
     what_was_found,
 )
@@ -118,3 +121,37 @@ def test_a_subject_has_a_name_and_a_two_letter_country() -> None:
         ScreeningSubject(" ", "", None, None)
     with pytest.raises(ValueError, match="country"):
         ScreeningSubject("NAKATO", "Amara", None, "UGA")
+
+
+def finished(status: RunStatus, ago: timedelta) -> LastRun:
+    return LastRun(status, NOW - ago, NOW - ago)
+
+
+@pytest.mark.parametrize(
+    ("last", "clearance"),
+    [
+        (None, Clearance.SCREEN),
+        (LastRun(RunStatus.PENDING, NOW, None), Clearance.WAIT),
+        (finished(RunStatus.CLEAR, timedelta(hours=1)), Clearance.CLEAR),
+        (finished(RunStatus.CLEAR, PAYOUT_SCREEN_FRESH), Clearance.CLEAR),
+        (finished(RunStatus.CLEAR, PAYOUT_SCREEN_FRESH + timedelta(seconds=1)), Clearance.SCREEN),
+        (finished(RunStatus.POSSIBLE_MATCH, timedelta(hours=1)), Clearance.CLEAR),
+        (finished(RunStatus.NOT_RUN, timedelta(hours=1)), Clearance.CLEAR),
+        (finished(RunStatus.NOT_RUN, timedelta(days=2)), Clearance.SCREEN),
+        (finished(RunStatus.UNAVAILABLE, timedelta(hours=1)), Clearance.WAIT),
+        (finished(RunStatus.NO_SUBJECT, timedelta(hours=1)), Clearance.WAIT),
+        (finished(RunStatus.UNAVAILABLE, timedelta(days=2)), Clearance.SCREEN),
+    ],
+)
+def test_a_payout_waits_for_a_recent_clear_screen(
+    last: LastRun | None, clearance: Clearance
+) -> None:
+    assert payout_clearance(last, open_case=False, sanctioned=False, now=NOW) is clearance
+
+
+@pytest.mark.parametrize("status", list(RunStatus))
+def test_a_case_holds_payouts_and_a_sanctions_match_blocks_them(status: RunStatus) -> None:
+    last = finished(status, timedelta(hours=1)) if status.finished else run(status)
+    assert payout_clearance(last, open_case=True, sanctioned=False, now=NOW) is Clearance.WAIT
+    assert payout_clearance(last, open_case=True, sanctioned=True, now=NOW) is Clearance.BLOCKED
+    assert payout_clearance(None, open_case=False, sanctioned=True, now=NOW) is Clearance.BLOCKED
