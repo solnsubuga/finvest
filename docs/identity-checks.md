@@ -57,6 +57,24 @@ At the switch (see [migration.md](migration.md)), a client whose identity Finves
 - The client is not told at the switch. They hear when they claim the account.
 - Only the system on the worker's connection may insert such a check, and only approved and with no staff member as the decider. Clients still insert only their own drafts and can never set the source. Like every decided check, it never changes.
 
+## Claim checks
+
+A carried-over check has no photos. So when the client claims their account, they take a selfie and a photo of the front of the identity document on file. One member of staff with `identity_checks.review` compares the two with each other and with the carried-over check, which they open like any other identity check. They then say whether the photos match. The code is `app/modules/kyc/claims.py`, and the tables are `kyc_claim_checks` and `kyc_claim_photos` (migration 0053).
+
+- A claim check starts as a draft and goes to `needs_review` when handed in. From there staff mark it `matched` or `not_matched`, which are final, or send it back to the client (`awaiting_client`) for named photos with a message. Every decision needs a reason and is written to the audit trail.
+- Only a client whose own approved check was carried over can start one. The photos are stored and kept exactly as identity photos are, under `kyc-claims/<claim check>/<photo>`.
+- The decision is published as `kyc.claim_check_decided`, with the client, the claim check and `matched`, in the decision's own transaction. The migration module moves the claim on from that in the worker, by adding its consumer to `claims.DECIDED_CONSUMERS`. This module never writes the migration tables.
+- A trigger holds the same transitions and the columns each actor may change. The worker only reads.
+
+| Route | What it does |
+| --- | --- |
+| `GET /client/claim-check`, `POST /client/claim-check` | The client's claim check, or `null`; start it |
+| `PUT /client/claim-check/photos/{front,selfie}` | One photo, multipart field `photo`, the same limits as identity photos |
+| `POST /client/claim-check/submit` | Hand it in |
+| `GET /staff/claim-checks`, `GET /staff/claim-checks/{id}` | The queue and one claim check (`identity_checks.view`) |
+| `POST /staff/claim-checks/{id}/photo-links` | 5-minute links to the photos, audited |
+| `POST /staff/claim-checks/{id}/match`, `/no-match`, `/ask-for-photos` | The decisions (`identity_checks.review`; matching needs a fresh confirmation) |
+
 ## Personal details are sealed
 
 The document number, date of birth and TIN are encrypted before they are saved (`app/infrastructure/sealing.py`, AES-256-GCM). The database, its backups and anyone reading a table see only sealed bytes.

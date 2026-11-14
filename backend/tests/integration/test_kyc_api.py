@@ -17,11 +17,13 @@ from app.modules.identity.api import COOKIES
 from app.modules.identity.hashing import PasswordHasher
 from app.modules.identity.service import IdentityService
 from app.modules.kyc import service as kyc
+from app.modules.kyc.domain.checks import DocumentType
 from app.modules.kyc.providers import ManualProvider
-from app.shared.actors import Actor
+from app.shared.actors import SYSTEM, Actor
 from tests.support.clock import FakeClock
 from tests.support.database import TestDatabase
 from tests.support.kyc import SEALER
+from tests.support.kyc import details as sample_details
 from tests.support.ledger import staff as new_staff
 
 pytestmark = pytest.mark.integration
@@ -428,3 +430,71 @@ async def test_nothing_personal_is_logged(api: Api, capsys: pytest.CaptureFixtur
     for secret in (number, "NAKATO", "Amara", "1994-06-22", f"kyc/{check_id}/"):
         assert secret not in logged.out
         assert secret not in logged.err
+
+
+# Claim checks -------------------------------------------------------------------------------------
+
+
+async def test_a_carried_over_client_hands_in_claim_photos_and_staff_match_them(
+    api: Api, worker_database: Database
+) -> None:
+    client_id = await api.identity.create_client(
+        phone=f"+256{next(_numbers)}", email=None, password=PASSWORD
+    )
+    issued = await api.identity.issue_session(
+        Actor("client", client_id), second_step="passkey", transport="token"
+    )
+    client = {"Authorization": f"Bearer {issued.token}"}
+    base = "/client/claim-check"
+    # Someone who was not carried over has no claim check to start.
+    other = await api.client()
+    assert (await api.http.post(base, headers=other)).status_code == 404
+    async with worker_database.actor_transaction(SYSTEM) as session:
+        carried = await kyc.record_carried_over_check(
+            session,
+            SEALER,
+            SYSTEM,
+            client_id=client_id,
+            document_type=DocumentType.NATIONAL_ID,
+            document_country="UG",
+            details=sample_details(),
+            legacy_reference=f"FV1-{client_id}",
+            reason="Carried over at the switch",
+            clock=api.clock,
+        )
+
+    assert (await api.http.get(base, headers=client)).json() == {"check": None}
+    started = await api.http.post(base, headers=client)
+    assert (started.status_code, started.json()["missing"]) == (200, ["front", "selfie"])
+    back = await api.http.put(f"{base}/photos/back", files=photo(), headers=client)
+    assert back.status_code == 422
+    for kind in ("front", "selfie"):
+        sent = await api.http.put(f"{base}/photos/{kind}", files=photo(), headers=client)
+        assert sent.status_code == 200, sent.text
+    submitted = await api.http.post(f"{base}/submit", headers=client)
+    assert submitted.json()["status"] == "needs_review"
+    claim_id = submitted.json()["id"]
+
+    staff = await api.staff()
+    listed = await api.http.get("/staff/claim-checks", headers=staff)
+    assert listed.status_code == 200, listed.text
+    queue = listed.json()["items"]
+    assert claim_id in [item["id"] for item in queue]
+    one = (await api.http.get(f"/staff/claim-checks/{claim_id}", headers=staff)).json()
+    assert one["check_id"] == carried.id
+    links = await api.http.post(f"/staff/claim-checks/{claim_id}/photo-links", headers=staff)
+    assert all(
+        photo["url"].startswith(f"memory://kyc-claims/{claim_id}/")
+        for photo in links.json()["photos"]
+    )
+    matched = await api.http.post(
+        f"/staff/claim-checks/{claim_id}/match", json={"reason": "Same face"}, headers=staff
+    )
+    assert matched.json()["status"] == "matched"
+    mine = (await api.http.get(base, headers=client)).json()["check"]
+    assert mine["status"] == "matched"
+    support = await api.staff("support")
+    refused = await api.http.post(
+        f"/staff/claim-checks/{claim_id}/no-match", json={"reason": "x"}, headers=support
+    )
+    assert (refused.status_code, refused.json()["error"]["code"]) == (403, "forbidden")

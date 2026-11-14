@@ -9,7 +9,7 @@ Clients do nothing until they are invited. Staff move the records, and each clie
 | 3. Check the money | Finance | Client totals, interest to date and holdings are compared with the old system and the custodian statement. Every difference is fixed or signed off with a reason. |
 | 4. Switch | Staff | The old system is frozen, the final import runs, and each investment is opened in the ledger with its original start date, rate and interest earned so far. Each client gets a new account number, and the old one keeps working as a bank reference. |
 | 5. Invite | System | Every client gets an SMS and email with a personal one-time link. |
-| 6. Claim | Client | They confirm their phone by code, create a password and a PIN, add a passkey, take a selfie that is matched to the ID on file, and then see their investments and confirm that they are right. |
+| 6. Claim | Client | They confirm their phone by code, create a password and a PIN, add a passkey, take a selfie and a photo of the front of their ID that staff compare with the ID on file (see identity-checks.md, "Claim checks"), and then see their investments and confirm that they are right. |
 | 7. Follow up | Staff | The console shows who has claimed, who reported a problem and who has not responded. Unclaimed accounts keep earning and mature as before. Staff can call a client, update a changed phone number after checking identity, and send a fresh link. |
 
 Clients whose identity documents are missing or out of date are asked to redo the ID check during step 6. A single client can also be added by hand in the console, with a second person approving the opening balance.

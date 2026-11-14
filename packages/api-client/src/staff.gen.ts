@@ -297,6 +297,9 @@ export type CheckOut = z.infer<typeof CheckOut>;
 export const CheckStatus = z.enum(["draft", "submitted", "needs_review", "with_compliance", "awaiting_client", "approved", "rejected"]);
 export type CheckStatus = z.infer<typeof CheckStatus>;
 
+export const ClaimCheckStatus = z.enum(["draft", "needs_review", "awaiting_client", "matched", "not_matched"]);
+export type ClaimCheckStatus = z.infer<typeof ClaimCheckStatus>;
+
 export const ClaimProgressView = z.object({
   cannot_be_invited: z.number().int(),
   claimed_and_confirmed: z.number().int(),
@@ -305,6 +308,31 @@ export const ClaimProgressView = z.object({
   said_something_is_wrong: z.number().int(),
 });
 export type ClaimProgressView = z.infer<typeof ClaimProgressView>;
+
+export const StaffPhoto = z.object({
+  id: z.string(),
+  kind: PhotoKind,
+});
+export type StaffPhoto = z.infer<typeof StaffPhoto>;
+
+export const StaffClaimCheck = z.object({
+  check_id: z.string(),
+  client_id: z.string(),
+  client_message: z.string().nullable(),
+  decided_at: z.string().nullable(),
+  id: z.string(),
+  photos: z.array(StaffPhoto),
+  retake_photos: z.array(PhotoKind),
+  status: ClaimCheckStatus,
+  submission: z.number().int(),
+  submitted_at: z.string().nullable(),
+});
+export type StaffClaimCheck = z.infer<typeof StaffClaimCheck>;
+
+export const ClaimQueue = z.object({
+  items: z.array(StaffClaimCheck),
+});
+export type ClaimQueue = z.infer<typeof ClaimQueue>;
 
 export const ClientCardView = z.object({
   account_number: z.string().nullable(),
@@ -1360,12 +1388,6 @@ export const StaffChat = z.object({
 });
 export type StaffChat = z.infer<typeof StaffChat>;
 
-export const StaffPhoto = z.object({
-  id: z.string(),
-  kind: PhotoKind,
-});
-export type StaffPhoto = z.infer<typeof StaffPhoto>;
-
 export const StaffCheck = z.object({
   account_number: z.string().nullable(),
   allowed: z.array(z.enum(["approve", "reject", "ask_for_photos", "escalate"])),
@@ -1756,6 +1778,82 @@ export const operations = {
     idempotent: false,
     status: 200,
     response: Facets,
+  },
+  "GET /staff/claim-checks": {
+    method: "GET",
+    path: "/staff/claim-checks",
+    params: z.object({}),
+    query: z.object({}),
+    body: null,
+    bodyKind: null,
+    idempotent: false,
+    status: 200,
+    response: ClaimQueue,
+  },
+  "GET /staff/claim-checks/{claim_check_id}": {
+    method: "GET",
+    path: "/staff/claim-checks/{claim_check_id}",
+    params: z.object({
+    claim_check_id: z.string(),
+  }),
+    query: z.object({}),
+    body: null,
+    bodyKind: null,
+    idempotent: false,
+    status: 200,
+    response: StaffClaimCheck,
+  },
+  "POST /staff/claim-checks/{claim_check_id}/ask-for-photos": {
+    method: "POST",
+    path: "/staff/claim-checks/{claim_check_id}/ask-for-photos",
+    params: z.object({
+    claim_check_id: z.string(),
+  }),
+    query: z.object({}),
+    body: AskForPhotosBody,
+    bodyKind: "json",
+    idempotent: false,
+    status: 200,
+    response: StaffClaimCheck,
+  },
+  "POST /staff/claim-checks/{claim_check_id}/match": {
+    method: "POST",
+    path: "/staff/claim-checks/{claim_check_id}/match",
+    params: z.object({
+    claim_check_id: z.string(),
+  }),
+    query: z.object({}),
+    body: ReasonBody,
+    bodyKind: "json",
+    idempotent: false,
+    status: 200,
+    response: StaffClaimCheck,
+  },
+  "POST /staff/claim-checks/{claim_check_id}/no-match": {
+    method: "POST",
+    path: "/staff/claim-checks/{claim_check_id}/no-match",
+    params: z.object({
+    claim_check_id: z.string(),
+  }),
+    query: z.object({}),
+    body: ReasonBody,
+    bodyKind: "json",
+    idempotent: false,
+    status: 200,
+    response: StaffClaimCheck,
+  },
+  "POST /staff/claim-checks/{claim_check_id}/photo-links": {
+    method: "POST",
+    path: "/staff/claim-checks/{claim_check_id}/photo-links",
+    params: z.object({
+    claim_check_id: z.string(),
+  }),
+    query: z.object({}),
+    body: null,
+    bodyKind: null,
+    idempotent: false,
+    status: 200,
+    response: PhotoLinks,
   },
   "GET /staff/clients/cards": {
     method: "GET",
