@@ -15,7 +15,7 @@ and column, the new system's totals, and the figures of the investments that dif
 
 import hashlib
 import json
-from dataclasses import dataclass, replace
+from dataclasses import dataclass, field, replace
 from datetime import date, datetime
 from typing import Any, Literal
 
@@ -29,6 +29,7 @@ from app.modules.investments import service as investments
 from app.modules.migration.domain.finance import (
     MAX_REASON_LENGTH,
     ControlTotals,
+    DifferencePlace,
     InvalidFinanceCheck,
     TotalLine,
     check_investments,
@@ -71,6 +72,8 @@ class TrialView:
     new_totals: dict[str, int]
     # Investments whose interest or tax rate differs, by key, with the figures that differ.
     differing: dict[str, tuple[int, ...]]
+    # The sheet row and currency of each of those. Empty for a trial run before 0073.
+    placed: dict[str, DifferencePlace] = field(default_factory=dict)
 
 
 @dataclass(frozen=True, slots=True)
@@ -136,18 +139,21 @@ class Overview:
 
 _INSERT_TRIAL = text(
     "INSERT INTO migration_trials (id, as_of, clients_sha256, investments_sha256, error_count, "
-    "warning_count, problems, summary, new_totals, differing, ran_by, ran_at) VALUES (:id, "
-    ":as_of, :clients_sha256, :investments_sha256, :error_count, :warning_count, "
-    "CAST(:problems AS jsonb), CAST(:summary AS jsonb), CAST(:new_totals AS jsonb), "
-    "CAST(:differing AS jsonb), :ran_by, :ran_at)"
+    "warning_count, problems, summary, new_totals, differing, difference_places, ran_by, "
+    "ran_at) VALUES (:id, :as_of, :clients_sha256, :investments_sha256, :error_count, "
+    ":warning_count, CAST(:problems AS jsonb), CAST(:summary AS jsonb), "
+    "CAST(:new_totals AS jsonb), CAST(:differing AS jsonb), CAST(:placed AS jsonb), "
+    ":ran_by, :ran_at)"
 )
 _LATEST_TRIAL = text(
-    "SELECT id, as_of, error_count, warning_count, problems, new_totals, differing, ran_by, "
+    "SELECT id, as_of, error_count, warning_count, problems, new_totals, differing, "
+    "difference_places, ran_by, "
     "ran_at FROM migration_trials ORDER BY ran_at DESC, id DESC LIMIT 1"
 )
 _COUNT_TRIALS = text("SELECT count(*) FROM migration_trials")
 _TRIALS_BETWEEN = text(
-    "SELECT id, as_of, error_count, warning_count, problems, new_totals, differing, ran_by, "
+    "SELECT id, as_of, error_count, warning_count, problems, new_totals, differing, "
+    "difference_places, ran_by, "
     "ran_at, clients_sha256, investments_sha256 FROM migration_trials "
     "WHERE as_of BETWEEN :date_from AND :date_to ORDER BY ran_at, id LIMIT :limit"
 )
@@ -228,6 +234,7 @@ async def run_trial_import(
         problems=tuple(kept[:MAX_STORED_PROBLEMS]),
         new_totals=new_totals(report, check),
         differing=check.differing,
+        placed=check.placed,
     )
     summary = report.summary
     await session.execute(
@@ -259,6 +266,12 @@ async def run_trial_import(
             ),
             "new_totals": json.dumps(view.new_totals),
             "differing": json.dumps(view.differing),
+            "placed": json.dumps(
+                {
+                    key: {"row": place.row, "currency": place.currency and place.currency.value}
+                    for key, place in view.placed.items()
+                }
+            ),
             "ran_by": view.ran_by,
             "ran_at": view.ran_at,
         },
@@ -623,6 +636,12 @@ def _trial(row: Row[Any]) -> TrialView:
         differing={
             str(key): tuple(int(figure) for figure in figures)
             for key, figures in row.differing.items()
+        },
+        placed={
+            str(key): DifferencePlace(
+                int(item["row"]), None if item["currency"] is None else Currency(item["currency"])
+            )
+            for key, item in row.difference_places.items()
         },
     )
 

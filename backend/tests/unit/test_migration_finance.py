@@ -9,6 +9,7 @@ from app.modules.investments.domain.rates import SEED_RATES
 from app.modules.migration.domain.finance import (
     Blocker,
     ControlTotals,
+    DifferencePlace,
     Figure,
     InvalidFinanceCheck,
     SignOff,
@@ -264,6 +265,17 @@ def test_a_tax_rate_that_is_not_the_products_needs_a_sign_off() -> None:
     )
     assert check.needs_sign_off == ("tax_rate:B",)
     assert switch_blockers(report, check, []) == [(Blocker.DIFFERENCE_NOT_SIGNED_OFF, "tax_rate:B")]
+
+
+def test_each_difference_keeps_its_sheet_row_and_the_currency_of_its_figures() -> None:
+    interest = check_investments(trial(interest_before_tax="29,200"), PRODUCTS, TAX)
+    assert interest.placed == {"investment:B": DifferencePlace(3, Currency.UGX)}
+
+    # A tax rate is in basis points, so it has no currency.
+    rate = check_investments(trial(tax_percent="10", tax_withheld=""), PRODUCTS, TAX)
+    assert rate.placed == {"tax_rate:B": DifferencePlace(3, None)}
+
+    assert check_investments(trial(), PRODUCTS, TAX).placed == {}
 
 
 def test_a_sign_off_counts_only_for_the_figures_it_was_written_for() -> None:

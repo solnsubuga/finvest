@@ -120,7 +120,13 @@ async def test_the_checks_run_from_a_trial_to_a_sign_off_by_two_people(console: 
     assert (seen["trial"]["error_count"], seen["trial"]["problems"]) == (0, [])
     assert seen["lines"] == []
     assert seen["differences"] == [
-        {"key": key, "figures": [11_700, 11_643, 1_746, 1_746], "sign_off": None}
+        {
+            "key": key,
+            "figures": [11_700, 11_643, 1_746, 1_746],
+            "sign_off": None,
+            "row": 2,
+            "currency": "UGX",
+        }
     ]
     assert seen["blockers"] == ["totals_not_entered", "difference_not_signed_off"]
     assert seen["allowed"] == ["run_trial"]
