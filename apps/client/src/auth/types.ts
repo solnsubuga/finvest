@@ -19,7 +19,14 @@ export type Session = {
   email: string | null;
   /** True once the client opened the link we emailed to that address. */
   emailVerified: boolean;
+  /** The phone app's PIN for this session. Always false in a browser. */
+  pinSet: boolean;
+  /** True when the PIN must be entered before anything else works. */
+  locked: boolean;
 };
+
+/** What checking a PIN said. Out of tries signs the phone out instead (`signed_out`). */
+export type PinCheck = { unlocked: boolean; triesLeft: number };
 
 export type AuthErrorCode =
   | "invalid_credentials"
@@ -37,6 +44,9 @@ export type AuthErrorCode =
   | "not_found"
   | "not_accepted"
   | "offline"
+  /** Five wrong PINs in a row: this phone was signed out. */
+  | "signed_out"
+  | "pin_too_simple"
   | "unavailable";
 
 export class AuthError extends Error {
@@ -138,7 +148,10 @@ export interface AuthClient {
    * Never opens a session on its own. An address the client never proved
    * fails like a wrong password.
    */
-  startLogin(identifier: LoginIdentifier, password: string): Promise<LoginChallenge>;
+  startLogin(
+    identifier: LoginIdentifier,
+    password: string,
+  ): Promise<LoginChallenge>;
   /** Log in, step 2, with a passkey. */
   verifyWithPasskey(loginId: string): Promise<Session>;
   /** Log in, step 2, with the 6 digit code from an authenticator app. */
@@ -187,7 +200,11 @@ export interface AuthClient {
    * Every device is signed out, and for 24 hours withdrawals go only to
    * accounts used before. It opens no session: the client logs in next.
    */
-  completePasswordReset(challengeId: string, code: string, password: string): Promise<void>;
+  completePasswordReset(
+    challengeId: string,
+    code: string,
+    password: string,
+  ): Promise<void>;
 
   /** The devices signed in to this account, most recently used first. */
   listDevices(): Promise<Device[]>;
@@ -216,11 +233,24 @@ export interface AuthClient {
    */
   confirmEmail(token: string): Promise<void>;
 
+  /**
+   * Sets the phone app's PIN for this session. Needs a log in from the last
+   * few minutes, else `sign_in_again`. Fails with `pin_too_simple` for
+   * repeated digits or a straight run such as 12345.
+   */
+  setPin(pin: string): Promise<void>;
+  /**
+   * Opens a locked app. A wrong PIN says how many tries are left. The fifth
+   * wrong one in a row fails with `signed_out`, and the client logs in again.
+   */
+  unlockWithPin(pin: string): Promise<PinCheck>;
+
   signOut(): Promise<void>;
 }
 
 const messages: Record<AuthErrorCode, string> = {
-  invalid_credentials: "That number and password do not match. Check both and try again.",
+  invalid_credentials:
+    "That number and password do not match. Check both and try again.",
   invalid_email_credentials:
     "That email and password do not match. Only an email address you confirmed by its link works here.",
   invalid_code: "That code is not right. Check it and try again.",
@@ -230,15 +260,23 @@ const messages: Record<AuthErrorCode, string> = {
   sign_in_again:
     "For your safety, log in again before you change how you sign in. We will bring you straight back here.",
   cancelled: "Nothing was added. You can try again when you are ready.",
-  expired: "That took too long, so we stopped for your safety. Please start again.",
-  passkey_failed: "We could not confirm your passkey. Try again, or use another way to log in.",
+  expired:
+    "That took too long, so we stopped for your safety. Please start again.",
+  passkey_failed:
+    "We could not confirm your passkey. Try again, or use another way to log in.",
   passkey_unsupported:
     "Passkeys are not available in this app yet. Use an authenticator app or an SMS code for now.",
   rate_limited: "Too many tries. Wait a few minutes and try again.",
   not_found: "That has already gone. The list below is up to date.",
-  not_accepted: "Something in that was not accepted. Check what you entered and try again.",
+  not_accepted:
+    "Something in that was not accepted. Check what you entered and try again.",
   offline: "You seem to be offline. Check your connection and try again.",
-  unavailable: "We could not reach Finvest. Check your connection and try again.",
+  signed_out:
+    "We signed you out after 5 wrong PINs. Log in with your password to choose a new PIN.",
+  pin_too_simple:
+    "That PIN is too easy to guess. Avoid repeated digits and runs like 12345.",
+  unavailable:
+    "We could not reach Finvest. Check your connection and try again.",
 };
 
 /** A sentence a client can act on. Never shows codes or technical detail. */

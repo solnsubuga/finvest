@@ -3,6 +3,7 @@ import { StyleSheet, View } from "react-native";
 import { Redirect, Stack } from "expo-router";
 
 import { useAuth } from "@/auth/AuthProvider";
+import { signupSteps, stepOf } from "@/auth/signupSteps";
 import { checkPassword, passwordIsAcceptable, passwordStrength } from "@/auth/password";
 import { describeAuthError } from "@/auth/types";
 import { BackButton } from "@/components/BackButton";
@@ -14,7 +15,8 @@ import { Title, Txt } from "@/components/Txt";
 import { colors, fontSizes } from "@/theme";
 
 export default function SignupPassword() {
-  const { client, ticket, setTicket, setSignup, setSession } = useAuth();
+  const { client, ticket, setTicket, setSignup, setSession, setReturnTo, setJustSignedUp, pinApplies } =
+    useAuth();
   const [password, setPassword] = useState("");
   const [confirmation, setConfirmation] = useState("");
   const [busy, setBusy] = useState(false);
@@ -34,7 +36,10 @@ export default function SignupPassword() {
       const session = await client.completeSignup(ticket.ticket, password);
       setTicket(null);
       setSignup(null);
-      // The auth layout sends a signed-in client to the app.
+      setJustSignedUp(true);
+      // The auth layout sends a signed-in client on: a phone to choose its PIN (the app's
+      // layout asks for one), anything that can make a passkey to the offer of one.
+      if (!pinApplies && signupSteps(false).includes("passkey")) setReturnTo("/setup/passkey");
       setSession(session);
     } catch (caught) {
       setError(describeAuthError(caught));
@@ -57,7 +62,7 @@ export default function SignupPassword() {
       <Stack.Screen options={{ title: "Create a password" }} />
       <View style={styles.top}>
         <BackButton fallback="/signup" />
-        <StepProgress step={2} of={4} />
+        <StepProgress {...stepOf("password", pinApplies)} />
       </View>
       <View style={{ marginTop: 36, gap: 10 }}>
         <Title>Create a password</Title>

@@ -32,8 +32,10 @@ export type ApiErrorCode =
   | "passkey_failed"
   | "second_step_missing"
   | "sign_in_again"
+  | "app_locked"
   | "expired"
   | "phone_taken"
+  | "email_taken"
   | "leaked_password"
   | "forbidden"
   | "conflict"
@@ -54,8 +56,10 @@ const KNOWN_CODES = new Set<string>([
   "passkey_failed",
   "second_step_missing",
   "sign_in_again",
+  "app_locked",
   "expired",
   "phone_taken",
+  "email_taken",
   "leaked_password",
   "forbidden",
   "conflict",
@@ -133,6 +137,14 @@ const unauthorizedListeners = new Set<Listener>();
 export function onUnauthorized(listener: Listener): () => void {
   unauthorizedListeners.add(listener);
   return () => unauthorizedListeners.delete(listener);
+}
+
+const lockedListeners = new Set<Listener>();
+
+/** Called when the API says the phone app is locked and wants its PIN first. */
+export function onLocked(listener: Listener): () => void {
+  lockedListeners.add(listener);
+  return () => lockedListeners.delete(listener);
 }
 
 export type Fetch = typeof fetch;
@@ -263,6 +275,9 @@ export async function api<K extends OperationName>(name: K, input: ApiInput<K>):
     const error = await refusal(response);
     if (error.code === "unauthorized") {
       for (const listener of unauthorizedListeners) listener(error);
+    }
+    if (error.code === "app_locked") {
+      for (const listener of lockedListeners) listener(error);
     }
     throw error;
   }
