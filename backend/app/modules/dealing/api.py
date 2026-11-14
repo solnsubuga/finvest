@@ -62,6 +62,9 @@ class PositionOut(Contract):
     on_order: AmountOut
     face_held: AmountOut
     cover: Cover
+    # The next Treasury bill auction in the calendar, on or after today. Null when none is
+    # entered, and for a product that is not a Treasury bill.
+    next_auction: date | None
 
 
 class FillOut(Contract):
@@ -198,6 +201,7 @@ def _desk_out(view: desk_view.DeskView) -> DeskOut:
                 on_order=_amount(p.on_order),
                 face_held=_amount(p.face_held),
                 cover=p.cover,
+                next_auction=p.next_auction,
             )
             for p in view.positions
         ],

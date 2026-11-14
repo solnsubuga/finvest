@@ -29,6 +29,7 @@ from app.modules.closures import api as closures_api
 from app.modules.console import api as console_api
 from app.modules.dealing import allocations_api as dealing_allocations_api
 from app.modules.dealing import api as dealing_api
+from app.modules.dealing import auctions_api as dealing_auctions_api
 from app.modules.dealing import buffer_api as dealing_buffer_api
 from app.modules.documents import api as documents_api
 from app.modules.finance import api as finance_api
@@ -308,6 +309,7 @@ def create_app(
     app.include_router(dealing_api.router)
     app.include_router(dealing_buffer_api.router)
     app.include_router(dealing_allocations_api.router)
+    app.include_router(dealing_auctions_api.router)
     app.include_router(tax_api.create_router(identity_sealer))
     app.include_router(finance_api.create_router())
     app.include_router(client_data_api.create_router(identity_sealer))

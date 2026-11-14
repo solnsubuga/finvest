@@ -26,6 +26,18 @@ Both sides leave interest out. Clients are owed principal and bills are carried 
 
 A surplus in one product never offsets a gap in another.
 
+### The auction calendar
+
+The Bank of Uganda publishes the dates of its Treasury bill auctions. Staff with `dealing_orders.change` keep them in the desk's calendar (`auctions.py`, rules in `domain/auctions.py`, table `dealing_auctions` from migration 0088), so the desk can say when the money still to buy can next be bid for. Each Treasury bill position carries `next_auction`: the earliest standing date on or after today. It is null when none stands, and always null for a product that is not a Treasury bill.
+
+Every change takes two people, as for the platform settings:
+
+- One person proposes a date for a Treasury bill product, today or later. Today counts, because bids close during the day. A different person approves it, and only then does the desk count it, or declines it with a note. The proposer may withdraw it while it waits.
+- A date the Bank moves is cancelled the same way. One person proposes the cancellation with a reason, and a different person approves it. The date still counts until then. The new day is proposed as a new date.
+- One date waits per product and day, one cancellation waits or stands per date, and the same product and day never stands twice. A date that passes while it waits can only be declined or withdrawn.
+- Every step is audited (`dealing.auction.add_proposed`, `add_approved`, `add_declined`, `add_withdrawn`, and the same for `cancel_`). Waiting changes appear in the approvals inbox as `auction_date`.
+- The database enforces the two people, keeps every row, lets a change be decided only once, and refuses a cancellation of a date that is not approved.
+
 ## Orders
 
 No bill is bought or sold on one person's word.
@@ -249,10 +261,18 @@ Agreed with the investing, and the payouts and reconciliation, threads on 13 Nov
 | `POST /staff/dealing/buffer/capital/{id}/decline` | Decline it with a reason |
 | `GET /staff/dealing/allocations?currency=UGX` | The allocation report: for each product, the lots held (face, cost, the part of the cost allocated and the part not, how many investments it stands behind) and the running investments (how many, what they are owed, what is covered and what still waits) |
 | `GET /staff/dealing/allocations/investments/{id}` | The bills behind one investment, with their total, or none |
+| `GET /staff/dealing/auctions` | The auction calendar from a month ago on, and any change still waiting, earliest first: each date's state, its cancellation if any, the steps the reader may take on each (`allowed`), and whether the reader may change the calendar (`may_change`) |
+| `POST /staff/dealing/auctions` | Propose an auction date for a product |
+| `POST /staff/dealing/auctions/{id}/cancel` | Propose cancelling a standing date, with a reason |
+| `POST /staff/dealing/auctions/changes/{id}/approve` | Approve a proposed date or cancellation, as the second person |
+| `POST /staff/dealing/auctions/changes/{id}/decline` | Decline it with a note |
+| `POST /staff/dealing/auctions/changes/{id}/withdraw` | Withdraw it, by whoever proposed it |
 
 The buffer commands take `dealing_orders.change` too, and both approvals ask for a recent passkey or app code. Every command takes an `Idempotency-Key` and answers with the buffer screen. A pay-in whose day closes between recording and approval is refused with `day_closed_decline_and_record_again`: the second person declines it, and it is recorded again on an open day. Reasons and notes are staff free text and never reach the logs.
 
 The allocation routes only read, with `dealing_desk.view` (`allocations_api.py`, rules in `domain/allocation_report.py`). They show allocations as they stand, so for up to 15 minutes after a purchase settles or an investment ends the report shows cost not shared out, or investments waiting, that the next run settles. An allocation the next run will release, behind an investment no longer running or a lot no longer held, counts in neither total, and an investment is never shown covered beyond what it is owed. No client is named: investments appear by ID and as counts.
+
+The auction calendar commands take `dealing_orders.change` and an `Idempotency-Key`, and answer with the calendar. Reading it takes `dealing_desk.view`.
 
 The audit event for a recorded result carries its figures, so a result later rejected can still be read.
 

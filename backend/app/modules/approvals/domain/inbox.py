@@ -20,6 +20,7 @@ Kind = Literal[
     "dealing_result",
     "buffer_rules",
     "buffer_capital",
+    "auction_date",
     "rate_change",
     "product_change",
     "migration_totals",
@@ -82,6 +83,8 @@ SOURCES: dict[Kind, Source] = {
     # The buffer's rules and Finvest's own money in it, decided as the buffer routes decide them.
     "buffer_rules": Source("dealing_desk.view", "dealing_orders.change"),
     "buffer_capital": Source("dealing_desk.view", "dealing_orders.change"),
+    # A Treasury bill auction date, or its cancellation, put forward for the calendar.
+    "auction_date": Source("dealing_desk.view", "dealing_orders.change"),
     "rate_change": Source("rates.view", "rates.view"),
     "product_change": Source("products.view", "products.change"),
     "migration_totals": Source("migration.view", "migration.sign_off"),
