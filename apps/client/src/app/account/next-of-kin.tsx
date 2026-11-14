@@ -239,10 +239,14 @@ export default function NextOfKinScreen() {
             </Card>
           )}
 
-          <View style={styles.info}>
+          <View style={[styles.info, { gap: 6 }]}>
             <Txt size={fontSizes.sm}>
               Shares must add up to 100%{people.length ? ` (now ${bpsToPercent(total)})` : ""}. Each person needs a
               mobile number and their ID number, so we can confirm who they are.
+            </Txt>
+            <Txt size={fontSizes.sm}>
+              The shares record your wishes. They are not a will: anything paid to your next of kin follows the
+              documents the law asks for.
             </Txt>
           </View>
 
