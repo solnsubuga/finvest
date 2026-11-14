@@ -138,7 +138,7 @@ export default function LoginStart() {
                 Two steps, every time.
               </Txt>{" "}
               After your password we confirm it is you with your passkey, your authenticator app
-              or a code by SMS.
+              or a code by SMS or email.
             </Txt>
           </View>
         </Card>
