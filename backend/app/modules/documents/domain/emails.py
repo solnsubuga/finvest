@@ -8,6 +8,10 @@ A statement or tax certificate email carries no figures. The figures are in the 
 so a message that shows on a locked phone says nothing about what the client holds. A receipt
 shows the amount received, because that is what a receipt is.
 
+The attached PDF is locked with the client's date of birth, so whoever else reads the mailbox
+cannot open it. Each email says how to open it. The copy in the app, behind sign-in, is not
+locked.
+
 Every value is escaped before it goes into HTML. Links go only to Finvest's own app.
 """
 
@@ -20,6 +24,12 @@ from app.modules.documents.domain.statements import Period, StatementKind
 from app.shared import email_layout as layout
 
 DOCUMENTS_PATH = "/documents"
+LOCKED = "Password protected"
+# Said the same way in every email, so a client learns it once.
+HOW_TO_OPEN = (
+    "To open the PDF, type your date of birth as eight digits: day, month, then year. For "
+    "5 March 1990, that is 05031990. In the app, under Documents, it opens without a password."
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -72,14 +82,16 @@ def statement_email(
     detail = f"Account {account}"
     body = (
         layout.paragraphs(lines)
-        + layout.attachment(file_name, detail)
+        + layout.attachment(file_name, f"{detail} · {LOCKED}")
+        + layout.paragraphs([HOW_TO_OPEN])
         + layout.button("Open Documents", links.in_app(DOCUMENTS_PATH))
         + layout.paragraphs(closing)
     )
     text = "\n\n".join(
         [
             *lines,
-            f"Attached: {file_name} ({detail})",
+            f"Attached: {file_name} ({detail}, {LOCKED.lower()})",
+            HOW_TO_OPEN,
             f"Open Documents: {links.in_app(DOCUMENTS_PATH)}",
             *closing,
         ]
@@ -129,16 +141,17 @@ def receipt_email(
         + hero
         + layout.facts(facts)
         + layout.attachment(
-            file_name, f"Account {formatting.account_number(receipt.account_number)}"
+            file_name, f"Account {formatting.account_number(receipt.account_number)} · {LOCKED}"
         )
-        + layout.paragraphs(closing)
+        + layout.paragraphs([HOW_TO_OPEN, *closing])
     )
     text = "\n\n".join(
         [
             *lines,
             f"Amount: {amount}",
             *(f"{label}: {value}" for label, value in facts),
-            f"Attached: {file_name}",
+            f"Attached: {file_name} ({LOCKED.lower()})",
+            HOW_TO_OPEN,
             *closing,
         ]
     )
@@ -178,14 +191,16 @@ def tax_certificate_email(
     ]
     body = (
         layout.paragraphs(lines)
-        + layout.attachment(file_name, detail)
+        + layout.attachment(file_name, f"{detail} · {LOCKED}")
+        + layout.paragraphs([HOW_TO_OPEN])
         + layout.button("Open Documents", links.in_app(DOCUMENTS_PATH))
         + layout.paragraphs(closing)
     )
     text = "\n\n".join(
         [
             *lines,
-            f"Attached: {file_name} ({detail})",
+            f"Attached: {file_name} ({detail}, {LOCKED.lower()})",
+            HOW_TO_OPEN,
             f"Open Documents: {links.in_app(DOCUMENTS_PATH)}",
             *closing,
         ]

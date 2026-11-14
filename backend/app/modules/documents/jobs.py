@@ -39,7 +39,7 @@ from app.infrastructure.jobs import (
     external_effect,
 )
 from app.infrastructure.sealing import Sealer
-from app.modules.documents import building, pdf, service
+from app.modules.documents import building, locking, pdf, service
 from app.modules.documents.domain.emails import (
     Rendered,
     receipt_email,
@@ -57,6 +57,7 @@ from app.modules.documents.domain.statements import (
 from app.modules.documents.events import RECEIPT_KIND
 from app.modules.documents.service import DocumentFile, DocumentKind, DocumentStatus, DocumentView
 from app.modules.identity import service as identity
+from app.modules.kyc import service as kyc
 from app.modules.ledger import closing
 from app.modules.ledger import statements as ledger
 from app.modules.notifications import contract as notifications
@@ -425,7 +426,12 @@ class DocumentJobs:
         as `skipped` with `no_email`, an address the client has not proved with a link as
         `skipped` with `email_not_verified`, and an address on the notifications suppression
         list as `skipped` with `suppressed`.
-        Nothing is sent while a transaction is open.
+
+        The attached copy is locked with the client's date of birth, read from their identity
+        check, which needs the identity key. A worker without the key sends nothing and the job
+        waits for one that has it. A client with no check on record is `skipped` with
+        `no_date_of_birth`: an unlocked copy is never sent. Nothing is sent while a transaction
+        is open.
         """
         document_id = job.payload.get("document_id")
         if not isinstance(document_id, str):
@@ -436,11 +442,11 @@ class DocumentJobs:
             file = await service.document_file(session, document_id)
             if status is None or view is None or file is None:
                 raise PermanentJobError(code="document_email_missing")
-            rendered, address, skip = None, None, "no_email"
+            rendered, address, skip, password = None, None, "no_email", None
             if status == "queued":
                 contact = await identity.client_contact(session, view.client_id)
-                # The PDF has no password, so it goes only to an address the client proved
-                # with a link, and an account carried over from Finvest 1.0 gets none until
+                # The PDF goes only to an address the client proved with a link, as well as
+                # being locked, and an account carried over from Finvest 1.0 gets none until
                 # its owner claims it.
                 address = contact.email if contact is not None and contact.claimed else None
                 if address is not None and contact is not None and not contact.email_verified:
@@ -450,6 +456,10 @@ class DocumentJobs:
                     # PDF every month would harm the sending domain, and a complaint means
                     # the person asked us to stop.
                     address, skip = None, "suppressed"
+                if address is not None:
+                    password = await self._password(session, view)
+                    if password is None:
+                        address, skip = None, "no_date_of_birth"
                 rendered = await _render(session, view, file, self._links) if address else None
 
         if status != "queued":
@@ -460,6 +470,8 @@ class DocumentJobs:
             await context.apply(self._finish(document_id, "skipped", failure_code=skip))
             logger.info("document_email_skipped", document_id=document_id, error_code=skip)
             return
+        assert password is not None
+        attached = locking.lock(file.content, password)
         try:
             message = EmailMessage(
                 to=address,
@@ -468,7 +480,7 @@ class DocumentJobs:
                 text=rendered.text,
                 idempotency_key=f"document:{document_id}",
                 tags={"template": view.kind.value},
-                attachments=(Attachment(file.file_name, file.content),),
+                attachments=(Attachment(file.file_name, attached),),
             )
             sent = await self._email.send(message)
         except EmailDeferred as error:
@@ -487,6 +499,17 @@ class DocumentJobs:
             )
         )
         logger.info("document_emailed", document_id=document_id, kind=view.kind.value)
+
+    async def _password(self, session: AsyncSession, view: DocumentView) -> str | None:
+        """The client's date of birth as the attachment's password, or None with no check."""
+        if self._sealer is None:
+            # Configuration, not data: the email waits for a worker that has the key.
+            logger.error(
+                "document_email_waiting", document_id=view.id, error_code="identity_key_missing"
+            )
+            raise RetryableJobError(code="identity_key_missing")
+        subject = await kyc.screening_subject(session, self._sealer, view.client_id)
+        return locking.password_for(subject.date_of_birth) if subject is not None else None
 
     def _finish(
         self,
