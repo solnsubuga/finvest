@@ -11,11 +11,13 @@ from sqlalchemy import text
 
 from app.api.app import create_app
 from app.infrastructure.database import Database
-from app.modules.identity.domain.pins import LOCK_AFTER, MAX_WRONG_PINS
+from app.modules.identity.domain.pins import CONFIRMATION_LASTS, LOCK_AFTER, MAX_WRONG_PINS
 from app.modules.identity.hashing import PasswordHasher
 from app.modules.identity.passkeys import RECENT_SIGN_IN
+from app.modules.identity.pins import PinService
 from app.modules.identity.service import IdentityService
 from app.shared.actors import Actor
+from app.shared.errors import ApplicationError
 from tests.support.clock import FakeClock
 from tests.support.database import TestDatabase
 
@@ -32,6 +34,7 @@ _numbers = itertools.count(770_000_000)
 class Api:
     http: httpx.AsyncClient
     identity: IdentityService
+    pins: PinService
     clock: FakeClock
     owner: Database
 
@@ -47,7 +50,7 @@ async def api(
     app = create_app(settings, app_database, clock, HASHER)
     transport = httpx.ASGITransport(app=app, raise_app_exceptions=False)
     async with httpx.AsyncClient(transport=transport, base_url="https://api") as http:
-        yield Api(http, app.state.identity, clock, migrator_database)
+        yield Api(http, app.state.identity, app.state.pins, clock, migrator_database)
 
 
 async def a_phone(api: Api) -> tuple[str, dict[str, str]]:
@@ -177,3 +180,104 @@ async def test_a_browser_has_no_pin(api: Api) -> None:
         assert (session["pin_set"], session["locked"]) == (False, False)
     finally:
         api.http.cookies.clear()
+
+
+async def confirm(
+    api: Api, headers: dict[str, str], pin: str = PIN, action: str = "withdrawal"
+) -> httpx.Response:
+    return await api.http.post(
+        "/client/pin/confirm", json={"pin": pin, "action": action}, headers=headers
+    )
+
+
+def token_of(headers: dict[str, str]) -> str:
+    return headers["Authorization"].removeprefix("Bearer ")
+
+
+async def test_a_right_pin_confirms_one_action_once(api: Api) -> None:
+    _, phone = await a_phone(api)
+    assert (await set_pin(api, phone)).status_code == 204
+    client = await api.identity.client_session(token_of(phone))
+    assert client is not None and api.pins.needs_confirmation(client)
+
+    # Without a confirmation, the action is refused.
+    with pytest.raises(ApplicationError) as missing:
+        await api.pins.spend(client, "withdrawal", None)
+    assert missing.value.code == "pin_required"
+
+    wrong = await confirm(api, phone, "90817")
+    assert wrong.json() == {
+        "confirmed": False,
+        "tries_left": MAX_WRONG_PINS - 1,
+        "confirmation": None,
+    }
+    right = (await confirm(api, phone)).json()
+    assert right["confirmed"] is True
+    assert right["tries_left"] == MAX_WRONG_PINS
+
+    # It is for its own action only, and works once.
+    with pytest.raises(ApplicationError):
+        await api.pins.spend(client, "payout_account", right["confirmation"])
+    await api.pins.spend(client, "withdrawal", right["confirmation"])
+    with pytest.raises(ApplicationError):
+        await api.pins.spend(client, "withdrawal", right["confirmation"])
+
+
+async def test_a_confirmation_expires_and_belongs_to_its_session(api: Api) -> None:
+    _, phone = await a_phone(api)
+    await set_pin(api, phone)
+    _, other = await a_phone(api)
+    await set_pin(api, other)
+    stranger = await api.identity.client_session(token_of(other))
+    assert stranger is not None
+
+    given = (await confirm(api, phone)).json()["confirmation"]
+    with pytest.raises(ApplicationError):
+        await api.pins.spend(stranger, "withdrawal", given)
+
+    late = (await confirm(api, phone)).json()["confirmation"]
+    api.clock.advance(seconds=CONFIRMATION_LASTS.total_seconds())
+    client = await api.identity.client_session(token_of(phone))
+    assert client is not None
+    with pytest.raises(ApplicationError):
+        await api.pins.spend(client, "withdrawal", late)
+
+
+async def test_wrong_confirmations_count_with_unlocking_and_sign_the_phone_out(api: Api) -> None:
+    _, phone = await a_phone(api)
+    await set_pin(api, phone)
+    # Wrong PINs share one count, whether they were typed to unlock or to confirm.
+    for attempt in range(MAX_WRONG_PINS - 1):
+        if attempt % 2:
+            await unlock(api, phone, "90817")
+        else:
+            await confirm(api, phone, "90817")
+    last = await confirm(api, phone, "90817")
+    assert last.status_code == 401
+    assert (await api.http.get("/client/session", headers=phone)).status_code == 401
+
+
+async def test_parallel_spends_use_a_confirmation_once(api: Api) -> None:
+    _, phone = await a_phone(api)
+    await set_pin(api, phone)
+    given = (await confirm(api, phone)).json()["confirmation"]
+    client = await api.identity.client_session(token_of(phone))
+    assert client is not None
+
+    async def spend() -> bool:
+        try:
+            await api.pins.spend(client, "withdrawal", given)
+        except ApplicationError:
+            return False
+        return True
+
+    assert sorted(await asyncio.gather(*(spend() for _ in range(6)))) == [False] * 5 + [True]
+
+
+async def test_nothing_is_asked_without_a_pin(api: Api) -> None:
+    _, phone = await a_phone(api)
+    client = await api.identity.client_session(token_of(phone))
+    assert client is not None and not api.pins.needs_confirmation(client)
+    await api.pins.spend(client, "withdrawal", None)
+    refused = await confirm(api, phone)
+    assert (refused.status_code, refused.json()["error"]["code"]) == (409, "conflict")
