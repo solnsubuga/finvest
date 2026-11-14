@@ -14,7 +14,7 @@ from app.modules.reconciliation.domain.statements import StatementSource
 from app.shared.business_day import business_date
 from tests.support.database import TestDatabase
 from tests.support.http import Api, running_api
-from tests.support.ledger import ugx
+from tests.support.ledger import key, ugx
 
 pytestmark = pytest.mark.integration
 
@@ -107,6 +107,7 @@ async def test_a_pot_transfer_waits_in_the_reconciliation_inbox(api: Api) -> Non
             value_date=day,
             provider_reference=f"IOT-{secrets.token_hex(6)}",
             reason="Daily sweep of collected mobile money",
+            idempotency_key=key(),
             clock=api.clock,
         )
     checker = await api.staff("finance")
@@ -118,7 +119,9 @@ async def test_a_pot_transfer_waits_in_the_reconciliation_inbox(api: Api) -> Non
         assert proposed.id not in await inbox(api)
     finally:
         async with api.database.actor_transaction(checker) as session:
-            await transfers.decline(session, checker, proposed.id, "Test only", api.clock)
+            await transfers.decline(
+                session, checker, proposed.id, "Test only", idempotency_key=key(), clock=api.clock
+            )
 
 
 async def test_every_role_has_an_inbox_and_signed_out_callers_do_not(api: Api) -> None:

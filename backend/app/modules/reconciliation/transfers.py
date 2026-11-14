@@ -14,6 +14,7 @@ from sqlalchemy import Row, text
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.infrastructure.idempotency import Receipt, run_once
 from app.modules.audit import service as audit
 from app.modules.audit.domain.events import AuditActor, AuditEvent
 from app.modules.ledger import closing as ledger_closing
@@ -45,6 +46,10 @@ class TransferView:
     ledger_entry_id: str | None
     proposed_at: datetime
 
+
+PROPOSE_OPERATION = "reconciliation.propose_pot_transfer"
+APPROVE_OPERATION = "reconciliation.approve_pot_transfer"
+DECLINE_OPERATION = "reconciliation.decline_pot_transfer"
 
 _COLUMNS = (
     "id, from_source, from_reference, to_source, to_reference, currency, sent_minor, "
@@ -84,12 +89,66 @@ async def propose(
     value_date: date,
     provider_reference: str,
     reason: str,
+    idempotency_key: str,
     clock: Clock,
 ) -> TransferView:
-    """Record a sweep that has been made. Nothing is posted until someone else approves it."""
+    """Record a sweep that has been made. Nothing is posted until someone else approves it.
+
+    A retry with the same `idempotency_key` returns the transfer the first one recorded."""
     _staff_only(staff)
     if not reason.strip() or not provider_reference.strip():
         raise ApplicationError("validation_failed")
+
+    async def command() -> Receipt:
+        transfer_id = await _propose(
+            session,
+            staff,
+            from_pot=from_pot,
+            to_pot=to_pot,
+            sent=sent,
+            received=received,
+            value_date=value_date,
+            provider_reference=provider_reference.strip(),
+            reason=reason.strip(),
+            clock=clock,
+        )
+        return Receipt(201, {"transfer_id": transfer_id})
+
+    done = await run_once(
+        session,
+        actor=staff,
+        operation=PROPOSE_OPERATION,
+        key=idempotency_key,
+        request={
+            "from": [from_pot[0].value, from_pot[1]],
+            "to": [to_pot[0].value, to_pot[1]],
+            "currency": sent.currency.value,
+            "sent_minor": sent.minor,
+            "received_currency": received.currency.value,
+            "received_minor": received.minor,
+            "value_date": value_date.isoformat(),
+            "provider_reference": provider_reference.strip(),
+            "reason": reason.strip(),
+        },
+        now=clock.now(),
+        command=command,
+    )
+    return await get_transfer(session, str(done.receipt.response["transfer_id"]))
+
+
+async def _propose(
+    session: AsyncSession,
+    staff: Actor,
+    *,
+    from_pot: tuple[StatementSource, str],
+    to_pot: tuple[StatementSource, str],
+    sent: Money,
+    received: Money,
+    value_date: date,
+    provider_reference: str,
+    reason: str,
+    clock: Clock,
+) -> str:
     if value_date > business_date(clock.now()):
         raise TransferError("transfer_in_the_future")
     closed = await ledger_closing.closed_through(session)
@@ -118,10 +177,10 @@ async def propose(
                     "sent_minor": sent.minor,
                     "received_minor": received.minor,
                     "value_date": value_date,
-                    "provider_reference": provider_reference.strip(),
+                    "provider_reference": provider_reference,
                     "proposed_by": staff.id,
                     "now": clock.now(),
-                    "reason": reason.strip(),
+                    "reason": reason,
                 },
             )
     except IntegrityError as error:
@@ -130,14 +189,33 @@ async def propose(
             raise TransferError("transfer_already_recorded") from None
         raise
     await _audit(session, staff, "reconciliation.transfer_proposed", transfer_id, clock, reason)
-    return await get_transfer(session, transfer_id)
+    return transfer_id
 
 
 async def approve(
-    session: AsyncSession, staff: Actor, transfer_id: str, clock: Clock
+    session: AsyncSession, staff: Actor, transfer_id: str, *, idempotency_key: str, clock: Clock
 ) -> TransferView:
-    """The second person. Posts the transfer to the ledger, once."""
+    """The second person. Posts the transfer to the ledger, once. A retry with the same
+    `idempotency_key` returns the approved transfer."""
     _staff_only(staff)
+
+    async def command() -> Receipt:
+        await _approve(session, staff, transfer_id, clock)
+        return Receipt(200, {"transfer_id": transfer_id})
+
+    await run_once(
+        session,
+        actor=staff,
+        operation=APPROVE_OPERATION,
+        key=idempotency_key,
+        request={"transfer_id": transfer_id},
+        now=clock.now(),
+        command=command,
+    )
+    return await get_transfer(session, transfer_id)
+
+
+async def _approve(session: AsyncSession, staff: Actor, transfer_id: str, clock: Clock) -> None:
     row = (await session.execute(_LOCK, {"id": transfer_id})).one_or_none()
     if row is None:
         raise ApplicationError("not_found")
@@ -177,16 +255,41 @@ async def approve(
         session, staff, "reconciliation.transfer_approved", transfer_id, clock,
         "Second signature on a transfer between pots", category="approval",
     )  # fmt: skip
-    return await get_transfer(session, transfer_id)
 
 
 async def decline(
-    session: AsyncSession, staff: Actor, transfer_id: str, reason: str, clock: Clock
+    session: AsyncSession,
+    staff: Actor,
+    transfer_id: str,
+    reason: str,
+    *,
+    idempotency_key: str,
+    clock: Clock,
 ) -> TransferView:
     """The second person refuses it. Nothing is posted. A reason is required."""
     _staff_only(staff)
     if not reason.strip():
         raise ApplicationError("validation_failed")
+
+    async def command() -> Receipt:
+        await _decline(session, staff, transfer_id, reason.strip(), clock)
+        return Receipt(200, {"transfer_id": transfer_id})
+
+    await run_once(
+        session,
+        actor=staff,
+        operation=DECLINE_OPERATION,
+        key=idempotency_key,
+        request={"transfer_id": transfer_id, "reason": reason.strip()},
+        now=clock.now(),
+        command=command,
+    )
+    return await get_transfer(session, transfer_id)
+
+
+async def _decline(
+    session: AsyncSession, staff: Actor, transfer_id: str, reason: str, clock: Clock
+) -> None:
     row = (await session.execute(_LOCK, {"id": transfer_id})).one_or_none()
     if row is None:
         raise ApplicationError("not_found")
@@ -198,15 +301,14 @@ async def decline(
             "status": TransferStatus.DECLINED,
             "decided_by": staff.id,
             "now": clock.now(),
-            "reason": reason.strip(),
+            "reason": reason,
             "ledger_entry_id": None,
         },
     )
     await _audit(
-        session, staff, "reconciliation.transfer_declined", transfer_id, clock, reason.strip(),
+        session, staff, "reconciliation.transfer_declined", transfer_id, clock, reason,
         category="approval",
     )  # fmt: skip
-    return await get_transfer(session, transfer_id)
 
 
 async def get_transfer(session: AsyncSession, transfer_id: str) -> TransferView:
