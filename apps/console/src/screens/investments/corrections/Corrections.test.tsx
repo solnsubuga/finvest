@@ -31,6 +31,7 @@ describe("investments: corrections", () => {
     expect(screen.getByText(/2 are waiting for a second person/)).toBeInTheDocument();
     expect(waiting).toHaveTextContent("Proposed by Grace Auma");
     expect(waiting).toHaveTextContent("matched to the wrong client");
+    await waitFor(() => expect(waiting).toHaveTextContent("Amara Nakato"));
     const failed = await card("Refund to the client, UGX 9,000,000");
     expect(failed).toHaveTextContent("Nothing moved");
     expect(failed).toHaveTextContent("over what one mobile money payout can carry");
@@ -42,7 +43,7 @@ describe("investments: corrections", () => {
   it("approves someone else's, and Finvest moves the money", async () => {
     const { user } = renderSection();
     const waiting = await card(UNWIND);
-    expect(waiting).toHaveTextContent("the client stops seeing it");
+    expect(waiting).toHaveTextContent("the client stops seeing the investment");
     await user.click(within(waiting).getByRole("button", { name: "Approve" }));
     await waitFor(async () => expect(await card(UNWIND)).toHaveTextContent("Done"));
     expect(await card(UNWIND)).toHaveTextContent("Approved by you");

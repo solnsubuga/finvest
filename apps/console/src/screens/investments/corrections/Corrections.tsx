@@ -63,7 +63,9 @@ export function CorrectionsSection({ api, directory, me, canChange, newKey = () 
   const [busy, setBusy] = useState<string | null>(null);
   const [failed, setFailed] = useState<Failure | null>(null);
   const [names, setNames] = useState<Record<string, string | null>>({});
+  const [clients, setClients] = useState<Record<string, string | null>>({});
   const asked = useRef(new Set<string>());
+  const askedClients = useRef(new Set<string>());
   // One key per attempt: the same request sent again after a lost answer is not done twice.
   const pending = useRef(new Map<string, { request: string; key: string }>());
 
@@ -77,6 +79,14 @@ export function CorrectionsSection({ api, directory, me, canChange, newKey = () 
             void directory.staffName(staffId).then(
               (name) => setNames((known) => ({ ...known, [staffId]: name })),
               () => setNames((known) => ({ ...known, [staffId]: null })),
+            );
+          }
+          for (const clientId of items.map((item) => item.clientId)) {
+            if (askedClients.current.has(clientId)) continue;
+            askedClients.current.add(clientId);
+            void directory.client(clientId).then(
+              (card) => setClients((known) => ({ ...known, [clientId]: card?.name ?? null })),
+              () => setClients((known) => ({ ...known, [clientId]: null })),
             );
           }
           return { state: "ready", items };
@@ -210,6 +220,7 @@ export function CorrectionsSection({ api, directory, me, canChange, newKey = () 
                 mine={item.proposedBy === me}
                 canChange={canChange}
                 who={who}
+                clientName={clients[item.clientId] ?? null}
                 busy={busy === item.id}
                 locked={busy !== null}
                 error={failed?.on === item.id ? failed.message : null}
@@ -349,6 +360,8 @@ interface CorrectionCardProps {
   mine: boolean;
   canChange: boolean;
   who: (staffId: string) => string;
+  /** From the shared directory, once known. */
+  clientName: string | null;
   busy: boolean;
   /** Another command is running on the section. */
   locked: boolean;
@@ -358,7 +371,7 @@ interface CorrectionCardProps {
   onWithdraw: () => Promise<boolean>;
 }
 
-function CorrectionCard({ item, mine, canChange, who, busy, locked, error, onApprove, onSendBack, onWithdraw }: CorrectionCardProps) {
+function CorrectionCard({ item, mine, canChange, who, clientName, busy, locked, error, onApprove, onSendBack, onWithdraw }: CorrectionCardProps) {
   const [sendingBack, setSendingBack] = useState(false);
   const [note, setNote] = useState("");
   const [tried, setTried] = useState(false);
@@ -378,7 +391,10 @@ function CorrectionCard({ item, mine, canChange, who, busy, locked, error, onApp
         <dt className="text-muted">Investment</dt>
         <dd className="m-0 font-mono break-all">{item.investmentId}</dd>
         <dt className="text-muted">Client</dt>
-        <dd className="m-0 font-mono break-all">{item.clientId}</dd>
+        <dd className="m-0 break-all">
+          {clientName ? <span className="font-bold">{clientName}</span> : null}
+          <span className={cn("font-mono", clientName && "block text-xs text-muted")}>{item.clientId}</span>
+        </dd>
         {item.destinationId ? (
           <>
             <dt className="text-muted">Paid to</dt>
@@ -437,8 +453,8 @@ function CorrectionCard({ item, mine, canChange, who, busy, locked, error, onApp
         <div className="flex flex-col gap-2">
           <p className="m-0 text-sm text-muted">
             {item.kind === "unwind"
-              ? "Approving undoes the investment straight away: the interest so far is reversed and the client stops seeing it."
-              : "Approving pays the money to this payout account straight away. It cannot be called back."}
+              ? "Approving starts the undo: Finvest checks the figures again, reverses the interest so far, and the client stops seeing the investment."
+              : "Approving starts the payout to this account once Finvest has checked the amount again. A payout cannot be called back."}
           </p>
           <div className="flex gap-2">
             <Button disabled={locked} onClick={() => void onApprove()}>
