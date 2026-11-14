@@ -258,4 +258,4 @@ The audit event for a recorded result carries its figures, so a result later rej
 
 ## Not built yet
 
-The custodian statement comparison, and the console screen for the allocation report.
+The custodian statement comparison. The console shows the allocation report under the buffer section on the dealing desk.
