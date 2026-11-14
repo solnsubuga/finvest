@@ -13,7 +13,7 @@ import pytest
 from openpyxl import Workbook
 from pydantic import SecretStr, ValidationError
 
-from app.modules.reconciliation import claude_reader
+from app.modules.reconciliation import statement_answer
 from app.modules.reconciliation.claude_reader import ClaudeStatementReader
 from app.modules.reconciliation.custodian_api import sniff
 from app.modules.reconciliation.custodian_reading import DevelopmentStubReader, as_text
@@ -338,7 +338,7 @@ async def test_the_claude_reader_copies_rows_and_never_works_out_amounts() -> No
     assert reading.reader == "claude:a-model"
     call = messages.calls[0]
     assert call["model"] == "a-model"
-    assert call["output_config"]["format"]["schema"] == claude_reader.SCHEMA
+    assert call["output_config"]["format"]["schema"] == statement_answer.SCHEMA
     assert call["output_config"]["effort"] == "high"
     assert call["fallbacks"] == "default"
     document = call["messages"][0]["content"][0]
