@@ -19,6 +19,10 @@ import { notConnectedDayCloseApi, type DayCloseApi } from "./dayclose/api.ts";
 import { DayClose } from "./dayclose/DayClose.tsx";
 import { createHttpDayCloseApi } from "./dayclose/http.ts";
 import { createStubDayCloseApi, type DayCloseStubCase } from "./dayclose/stub.ts";
+import { notConnectedCustodianChecksApi, type CustodianChecksApi } from "./custodian/api.ts";
+import { CustodianChecks } from "./custodian/CustodianChecks.tsx";
+import { createHttpCustodianChecksApi } from "./custodian/http.ts";
+import { createStubCustodianChecksApi, type CustodianStubCase } from "./custodian/stub.ts";
 import { createHttpBankTransfersApi } from "./http.ts";
 import { notConnectedMistakenPaymentsApi, type MistakenPaymentsApi } from "./mistaken/api.ts";
 import { createHttpMistakenPaymentsApi } from "./mistaken/http.ts";
@@ -283,6 +287,18 @@ export default function ReconciliationPage() {
     const base = apiBaseUrl();
     return base ? createHttpPotTransfersApi(createHttp(base)) : notConnectedPotTransfersApi;
   });
+  // Custodian statement checks: sample checks under the stub, with `?sample=off` for a Finvest
+  // with no reader set up. The real routes otherwise.
+  const [custodian] = useState<CustodianChecksApi>(() => {
+    if (!session) return notConnectedCustodianChecksApi;
+    if (isStubAuth()) {
+      const sample = new URLSearchParams(window.location.search).get("sample");
+      const which: CustodianStubCase = sample === "empty" || sample === "error" || sample === "off" ? sample : "sample";
+      return createStubCustodianChecksApi(session.staffId, 150, which);
+    }
+    const base = apiBaseUrl();
+    return base ? createHttpCustodianChecksApi(createHttp(base)) : notConnectedCustodianChecksApi;
+  });
   return (
     <>
       <BankTransfersScreen api={api} canDecide={session ? can(session, "bank_transfers.change") : false} />
@@ -290,6 +306,7 @@ export default function ReconciliationPage() {
       <Reassignments api={moves} canChange={session ? can(session, "deposit_reassignments.change") : false} />
       <MistakenPayments api={mistaken} canChange={session ? can(session, "deposit_reassignments.change") : false} />
       <PotTransfers api={potTransfers} me={session?.staffId ?? ""} canChange={session ? can(session, "reconciliation.change") : false} />
+      <CustodianChecks api={custodian} canChange={session ? can(session, "reconciliation.change") : false} />
     </>
   );
 }
