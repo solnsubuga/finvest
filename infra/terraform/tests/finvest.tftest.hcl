@@ -155,3 +155,15 @@ run "office_networks_must_be_cidr" {
   }
   expect_failures = [var.admin_office_networks]
 }
+
+run "no_ssh_rule_without_ssh_addresses" {
+  command = plan
+  variables {
+    environment          = "staging"
+    ssh_source_addresses = []
+  }
+  assert {
+    condition     = length([for rule in digitalocean_firewall.app.inbound_rule : rule if coalesce(rule.port_range, "-") == "22"]) == 0
+    error_message = "With no SSH addresses and no Provision run, nothing may reach SSH."
+  }
+}

@@ -10,7 +10,7 @@ case $mode in
   check)
     names=(DIGITALOCEAN_TOKEN SPACES_ACCESS_KEY_ID SPACES_SECRET_ACCESS_KEY CLOUDFLARE_API_TOKEN TERRAFORM_STATE_BUCKET)
     if [[ $TARGET != shared ]]; then
-      names+=(GITHUB_TOKEN SSH_SOURCE_ADDRESSES DEPLOY_SSH_KEY)
+      names+=(GITHUB_TOKEN DEPLOY_SSH_KEY)
     fi
     if [[ $TARGET == production ]]; then
       names+=(ADMIN_ACCESS_EMAILS)
