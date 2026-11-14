@@ -140,6 +140,10 @@ Permission = Literal[
     # Proposing or deciding to send a client a statement of chosen dates, which reaches the app
     # and their proved email as one they asked for. Always takes a second person. Not a screen.
     "client_statements.send",
+    # Proposing or deciding an early withdrawal for a client who asked for it in writing in
+    # their own help chat, to an approved account of their own. Moves money, so it always takes
+    # a second person. Not a screen.
+    "client_withdrawals.start",
 ]
 PERMISSIONS: tuple[Permission, ...] = get_args(Permission)
 
@@ -182,6 +186,7 @@ ROLE_PERMISSIONS: dict[Role, frozenset[Permission]] = {
             "client_pins.reset",
             "client_limits.change",
             "client_statements.send",
+            "client_withdrawals.start",
         }
     ),
     "finance": frozenset(

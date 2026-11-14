@@ -115,62 +115,9 @@ async def request_withdrawal(
         if confirm is not None:
             await confirm()
         investment = await _own_locked(session, client, investment_id)
-        today = business_date(clock.now())
-        if not can_withdraw_early(
-            investment.status,
-            investment.maturity_date,
-            today,
-            requested=investment.withdrawal_requested_at is not None,
-        ):
-            raise ApplicationError("conflict")
-        # Not while it is being sent to another client. The investment is locked, so a
-        # transfer asked for at the same moment waits for this one and then sees it.
-        if await session.scalar(_OPEN_TRANSFER, {"id": investment.id}):
-            raise ApplicationError("conflict")
-        now = clock.now()
-        await check_payable_destination(
-            session,
-            investment.client_id,
-            destination_id,
-            investment.terms.principal + investment.accrued_net,
-            now,
+        await _save_request(
+            session, investment, destination_id, clock, AuditActor.client(investment.client_id)
         )
-        await session.execute(
-            _REQUEST, {"id": investment.id, "destination_id": destination_id, "now": now}
-        )
-        await enqueue(
-            session,
-            JobRequest(
-                kind=WITHDRAW_KIND,
-                idempotency_key=investment.id,
-                payload={"investment_id": investment.id},
-            ),
-            now=now,
-        )
-        await audit.record(
-            session,
-            AuditEvent(
-                category="change",
-                action="investments.withdrawal_requested",
-                resource_type=RESOURCE,
-                resource_id=investment.id,
-                actor=AuditActor.client(investment.client_id),
-                details={"destination_id": destination_id},
-            ),
-            clock,
-        )
-        # Interest stopped with the request, so this is the amount the client gets. The notice
-        # itself never names it.
-        await notifications.notify(
-            session,
-            event_name="investment_withdrawal_requested",
-            client_id=investment.client_id,
-            idempotency_key=investment.id,
-            variables={"amount": proceeds(investment), "product": investment.product_name},
-            link=notifications.Link("investment", investment.id),
-            now=now,
-        )
-        logger.info("investment_withdrawal_requested", investment_id=investment.id)
         return Receipt(200, {"investment_id": investment.id})
 
     await run_once(
@@ -183,6 +130,98 @@ async def request_withdrawal(
         command=command,
     )
     return await get_investment(session, investment_id)
+
+
+async def request_withdrawal_for_client(
+    session: AsyncSession,
+    staff: Actor,
+    investment_id: str,
+    *,
+    client_id: str,
+    destination_id: str,
+    clock: Clock,
+) -> Investment:
+    """Ask, for the client, to withdraw a running investment early, as two members of staff
+    agreed from the client's written request.
+
+    Called only by the console module, in the staff transaction that approved the action.
+    Migration 0354 refuses the request anywhere else. The checks are the client's own: a
+    running investment, before the day it matures, to an approved payout account of the
+    client's own past its first day's wait, within the payout limits. The money then moves and
+    is paid exactly as when the client asks in the app.
+    """
+    if staff.kind != "staff" or staff.id is None:
+        raise ApplicationError("forbidden")
+    investment = await _locked(session, investment_id)
+    if investment.client_id != client_id:
+        raise ApplicationError("not_found")
+    await _save_request(session, investment, destination_id, clock, AuditActor.staff(staff.id))
+    return await get_investment(session, investment_id)
+
+
+async def _save_request(
+    session: AsyncSession,
+    investment: Investment,
+    destination_id: str,
+    clock: Clock,
+    actor: AuditActor,
+) -> None:
+    today = business_date(clock.now())
+    if not can_withdraw_early(
+        investment.status,
+        investment.maturity_date,
+        today,
+        requested=investment.withdrawal_requested_at is not None,
+    ):
+        raise ApplicationError("conflict")
+    # Not while it is being sent to another client. The investment is locked, so a
+    # transfer asked for at the same moment waits for this one and then sees it.
+    if await session.scalar(_OPEN_TRANSFER, {"id": investment.id}):
+        raise ApplicationError("conflict")
+    now = clock.now()
+    await check_payable_destination(
+        session,
+        investment.client_id,
+        destination_id,
+        investment.terms.principal + investment.accrued_net,
+        now,
+    )
+    await session.execute(
+        _REQUEST, {"id": investment.id, "destination_id": destination_id, "now": now}
+    )
+    await enqueue(
+        session,
+        JobRequest(
+            kind=WITHDRAW_KIND,
+            idempotency_key=investment.id,
+            payload={"investment_id": investment.id},
+        ),
+        now=now,
+    )
+    await audit.record(
+        session,
+        AuditEvent(
+            category="change",
+            action="investments.withdrawal_requested",
+            resource_type=RESOURCE,
+            resource_id=investment.id,
+            actor=actor,
+            details={"destination_id": destination_id},
+        ),
+        clock,
+    )
+    # Interest stopped with the request, so this is the amount the client gets. The notice
+    # itself never names it.
+    await notifications.notify(
+        session,
+        event_name="investment_withdrawal_requested",
+        client_id=investment.client_id,
+        idempotency_key=investment.id,
+        variables={"amount": proceeds(investment), "product": investment.product_name},
+        link=notifications.Link("investment", investment.id),
+        now=now,
+    )
+    logger.info("investment_withdrawal_requested", investment_id=investment.id)
 
 
 # The worker -------------------------------------------------------------------------------------

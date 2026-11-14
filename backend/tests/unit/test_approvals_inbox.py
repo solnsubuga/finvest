@@ -27,6 +27,7 @@ def test_admin_sees_every_kind_and_support_sees_what_touches_clients() -> None:
         "client_pin_reset",
         "client_limits",
         "client_statement",
+        "client_withdrawal",
     }
 
 
