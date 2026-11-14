@@ -87,7 +87,8 @@ _SPECS = (
     _event("kyc_retake_requested", Category.ACCOUNT, "kyc"),
     _event("kyc_rejected", Category.ACCOUNT, "kyc"),
     # Company and group accounts.
-    _event("organisation_invited", Category.ACCOUNT, "organisations", "organisation", "person"),
+    # Never the organisation's name, which the applicant wrote and staff have not seen yet.
+    _event("organisation_invited", Category.ACCOUNT, "organisations", "person"),
     _event("organisation_returned", Category.ACCOUNT, "organisations", "organisation"),
     _event("organisation_rejected", Category.ACCOUNT, "organisations", "organisation"),
     _event("organisation_approved", Category.ACCOUNT, "organisations", "organisation"),

@@ -361,7 +361,8 @@ async def invite(
             payload={
                 "organisation_id": organisation_id,
                 "client_id": person.client_id,
-                "organisation": found.name,
+                # Never the organisation's name: the applicant wrote it and staff have not seen
+                # it, and this goes out in Finvest's voice. The app shows it.
                 "person": applicant.shown_name,
             },
         ),
@@ -641,9 +642,9 @@ async def reject(
 async def tell_invited(session: AsyncSession, payload: dict[str, object], clock: Clock) -> bool:
     """The worker tells an invited client, if they are still invited. True when told."""
     organisation_id, client_id = payload.get("organisation_id"), payload.get("client_id")
-    name, person = payload.get("organisation"), payload.get("person")
-    if not all(isinstance(v, str) for v in (organisation_id, client_id, name, person)):
-        raise ValueError("an invitation job needs the organisation, client, name and person")
+    person = payload.get("person")
+    if not all(isinstance(v, str) for v in (organisation_id, client_id, person)):
+        raise ValueError("an invitation job needs the organisation, client and person")
     still = await session.scalar(
         text(
             "SELECT EXISTS (SELECT FROM organisation_signatories s JOIN organisations o "
@@ -659,7 +660,7 @@ async def tell_invited(session: AsyncSession, payload: dict[str, object], clock:
         event_name="organisation_invited",
         client_id=str(client_id),
         idempotency_key=f"organisation-invited:{organisation_id}:{client_id}",
-        variables={"organisation": str(name), "person": str(person)},
+        variables={"person": str(person)},
         link=notifications.Link("organisation", str(organisation_id)),
         now=clock.now(),
     )
@@ -796,7 +797,10 @@ async def _tell_applicant(
 
 
 def _name(value: str) -> str:
-    cleaned = clean_name(value)
+    try:
+        cleaned = clean_name(value)
+    except ValueError:
+        raise _invalid("name", "not_a_name") from None
     if cleaned is None:
         raise _invalid("name", "required")
     return cleaned
