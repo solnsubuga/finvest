@@ -301,20 +301,13 @@ async def test_reading_when_iotec_is_down_is_tried_again_later() -> None:
         await adapter.result("stub:pass:check:1")
 
 
-def test_iotec_needs_its_credentials_and_never_approves_alone(
+def test_iotec_needs_its_credentials_and_approves_clean_results(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    monkeypatch.delenv("FINVEST_IDENTITY_AUTOMATIC_APPROVAL", raising=False)
     key = "A" * 43
     with pytest.raises(ValidationError, match="FINVEST_IOTEC_VERIFY_CLIENT_ID"):
         KycSettings(identity_data_key=key, identity_provider="iotec")
-    with pytest.raises(ValidationError, match="awaits the owner"):
-        KycSettings(
-            identity_data_key=key,
-            identity_provider="iotec",
-            iotec_verify_client_id="client-1",
-            iotec_verify_api_key="IO-key",
-            identity_automatic_approval=True,
-        )
     settings = KycSettings(
         identity_data_key=key,
         identity_provider="iotec",
@@ -323,6 +316,10 @@ def test_iotec_needs_its_credentials_and_never_approves_alone(
     )
     assert isinstance(settings.provider(MemoryStorage()), IotecVerifyProvider)
     assert "IO-key" not in repr(settings)
+    # The owner's decision: on with ioTec unless switched off.
+    assert settings.automatic_approval
+    off = settings.model_copy(update={"identity_automatic_approval": False})
+    assert not off.automatic_approval
 
 
 async def test_a_request_that_never_arrived_is_tried_once_more() -> None:

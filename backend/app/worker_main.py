@@ -116,7 +116,7 @@ def handlers(
                 # The provider reads the photos it sends from private storage.
                 identity.provider(storage),
                 clock,
-                automatic_approval=identity.identity_automatic_approval,
+                automatic_approval=identity.automatic_approval,
             ).handlers()
         )
         live = identity.liveness()
