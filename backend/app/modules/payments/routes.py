@@ -196,6 +196,15 @@ def _view(deposit: Deposit, receipt: bank.BankReceipt | None = None) -> PaymentV
     )
 
 
+class PaymentPage(Contract):
+    items: list[PaymentView]
+    next_before: PushId | None
+
+
+# Payments per page of a client's Activity list.
+CLIENT_PAGE = 50
+
+
 async def _payment_view(session: AsyncSession, deposit: Deposit) -> PaymentView:
     if deposit.method is Method.BANK_TRANSFER:
         transfer = await bank.get_bank_transfer(session, deposit.id)
@@ -375,6 +384,25 @@ def create_client_router(
             if deposit is None:
                 raise ApplicationError("not_found")
             return await _payment_view(session, deposit)
+
+    @router.get("/payments")
+    async def list_payments(
+        client: CurrentClient,
+        database: Db,
+        before: Annotated[PushId | None, Query()] = None,
+    ) -> PaymentPage:
+        """The client's own payments, newest first, for the Activity list.
+
+        Each is summarised without its receipt; `GET /client/payments/{payment_id}` has the
+        detail. `next_before` is the ID to pass as `before` for the next page.
+        """
+        async with database.actor_transaction(client.actor) as session:
+            deposits = await service.list_deposits(session, limit=CLIENT_PAGE + 1, before_id=before)
+        page = deposits[:CLIENT_PAGE]
+        return PaymentPage(
+            items=[_view(deposit) for deposit in page],
+            next_before=page[-1].id if len(deposits) > CLIENT_PAGE else None,
+        )
 
     @router.get("/payments/{payment_id}")
     async def get_payment(payment_id: PushId, client: CurrentClient, database: Db) -> PaymentView:

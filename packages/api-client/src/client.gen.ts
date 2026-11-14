@@ -680,6 +680,12 @@ export const PaymentView = z.object({
 });
 export type PaymentView = z.infer<typeof PaymentView>;
 
+export const PaymentPage = z.object({
+  items: z.array(PaymentView),
+  next_before: z.string().nullable(),
+});
+export type PaymentPage = z.infer<typeof PaymentPage>;
+
 export const PayoutOut = z.object({
   amount: MoneyView,
   business_date: z.string(),
@@ -1788,6 +1794,19 @@ export const operations = {
     idempotent: false,
     status: 200,
     response: ResetStarted,
+  },
+  "GET /client/payments": {
+    method: "GET",
+    path: "/client/payments",
+    params: z.object({}),
+    query: z.object({
+    before: z.string().nullable().optional(),
+  }),
+    body: null,
+    bodyKind: null,
+    idempotent: false,
+    status: 200,
+    response: PaymentPage,
   },
   "GET /client/payments/{payment_id}": {
     method: "GET",
