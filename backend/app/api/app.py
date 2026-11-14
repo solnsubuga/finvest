@@ -20,6 +20,7 @@ from app.infrastructure.storage import FileStorage, StorageSettings
 from app.modules.approvals import api as approvals_api
 from app.modules.audit import api as audit_api
 from app.modules.autoinvest import api as autoinvest_api
+from app.modules.closures import api as closures_api
 from app.modules.console import api as console_api
 from app.modules.dealing import allocations_api as dealing_allocations_api
 from app.modules.dealing import api as dealing_api
@@ -207,6 +208,7 @@ def create_app(
         *staff_returns_api.routers,
         *reconciliation_api.routers,
         *pot_transfers_api.routers,
+        *closures_api.routers,
     ):
         app.include_router(router)
     app.include_router(payments_api.create_router(collections))

@@ -5,8 +5,8 @@ resolutions and their bank batches, the migration checks, the imported statement
 closes and their recorded matches, the pot transfers, the help chat, the complaints register,
 the goals, the email delivery records, the unclaimed accounts, the complaint outcomes, the
 suppression lifts, the client locks, the announcements, the team changes, Finvest's own money in
-the buffer, the payments of tax to URA, the payments moved to the right client, next of kin or the
-answers to the investing questions."""
+the buffer, the payments of tax to URA, the payments moved to the right client, next of kin, the
+answers to the investing questions or the requests to close an account."""
 
 import os
 from collections.abc import Iterator
@@ -789,6 +789,13 @@ ROWS = {
         "INSERT INTO kyc_risk_answers (id, client_id, answers, score, profile, answered_at) "
         "VALUES ('-Nabc0000000000000A1', '-Nabc0000000000000B1', '{}', 0, 'careful', now())",
         "refusing to drop the answers clients gave",
+    ),
+    "0232_account_closures": (
+        "BEGIN; SELECT set_config('finvest.actor_kind', 'client', true); "
+        "SELECT set_config('finvest.actor_id', '-Nabc0000000000000B1', true); "
+        "INSERT INTO closure_requests (id, client_id, requested_at) "
+        "VALUES ('-Nabc0000000000000A1', '-Nabc0000000000000B1', now()); COMMIT",
+        "refusing to drop closure_requests",
     ),
 }
 

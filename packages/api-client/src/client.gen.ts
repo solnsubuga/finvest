@@ -24,6 +24,11 @@ export const AnswersView = z.object({
 });
 export type AnswersView = z.infer<typeof AnswersView>;
 
+export const AskBody = z.object({
+  reason: z.string().nullable().optional(),
+});
+export type AskBody = z.infer<typeof AskBody>;
+
 export const AtMaturity = z.enum(["roll_over", "pay_out"]);
 export type AtMaturity = z.infer<typeof AtMaturity>;
 
@@ -59,6 +64,9 @@ export const BankTransferDetails = z.object({
   reference: z.string(),
 });
 export type BankTransferDetails = z.infer<typeof BankTransferDetails>;
+
+export const Blocker = z.enum(["investments_running", "money_owed", "deposits_in_progress", "payouts_in_progress", "goals_open", "plans_live"]);
+export type Blocker = z.infer<typeof Blocker>;
 
 export const BodyAddPhotoClientClaimCheckPhotosKindPut = z.object({
   photo: Upload,
@@ -217,6 +225,40 @@ export const ClientClaimCheckEnvelope = z.object({
   check: ClientClaimCheck.nullable(),
 });
 export type ClientClaimCheckEnvelope = z.infer<typeof ClientClaimCheckEnvelope>;
+
+export const ClosureView = z.object({
+  cancelled_at: z.string().nullable(),
+  decided_at: z.string().nullable(),
+  decision_note: z.string().nullable(),
+  id: z.string(),
+  reason: z.string().nullable(),
+  requested_at: z.string(),
+  status: z.enum(["requested", "prepared", "closed", "declined", "cancelled"]),
+});
+export type ClosureView = z.infer<typeof ClosureView>;
+
+export const ClosuresApiAmountView = z.object({
+  amount_minor: z.number().int(),
+  currency: z.string(),
+});
+export type ClosuresApiAmountView = z.infer<typeof ClosuresApiAmountView>;
+
+export const StandingView = z.object({
+  blockers: z.array(Blocker),
+  live_plans: z.number().int(),
+  open_deposits: z.number().int(),
+  open_goals: z.number().int(),
+  open_payouts: z.number().int(),
+  owed: z.array(ClosuresApiAmountView),
+  running_investments: z.number().int(),
+});
+export type StandingView = z.infer<typeof StandingView>;
+
+export const ClientClosureView = z.object({
+  request: ClosureView.nullable(),
+  standing: StandingView,
+});
+export type ClientClosureView = z.infer<typeof ClientClosureView>;
 
 export const ClientComplaint = z.object({
   category: z.enum(["payments", "withdrawals", "investments", "identity", "account", "fees", "service", "other"]),
@@ -1024,6 +1066,41 @@ export type WithdrawalRequest = z.infer<typeof WithdrawalRequest>;
 
 /** Every route, by method and path, with what it takes and what it answers. */
 export const operations = {
+  "GET /client/account-closure": {
+    method: "GET",
+    path: "/client/account-closure",
+    params: z.object({}),
+    query: z.object({}),
+    body: null,
+    bodyKind: null,
+    idempotent: false,
+    status: 200,
+    response: ClientClosureView,
+  },
+  "POST /client/account-closure": {
+    method: "POST",
+    path: "/client/account-closure",
+    params: z.object({}),
+    query: z.object({}),
+    body: AskBody,
+    bodyKind: "json",
+    idempotent: false,
+    status: 201,
+    response: ClientClosureView,
+  },
+  "POST /client/account-closure/{request_id}/cancellation": {
+    method: "POST",
+    path: "/client/account-closure/{request_id}/cancellation",
+    params: z.object({
+    request_id: z.string(),
+  }),
+    query: z.object({}),
+    body: null,
+    bodyKind: null,
+    idempotent: false,
+    status: 200,
+    response: ClientClosureView,
+  },
   "GET /client/authenticator": {
     method: "GET",
     path: "/client/authenticator",
