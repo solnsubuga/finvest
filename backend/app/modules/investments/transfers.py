@@ -38,8 +38,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.infrastructure.idempotency import Receipt, run_once
 from app.infrastructure.jobs import JobRequest, enqueue, publish
 from app.modules.audit import service as audit
-from app.modules.closures import service as closures
 from app.modules.audit.domain.events import AuditActor, AuditCategory, AuditEvent
+from app.modules.closures import service as closures
 from app.modules.goals.events import FOLLOW_ROLLOVER
 from app.modules.identity.client_locks import client_id_for_phone, client_status
 from app.modules.investments import accrual
