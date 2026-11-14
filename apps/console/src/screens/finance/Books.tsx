@@ -164,7 +164,7 @@ export function BooksSection({ api, currency, today, save }: BooksSectionProps) 
               through it.
             </p>
           ) : (
-            <div className="overflow-x-auto rounded-[20px] border border-border bg-surface">
+            <div className="overflow-x-auto rounded-xl border border-border bg-surface" tabIndex={0} role="region" aria-label={`Books for ${formatMonth(month)}`}>
               <table aria-label={`Books for ${formatMonth(month)}`} className="w-full min-w-[640px] border-collapse text-md">
                 <caption className="sr-only">
                   Each ledger account, all clients together, from {formatDay(books.dateFrom)} to {formatDay(books.dateTo)}, in {currency}
