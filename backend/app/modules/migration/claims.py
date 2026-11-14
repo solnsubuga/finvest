@@ -22,6 +22,7 @@ from app.modules.audit import service as audit
 from app.modules.audit.domain.events import AuditActor, AuditCategory, AuditEvent
 from app.modules.migration.domain.claim import (
     LINK_LIFETIME,
+    MAX_REMINDERS,
     REMINDER_EVERY,
     ClaimStatus,
     IdentityStep,
@@ -50,6 +51,14 @@ class ClaimView:
     identity_step: IdentityStep
     reminders_sent: int
     problem_text: str | None
+
+
+@dataclass(frozen=True, slots=True)
+class DuePage:
+    """One page of clients due a reminder, and where the next page starts."""
+
+    client_ids: list[str]
+    last_id: str | None
 
 
 @dataclass(frozen=True, slots=True)
@@ -106,8 +115,9 @@ _COUNTS = text("SELECT status, count(*) AS n FROM migration_claims GROUP BY stat
 _INVITED = text(
     "SELECT c.client_id, c.reminders_sent, max(l.sent_at) AS last_sent_at "
     "FROM migration_claims AS c JOIN migration_claim_links AS l ON l.client_id = c.client_id "
-    "WHERE c.status = 'invited' GROUP BY c.client_id, c.reminders_sent "
-    "HAVING max(l.sent_at) <= :before ORDER BY max(l.sent_at), c.client_id LIMIT :limit"
+    "WHERE c.status = 'invited' AND c.reminders_sent < :most AND c.client_id > :after "
+    "GROUP BY c.client_id, c.reminders_sent "
+    "HAVING max(l.sent_at) <= :before ORDER BY c.client_id LIMIT :limit"
 )
 
 
@@ -290,11 +300,24 @@ async def claim_progress(session: AsyncSession) -> Progress:
     return progress({ClaimStatus(row.status): int(row.n) for row in rows})
 
 
-async def reminders_due(session: AsyncSession, clock: Clock, *, limit: int = 500) -> list[str]:
-    """Clients who were sent a link a week or more ago and have not used it, oldest first."""
+async def reminders_due(
+    session: AsyncSession, clock: Clock, *, after: str = "", limit: int = 500
+) -> DuePage:
+    """Clients who were sent a link a week or more ago and have not used it, in ID order after
+    `after`. `last_id` is where the next page starts, or None when this was the last."""
     now = clock.now()
-    rows = (await session.execute(_INVITED, {"before": now - REMINDER_EVERY, "limit": limit})).all()
-    return [
+    rows = (
+        await session.execute(
+            _INVITED,
+            {
+                "before": now - REMINDER_EVERY,
+                "most": MAX_REMINDERS,
+                "after": after,
+                "limit": limit,
+            },
+        )
+    ).all()
+    due = [
         row.client_id
         for row in rows
         if reminder_due(
@@ -304,6 +327,7 @@ async def reminders_due(session: AsyncSession, clock: Clock, *, limit: int = 500
             now=now,
         )
     ]
+    return DuePage(due, rows[-1].client_id if len(rows) >= limit else None)
 
 
 async def claim_for(session: AsyncSession, client_id: str) -> ClaimView | None:

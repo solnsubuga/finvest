@@ -39,6 +39,23 @@ class PinBody(Contract):
     pin: Pin
 
 
+# A key the API made, from `secrets.token_urlsafe(32)`. Bounded so nothing large is hashed.
+Key = Annotated[str, Field(min_length=1, max_length=128)]
+
+
+class UnlockKeyBody(Contract):
+    key: Key
+
+
+class UnlockKeyTurnedOn(Contract):
+    """A right PIN gives `key`, once: keep it where only a fingerprint or face can read it.
+    Otherwise `tries_left` before this device signs out."""
+
+    enabled: bool
+    tries_left: int
+    key: str | None
+
+
 class PinChecked(Contract):
     """`unlocked` when the PIN was right. Otherwise the tries left before this device signs out."""
 
@@ -62,7 +79,8 @@ class PinConfirmed(Contract):
 
 @router.put("", status_code=204)
 async def set_pin(body: PinBody, request: Request, client: CurrentClient) -> None:
-    """Set or replace the PIN for this phone. Needs a log in from the last ten minutes."""
+    """Set or replace the PIN for this phone. Needs a log in, or a passkey or app confirmation,
+    from the last ten minutes."""
     await _service(request).set_pin(client, body.pin)
 
 
@@ -70,6 +88,30 @@ async def set_pin(body: PinBody, request: Request, client: CurrentClient) -> Non
 async def unlock(body: PinBody, request: Request, client: CurrentClientEvenLocked) -> PinChecked:
     """Open a locked app. The fifth wrong PIN in a row signs this device out (401)."""
     checked = await _service(request).unlock(client, body.pin)
+    return PinChecked(unlocked=checked.unlocked, tries_left=checked.tries_left)
+
+
+@router.put("/unlock-key")
+async def turn_on_unlock_key(
+    body: PinBody, request: Request, client: CurrentClient
+) -> UnlockKeyTurnedOn:
+    """Turn on fingerprint or face unlock for this phone, with the PIN. A wrong PIN counts."""
+    made = await _service(request).turn_on_unlock_key(client, body.pin)
+    return UnlockKeyTurnedOn(enabled=made.enabled, tries_left=made.tries_left, key=made.key)
+
+
+@router.delete("/unlock-key", status_code=204)
+async def turn_off_unlock_key(request: Request, client: CurrentClient) -> None:
+    """Turn off fingerprint or face unlock for this phone."""
+    await _service(request).turn_off_unlock_key(client)
+
+
+@router.post("/unlock-with-key")
+async def unlock_with_key(
+    body: UnlockKeyBody, request: Request, client: CurrentClientEvenLocked
+) -> PinChecked:
+    """Open a locked app with this phone's unlock key. A wrong key turns fingerprint unlock off."""
+    checked = await _service(request).unlock_with_key(client, body.key)
     return PinChecked(unlocked=checked.unlocked, tries_left=checked.tries_left)
 
 

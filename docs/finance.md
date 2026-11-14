@@ -100,3 +100,31 @@ A system's file names the system's accounts, so each system has an account code 
 | `POST /staff/finance/account-codes/proposals/{id}/decision` | `approved` or `rejected` by someone else, `withdrawn` by the proposer, with a reason. `account_codes.change`, confirmed in the last ten minutes. |
 
 The first two need `finance.view` (finance and admin).
+Both need `finance.view` (finance and admin).
+
+## Closing the month
+
+The ledger closes day by day. Closing the month is Finance's sign-off that a month is finished. It moves nothing and locks nothing the day closes have not already locked. It records that two people checked the month, and it keeps that month's books exactly as they were signed.
+
+One person proposes closing a month, and a different person approves it. The approval needs a passkey or app code from the last few minutes. The month waits in the approvals inbox as `month_close`, and the proposer may withdraw it while it waits. A proposal is refused with 409 for any of these reasons:
+
+| Code | Why |
+| --- | --- |
+| `month_not_ended` | the month has not ended |
+| `month_already_closed` | the month is already closed |
+| `close_months_in_order` | it is not the month after the last one closed (the first close may be any month) |
+| `days_not_closed` | a day in it is still open in the ledger |
+| `books_do_not_balance` | its debits and credits differ in a currency |
+| `close_already_proposed` | another close is already waiting |
+
+The proposal keeps every account code's opening balance, debits, credits and closing balance for the month in every currency, in minor units, with clients folded into their codes. It also keeps a SHA-256 digest of those figures. Approving reads the books again and refuses with `books_changed` if the digest differs, so the month that is signed is the month that was shown. Every step is on the audit trail on resource `finance_month_close`.
+
+| Route | What it does |
+| --- | --- |
+| `GET /staff/finance/month-closes` | The last month closed, the month to close next and whether it can be proposed now (`refusal` is null when it can), and the latest twelve closes with their books |
+| `POST /staff/finance/month-closes` | Propose `{month: "YYYY-MM", reason}`. Takes an idempotency key |
+| `POST /staff/finance/month-closes/{id}/approve` | A different person closes the month. Takes an idempotency key and a recent second step. Refused with 403 `proposed_by_you` |
+| `POST /staff/finance/month-closes/{id}/decline` | A different person sends it back |
+| `POST /staff/finance/month-closes/{id}/withdraw` | The proposer takes it back |
+
+Migration `0321_finance_month_closes` owns `finance_month_closes`. The database allows one approved close per month and one waiting close at a time. It refuses an approval or decline by the proposer, any change to the books kept, and any delete.

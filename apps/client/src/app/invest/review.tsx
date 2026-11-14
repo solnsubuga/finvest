@@ -17,7 +17,7 @@ import { DetailList, Loading } from "@/payments/Parts";
 import { colors, fontSizes, radii } from "@/theme";
 import { IdCheckPrompt } from "@/identity/Parts";
 
-const CHOICES: AtMaturity[] = ["roll_over", "pay_out"];
+const CHOICES: AtMaturity[] = ["roll_over", "pay_out", "pay_interest"];
 
 /**
  * Review and confirm. Confirming saves the investment at today's rate, then

@@ -757,6 +757,33 @@ async def test_a_client_adds_an_authenticator_app_and_signs_in_with_it(api: Api)
     assert verified.json()["token"]
 
 
+async def test_a_client_confirms_it_is_them_with_their_app_before_a_sign_in_change(
+    api: Api,
+) -> None:
+    _, _, token = await a_signed_in_client(api)
+    bearer = {"Authorization": f"Bearer {token}"}
+    secret = await add_app(api, token)
+    change = {"email": "amara@example.com"}
+    # The sign up code is not a passkey or an app, so it never counts.
+    refused = await api.http.put("/client/email", json=change, headers=bearer)
+    assert (refused.status_code, code(refused)) == (403, "confirm_it_is_you")
+    wrong = await api.http.post(
+        "/client/session/confirmation/authenticator", json={"code": "000000"}, headers=bearer
+    )
+    assert (wrong.status_code, code(wrong)) == (401, "invalid_code")
+    api.clock.advance(seconds=31)
+    right = await api.http.post(
+        "/client/session/confirmation/authenticator",
+        json={"code": app_code(api, secret)},
+        headers=bearer,
+    )
+    assert right.status_code == 200, right.text
+    assert (await api.http.put("/client/email", json=change, headers=bearer)).status_code == 200
+    api.clock.advance(minutes=11)
+    late = await api.http.put("/client/email", json={"email": "b@example.com"}, headers=bearer)
+    assert code(late) == "confirm_it_is_you"
+
+
 async def test_a_client_app_is_not_on_until_a_code_confirms_it(api: Api) -> None:
     phone, _, token = await a_signed_in_client(api)
     bearer = {"Authorization": f"Bearer {token}"}
@@ -964,3 +991,44 @@ async def test_confirming_needs_a_signed_in_member_of_staff_on_the_console(api: 
         headers={"Origin": "https://evil.example"},
     )
     assert (elsewhere.status_code, code(elsewhere)) == (403, "forbidden")
+
+
+async def security_notices(api: Api, actor_id: str) -> list[str]:
+    """The security notices a client was told, oldest first."""
+    async with api.database.actor_transaction(Actor("client", actor_id)) as session:
+        rows = await session.execute(
+            text(
+                "SELECT body FROM notifications WHERE client_id = :id AND category = 'security' "
+                "ORDER BY created_at, id"
+            ),
+            {"id": actor_id},
+        )
+        return [row.body for row in rows]
+
+
+async def test_a_client_is_told_each_change_to_their_second_steps(api: Api) -> None:
+    _, client_id, token = await a_signed_in_client(api)
+    bearer = {"Authorization": f"Bearer {token}"}
+    added = await add_passkey(api, token, Device(CLIENT_SITE, CLIENT_ORIGIN))
+    await api.http.delete(f"/client/passkeys/{added.json()['id']}", headers=bearer)
+    await add_app(api, token)
+    await api.http.delete("/client/authenticator", headers=bearer)
+    tail = ". If this was not you, contact us straight away."
+    assert await security_notices(api, client_id) == [
+        "A passkey was added to your account" + tail,
+        "A passkey was removed from your account" + tail,
+        "An authenticator app was set up for your account" + tail,
+        "The authenticator app was removed from your account" + tail,
+    ]
+
+
+async def test_staff_second_steps_tell_no_client(api: Api) -> None:
+    _, staff_id, token = await invited(api)
+    enrolled = await enrol_with_passkey(api, token, Device(STAFF_SITE, STAFF_ORIGIN))
+    assert enrolled.status_code == 200, enrolled.text
+    # Staff have no inbox: nothing is written under their ID.
+    async with api.database.actor_transaction(Actor("staff", staff_id)) as session:
+        told = await session.scalar(
+            text("SELECT count(*) FROM notifications WHERE client_id = :id"), {"id": staff_id}
+        )
+    assert told == 0

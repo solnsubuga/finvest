@@ -233,6 +233,21 @@ describe("the maturity choice", () => {
     );
   });
 
+  it("keeps what was put in invested and pays the interest to a chosen account", async () => {
+    await signIn();
+    await open("/portfolio");
+    await fireEvent.press(await screen.findByLabelText(/^91 Day Treasury Bill, Running/));
+    await fireEvent.press(await screen.findByTestId("change-maturity"));
+    await fireEvent.press(await screen.findByTestId("maturity-pay_interest"));
+    expect(screen.getByText("Pay the interest to")).toBeTruthy();
+    await fireEvent.press(screen.getByTestId("account-demo-account-bank"));
+    await fireEvent.press(screen.getByTestId("maturity-save"));
+    expect(await screen.findByText("Pay me the interest")).toBeTruthy();
+    expect(mockChoose).toHaveBeenCalledWith(
+      expect.objectContaining({ atMaturity: "pay_interest", destinationId: "demo-account-bank" }),
+    );
+  });
+
   it("sends matured money to a ready account, and asks the same again after a lost answer", async () => {
     mockInvesting.maturedWaiting = true;
     await signIn();

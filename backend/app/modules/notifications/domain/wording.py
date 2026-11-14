@@ -85,6 +85,13 @@ DEFAULTS: dict[str, Wording] = {
         "the app.",
         "Finvest: your payment from {method} did not go through. No money was taken.",
     ),
+    "payment_reversed": Wording(
+        "Payment taken back",
+        "A payment from {method} was matched to your account by mistake, so we have taken it "
+        "back. If you think this is wrong, message us in the app.",
+        "Finvest: a payment from {method} was matched to your account by mistake and has been "
+        "taken back.",
+    ),
     "payout_processing": Wording(
         "Withdrawal is being processed",
         "Your withdrawal to {destination} is being processed. We will confirm when it is sent.",
@@ -119,6 +126,13 @@ DEFAULTS: dict[str, Wording] = {
         "Investment started",
         "Your money is now in a {product}.",
         "Finvest: your money is now invested in a {product}.",
+    ),
+    "investment_booked": Wording(
+        "Investment ready for you to pay",
+        "As you asked, we set up a {product} for you. See the amount and pay for it in the app "
+        "within 3 days to start it.",
+        "Finvest: as you asked, we set up a {product} for you. Pay for it in the app within 3 "
+        "days to start it.",
     ),
     "investment_maturing": Wording(
         "Your investment matures soon",
@@ -181,6 +195,12 @@ DEFAULTS: dict[str, Wording] = {
         "Your monthly saving towards {goal} is due on {date}. See how much to save and pay in "
         "the app.",
         "Finvest: your monthly saving towards {goal} is due on {date}. Pay in the app.",
+    ),
+    "goal_payday": Wording(
+        "It's payday",
+        "Today is the payday you chose for {goal}. Put something towards it while the money is "
+        "in. See how much to save in the app.",
+        "Finvest: it's payday. Put something towards {goal} today. Save in the app.",
     ),
     "goal_reached": Wording(
         "You reached your goal",
@@ -252,13 +272,13 @@ DEFAULTS: dict[str, Wording] = {
     ),
     "payout_destination_approved": Wording(
         "Payout account approved",
-        "{destination} is approved. You can withdraw to it after the 24 hour wait.",
-        "Finvest: {destination} is approved for withdrawals after the 24 hour wait.",
+        "We approved {destination}. You can withdraw to it after the 24 hour wait.",
+        "Finvest: we approved {destination} for withdrawals after the 24 hour wait.",
     ),
     "payout_destination_refused": Wording(
         "Payout account not approved",
-        "We could not approve {destination}. A payout account must be in your own name.",
-        "Finvest: we could not approve {destination}. A payout account must be in your own name.",
+        "We could not approve {destination}. See why in the app.",
+        "Finvest: we could not approve {destination} for withdrawals. See why in the app.",
     ),
     "statement_ready": Wording(
         "{period} statement is ready",

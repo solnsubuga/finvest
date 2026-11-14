@@ -24,6 +24,7 @@ const PASSTHROUGH: ReadonlySet<AuthErrorCode> = new Set([
   "rate_limited",
   "not_found",
   "offline",
+  "confirm_it_is_you",
 ]);
 
 /** Turns what the API or the network said into a reason a sign-in screen can show. */
@@ -34,7 +35,12 @@ export function toAuthError(error: unknown): AuthError {
     if (PASSTHROUGH.has(error.code as AuthErrorCode)) return new AuthError(error.code as AuthErrorCode);
     // A setting-up screen whose session has gone: logging in again brings the client back.
     if (error.code === "unauthorized") return new AuthError("sign_in_again");
-    if (error.code === "validation_failed") return new AuthError("not_accepted");
+    if (error.code === "validation_failed") {
+      const problem = error.fields[0]?.code;
+      if (problem === "leaked_password") return new AuthError("leaked_password");
+      if (problem === "same_as_now") return new AuthError("same_as_now");
+      return new AuthError("not_accepted");
+    }
   }
   return new AuthError("unavailable");
 }
@@ -313,6 +319,39 @@ export function createApiAuthClient(): AuthClient {
       wrap(async () => {
         await api("POST /client/email/verification/confirm", { body: { token } });
       }),
+
+    confirmWithPasskey: () =>
+      wrap(async () => {
+        if (!passkeysSupported()) throw new AuthError("passkey_unsupported");
+        const options = await api("POST /client/session/confirmation/passkey/options", {});
+        const credential = await signWithPasskey(options.public_key);
+        await api("POST /client/session/confirmation/passkey", { body: { credential } });
+      }),
+
+    confirmWithAuthenticator: (code) =>
+      wrap(async () => {
+        await api("POST /client/session/confirmation/authenticator", { body: { code } });
+      }),
+
+    changePassword: (current, next) =>
+      wrap(async () => {
+        await api("PUT /client/password", { body: { current_password: current, new_password: next } });
+      }),
+
+    startPhoneChange: (phone) =>
+      wrap(async () => (await api("POST /client/phone-change", { body: { phone } })).challenge_id),
+
+    confirmPhoneChange: (challengeId, code) =>
+      wrap(async () => {
+        const result = await api("POST /client/phone-change/{challenge_id}/confirmation", {
+          params: { challenge_id: challengeId },
+          body: { code },
+        });
+        return result.phone;
+      }),
+
+    changeEmail: (email) =>
+      wrap(async () => (await api("PUT /client/email", { body: { email } })).email),
 
     signOut: async () => {
       try {

@@ -21,4 +21,3 @@
 - [ ] Docs in `docs/` still match the code
 - [ ] No secrets, real client data or provider credentials
 - [ ] Money rules in `docs/rules.md` are respected
-- [ ] Commit messages carry no AI attribution lines

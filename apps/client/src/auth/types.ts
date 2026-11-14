@@ -61,6 +61,10 @@ export type AuthErrorCode =
   /** Five wrong PINs in a row: this phone was signed out. */
   | "signed_out"
   | "pin_too_simple"
+  /** A change to how the client signs in needs a passkey or authenticator app first. */
+  | "confirm_it_is_you"
+  /** The new number or address is the one the account already has. */
+  | "same_as_now"
   | "unavailable";
 
 export class AuthError extends Error {
@@ -277,6 +281,34 @@ export interface AuthClient {
    */
   confirmWithPin(pin: string, action: PinAction): Promise<PinConfirmation>;
 
+  /**
+   * Confirms it is the client with a passkey or their authenticator app, on
+   * this session. For ten minutes after, the changes below work. A texted
+   * code never counts, so a stolen SIM cannot change how the account signs in.
+   */
+  confirmWithPasskey(): Promise<void>;
+  confirmWithAuthenticator(code: string): Promise<void>;
+  /**
+   * The changes below fail with `confirm_it_is_you` unless the client used a
+   * passkey or authenticator app in the last ten minutes, by logging in with
+   * it or confirming above.
+   *
+   * Changes the password. A wrong current password fails with
+   * `invalid_credentials`. Every other device is signed out.
+   */
+  changePassword(current: string, next: string): Promise<void>;
+  /** Moving to a new number, step 1: texts a code to it. Returns its id. */
+  startPhoneChange(phone: string): Promise<string>;
+  /**
+   * Step 2: the code moves the account to the new number. Every other device
+   * is signed out, and for 24 hours withdrawals go only to accounts used
+   * before. Returns the new number. A number with an account fails with
+   * `phone_taken`.
+   */
+  confirmPhoneChange(challengeId: string, code: string): Promise<string>;
+  /** Sets a new email address, not proved until the link sent to it is opened. */
+  changeEmail(email: string): Promise<string>;
+
   signOut(): Promise<void>;
 }
 
@@ -303,6 +335,8 @@ const messages: Record<AuthErrorCode, string> = {
     "We signed you out after 5 wrong PINs. Log in with your password to choose a new PIN.",
   pin_too_simple:
     "That PIN is too easy to guess. Avoid repeated digits and runs like 12345.",
+  confirm_it_is_you: "For your safety, confirm it is you with your passkey or authenticator app first.",
+  same_as_now: "That is already the one on your account.",
   unavailable: "We could not reach Finvest. Check your connection and try again.",
 };
 

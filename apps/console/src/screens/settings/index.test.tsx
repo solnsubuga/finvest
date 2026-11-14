@@ -7,6 +7,7 @@ import { SettingsScreen } from "./index.tsx";
 import { checkWording, fillSample, outsideLinks } from "./rules.ts";
 import { createStubAnnouncementsApi } from "./announcementsStub.ts";
 import { createStubBankAccountsApi } from "./bankAccountsStub.ts";
+import { createStubLimitsApi, createStubPlatformSettingsApi } from "./platformStub.ts";
 import { createStubWordingsApi } from "./stub.ts";
 
 const ME = { id: "sample-me", name: "Amina Kintu" };
@@ -18,6 +19,8 @@ function renderSettings({ api = createStubWordingsApi(ME, () => NOW), canChange 
       api={api}
       announcements={createStubAnnouncementsApi(ME, () => NOW)}
       bankAccounts={createStubBankAccountsApi(ME, () => NOW, "empty")}
+      platform={createStubPlatformSettingsApi({ id: ME.id, permissions: [] }, () => NOW, "empty")}
+      limits={createStubLimitsApi({ id: ME.id, permissions: [] }, () => NOW, "empty")}
       directory={createStubDirectory(ME)}
       canChange={canChange}
       canSend={canSend}

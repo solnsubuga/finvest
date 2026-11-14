@@ -16,7 +16,9 @@ import {
   type InvestmentStatus,
   type InvestmentsApi,
 } from "./api.ts";
+import { BookingsPanel } from "./bookings/index.tsx";
 import { CorrectionsPanel } from "./corrections/index.tsx";
+import { RunAgainPanel } from "./runs/index.tsx";
 import { createHttpInvestmentsApi } from "./http.ts";
 import { createStubInvestmentsApi } from "./stub.ts";
 
@@ -32,7 +34,7 @@ const TABS: readonly { status: InvestmentStatus; label: string; empty: string }[
   { status: "cancelled", label: "Cancelled", empty: "No investment has been cancelled." },
 ];
 
-const AT_MATURITY_LABELS: Record<AtMaturity, string> = { roll_over: "Roll over", pay_out: "Pay out" };
+const AT_MATURITY_LABELS: Record<AtMaturity, string> = { roll_over: "Roll over", pay_out: "Pay out", pay_interest: "Pay the interest" };
 
 const REFUSAL_LABELS: Record<string, string> = {
   no_destination: "Waiting for the client to choose where to be paid",
@@ -382,6 +384,8 @@ export default function InvestmentsPage() {
   return (
     <>
       <InvestmentsScreen api={api} directory={directory} />
+      <RunAgainPanel kind="interest" />
+      <BookingsPanel />
       <CorrectionsPanel />
     </>
   );

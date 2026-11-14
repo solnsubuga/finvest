@@ -34,6 +34,8 @@ type StoredSaving = {
   createdOn: string;
   /** Null until paid. In the demo a saving is paid the moment it is confirmed. */
   startDate: string | null;
+  /** The day it was taken out early. It stops earning then and no longer counts. */
+  withdrawnOn?: string;
 };
 
 type StoredGoal = {
@@ -44,6 +46,10 @@ type StoredGoal = {
   createdAt: string;
   status: "active" | "closed";
   savings: StoredSaving[];
+  payday?: number | null;
+  /** The first day the savings are free again, while locked. */
+  lockedUntil?: string | null;
+  unlockRequestedAt?: string | null;
 };
 
 type StubOptions = {
@@ -54,6 +60,8 @@ type StubOptions = {
 };
 
 const MAX_ACTIVE = 20;
+/** Undoing a lock waits a week (Solo's rule). */
+const UNLOCK_WAIT_DAYS = 7;
 const KAMPALA_MS = 3 * 60 * 60 * 1000;
 const ugx = (minor: number): Money => ({ currency: "UGX", minor });
 
@@ -86,7 +94,7 @@ export function createStubGoalsClient(options: StubOptions = {}): GoalsClient {
       return { value: 0, interest: 0 };
     }
     const days = Math.min(
-      Math.max(daysBetween(saving.startDate, today()), 0),
+      Math.max(daysBetween(saving.startDate, saving.withdrawnOn ?? today()), 0),
       saving.product.termDays,
     );
     const interest = netInterest(saving.amount, saving.product, days);
@@ -98,6 +106,9 @@ export function createStubGoalsClient(options: StubOptions = {}): GoalsClient {
     let interest = 0;
     let waiting = 0;
     for (const saving of goal.savings) {
+      if (saving.withdrawnOn) {
+        continue;
+      }
       if (saving.startDate) {
         const worth = valueOf(saving);
         value += worth.value;
@@ -134,7 +145,11 @@ export function createStubGoalsClient(options: StubOptions = {}): GoalsClient {
       .slice()
       .reverse()
       .map((saving) => {
-        const status: SavingStatus = saving.startDate ? "active" : "awaiting_payment";
+        const status: SavingStatus = saving.withdrawnOn
+          ? "withdrawn"
+          : saving.startDate
+            ? "active"
+            : "awaiting_payment";
         return {
           investmentId: saving.investmentId,
           productName: saving.product.name,
@@ -143,9 +158,10 @@ export function createStubGoalsClient(options: StubOptions = {}): GoalsClient {
           value: ugx(valueOf(saving).value),
           payBy: new Date(now() + 72 * 3_600_000).toISOString(),
           startDate: saving.startDate,
-          maturityDate: saving.startDate
-            ? addDays(saving.startDate, saving.product.termDays)
-            : null,
+          maturityDate:
+            saving.startDate && !saving.withdrawnOn
+              ? addDays(saving.startDate, saving.product.termDays)
+              : null,
         };
       });
     return {
@@ -160,7 +176,24 @@ export function createStubGoalsClient(options: StubOptions = {}): GoalsClient {
       progress: standing,
       plan,
       savings,
+      payday: goal.payday ?? null,
+      ...lockOf(goal),
     };
+  }
+
+  /** The lock as the client is shown it: none once its day has come. */
+  function lockOf(goal: StoredGoal): { lockedUntil: string | null; unlockRequestedAt: string | null } {
+    if (!goal.lockedUntil || goal.lockedUntil <= today()) {
+      return { lockedUntil: null, unlockRequestedAt: null };
+    }
+    return { lockedUntil: goal.lockedUntil, unlockRequestedAt: goal.unlockRequestedAt ?? null };
+  }
+
+  /** Free seven days from today, or sooner if the lock already ends sooner. */
+  function startUnlock(goal: StoredGoal) {
+    const on = addDays(today(), UNLOCK_WAIT_DAYS);
+    goal.lockedUntil = goal.lockedUntil && goal.lockedUntil < on ? goal.lockedUntil : on;
+    goal.unlockRequestedAt = new Date(now()).toISOString();
   }
 
   function productFor(details: GoalDetails): string {
@@ -244,6 +277,15 @@ export function createStubGoalsClient(options: StubOptions = {}): GoalsClient {
           createdOn: addMonths(start, -1),
           startDate: addMonths(start, -1),
         },
+        {
+          // Taken out early, to show a saving that no longer counts towards its goal.
+          investmentId: nextId("inv"),
+          product: product("TREA-91"),
+          amount: 250_000,
+          createdOn: addMonths(start, -1),
+          startDate: addMonths(start, -1),
+          withdrawnOn: addDays(start, -6),
+        },
       ],
     };
     goals.set(school.id, school);
@@ -324,7 +366,40 @@ export function createStubGoalsClient(options: StubOptions = {}): GoalsClient {
     async closeGoal(goalId) {
       await pause();
       const goal = own(goalId);
+      if (goal.status === "active" && lockOf(goal).lockedUntil && !goal.unlockRequestedAt) {
+        // Its savings become ordinary investments, but a lock still waits its seven days.
+        startUnlock(goal);
+      }
       goal.status = "closed";
+      return view(goal);
+    },
+
+    async lockGoal(goalId) {
+      await pause();
+      const goal = own(goalId);
+      if (goal.status !== "active") throw new GoalError("closed");
+      const date = goal.details.targetDate;
+      if (!date || date <= today()) throw new GoalError("invalid");
+      const running = lockOf(goal).lockedUntil;
+      goal.lockedUntil = running && running > date ? running : date;
+      goal.unlockRequestedAt = null;
+      return view(goal);
+    },
+
+    async unlockGoal(goalId) {
+      await pause();
+      const goal = own(goalId);
+      if (goal.status !== "active" || !lockOf(goal).lockedUntil) throw new GoalError("invalid");
+      if (!goal.unlockRequestedAt) startUnlock(goal);
+      return view(goal);
+    },
+
+    async setPayday(goalId, day) {
+      await pause();
+      const goal = own(goalId);
+      if (goal.status !== "active") throw new GoalError("closed");
+      if (day !== null && (!Number.isInteger(day) || day < 1 || day > 31)) throw new GoalError("invalid");
+      goal.payday = day;
       return view(goal);
     },
 

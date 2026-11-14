@@ -37,6 +37,8 @@ from app.modules.identity import api as identity_api
 from app.modules.identity import (
     codes_api,
     email_checks_api,
+    freeze_api,
+    own_changes_api,
     passkeys_api,
     people_api,
     phone_changes_api,
@@ -50,6 +52,7 @@ from app.modules.identity.codes import CodeService
 from app.modules.identity.devices import DeviceMiddleware
 from app.modules.identity.email_checks import EmailCheckService
 from app.modules.identity.hashing import PasswordHasher
+from app.modules.identity.own_changes import OwnChangeService
 from app.modules.identity.passkeys import PasskeyService
 from app.modules.identity.phone_changes import PhoneChangeService
 from app.modules.identity.pins import PinService
@@ -84,6 +87,7 @@ from app.modules.payments.domain.provider import CollectionsProvider
 from app.modules.payments.settings import PaymentsSettings
 from app.modules.payments.wiring import collections_provider
 from app.modules.payouts import api as payouts_api
+from app.modules.payouts import limits_api as withdrawal_limits_api
 from app.modules.payouts import staff_api as payouts_staff_api
 from app.modules.payouts import (
     staff_bank_api,
@@ -93,6 +97,7 @@ from app.modules.payouts import (
     staff_returns_api,
 )
 from app.modules.payouts.wiring import PayoutNameSettings
+from app.modules.platform_settings import api as platform_settings_api
 from app.modules.reconciliation import api as reconciliation_api
 from app.modules.reconciliation import transfers_api as pot_transfers_api
 from app.modules.reconciliation.domain.wallet import WalletBalances
@@ -188,6 +193,9 @@ def create_app(
         clock,
         settings.client_app(),
     )
+    app.state.own_changes = OwnChangeService(
+        database, clock, hasher, app.state.codes, app.state.email_checks
+    )
     install_error_handlers(app)
     # The last middleware added is the outermost, so the request ID exists before anything runs.
     # Inside CORS, so a browser can read the maintenance answer and show its screen.
@@ -247,6 +255,8 @@ def create_app(
         *reconciliation_api.routers,
         *pot_transfers_api.routers,
         *closures_api.routers,
+        freeze_api.router,
+        own_changes_api.router,
     ):
         app.include_router(router)
     app.include_router(payments_api.create_router(collections))
@@ -255,7 +265,11 @@ def create_app(
     app.include_router(notification_hooks.create_router(email_hooks))
     app.include_router(payment_routes.create_client_router(collections))
     app.include_router(payment_routes.staff_router)
-    for router in bank_account_routes.routers:
+    for router in (
+        *bank_account_routes.routers,
+        *platform_settings_api.routers,
+        *withdrawal_limits_api.routers,
+    ):
         app.include_router(router)
     for router in reassignment_routes.routers:
         app.include_router(router)

@@ -339,6 +339,88 @@ async def test_a_rate_change_takes_two_people_over_http(api: Api) -> None:
     assert (sent_back.status_code, sent_back.json()["status"]) == (200, "sent_back")
 
 
+async def test_a_new_product_takes_two_people_over_http(api: Api) -> None:
+    _, first = await signed_in_staff(api, "finance")
+    _, second = await signed_in_staff(api, "finance")
+    code_ = f"HTTP-{secrets.randbelow(10**6)}"
+    proposed = await api.http.post(
+        "/staff/product-changes/new-product",
+        json={
+            "code": code_,
+            "name": "364 Day Treasury Bill",
+            "kind": "treasury_bill",
+            "currency": "UGX",
+            "term_days": 364,
+            "minimum_minor": 500_000,
+            "interest_paid": "at_maturity",
+            "annual_rate_bps": 1500,
+            "tax_bps": 1500,
+            "reason": "The 364 day bill",
+        },
+        headers=first,
+    )
+    assert proposed.status_code == 201, proposed.text
+    change = proposed.json()
+    assert (change["action"], change["product_status"]) == ("create", "draft")
+    assert change["first_rate"]["client_rate_percent"] == "12.75"
+    own = await api.http.post(f"/staff/product-changes/{change['id']}/approve", headers=first)
+    assert own.status_code == 403
+    waiting = await api.http.get(
+        "/staff/product-changes", params={"status": "proposed"}, headers=second
+    )
+    assert change["id"] in [item["id"] for item in waiting.json()]
+    inbox = await api.http.get("/staff/approvals", headers=second)
+    assert change["id"] in [item["id"] for item in inbox.json()["items"]]
+    approved = await api.http.post(f"/staff/product-changes/{change['id']}/approve", headers=second)
+    assert (approved.status_code, approved.json()["status"]) == (200, "approved")
+    products = await api.http.get("/staff/products", headers=second)
+    assert {p["code"]: p["status"] for p in products.json()}[code_] == "draft"
+    paused = await api.http.post(
+        "/staff/product-changes/status",
+        json={"product_code": code_, "to": "paused", "reason": "Never opened"},
+        headers=first,
+    )
+    assert (paused.status_code, paused.json()["error"]["fields"][0]["code"]) == (
+        422,
+        "not_live",
+    )
+    reach = await api.http.get(f"/staff/products/{code_}/reach", headers=second)
+    assert reach.json() == {
+        "product_code": code_,
+        "running_investments": 0,
+        "awaiting_payment": 0,
+        "clients": 0,
+        "open_goals": 0,
+        "active_plans": 0,
+        "paused_plans": 0,
+    }
+
+
+async def test_new_terms_over_http_are_sent_back_with_a_note(api: Api) -> None:
+    _, first = await signed_in_staff(api, "finance")
+    _, second = await signed_in_staff(api, "admin")
+    proposed = await api.http.post(
+        "/staff/product-changes/new-terms",
+        json={
+            "product_code": "TREA-182",
+            "name": "182 Day T-Bill",
+            "kind": "treasury_bill",
+            "term_days": 182,
+            "minimum_minor": 200_000,
+            "interest_paid": "at_maturity",
+            "reason": "Shorter name",
+        },
+        headers=first,
+    )
+    assert proposed.status_code == 201, proposed.text
+    sent_back = await api.http.post(
+        f"/staff/product-changes/{proposed.json()['id']}/send-back",
+        json={"note": "Keep the full name"},
+        headers=second,
+    )
+    assert (sent_back.status_code, sent_back.json()["status"]) == (200, "sent_back")
+
+
 async def test_each_staff_route_checks_its_permission(api: Api) -> None:
     _, support = await signed_in_staff(api, "support")
     for path in (
@@ -348,6 +430,8 @@ async def test_each_staff_route_checks_its_permission(api: Api) -> None:
         "/staff/investments",
         "/staff/interest-runs",
         "/staff/maturities",
+        "/staff/product-changes",
+        "/staff/products/TREA-91/reach",
     ):
         response = await api.http.get(path, headers=support)
         assert (response.status_code, code(response)) == (403, "forbidden"), path
@@ -370,6 +454,15 @@ async def test_each_staff_route_checks_its_permission(api: Api) -> None:
         "/staff/rate-proposals/x/send-back", json={"note": "x"}, headers=support
     )
     assert (sent_back.status_code, code(sent_back)) == (403, "forbidden")
+    paused = await api.http.post(
+        "/staff/product-changes/status",
+        json={"product_code": "TREA-91", "to": "paused", "reason": "x"},
+        headers=support,
+    )
+    assert (paused.status_code, code(paused)) == (403, "forbidden")
+    for action in ("approve", "withdraw"):
+        response = await api.http.post(f"/staff/product-changes/x/{action}", headers=support)
+        assert (response.status_code, code(response)) == (403, "forbidden"), action
     _, client = await signed_in_client(api, approved=False)
     assert (await api.http.get("/staff/investments", headers=client)).status_code == 401
 

@@ -9,7 +9,9 @@ changes, Finvest's own money in the buffer, the payments of tax to URA, the paym
 the right client, next of kin, the answers to the investing questions, the requests to close an
 account, the journals sent to the accounting system, who set the bank account clients pay
 into, why a payout send waited, the account code maps, the deposits taken back as mistakes,
-what clients owe for them or the runs staff asked for again."""
+what clients owe for them, the runs staff asked for again, staff notes and actions on a
+client, the account freezes, why an investment was sent to another client, the platform
+settings, the withdrawal limit changes or the paydays clients named."""
 
 import os
 from collections.abc import Iterator
@@ -22,6 +24,18 @@ from tests.support.database import TestDatabase
 pytestmark = pytest.mark.integration
 
 ROWS = {
+    "0310_identity_unlock_keys": (
+        "INSERT INTO identity_clients (id, phone, status, created_at) VALUES "
+        "('-Nabc0000000000000B1', '+256772123456', 'unclaimed', now()); "
+        "INSERT INTO identity_sessions (id, actor_kind, actor_id, token_hash, second_step, "
+        "transport, created_at, last_seen_at, idle_expires_at, absolute_expires_at) "
+        "VALUES ('-Nabc0000000000000A1', 'client', '-Nabc0000000000000B1', "
+        "decode(repeat('00', 32), 'hex'), 'passkey', 'token', now(), now(), now(), now()); "
+        "INSERT INTO identity_app_pins (session_id, pin_hash, created_at, unlock_key_hash, "
+        "unlock_key_set_at) VALUES ('-Nabc0000000000000A1', 'x', now(), "
+        "decode(repeat('00', 32), 'hex'), now())",
+        "refusing to drop unlock keys that are in use",
+    ),
     "0183_monitoring_transfers": (
         "BEGIN; SELECT set_config('finvest.actor_kind', 'system', true); "
         "INSERT INTO monitoring_transactions (id, client_id, kind, source_id, currency, "
@@ -821,6 +835,23 @@ ROWS = {
         "ALTER TABLE investments ENABLE TRIGGER USER; COMMIT",
         "refusing to drop the record of investment transfers",
     ),
+    "0243_transfer_purposes": (
+        "BEGIN; ALTER TABLE investments DISABLE TRIGGER USER; "
+        "ALTER TABLE investment_transfers DISABLE TRIGGER USER; "
+        "INSERT INTO investments (id, client_id, product_id, currency, principal_minor, "
+        "annual_rate_bps, tax_bps, term_days, at_maturity, created_at, pay_by, updated_at) "
+        "VALUES ('-Nabc0000000000000A1', '-Nabc0000000000000B1', 'FvProduct1TREA91_001', "
+        "'UGX', 1000000, 1250, 1500, 91, 'roll_over', now(), now() + interval '72 hours', "
+        "now()); "
+        "INSERT INTO investment_transfers (id, investment_id, sender_client_id, "
+        "recipient_client_id, sender_name, recipient_name, currency, amount_minor, whole, "
+        "purpose, status, held, requested_at) VALUES ('-Nabc0000000000000T1', "
+        "'-Nabc0000000000000A1', '-Nabc0000000000000B1', '-Nabc0000000000000B2', 'Amara N.', "
+        "'Brian K.', 'UGX', 500000, false, 'gift', 'waiting', false, now()); "
+        "ALTER TABLE investment_transfers ENABLE TRIGGER USER; "
+        "ALTER TABLE investments ENABLE TRIGGER USER; COMMIT",
+        "refusing to drop why investments were sent",
+    ),
     "0242_organisations": (
         "BEGIN; ALTER TABLE organisations DISABLE TRIGGER USER; "
         "INSERT INTO organisations (id, kind, name, applicant_id, approvals_needed, created_at) "
@@ -905,6 +936,21 @@ ROWS = {
         "now())",
         "refusing to drop staff re-confirmations",
     ),
+    "0236_client_own_changes": (
+        "INSERT INTO identity_codes (id, purpose, channel, phone, actor_id, bound_to, "
+        "code_hash, created_at, expires_at) VALUES ('-Nabc0000000000000A1', 'phone_change', "
+        "'sms', '+256772123456', '-Nabc0000000000000B1', '-Nabc0000000000000C1', "
+        "decode(repeat('00', 32), 'hex'), now(), now())",
+        "refusing to drop number change codes",
+    ),
+    "0235_client_freezes": (
+        "INSERT INTO identity_clients (id, phone, password_hash, password_changed_at, status, "
+        "created_at) VALUES ('-Nabc0000000000000B1', '+256772123456', 'x', now(), 'active', "
+        "now()); "
+        "INSERT INTO identity_client_freezes (id, client_id, frozen_at, frozen_in) VALUES "
+        "('-Nabc0000000000000A1', '-Nabc0000000000000B1', now(), pg_current_xact_id())",
+        "refusing to drop the record of clients who froze their accounts",
+    ),
     "0230_kyc_next_of_kin": (
         "INSERT INTO kyc_next_of_kin_lists (client_id, people, updated_at) "
         "VALUES ('-Nabc0000000000000B1', 0, now())",
@@ -956,6 +1002,23 @@ ROWS = {
         "deferred_for = 'wallet_short' WHERE payout_id = '-Nabc0000000000000A1'; COMMIT",
         "refusing to drop why payout sends were deferred",
     ),
+    "0321_finance_month_closes": (
+        "BEGIN; SELECT set_config('finvest.actor_kind', 'staff', true); "
+        "SELECT set_config('finvest.actor_id', '-Nabc0000000000000S1', true); "
+        "INSERT INTO finance_month_closes (id, month, books, books_sha256, reason, status, "
+        "proposed_by, proposed_at) VALUES ('-Nabc0000000000000A1', '2026-10-01', '[]', "
+        "repeat('a', 64), 'Test', 'proposed', '-Nabc0000000000000S1', now()); COMMIT",
+        "refusing to drop month closes",
+    ),
+    "0320_report_schedules": (
+        "BEGIN; SELECT set_config('finvest.actor_kind', 'staff', true); "
+        "SELECT set_config('finvest.actor_id', '-Nabc0000000000000S1', true); "
+        "INSERT INTO report_schedules (id, report_key, frequency, currency, recipients, reason, "
+        "status, proposed_by, proposed_at) VALUES ('-Nabc0000000000000A1', 'daily_position', "
+        "'daily', 'UGX', ARRAY['-Nabc0000000000000S2']::push_id[], 'Test', 'proposed', "
+        "'-Nabc0000000000000S1', now()); COMMIT",
+        "refusing to drop report schedules",
+    ),
     "0290_finance_code_maps": (
         "BEGIN; SELECT set_config('finvest.actor_kind', 'staff', true); "
         "SELECT set_config('finvest.actor_id', '-Nabc0000000000000S1', true); "
@@ -1005,6 +1068,23 @@ ROWS = {
         "'-Nabc0000000000000A1', 'open', '-Nabc0000000000000B1', 'UGX', 1000, 'Never arrived', "
         "'-Nabc0000000000000S1', now())",
         "refusing to drop the record of mistaken deposit receivables",
+    ),
+    "0340_platform_settings": (
+        # The guard admits only staff proposing in their own name.
+        "ALTER TABLE platform_settings DISABLE TRIGGER platform_settings_guard; "
+        "INSERT INTO platform_settings (id, key, value, reason, proposed_by, proposed_at) "
+        "VALUES ('-Nabc0000000000000A1', 'staff_idle_minutes', '15', 'Shorter sessions', "
+        "'-Nabc0000000000000S1', now())",
+        "refusing to drop platform settings that hold records",
+    ),
+    "0341_withdrawal_limit_changes": (
+        # The guard admits only staff proposing in their own name.
+        "ALTER TABLE withdrawal_limit_changes DISABLE TRIGGER withdrawal_limit_changes_guard; "
+        "INSERT INTO withdrawal_limit_changes (id, effective_from, currency, "
+        "mobile_money_per_payout, reason, proposed_by, proposed_at) VALUES "
+        "('-Nabc0000000000000A1', DATE '2090-01-01', 'UGX', 1000000, 'Lower limits', "
+        "'-Nabc0000000000000S1', now())",
+        "refusing to drop withdrawal limit changes that hold records",
     ),
     "0224_identity_recovery_asks": (
         "INSERT INTO identity_clients (id, phone, status, created_at) VALUES "
@@ -1062,6 +1142,100 @@ ROWS = {
         "ALTER TABLE investment_corrections ENABLE TRIGGER USER; "
         "ALTER TABLE investments ENABLE TRIGGER USER; COMMIT",
         "refusing to drop the record of held money staff sent on",
+    ),
+    "0350_console_client_notes": (
+        "INSERT INTO identity_clients (id, phone, status, created_at) VALUES "
+        "('-Nabc0000000000000B1', '+256772123456', 'unclaimed', now()); "
+        "INSERT INTO identity_staff (id, email, name, role, created_at) "
+        "VALUES ('-Nabc0000000000000S1', 'ada@example.com', 'Ada Nakato', 'support', now()); "
+        "INSERT INTO console_client_notes (id, client_id, body, written_by, written_at) "
+        "VALUES ('-Nabc0000000000000A1', '-Nabc0000000000000B1', 'Called', "
+        "'-Nabc0000000000000S1', now())",
+        "refusing to drop staff notes that hold records",
+    ),
+    "0351_console_client_actions": (
+        # The guard admits only active staff proposing in their own name.
+        "ALTER TABLE console_client_actions DISABLE TRIGGER console_client_actions_guard; "
+        "INSERT INTO identity_clients (id, phone, status, created_at) VALUES "
+        "('-Nabc0000000000000B1', '+256772123456', 'unclaimed', now()); "
+        "INSERT INTO identity_staff (id, email, name, role, created_at) "
+        "VALUES ('-Nabc0000000000000S1', 'ada@example.com', 'Ada Nakato', 'support', now()); "
+        "INSERT INTO console_client_actions (id, client_id, kind, reason, proposed_by, "
+        "proposed_at) VALUES ('-Nabc0000000000000A1', '-Nabc0000000000000B1', 'pin_reset', "
+        "'Phone lost', '-Nabc0000000000000S1', now())",
+        "refusing to drop staff actions that hold records",
+    ),
+    "0352_payout_client_limits": (
+        "ALTER TABLE console_client_actions DISABLE TRIGGER console_client_actions_guard; "
+        "INSERT INTO identity_clients (id, phone, status, created_at) VALUES "
+        "('-Nabc0000000000000B1', '+256772123456', 'unclaimed', now()); "
+        "INSERT INTO identity_staff (id, email, name, role, created_at) "
+        "VALUES ('-Nabc0000000000000S1', 'ada@example.com', 'Ada Nakato', 'support', now()); "
+        "INSERT INTO console_client_actions (id, client_id, kind, details, reason, proposed_by, "
+        "proposed_at) VALUES ('-Nabc0000000000000A1', '-Nabc0000000000000B1', "
+        "'withdrawal_limits', '{}', 'Lower them', '-Nabc0000000000000S1', now())",
+        "refusing to drop client withdrawal limits that hold records",
+    ),
+    "0353_documents_staff_statements": (
+        "ALTER TABLE console_client_actions DISABLE TRIGGER console_client_actions_guard; "
+        "INSERT INTO identity_clients (id, phone, status, created_at) VALUES "
+        "('-Nabc0000000000000B1', '+256772123456', 'unclaimed', now()); "
+        "INSERT INTO identity_staff (id, email, name, role, created_at) "
+        "VALUES ('-Nabc0000000000000S1', 'ada@example.com', 'Ada Nakato', 'support', now()); "
+        "INSERT INTO console_client_actions (id, client_id, kind, details, reason, proposed_by, "
+        "proposed_at) VALUES ('-Nabc0000000000000A1', '-Nabc0000000000000B1', 'statement', "
+        "'{}', 'Asked for one', '-Nabc0000000000000S1', now())",
+        "refusing to drop statements staff sent that hold records",
+    ),
+    "0354_staff_withdrawals": (
+        "ALTER TABLE console_client_actions DISABLE TRIGGER console_client_actions_guard; "
+        "INSERT INTO identity_clients (id, phone, status, created_at) VALUES "
+        "('-Nabc0000000000000B1', '+256772123456', 'unclaimed', now()); "
+        "INSERT INTO identity_staff (id, email, name, role, created_at) "
+        "VALUES ('-Nabc0000000000000S1', 'ada@example.com', 'Ada Nakato', 'support', now()); "
+        "INSERT INTO console_client_actions (id, client_id, kind, details, reason, proposed_by, "
+        "proposed_at) VALUES ('-Nabc0000000000000A1', '-Nabc0000000000000B1', 'withdrawal', "
+        '\'{"investment_id": "i", "destination_id": "d", "message_id": "m"}\', '
+        "'Asked in chat', '-Nabc0000000000000S1', now())",
+        "refusing to drop withdrawals staff started that hold records",
+    ),
+    "0302_goal_paydays": (
+        "BEGIN; SELECT set_config('finvest.actor_kind', 'client', true); "
+        "SELECT set_config('finvest.actor_id', '-Nabc0000000000000B1', true); "
+        "INSERT INTO goals (id, client_id, name, category, currency, target_minor, "
+        "product_code, payday, created_at, updated_at) VALUES ('-Nabc0000000000000A1', "
+        "'-Nabc0000000000000B1', 'School fees', 'school_fees', 'UGX', 2000000, 'TREA-91', 25, "
+        "now(), now()); COMMIT",
+        "refusing to drop the paydays clients named",
+    ),
+    "0303_goal_locks": (
+        "BEGIN; SELECT set_config('finvest.actor_kind', 'client', true); "
+        "SELECT set_config('finvest.actor_id', '-Nabc0000000000000B1', true); "
+        "INSERT INTO goals (id, client_id, name, category, currency, target_minor, "
+        "product_code, locked_until, created_at, updated_at) VALUES ('-Nabc0000000000000A1', "
+        "'-Nabc0000000000000B1', 'School fees', 'school_fees', 'UGX', 2000000, 'TREA-91', "
+        "DATE '2099-01-01', now(), now()); COMMIT",
+        "refusing to drop the locks clients set",
+    ),
+    "0360_investment_product_changes": (
+        "BEGIN; SELECT set_config('finvest.actor_kind', 'staff', true); "
+        "SELECT set_config('finvest.actor_id', '-Nabc0000000000000S1', true); "
+        "INSERT INTO investment_product_changes (id, action, code, name, kind, currency, "
+        "term_days, minimum_minor, interest_paid, product_status, first_annual_rate_bps, "
+        "first_tax_bps, reason, proposed_by, proposed_at) VALUES ('-Nabc0000000000000A1', "
+        "'create', 'TREA-28', 'Treasury bill, 28 days', 'treasury_bill', 'UGX', 28, 100000, "
+        "'at_maturity', 'draft', 1000, 1500, 'A shorter bill', '-Nabc0000000000000S1', now()); "
+        "COMMIT",
+        "refusing to drop product changes",
+    ),
+    "0334_investment_bookings": (
+        "BEGIN; SELECT set_config('finvest.actor_kind', 'staff', true); "
+        "SELECT set_config('finvest.actor_id', '-Nabc0000000000000S1', true); "
+        "INSERT INTO investment_bookings (id, client_id, product_id, currency, principal_minor, "
+        "at_maturity, reason, proposed_by, proposed_at) VALUES ('-Nabc0000000000000A1', "
+        "'-Nabc0000000000000B1', 'FvProduct1TREA91_001', 'UGX', 1000000, 'roll_over', "
+        "'The client called the office', '-Nabc0000000000000S1', now()); COMMIT",
+        "refusing to drop the record of investments staff booked",
     ),
 }
 

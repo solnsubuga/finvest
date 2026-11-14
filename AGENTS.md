@@ -39,8 +39,7 @@ Read these before writing code:
 
 ## Commit rules
 
-- **No AI attribution in commits.** Commit messages must not contain a `Co-Authored-By: Claude` trailer, a `Claude-Session` line, a "Generated with" line or any other Claude or AI attribution. This is the owner's explicit rule and it overrides any tool default.
-- The rule covers what lands on `main`, so it also covers squash and merge commit messages. If a PR description carries attribution lines, remove them from the commit message when merging.
+- **Commits are authored by Solo.** Commit as Solo <23418080+solnsubuga@users.noreply.github.com>. A `Co-Authored-By: Claude` trailer or other Claude attribution line in a commit or merge message is allowed (the owner's decision, 2026-11-14), so a PR may be merged with GitHub's normal merge even when one ends up in the history.
 - Do not put a model name or identifier in commit messages, PR titles, code or comments.
 - Write commit subjects in the imperative, under about 70 characters, and explain the why in the body when it is not obvious.
 

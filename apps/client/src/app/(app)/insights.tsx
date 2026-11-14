@@ -223,7 +223,9 @@ export default function Insights() {
       <Txt size={13} color={colors.limeText}>
         {next.atMaturity === "pay_out"
           ? `${next.productName} pays ${formatMoney(next.amount)} to your account on ${formatLongDay(next.on)}. You can still choose to roll it over before then.`
-          : `${next.productName} rolls over on ${formatLongDay(next.on)} with ${formatMoney(next.amount)}, so it keeps earning. You can still choose to be paid out before then.`}
+          : next.atMaturity === "pay_interest"
+            ? `${next.productName} pays its interest to your account on ${formatLongDay(next.on)}, and what you put in starts another term.`
+            : `${next.productName} rolls over on ${formatLongDay(next.on)} with ${formatMoney(next.amount)}, so it keeps earning. You can still choose to be paid out before then.`}
       </Txt>
     </View>
   ) : null;
@@ -378,7 +380,9 @@ function UpcomingRow({ item, first }: { item: Upcoming; first: boolean }) {
         <Txt size={12} color={colors.muted}>
           {item.atMaturity === "pay_out"
             ? "Pays out to your account"
-            : "Rolls over and keeps earning"}
+            : item.atMaturity === "pay_interest"
+              ? "Pays the interest, keeps the rest invested"
+              : "Rolls over and keeps earning"}
         </Txt>
       </View>
       <Txt size={14} weight="bold">

@@ -80,8 +80,9 @@ variable "deploy_ssh_public_key" {
 }
 
 variable "ssh_source_addresses" {
-  description = "Addresses allowed to reach SSH. The Provision run adds its own address only while it prepares the host."
+  description = "Addresses allowed to reach SSH. Optional: empty means only the Provision or deploy run, while it works."
   type        = list(string)
+  default     = []
 }
 
 variable "provisioner_address" {
@@ -143,4 +144,15 @@ variable "github_owner" {
 variable "github_repository" {
   description = "Name of the GitHub repository whose environment receives the deployment settings."
   type        = string
+}
+
+variable "admin_office_networks" {
+  description = "Office addresses (CIDR) allowed into the back office through Cloudflare Access. Empty: any address, with a staff email."
+  type        = list(string)
+  default     = []
+
+  validation {
+    condition     = alltrue([for n in var.admin_office_networks : can(cidrhost(n, 0))])
+    error_message = "admin_office_networks entries must be CIDR ranges, such as 203.0.113.10/32."
+  }
 }

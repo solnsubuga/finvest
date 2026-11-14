@@ -37,6 +37,7 @@ function fake(standing: Standing): ProfileClient & { asked: (string | null)[] } 
     getRiskProfile: fail,
     answerRiskQuestions: fail,
     downloadMyData: fail,
+    freezeAccount: fail,
     getClosure: async () => closure,
     askToClose: async (reason) => {
       asked.push(reason);

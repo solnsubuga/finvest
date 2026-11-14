@@ -98,10 +98,12 @@ export default function PayOutMatured() {
               Ready for you
             </Txt>
             <Txt size={36} weight="extrabold" lineHeight={42} color={colors.white} style={{ letterSpacing: -0.8 }} testID="pay-out-amount">
-              {formatAmount(loaded.value.investment.value)}
+              {formatAmount(loaded.value.investment.waiting ?? loaded.value.investment.value)}
             </Txt>
             <Txt size={fontSizes.sm} weight="semibold" color={colors.lime}>
-              {`${loaded.value.investment.productName} has matured. No fee.`}
+              {loaded.value.investment.rolledIntoId
+                ? `The interest from ${loaded.value.investment.productName}. What you put in started another term. No fee.`
+                : `${loaded.value.investment.productName} has matured. No fee.`}
             </Txt>
           </View>
           <View style={{ gap: 8 }}>

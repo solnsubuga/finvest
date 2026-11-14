@@ -1,7 +1,7 @@
 import { readdirSync } from "fs";
 import { join } from "path";
 
-import { destinations, tabBarDestinations } from "@/navigation/destinations";
+import { destinations, sidebarGroups, tabBarDestinations } from "@/navigation/destinations";
 
 describe("destinations", () => {
   it("has a route file for every destination and a destination for every route file", () => {
@@ -25,5 +25,22 @@ describe("destinations", () => {
     expect(destinations.some((destination) => /wallet|balance/i.test(destination.label))).toBe(
       false,
     );
+  });
+
+  it("groups every destination in the sidebar exactly once", () => {
+    const grouped = sidebarGroups.flatMap((group) => group.destinations.map((d) => d.name));
+    expect([...grouped].sort()).toEqual(destinations.map((d) => d.name).sort());
+    expect(new Set(grouped).size).toBe(grouped.length);
+  });
+
+  it("puts Home alone at the top, then Money, Planning and Account", () => {
+    expect(
+      sidebarGroups.map((group) => [group.heading, group.destinations.map((d) => d.label)]),
+    ).toEqual([
+      [null, ["Home"]],
+      ["Money", ["Invest", "Portfolio", "Activity"]],
+      ["Planning", ["Goals", "Insights"]],
+      ["Account", ["Profile", "Documents", "Help"]],
+    ]);
   });
 });
