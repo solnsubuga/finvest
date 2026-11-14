@@ -118,7 +118,7 @@ class ReturnOut(Contract):
     ledger_entry_id: PushId | None
     payout: ReturnedPayoutOut
     line: ReturnLineOut | None = Field(
-        description="The line that brought the money back. Null once it leaves the search window."
+        description="The line that brought the money back. Null only if not on the payout's pot."
     )
 
 

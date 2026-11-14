@@ -112,6 +112,13 @@ _FIND = text(
     "     OR (line.amount_minor = :amount_minor AND statement.currency = :currency)) "
     "ORDER BY line.value_date, line.id LIMIT :limit"
 )
+_LINE_BY_ID = text(
+    "SELECT line.id, statement.source, statement.account_reference, statement.currency, "
+    "line.value_date, line.direction, line.amount_minor, line.reference, line.narrative "
+    "FROM reconciliation_statement_lines AS line "
+    "JOIN reconciliation_statements AS statement ON statement.id = line.statement_id "
+    "WHERE line.id = :id"
+)
 _ADDS_UP = "reconciliation_statements_adds_up, reconciliation_statement_lines_adds_up"
 _REFUSALS = {
     "uq_reconciliation_statements_pot_day": "statement_already_imported",
@@ -279,6 +286,13 @@ async def get_statement_by_id(session: AsyncSession, statement_id: str) -> Impor
         Money(int(row.closing_minor), currency),
         row.line_count,
     )
+
+
+async def get_statement_line(session: AsyncSession, line_id: str) -> StatementLineView | None:
+    """One imported line by its ID, for a module that recorded it as evidence and shows it again.
+    Staff transactions and the worker only."""
+    row = (await session.execute(_LINE_BY_ID, {"id": line_id})).one_or_none()
+    return None if row is None else _line(row)
 
 
 async def statement_days(
