@@ -19,7 +19,7 @@ from app.infrastructure.sealing import Sealer
 from app.infrastructure.storage import FileStorage, InvalidFile, NewFile, StorageError
 from app.modules.identity.api import CurrentClient, require_confirmed, require_permission
 from app.modules.identity.service import StaffSession
-from app.modules.kyc import liveness, service
+from app.modules.kyc import liveness, poses, service
 from app.modules.kyc import phone_names as phone_lookups
 from app.modules.kyc.domain import names
 from app.modules.kyc.domain.checks import (
@@ -29,10 +29,19 @@ from app.modules.kyc.domain.checks import (
     PhotoKind,
     mask_document_number,
     photo_matches_type,
+    required_photos,
     staff_moves,
 )
 from app.modules.kyc.domain.liveness import LivenessProvider, LivenessStatus
 from app.modules.kyc.domain.phone_names import PhoneName
+from app.modules.kyc.domain.poses import (
+    FaceQuality,
+    FrameReading,
+    Pose,
+    Quality,
+    QualityUnavailable,
+    frame_problems,
+)
 from app.modules.kyc.domain.provider import AutomaticCheck, IdentityProvider, Verdict
 from app.modules.screening import contract as screening
 from app.modules.screening.contract import Outcome as ScreeningOutcome
@@ -114,6 +123,11 @@ class ClientCheck(Contract):
     client_message: str | None
     submitted_at: datetime | None
     account_number: str | None
+    # True when the selfie is the guided one: after the straight-on selfie, a frame for each
+    # pose (`PUT /poses/{pose}`). Missing poses are listed in `missing` as `pose_<pose>`.
+    guided_selfie: bool = False
+    # The pose frames kept with the current selfie.
+    poses: list[Pose] = Field(default_factory=list)
 
 
 class ClientCheckEnvelope(Contract):
@@ -144,6 +158,15 @@ class StaffPhoto(Contract):
     kind: PhotoKind
     # True for a selfie captured by a liveness check that saw a live person.
     live: bool = False
+
+
+class PoseLink(Contract):
+    id: PushId
+    pose: Pose
+    # The angles the face quality service read, in degrees.
+    yaw: int
+    pitch: int
+    url: str
 
 
 class LivenessAttempt(Contract):
@@ -221,6 +244,8 @@ class PhotoLink(Contract):
 
 class PhotoLinks(Contract):
     photos: list[PhotoLink]
+    # The guided selfie's pose frames, if it was taken that way.
+    poses: list[PoseLink] = Field(default_factory=list)
     expires_at: datetime
 
 
@@ -237,8 +262,11 @@ class AskForPhotosBody(Contract):
     client_message: str = Field(max_length=300)
 
 
-def _client_check(view: service.CheckView) -> ClientCheck:
+def _client_check(view: service.CheckView, *, guided: bool = False) -> ClientCheck:
     details = view.details
+    missing = list(view.missing)
+    if guided and PhotoKind.SELFIE in required_photos(view.document_type):
+        missing += [f"pose_{pose.value}" for pose in Pose if pose not in view.poses]
     return ClientCheck(
         id=view.id,
         status=view.status,
@@ -261,12 +289,14 @@ def _client_check(view: service.CheckView) -> ClientCheck:
             )
             for p in view.photos
         ],
-        missing=view.missing,
+        missing=missing,
         retake_photos=sorted(view.retake_photos),
         retaken=sorted(view.retaken),
         client_message=view.client_message,
         submitted_at=view.submitted_at,
         account_number=view.account_number,
+        guided_selfie=guided,
+        poses=[pose for pose in Pose if pose in view.poses],
     )
 
 
@@ -353,8 +383,13 @@ def create_routers(
     provider: IdentityProvider,
     storage: FileStorage,
     liveness_provider: LivenessProvider | None = None,
+    face_quality: FaceQuality | None = None,
 ) -> list[APIRouter]:
-    """The routes for this process. Without the data key they answer `unavailable`."""
+    """The routes for this process. Without the data key they answer `unavailable`.
+
+    With `face_quality`, the selfie is the guided one: the selfie and each pose frame are read
+    by it before they are kept, and a check is handed in only with all four poses.
+    """
     client_router = APIRouter(
         prefix="/client/identity-check", tags=["identity checks"], responses=_REFUSALS
     )
@@ -379,6 +414,32 @@ def create_routers(
         held: Clock = request.app.state.clock
         return held
 
+    guided = face_quality is not None
+
+    def _check(view: service.CheckView) -> ClientCheck:
+        return _client_check(view, guided=guided)
+
+    async def frame_problems_of(
+        data: bytes, pose: Pose | None, opposite: FrameReading | None
+    ) -> tuple[FrameReading, tuple[Quality, ...]]:
+        """Read a frame with the face quality service. Outside any transaction: a provider
+        call never holds one open. It changes nothing, so a failure is simply tried again."""
+        assert face_quality is not None
+        try:
+            reading = await face_quality.read(data)
+        except QualityUnavailable:
+            raise ApplicationError("unavailable") from None
+        return reading, frame_problems(pose, reading, opposite)
+
+    def refused(pose: Pose | None, problems: tuple[Quality, ...]) -> ApplicationError:
+        return ApplicationError(
+            "validation_failed",
+            fields=[
+                FieldProblem(field_path=["photo" if pose is None else "frame"], code=p.value)
+                for p in problems
+            ],
+        )
+
     # The client's own check ------------------------------------------------------------------
 
     @client_router.get("")
@@ -386,7 +447,7 @@ def create_routers(
         """The signed-in client's check, or `null` before they have chosen a document."""
         async with database(request).actor_transaction(client.actor) as session:
             view = await service.check_for_client(session, seal(), client.actor)
-        return ClientCheckEnvelope(check=None if view is None else _client_check(view))
+        return ClientCheckEnvelope(check=None if view is None else _check(view))
 
     @client_router.put("/document")
     async def choose_document(
@@ -402,7 +463,7 @@ def create_routers(
                 body.document_country,
                 clock(request),
             )
-        return _client_check(view)
+        return _check(view)
 
     @client_router.put("/photos/{kind}")
     async def add_photo(
@@ -425,6 +486,11 @@ def create_routers(
                 "validation_failed",
                 fields=[FieldProblem(field_path=["photo"], code="not_an_image_of_that_type")],
             )
+        if guided and kind is PhotoKind.SELFIE:
+            # The straight-on selfie of the guided selfie: only a good one is kept.
+            _, problems = await frame_problems_of(data, None, None)
+            if problems:
+                raise refused(None, problems)
         photo_id = push_id()
         key = service.photo_key(check_id, photo_id)
         try:
@@ -456,7 +522,74 @@ def create_routers(
             raise
         if view is None:
             raise ApplicationError("not_found")
-        return _client_check(view)
+        return _check(view)
+
+    @client_router.put(
+        "/poses/{pose}",
+        responses={422: {"model": ErrorEnvelope, "description": "Take the frame again"}},
+    )
+    async def add_pose_frame(
+        pose: Pose,
+        photo: Annotated[UploadFile, File(description="JPEG, PNG or WebP, at most 10 MiB")],
+        client: CurrentClient,
+        request: Request,
+    ) -> ClientCheck:
+        """Send one frame of the guided selfie as `multipart/form-data`, after the selfie.
+
+        It is kept only if the face quality service finds one face, big enough, centred, sharp,
+        well lit, with no glare, eyes open and the head turned the asked way. Otherwise it
+        answers `validation_failed` with one problem per reason (`frame`: `turn_more`,
+        `too_dark`, `wrong_way`...), and the client takes it again.
+        """
+        if face_quality is None:
+            raise ApplicationError("not_found")
+        sealer_now = seal()
+        data = await photo.read(service.MAX_PHOTO_BYTES + 1)
+        content_type = photo.content_type or ""
+        async with database(request).actor_transaction(client.actor) as session:
+            check_id, opposite = await poses.frame_slot(
+                session, client.actor, pose, content_type=content_type, byte_size=len(data)
+            )
+        if not photo_matches_type(content_type, data):
+            raise ApplicationError(
+                "validation_failed",
+                fields=[FieldProblem(field_path=["frame"], code="not_an_image_of_that_type")],
+            )
+        reading, problems = await frame_problems_of(data, pose, opposite)
+        if problems:
+            raise refused(pose, problems)
+        frame_id = push_id()
+        key = poses.frame_key(check_id, frame_id)
+        try:
+            stored = await storage.put(NewFile(key, data, content_type))
+        except InvalidFile:
+            raise ApplicationError(
+                "validation_failed",
+                fields=[FieldProblem(field_path=["frame"], code="unsupported_content_type")],
+            ) from None
+        except StorageError:
+            raise ApplicationError("unavailable") from None
+        try:
+            async with database(request).actor_transaction(client.actor) as session:
+                await poses.add_frame(
+                    session,
+                    client.actor,
+                    pose,
+                    frame_id=frame_id,
+                    content_type=stored.content_type,
+                    byte_size=stored.byte_size,
+                    sha256=stored.sha256,
+                    reading=reading,
+                    clock=clock(request),
+                )
+                view = await service.check_for_client(session, sealer_now, client.actor)
+        except Exception:
+            # The check changed in between, for example it was handed in. Keep no orphan file.
+            await _discard(storage, key, frame_id)
+            raise
+        if view is None:
+            raise ApplicationError("not_found")
+        return _check(view)
 
     @client_router.get("/liveness")
     async def my_liveness(client: CurrentClient, request: Request) -> LivenessState:
@@ -512,7 +645,7 @@ def create_routers(
             view = await service.confirm_details(
                 session, seal(), client.actor, details, clock(request)
             )
-        return _client_check(view)
+        return _check(view)
 
     @client_router.post("/submit")
     async def submit(client: CurrentClient, request: Request) -> ClientCheck:
@@ -525,8 +658,9 @@ def create_routers(
                 provider,
                 clock(request),
                 phone_names=request.app.state.payout_names_on,
+                guided_selfie=guided,
             )
-        return _client_check(view)
+        return _check(view)
 
     # Staff -----------------------------------------------------------------------------------
 
@@ -574,6 +708,7 @@ def create_routers(
             photos = await service.photos_for_viewing(
                 session, seal(), staff.actor, check_id, clock(request)
             )
+            frames = await poses.current_frames(session, check_id)
         return PhotoLinks(
             photos=[
                 PhotoLink(
@@ -587,6 +722,21 @@ def create_routers(
                     ).url,
                 )
                 for photo in photos
+            ],
+            poses=[
+                PoseLink(
+                    id=frame.id,
+                    pose=frame.pose,
+                    yaw=frame.yaw,
+                    pitch=frame.pitch,
+                    url=storage.read_link(
+                        frame.storage_key,
+                        content_type=frame.content_type,
+                        lifetime=VIEW_LINK_LIFETIME,
+                        now=now,
+                    ).url,
+                )
+                for frame in frames
             ],
             expires_at=now + VIEW_LINK_LIFETIME,
         )

@@ -42,6 +42,7 @@ from app.modules.kyc.domain.checks import (
     status_on_submit,
 )
 from app.modules.kyc.domain.phone_names import PhoneName
+from app.modules.kyc.domain.poses import Kept, Pose, poses_apart, poses_missing
 from app.modules.kyc.domain.provider import (
     AutomaticCheck,
     CheckOutcome,
@@ -131,6 +132,8 @@ class CheckView:
     # never happened: every client takes the full ID check.
     source: str = "finvest2"
     retake_requested_at: datetime | None = None
+    # The guided selfie's pose frames kept with the current selfie.
+    poses: frozenset[Pose] = frozenset()
 
     @property
     def retaken(self) -> frozenset[PhotoKind]:
@@ -261,6 +264,15 @@ _REPLACE_PHOTO = text(
     "UPDATE kyc_photos SET replaced_at = :now "
     "WHERE check_id = :check_id AND kind = :kind AND replaced_at IS NULL"
 )
+# A new selfie retires the pose frames taken with the old one, so a set is taken together.
+_RETIRE_POSES = text(
+    "UPDATE kyc_pose_frames SET replaced_at = :now WHERE check_id = :check_id "
+    "AND replaced_at IS NULL"
+)
+_KEPT_POSES = text(
+    "SELECT pose, yaw, pitch FROM kyc_pose_frames WHERE check_id = :check_id "
+    "AND replaced_at IS NULL"
+)
 _INSERT_PHOTO = text(
     "INSERT INTO kyc_photos (id, check_id, kind, storage_key, content_type, byte_size, sha256, "
     "created_at) VALUES (:id, :check_id, :kind, :storage_key, :content_type, :byte_size, "
@@ -358,6 +370,8 @@ async def add_photo(
     photo_id = photo_id or push_id()
     storage_key = photo_key(row.id, photo_id)
     await session.execute(_REPLACE_PHOTO, {"check_id": row.id, "kind": kind.value, "now": now})
+    if kind is PhotoKind.SELFIE:
+        await session.execute(_RETIRE_POSES, {"check_id": row.id, "now": now})
     await session.execute(
         _INSERT_PHOTO,
         {
@@ -420,22 +434,32 @@ async def submit(
     clock: Clock,
     *,
     phone_names: bool = False,
+    guided_selfie: bool = False,
 ) -> CheckView:
     """Hand the check in. It goes to the provider, or to a person when nothing automatic applies.
 
     `phone_names`: a provider reads the name the network holds for a phone number, so the
     client's own number is looked up too (`phone_names.py`).
+    `guided_selfie`: a document with a selfie also needs a kept frame for each pose, the two
+    turns going opposite ways and the two nods too (`poses.py`).
     """
     row = await _editable(session, client)
     view = await _view(session, sealer, row)
     missing = view.missing
     if row.status == CheckStatus.AWAITING_CLIENT:
         missing += [kind.value for kind in PhotoKind if kind in view.retake_photos - view.retaken]
+    kept: dict[Pose, Kept] = {}
+    if guided_selfie and PhotoKind.SELFIE in _required(row):
+        kept = await kept_poses(session, row.id)
+        missing += [f"pose_{pose.value}" for pose in poses_missing(kept)]
     if missing:
         raise ApplicationError(
             "validation_failed",
             fields=[FieldProblem(field_path=[name], code="missing") for name in missing],
         )
+    if kept and not poses_apart(kept):
+        # Left and right, or up and down, were taken the same way: take them again.
+        raise _invalid("poses", "poses_not_apart")
     target = status_on_submit(view.document_type, automatic_checks=provider.automatic)
     _require_move("client", view.status, target)
     flags: list[str] = []
@@ -482,6 +506,12 @@ async def submit(
         await phone_lookups.ask_at_hand_in(session, row.id, row.client_id, clock)
     await _audit(session, client, "change", "kyc.check.submitted", row.id, clock)
     return await _view_by_id(session, sealer, row.id)
+
+
+async def kept_poses(session: AsyncSession, check_id: str) -> dict[Pose, Kept]:
+    """The pose frames kept with the check's current selfie."""
+    rows = await session.execute(_KEPT_POSES, {"check_id": check_id})
+    return {Pose(r.pose): Kept(Pose(r.pose), r.yaw, r.pitch) for r in rows}
 
 
 async def check_for_client(
@@ -1413,6 +1443,7 @@ async def _view(session: AsyncSession, sealer: Sealer, row: Row[Any]) -> CheckVi
         decided_by=row.decided_by,
         account_number=row.account_number,
         source=row.source,
+        poses=frozenset(await kept_poses(session, row.id)),
         photos=tuple(
             PhotoView(
                 id=photo.id,

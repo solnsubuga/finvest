@@ -13,7 +13,8 @@ export function toBooking(json: BookingOut): Booking {
     productCode: json.product_code,
     productName: json.product_name,
     amount: { minor: json.amount_minor, currency: json.currency },
-    atMaturity: json.at_maturity,
+    // A booking never chooses interest to a goal: that is chosen later, on a running investment.
+    atMaturity: json.at_maturity === "interest_to_goal" ? null : json.at_maturity,
     reason: json.reason,
     status: json.status,
     proposedBy: json.proposed_by,
