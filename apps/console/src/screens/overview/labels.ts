@@ -44,6 +44,13 @@ export const KIND_INFO: Record<Kind, KindInfo> = {
     label: "Large payout to release",
     path: (item) => `/review-queue?tab=held&payout=${encodeURIComponent(item.subject)}`,
   },
+  // Undoing, refunding or sending on a matured term's money, decided under Corrections.
+  investment_correction: { label: "Investment correction", path: at("/investments") },
+  // The subject is "interest 2026-11-13" or "maturity 2026-11-14".
+  investment_run: {
+    label: "Run again",
+    path: (item) => (item.subject.startsWith("maturity") ? "/maturities" : "/investments"),
+  },
 };
 
 const SUBJECT_WORDS: Record<string, string> = {
@@ -54,6 +61,9 @@ const SUBJECT_WORDS: Record<string, string> = {
   reset_sign_in: "Reset sign-in",
   mobile_money: "Mobile money",
   bank: "Bank account",
+  unwind: "Undo an investment",
+  refund: "Refund to the client",
+  pay_out: "Send matured money on",
 };
 
 /** The subject in words where it is a code, such as `change_role` or `lock -N…`. */
@@ -63,6 +73,10 @@ export function describeSubject(item: ApprovalItem): string {
     return `${kind === "unlock" ? "Unlock" : "Lock"} client ${client ?? ""}`.trim();
   }
   if (item.kind === "suppression_lift") return `Address ${item.subject}…`;
+  if (item.kind === "investment_run") {
+    const [kind, day] = item.subject.split(" ");
+    return `${kind === "maturity" ? "Maturities" : "Interest"} for ${day ?? ""}`.trim();
+  }
   if (item.kind === "phone_change" || item.kind === "account_closure") return `Client ${item.subject}`;
   return SUBJECT_WORDS[item.subject] ?? item.subject;
 }
