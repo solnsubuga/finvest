@@ -84,7 +84,9 @@ describe("api", () => {
       request_id: "R".repeat(20),
       error: { code: "leaked_password", message: "x", fields: [{ field_path: ["body", "password"], code: "leaked" }] },
     });
-    const error = await api("POST /client/signup/complete", { body: { ticket: "t".repeat(20), password: "p" } }).catch(
+    const error = await api("POST /client/signup/complete", {
+      body: { ticket: "t".repeat(20), password: "p", accepted_terms: true },
+    }).catch(
       (e: unknown) => e,
     );
     expect(error).toBeInstanceOf(ApiError);

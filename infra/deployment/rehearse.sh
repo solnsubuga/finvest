@@ -6,7 +6,7 @@
 #
 #   bash infra/deployment/rehearse.sh
 #
-# Set BACKEND_IMAGE, CONSOLE_IMAGE and SITE_IMAGE (name@sha256:...) to reuse images already in a registry.
+# Set BACKEND_IMAGE, CONSOLE_IMAGE, APP_IMAGE and SITE_IMAGE (name@sha256:...) to reuse images already in a registry.
 set -euo pipefail
 here=$(cd "$(dirname "$0")" && pwd)
 repo=$(cd "$here/../.." && pwd)
@@ -32,16 +32,18 @@ gateway=$(docker network inspect bridge --format '{{(index .IPAM.Config 0).Gatew
 docker run -d --name finvest-rehearsal-db -e POSTGRES_PASSWORD=admin -e POSTGRES_DB=finvest \
   -p 15432:5432 postgres:17.12@sha256:dbb9623d5121b5d2c2c9e2fba56e40193cbb3510d4af7f035b1ab1823aff3205 >/dev/null
 
-if [[ -z ${BACKEND_IMAGE:-} || -z ${CONSOLE_IMAGE:-} || -z ${SITE_IMAGE:-} ]]; then
+if [[ -z ${BACKEND_IMAGE:-} || -z ${CONSOLE_IMAGE:-} || -z ${APP_IMAGE:-} || -z ${SITE_IMAGE:-} ]]; then
   docker run -d --name finvest-rehearsal-registry -p 127.0.0.1:15000:5000 registry:2 >/dev/null
   docker build --quiet -t localhost:15000/finvest-backend:rehearsal "$repo/backend"
   docker build --quiet -t localhost:15000/finvest-console:rehearsal --build-arg VITE_DEPLOY_ENV=staging \
     -f "$here/console.Dockerfile" "$repo"
+  docker build --quiet -t localhost:15000/finvest-app:rehearsal \
+    --build-arg "EXPO_PUBLIC_API_URL=https://$host" -f "$here/app.Dockerfile" "$repo"
   docker build --quiet -t localhost:15000/finvest-site:rehearsal \
     --build-arg PUBLIC_SITE_URL=https://staging.finvestug.com \
     --build-arg PUBLIC_APP_URL=https://app-staging.finvestug.com \
     --build-arg "PUBLIC_API_URL=https://$host" -f "$here/site.Dockerfile" "$repo"
-  for name in backend console site; do
+  for name in backend console app site; do
     docker push --quiet "localhost:15000/finvest-$name:rehearsal" >/dev/null
     digest=$(curl --silent --noproxy '*' --head \
       -H 'Accept: application/vnd.oci.image.index.v1+json' \
@@ -67,7 +69,7 @@ deploy() {
   mkdir -p "$(dirname "$release")"
   DEPLOY_ENVIRONMENT=staging API_DOMAIN=$host ADMIN_DOMAIN=admin-staging.finvestug.com \
     APP_DOMAIN=app-staging.finvestug.com SITE_DOMAINS=staging.finvestug.com \
-    BACKEND_IMAGE=$BACKEND_IMAGE CONSOLE_IMAGE=$CONSOLE_IMAGE SITE_IMAGE=$SITE_IMAGE \
+    BACKEND_IMAGE=$BACKEND_IMAGE CONSOLE_IMAGE=$CONSOLE_IMAGE APP_IMAGE=$APP_IMAGE SITE_IMAGE=$SITE_IMAGE \
     DATABASE_HOST=$gateway DATABASE_PORT=15432 DATABASE_NAME=finvest \
     DATABASE_MIGRATOR_PASSWORD='mig/p@ss' DATABASE_APP_PASSWORD=app-pass DATABASE_WORKER_PASSWORD=worker-pass \
     ORIGIN_TLS_CERT=$(cat "$work/cert.pem") ORIGIN_TLS_KEY=$(cat "$work/key.pem") \
@@ -115,7 +117,18 @@ code() { "${curl_local[@]}" --resolve "$1:$port:127.0.0.1" --output /dev/null --
 "${curl_local[@]}" --resolve "staging.finvestug.com:$port:127.0.0.1" --output /dev/null --dump-header - \
   "https://staging.finvestug.com:$port/" | grep -i '^content-security-policy:' |
   grep -q "script-src 'self'.*connect-src 'self' https://$host "
-[[ $(code app-staging.finvestug.com /) == 503 ]]
+# The client app answers every route with its page, and allows the selfie's camera, WebAssembly
+# and Regula, and calls this environment's API.
+[[ $(code app-staging.finvestug.com /) == 200 ]]
+[[ $(code app-staging.finvestug.com /id-check/poses) == 200 ]]
+[[ $(code app-staging.finvestug.com /face/face_landmarker.task) == 200 ]]
+app_headers=$("${curl_local[@]}" --resolve "app-staging.finvestug.com:$port:127.0.0.1" --output /dev/null \
+  --dump-header - "https://app-staging.finvestug.com:$port/")
+grep -i '^permissions-policy:' <<< "$app_headers" | grep -q 'camera=(self)'
+grep -i '^content-security-policy:' <<< "$app_headers" |
+  grep "script-src 'self' 'wasm-unsafe-eval'" | grep "worker-src 'self' blob: https://wasm.regulaforensics.com" |
+  grep -q "connect-src 'self' https://$host "
+[[ $(grep -ci '^content-security-policy:' <<< "$app_headers") == 1 ]]
 [[ $(code "$host" /.env) == 404 ]]
 # A body far over the API's own limit stops at the edge. Caddy's refusal has no body, so no
 # content type; anything the API answers is JSON, whatever its status (it has limits of its own).
@@ -131,7 +144,7 @@ head -c 13000000 /dev/zero > "$work/huge-body"
 [[ $(post "$work/huge-body" /staff/reconciliation/statements) == '413 ' ]]
 [[ $(code unknown.example /) == 000 ]]
 # Staging asks search engines to leave every address out.
-for name in staging.finvestug.com admin-staging.finvestug.com "$host"; do
+for name in staging.finvestug.com admin-staging.finvestug.com app-staging.finvestug.com "$host"; do
   "${curl_local[@]}" --resolve "$name:$port:127.0.0.1" --output /dev/null --dump-header - \
     "https://$name:$port/" | grep -qi '^x-robots-tag: noindex'
 done

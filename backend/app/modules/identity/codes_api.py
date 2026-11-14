@@ -59,6 +59,9 @@ class SignupTicketView(Contract):
 class SignupComplete(Contract):
     ticket: Token
     password: Password
+    # The client ticked "I agree to the terms and the privacy notice". The versions current now
+    # are recorded with the account.
+    accepted_terms: Literal[True]
 
 
 class SendLoginCode(Contract):

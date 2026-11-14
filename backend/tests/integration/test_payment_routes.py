@@ -3,7 +3,7 @@
 import secrets
 from collections.abc import AsyncIterator
 from dataclasses import dataclass
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, date, datetime, timedelta
 from typing import Any
 
 import httpx
@@ -57,12 +57,14 @@ CLIENT_ORIGIN = "https://app.finvestug.com"
 STAFF_ORIGIN = "https://admin.finvestug.com"
 PASSWORD = "copper-harbour-violin"
 HASHER = PasswordHasher(memory_kib=19_456, time_cost=2)
-# Real time: the database refuses an investment not created now.
 # The database refuses an investment not created at the current time, so each test's clock
-# starts when the test does (`now()`), not when this file was imported. NOW only fixes the day
-# a transfer was sent.
-NOW = datetime.now(UTC)
-SENT_ON = business_date(NOW) - timedelta(days=1)
+# starts when the test does (`now()`), not when this file was imported.
+
+
+def sent_on() -> date:
+    """The day a transfer was sent: yesterday in Kampala, read when a test asks, so a run that
+    crosses midnight still agrees with the database."""
+    return business_date(datetime.now(UTC)) - timedelta(days=1)
 
 
 def now() -> datetime:
@@ -417,7 +419,7 @@ RECEIPT = b"%PDF-1.7\n" + secrets.token_bytes(4096)
 def transfer_form(minor: int, **changes: str) -> dict[str, str]:
     return {
         "amount_minor": str(minor),
-        "sent_on": SENT_ON.isoformat(),
+        "sent_on": sent_on().isoformat(),
         "bank_name": "Stanbic Bank",
         "transaction_number": "FT2633100042",
     } | changes
@@ -451,11 +453,11 @@ async def submit_transfer(http: httpx.AsyncClient, investment_id: str, minor: in
 async def import_statement(api: Api, minor: int, pot: str | None = None) -> str:
     pot = pot or f"trust-{secrets.token_hex(4)}"
     parsed = parse_csv(
-        f"Date,Details,Reference,In,Out\n{SENT_ON.isoformat()},Transfer,REF1,{minor},\n",
+        f"Date,Details,Reference,In,Out\n{sent_on().isoformat()},Transfer,REF1,{minor},\n",
         FORMAT,
         source=StatementSource.BANK,
         account_reference=pot,
-        statement_date=SENT_ON,
+        statement_date=sent_on(),
         opening_balance=ugx(10**12),
         closing_balance=ugx(10**12 + minor),
     )
@@ -510,7 +512,7 @@ async def test_a_bank_transfer_is_checked_by_one_person_and_approved_by_another(
         shown = (await second.get(f"/staff/payments/bank-transfers/{payment['id']}")).json()
         assert shown["matched_line"]["id"] == line["id"]
         assert shown["matched_line"]["amount"] == {"minor": minor, "currency": "UGX"}
-        assert shown["matched_line"]["value_date"] == SENT_ON.isoformat()
+        assert shown["matched_line"]["value_date"] == sent_on().isoformat()
         own = await first.post(
             f"/staff/payments/bank-transfers/{payment['id']}/approve", headers=key()
         )
@@ -702,7 +704,7 @@ async def test_a_receipt_is_checked_before_it_is_stored(api: Api) -> None:
                     client_http,
                     investment.id,
                     owed,
-                    sent_on=(SENT_ON + timedelta(days=3)).isoformat(),
+                    sent_on=(sent_on() + timedelta(days=3)).isoformat(),
                 ),
                 "sent_on",
                 "in_the_future",

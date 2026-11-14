@@ -29,6 +29,7 @@ value() { sed -n "s/^$1=//p" release.env; }
 project=$(value FINVEST_DEPLOY_PROJECT)
 api_domain=$(value FINVEST_API_DOMAIN)
 admin_domain=$(value FINVEST_ADMIN_DOMAIN)
+app_domain=$(value FINVEST_APP_DOMAIN)
 # Set only when this release serves the public website (prepare_release.py).
 site_domain=$(value FINVEST_SITE_DOMAIN)
 edge_subnet=$(value FINVEST_EDGE_SUBNET)
@@ -36,7 +37,7 @@ stop_before_migrate=$(value FINVEST_STOP_BEFORE_MIGRATE)
 # A rehearsal on a machine without Cloudflare in front checks the local Caddy directly.
 check_local=$(value FINVEST_CHECK_LOCAL)
 [[ $project =~ ^[a-z][a-z0-9-]*$ ]] || exit 1
-[[ $api_domain =~ ^[a-z0-9][a-z0-9.-]*$ && $admin_domain =~ ^[a-z0-9][a-z0-9.-]*$ ]] || exit 1
+[[ $api_domain =~ ^[a-z0-9][a-z0-9.-]*$ && $admin_domain =~ ^[a-z0-9][a-z0-9.-]*$ && $app_domain =~ ^[a-z0-9][a-z0-9.-]*$ ]] || exit 1
 [[ -z $site_domain || $site_domain =~ ^[a-z0-9][a-z0-9.-]*$ ]] || exit 1
 [[ $edge_subnet =~ ^[0-9./]+$ ]] || exit 1
 
@@ -82,7 +83,7 @@ chmod 0600 "$root/tls/origin.key"
 stage="$root/edge.next"
 rm -rf -- "$stage"
 cp -R edge "$stage"
-sed -i -E "s/(api|console|site)-blue:/\1-$next:/" "$stage/upstreams.caddy"
+sed -i -E "s/(api|console|app|site)-blue:/\1-$next:/" "$stage/upstreams.caddy"
 chmod 0755 "$stage"
 chmod 0644 "$stage"/*
 edge "$stage" run --rm --no-deps -T caddy caddy validate --config /etc/caddy/Caddyfile
@@ -123,7 +124,7 @@ colour "$next" run --rm --no-deps -T migrate
 state=started
 options=(up -d --wait --wait-timeout 180)
 if [[ $force == true ]]; then options+=(--force-recreate); fi
-colour "$next" "${options[@]}" api worker scheduler console site
+colour "$next" "${options[@]}" api worker scheduler console app site
 
 # Keep what to switch back to.
 rm -rf -- "$root/edge.previous"
@@ -153,6 +154,7 @@ check() {
 }
 check "$api_domain" /health/ready
 check "$admin_domain" /
+check "$app_domain" /
 if [[ -n $site_domain ]]; then
   check "$site_domain" /
 fi

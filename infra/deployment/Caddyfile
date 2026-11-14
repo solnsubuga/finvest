@@ -27,15 +27,20 @@ import /etc/caddy/upstreams.caddy
 	}
 }
 
-(common_headers) {
+(security_headers) {
 	header {
 		Strict-Transport-Security "max-age=31536000; includeSubDomains"
 		X-Content-Type-Options nosniff
 		Referrer-Policy strict-origin-when-cross-origin
 		X-Frame-Options DENY
-		Permissions-Policy "accelerometer=(), camera=(), geolocation=(), gyroscope=(), magnetometer=(), microphone=(), payment=(), usb=()"
 		-Server
 	}
+}
+
+# Every host but the client app, which needs the camera, turns the device features off.
+(common_headers) {
+	import security_headers
+	header Permissions-Policy "accelerometer=(), camera=(), geolocation=(), gyroscope=(), magnetometer=(), microphone=(), payment=(), usb=()"
 }
 
 # Search engines list only the production website. Every other address asks to be left out.
@@ -59,7 +64,7 @@ import /etc/caddy/upstreams.caddy
 	# larger before it reaches a container, with 413: by its declared length before anything is
 	# forwarded, and by counting a body sent without one. Upload routes get 12 MiB here, above
 	# every file route's own limit (10 MiB files plus the form around them); everything else
-	# gets a million bytes. A new upload route is added to all three lists below.
+	# gets a million bytes. A new upload route is added to all four lists below.
 	@upload path_regexp upload ^/(client/investments/[^/]+/payments/bank-transfer|client/payout-destinations/[^/]+/proof|client/identity-check/photos|client/identity-check/poses|client/claim-check/photos|staff/reconciliation/statements)(/|$)
 	@other not path_regexp other ^/(client/investments/[^/]+/payments/bank-transfer|client/payout-destinations/[^/]+/proof|client/identity-check/photos|client/identity-check/poses|client/claim-check/photos|staff/reconciliation/statements)(/|$)
 	@oversize {
@@ -103,15 +108,27 @@ import /etc/caddy/upstreams.caddy
 	}
 }
 
-# The client web app is not built yet. When it is served here, its block needs, unlike the
-# shared headers: Permissions-Policy camera=(self) for the guided selfie, and 'wasm-unsafe-eval' in
-# script-src for the face detector that runs as WebAssembly from the app's own /face path.
+# The client app's web build (app.Dockerfile). The app image sends the policy written for its
+# own build (app-csp.mjs): it allows the selfie's WebAssembly face detector and Regula's liveness
+# check. Unlike the shared headers, the camera is allowed for this origin, for the ID photos and
+# the guided selfie. The page itself takes no uploads (files go to the API host), so bodies stay
+# small here.
 {$FINVEST_APP_DOMAIN} {
 	import origin_tls
-	import common_headers
+	import updating
+	import security_headers
 	import unlisted
-	header Cache-Control no-store
-	respond "Finvest is coming soon." 503
+	header Permissions-Policy "accelerometer=(), camera=(self), geolocation=(), gyroscope=(), magnetometer=(), microphone=(), payment=(), usb=()"
+	encode zstd gzip
+	request_body {
+		max_size 1MB
+	}
+	# Applies only if a response arrives without the image's own policy.
+	header ?Content-Security-Policy "default-src 'self'; object-src 'none'; base-uri 'self'; frame-ancestors 'none'"
+	route {
+		import private_paths
+		import app_upstream
+	}
 }
 
 # The public website: generated per environment (site.caddy).

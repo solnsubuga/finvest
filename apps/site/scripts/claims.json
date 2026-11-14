@@ -63,5 +63,25 @@
     "claim": "Finvest was built in Kampala, and buying a treasury bill used to mean a bank visit and forms",
     "where": "About",
     "confirmedBy": null
+  },
+  {
+    "claim": "The Bank of Uganda auction figures (21 October 2026 Treasury bill auction, issue 1236, and 28 October 2026 Treasury bond auction): yields and coupons after withholding tax, ISINs, maturity dates and amounts accepted, credited to the Bank of Uganda. Read from published reports of the results (level.africa) because bou.or.ug was unreachable from the build sandbox; check against the Bank of Uganda's own results before launch",
+    "where": "Products (\"What the government paid at its latest auctions\")",
+    "confirmedBy": null
+  },
+  {
+    "claim": "Withholding tax used to work out the after-tax auction figures: 20% on bills and on bonds under 10 years, 10% on bonds of 10 years or more",
+    "where": "Products (auction tables)",
+    "confirmedBy": null
+  },
+  {
+    "claim": "Finvest will offer Treasury bonds, unit trusts, fixed income deposits and thematic equity portfolios (\"Coming soon\", \"on the way\", \"follow\"). Unit trusts and equity portfolios may need Capital Markets Authority licensing or partner agreements",
+    "where": "Home (\"More than bills\"), Products (\"Five ways to grow your money\", page title, auction source line), Footer",
+    "confirmedBy": null
+  },
+  {
+    "claim": "Finvest's rates follow the Bank of Uganda auction and are updated on the site whenever they change",
+    "where": "Products (\"Treasury bills, at today's rates\")",
+    "confirmedBy": null
   }
 ]

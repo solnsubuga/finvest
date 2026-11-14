@@ -32,12 +32,11 @@ from tests.support.ledger import ugx
 
 pytestmark = pytest.mark.integration
 
-DAY = today()
 NOW = PRESENT
 
 
 def day(offset: int) -> date:
-    return DAY + timedelta(days=offset)
+    return today() + timedelta(days=offset)
 
 
 async def pay_interest(
@@ -130,7 +129,7 @@ async def test_nothing_is_earned_on_the_day_an_investment_starts(
     app_database: Database, worker_database: Database
 ) -> None:
     investment = await started(app_database, worker_database, NOW)
-    assert await pay_interest(worker_database, investment.id, DAY) is None
+    assert await pay_interest(worker_database, investment.id, today()) is None
     assert (await reload(worker_database, investment.id)).accrued_through is None
     assert await entries_for(worker_database, investment.id) == 0
 
@@ -549,13 +548,17 @@ async def test_the_run_tells_each_client_once_what_the_day_earned_after_tax(
         investment = await request(app_database, client, NOW)
         await pay(worker_database, investment, investment.amount, NOW)
         async with worker_database.actor_transaction(SYSTEM) as session:
-            await investments.start_investment(session, investment.id, confirmed_on=DAY, clock=NOW)
+            await investments.start_investment(
+                session, investment.id, confirmed_on=today(), clock=NOW
+            )
     # Nothing is earned on the start date, so nobody is told then.
     async with worker_database.actor_transaction(SYSTEM) as session:
-        await accrual.tell_earnings(session, DAY, at(DAY, 12), after=just_them, limit=1)
+        await accrual.tell_earnings(session, today(), at(today(), 12), after=just_them, limit=1)
     assert await earnings_told(app_database, client) == []
 
-    outcome = await run_job(worker_database, f"{DAY.isoformat()}T21:30:00+00:00", at(day(1), 12))
+    outcome = await run_job(
+        worker_database, f"{today().isoformat()}T21:30:00+00:00", at(day(1), 12)
+    )
 
     assert outcome == "succeeded:None"
     # The run tells nobody itself: recording it queues the telling as a job of its own.

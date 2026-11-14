@@ -1,4 +1,5 @@
 import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react-native";
+import { Linking } from "react-native";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 
 import Documents from "@/app/(app)/documents";
@@ -39,6 +40,22 @@ async function show(phone: string | null) {
 }
 
 describe("the Documents screen", () => {
+  it("shows the terms the client accepted, each opening its version's PDF", async () => {
+    const open = jest.spyOn(Linking, "openURL").mockResolvedValue(undefined);
+    await show("+256772123456");
+    expect(await screen.findByText("Terms you accepted")).toBeTruthy();
+    expect(screen.getByText("Terms and conditions")).toBeTruthy();
+    expect(screen.getByText("Privacy notice")).toBeTruthy();
+    expect(
+      within(screen.getByTestId("agreement-terms")).getByText(
+        /^Version of 14 Nov 2026\. You agreed on 14 Nov 2026, .*, when you signed up\.$/,
+      ),
+    ).toBeTruthy();
+    await fireEvent.press(screen.getByTestId("open-agreement-privacy"));
+    expect(open).toHaveBeenCalledWith("https://finvestug.com/legal/privacy-2026-11-14.pdf");
+    open.mockRestore();
+  });
+
   it("lists statements and receipts and downloads one", async () => {
     const client = await show("+256772123456");
     expect(await screen.findByText("Monthly statements")).toBeTruthy();

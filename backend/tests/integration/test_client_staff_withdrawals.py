@@ -16,13 +16,21 @@ from app.shared.clock import Clock
 from app.shared.errors import ApplicationError
 from tests.support.database import TestDatabase
 from tests.support.http import Api, running_api
-from tests.support.investments import PRESENT, approved_destination, at, pay, request, today
+from tests.support.investments import (
+    PRESENT,
+    approved_destination,
+    at,
+    days_on,
+    pay,
+    request,
+    today,
+)
 from tests.support.kyc import verify
 from tests.support.ledger import key
 
 pytestmark = pytest.mark.integration
 
-LATER = at(today() + timedelta(days=2))
+
 DECIDERS = {"client_withdrawals.start"}
 
 
@@ -32,7 +40,8 @@ async def api(test_database: TestDatabase, app_database: Database) -> AsyncItera
         yield api
 
 
-async def asked_in_chat(app_database: Database, client_id: str, clock: Clock = LATER) -> str:
+async def asked_in_chat(app_database: Database, client_id: str, clock: Clock | None = None) -> str:
+    clock = clock or days_on(2)
     client = Actor("client", client_id)
     async with app_database.actor_transaction(client) as session:
         message = await conversations.send_as_client(
@@ -76,7 +85,7 @@ async def propose(
             investment.client_id,
             "withdrawal",
             "Client asked in help chat",
-            LATER,
+            days_on(2),
             details,
         )
 
@@ -91,7 +100,7 @@ async def decide(
             action_id,
             decision,  # type: ignore[arg-type]
             "Read the client's message",
-            LATER,
+            days_on(2),
             permissions=DECIDERS,
         )
 
@@ -243,7 +252,7 @@ async def test_staff_see_what_a_withdrawal_can_name(
     api: Api, app_database: Database, worker_database: Database
 ) -> None:
     investment, destination_id, message_id = await setting_up(api, app_database, worker_database)
-    api.clock.current = LATER.now()
+    api.clock.current = days_on(2).now()
     await api.staff("operations")
     options = await api.http.get(f"/staff/clients/{investment.client_id}/withdrawal-options")
     assert options.status_code == 200, options.text

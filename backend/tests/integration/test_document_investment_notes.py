@@ -25,14 +25,11 @@ from app.modules.investments import service as investments
 from app.shared.actors import SYSTEM, Actor
 from app.shared.errors import ApplicationError
 from app.shared.push_ids import push_id
-from tests.integration.test_documents import LATER, FakeEmail, invested, run_jobs
+from tests.integration.test_documents import FakeEmail, invested, later_clock, run_jobs
 from tests.support.investments import PRESENT, at, started, today
 from tests.support.ledger import ugx
 
 pytestmark = pytest.mark.integration
-
-# A 91 day bill started today matures on this day.
-MATURES = today() + timedelta(days=91)
 
 
 @pytest.fixture(autouse=True)
@@ -62,7 +59,7 @@ async def deliver(worker_database: Database, investment_id: str, client_id: str)
                     payload={"data": {"investment_id": investment_id, "client_id": client_id}},
                     queue=service.QUEUE,
                 ),
-                now=LATER.now(),
+                now=later_clock().now(),
             )
 
 
@@ -130,7 +127,7 @@ async def test_the_database_holds_a_note_to_its_investment(worker_database: Data
                     kind=DocumentKind.INVESTMENT_NOTE,
                     key=key,
                     source_id=source,
-                    now=LATER.now(),
+                    now=later_clock().now(),
                 )
     with pytest.raises(DBAPIError, match="ck_documents_shape"):
         async with worker_database.actor_transaction(SYSTEM) as session:
@@ -139,7 +136,7 @@ async def test_the_database_holds_a_note_to_its_investment(worker_database: Data
                 client_id=push_id(),
                 kind=DocumentKind.INVESTMENT_NOTE,
                 key="started:x",
-                now=LATER.now(),
+                now=later_clock().now(),
             )
 
 
@@ -184,13 +181,15 @@ async def deliver_end(worker_database: Database, investment_id: str, client_id: 
                     payload={"data": {"investment_id": investment_id, "client_id": client_id}},
                     queue=service.QUEUE,
                 ),
-                now=LATER.now(),
+                now=later_clock().now(),
             )
 
 
 async def mature(worker_database: Database, investment_id: str) -> None:
     async with worker_database.actor_transaction(SYSTEM) as session:
-        await investments.mature_investment(session, investment_id, MATURES, at(MATURES))
+        # A 91 day bill started today matures on this day.
+        matures = today() + timedelta(days=91)
+        await investments.mature_investment(session, investment_id, matures, at(matures))
 
 
 async def published(worker_database: Database, kind: str, investment_id: str) -> int:

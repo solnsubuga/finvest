@@ -2281,3 +2281,99 @@ a:hover {
     display: none;
   }
 }
+
+/* The range of investments: open categories and those coming soon */
+
+.range {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--fv-space-3);
+  margin: 22px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.range__item {
+  display: flex;
+  flex-direction: column;
+}
+
+.range__top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--fv-space-3);
+}
+
+.range__item .h3 {
+  margin-top: var(--fv-space-4);
+}
+
+.range__link {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--fv-space-2);
+  margin-top: auto;
+  padding-top: var(--fv-space-4);
+  font-weight: var(--fv-font-weight-bold);
+}
+
+@media (min-width: 700px) {
+  .range {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (min-width: 1100px) {
+  .range {
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+    gap: var(--fv-space-4);
+    margin-top: var(--fv-space-10);
+  }
+}
+
+@media (min-width: 900px) {
+  .grid--4 {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (min-width: 1200px) {
+  .grid--4 {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
+
+/* Bank of Uganda auction tables */
+
+.market {
+  min-width: 640px;
+}
+
+.market td:first-child {
+  font-weight: var(--fv-font-weight-bold);
+}
+
+.market__yield {
+  font-weight: var(--fv-font-weight-extrabold);
+}
+
+.market__code {
+  font-variant-numeric: tabular-nums;
+  color: var(--fv-color-muted);
+}
+
+.source {
+  margin-top: var(--fv-space-3);
+  font-size: var(--fv-font-size-sm);
+  line-height: 1.5;
+  color: var(--fv-color-muted);
+}
+
+.market-head {
+  margin-top: var(--fv-space-10);
+}
+
+.lead + .h2 {
+  margin-top: var(--fv-space-8);
+}

@@ -18,6 +18,7 @@ from tests.support.investments import (
     PRESENT,
     approved_client,
     at,
+    days_on,
     pay,
     request,
     started,
@@ -27,19 +28,17 @@ from tests.support.ledger import staff as new_staff
 
 pytestmark = pytest.mark.integration
 
-DAY = today()
 # Two days after a 91 day term that starts today ends.
-LOOKED = DAY + timedelta(days=93)
 
 
 def day(offset: int) -> date:
-    return DAY + timedelta(days=offset)
+    return today() + timedelta(days=offset)
 
 
 async def look(app_database: Database) -> investments.Maturities:
     staff = new_staff()
     async with app_database.actor_transaction(staff) as session:
-        return await investments.maturities(session, staff, at(LOOKED))
+        return await investments.maturities(session, staff, days_on(93))
 
 
 def due_on(found: investments.Maturities, on: date) -> investments.MaturityDay | None:
@@ -70,7 +69,7 @@ async def test_each_day_says_what_its_terms_became_and_what_needs_a_person(
     to_pay = await request(app_database, client, PRESENT, at_maturity=AtMaturity.PAY_OUT)
     await pay(worker_database, to_pay, to_pay.amount, PRESENT)
     async with worker_database.actor_transaction(SYSTEM) as session:
-        await investments.start_investment(session, to_pay.id, confirmed_on=DAY, clock=PRESENT)
+        await investments.start_investment(session, to_pay.id, confirmed_on=today(), clock=PRESENT)
     left = await started(app_database, worker_database, PRESENT)
     for investment in (rolled, to_pay):
         async with worker_database.actor_transaction(SYSTEM) as session:
@@ -78,7 +77,7 @@ async def test_each_day_says_what_its_terms_became_and_what_needs_a_person(
 
     found = await look(app_database)
 
-    assert found.today == LOOKED
+    assert found.today == today() + timedelta(days=93)
     amount = rolled.amount.minor + to_pay.amount.minor + left.amount.minor
     after = counts(found, day(91))
     # Three more terms end that day: one rolled over, one held, one the run has not closed.
@@ -96,5 +95,5 @@ async def test_only_staff_may_look(app_database: Database) -> None:
     client = await approved_client(app_database, PRESENT)
     async with app_database.actor_transaction(client) as session:
         with pytest.raises(ApplicationError) as refused:
-            await investments.maturities(session, client, at(LOOKED))
+            await investments.maturities(session, client, days_on(93))
     assert refused.value.code == "forbidden"

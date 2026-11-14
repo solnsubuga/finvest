@@ -12,6 +12,9 @@ on:
       - "package.json"
       - "pnpm-lock.yaml"
       - "pnpm-workspace.yaml"
+      - ".dockerignore"
+      - "infra/deployment/app.*"
+      - "infra/deployment/app-csp.mjs"
       - ".github/workflows/client.yml"
   push:
     branches: [main]
@@ -121,3 +124,26 @@ jobs:
             echo "The demo activity was bundled into a production build" >&2
             exit 1
           fi
+
+  # The image the deploy builds from this app (infra/deployment/app.Dockerfile), so a change that
+  # breaks it shows here and not on release day.
+  web-image:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+        with:
+          persist-credentials: false
+      - name: Build the web image
+        run: |
+          docker build -t finvest-app:check --build-arg EXPO_PUBLIC_API_URL=https://api.finvestug.com \
+            --build-arg EXPO_PUBLIC_REGULA_FACE_URL=https://face.example.com/api \
+            -f infra/deployment/app.Dockerfile .
+      - name: Serve a deep link and the face detector
+        run: |
+          docker run -d --name app -p 127.0.0.1:18080:8080 --read-only --tmpfs /tmp --cap-drop ALL finvest-app:check
+          for _ in $(seq 30); do curl -fs http://127.0.0.1:18080/health/live >/dev/null && break; sleep 1; done
+          curl -fsS -o /dev/null http://127.0.0.1:18080/id-check/poses
+          curl -fsS -o /dev/null http://127.0.0.1:18080/face/face_landmarker.task
+          curl -fsS -D - -o /dev/null http://127.0.0.1:18080/ | grep -i '^content-security-policy:' |
+            grep "'wasm-unsafe-eval'" | grep -q "connect-src 'self' https://api.finvestug.com https://wasm.regulaforensics.com https://face.example.com "

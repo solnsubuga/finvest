@@ -1,5 +1,6 @@
 ---
 import Calculator from "../components/Calculator.astro";
+import Categories from "../components/Categories.astro";
 import Cta from "../components/Cta.astro";
 import Faq from "../components/Faq.astro";
 import Icon from "../components/Icon.astro";
@@ -81,7 +82,7 @@ const questions = [
 
 <Base
   title="Finvest"
-  description="Invest in Uganda government treasury bills from your phone. Pay with mobile money, see your interest grow daily, and get paid back to mobile money or your bank."
+  description="Invest in Uganda government treasury bills from your phone, paid by mobile money, with bonds, unit trusts, fixed deposits and equity portfolios on the way."
 >
   <section class="band--black hero">
     <div class="wrap hero__grid">
@@ -170,9 +171,28 @@ const questions = [
           Compare all products <Icon name="arrow" size={18} />
         </a>
       </div>
-      <div class="grid grid--3">
+      <div class={`grid ${fallback.products.length > 3 ? "grid--4" : "grid--3"}`}>
         {fallback.products.map((product) => <ProductCard product={product} />)}
       </div>
+    </div>
+  </section>
+
+  <section class="band band--white" id="range">
+    <div class="wrap">
+      <div class="section-head">
+        <div>
+          <p class="eyebrow">More than bills</p>
+          <h2 class="h2">One app for the investments Uganda trusts.</h2>
+          <p class="lead">
+            Treasury bills are open today. Bonds, unit trusts, fixed deposits and equity
+            portfolios follow, each shown the same plain way.
+          </p>
+        </div>
+        <a class="button button--outline" href="/products#auctions">
+          Latest government auctions <Icon name="arrow" size={18} />
+        </a>
+      </div>
+      <Categories openHref="/products#rates" />
     </div>
   </section>
 

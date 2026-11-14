@@ -5,6 +5,7 @@ from typing import Any
 import httpx
 import pytest
 
+from app.modules.identity.domain.terms import CURRENT_VERSIONS
 from app.modules.migration import claims
 from app.modules.migration.domain.claim import ClaimStatus
 from app.shared.actors import SYSTEM, Actor
@@ -36,7 +37,13 @@ async def start(api: Api, token: str) -> httpx.Response:
 
 
 async def complete(api: Api, token: str, challenge_id: str, code: str) -> httpx.Response:
-    body = {"token": token, "challenge_id": challenge_id, "code": code, "password": PASSWORD}
+    body = {
+        "token": token,
+        "challenge_id": challenge_id,
+        "code": code,
+        "password": PASSWORD,
+        "accepted_terms": True,
+    }
     return await api.http.post("/client/claim/complete", json=body)
 
 
@@ -64,6 +71,12 @@ async def test_a_client_claims_from_the_link_and_is_signed_in(api: Api) -> None:
         "identity_step": "selfie",
         "problem_reported": False,
     }
+    # Claiming is when the client agrees to the terms and privacy notice.
+    agreed = await api.http.get("/client/terms-acceptances", headers=bearer)
+    assert sorted((i["document"], i["version"], i["via"]) for i in agreed.json()["items"]) == [
+        ("privacy", CURRENT_VERSIONS["privacy"], "claim"),
+        ("terms", CURRENT_VERSIONS["terms"], "claim"),
+    ]
     # The link is spent.
     assert refusal(await start(api, token))[0] == 404
 
@@ -132,3 +145,20 @@ async def test_signing_in_is_needed_to_see_a_claim(api: Api) -> None:
     assert refusal(await api.http.get("/client/claim"))[0] == 401
     problem = await api.http.post("/client/claim/problem", json={"description": "x"})
     assert refusal(problem)[0] == 401
+
+
+async def test_a_claim_without_agreeing_to_the_terms_changes_nothing(api: Api) -> None:
+    phone, _, token = await invited(api)
+    started = await start(api, token)
+    [code] = await texted(api, phone)
+    body = {
+        "token": token,
+        "challenge_id": started.json()["challenge_id"],
+        "code": code,
+        "password": PASSWORD,
+    }
+    refused = await api.http.post("/client/claim/complete", json=body)
+    assert (refused.status_code, refused.json()["error"]["code"]) == (422, "validation_failed")
+    # The code was not spent, so ticking the box finishes the claim.
+    done = await api.http.post("/client/claim/complete", json={**body, "accepted_terms": True})
+    assert done.status_code == 200, done.text

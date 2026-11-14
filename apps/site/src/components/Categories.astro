@@ -1,0 +1,38 @@
+---
+import { categories } from "../data/categories.ts";
+import { fallback } from "../data/fallback.ts";
+import Icon from "./Icon.astro";
+
+interface Props {
+  /** Where an open category's link goes. */
+  openHref: string;
+}
+
+const { openHref } = Astro.props;
+const open = (kind: string | null) =>
+  kind !== null && fallback.products.some((p) => p.kind === kind && p.status === "live");
+---
+
+<ul class="range">
+  {
+    categories.map((category) => (
+      <li class="card range__item" id={category.id}>
+        <div class="range__top">
+          <span class="tile"><Icon name={category.icon} /></span>
+          {open(category.kind) ? (
+            <span class="tag tag--lime">Open now</span>
+          ) : (
+            <span class="tag tag--soon">Coming soon</span>
+          )}
+        </div>
+        <h3 class="h3">{category.name}</h3>
+        <p>{category.text}</p>
+        {open(category.kind) && (
+          <a class="range__link" href={openHref}>
+            See today's rates <Icon name="arrow" size={16} />
+          </a>
+        )}
+      </li>
+    ))
+  }
+</ul>

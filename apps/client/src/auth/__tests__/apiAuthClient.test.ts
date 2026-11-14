@@ -65,7 +65,13 @@ describe("the sign-in client for the real API", () => {
     expect(await auth.startClaim("T".repeat(43))).toEqual({ challengeId: "C1" });
     const session = await auth.completeClaim("T".repeat(43), "C1", "123456", "a long new password");
     expect(session.phone).toBe("+256772123456");
-    expect(seen[1]?.body).toEqual({ token: "T".repeat(43), challenge_id: "C1", code: "123456", password: "a long new password" });
+    expect(seen[1]?.body).toEqual({
+      token: "T".repeat(43),
+      challenge_id: "C1",
+      code: "123456",
+      password: "a long new password",
+      accepted_terms: true,
+    });
     expect(await readToken()).toBe("phone-token");
   });
 

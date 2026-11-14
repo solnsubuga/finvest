@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Pressable, StyleSheet, View } from "react-native";
+import { View } from "react-native";
 import { Stack, useRouter } from "expo-router";
 
 import { useAuth } from "@/auth/AuthProvider";
@@ -10,8 +10,8 @@ import { BackButton } from "@/components/BackButton";
 import { Notice } from "@/components/Blocks";
 import { Button, TextLink } from "@/components/Button";
 import { PhoneField, TextField } from "@/components/Field";
-import { Icon } from "@/components/Icon";
 import { Screen } from "@/components/Screen";
+import { TermsAgreement } from "@/components/TermsAgreement";
 import { Title, Txt } from "@/components/Txt";
 import { colors, fontSizes } from "@/theme";
 
@@ -103,42 +103,8 @@ export default function SignupStart() {
           autoCapitalize="characters"
           autoCorrect={false}
         />
-        <Pressable
-          accessibilityRole="checkbox"
-          aria-checked={agreed}
-          onPress={() => setAgreed((current) => !current)}
-          style={styles.terms}
-          testID="terms-checkbox"
-        >
-          <View
-            style={[
-              styles.box,
-              agreed && styles.boxChecked,
-              termsError && { borderColor: colors.danger },
-            ]}
-          >
-            {agreed ? <Icon name="check" size={16} color={colors.white} strokeWidth={3} /> : null}
-          </View>
-          <Txt size={fontSizes.sm} style={{ flex: 1 }} color={termsError ? colors.danger : colors.ink}>
-            I agree to the terms and the privacy notice, and I am 18 or older.
-          </Txt>
-        </Pressable>
+        <TermsAgreement agreed={agreed} onChange={setAgreed} invalid={termsError} />
       </View>
     </Screen>
   );
 }
-
-const styles = StyleSheet.create({
-  terms: { flexDirection: "row", gap: 12, alignItems: "flex-start", minHeight: 44 },
-  box: {
-    width: 22,
-    height: 22,
-    borderRadius: 6,
-    borderWidth: 2,
-    borderColor: colors.black,
-    backgroundColor: colors.surface,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  boxChecked: { backgroundColor: colors.black },
-});

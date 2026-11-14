@@ -1,7 +1,10 @@
 """One migrated database per test session, reached only through the application roles."""
 
 import os
+import time
 from collections.abc import AsyncIterator, Iterator
+from datetime import UTC, datetime, timedelta
+from zoneinfo import ZoneInfo
 
 import pytest
 
@@ -55,3 +58,23 @@ async def application_database(
     database = Database(test_database.settings(request.param))
     yield database
     await database.close()
+
+
+KAMPALA = ZoneInfo("Africa/Kampala")
+# Longer than any one test takes.
+MIDNIGHT_MARGIN = timedelta(seconds=90)
+
+
+@pytest.fixture(autouse=True)
+def clear_of_midnight() -> None:
+    """Start each test only when it can finish before midnight in Kampala.
+
+    The database decides "today" from its own clock, and a test reads the same day in Python.
+    A test that started just before midnight would see two different days, so this waits until
+    the new day has begun.
+    """
+    now = datetime.now(KAMPALA)
+    midnight = datetime.combine(now.date() + timedelta(days=1), datetime.min.time(), KAMPALA)
+    if midnight - now < MIDNIGHT_MARGIN:
+        time.sleep((midnight - now).total_seconds() + 1)
+        assert datetime.now(UTC).astimezone(KAMPALA).date() == midnight.date()

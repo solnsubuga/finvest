@@ -1,11 +1,13 @@
 ---
 import Calculator from "../components/Calculator.astro";
+import Categories from "../components/Categories.astro";
 import Cta from "../components/Cta.astro";
 import Icon from "../components/Icon.astro";
 import LiveRates from "../components/LiveRates.astro";
 import ProductCard from "../components/ProductCard.astro";
 import { fallback } from "../data/fallback.ts";
-import { formatDay, minimumLabel } from "../lib/format.ts";
+import { billAuction, bondAuction, otherBondTenors } from "../data/market.ts";
+import { formatDay, formatMoney, minimumLabel } from "../lib/format.ts";
 import Base from "../layouts/Base.astro";
 
 const products = fallback.products;
@@ -23,6 +25,14 @@ const notes: Record<string, Record<string, string>> = {
   },
   "TREA-182": {
     suits: "Money you can leave for six months",
+    more: "Yes, as a new investment",
+    interest: "Earned daily, paid at maturity",
+    end: "Roll over or pay out",
+    early: "Ask in the app, and see the exact amount before you confirm",
+    pay: "MTN, Airtel, bank transfer",
+  },
+  "TREA-364": {
+    suits: "Money you can leave for a year",
     more: "Yes, as a new investment",
     interest: "Earned daily, paid at maturity",
     end: "Roll over or pay out",
@@ -48,34 +58,125 @@ const rows = [
   ["pay", "Pay with"],
 ] as const;
 const note = (code: string, key: string) => notes[code]?.[key] ?? "Ask us";
+const listFormat = new Intl.ListFormat("en-GB", { type: "conjunction" });
+const others = listFormat.format(otherBondTenors.map(String));
 ---
 
 <Base
   title="Products and rates"
-  description="Today's rates for Finvest treasury bills and fixed income, shown yearly and after tax, with minimums, terms and a side by side comparison."
+  description="Uganda Treasury bills at today's rates after tax, the latest Bank of Uganda bill and bond auctions, and the bonds, unit trusts and portfolios coming next."
 >
   <section class="band band--black page-title">
     <div class="wrap">
       <p class="eyebrow">Products</p>
       <h1>Simple investments, with the return shown up front.</h1>
       <p>
-        Rates are yearly and after tax. They are set by Bank of Uganda auctions and updated here
-        whenever they change. Last updated <span data-updated>{formatDay(fallback.updatedOn)}</span
-        >.
+        Start with Government of Uganda Treasury bills today. Treasury bonds, unit trusts, fixed
+        income deposits and thematic equity portfolios are on the way. Every rate is yearly and
+        after tax.
       </p>
     </div>
   </section>
 
-  <section class="band band--tight">
+  <section class="band band--tight" id="range">
     <div class="wrap">
-      <h2 class="visually-hidden">Today's rates</h2>
-      <div class="grid grid--3 grid--flush">
+      <p class="eyebrow">What you can invest in</p>
+      <h2 class="h2">Five ways to grow your money.</h2>
+      <Categories openHref="#rates" />
+    </div>
+  </section>
+
+  <section class="band band--flush-top" id="rates">
+    <div class="wrap">
+      <p class="eyebrow">Open now</p>
+      <h2 class="h2">Treasury bills, at today's rates.</h2>
+      <p class="lead">
+        Our rates follow the Bank of Uganda auction and are updated here whenever they change.
+        Last updated <span data-updated>{formatDay(fallback.updatedOn)}</span>.
+      </p>
+      <div class={`grid ${fallback.products.length > 3 ? "grid--4" : "grid--3"}`}>
         {products.map((product) => <ProductCard product={product} />)}
       </div>
     </div>
   </section>
 
-  <section class="band band--flush-top">
+  <section class="band band--white" id="auctions">
+    <div class="wrap">
+      <p class="eyebrow">From the Bank of Uganda</p>
+      <h2 class="h2">What the government paid at its latest auctions.</h2>
+      <p class="lead">
+        These are real Government of Uganda securities. The yields are yearly and after
+        withholding tax, the same way we show our own rates.
+      </p>
+
+      <h3 class="h3 market-head">Treasury bills, {formatDay(billAuction.heldOn)}</h3>
+      <div class="table-box" tabindex="0" role="region" aria-label="Treasury bill auction">
+        <table class="compare market">
+          <thead>
+            <tr>
+              <th scope="col">Bill</th>
+              <th scope="col">Yield, a year after tax</th>
+              <th scope="col">Matures</th>
+              <th scope="col">ISIN</th>
+              <th scope="col">Accepted</th>
+            </tr>
+          </thead>
+          <tbody>
+            {
+              billAuction.securities.map((bill) => (
+                <tr>
+                  <td>{bill.termDays} days</td>
+                  <td class="market__yield">{bill.netYieldPercent}%</td>
+                  <td>{formatDay(bill.maturesOn)}</td>
+                  <td class="market__code">{bill.isin}</td>
+                  <td>UGX {bill.acceptedBillions} billion</td>
+                </tr>
+              ))
+            }
+          </tbody>
+        </table>
+      </div>
+      <p class="source">Source: {billAuction.source}.</p>
+
+      <h3 class="h3 market-head">Treasury bonds, {formatDay(bondAuction.heldOn)}</h3>
+      <div class="table-box" tabindex="0" role="region" aria-label="Treasury bond auction">
+        <table class="compare market">
+          <thead>
+            <tr>
+              <th scope="col">Bond</th>
+              <th scope="col">Yield to maturity, a year after tax</th>
+              <th scope="col">Paid every six months, per UGX 1,000,000</th>
+              <th scope="col">Matures</th>
+              <th scope="col">ISIN</th>
+            </tr>
+          </thead>
+          <tbody>
+            {
+              bondAuction.securities.map((bond) => (
+                <tr>
+                  <td>{bond.years} years</td>
+                  <td class="market__yield">{bond.netYieldPercent}%</td>
+                  <td>
+                    {bond.netCouponPerMillion === null
+                      ? "Paid twice a year"
+                      : `${formatMoney(bond.netCouponPerMillion, "UGX")} after tax`}
+                  </td>
+                  <td>{formatDay(bond.maturesOn)}</td>
+                  <td class="market__code">{bond.isin}</td>
+                </tr>
+              ))
+            }
+          </tbody>
+        </table>
+      </div>
+      <p class="source">
+        Source: {bondAuction.source}. The Bank of Uganda auctions {others} year bonds in a
+        separate round. Treasury bonds are coming soon to Finvest.
+      </p>
+    </div>
+  </section>
+
+  <section class="band">
     <div class="wrap">
       <p class="eyebrow">Side by side</p>
       <h2 class="h2">Which one fits?</h2>
@@ -146,6 +247,12 @@ const note = (code: string, key: string) => notes[code]?.[key] ?? "Ask us";
           is your interest. Finvest buys the bills for you at Bank of Uganda auctions and shows
           the return as a simple yearly rate after tax.
         </p>
+        <h2 class="h2">And a treasury bond?</h2>
+        <p class="lead">
+          A longer loan to the government, from 2 to 25 years. It pays interest every six months
+          and the full amount back at the end. If you sell before then, the price can be higher or
+          lower than you paid.
+        </p>
       </div>
       <Calculator />
     </div>
@@ -157,7 +264,8 @@ const note = (code: string, key: string) => notes[code]?.[key] ?? "Ask us";
       <div>
         <h2>Know the risks</h2>
         <p>
-          Held to maturity, a treasury bill pays the amount shown when you invest. If you withdraw
+          Held to maturity, a treasury bill pays the amount shown when you invest. Past auction
+          yields do not promise future ones, and the next auction can pay more or less. If you withdraw
           early you can get back less than you expected, and you see the exact amount before you
           confirm. Dollar investments also move with the exchange rate if you think in shillings.
           Read the <a href="/legal/risk">risk disclosure</a>.

@@ -6,6 +6,19 @@ import { z } from "zod";
 export type Upload = Blob | { uri: string; name: string; type: string };
 export const Upload = z.custom<Upload>((value) => value !== null && typeof value === "object");
 
+export const AcceptanceView = z.object({
+  accepted_at: z.string(),
+  document: z.enum(["terms", "privacy"]),
+  version: z.string(),
+  via: z.enum(["signup", "claim"]),
+});
+export type AcceptanceView = z.infer<typeof AcceptanceView>;
+
+export const AcceptancesView = z.object({
+  items: z.array(AcceptanceView),
+});
+export type AcceptancesView = z.infer<typeof AcceptancesView>;
+
 export const AnswerBody = z.object({
   join: z.boolean(),
 });
@@ -133,6 +146,7 @@ export const CheckStatus = z.enum(["draft", "submitted", "needs_review", "with_c
 export type CheckStatus = z.infer<typeof CheckStatus>;
 
 export const ClaimComplete = z.object({
+  accepted_terms: z.literal(true),
   challenge_id: z.string(),
   code: z.string(),
   password: z.string(),
@@ -1374,6 +1388,7 @@ export const SignedOut = z.object({
 export type SignedOut = z.infer<typeof SignedOut>;
 
 export const SignupComplete = z.object({
+  accepted_terms: z.literal(true),
   password: z.string(),
   ticket: z.string(),
 });
@@ -3271,6 +3286,17 @@ export const operations = {
     idempotent: false,
     status: 204,
     response: null,
+  },
+  "GET /client/terms-acceptances": {
+    method: "GET",
+    path: "/client/terms-acceptances",
+    params: z.object({}),
+    query: z.object({}),
+    body: null,
+    bodyKind: null,
+    idempotent: false,
+    status: 200,
+    response: AcceptancesView,
   },
   "GET /client/transfer-recipients": {
     method: "GET",

@@ -1,0 +1,43 @@
+# Serves the client app's web build inside its own container. The edge Caddy in front adds TLS
+# and the other security headers (infra/deployment/Caddyfile).
+{
+	admin off
+	auto_https off
+	persist_config off
+}
+
+:8080 {
+	root * /srv
+	encode zstd gzip
+	# Written at build time for exactly this build (app-csp.mjs).
+	import /etc/caddy/csp.caddy
+	handle /health/live {
+		respond "ok" 200
+	}
+	# Scripts and images carry a hash in their names, so they never change and can be cached for
+	# a year.
+	@hashed {
+		path /_expo/static/* /assets/*
+		file
+	}
+	handle @hashed {
+		header Cache-Control "public, max-age=31536000, immutable"
+		file_server
+	}
+	# The selfie's face detector (/face) and Regula's component (/regula) keep their names across
+	# releases, so the browser asks each time and gets 304 while they are unchanged.
+	@unhashed {
+		path /face/* /regula/* /favicon.ico
+		file
+	}
+	handle @unhashed {
+		header Cache-Control "no-cache"
+		file_server
+	}
+	# Every other path is a route of the single page app, which Expo Router reads in the browser.
+	handle {
+		header Cache-Control "no-cache"
+		try_files {path} /index.html
+		file_server
+	}
+}
