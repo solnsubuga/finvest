@@ -2,10 +2,10 @@ import type { PaymentPage } from "@finvest/api-client/client";
 
 import { api } from "@/api/http";
 
-import { buildActivity, PaymentRow } from "./build";
+import { buildActivity, from, PaymentRow } from "./build";
 import { ActivityClient, ActivityError } from "./types";
 
-/** Pages of payments read at most. A client with more sees the newest of them. */
+/** Pages of payments read at most. A client with more sees everything since the oldest one read. */
 const MAX_PAYMENT_PAGES = 4;
 
 /** The Activity list from `GET /client/payments`, `/client/investments` and `/client/payouts`. */
@@ -27,7 +27,9 @@ export function createApiActivityClient(): ActivityClient {
           api("GET /client/investments", {}),
           api("GET /client/payouts", {}),
         ]);
-        return buildActivity(payments, investments, payouts);
+        // Payments come newest first, so the last one read is where a cut list starts.
+        const since = before ? (payments[payments.length - 1]?.created_at ?? null) : null;
+        return { items: from(buildActivity(payments, investments, payouts), since), since };
       } catch {
         throw new ActivityError();
       }

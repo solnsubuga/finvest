@@ -1,4 +1,5 @@
-import { buildActivity, byMonth, InvestmentRow, monthHeading, PaymentRow, PayoutRow, shortDay } from "../build";
+import { buildActivity, byMonth, from, InvestmentRow, longDay, monthHeading, PaymentRow, PayoutRow, shortDay } from "../build";
+import { ActivityItem } from "../types";
 
 const ugx = (minor: number) => ({ currency: "UGX" as const, minor });
 
@@ -35,9 +36,9 @@ const payout = (over: Partial<PayoutRow> = {}): PayoutRow => ({
 describe("the Activity list", () => {
   it("names the investment a payment was for, and falls back when it is not known", () => {
     const [known] = buildActivity([payment()], [investment()], []);
-    expect(known).toMatchObject({ kind: "payment", title: "Paid for 91 day Treasury bill", detail: "MTN Mobile Money", direction: "out", status: "done", statusLabel: "Paid", investmentId: "inv-1" });
+    expect(known).toMatchObject({ kind: "payment", title: "Payment for 91 day Treasury bill", detail: "MTN Mobile Money", direction: "out", status: "done", statusLabel: "Paid", investmentId: "inv-1" });
     const [unknown] = buildActivity([payment({ investment_id: "other" })], [], []);
-    expect(unknown?.title).toBe("Paid for an investment");
+    expect(unknown?.title).toBe("Payment for an investment");
   });
 
   it("dates a payment by when it was confirmed, else when it started", () => {
@@ -90,5 +91,18 @@ describe("the Activity list", () => {
       "November 2026",
       "October 2026",
     ]);
+  });
+});
+
+describe("a list cut short", () => {
+  it("keeps every kind of row from the start time on and nothing older", () => {
+    const at = (key: string, iso: string) => ({ key, at: iso }) as ActivityItem;
+    const items = [at("a", "2026-11-03T00:00:00Z"), at("b", "2026-11-02T00:00:00Z"), at("c", "2026-11-01T00:00:00Z")];
+    expect(from(items, "2026-11-02T00:00:00Z").map((item) => item.key)).toEqual(["a", "b"]);
+    expect(from(items, null)).toBe(items);
+  });
+
+  it("names the day it starts in full, Kampala time", () => {
+    expect(longDay("2026-10-31T22:00:00Z")).toBe("1 November 2026");
   });
 });

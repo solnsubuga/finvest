@@ -58,7 +58,7 @@ export function buildActivity(
       key: `payment:${payment.id}`,
       kind: "payment",
       at: payment.confirmed_at ?? payment.created_at,
-      title: name ? `Paid for ${name}` : "Paid for an investment",
+      title: name ? `Payment for ${name}` : "Payment for an investment",
       detail: METHOD[payment.method],
       amount: payment.amount,
       direction: "out",
@@ -116,6 +116,22 @@ const KAMPALA_OFFSET_MS = 3 * 60 * 60 * 1000;
 export function monthHeading(iso: string): string {
   const at = new Date(Date.parse(iso) + KAMPALA_OFFSET_MS);
   return `${MONTHS[at.getUTCMonth()]} ${at.getUTCFullYear()}`;
+}
+
+/** "13 November 2026", the Kampala day in full. */
+export function longDay(iso: string): string {
+  const at = new Date(Date.parse(iso) + KAMPALA_OFFSET_MS);
+  return `${at.getUTCDate()} ${MONTHS[at.getUTCMonth()]} ${at.getUTCFullYear()}`;
+}
+
+/**
+ * Only the rows from `since` on, so a list cut short is still whole for the
+ * time it covers: no older interest or payout beside missing older payments.
+ */
+export function from(items: ActivityItem[], since: string | null): ActivityItem[] {
+  if (!since) return items;
+  const start = Date.parse(since);
+  return items.filter((item) => Date.parse(item.at) >= start);
 }
 
 /** "13 Nov", the Kampala day a row falls in. */

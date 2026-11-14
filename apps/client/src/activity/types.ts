@@ -17,7 +17,7 @@ export type ActivityItem = {
   kind: ActivityKind;
   /** When it happened, ISO 8601. Newest first is by this. */
   at: string;
-  /** "Paid for 91 day Treasury bill". */
+  /** "Payment for 91 day Treasury bill", true whether it went through or not. */
   title: string;
   /** "MTN Mobile Money", "Bank transfer", "To your mobile money". */
   detail: string;
@@ -38,7 +38,18 @@ export class ActivityError extends Error {
   }
 }
 
+export type ActivityList = {
+  /** Newest first. */
+  items: ActivityItem[];
+  /**
+   * Null when the list holds everything. Otherwise the client has more
+   * payments than the app reads, and the list holds every kind of row from
+   * this time on and nothing older, so the screen can say where it starts.
+   */
+  since: string | null;
+};
+
 export interface ActivityClient {
-  /** Everything, newest first. Fails with ActivityError when any part cannot be read. */
-  list(): Promise<ActivityItem[]>;
+  /** Fails with ActivityError when any part cannot be read. */
+  list(): Promise<ActivityList>;
 }

@@ -49,7 +49,7 @@ describe("Activity", () => {
     await screen.findByText("Welcome, Amara");
     await fireEvent.press(screen.getByLabelText("Activity"));
 
-    expect(await screen.findByText("Paid for 182 day Treasury bill")).toBeTruthy();
+    expect(await screen.findByText("Payment for 182 day Treasury bill")).toBeTruthy();
     expect(screen.getByText("Being checked")).toBeTruthy();
     expect(screen.getByText("Did not go through")).toBeTruthy();
     expect(screen.getByText("Interest on 91 day Treasury bill")).toBeTruthy();
@@ -61,7 +61,8 @@ describe("Activity", () => {
     expect(screen.getByText("Interest on 91 day Treasury bill")).toBeTruthy();
     await fireEvent.press(screen.getByTestId("filter-payout"));
     expect(screen.getByText("Paid to you")).toBeTruthy();
-    expect(screen.queryByText(/^Paid for/)).toBeNull();
+    expect(screen.queryByText(/^Payment for/)).toBeNull();
+    expect(screen.queryByTestId("activity-since")).toBeNull();
   });
 
   it("says nothing has happened yet for a new client", async () => {

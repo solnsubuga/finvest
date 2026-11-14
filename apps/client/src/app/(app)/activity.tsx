@@ -2,7 +2,7 @@ import { useCallback, useState } from "react";
 import { Pressable, StyleSheet, View } from "react-native";
 import { useFocusEffect, useRouter } from "expo-router";
 
-import { byMonth, shortDay } from "@/activity/build";
+import { byMonth, longDay, shortDay } from "@/activity/build";
 import { useActivity } from "@/activity/ActivityProvider";
 import { ActivityItem, ActivityKind } from "@/activity/types";
 import { AppPage } from "@/components/AppPage";
@@ -14,7 +14,7 @@ import { formatMoney } from "@/payments/format";
 import { Loading } from "@/payments/Parts";
 import { colors, COLUMN_WIDTH, fontSizes, radii } from "@/theme";
 
-type State = { status: "loading" } | { status: "error" } | { status: "ready"; items: ActivityItem[] };
+type State = { status: "loading" } | { status: "error" } | { status: "ready"; items: ActivityItem[]; since: string | null };
 
 type Filter = "all" | ActivityKind;
 
@@ -46,7 +46,7 @@ export default function Activity() {
     useCallback(() => {
       let live = true;
       client.list().then(
-        (items) => live && setState({ status: "ready", items }),
+        ({ items, since }) => live && setState({ status: "ready", items, since }),
         () => live && setState({ status: "error" }),
       );
       return () => {
@@ -125,6 +125,11 @@ export default function Activity() {
                 </View>
               ))
             )}
+            {state.since ? (
+              <Txt size={fontSizes.sm} color={colors.muted} testID="activity-since">
+                {`This list goes back to ${longDay(state.since)}. For anything older, ask for a statement in Documents.`}
+              </Txt>
+            ) : null}
           </>
         ) : null}
       </View>
