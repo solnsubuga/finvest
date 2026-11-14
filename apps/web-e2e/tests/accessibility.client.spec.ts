@@ -157,7 +157,7 @@ test("freezing the account and the frozen screen meet WCAG 2.1 AA", async ({ pag
   await page.getByTestId("login-submit").click();
   await page.getByTestId("use-passkey").click();
   await createPin(page);
-  await expect(page.getByText("Welcome, Amara")).toBeVisible();
+  await expect(page.getByTestId("home")).toBeVisible();
   await visit(page, "/account/freeze");
   await expect(page.getByTestId("freeze-confirm")).toBeVisible();
   expect(await violations(page), "freeze your account").toEqual([]);
