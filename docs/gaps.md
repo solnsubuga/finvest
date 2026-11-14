@@ -64,7 +64,7 @@ Four screens were still the placeholder page. The Review Queue is connected to `
 | **Tax certificates and URA withholding reports.** | | Running thread "Build tax certificates and URA reports" |
 | **Sending push, SMS and email.** | | Notifications thread |
 | **Anti-money-laundering.** Sanctions and politically exposed person screening runs once, when a client hands in their identity check, through ioTec Verify's AML screening (once `FINVEST_IDENTITY_PROVIDER=iotec`). Not built: screening again later, screening at payouts, transaction monitoring rules and the Financial Intelligence Authority report. | Listed on the roadmap's back office checklist and likely a licence condition. | Identity checks thread for the screening; the rest needs an owner |
-| **Next of kin and the suitability questions.** Not built. | Listed on the roadmap and "usually asked for by the regulator". | None |
+| ~~**Next of kin and the suitability questions.** Not built.~~ Backend closed by the next of kin and investing questions PR ([client-profile.md](client-profile.md)). | ~~Listed on the roadmap and "usually asked for by the regulator".~~ | Client profile thread |
 | **The real device checks** in [launch.md](launch.md) have not been run. | A launch condition. | Engineering, once Android and iPhone builds exist |
 | **Web end-to-end tests** cover 7 client and 6 console journeys. The claim has none, because its screen does not exist yet. Payout accounts and the identity check have theirs. | Each new screen above should add its journey. | Each screen's thread |
 

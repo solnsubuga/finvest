@@ -48,6 +48,7 @@ from app.modules.insights import api as insights_api
 from app.modules.investments import api as investments_api
 from app.modules.kyc import api as kyc_api
 from app.modules.kyc import claims_api as kyc_claims_api
+from app.modules.kyc import profile_api as kyc_profile_api
 from app.modules.kyc.domain.liveness import LivenessProvider
 from app.modules.kyc.domain.provider import IdentityProvider
 from app.modules.kyc.settings import KycSettings
@@ -231,6 +232,8 @@ def create_app(
     ):
         app.include_router(router)
     for router in kyc_claims_api.create_routers(storage):
+        app.include_router(router)
+    for router in kyc_profile_api.create_routers(identity_sealer):
         app.include_router(router)
     app.include_router(dealing_api.router)
     app.include_router(dealing_buffer_api.router)

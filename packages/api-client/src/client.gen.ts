@@ -6,6 +6,24 @@ import { z } from "zod";
 export type Upload = Blob | { uri: string; name: string; type: string };
 export const Upload = z.custom<Upload>((value) => value !== null && typeof value === "object");
 
+export const AnswersBody = z.object({
+  answers: z.record(z.string(), z.unknown()),
+});
+export type AnswersBody = z.infer<typeof AnswersBody>;
+
+export const Profile = z.enum(["careful", "balanced", "long_term"]);
+export type Profile = z.infer<typeof Profile>;
+
+export const AnswersView = z.object({
+  answered_at: z.string(),
+  answers: z.record(z.string(), z.unknown()),
+  due_again_at: z.string(),
+  id: z.string(),
+  longest_term_days: z.number().int().nullable(),
+  profile: Profile,
+});
+export type AnswersView = z.infer<typeof AnswersView>;
+
 export const AtMaturity = z.enum(["roll_over", "pay_out"]);
 export type AtMaturity = z.infer<typeof AtMaturity>;
 
@@ -684,6 +702,39 @@ export const NewSaving = z.object({
 });
 export type NewSaving = z.infer<typeof NewSaving>;
 
+export const Relationship = z.enum(["spouse", "child", "parent", "sibling", "other_relative", "friend", "other"]);
+export type Relationship = z.infer<typeof Relationship>;
+
+export const PersonBody = z.object({
+  full_name: z.string(),
+  id_number: z.string(),
+  phone: z.string(),
+  relationship: Relationship,
+  share_bps: z.number().int(),
+});
+export type PersonBody = z.infer<typeof PersonBody>;
+
+export const NextOfKinBody = z.object({
+  people: z.array(PersonBody),
+});
+export type NextOfKinBody = z.infer<typeof NextOfKinBody>;
+
+export const KycProfileApiPersonView = z.object({
+  full_name: z.string(),
+  id: z.string(),
+  id_number: z.string(),
+  phone: z.string(),
+  relationship: Relationship,
+  share_bps: z.number().int(),
+});
+export type KycProfileApiPersonView = z.infer<typeof KycProfileApiPersonView>;
+
+export const NextOfKinView = z.object({
+  people: z.array(KycProfileApiPersonView),
+  updated_at: z.string().nullable(),
+});
+export type NextOfKinView = z.infer<typeof NextOfKinView>;
+
 export const NotificationItem = z.object({
   body: z.string(),
   category: z.enum(["money", "investments", "earnings", "account", "security", "support", "news"]),
@@ -702,6 +753,11 @@ export const NotificationPage = z.object({
   unread: z.number().int(),
 });
 export type NotificationPage = z.infer<typeof NotificationPage>;
+
+export const OptionView = z.object({
+  code: z.string(),
+});
+export type OptionView = z.infer<typeof OptionView>;
 
 export const PasskeyItem = z.object({
   created_at: z.string(),
@@ -863,6 +919,12 @@ export const PushDeviceToken = z.object({
 });
 export type PushDeviceToken = z.infer<typeof PushDeviceToken>;
 
+export const QuestionView = z.object({
+  code: z.string(),
+  options: z.array(OptionView),
+});
+export type QuestionView = z.infer<typeof QuestionView>;
+
 export const QuoteOut = z.object({
   amount_minor: z.number().int(),
   currency: Currency,
@@ -900,6 +962,13 @@ export const ResetStarted = z.object({
   challenge_id: z.string(),
 });
 export type ResetStarted = z.infer<typeof ResetStarted>;
+
+export const RiskProfileView = z.object({
+  due: z.boolean(),
+  latest: AnswersView.nullable(),
+  questions: z.array(QuestionView),
+});
+export type RiskProfileView = z.infer<typeof RiskProfileView>;
 
 export const SavePreferences = z.object({
   categories: z.array(PreferenceChange),
@@ -1852,6 +1921,28 @@ export const operations = {
     status: 200,
     response: LoginStarted,
   },
+  "GET /client/next-of-kin": {
+    method: "GET",
+    path: "/client/next-of-kin",
+    params: z.object({}),
+    query: z.object({}),
+    body: null,
+    bodyKind: null,
+    idempotent: false,
+    status: 200,
+    response: NextOfKinView,
+  },
+  "PUT /client/next-of-kin": {
+    method: "PUT",
+    path: "/client/next-of-kin",
+    params: z.object({}),
+    query: z.object({}),
+    body: NextOfKinBody,
+    bodyKind: "json",
+    idempotent: false,
+    status: 200,
+    response: NextOfKinView,
+  },
   "GET /client/notification-preferences": {
     method: "GET",
     path: "/client/notification-preferences",
@@ -2164,6 +2255,28 @@ export const operations = {
     idempotent: false,
     status: 204,
     response: null,
+  },
+  "GET /client/risk-profile": {
+    method: "GET",
+    path: "/client/risk-profile",
+    params: z.object({}),
+    query: z.object({}),
+    body: null,
+    bodyKind: null,
+    idempotent: false,
+    status: 200,
+    response: RiskProfileView,
+  },
+  "PUT /client/risk-profile": {
+    method: "PUT",
+    path: "/client/risk-profile",
+    params: z.object({}),
+    query: z.object({}),
+    body: AnswersBody,
+    bodyKind: "json",
+    idempotent: false,
+    status: 200,
+    response: RiskProfileView,
   },
   "GET /client/second-steps": {
     method: "GET",
