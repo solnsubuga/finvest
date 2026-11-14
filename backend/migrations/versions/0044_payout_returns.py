@@ -44,13 +44,12 @@ CREATE TABLE payout_returns (
     decided_by push_id,
     decided_at timestamptz,
     decision_reason varchar(500),
+    -- No foreign key into the ledger's tables: the guard checks the entry, as other modules do.
     ledger_entry_id push_id,
     CONSTRAINT pk_payout_returns PRIMARY KEY (id),
     CONSTRAINT fk_payout_returns_payout FOREIGN KEY (payout_id) REFERENCES payouts (id),
     CONSTRAINT fk_payout_returns_line
         FOREIGN KEY (statement_line_id) REFERENCES reconciliation_statement_lines (id),
-    CONSTRAINT fk_payout_returns_entry
-        FOREIGN KEY (ledger_entry_id) REFERENCES ledger_journal_entries (id),
     CONSTRAINT ck_payout_returns_reason CHECK (btrim(reason) <> ''),
     CONSTRAINT ck_payout_returns_status
         CHECK (status IN ('proposed', 'approved', 'declined', 'withdrawn')),
