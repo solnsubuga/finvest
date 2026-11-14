@@ -161,7 +161,8 @@ export function differenceSummary(item: Difference): string {
   }
   const gap = difference(item.old, item.new);
   const more = !gap.startsWith("-");
-  const amount = formatWithCurrency(more ? gap : gap.slice(1), item.currency);
+  const size = more ? gap : gap.slice(1);
+  const amount = item.currency ? formatWithCurrency(size, item.currency) : `${formatAmount(size, null)} in the smallest unit`;
   return gap === "0" ? "The tax held differs" : `Finvest 1.0 shows ${amount} ${more ? "more" : "less"} interest`;
 }
 

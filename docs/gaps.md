@@ -37,7 +37,7 @@ Every console screen is built, but eight of them only work on the sample sign-in
 | Investments | Sample data only | `/staff/investments`, `/staff/investments/{id}`, `/staff/interest-runs` | None |
 | Goals | Sample data only, goals and group goals | `/staff/goals`, `/staff/goals/{id}`, `/staff/goal-groups`, `/staff/goal-groups/{id}` | None |
 | Reconciliation | Sample data only | `/staff/payments/bank-transfers` (four) | None |
-| Migration | Sample data only | `/staff/migration` and its trials, control totals and sign-offs (seven) | Migration thread, to confirm |
+| ~~Migration~~ | ~~Sample data only~~ Closed by the console migration wiring PR (`src/screens/migration/http.ts`). | `/staff/migration` and its trials, control totals and sign-offs (seven) | |
 | Dealing Desk | Sample data only; the buffer tab is being connected | `/staff/dealing/desk`, `/staff/dealing/orders` (seven) | Dealing desk thread (PRs #262, #265) |
 | Automatic Investing | Sample data only | None: the staff routes are not built ([automatic-investing.md](automatic-investing.md)) | Phase 4 |
 

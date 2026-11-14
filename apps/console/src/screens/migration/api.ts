@@ -66,9 +66,11 @@ export interface TotalLine {
 export interface Difference {
   key: string;
   kind: "interest" | "tax_rate";
-  row: number;
+  /** The investments sheet's row. Null when the backend does not say. */
+  row: number | null;
   legacyInvestmentRef: string;
-  currency: Currency;
+  /** Null when the backend does not say: the interest is then shown as a whole number in the smallest unit. */
+  currency: Currency | null;
   /** Interest in the smallest unit, or a tax rate in basis points. */
   old: string;
   new: string;
@@ -172,7 +174,15 @@ export interface MigrationApi {
 /** The largest sheet the backend accepts, in bytes. */
 export const MAX_SHEET_BYTES = 40_000_000;
 
-export type MigrationErrorCode = "forbidden" | "conflict" | "file_too_large" | "not_connected" | "unavailable";
+export type MigrationErrorCode =
+  | "forbidden"
+  | "conflict"
+  | "invalid"
+  | "file_too_large"
+  | "not_confirmed"
+  | "stale"
+  | "not_connected"
+  | "unavailable";
 
 export class MigrationError extends Error {
   readonly code: MigrationErrorCode;
@@ -187,6 +197,9 @@ export class MigrationError extends Error {
 const MESSAGES: Record<MigrationErrorCode, string> = {
   forbidden: "You are not allowed to do this. A sign-off or an entry of totals is checked by someone else.",
   conflict: "Someone changed this while you were looking. The screen now shows the latest figures.",
+  invalid: "Finvest could not accept that. Check the figures and the reason, and try again.",
+  not_confirmed: "Nothing was changed, because you did not confirm it is you.",
+  stale: "That was saved, but the screen could not load the latest figures. It has been reloaded.",
   file_too_large: "One of the files is too large. A sheet holds at most 100,000 rows.",
   not_connected: "Migration is not connected to the Finvest service yet.",
   unavailable: "We could not reach Finvest. Check your connection and try again.",
