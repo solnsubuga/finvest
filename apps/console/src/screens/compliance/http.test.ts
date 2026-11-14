@@ -19,7 +19,7 @@ const PROPOSAL = {
 
 const CASE = {
   id: "-Ncase00000000000001",
-  client: { id: "-Nclient000000000001", name: "Ruth Achieng", account_number: "FV 2035 0118" },
+  client: { id: "-Nclient000000000001", name: "Ruth Achieng", account_number: "1001000118" },
   source: "monitoring",
   code: "large_deposit",
   opened_at: "2026-11-13T07:00:00Z",
@@ -84,7 +84,7 @@ describe("compliance over the API", () => {
     expect(fetchImpl.mock.calls[0]?.[0]).toBe("https://api.example/staff/compliance/cases?status=open&source=monitoring");
     expect(first).toMatchObject({
       code: "large_deposit",
-      client: { name: "Ruth Achieng", accountNumber: "FV 2035 0118" },
+      client: { name: "Ruth Achieng", accountNumber: "1001000118" },
       waiting: { proposedByName: "Grace Auma", outcome: "no_concern" },
     });
   });
