@@ -119,10 +119,17 @@ async def _post(
 
 
 async def invested(
-    app_database: Database, worker_database: Database, *, interest: tuple[int, ...] = (100, 100)
+    app_database: Database,
+    worker_database: Database,
+    *,
+    interest: tuple[int, ...] = (100, 100),
+    on: date | None = None,
 ) -> tuple[Actor, investments.Investment]:
-    """An approved client's running 91 day bill, paid on STARTED, with daily interest after."""
-    client = await approved_client(app_database, at(STARTED))
+    """An approved client's running 91 day bill, paid on STARTED or `on`, with daily interest
+    after. Pass on=today() to read the day when the test runs rather than when it was
+    collected."""
+    started_on = on or STARTED
+    client = await approved_client(app_database, at(started_on))
     investment = await request(app_database, client, PRESENT)
     amount = investment.amount
     awaiting = AccountSpec(
@@ -141,12 +148,12 @@ async def invested(
         ),
         credit_spec=awaiting,
         amount=amount,
-        on=STARTED,
+        on=started_on,
         source_id=push_id(),
     )
     async with worker_database.actor_transaction(SYSTEM) as session:
         await investments.start_investment(
-            session, investment.id, confirmed_on=STARTED, clock=at(STARTED)
+            session, investment.id, confirmed_on=started_on, clock=at(started_on)
         )
     for day, earned in enumerate(interest, start=1):
         await _post(
@@ -164,7 +171,7 @@ async def invested(
                 reference=investment.id,
             ),
             amount=ugx(earned),
-            on=STARTED + timedelta(days=day),
+            on=started_on + timedelta(days=day),
         )
     return client, investment
 
