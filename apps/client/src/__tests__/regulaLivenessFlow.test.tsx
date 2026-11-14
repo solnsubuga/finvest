@@ -119,7 +119,11 @@ beforeAll(warmRouter, WARM_ROUTER_MS);
 describe("Regula's liveness in the app", () => {
   it("runs Regula with the attempt's tag, reports the transaction, then goes on to the head turns", async () => {
     await upToTheSelfie();
-    expect(screen.getByText(/A short check by Regula/)).toBeTruthy();
+    // What the check is sits behind "Powered by Regula".
+    expect(screen.queryByText(/A short check by our identity partner/)).toBeNull();
+    await fireEvent.press(await top("powered-by-regula"));
+    expect(screen.getByText(/A short check by our identity partner/)).toBeTruthy();
+    expect(screen.getByText(/They take the picture and get no name or number from us/)).toBeTruthy();
     await startSession();
     expect(regulaSession.tag).toMatch(/^demo-liveness-\d+$/);
     expect(regulaSession.serviceUrl).toBe("https://face.regula.test");

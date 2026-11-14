@@ -124,6 +124,8 @@ export function RegulaLiveness({ tag, serviceUrl, onEnd }: RegulaLivenessProps) 
       finishScreen: false,
       retryCount: 1,
       changeCamera: false,
+      // "Powered by Regula" on Finvest's own screen is enough; no Regula footer on the capture.
+      copyright: false,
       customization: {
         fontFamily: "inherit",
         onboardingScreenStartButtonBackground: colors.black,

@@ -59,6 +59,8 @@ async function run(tag: string, serviceUrl: string): Promise<RegulaOutcome> {
       // Finvest's own screen says how it went, once the API has read the result.
       skipStep: [LivenessSkipStep.SUCCESS_STEP],
       locationTrackingEnabled: false,
+      // "Powered by Regula" on Finvest's own screen is enough; no Regula footer on the capture.
+      copyright: false,
       preventScreenRecording: true,
     }),
   });

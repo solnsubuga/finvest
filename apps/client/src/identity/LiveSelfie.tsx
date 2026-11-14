@@ -9,6 +9,7 @@ import { Title, Txt } from "@/components/Txt";
 import { colors, fontSizes } from "@/theme";
 
 import { useIdentity } from "./IdentityProvider";
+import { PoweredByRegula } from "./regula/PoweredByRegula";
 import { RegulaRun } from "./regula/RegulaRun";
 import { regulaTag, regulaTroubleCopy, type RegulaOutcome } from "./regula/types";
 import { describeIdentityError, IdentityCheck, IdentityError, LivenessState } from "./types";
@@ -415,9 +416,9 @@ export function LiveSelfie({ check, top, frame, onCamera, onDone, regula = false
     : unfinished
       ? "Your live check did not finish"
       : "Take a live selfie";
-  const lead = regula && !failed && !unfinished
-    ? "A short check by Regula, our identity partner, right here in Finvest. You look at the camera and move as it asks, so we know a real person is in front of it. Then come four quick head turns."
-    : failed
+  // With Regula, what the check is sits behind "Powered by Regula".
+  const poweredBy = regula && !failed && !unfinished;
+  const lead = failed
     ? "It happens in poor light or when the face is partly hidden. Try again facing a window, with your whole face in view."
     : unfinished
       ? "It ran out of time or could not start. Start a new one, it only takes a minute."
@@ -445,7 +446,7 @@ export function LiveSelfie({ check, top, frame, onCamera, onDone, regula = false
       {top}
       <View style={{ marginTop: 28, gap: 8 }}>
         <Title>{heading}</Title>
-        <Txt color={colors.muted}>{lead}</Txt>
+        {poweredBy ? <PoweredByRegula /> : <Txt color={colors.muted}>{lead}</Txt>}
       </View>
       <View style={{ marginTop: 22, gap: 16 }}>
         {retake && check.clientMessage ? <Notice tone="warning">{check.clientMessage}</Notice> : null}
@@ -463,10 +464,11 @@ export function LiveSelfie({ check, top, frame, onCamera, onDone, regula = false
             </View>
           ))}
         </View>
-        <Txt size={fontSizes.xs} color={colors.muted}>
-          {regula ? "Regula" : "ioTec"} takes the picture and gets no name or number from us. Finvest uses it only to
-          confirm it is you.
-        </Txt>
+        {regula ? null : (
+          <Txt size={fontSizes.xs} color={colors.muted}>
+            ioTec takes the picture and gets no name or number from us. Finvest uses it only to confirm it is you.
+          </Txt>
+        )}
         {errorNotice}
       </View>
     </Screen>
