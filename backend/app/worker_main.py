@@ -39,6 +39,7 @@ from app.modules.notifications.keyed_backfill import KeyedBackfillJobs
 from app.modules.notifications.settings import EmailHashSettings
 from app.modules.payments.bank_transfers import BankTransferJobs
 from app.modules.payments.jobs import DepositJobs
+from app.modules.payments.reversals import ReversalJobs
 from app.modules.payments.settings import PaymentsSettings
 from app.modules.payments.wiring import collections_provider
 from app.modules.payouts.jobs import PayoutJobs, release_screened
@@ -126,6 +127,7 @@ def handlers(
     # Bank transfers are settled from a staff review and call no provider, so they run even
     # where mobile money is turned off.
     kinds.update(BankTransferJobs(database, clock).handlers())
+    kinds.update(ReversalJobs(database, clock).handlers())
     collections = collections_provider(PaymentsSettings(), clock)
     if collections is not None:
         kinds.update(DepositJobs(database, collections, clock).handlers())

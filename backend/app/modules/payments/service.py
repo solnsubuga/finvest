@@ -121,12 +121,15 @@ class Deposit:
     updated_at: datetime
     sent_at: datetime | None
     settled_at: datetime | None
+    # Set when two members of staff took back a deposit credited by mistake (reversals.py).
+    # It stays confirmed, but no longer counts as the investment's payment.
+    reversal_id: str | None = None
 
 
 _COLUMNS = (
     "id, client_id, purpose_type, purpose_id, method, provider, currency, amount_minor, "
     "payer_msisdn, status, code, provider_reference, ledger_entry_id, created_at, updated_at, "
-    "sent_at, settled_at"
+    "sent_at, settled_at, reversal_id"
 )
 _INSERT = text(
     "INSERT INTO payment_deposits (id, client_id, purpose_type, purpose_id, method, provider, "
@@ -139,15 +142,16 @@ _SELECT = text(f"SELECT {_COLUMNS} FROM payment_deposits WHERE id = :id")  # noq
 LIVE_INVESTMENT_INDEX = "uq_payment_deposits_live_investment"
 _HAS_LIVE = text(
     "SELECT 1 FROM payment_deposits WHERE purpose_type = :purpose_type "
-    "AND purpose_id = :purpose_id AND status <> 'failed' LIMIT 1"
+    "AND purpose_id = :purpose_id AND status <> 'failed' AND reversal_id IS NULL LIMIT 1"
 )
 _HAS_LIVE_ID = text(
     "SELECT id FROM payment_deposits WHERE purpose_type = :purpose_type "
-    "AND purpose_id = :purpose_id AND status <> 'failed' ORDER BY id DESC LIMIT 1"
+    "AND purpose_id = :purpose_id AND status <> 'failed' AND reversal_id IS NULL "
+    "ORDER BY id DESC LIMIT 1"
 )
 _SELECT_LIVE = text(
     "SELECT id, status FROM payment_deposits WHERE purpose_type = 'investment' "
-    "AND purpose_id = :purpose_id AND status <> 'failed' LIMIT 1"
+    "AND purpose_id = :purpose_id AND status <> 'failed' AND reversal_id IS NULL LIMIT 1"
 )
 _SELECT_LOCKED = text(
     f"SELECT {_COLUMNS} FROM payment_deposits WHERE id = :id FOR UPDATE"  # noqa: S608
@@ -307,7 +311,8 @@ async def insert_deposit(session: AsyncSession, values: dict[str, object]) -> No
 
 
 async def has_live_deposit(session: AsyncSession, *, purpose: Purpose, purpose_id: str) -> bool:
-    """Whether a deposit that has not failed exists for this investment or goal.
+    """Whether a deposit that has not failed, and was not reversed, exists for this investment
+    or goal.
 
     For other modules, called as the system in the worker. True while a deposit is being sent,
     awaiting approval, uncertain or confirmed: money for this purpose has arrived or still may.
@@ -682,6 +687,7 @@ def _deposit(row: Row[Any]) -> Deposit:
         updated_at=row.updated_at,
         sent_at=row.sent_at,
         settled_at=row.settled_at,
+        reversal_id=row.reversal_id,
     )
 
 

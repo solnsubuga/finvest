@@ -149,7 +149,21 @@ The database enforces the same rules: only staff write the table and only as the
 
 Decided by the owner on 13 November 2026: receivable, then recover. The original entry is never touched, and no balance goes below zero. Every step is proposed by one staff member and approved by another through the ledger's corrections ([ledger.md](ledger.md)), with a reason, and is audited.
 
-**The money is still in `client.awaiting_start`.** Staff propose an exact reversal of the deposit entry and a second person approves it.
+**The money is still in `client.awaiting_start`.** The deposit is reversed, by two people (`reversals.py`, `domain/reversals.py`, `reversal_routes.py`, migration 0261). If the investment started, it is unwound first through investments corrections, which puts the principal back there.
+
+1. **Propose.** One member of staff names the confirmed deposit and a reason (`POST /staff/payments/reversals`). The whole amount must still wait for the investment, or it is refused with `money_moved_on`. A deposit saved by a reassignment is refused with `not_a_payment`: it is put right by reassigning it. Nothing moves.
+2. **Approve.** A different member of staff approves, with a passkey or app code from the last ten minutes, and the worker's job is queued in that transaction. Or the second person sends it back with a note, or the proposer withdraws it. It shows in the approvals inbox as `deposit_reversal`.
+3. **The worker** takes the investment's row lock, the one the start of an investment holds while it reads the money waiting, so a start and a reversal never interleave. It checks everything again and posts the exact reversal of the deposit's entry:
+
+| Debit | Credit |
+| --- | --- |
+| Liability `client.awaiting_start`, the client, reference the investment | The wallet or bank account the deposit's entry debited |
+
+The entry is `payment.deposit_reversed`, source `payment.deposit_reversal` and the reversal's ID, key `deposit-reversal:<ID>`, and it points at the deposit's entry as the one it reverses. In the same transaction the deposit's `reversal_id` is set. The deposit stays `confirmed`, because it was, but it no longer counts as the investment's payment: `has_live_deposit` is false and the one-payment-per-investment index leaves it out. So the client can pay for the investment again, or the sweep cancels it as unpaid at its pay-by time. If the money moved in between, the reversal is marked `failed` with a code and nothing moves; staff propose again once it is back.
+
+Seeing reversals needs `reconciliation.view`. Proposing and deciding need `deposit_reassignments.change`, the permission for putting a wrongly credited payment right. The database holds each person to their part: only the proposer withdraws, nobody decides their own, only the worker records the outcome, a done reversal must carry its own exact reversing entry, and a deposit's `reversal_id` is set once, by the worker, to a done reversal of it. Payments never writes to investments.
+
+The client is not told by message yet, and a start job queued by the original confirmation, if it runs after the reversal, fails for want of money and shows among the failed jobs.
 
 **The money has moved on**, for example the investment has started, so a reversal would overdraw the account. Staff propose a forward entry `payment.deposit_correction`:
 

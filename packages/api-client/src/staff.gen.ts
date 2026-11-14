@@ -113,7 +113,7 @@ export type Approval = z.infer<typeof Approval>;
 export const ApprovalItemOut = z.object({
   can_decide: z.boolean(),
   id: z.string(),
-  kind: z.enum(["wording_change", "ledger_correction", "pot_transfer", "bank_transfer_match", "day_close", "dealing_order", "dealing_result", "buffer_rules", "buffer_capital", "rate_change", "migration_totals", "migration_sign_off", "phone_change", "team_change", "client_lock", "suppression_lift", "complaint_outcome", "announcement", "payout_account", "investment_correction", "payout_resolution", "tax_remittance", "deposit_reassignment", "payout_release", "account_closure", "compliance_case", "bank_account_change"]),
+  kind: z.enum(["wording_change", "ledger_correction", "pot_transfer", "bank_transfer_match", "day_close", "dealing_order", "dealing_result", "buffer_rules", "buffer_capital", "rate_change", "migration_totals", "migration_sign_off", "phone_change", "team_change", "client_lock", "suppression_lift", "complaint_outcome", "announcement", "payout_account", "investment_correction", "payout_resolution", "tax_remittance", "deposit_reassignment", "payout_release", "account_closure", "compliance_case", "bank_account_change", "deposit_reversal"]),
   proposed_at: z.string(),
   proposed_by: z.string(),
   proposed_by_name: z.string().nullable(),
@@ -2107,6 +2107,46 @@ export const ReturnablePayoutOut = z.object({
   paid_at: z.string(),
 });
 export type ReturnablePayoutOut = z.infer<typeof ReturnablePayoutOut>;
+
+export const ReversalOut = z.object({
+  amount: MoneyView,
+  client_id: z.string(),
+  decided_at: z.string().nullable(),
+  decided_by: z.string().nullable(),
+  decision_note: z.string().nullable(),
+  deposit_id: z.string(),
+  done_at: z.string().nullable(),
+  entry_id: z.string().nullable(),
+  failure_code: z.string().nullable(),
+  id: z.string(),
+  investment_id: z.string(),
+  proposed_at: z.string(),
+  proposed_by: z.string(),
+  reason: z.string(),
+  status: z.enum(["proposed", "approved", "sent_back", "withdrawn", "done", "failed"]),
+});
+export type ReversalOut = z.infer<typeof ReversalOut>;
+
+export const ReversalDetailOut = z.object({
+  can_decide: z.boolean(),
+  method: z.string(),
+  refusal: z.enum(["not_confirmed", "not_for_an_investment", "already_reversed", "not_a_payment", "money_moved_on"]).nullable(),
+  reversal: ReversalOut,
+  waiting: MoneyView,
+  yours: z.boolean(),
+});
+export type ReversalDetailOut = z.infer<typeof ReversalDetailOut>;
+
+export const ReversalProposeIn = z.object({
+  deposit_id: z.string(),
+  reason: z.string(),
+});
+export type ReversalProposeIn = z.infer<typeof ReversalProposeIn>;
+
+export const ReversalSendBackIn = z.object({
+  note: z.string(),
+});
+export type ReversalSendBackIn = z.infer<typeof ReversalSendBackIn>;
 
 export const ReviewIn = z.object({
   reason: z.string(),
@@ -4318,6 +4358,83 @@ export const operations = {
     idempotent: true,
     status: 200,
     response: ReassignmentDetailOut,
+  },
+  "GET /staff/payments/reversals": {
+    method: "GET",
+    path: "/staff/payments/reversals",
+    params: z.object({}),
+    query: z.object({
+    status: z.enum(["proposed", "approved", "sent_back", "withdrawn", "done", "failed"]).nullable().optional(),
+    deposit_id: z.string().nullable().optional(),
+  }),
+    body: null,
+    bodyKind: null,
+    idempotent: false,
+    status: 200,
+    response: z.array(ReversalOut),
+  },
+  "POST /staff/payments/reversals": {
+    method: "POST",
+    path: "/staff/payments/reversals",
+    params: z.object({}),
+    query: z.object({}),
+    body: ReversalProposeIn,
+    bodyKind: "json",
+    idempotent: true,
+    status: 201,
+    response: ReversalDetailOut,
+  },
+  "GET /staff/payments/reversals/{reversal_id}": {
+    method: "GET",
+    path: "/staff/payments/reversals/{reversal_id}",
+    params: z.object({
+    reversal_id: z.string(),
+  }),
+    query: z.object({}),
+    body: null,
+    bodyKind: null,
+    idempotent: false,
+    status: 200,
+    response: ReversalDetailOut,
+  },
+  "POST /staff/payments/reversals/{reversal_id}/approve": {
+    method: "POST",
+    path: "/staff/payments/reversals/{reversal_id}/approve",
+    params: z.object({
+    reversal_id: z.string(),
+  }),
+    query: z.object({}),
+    body: null,
+    bodyKind: null,
+    idempotent: true,
+    status: 200,
+    response: ReversalDetailOut,
+  },
+  "POST /staff/payments/reversals/{reversal_id}/send-back": {
+    method: "POST",
+    path: "/staff/payments/reversals/{reversal_id}/send-back",
+    params: z.object({
+    reversal_id: z.string(),
+  }),
+    query: z.object({}),
+    body: ReversalSendBackIn,
+    bodyKind: "json",
+    idempotent: true,
+    status: 200,
+    response: ReversalDetailOut,
+  },
+  "POST /staff/payments/reversals/{reversal_id}/withdraw": {
+    method: "POST",
+    path: "/staff/payments/reversals/{reversal_id}/withdraw",
+    params: z.object({
+    reversal_id: z.string(),
+  }),
+    query: z.object({}),
+    body: null,
+    bodyKind: null,
+    idempotent: true,
+    status: 200,
+    response: ReversalDetailOut,
   },
   "GET /staff/payout-bank-batches": {
     method: "GET",
