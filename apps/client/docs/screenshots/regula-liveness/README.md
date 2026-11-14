@@ -6,9 +6,13 @@ From the demo web build. The demo has no Regula service, so a stand-in shows whe
 
 ![Take a live selfie (phone)](phone-01-take-a-live-selfie.png)
 
-## Regula's session running (demo stand-in) (phone)
+## Powered by Regula, details open (phone)
 
-![Regula's session running (demo stand-in) (phone)](phone-02-regula-runs-here.png)
+![Powered by Regula, details open (phone)](phone-08-about-this-check.png)
+
+## Live selfie running (demo stand-in) (phone)
+
+![Live selfie running (demo stand-in) (phone)](phone-02-regula-runs-here.png)
 
 ## Session closed: open it again (phone)
 
@@ -34,9 +38,13 @@ From the demo web build. The demo has no Regula service, so a stand-in shows whe
 
 ![Take a live selfie (wide)](wide-01-take-a-live-selfie.png)
 
-## Regula's session running (demo stand-in) (wide)
+## Powered by Regula, details open (wide)
 
-![Regula's session running (demo stand-in) (wide)](wide-02-regula-runs-here.png)
+![Powered by Regula, details open (wide)](wide-08-about-this-check.png)
+
+## Live selfie running (demo stand-in) (wide)
+
+![Live selfie running (demo stand-in) (wide)](wide-02-regula-runs-here.png)
 
 ## Session closed: open it again (wide)
 
