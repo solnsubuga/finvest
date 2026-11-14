@@ -228,7 +228,8 @@ ioTec Pay is the chosen provider, and there is a sandbox that moves no money for
   - the payer's number as `256…`
   - the amount in whole shillings
   - the deposit ID as `externalId`
-  - `transactionChargesCategory` `ChargeWallet`, so the client pays exactly the investment's amount and ioTec's charge falls on our wallet. That is decided for now ([decisions.md](decisions.md)). Nothing posts the charge yet, so `iotec.wallet` runs ahead of ioTec's balance by the charges until how it is booked is decided (an open question there).
+  - `transactionChargesCategory` `ChargeWallet`, so the client pays exactly the investment's amount and ioTec's charge falls on our wallet. That is decided for now ([decisions.md](decisions.md)).
+- **Booking the charge.** The status read that confirms a collection carries `totalTransactionCharge`. The adapter rounds it up to a whole shilling (24.5 becomes 25), and the confirmation posts it beside the deposit's own entry as `payment.provider_charge`: debit `fees.provider.iotec`, credit `iotec.wallet`, key `deposit-charge:<deposit id>`. The deposit's entry still credits the client with the whole payment, so the charge is Finvest's cost and never the client's. Rounding up means the books never show less than ioTec took. The fraction shows as a small difference on the ioTec wallet at reconciliation. A charge that cannot be read (missing, not a number, negative, or not below the amount) is left out and logged as `iotec_charge_unreadable`. It never stops the deposit, and the wallet difference shows at reconciliation.
 - **Reading the status.** The status is read by ioTec's ID, or by the deposit ID when the answer to the send was lost.
 
 How a send ends:

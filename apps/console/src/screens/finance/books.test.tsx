@@ -28,7 +28,8 @@ describe("books", () => {
     expect(costs).toHaveTextContent("UGX 6,394,500");
     expect(screen.getByText("Income this month").parentElement).toHaveTextContent("UGX 10,270,000");
     expect(screen.getByText("Net this month").parentElement).toHaveTextContent("UGX 3,875,500");
-    expect(screen.getByText(/ioTec’s charge on each mobile money payment in is not booked yet/)).toBeInTheDocument();
+    expect(screen.getByText(/ioTec fees include ioTec’s charge on each mobile money payment in, rounded up/)).toBeInTheDocument();
+    expect(screen.queryByText(/payment in is not booked yet/)).not.toBeInTheDocument();
   });
 
   it("downloads the closed days not yet downloaded and then lists them", async () => {

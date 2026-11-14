@@ -18,8 +18,9 @@ How each way a send can end is sorted (see `domain/outcomes.py`):
 | A timeout or a dropped connection after sending, a 5xx, an unreadable answer | Uncertain |
 
 The payer pays exactly the investment's amount: ioTec's charges go to our wallet
-(`ChargeWallet`). A callback is checked against the token ioTec is set to send, and is only
-a hint: it never changes a deposit.
+(`ChargeWallet`). The status read's `totalTransactionCharge`, rounded up to a whole shilling,
+comes back with the confirmation and is booked as Finvest's cost. A callback is checked
+against the token ioTec is set to send, and is only a hint: it never changes a deposit.
 
 Nothing logged here holds a phone number, an amount or a token.
 """
@@ -30,7 +31,7 @@ import hmac
 import json
 import re
 from collections.abc import Mapping
-from decimal import Decimal
+from decimal import ROUND_CEILING, Decimal
 from typing import Any
 
 import httpx
@@ -198,7 +199,8 @@ class IotecCollections:
                 raise _Unreadable
             state = _status(data)
             if state == "Success":
-                return Confirmed(reference, self._amount(data))
+                amount = self._amount(data)
+                return Confirmed(reference, amount, _charge(data, amount))
             if state in _REFUSED:
                 return Rejected(_refusal(data), reference)
             if state in _UNDER_WAY:
@@ -279,6 +281,32 @@ def _read(response: httpx.Response) -> Mapping[str, Any]:
     if not isinstance(data, dict):
         raise _Unreadable
     return data
+
+
+def _charge(data: Mapping[str, Any], amount: Money) -> Money | None:
+    """ioTec's whole charge on a collection, which `ChargeWallet` takes from our wallet.
+
+    ioTec gives it in shillings and sometimes with a fraction, such as 24.5. A ledger amount is a
+    whole shilling, so it is rounded up: the owner chose that the books never show less than
+    ioTec took (2026-11-14). A charge we cannot read is left out and logged, and never stops the
+    deposit: the client paid in full either way, and the wallet difference shows at
+    reconciliation.
+    """
+    if "totalTransactionCharge" not in data or data["totalTransactionCharge"] is None:
+        return None
+    value = data["totalTransactionCharge"]
+    if isinstance(value, bool) or not isinstance(value, (int, Decimal)):
+        logger.warning("iotec_charge_unreadable", reason="not_a_number")
+        return None
+    charge = Decimal(value)
+    if not charge.is_finite() or charge < 0:
+        logger.warning("iotec_charge_unreadable", reason="out_of_range")
+        return None
+    whole = int(charge.to_integral_value(rounding=ROUND_CEILING))
+    if whole >= amount.minor:
+        logger.warning("iotec_charge_unreadable", reason="not_below_amount")
+        return None
+    return Money(whole, amount.currency)
 
 
 def _reference(data: Mapping[str, Any]) -> str:
