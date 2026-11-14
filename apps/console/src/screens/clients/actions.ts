@@ -140,8 +140,9 @@ export interface ActionsApi {
   actionsFor(clientId: string): Promise<ClientActions>;
   limitsFor(clientId: string): Promise<ClientLimits>;
   withdrawalOptions(clientId: string): Promise<WithdrawalOptions>;
-  propose(clientId: string, proposal: Proposal): Promise<void>;
-  decide(actionId: string, decision: ActionDecision, reason: string): Promise<void>;
+  /** `idempotencyKey` is chosen once per intended action and sent again on every retry of it. */
+  propose(clientId: string, proposal: Proposal, idempotencyKey: string): Promise<void>;
+  decide(actionId: string, decision: ActionDecision, reason: string, idempotencyKey: string): Promise<void>;
 }
 
 export type ActionErrorCode =
@@ -415,13 +416,13 @@ export function createHttpActionsApi(http: Http): ActionsApi {
           open: json.open,
         };
       }),
-    propose: (clientId, proposal) =>
+    propose: (clientId, proposal, idempotencyKey) =>
       call(async () => {
-        await http.request("POST", client(clientId, "actions"), body(proposal));
+        await http.request("POST", client(clientId, "actions"), body(proposal), { idempotencyKey });
       }),
-    decide: (actionId, decision, reason) =>
+    decide: (actionId, decision, reason, idempotencyKey) =>
       call(async () => {
-        await http.request("POST", `/staff/clients/actions/${encodeURIComponent(actionId)}/decision`, { decision, reason });
+        await http.request("POST", `/staff/clients/actions/${encodeURIComponent(actionId)}/decision`, { decision, reason }, { idempotencyKey });
       }, true),
   };
 }

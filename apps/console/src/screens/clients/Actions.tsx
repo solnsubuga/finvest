@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useId, useState, type FormEvent, type ReactNode } from "react";
+import { useCallback, useEffect, useId, useRef, useState, type FormEvent, type ReactNode } from "react";
 import { Link } from "react-router";
 import { Button } from "@/components/ui/button.tsx";
 import {
@@ -88,13 +88,26 @@ function Alert({ children }: { children: ReactNode }) {
  * Shown to every member of staff who can see the client; each button only to those whose role
  * holds its permission, and the backend checks it again.
  */
-export function ActionsSection({ api, clientId, canRefund }: { api: ActionsApi; clientId: string; canRefund: boolean }) {
+export function ActionsSection({
+  api,
+  clientId,
+  canRefund,
+  newKey = () => crypto.randomUUID(),
+}: {
+  api: ActionsApi;
+  clientId: string;
+  canRefund: boolean;
+  /** A fresh idempotency key. One is chosen when a form opens and sent again on every retry of it. */
+  newKey?: () => string;
+}) {
   const [load, setLoad] = useState<Load>({ state: "loading" });
   const [form, setForm] = useState<Form>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const id = useId();
+  // The key for the form open now, chosen when it opens: a retry after a failure sends the same one, so nothing is done twice.
+  const key = useRef("");
 
   const fetchAll = useCallback(async (): Promise<Load> => {
     try {
@@ -133,11 +146,12 @@ export function ActionsSection({ api, clientId, canRefund }: { api: ActionsApi; 
   }
 
   const open = (next: Form) => {
+    key.current = newKey();
     setForm(next);
     setError(null);
     setNotice(null);
   };
-  const propose = (proposal: Proposal) => void run(() => api.propose(clientId, proposal), "Sent. Someone else must approve it before anything happens.");
+  const propose = (proposal: Proposal) => void run(() => api.propose(clientId, proposal, key.current), "Sent. Someone else must approve it before anything happens.");
 
   return (
     <section aria-labelledby={`${id}-title`} className="flex flex-col gap-3">
@@ -183,7 +197,7 @@ export function ActionsSection({ api, clientId, canRefund }: { api: ActionsApi; 
           onPropose={propose}
           onDecide={(action, decision, reason) =>
             void run(
-              () => api.decide(action.id, decision, reason),
+              () => api.decide(action.id, decision, reason, key.current),
               decision === "approved" ? KIND[action.kind].approved : decision === "rejected" ? "Rejected. Nothing changed." : "Withdrawn. Nothing changed.",
             )
           }
