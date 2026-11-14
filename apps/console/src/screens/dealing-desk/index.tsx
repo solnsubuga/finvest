@@ -19,6 +19,7 @@ import { BufferSection } from "./Buffer.tsx";
 import { notConnectedBufferApi, type BufferApi } from "./buffer.ts";
 import { createHttpBufferApi } from "./bufferHttp.ts";
 import { BUFFER_COLLEAGUE, createStubBufferApi } from "./bufferStub.ts";
+import { createHttpDealingApi } from "./dealingHttp.ts";
 import { createStubDealingApi } from "./stub.ts";
 
 const SUMMARY = "Turn client payments into real bills, and keep enough cash to pay people out.";
@@ -209,10 +210,14 @@ export function DealingDeskScreen({ api, newKey = () => crypto.randomUUID(), tod
 
 export default function DealingDeskPage() {
   const { session } = useAuth();
-  // Sample figures under `pnpm dev` or a preview build, like sign-in. Otherwise nothing until the API client exists.
-  const [api] = useState<DealingApi>(() =>
-    isStubAuth() && session ? createStubDealingApi({ id: session.staffId, name: session.name }) : notConnectedDealingApi,
-  );
+  // Sample figures under `pnpm dev` or a preview build, like sign-in. Otherwise the real API.
+  const [api] = useState<DealingApi>(() => {
+    if (isStubAuth() && session) return createStubDealingApi({ id: session.staffId, name: session.name });
+    const base = apiBaseUrl();
+    if (!base) return notConnectedDealingApi;
+    const http = createHttp(base);
+    return createHttpDealingApi(http, createHttpDirectory(http));
+  });
   // The buffer is on the real API. Under the stub, `?sample=empty` shows it before Finvest has paid any money in,
   // and `?sample=offline` as if Finvest could not be reached.
   const [buffer] = useState<{ api: BufferApi; directory: Directory }>(() => {
