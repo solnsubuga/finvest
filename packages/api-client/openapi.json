@@ -520,7 +520,8 @@
         "enum": [
           "document_genuine",
           "selfie_match",
-          "screening"
+          "screening",
+          "liveness"
         ],
         "title": "AutomaticCheck",
         "type": "string"
@@ -2695,6 +2696,11 @@
           },
           "kind": {
             "$ref": "#/components/schemas/PhotoKind"
+          },
+          "live": {
+            "default": false,
+            "title": "Live",
+            "type": "boolean"
           }
         },
         "required": [
@@ -6195,6 +6201,118 @@
         ],
         "title": "LinkView",
         "type": "object"
+      },
+      "LivenessAttempt": {
+        "additionalProperties": false,
+        "description": "One liveness attempt. Open the `url` page while `status` is `open`.",
+        "properties": {
+          "expires_at": {
+            "format": "date-time",
+            "title": "Expires At",
+            "type": "string"
+          },
+          "failure_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Failure Code"
+          },
+          "id": {
+            "maxLength": 20,
+            "minLength": 20,
+            "pattern": "^[-0-9A-Z_a-z]{20}$",
+            "title": "Id",
+            "type": "string"
+          },
+          "photo_used": {
+            "title": "Photo Used",
+            "type": "boolean"
+          },
+          "status": {
+            "$ref": "#/components/schemas/LivenessStatus"
+          },
+          "url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Url"
+          }
+        },
+        "required": [
+          "id",
+          "status",
+          "url",
+          "failure_code",
+          "photo_used",
+          "expires_at"
+        ],
+        "title": "LivenessAttempt",
+        "type": "object"
+      },
+      "LivenessState": {
+        "additionalProperties": false,
+        "description": "Whether the selfie step can use a liveness check, and the latest attempt.",
+        "properties": {
+          "attempts_left": {
+            "title": "Attempts Left",
+            "type": "integer"
+          },
+          "available": {
+            "title": "Available",
+            "type": "boolean"
+          },
+          "latest": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/LivenessAttempt"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "problem": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Problem"
+          }
+        },
+        "required": [
+          "available",
+          "problem",
+          "attempts_left",
+          "latest"
+        ],
+        "title": "LivenessState",
+        "type": "object"
+      },
+      "LivenessStatus": {
+        "enum": [
+          "starting",
+          "open",
+          "passed",
+          "failed",
+          "not_started",
+          "expired"
+        ],
+        "title": "LivenessStatus",
+        "type": "string"
       },
       "LockView": {
         "additionalProperties": false,
@@ -13814,6 +13932,11 @@
           },
           "kind": {
             "$ref": "#/components/schemas/PhotoKind"
+          },
+          "live": {
+            "default": false,
+            "title": "Live",
+            "type": "boolean"
           }
         },
         "required": [
@@ -20755,6 +20878,168 @@
           }
         },
         "summary": "Choose Document",
+        "tags": [
+          "identity checks"
+        ]
+      }
+    },
+    "/client/identity-check/liveness": {
+      "get": {
+        "description": "Whether the selfie can be taken with a liveness check, and how the latest one stands.\n\nRead it again every few seconds while the latest attempt is `starting` or `open`.",
+        "operationId": "my_liveness_client_identity_check_liveness_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LivenessState"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "summary": "My Liveness",
+        "tags": [
+          "identity checks"
+        ]
+      },
+      "post": {
+        "description": "Start a liveness attempt for the selfie. Any attempt still waiting is retired.\n\nThe attempt starts as `starting`. Read `GET /liveness` until it is `open`, then open its\npage. When it passes, the face it captured is the check's selfie.",
+        "operationId": "start_liveness_client_identity_check_liveness_post",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LivenessAttempt"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "summary": "Start Liveness",
         "tags": [
           "identity checks"
         ]

@@ -9,6 +9,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.infrastructure.database import Database
 from app.infrastructure.sealing import KEY_BYTES, Sealer
+from app.infrastructure.storage import StoredFile
+from app.modules.kyc import liveness
 from app.modules.kyc import service as kyc
 from app.modules.kyc.domain.checks import DocumentType, IdentityDetails, PhotoKind, required_photos
 from app.modules.kyc.domain.provider import (
@@ -22,7 +24,7 @@ from app.modules.kyc.domain.provider import (
     Verdict,
 )
 from app.modules.kyc.providers import ManualProvider
-from app.shared.actors import Actor
+from app.shared.actors import SYSTEM, Actor
 from app.shared.clock import Clock
 from app.shared.push_ids import push_id
 
@@ -117,3 +119,28 @@ async def verify(database: Database, client: Actor, clock: Clock) -> None:
     reviewer = Actor("staff", push_id())
     async with database.actor_transaction(reviewer) as session:
         await kyc.approve(session, SEALER, reviewer, check.id, "Documents match", clock)
+
+
+async def live_selfie(
+    app: Database, worker: Database, client: Actor, clock: Clock, *, sha256: str = SHA256
+) -> str:
+    """Take the client's selfie with a liveness check that passes, as the worker records it.
+
+    Returns the attempt's ID. The check must be the client's to change.
+    """
+    async with app.actor_transaction(client) as session:
+        attempt = await liveness.start(session, client, "fake-liveness", clock)
+    photo_id = push_id()
+    async with worker.actor_transaction(SYSTEM) as session:
+        assert await liveness.to_start(session, attempt.id, clock)
+        assert await liveness.note_open(
+            session, SEALER, attempt.id, str(uuid.uuid4()), "https://faces.iotec.io/x", clock
+        )
+        stored = StoredFile(
+            key=kyc.photo_key(attempt.check_id, photo_id),
+            content_type="image/jpeg",
+            byte_size=2048,
+            sha256=sha256,
+        )
+        assert await liveness.record_live(session, attempt.id, photo_id, stored, clock)
+    return attempt.id

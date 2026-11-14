@@ -8,9 +8,15 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from app.infrastructure.sealing import Sealer, key_from_text
 from app.infrastructure.storage import FileStorage
+from app.modules.kyc.domain.liveness import LivenessProvider
 from app.modules.kyc.domain.provider import IdentityProvider
 from app.modules.kyc.iotec import BASE_URL, IotecVerifyProvider
-from app.modules.kyc.providers import DevelopmentStubProvider, ManualProvider
+from app.modules.kyc.iotec_liveness import IotecLivenessProvider
+from app.modules.kyc.providers import (
+    DevelopmentStubLiveness,
+    DevelopmentStubProvider,
+    ManualProvider,
+)
 
 
 class KycSettings(BaseSettings):
@@ -59,9 +65,12 @@ class KycSettings(BaseSettings):
             if not self.iotec_verify_base_url.startswith("https://"):
                 raise ValueError("FINVEST_IOTEC_VERIFY_BASE_URL must use https")
             if self.identity_automatic_approval:
-                # Its face match compares two photos and does not prove a live person, so a
-                # clean result is not enough to approve with no person involved.
-                raise ValueError("ioTec Verify does not check liveness and may not approve clients")
+                # Liveness now runs before hand-in (docs/identity-checks.md#liveness), but
+                # approving with no person involved is still the owner's decision to make.
+                raise ValueError(
+                    "Automatic approval with ioTec Verify awaits the owner's decision "
+                    "(docs/decisions.md)"
+                )
         return self
 
     def sealer(self) -> Sealer:
@@ -82,3 +91,16 @@ class KycSettings(BaseSettings):
         if self.identity_provider == "development-stub":
             return DevelopmentStubProvider()
         return ManualProvider()
+
+    def liveness(self) -> LivenessProvider | None:
+        """The liveness provider, or None when clients can only send a camera selfie."""
+        if self.identity_provider == "iotec":
+            assert self.iotec_verify_client_id and self.iotec_verify_api_key  # checked above
+            return IotecLivenessProvider(
+                client_id=self.iotec_verify_client_id,
+                api_key=self.iotec_verify_api_key,
+                base_url=self.iotec_verify_base_url,
+            )
+        if self.identity_provider == "development-stub":
+            return DevelopmentStubLiveness()
+        return None

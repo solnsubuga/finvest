@@ -18,7 +18,8 @@ from app.modules.identity.hashing import PasswordHasher
 from app.modules.identity.service import IdentityService
 from app.modules.kyc import service as kyc
 from app.modules.kyc.domain.checks import DocumentType
-from app.modules.kyc.providers import ManualProvider
+from app.modules.kyc.domain.liveness import LivenessProvider
+from app.modules.kyc.providers import DevelopmentStubLiveness, ManualProvider
 from app.shared.actors import SYSTEM, Actor
 from tests.support.clock import FakeClock
 from tests.support.database import TestDatabase
@@ -85,6 +86,7 @@ def an_app(
     *,
     sealed: bool = True,
     storage: FileStorage,
+    liveness: LivenessProvider | None = None,
 ) -> tuple[httpx.AsyncClient, IdentityService, FakeClock]:
     settings = test_database.settings("finvest_app").model_copy(
         update={
@@ -101,6 +103,7 @@ def an_app(
         HASHER,
         identity_sealer=SEALER if sealed else None,
         identity_provider=ManualProvider(),
+        identity_liveness=liveness,
         storage=storage,
     )
     transport = httpx.ASGITransport(app=app, raise_app_exceptions=False, client=("127.0.0.1", 1))
@@ -201,9 +204,12 @@ async def test_a_client_goes_from_nothing_to_a_check_waiting_for_a_person(api: A
     for kind in ("front", "selfie"):
         sent = await api.http.put(f"{base}/photos/{kind}", files=photo(), headers=client)
         assert sent.status_code == 200
-        assert {"kind": kind, "content_type": "image/jpeg", "byte_size": len(JPEG)} in sent.json()[
-            "photos"
-        ]
+        assert {
+            "kind": kind,
+            "content_type": "image/jpeg",
+            "byte_size": len(JPEG),
+            "live": False,
+        } in sent.json()["photos"]
     # The API stored each file under the check, with the digest the record holds.
     stored = sorted(
         key for key in api.storage.files if key.startswith(f"kyc/{started.json()['id']}/")
@@ -386,6 +392,60 @@ async def test_staff_ask_for_a_photo_escalate_and_reject(api: Api) -> None:
     assert (rejected.json()["status"], rejected.json()["allowed"]) == ("rejected", [])
     mine = (await api.http.get("/client/identity-check", headers=client)).json()["check"]
     assert (mine["status"], mine["client_message"]) == ("rejected", "We could not verify your ID.")
+
+
+# Liveness ---------------------------------------------------------------------------------------
+
+
+async def test_without_a_liveness_provider_the_selfie_is_a_camera_photo(api: Api) -> None:
+    client = await api.client()
+    base = "/client/identity-check"
+    shown = await api.http.get(f"{base}/liveness", headers=client)
+    assert shown.json() == {
+        "available": False,
+        "problem": None,
+        "attempts_left": 10,
+        "latest": None,
+    }
+    refused = await api.http.post(f"{base}/liveness", headers=client)
+    assert (refused.status_code, refused.json()["error"]["code"]) == (503, "unavailable")
+
+
+async def test_a_client_starts_a_liveness_attempt_and_only_they_see_it(
+    test_database: TestDatabase, app_database: Database, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    for name in ("IDENTITY_DATA_KEY", "IDENTITY_PROVIDER"):
+        monkeypatch.delenv(f"FINVEST_{name}", raising=False)
+    storage = MemoryStorage()
+    http, identity, clock = an_app(
+        test_database, app_database, storage=storage, liveness=DevelopmentStubLiveness()
+    )
+    async with http:
+        api = Api(http, identity, clock, app_database, storage)
+        client = await api.client()
+        base = "/client/identity-check"
+        before = await http.get(f"{base}/liveness", headers=client)
+        assert before.json()["problem"] == "no_check"
+        nothing = await http.post(f"{base}/liveness", headers=client)
+        assert nothing.status_code == 404
+
+        document = {"document_type": "national_id", "document_country": "UG"}
+        await http.put(f"{base}/document", json=document, headers=client)
+        started = await http.post(f"{base}/liveness", headers=client)
+        assert started.status_code == 200
+        attempt = started.json()
+        assert attempt["status"] == "starting"
+        assert attempt["url"] is None
+        shown = (await http.get(f"{base}/liveness", headers=client)).json()
+        assert shown["available"] is True
+        assert shown["attempts_left"] == 9
+        assert shown["latest"]["id"] == attempt["id"]
+
+        other = await api.client()
+        theirs = (await http.get(f"{base}/liveness", headers=other)).json()
+        assert theirs["latest"] is None
+        signed_out = await http.get(f"{base}/liveness")
+        assert signed_out.status_code == 401
 
 
 # Configuration ------------------------------------------------------------------------------------

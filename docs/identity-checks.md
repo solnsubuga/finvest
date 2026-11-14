@@ -35,7 +35,7 @@ Staff can approve, reject, ask for photos again or escalate. One member of staff
 
 ## Automatic checks
 
-A provider is asked for three things: that the document is genuine and not expired, that the selfie is a live person who matches the document, and sanctions and politically exposed person screening.
+A provider is asked for three things: that the document is genuine and not expired, that the selfie matches the document, and sanctions and politically exposed person screening. A fourth, `liveness`, says the selfie was captured by a liveness check that saw a live person ([Liveness](#liveness)). It comes from the selfie handed in, not from the identity provider, so all four must pass for `automatic_checks_passed`.
 
 - A person approves every client. When all three ran and passed, the check goes to staff flagged `automatic_checks_passed`, so it is quick to confirm.
 - Approval with no person involved is built but switched off (`automatic_approval` in `record_provider_result`). It is the owner's decision to turn it on, and it is listed as open in [decisions.md](decisions.md). With it on, a client is approved automatically only when all three ran and passed and the document has not expired since.
@@ -111,7 +111,7 @@ The module talks to an `IdentityProvider` port (`domain/provider.py`) with three
 | `manual` | Built, and the default. It checks nothing, so every client goes to a person. Nobody is approved by a check that did not happen. |
 | `iotec` | Built: ioTec Verify, below. Off until `FINVEST_IDENTITY_PROVIDER=iotec` and its credentials are set. |
 | `development-stub` | Built, for a developer's own machine. It checks nothing: everyone "passes", except a document number ending in 0, whose selfie comes back unsure. Its answers go to a person, and the settings refuse to combine it with automatic approval, so it can never approve a client. It is refused at start-up where `FINVEST_ENVIRONMENT` is `production`, because staff would see passes for checks nobody ran. |
-| Smile ID | Not built. A candidate if ioTec Verify falls short, for example on liveness. |
+| Smile ID | Not built. A candidate if ioTec Verify falls short. |
 
 ### ioTec Verify
 
@@ -129,9 +129,44 @@ The module talks to an `IdentityProvider` port (`domain/provider.py`) with three
 - If nothing was accepted and nothing arrived, the whole submission is tried again; the sweep hands the check to a person after 30 minutes.
 - A face match confidence outside 0 to 1 is not understood, so it has no score and is `unsure`. The base URL must be https.
 - The worker reads the selfie and front from private storage, with the digest saved for each, before sending anything. A photo it cannot read sends nothing and is tried again.
-- The face match compares two photos and does not prove a live person. The settings therefore refuse ioTec with `FINVEST_IDENTITY_AUTOMATIC_APPROVAL`, whatever the owner decides, until liveness is checked. ioTec's liveness check (`/api/face-verification`) emails the client a link to ioTec Faces, which is a separate client step and is not built.
+- The face match compares two photos and does not prove a live person on its own. Liveness is a separate step before hand-in ([Liveness](#liveness)), and its capture is the selfie the face match compares. The settings still refuse ioTec with `FINVEST_IDENTITY_AUTOMATIC_APPROVAL`, because approving with no person involved is the owner's decision ([decisions.md](decisions.md)).
 - To confirm against ioTec's sandbox: the exact values of `matchingStatus` and `cardStatus`, which the API reference does not list. Anything not recognised is `unsure`, never a pass.
 - Nothing ioTec sends back is logged or kept beyond the verdicts and the face match score, because it carries the client's details.
+
+## Liveness
+
+A face match compares two photos, so a printed photo or a screen held up to the camera can pass it. A liveness check runs the camera on the provider's own page and answers whether a live person was there. The face it captured then becomes the check's selfie, so the face match at hand-in compares the live capture with the document, not a photo the client chose.
+
+How an attempt goes (`app/modules/kyc/liveness.py`, `liveness_jobs.py`, `domain/liveness.py`):
+
+1. The client starts an attempt (`POST /client/identity-check/liveness`) while the selfie is theirs to change: a draft, or a check sent back for a new selfie. Any attempt still waiting is retired, so only the newest counts. The attempt and the job `kyc.start_liveness` are saved together.
+2. The worker asks the provider for a session, keyed by the attempt's ID, and saves its page sealed. The attempt is `open`, and `GET /client/identity-check/liveness` gives the client the page's address. Only that client is given it.
+3. The client opens the page and does what it asks. The worker reads the attempt every 10 seconds (`kyc.read_liveness`, one job per read) until the provider answers or the attempt is 30 minutes old, when it shows as `expired`.
+4. Live: the worker downloads the capture, stores it as `kyc/<check>/<photo>` and, in one transaction, retires the current selfie and adds the capture as the selfie with `source = 'liveness'`. If the check was handed in meanwhile, nothing changes and the file is deleted (`check_moved_on`). Not live: the attempt is `failed`, and the client may try again.
+
+| Status | Meaning |
+| --- | --- |
+| `starting` | Saved; the worker is asking the provider for a session. |
+| `open` | The page is ready for the client. |
+| `passed` | A live person; the capture is the selfie (unless `failure_code` is `check_moved_on`). |
+| `failed` | Not a live person, or nothing usable came back (`not_live`, `no_capture`, `iotec_ended`, `iotec_unclear`). |
+| `not_started` | The provider refused (`iotec_refused`, `iotec_no_page`), or may have opened a session but never confirmed it (`provider_uncertain`). |
+| `expired` | Open for 30 minutes, or replaced by a newer attempt. |
+
+- A start that certainly did not arrive is tried again. One that may have arrived is not sent again on a guess: ioTec cannot be asked by our key, so the attempt ends as `not_started` and the client starts a new one, under a new key.
+- A client has 10 attempts per check. A live capture counts toward the 30 photos a check may hold.
+- A client may still send a camera selfie instead. At hand-in, `liveness` is `pass` for a live selfie, `fail` for a camera selfie after a failed attempt, and not run (`liveness_not_run`) otherwise. Staff see each as a flag, and see which selfie was live.
+- The database holds the rules too (migration 0200): only the worker adds a `liveness` photo, only as a selfie and only while the photo trigger of migration 0050 allows the selfie to change; a client sends only `client` photos; an attempt only moves forward, and a client may only retire a waiting one.
+- Each attempt's start and its end are audit events (`kyc.liveness.*`, resource `kyc_liveness`).
+
+### ioTec Faces
+
+`app/modules/kyc/iotec_liveness.py`, with the same credentials as ioTec Verify. `POST /api/face-verification` with the attempt's ID as `referenceId` and no email, phone or name: ioTec would email the link to an address, but the app opens the page itself (`verificationUrl`). `GET /api/face-verification/{id}` until `faceVerificationStatus` is `Verified` or `Failed`; a request that ended at ioTec (`Failed`, `Expired`, `Cancelled`) is not live. On `Verified` the capture is `profileImageUrl`.
+
+- The client is only sent to, and the capture only downloaded from, an https address on `iotec.io` or a subdomain. The API key is only sent to the API's own host. The capture's type is read from its bytes, and it may be at most 10 MiB.
+- ioTec's callback (`/api/face-verification/callback`) is not used. Reading is cheap and a callback is only a hint.
+- To confirm against ioTec's sandbox: that a request with no email still returns `verificationUrl`; that `profileImageUrl` is on an ioTec host and needs no key; whether ioTec Faces can return the client to the app when done; and what ioTec Faces asks of the client (it may also ask for the ID card, which this flow does not use).
+- The development stub passes on the first read with a stand-in capture, and its page is a placeholder.
 
 ## Talking to the provider
 
@@ -164,6 +199,8 @@ The client's own check, under `/client/identity-check`, with the client's sessio
 | `PUT /photos/{kind}` | Send one photo (`front`, `back` or `selfie`) as `multipart/form-data`, field `photo`: JPEG, PNG or WebP, at most 10 MiB. It replaces the photo of that kind. |
 | `PUT /details` | Save the details the client confirmed. |
 | `POST /submit` | Hand the check in. Says which photos or details are missing if it is not ready. |
+| `GET /liveness` | Whether the selfie can be taken with a liveness check (`available`), why a new attempt cannot start now (`problem`), the attempts left and the latest attempt, with its page while it is open. |
+| `POST /liveness` | Start a liveness attempt. `unavailable` when no liveness provider is set. |
 
 The review queue, under `/staff/identity-checks`. Reading needs the permission `identity_checks.view`. Deciding needs `identity_checks.review`. Admin, Operations and Compliance hold both.
 
@@ -187,7 +224,7 @@ Without `FINVEST_IDENTITY_DATA_KEY` the routes answer `unavailable`, and so do t
 
 `apps/client/src/app/id-check` follows the canvas order: choose the document and country, the front, the back (not for a passport), the details, then the selfie, which hands the check in. Home shows what the check needs next until it is approved, Profile links to it, and the invest, goal, plan and bank transfer screens open it when they are refused for an unapproved client. After approval the screen shows the account number. The client is notified when the check is approved or rejected and when staff ask for photos again, never when it is escalated, and the notification opens the ID check screen.
 
-- The device's own camera or file chooser takes each photo, and the client looks at it before it is sent. There is no live frame detection or liveness guidance yet.
+- The device's own camera or file chooser takes each photo, and the client looks at it before it is sent. Where liveness is available, the selfie step starts a liveness check instead, opens the provider's page, and waits for the answer; a camera selfie stays as a fallback.
 - The client types the details. Nothing reads them from the photo yet.
 - During a retake the API does not say which photos were sent since staff asked, so the app remembers it for the session, and handing in confirms it.
 - In a demo build (`EXPO_PUBLIC_DEMO_AUTH=1`) an in-memory stand-in answers, and the last digit of the document number stands in for staff: 1 asks for a new selfie, 2 rejects, 3 approves.
