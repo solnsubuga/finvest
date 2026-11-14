@@ -8,7 +8,8 @@ complaint outcomes, the suppression lifts, the client locks, the announcements, 
 changes, Finvest's own money in the buffer, the payments of tax to URA, the payments moved to
 the right client, next of kin, the answers to the investing questions, the requests to close an
 account, the journals sent to the accounting system, who set the bank account clients pay
-into, why a payout send waited or the runs staff asked for again."""
+into, why a payout send waited, the runs staff asked for again or the investments staff
+booked for clients."""
 
 import os
 from collections.abc import Iterator
@@ -991,6 +992,15 @@ ROWS = {
         "ALTER TABLE investment_corrections ENABLE TRIGGER USER; "
         "ALTER TABLE investments ENABLE TRIGGER USER; COMMIT",
         "refusing to drop the record of held money staff sent on",
+    ),
+    "0334_investment_bookings": (
+        "BEGIN; SELECT set_config('finvest.actor_kind', 'staff', true); "
+        "SELECT set_config('finvest.actor_id', '-Nabc0000000000000S1', true); "
+        "INSERT INTO investment_bookings (id, client_id, product_id, currency, principal_minor, "
+        "at_maturity, reason, proposed_by, proposed_at) VALUES ('-Nabc0000000000000A1', "
+        "'-Nabc0000000000000B1', 'FvProduct1TREA91_001', 'UGX', 1000000, 'roll_over', "
+        "'The client called the office', '-Nabc0000000000000S1', now()); COMMIT",
+        "refusing to drop the record of investments staff booked",
     ),
 }
 
