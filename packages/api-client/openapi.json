@@ -8154,6 +8154,17 @@
             "title": "Kind",
             "type": "string"
           },
+          "resent_as": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Resent As"
+          },
           "returned_at": {
             "anyOf": [
               {

@@ -114,6 +114,7 @@ it("sends a payout that came back again once, to a ready account", async () => {
   expect(await api.resend(RETURNED_DEMO_PAYOUT, "demo-account-mtn")).toEqual(sent);
   expect(await code(api.resend(RETURNED_DEMO_PAYOUT, "demo-account-bank"))).toBe("already_resent");
   expect((await api.listPayouts())[0]).toEqual(sent);
+  expect((await api.getPayout(RETURNED_DEMO_PAYOUT)).resentAs).toBe(sent.id);
 });
 
 it("lets a new account take a payout that came back once its first day has passed", async () => {
