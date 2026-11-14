@@ -9,7 +9,8 @@ changes, Finvest's own money in the buffer, the payments of tax to URA, the paym
 the right client, next of kin, the answers to the investing questions, the requests to close an
 account, the journals sent to the accounting system, who set the bank account clients pay
 into, why a payout send waited, the account code maps, the deposits taken back as mistakes,
-what clients owe for them, the runs staff asked for again or the report schedules."""
+what clients owe for them, the runs staff asked for again, the report schedules or the
+month closes."""
 
 import os
 from collections.abc import Iterator
@@ -955,6 +956,14 @@ ROWS = {
         "UPDATE payout_send_attempts SET outcome = 'deferred', finished_at = now(), "
         "deferred_for = 'wallet_short' WHERE payout_id = '-Nabc0000000000000A1'; COMMIT",
         "refusing to drop why payout sends were deferred",
+    ),
+    "0321_finance_month_closes": (
+        "BEGIN; SELECT set_config('finvest.actor_kind', 'staff', true); "
+        "SELECT set_config('finvest.actor_id', '-Nabc0000000000000S1', true); "
+        "INSERT INTO finance_month_closes (id, month, books, books_sha256, reason, status, "
+        "proposed_by, proposed_at) VALUES ('-Nabc0000000000000A1', '2026-10-01', '[]', "
+        "repeat('a', 64), 'Test', 'proposed', '-Nabc0000000000000S1', now()); COMMIT",
+        "refusing to drop month closes",
     ),
     "0320_report_schedules": (
         "BEGIN; SELECT set_config('finvest.actor_kind', 'staff', true); "
