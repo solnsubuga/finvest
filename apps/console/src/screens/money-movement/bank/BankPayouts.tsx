@@ -298,6 +298,7 @@ export function BankPayouts({ api, me, canChange, newKey = () => crypto.randomUU
         bulks={bulks}
         onRetry={() => void reloadBulks()}
         sent={sent.state === "ready" ? sent.value : null}
+        batches={batches.state === "ready" ? batches.value : null}
         clients={clients}
         noteFor={(id) => noteFor("bulk", id)}
         done={note?.area === "bulk" && note.kind === "done" ? note : null}
