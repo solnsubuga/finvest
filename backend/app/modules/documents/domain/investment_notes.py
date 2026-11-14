@@ -1,13 +1,15 @@
-"""The note that confirms an investment started. Pure.
+"""The notes that confirm an investment started and ended. Pure.
 
-One note for each investment, issued once, on the day the money goes to work. It shows what
-the client invested, the yearly rate after tax, the dates, and what the client gets back at
-maturity after tax. Like every client figure it is after tax: it never shows a tax rate or a
-tax amount.
+One note for each investment when the money goes to work, and one when it ends: at maturity,
+paid out or rolled over, or withdrawn early. The first shows what the client invested, the
+yearly rate after tax, the dates and what comes back at maturity. The second shows what the
+investment earned and came to, and where the money went. Like every client figure they are
+after tax: neither shows a tax rate or a tax amount.
 """
 
 from dataclasses import dataclass
 from datetime import date
+from enum import StrEnum
 
 from app.shared.money import Money
 
@@ -51,3 +53,45 @@ class InvestmentNote:
     @property
     def is_open_term(self) -> bool:
         return self.term_days is None
+
+
+class Ending(StrEnum):
+    """How an investment ended."""
+
+    PAID_OUT = "paid_out"  # matured, and the money is on its way to the client
+    ROLLED_OVER = "rolled_over"  # matured into a new investment
+    WAITING = "waiting"  # matured, and waits for the client to say where to send it
+    WITHDRAWN = "withdrawn"  # withdrawn early at the client's request
+
+
+@dataclass(frozen=True, slots=True)
+class EndedNote:
+    """The note that confirms an investment ended, and what it paid, after tax."""
+
+    reference: str  # "IN-" and the note's ID
+    client_name: str
+    account_number: str
+    investment_id: str
+    product_name: str
+    amount: Money  # what was invested
+    interest: Money  # earned after tax, up to the end
+    start_date: date
+    ended_on: date
+    ending: Ending
+    # The investment a rollover opened.
+    rolled_into_id: str | None = None
+
+    def __post_init__(self) -> None:
+        if not self.amount.is_positive:
+            raise ValueError("An investment note is for an amount above zero")
+        if self.interest.minor < 0:
+            raise ValueError("Interest earned is never below zero")
+        if self.ended_on < self.start_date:
+            raise ValueError("An investment ends on or after it starts")
+        if (self.ending is Ending.ROLLED_OVER) != (self.rolled_into_id is not None):
+            raise ValueError("A rollover names the investment it opened, and only a rollover")
+
+    @property
+    def total(self) -> Money:
+        """What the investment came to: the amount invested plus the interest after tax."""
+        return self.amount + self.interest

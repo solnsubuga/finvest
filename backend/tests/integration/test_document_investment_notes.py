@@ -3,6 +3,7 @@ investment starts, built from the client's own view of it, stored, listed and em
 and without a figure."""
 
 from collections.abc import Iterator
+from datetime import timedelta
 from io import BytesIO
 
 import pytest
@@ -14,19 +15,24 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.infrastructure.database import Database
 from app.infrastructure.jobs import JobRequest, enqueue
 from app.modules.documents import pdf, service
-from app.modules.documents.domain.investment_notes import InvestmentNote
-from app.modules.documents.events import INVESTMENT_NOTE_KIND
+from app.modules.documents.domain.investment_notes import EndedNote, Ending, InvestmentNote
+from app.modules.documents.events import ENDED_NOTE_KIND, INVESTMENT_NOTE_KIND
 from app.modules.documents.service import DocumentKind, DocumentStatus
 from app.modules.identity import service as identity_service
 from app.modules.identity.service import ClientContact
 from app.modules.investments import holdings
-from app.shared.actors import SYSTEM
+from app.modules.investments import service as investments
+from app.shared.actors import SYSTEM, Actor
 from app.shared.errors import ApplicationError
 from app.shared.push_ids import push_id
 from tests.integration.test_documents import LATER, FakeEmail, invested, run_jobs
+from tests.support.investments import PRESENT, at, started, today
 from tests.support.ledger import ugx
 
 pytestmark = pytest.mark.integration
+
+# A 91 day bill started today matures on this day.
+MATURES = today() + timedelta(days=91)
 
 
 @pytest.fixture(autouse=True)
@@ -160,3 +166,98 @@ async def test_an_investment_undone_before_its_note_is_built_gets_none(
     assert email.sent == []
     async with app_database.actor_transaction(client) as session:
         assert await service.client_documents(session, client) == []
+
+
+# When it ends --------------------------------------------------------------------------------
+
+
+async def deliver_end(worker_database: Database, investment_id: str, client_id: str) -> None:
+    """As the outbox delivers the end of an investment to the documents consumer. Twice."""
+    async with worker_database.actor_transaction(SYSTEM) as session:
+        for _ in range(2):
+            await enqueue(
+                session,
+                JobRequest(
+                    kind=ENDED_NOTE_KIND,
+                    idempotency_key=f"ended-note-test:{investment_id}",
+                    payload={"data": {"investment_id": investment_id, "client_id": client_id}},
+                    queue=service.QUEUE,
+                ),
+                now=LATER.now(),
+            )
+
+
+async def mature(worker_database: Database, investment_id: str) -> None:
+    async with worker_database.actor_transaction(SYSTEM) as session:
+        await investments.mature_investment(session, investment_id, MATURES, at(MATURES))
+
+
+async def published(worker_database: Database, kind: str, investment_id: str) -> int:
+    async with worker_database.actor_transaction(SYSTEM) as session:
+        return int(
+            await session.scalar(
+                text("SELECT count(*) FROM jobs WHERE kind = :kind AND payload::text LIKE :id"),
+                {"kind": kind, "id": f"%{investment_id}%"},
+            )
+            or 0
+        )
+
+
+async def test_a_matured_investment_gets_a_note_that_says_what_it_came_to_and_where_it_went(
+    app_database: Database, worker_database: Database, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    investment = await started(app_database, worker_database, PRESENT)
+    client = Actor("client", investment.client_id)
+    await mature(worker_database, investment.id)
+    # Maturing named the documents consumer on `investments.rolled_over`.
+    assert await published(worker_database, ENDED_NOTE_KIND, investment.id) == 1
+    drawn: list[EndedNote] = []
+    original = pdf.ended_note_pdf
+
+    def keep(note: EndedNote, **kwargs: object) -> bytes:
+        drawn.append(note)
+        return original(note, **kwargs)  # type: ignore[arg-type]
+
+    monkeypatch.setattr(pdf, "ended_note_pdf", keep)
+    await deliver_end(worker_database, investment.id, investment.client_id)
+    email = FakeEmail()
+    await run_jobs(worker_database, email=email)
+
+    async with worker_database.actor_transaction(SYSTEM) as session:
+        reloaded = await investments.get_investment(session, investment.id)
+    (note,) = drawn
+    assert note.ending is Ending.ROLLED_OVER
+    assert note.rolled_into_id == reloaded.rolled_into_id
+    assert (note.amount, note.interest) == (investment.amount, reloaded.accrued_net)
+    assert note.total == investment.amount + reloaded.accrued_net
+    assert note.ended_on == reloaded.maturity_date
+    async with app_database.actor_transaction(client) as session:
+        listed = await service.client_documents(session, client)
+    ended = [view for view in listed if view.idempotency_key == f"ended:{investment.id}"]
+    assert [(view.kind, view.status) for view in ended] == [
+        (DocumentKind.INVESTMENT_NOTE, DocumentStatus.READY)
+    ]
+    (message,) = email.sent
+    assert message.subject == f"Your Finvest investment note: {investment.product_name} ended"
+    assert "rolled over" in message.text
+    assert "UGX" not in message.text and "UGX" not in message.html
+    assert await run_jobs(worker_database, email=email) == 0
+
+
+async def test_an_investment_that_has_not_ended_gets_no_end_note(
+    app_database: Database, worker_database: Database
+) -> None:
+    investment = await started(app_database, worker_database, PRESENT)
+    await deliver_end(worker_database, investment.id, investment.client_id)
+    await run_jobs(worker_database)
+    async with worker_database.actor_transaction(SYSTEM) as session:
+        row = (
+            await session.execute(
+                text(
+                    "SELECT status, failure_code FROM documents "
+                    "WHERE kind = 'investment_note' AND idempotency_key = :key"
+                ),
+                {"key": f"ended:{investment.id}"},
+            )
+        ).one()
+    assert (row.status, row.failure_code) == ("failed", "source_conflict")

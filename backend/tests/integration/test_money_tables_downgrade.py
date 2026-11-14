@@ -655,6 +655,12 @@ ROWS = {
         "'started:-Nabc0000000000000C1', '-Nabc0000000000000C1', now())",
         "refusing to drop investment notes",
     ),
+    "0144_ended_investment_notes": (
+        "INSERT INTO documents (id, client_id, kind, idempotency_key, source_id, requested_at) "
+        "VALUES ('-Nabc0000000000000A1', '-Nabc0000000000000B1', 'investment_note', "
+        "'ended:-Nabc0000000000000C1', '-Nabc0000000000000C1', now())",
+        "refusing to drop investment notes",
+    ),
     "0141_document_emails": (
         # Only the worker queues an email, and only for a ready document. The migrator owns
         # both tables, so it sets their guards aside to write the row this test needs.
