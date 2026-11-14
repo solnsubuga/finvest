@@ -347,6 +347,12 @@ export const CodeAnswer = z.object({
 });
 export type CodeAnswer = z.infer<typeof CodeAnswer>;
 
+export const ConfirmBody = z.object({
+  action: z.enum(["withdrawal", "payout_account"]),
+  pin: z.string(),
+});
+export type ConfirmBody = z.infer<typeof ConfirmBody>;
+
 export const ConfirmCode = z.object({
   code: z.string(),
 });
@@ -875,6 +881,13 @@ export const PinChecked = z.object({
   unlocked: z.boolean(),
 });
 export type PinChecked = z.infer<typeof PinChecked>;
+
+export const PinConfirmed = z.object({
+  confirmation: z.string().nullable(),
+  confirmed: z.boolean(),
+  tries_left: z.number().int(),
+});
+export type PinConfirmed = z.infer<typeof PinConfirmed>;
 
 export const PlanDetails = z.object({
   amount_minor: z.number().int(),
@@ -2341,6 +2354,17 @@ export const operations = {
     idempotent: false,
     status: 204,
     response: null,
+  },
+  "POST /client/pin/confirm": {
+    method: "POST",
+    path: "/client/pin/confirm",
+    params: z.object({}),
+    query: z.object({}),
+    body: ConfirmBody,
+    bodyKind: "json",
+    idempotent: false,
+    status: 200,
+    response: PinConfirmed,
   },
   "POST /client/pin/unlock": {
     method: "POST",

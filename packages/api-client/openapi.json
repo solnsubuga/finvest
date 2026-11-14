@@ -3857,6 +3857,31 @@
         "title": "ComplaintNote",
         "type": "object"
       },
+      "ConfirmBody": {
+        "additionalProperties": false,
+        "properties": {
+          "action": {
+            "enum": [
+              "withdrawal",
+              "payout_account"
+            ],
+            "title": "Action",
+            "type": "string"
+          },
+          "pin": {
+            "maxLength": 16,
+            "minLength": 1,
+            "title": "Pin",
+            "type": "string"
+          }
+        },
+        "required": [
+          "pin",
+          "action"
+        ],
+        "title": "ConfirmBody",
+        "type": "object"
+      },
       "ConfirmCode": {
         "additionalProperties": false,
         "properties": {
@@ -5553,6 +5578,7 @@
               "second_step_missing",
               "sign_in_again",
               "app_locked",
+              "pin_required",
               "confirm_it_is_you",
               "expired",
               "phone_taken",
@@ -10155,6 +10181,38 @@
           "tries_left"
         ],
         "title": "PinChecked",
+        "type": "object"
+      },
+      "PinConfirmed": {
+        "additionalProperties": false,
+        "description": "A right PIN gives `confirmation`: send it with the action, once, within three minutes.\nOtherwise `tries_left` before this device signs out.",
+        "properties": {
+          "confirmation": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Confirmation"
+          },
+          "confirmed": {
+            "title": "Confirmed",
+            "type": "boolean"
+          },
+          "tries_left": {
+            "title": "Tries Left",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "confirmed",
+          "tries_left",
+          "confirmation"
+        ],
+        "title": "PinConfirmed",
         "type": "object"
       },
       "PlanCountsView": {
@@ -27798,6 +27856,16 @@
             },
             "description": "Locked"
           },
+          "428": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Precondition Required"
+          },
           "429": {
             "content": {
               "application/json": {
@@ -27810,6 +27878,108 @@
           }
         },
         "summary": "Set Pin",
+        "tags": [
+          "client sign-in"
+        ]
+      }
+    },
+    "/client/pin/confirm": {
+      "post": {
+        "description": "Confirm one action with the PIN. The fifth wrong PIN in a row signs this device out.",
+        "operationId": "confirm_client_pin_confirm_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ConfirmBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PinConfirmed"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "423": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Locked"
+          },
+          "428": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Precondition Required"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          }
+        },
+        "summary": "Confirm",
         "tags": [
           "client sign-in"
         ]
@@ -27889,6 +28059,16 @@
               }
             },
             "description": "Locked"
+          },
+          "428": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Precondition Required"
           },
           "429": {
             "content": {

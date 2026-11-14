@@ -887,6 +887,18 @@ ROWS = {
         "'+256701555013', 'lost_phone', 'open', now(), 2, now())",
         "refusing to drop the later asks on open recovery requests",
     ),
+    "0225_identity_pin_confirmations": (
+        "INSERT INTO identity_clients (id, phone, status, created_at) VALUES "
+        "('-Nabc0000000000000B1', '+256772123456', 'unclaimed', now()); "
+        "INSERT INTO identity_sessions (id, actor_kind, actor_id, token_hash, second_step, "
+        "transport, created_at, last_seen_at, idle_expires_at, absolute_expires_at) "
+        "VALUES ('-Nabc0000000000000A1', 'client', '-Nabc0000000000000B1', "
+        "decode(repeat('00', 32), 'hex'), 'passkey', 'token', now(), now(), now(), now()); "
+        "INSERT INTO identity_pin_confirmations (id, session_id, action, token_hash, created_at, "
+        "expires_at) VALUES ('-Nabc0000000000000C1', '-Nabc0000000000000A1', 'withdrawal', "
+        "decode(repeat('11', 32), 'hex'), now(), now() + interval '3 minutes')",
+        "refusing to drop PIN confirmations that are not used yet",
+    ),
 }
 
 
