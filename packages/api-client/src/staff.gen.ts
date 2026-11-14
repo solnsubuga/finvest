@@ -2688,6 +2688,13 @@ export const StaffTransferOut = z.object({
 });
 export type StaffTransferOut = z.infer<typeof StaffTransferOut>;
 
+export const StaffWriteFirst = z.object({
+  body: z.string(),
+  key: z.string(),
+  topic: z.enum(["deposit", "withdrawal", "investment", "identity", "account", "other"]).optional(),
+});
+export type StaffWriteFirst = z.infer<typeof StaffWriteFirst>;
+
 export const StatementOut = z.object({
   account_reference: z.string(),
   business_date: z.string(),
@@ -5751,6 +5758,19 @@ export const operations = {
     idempotent: false,
     status: 204,
     response: null,
+  },
+  "POST /staff/support/clients/{client_id}/messages": {
+    method: "POST",
+    path: "/staff/support/clients/{client_id}/messages",
+    params: z.object({
+    client_id: z.string(),
+  }),
+    query: z.object({}),
+    body: StaffWriteFirst,
+    bodyKind: "json",
+    idempotent: false,
+    status: 201,
+    response: MessageItem,
   },
   "GET /staff/support/conversations": {
     method: "GET",
