@@ -67,7 +67,7 @@ async def test_a_client_claims_from_the_link_and_is_signed_in(api: Api) -> None:
     # The link is spent.
     assert refusal(await start(api, token))[0] == 404
 
-    # The identity check is the identity module's, not built into these routes yet.
+    # The identity step is covered in test_migration_claim_steps; here it moves directly.
     client = Actor("client", client_id)
     async with api.database.actor_transaction(client) as session:
         await claims.submit_identity(session, client, api.clock)

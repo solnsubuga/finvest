@@ -169,6 +169,7 @@ A running log. Add a row when a decision is made, and move an open question up w
 | Payouts: mobile money prefixes accepted are MTN 76, 77, 78, 39 and Airtel 70, 74, 75, 20. Confirm the list. | Owner, ioTec |
 | Payouts: a client can cancel a withdrawal only while it is held for review (built so far). Should they be able to cancel before it is sent? | Owner |
 | Reconciliation: is a provider's fee on a sweep between pots Finvest's own expense, and under which account (built so far: `fees.provider.iotec`)? Where do bank charges on the trust account go? | Owner, accountant |
+| Migration: when staff decide that a migrated client's selfie does not match the ID on file, the claim goes back to signed in, but the claim check cannot be taken again. Built: staff follow the client up by hand. Should the client be able to take the photos again, or be sent to the full ID check? | Owner, compliance |
 | Migration: a sample Finvest 1.0 export, or the old database tables, to check the import columns against. | Owner |
 | Migration: Finvest 1.0 identity documents with no expiry date on file are treated as still valid (built so far). Should those clients redo the ID check instead? | Owner, counsel |
 | Migration: should payout accounts and past transactions from Finvest 1.0 be brought across? Built: no. | Owner |

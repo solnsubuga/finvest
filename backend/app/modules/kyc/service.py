@@ -60,7 +60,8 @@ _LEGACY_REFERENCE = re.compile(r"[A-Za-z0-9][A-Za-z0-9._/-]{0,63}")
 # Published when a check is approved or rejected, by staff or by the worker. Other modules that
 # need to hear, such as migration for a client claiming an account, add their consumer here.
 DECIDED_TOPIC = "kyc.check_decided"
-DECIDED_CONSUMERS: tuple[Consumer, ...] = ()
+# The migration module moves a migrated client's claim on when their full ID check is decided.
+DECIDED_CONSUMERS: tuple[Consumer, ...] = (Consumer(kind="migration.identity_check_decided"),)
 # The worker's jobs (app/modules/kyc/jobs.py). One send per submission, whatever is retried.
 SEND_CHECK = "kyc.send_check"
 READ_RESULT = "kyc.read_result"
