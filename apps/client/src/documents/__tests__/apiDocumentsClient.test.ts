@@ -27,6 +27,8 @@ const ITEM = {
   file_name: null,
   byte_size: null,
   not_final_from: null,
+  investment_id: null,
+  deposit_id: null,
 };
 
 type Call = { url: string; init: RequestInit };
