@@ -9,9 +9,13 @@ Other modules import from here. A client-facing route may call only `client_insi
 
 from dataclasses import dataclass
 from datetime import date
+from enum import StrEnum
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.modules.autoinvest import service as autoinvest
+from app.modules.goals import saving_rules
+from app.modules.goals import service as goals
 from app.modules.insights.domain.months import DEFAULT_MONTHS, month_end, months_ending
 from app.modules.investments import service as investments
 from app.modules.investments.domain.investments import AtMaturity, InvestmentStatus
@@ -29,6 +33,17 @@ PAID_OUT = ("client.payout_in_flight", "payout.settle")
 # A paid payout that came back, owed to the client again. It comes off paid out in its month.
 RETURNED = ("client.payout_pending", "payout.returned")
 UPCOMING_LIMIT = 5
+
+
+class UpcomingKind(StrEnum):
+    # An investment matures: `amount` is what comes back, after tax.
+    MATURITY = "maturity"
+    # An automatic investing plan asks for its next payment: `amount` is what it asks for.
+    AUTOINVEST_RUN = "autoinvest_run"
+    # A goal's saving rule asks for its next monthly saving: `amount` is what it asks for.
+    GOAL_SAVING = "goal_saving"
+    # A goal's date: `amount` is its target.
+    GOAL_DATE = "goal_date"
 
 
 @dataclass(frozen=True, slots=True)
@@ -49,12 +64,19 @@ class Month:
 class Upcoming:
     """Something that will happen to the client's money, soonest first."""
 
+    kind: UpcomingKind
     on: date
-    investment_id: str
-    product_name: str
-    at_maturity: AtMaturity | None
-    # What the client gets back at maturity, after tax.
+    # See `UpcomingKind` for what the amount is, for each kind. Never a figure before tax.
     amount: Money
+    # A maturity names its investment, a run its plan, and a goal saving or date its goal.
+    investment_id: str | None = None
+    plan_id: str | None = None
+    goal_id: str | None = None
+    # The product, for a maturity or a run. None for a goal's date.
+    product_name: str | None = None
+    # The goal's name, the client's own words, for a goal saving or date.
+    goal_name: str | None = None
+    at_maturity: AtMaturity | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -111,20 +133,24 @@ async def client_insights(
         if held.status is InvestmentStatus.ACTIVE and held.amount.currency is currency
     ]
     upcoming = sorted(
-        (
-            Upcoming(
-                on=held.maturity_date,
-                investment_id=held.id,
-                product_name=held.product_name,
-                at_maturity=held.at_maturity,
-                amount=held.at_maturity_returns.total,
-            )
-            for held in portfolio
-            if held.maturity_date is not None
-            and held.maturity_date >= today
-            and held.at_maturity_returns is not None
-        ),
-        key=lambda item: (item.on, item.investment_id),
+        [
+            *(
+                Upcoming(
+                    kind=UpcomingKind.MATURITY,
+                    on=held.maturity_date,
+                    amount=held.at_maturity_returns.total,
+                    investment_id=held.id,
+                    product_name=held.product_name,
+                    at_maturity=held.at_maturity,
+                )
+                for held in portfolio
+                if held.maturity_date is not None
+                and held.maturity_date >= today
+                and held.at_maturity_returns is not None
+            ),
+            *await _coming_savings(session, client, clock, currency, today),
+        ],
+        key=lambda item: (item.on, item.kind.value, item.investment_id or item.plan_id or ""),
     )[:UPCOMING_LIMIT]
     return ClientInsights(
         currency=currency,
@@ -141,6 +167,59 @@ async def client_insights(
         earned_so_far=sum((held.interest_so_far for held in portfolio), zero),
         upcoming=tuple(upcoming),
     )
+
+
+async def _coming_savings(
+    session: AsyncSession, client: Actor, clock: Clock, currency: Currency, today: date
+) -> list[Upcoming]:
+    """The next payment of each active automatic plan, and each active goal's date.
+
+    A plan that is a goal's saving rule shows as that goal's saving, named by the goal.
+    """
+    plans = [
+        plan
+        for plan in await autoinvest.client_plans(session, client)
+        if plan.status is autoinvest.PlanStatus.ACTIVE
+        and plan.next_run_on is not None
+        and plan.next_run_on >= today
+        and plan.amount.currency is currency
+    ]
+    open_goals = [
+        g for g in await goals.active_goals(session, client) if g.target.currency is currency
+    ]
+    ruled = await saving_rules.goals_with_rules(session, [g.id for g in open_goals])
+    goal_of_plan = {plan_id: goal_id for goal_id, plan_id in ruled.items()}
+    names = {g.id: g.name for g in open_goals}
+    products = (
+        {p.code: p.name for p in await investments.client_products(session, clock)} if plans else {}
+    )
+    coming: list[Upcoming] = []
+    for plan in plans:
+        assert plan.next_run_on is not None
+        goal_id = goal_of_plan.get(plan.id)
+        coming.append(
+            Upcoming(
+                kind=UpcomingKind.GOAL_SAVING if goal_id else UpcomingKind.AUTOINVEST_RUN,
+                on=plan.next_run_on,
+                amount=plan.amount,
+                plan_id=plan.id,
+                goal_id=goal_id,
+                product_name=products.get(plan.product_code, plan.product_code),
+                goal_name=names.get(goal_id) if goal_id else None,
+            )
+        )
+    coming.extend(
+        Upcoming(
+            kind=UpcomingKind.GOAL_DATE,
+            on=goal.target_date,
+            amount=goal.target,
+            goal_id=goal.id,
+            goal_name=goal.name,
+        )
+        for goal in open_goals
+        if goal.target_date is not None and goal.target_date >= today
+    )
+    return coming
 
 
 async def _monthly(
