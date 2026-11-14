@@ -79,7 +79,7 @@ export function screeningWarning(standing: ScreeningStanding | null): string | n
     case "confirmed_match":
       return "Compliance confirmed this client matches a sanctions or political exposure list. Do not approve without compliance.";
     case "unavailable":
-      return "Screening could not finish, so this client has not been checked against the sanctions and political exposure lists. Run it again from the Compliance screen before approving.";
+      return "Screening could not finish, so this client has not been checked against the sanctions and political exposure lists. Do not approve until it has run: escalate to compliance to have the client screened again.";
     case "pending":
       return "Screening has not finished yet. Wait for its result before approving.";
     case "not_run":
