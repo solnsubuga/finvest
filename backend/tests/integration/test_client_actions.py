@@ -195,7 +195,7 @@ async def test_withdrawn_and_rejected_actions_change_nothing(api: Api) -> None:
     assert (await decide(api, action["id"], "approved")).status_code == 404
     page = (await api.http.get(f"/staff/clients/{client.id}/actions")).json()
     assert [item["status"] for item in page["actions"]] == ["rejected", "withdrawn"]
-    assert page["allowed"] == ["pin_reset", "withdrawal_limits"]
+    assert page["allowed"] == ["pin_reset", "withdrawal_limits", "statement"]
 
 
 async def test_finance_cannot_reset_a_pin(api: Api) -> None:

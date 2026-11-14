@@ -470,6 +470,7 @@ async def test_staff_session_lists_the_role_and_its_permissions(api: Api) -> Non
             "email_suppressions.lift",
             "client_notes.write",
             "client_pins.reset",
+            "client_statements.send",
         ],
         # Signing in counts as confirming it is them, for ten minutes.
         "confirmed_until": (api.clock.now() + timedelta(minutes=10))
