@@ -82,6 +82,16 @@ _GET = text(
     "WHERE source = :source AND account_reference = :account_reference "
     "AND business_date = :business_date"
 )
+_STATEMENT_COLUMNS = (
+    "SELECT id, source, account_reference, business_date, currency, opening_minor, "
+    "closing_minor, line_count FROM reconciliation_statements "
+    "WHERE source = :source AND account_reference = :account_reference "
+)
+_LAST = text(_STATEMENT_COLUMNS + "ORDER BY business_date DESC LIMIT 1")
+_LIST = text(
+    _STATEMENT_COLUMNS + "AND business_date BETWEEN :date_from AND :date_to "
+    "ORDER BY business_date LIMIT 100"
+)
 _FIND = text(
     "SELECT line.id, statement.source, statement.account_reference, statement.currency, "
     "line.value_date, line.direction, line.amount_minor, line.reference, line.narrative "
@@ -198,8 +208,41 @@ async def get_statement(
             _GET, {"source": source, "account_reference": account_reference, "business_date": on}
         )
     ).one_or_none()
-    if row is None:
-        return None
+    return None if row is None else _statement(row)
+
+
+async def last_statement(
+    session: AsyncSession, source: StatementSource, account_reference: str
+) -> ImportedStatement | None:
+    """A pot's latest statement: the next one must be for the day after, opening at its close."""
+    row = (
+        await session.execute(_LAST, {"source": source, "account_reference": account_reference})
+    ).one_or_none()
+    return None if row is None else _statement(row)
+
+
+async def list_statements(
+    session: AsyncSession,
+    source: StatementSource,
+    account_reference: str,
+    *,
+    date_from: date,
+    date_to: date,
+) -> list[ImportedStatement]:
+    """A pot's statements in a range of days, oldest first, at most 100."""
+    rows = await session.execute(
+        _LIST,
+        {
+            "source": source,
+            "account_reference": account_reference,
+            "date_from": date_from,
+            "date_to": date_to,
+        },
+    )
+    return [_statement(row) for row in rows.all()]
+
+
+def _statement(row: Row[Any]) -> ImportedStatement:
     currency = Currency(row.currency)
     return ImportedStatement(
         row.id,

@@ -1,6 +1,6 @@
 # Reconciliation
 
-How Finvest proves each day that the ledger agrees with the money that really moved. The pure rules are in `backend/app/modules/reconciliation/domain`. The matching and day close tables, the scheduled run and the console screens arrive in later pull requests, and this document grows with them.
+How Finvest proves each day that the ledger agrees with the money that really moved. The pure rules are in `backend/app/modules/reconciliation/domain`. The scheduled run and the console screens arrive in later pull requests, and this document grows with them.
 
 ## Pots
 
@@ -115,6 +115,26 @@ The ledger is closed before the figures are read at approval, so no entry can sl
 | Who | Only staff prepare and decide. The worker reads. Clients see nothing |
 
 The pots closed today are the two ioTec wallets and the trust bank account (`domain/pots.py`). The custodian joins when the dealing desk can report holdings. A bill's purchase and its maturity are posted to `bank.trust` without the bank's reference, which is not known when the entry is posted, so they pair by the reference the dealing desk gives for them. A maturity on a weekend or public holiday is paid on the next working day, so its bank line can come a day or more after the entry.
+
+## Staff routes
+
+In `backend/app/modules/reconciliation/api.py`. Everything needs `reconciliation.view`. Approving a close also needs the second step in the last ten minutes (403 `confirm_it_is_you`). Refusals carry their code in `fields`.
+
+| Route | What it does |
+| --- | --- |
+| `GET /staff/reconciliation/pots` | Every pot closed each day, with its last statement day and closing balance, so staff know which day comes next and what it must open at |
+| `GET /staff/reconciliation/statements?source&account_reference&date_from&date_to` | One pot's statements in a range, oldest first, at most 100 |
+| `POST /staff/reconciliation/statements` | Multipart: `source`, `account_reference`, `statement_date`, `opening_balance` and `closing_balance` as the statement prints them, `format`, and the CSV `file` (at most 2 MiB). 201 with the statement. 422 names the problem and, for a row, its number (`["body", "file", row]`), never its contents; 409 `statement_already_imported`, `statement_day_out_of_order`, `statement_opening_balance_differs` or `statement_day_not_over` |
+| `GET /staff/reconciliation/days/{day}` | Each pot at the end of the day: statement, ledger, open exceptions with their lines and movements, and what is unexplained. A line with no pair lists the movements of the same direction and amount within three days as `suggested_movements`. While the day is open, `blockers` lists every reason it cannot be prepared yet; once prepared or closed, `close` says who signed |
+| `POST /staff/reconciliation/days/{day}/refresh` | Brings in the ledger's movements up to the day and pairs what the records and references pair. Safe to run again |
+| `POST /staff/reconciliation/matches` | `{statement_line_id, entry_id, line_no, reason}`: a person pairs a line with a movement. 409 `line_already_matched`, `movement_already_matched`, `match_not_found` or `match_not_same_money` |
+| `POST /staff/reconciliation/days/{day}/prepare` | The first signature. 409 with the first blocker |
+| `POST /staff/reconciliation/days/{day}/approve` | The second signature. 409 `close_not_prepared`, `close_needs_second_person`, `close_needs_someone_who_did_not_import` or `close_changed_since_prepared` |
+| `POST /staff/reconciliation/days/{day}/send-back` | `{reason}`. Declines or withdraws a prepared close |
+
+A statement line's narrative is shown only as `counterparty_hint`. Statements are uploaded in the `standard` layout (`domain/formats.py`): a header row `Date,Details,Reference,In,Out`, dates as `YYYY-MM-DD`, and money in and money out in separate columns. Each provider's own export gets a format once one of its files has been seen. Until then staff save the export in that layout.
+
+The journeys import ioTec's statements and sign every day off through these routes (`tests/journeys/test_99_day_close.py`). Pot transfers have no routes yet.
 
 ## Transfers between pots
 
