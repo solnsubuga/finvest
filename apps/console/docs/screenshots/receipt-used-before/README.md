@@ -1,6 +1,6 @@
 # Receipt used before screenshots
 
-From the console's sample build (`VITE_STUB_API=true`). See docs/payments.md, "A receipt used before".
+From the console's sample build (`VITE_STUB_API=true`). On wide screens the queue tag shows beside the transfer in the first image, so only the phone has a queue image of its own. See docs/payments.md, "A receipt used before".
 
 ## A transfer whose receipt was handed in before (phone)
 
@@ -13,10 +13,6 @@ From the console's sample build (`VITE_STUB_API=true`). See docs/payments.md, "A
 ## The queue tags it (phone)
 
 ![The queue tags it (phone)](phone-02-queue-tag.png)
-
-## The queue tags it (wide)
-
-![The queue tags it (wide)](wide-02-queue-tag.png)
 
 ## A transfer whose receipt is new (phone)
 
