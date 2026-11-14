@@ -61,6 +61,37 @@ resource "cloudflare_zero_trust_access_policy" "admin_staff" {
   }]
 }
 
+# Office networks for the back office (ADMIN_OFFICE_NETWORKS). When set, Access lets a staff
+# email in only from these addresses. The console's own office networks check on staff routes
+# stays the real control: it also covers the staff API, which this does not.
+resource "cloudflare_zero_trust_list" "office_networks" {
+  count = length(var.admin_access_emails) > 0 && length(var.admin_office_networks) > 0 ? 1 : 0
+
+  account_id = data.cloudflare_zone.this.account.id
+  name       = "${local.name} office networks"
+  type       = "IP"
+  items      = [for n in var.admin_office_networks : { value = n }]
+}
+
+resource "cloudflare_zero_trust_access_policy" "admin_office" {
+  count = length(cloudflare_zero_trust_list.office_networks)
+
+  account_id = data.cloudflare_zone.this.account.id
+  name       = "${local.name} staff in the office"
+  decision   = "allow"
+
+  include = [for e in var.admin_access_emails : {
+    email = {
+      email = e
+    }
+  }]
+  require = [{
+    ip_list = {
+      id = cloudflare_zero_trust_list.office_networks[0].id
+    }
+  }]
+}
+
 # Until switch day the production client app is for staff only, like the back office. The API
 # stays public: provider callbacks, Resend webhooks and the phone apps call it directly. The
 # phone apps are held back from the stores until this is lifted (docs/launch.md).
@@ -89,7 +120,10 @@ resource "cloudflare_zero_trust_access_application" "admin" {
   session_duration = "12h"
 
   policies = [{
-    id         = cloudflare_zero_trust_access_policy.admin_staff[0].id
+    id = (length(cloudflare_zero_trust_access_policy.admin_office) > 0
+      ? cloudflare_zero_trust_access_policy.admin_office[0].id
+      : cloudflare_zero_trust_access_policy.admin_staff[0].id
+    )
     precedence = 1
   }]
 }

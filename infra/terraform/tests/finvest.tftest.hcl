@@ -112,3 +112,46 @@ run "production_with_access" {
     error_message = "Production settings go to the prod GitHub environment."
   }
 }
+
+run "back_office_open_from_anywhere_without_office_networks" {
+  command = plan
+  variables {
+    environment         = "production"
+    admin_access_emails = ["staff@example.com"]
+  }
+  assert {
+    condition     = length(cloudflare_zero_trust_list.office_networks) == 0 && length(cloudflare_zero_trust_access_policy.admin_office) == 0
+    error_message = "With no office networks the back office keeps the email-only policy."
+  }
+}
+
+run "back_office_only_from_office_networks" {
+  command = plan
+  variables {
+    environment           = "production"
+    admin_access_emails   = ["staff@example.com"]
+    admin_office_networks = ["203.0.113.0/24", "198.51.100.7/32"]
+  }
+  assert {
+    condition     = toset([for i in cloudflare_zero_trust_list.office_networks[0].items : i.value]) == toset(["203.0.113.0/24", "198.51.100.7/32"])
+    error_message = "The office list holds exactly the configured networks."
+  }
+  assert {
+    condition     = length(cloudflare_zero_trust_access_policy.admin_office[0].require) == 1
+    error_message = "The office policy requires the office list."
+  }
+  assert {
+    condition     = length(cloudflare_zero_trust_access_application.app) == 1
+    error_message = "The client app keeps the email-only staff policy before launch."
+  }
+}
+
+run "office_networks_must_be_cidr" {
+  command = plan
+  variables {
+    environment           = "production"
+    admin_access_emails   = ["staff@example.com"]
+    admin_office_networks = ["office"]
+  }
+  expect_failures = [var.admin_office_networks]
+}
