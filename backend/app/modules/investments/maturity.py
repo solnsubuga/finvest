@@ -12,6 +12,13 @@ closes it in one transaction, and the principal and the interest leave the holdi
 * **Interest paid, principal kept invested.** A new investment in the same product starts for
   the principal alone, and the interest is handed to payouts and paid out as above, in one
   ledger entry. The new term keeps the same choice and destination.
+* **Interest saved to a goal, principal kept invested.** As above, the principal starts a new
+  term in the same product, keeping the choice and the goal. The interest starts a second new
+  investment at once, in the product the goal saves into, at that product's rate on the day,
+  with no payment to make and no minimum (the owner's decision). Both come from one ledger
+  entry, and goals records the second as a saving towards the goal. If the goal was closed, or
+  its product no longer takes money, the interest rolls over with the principal instead and
+  the client is told.
 * **Held.** If the client's choice cannot be carried out, or payouts refuses the payout, the
   money is handed over just the same and waits there (only the interest, when the principal
   was kept invested). The reason is kept on the investment, and
@@ -33,13 +40,15 @@ from app.infrastructure.jobs import publish
 from app.modules.audit import service as audit
 from app.modules.audit.domain.events import AuditActor, AuditEvent
 from app.modules.documents.events import NOTE_ON_END
-from app.modules.goals.events import FOLLOW_ROLLOVER
+from app.modules.goals import reads as goal_reads
+from app.modules.goals.events import FOLLOW_ROLLOVER, LINK_INTEREST_SAVING
 from app.modules.investments import accrual
 from app.modules.investments.catalogue import invalid, product_from_row, product_row, rates_for
 from app.modules.investments.domain.interest import maturity_date
 from app.modules.investments.domain.investments import (
     PAYS_OUT,
     AtMaturity,
+    GoalMiss,
     HoldReason,
     InvestmentStatus,
     MaturityStep,
@@ -51,6 +60,7 @@ from app.modules.investments.domain.investments import (
 from app.modules.investments.domain.products import ProductStatus
 from app.modules.investments.domain.rates import rate_in_force
 from app.modules.investments.holdings import (
+    GOAL_INTEREST_SOURCE,
     INVESTMENT_RESOURCE,
     Investment,
     get_investment,
@@ -58,7 +68,7 @@ from app.modules.investments.holdings import (
     investment_from_row,
     select_investments,
 )
-from app.modules.investments.locks import inherit_lock
+from app.modules.investments.locks import inherit_lock, lock_withdrawals
 from app.modules.ledger import service as ledger
 from app.modules.ledger.domain.entries import EntryDraft, Line, credit, debit
 from app.modules.notifications import contract as notifications
@@ -73,6 +83,7 @@ from app.shared.push_ids import push_id
 
 MATURED_TOPIC = "investments.matured"
 ROLLED_OVER_TOPIC = "investments.rolled_over"
+INTEREST_SAVED_TOPIC = "investments.interest_saved_to_goal"
 BATCH = 100
 logger = structlog.get_logger()
 
@@ -93,14 +104,21 @@ _DUE = select_investments(
 )
 _CHOOSE = text(
     "UPDATE investments SET at_maturity = :at_maturity, payout_destination_id = :destination_id, "
-    "updated_at = :now WHERE id = :id"
+    "interest_goal_id = :goal_id, updated_at = :now WHERE id = :id"
 )
 _INSERT_ROLLED = text(
     "INSERT INTO investments (id, client_id, product_id, currency, principal_minor, "
-    "annual_rate_bps, tax_bps, term_days, at_maturity, payout_destination_id, created_at, "
-    "pay_by, updated_at, rolled_from_id) VALUES (:id, :client_id, :product_id, :currency, "
-    ":principal_minor, :annual_rate_bps, :tax_bps, :term_days, :at_maturity, :destination_id, "
-    ":created_at, :pay_by, :now, :rolled_from_id)"
+    "annual_rate_bps, tax_bps, term_days, at_maturity, payout_destination_id, interest_goal_id, "
+    "created_at, pay_by, updated_at, rolled_from_id) VALUES (:id, :client_id, :product_id, "
+    ":currency, :principal_minor, :annual_rate_bps, :tax_bps, :term_days, :at_maturity, "
+    ":destination_id, :goal_id, :created_at, :pay_by, :now, :rolled_from_id)"
+)
+_INSERT_INTEREST_SAVING = text(
+    "INSERT INTO investments (id, client_id, product_id, currency, principal_minor, "
+    "annual_rate_bps, tax_bps, term_days, at_maturity, created_at, pay_by, updated_at, "
+    "source_type, source_id) VALUES (:id, :client_id, :product_id, :currency, :principal_minor, "
+    ":annual_rate_bps, :tax_bps, :term_days, :at_maturity, :created_at, :pay_by, :now, "
+    ":source_type, :source_id)"
 )
 _START_ROLLED = text(
     "UPDATE investments SET status = 'active', start_date = :start_date, "
@@ -129,11 +147,15 @@ async def choose_at_maturity(
     at_maturity: AtMaturity,
     destination_id: str | None,
     clock: Clock,
+    goal_id: str | None = None,
 ) -> Investment:
     """Save what the client wants done at maturity. It can change up to the day before.
 
     To be paid out, all of it or the interest alone, the client names one of their approved
-    payout destinations. Rolling over takes none, and clears one chosen earlier.
+    payout destinations. To save the interest to a goal, they name one of their open goals in
+    the investment's currency, other than the goal the investment is itself saved towards
+    (rolling over already keeps its interest there). Rolling over takes neither, and clears
+    one chosen earlier.
     """
     investment = await _own_locked(session, client, investment_id)
     today = business_date(clock.now())
@@ -147,12 +169,19 @@ async def choose_at_maturity(
         await _usable(session, investment.client_id, destination_id)
     elif destination_id is not None:
         raise invalid("destination_id", "not_used_when_rolling_over")
+    if at_maturity is AtMaturity.INTEREST_TO_GOAL:
+        if goal_id is None:
+            raise invalid("goal_id", "required")
+        await _usable_goal(session, investment, goal_id)
+    elif goal_id is not None:
+        raise invalid("goal_id", "not_used")
     await session.execute(
         _CHOOSE,
         {
             "id": investment.id,
             "at_maturity": at_maturity.value,
             "destination_id": destination_id,
+            "goal_id": goal_id,
             "now": clock.now(),
         },
     )
@@ -164,7 +193,11 @@ async def choose_at_maturity(
             resource_type=INVESTMENT_RESOURCE,
             resource_id=investment.id,
             actor=AuditActor.client(investment.client_id),
-            details={"at_maturity": at_maturity.value, "destination_id": destination_id},
+            details={
+                "at_maturity": at_maturity.value,
+                "destination_id": destination_id,
+                "goal_id": goal_id,
+            },
         ),
         clock,
     )
@@ -288,14 +321,49 @@ async def _mature(
     # database checks the creation time against (migration 0062).
     quoted_at: datetime = await session.scalar(_DATABASE_NOW)
     rate = rate_in_force(await rates_for(session, row.id), business_date(quoted_at))
+    goal: goal_reads.GoalForInterest | None = None
+    saving: _GoalSaving | None = None
+    miss: GoalMiss | None = None
+    if investment.at_maturity is AtMaturity.INTEREST_TO_GOAL:
+        goal, saving, miss = await _goal_saving(session, investment, quoted_at)
     plan = plan_maturity(
         investment.at_maturity,
         has_destination=investment.payout_destination_id is not None,
         product_open=product.status is ProductStatus.LIVE and rate is not None,
+        goal_miss=miss,
     )
     if plan.step is MaturityStep.ROLL_OVER and rate is not None:
         await _roll_over(
-            session, investment, row.id, rate.annual_rate_bps, rate.tax_bps, quoted_at, clock
+            session,
+            investment,
+            row.id,
+            rate.annual_rate_bps,
+            rate.tax_bps,
+            quoted_at,
+            clock,
+            # The choice carries on while the goal is open; a closed goal ends it.
+            keep_goal=goal is not None and goal.active and miss is not None,
+        )
+        if goal is not None and miss is not None:
+            await notifications.notify(
+                session,
+                event_name="goal_interest_not_saved",
+                client_id=investment.client_id,
+                idempotency_key=investment.id,
+                variables={"goal": goal.name, "product": product.name},
+                link=notifications.Link("investment", investment.id),
+                now=clock.now(),
+            )
+    elif plan.step is MaturityStep.ROLL_OVER_INTEREST_TO_GOAL and rate is not None:
+        await _roll_over(
+            session,
+            investment,
+            row.id,
+            rate.annual_rate_bps,
+            rate.tax_bps,
+            quoted_at,
+            clock,
+            to_goal=saving,
         )
     elif plan.step is MaturityStep.ROLL_OVER_PAY_INTEREST and rate is not None:
         await _roll_over(
@@ -319,7 +387,10 @@ async def _mature(
             resource_type=INVESTMENT_RESOURCE,
             resource_id=investment.id,
             actor=AuditActor.system(),
-            details={"step": plan.step.value},
+            details={
+                "step": plan.step.value,
+                **({"goal_miss": plan.goal_miss.value} if plan.goal_miss else {}),
+            },
         ),
         clock,
     )
@@ -334,6 +405,41 @@ async def _mature(
     )
 
 
+@dataclass(frozen=True, slots=True)
+class _GoalSaving:
+    """Where the interest goes when it is saved to a goal: the goal and its product's terms on
+    the day."""
+
+    goal: goal_reads.GoalForInterest
+    product_id: str
+    term_days: int | None
+    annual_rate_bps: int
+    tax_bps: int
+
+
+async def _goal_saving(
+    session: AsyncSession, investment: Investment, quoted_at: datetime
+) -> tuple[goal_reads.GoalForInterest | None, _GoalSaving | None, GoalMiss | None]:
+    """The goal the interest is to be saved to, and whether it can take it today."""
+    goal_id = investment.interest_goal_id
+    goal = None if goal_id is None else await goal_reads.goal_for_interest(session, goal_id)
+    if goal is None or not goal.active or goal.currency is not investment.amount.currency:
+        return goal, None, GoalMiss.GOAL_CLOSED
+    try:
+        row = await product_row(session, goal.product_code)
+    except ApplicationError:
+        return goal, None, GoalMiss.GOAL_PRODUCT_NOT_OPEN
+    product = product_from_row(row)
+    rate = rate_in_force(await rates_for(session, row.id), business_date(quoted_at))
+    if product.status is not ProductStatus.LIVE or rate is None:
+        return goal, None, GoalMiss.GOAL_PRODUCT_NOT_OPEN
+    return (
+        goal,
+        _GoalSaving(goal, row.id, product.term_days, rate.annual_rate_bps, rate.tax_bps),
+        None,
+    )
+
+
 async def _roll_over(
     session: AsyncSession,
     investment: Investment,
@@ -345,18 +451,34 @@ async def _roll_over(
     *,
     pay_interest: bool = False,
     hold_reason: HoldReason | None = None,
+    to_goal: _GoalSaving | None = None,
+    keep_goal: bool = False,
 ) -> None:
-    """Start a new term in the same product. With `pay_interest`, the new term is for the
-    principal alone, keeps the client's choice and destination, and the interest goes to
-    payouts in the same entry."""
+    """Start a new term in the same product.
+
+    With `pay_interest`, the new term is for the principal alone, keeps the client's choice and
+    destination, and the interest goes to payouts in the same entry. With `to_goal`, the new
+    term is for the principal alone and keeps the choice and the goal, and the interest starts
+    a new investment in the goal's product, in the same entry. With `keep_goal`, everything
+    rolls over but the new term keeps the choice to save its interest to the goal, which is
+    still open.
+    """
     now = clock.now()
-    interest = investment.accrued_net if pay_interest else Money.zero(investment.amount.currency)
+    currency = investment.amount.currency
+    split = pay_interest or to_goal is not None
+    interest = investment.accrued_net if split else Money.zero(currency)
     proceeds = _proceeds(investment) - interest
     new_id = push_id()
     # The new term starts the day the old one ended, so no day is left without interest.
     start_date = _maturity(investment)
     if investment.term_days is None:
         raise ApplicationError("conflict")
+    if pay_interest:
+        choice = AtMaturity.PAY_INTEREST
+    elif to_goal is not None or keep_goal:
+        choice = AtMaturity.INTEREST_TO_GOAL
+    else:
+        choice = AtMaturity.ROLL_OVER
     await session.execute(
         _INSERT_ROLLED,
         {
@@ -368,10 +490,11 @@ async def _roll_over(
             "annual_rate_bps": annual_rate_bps,
             "tax_bps": tax_bps,
             "term_days": investment.term_days,
-            "at_maturity": (
-                AtMaturity.PAY_INTEREST if pay_interest else AtMaturity.ROLL_OVER
-            ).value,
+            "at_maturity": choice.value,
             "destination_id": investment.payout_destination_id if pay_interest else None,
+            "goal_id": investment.interest_goal_id
+            if choice is AtMaturity.INTEREST_TO_GOAL
+            else None,
             "created_at": quoted_at,
             "pay_by": pay_by(quoted_at),
             "now": now,
@@ -381,19 +504,31 @@ async def _roll_over(
     rolled = await get_investment(session, new_id)
     new_holding = await ledger.open_account(session, holding_account(rolled), clock)
     lines = [*await out_of_holding(session, investment, clock), credit(new_holding.id, proceeds)]
-    if interest.is_positive:
+    saving_id: str | None = None
+    if to_goal is not None and interest.is_positive:
+        saving_id = await _open_interest_saving(
+            session, investment, to_goal, interest, quoted_at, now
+        )
+        saving = await get_investment(session, saving_id)
+        saving_holding = await ledger.open_account(session, holding_account(saving), clock)
+        lines.append(credit(saving_holding.id, interest))
+    elif pay_interest and interest.is_positive:
         handover = await ledger.open_account(
             session,
             payout_posting.funding_account(investment.client_id, investment.id, interest.currency),
             clock,
         )
         lines.append(credit(handover.id, interest))
+    if pay_interest:
+        entry_type = "investment.rolled_over_interest_paid"
+    elif to_goal is not None:
+        entry_type = "investment.rolled_over_interest_saved"
+    else:
+        entry_type = "investment.rolled_over"
     entry = await ledger.post_entry(
         session,
         EntryDraft(
-            entry_type="investment.rolled_over_interest_paid"
-            if pay_interest
-            else "investment.rolled_over",
+            entry_type=entry_type,
             effective_date=business_date(now),
             lines=tuple(lines),
             idempotency_key=f"investment-rollover:{investment.id}",
@@ -404,7 +539,7 @@ async def _roll_over(
     )
     payout_id: str | None = None
     refusal: str | None = None
-    if interest.is_positive:
+    if pay_interest and interest.is_positive:
         payout_id, refusal = await _pay(session, investment, interest, hold_reason, clock)
     await session.execute(
         _START_ROLLED,
@@ -416,10 +551,32 @@ async def _roll_over(
             "now": now,
         },
     )
+    today = business_date(now)
     # A saving locked through a goal stays locked in its next term, until the same day.
-    await inherit_lock(
-        session, old_id=investment.id, new_id=new_id, today=business_date(now), now=now
-    )
+    await inherit_lock(session, old_id=investment.id, new_id=new_id, today=today, now=now)
+    if saving_id is not None and to_goal is not None:
+        await session.execute(
+            _START_ROLLED,
+            {
+                "id": saving_id,
+                "start_date": start_date,
+                "maturity_date": None
+                if to_goal.term_days is None
+                else maturity_date(start_date, to_goal.term_days),
+                "entry_id": entry.id,
+                "now": now,
+            },
+        )
+        locked_until = to_goal.goal.locked_on(today)
+        if locked_until is not None:
+            # A locked goal's new savings are locked with it, until the same day.
+            await lock_withdrawals(
+                session,
+                client_id=investment.client_id,
+                investment_ids=[saving_id],
+                until=locked_until,
+                now=now,
+            )
     await session.execute(
         _MATURE,
         {
@@ -447,13 +604,63 @@ async def _roll_over(
         consumers=[FOLLOW_ROLLOVER, NOTE_ON_END],
         now=now,
     )
+    if saving_id is not None and to_goal is not None:
+        await publish(
+            session,
+            topic=INTEREST_SAVED_TOPIC,
+            idempotency_key=investment.id,
+            payload={
+                "investment_id": investment.id,
+                "saving_investment_id": saving_id,
+                "goal_id": to_goal.goal.id,
+                "client_id": investment.client_id,
+            },
+            # Goals records the new investment as a saving towards the goal.
+            consumers=[LINK_INTEREST_SAVING],
+            now=now,
+        )
     logger.info(
         "investment_rolled_over",
         investment_id=investment.id,
         new_investment_id=new_id,
         interest_paid_out=payout_id is not None,
+        interest_saving_id=saving_id,
         error_code=refusal,
     )
+
+
+async def _open_interest_saving(
+    session: AsyncSession,
+    investment: Investment,
+    to_goal: _GoalSaving,
+    interest: Money,
+    quoted_at: datetime,
+    now: datetime,
+) -> str:
+    """Insert the investment the interest starts in the goal's product, unpaid, for this same
+    transaction to start. The product's minimum does not apply (the owner's decision): the
+    money is already invested, so no deposit is taken."""
+    saving_id = push_id()
+    await session.execute(
+        _INSERT_INTEREST_SAVING,
+        {
+            "id": saving_id,
+            "client_id": investment.client_id,
+            "product_id": to_goal.product_id,
+            "currency": interest.currency.value,
+            "principal_minor": interest.minor,
+            "annual_rate_bps": to_goal.annual_rate_bps,
+            "tax_bps": to_goal.tax_bps,
+            "term_days": to_goal.term_days,
+            "at_maturity": None if to_goal.term_days is None else AtMaturity.ROLL_OVER.value,
+            "created_at": quoted_at,
+            "pay_by": pay_by(quoted_at),
+            "now": now,
+            "source_type": GOAL_INTEREST_SOURCE,
+            "source_id": investment.id,
+        },
+    )
+    return saving_id
 
 
 async def _hand_over(
@@ -597,3 +804,17 @@ async def _usable(session: AsyncSession, client_id: str, destination_id: str) ->
         if error.code != "not_found":
             raise
         raise invalid("destination_id", "not_usable") from error
+
+
+async def _usable_goal(session: AsyncSession, investment: Investment, goal_id: str) -> None:
+    """Refuse a goal the interest cannot be saved to: not the client's, closed, in another
+    currency, or the goal this investment is itself saved towards."""
+    goal = await goal_reads.goal_for_interest(session, goal_id)
+    if goal is None or goal.client_id != investment.client_id:
+        raise invalid("goal_id", "not_usable")
+    if not goal.active:
+        raise invalid("goal_id", "goal_closed")
+    if goal.currency is not investment.amount.currency:
+        raise invalid("goal_id", "not_goal_currency")
+    if await goal_reads.goal_saved_to(session, investment.id) == goal.id:
+        raise invalid("goal_id", "already_saved_to_goal")

@@ -12,7 +12,7 @@ Three audiences, three routers:
 Each request opens one transaction for the caller and does all its work inside it.
 """
 
-from collections.abc import AsyncIterator, Awaitable, Callable
+from collections.abc import AsyncIterator, Awaitable, Callable, Mapping
 from contextlib import asynccontextmanager
 from datetime import date, datetime
 from typing import Annotated, Literal
@@ -25,6 +25,7 @@ from app.api.idempotency import IdempotencyKey
 from app.infrastructure.database import Database
 from app.infrastructure.idempotency import Receipt, run_once
 from app.infrastructure.settings import Settings
+from app.modules.goals import reads as goal_reads
 from app.modules.identity.api import CurrentClient, require_confirmed, require_permission
 from app.modules.identity.pins_api import Pins
 from app.modules.identity.service import StaffSession
@@ -109,6 +110,9 @@ class MaturityChoice(Contract):
     at_maturity: AtMaturityIn
     # Required to be paid out: one of the client's approved payout destinations.
     destination_id: PushId | None = None
+    # Required for `interest_to_goal`, and only then: one of the client's open goals in the
+    # investment's currency, other than the goal it is itself saved towards.
+    goal_id: PushId | None = None
 
 
 # From POST /client/pin/confirm with action `withdrawal`. The phone app sends it once it has
@@ -164,6 +168,12 @@ class ClientInvestmentOut(Contract):
     # Locked through a goal: the first day it may be withdrawn early or sent on again. Null
     # when it is not locked.
     withdrawal_locked_until: date | None = None
+    # With `interest_to_goal`: the goal the interest is saved to at maturity, and its name
+    # (the client's own words).
+    interest_goal_id: PushId | None = None
+    interest_goal_name: str | None = None
+    # Started from another investment's interest when it matured: that investment.
+    interest_from_investment_id: PushId | None = None
 
 
 class RateOut(Contract):
@@ -397,6 +407,11 @@ class StaffInvestmentOut(Contract):
     rolled_from_id: PushId | None
     payout_id: PushId | None
     payout_refusal: str | None
+    # With `interest_to_goal`: the goal the interest is saved to at maturity, and its name.
+    interest_goal_id: PushId | None = None
+    interest_goal_name: str | None = None
+    # Started from another investment's interest when it matured: that investment.
+    interest_from_investment_id: PushId | None = None
 
 
 class MaturityDayOut(Contract):
@@ -511,7 +526,17 @@ def _withdrawals_open(request: Request) -> bool:
     return settings.early_withdrawal_open
 
 
-def _client_out(view: service.ClientInvestment, request: Request) -> ClientInvestmentOut:
+async def _goal_names(
+    session: AsyncSession, views: list[service.ClientInvestment]
+) -> dict[str, str]:
+    return await goal_reads.goal_names(
+        session, [view.interest_goal_id for view in views if view.interest_goal_id]
+    )
+
+
+def _client_out(
+    view: service.ClientInvestment, request: Request, goal_names: Mapping[str, str] | None = None
+) -> ClientInvestmentOut:
     at_maturity = view.at_maturity_returns
     return ClientInvestmentOut(
         id=view.id,
@@ -542,6 +567,11 @@ def _client_out(view: service.ClientInvestment, request: Request) -> ClientInves
         withdrawal_requested_at=view.withdrawal_requested_at,
         can_send=view.can_send,
         withdrawal_locked_until=view.withdrawal_locked_until,
+        interest_goal_id=view.interest_goal_id,
+        interest_goal_name=None
+        if view.interest_goal_id is None
+        else (goal_names or {}).get(view.interest_goal_id),
+        interest_from_investment_id=view.interest_from_id,
     )
 
 
@@ -646,7 +676,17 @@ def _correction_out(correction: service.Correction) -> CorrectionOut:
     )
 
 
-def _staff_investment_out(investment: service.Investment) -> StaffInvestmentOut:
+async def _staff_goal_names(
+    session: AsyncSession, found: list[service.Investment]
+) -> dict[str, str]:
+    return await goal_reads.goal_names(
+        session, [i.interest_goal_id for i in found if i.interest_goal_id]
+    )
+
+
+def _staff_investment_out(
+    investment: service.Investment, goal_names: Mapping[str, str] | None = None
+) -> StaffInvestmentOut:
     terms = investment.terms
     return StaffInvestmentOut(
         id=investment.id,
@@ -672,6 +712,13 @@ def _staff_investment_out(investment: service.Investment) -> StaffInvestmentOut:
         rolled_from_id=investment.rolled_from_id,
         payout_id=investment.payout_id,
         payout_refusal=investment.payout_refusal,
+        interest_goal_id=investment.interest_goal_id,
+        interest_goal_name=None
+        if investment.interest_goal_id is None
+        else (goal_names or {}).get(investment.interest_goal_id),
+        interest_from_investment_id=investment.source_id
+        if investment.source_type == service.GOAL_INTEREST_SOURCE
+        else None,
     )
 
 
@@ -790,7 +837,8 @@ async def client_investments(
 ) -> list[ClientInvestmentOut]:
     async with _transaction(request, client.actor) as session:
         views = await service.client_investments(session, client.actor, clock)
-    return [_client_out(view, request) for view in views]
+        names = await _goal_names(session, views)
+    return [_client_out(view, request, names) for view in views]
 
 
 @client_router.get("/investments/{investment_id}")
@@ -799,7 +847,8 @@ async def client_investment(
 ) -> ClientInvestmentOut:
     async with _transaction(request, client.actor) as session:
         view = await service.client_investment(session, client.actor, investment_id, clock)
-    return _client_out(view, request)
+        names = await _goal_names(session, [view])
+    return _client_out(view, request, names)
 
 
 @client_router.put("/investments/{investment_id}/at-maturity")
@@ -818,10 +867,12 @@ async def choose_at_maturity(
             investment_id,
             at_maturity=body.at_maturity,
             destination_id=body.destination_id,
+            goal_id=body.goal_id,
             clock=clock,
         )
         view = await service.client_investment(session, client.actor, investment_id, clock)
-    return _client_out(view, request)
+        names = await _goal_names(session, [view])
+    return _client_out(view, request, names)
 
 
 @client_router.post(
@@ -1221,7 +1272,8 @@ async def staff_investments(
 ) -> list[StaffInvestmentOut]:
     async with _transaction(request, staff.actor) as session:
         found = await service.list_investments(session, staff.actor, status=status, limit=limit)
-    return [_staff_investment_out(investment) for investment in found]
+        names = await _staff_goal_names(session, found)
+    return [_staff_investment_out(investment, names) for investment in found]
 
 
 @staff_router.get("/investments/{investment_id}")
@@ -1230,7 +1282,8 @@ async def staff_investment(
 ) -> StaffInvestmentOut:
     async with _transaction(request, staff.actor) as session:
         investment = await service.get_investment(session, investment_id)
-    return _staff_investment_out(investment)
+        names = await _staff_goal_names(session, [investment])
+    return _staff_investment_out(investment, names)
 
 
 @staff_router.get("/interest-runs")

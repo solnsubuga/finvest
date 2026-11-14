@@ -58,6 +58,7 @@ from app.modules.investments.corrections import (
 from app.modules.investments.domain.product_changes import ProductAction
 from app.modules.investments.domain.runs import RunKind
 from app.modules.investments.holdings import (
+    GOAL_INTEREST_SOURCE,
     REQUEST_OPERATION,
     STARTED_TOPIC,
     ClientInvestment,
@@ -67,6 +68,7 @@ from app.modules.investments.holdings import (
     client_investment,
     client_investments,
     client_investments_by_id,
+    client_investments_saving_interest_to,
     get_investment,
     get_investments,
     list_investments,
@@ -79,6 +81,7 @@ from app.modules.investments.holdings import (
 from app.modules.investments.locks import UNLOCK_WAIT_DAYS, lock_withdrawals, unlock_withdrawals
 from app.modules.investments.maturities import Maturities, MaturityDay, maturities
 from app.modules.investments.maturity import (
+    INTEREST_SAVED_TOPIC,
     MATURED_TOPIC,
     ROLLED_OVER_TOPIC,
     choose_at_maturity,
@@ -129,6 +132,8 @@ from app.modules.investments.withdrawal import (
 
 __all__ = [
     "CHANGE_RESOURCE",
+    "GOAL_INTEREST_SOURCE",
+    "INTEREST_SAVED_TOPIC",
     "MATURED_TOPIC",
     "MAX_CHANGES",
     "MAX_PROPOSALS",
@@ -176,6 +181,7 @@ __all__ = [
     "client_investment",
     "client_investments",
     "client_investments_by_id",
+    "client_investments_saving_interest_to",
     "client_products",
     "client_quote",
     "client_transfers",
