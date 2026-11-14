@@ -9,7 +9,7 @@ from sqlalchemy.exc import DBAPIError
 
 from app.infrastructure.database import Database
 from app.modules.ledger import service as ledger
-from app.modules.payouts import destinations, payouts
+from app.modules.payouts import destinations, payouts, reviews
 from app.modules.payouts.domain.destinations import (
     BankAccount,
 )
@@ -474,13 +474,42 @@ async def test_a_large_withdrawal_is_held_until_staff_approve_it(
     with pytest.raises(IllegalTransition):
         await world.worker_event(held.id, E.SEND_ACCEPTED)
 
-    checker = staff()
+    maker, checker = staff(), staff()
+    # The database checks that a release is proposed and decided now.
+    fake_clock.current = datetime.now(UTC)
     async with app_database.actor_transaction(checker) as session:
         assert held.id in [p.id for p in await payouts.held_for_review(session, limit=100)]
         with pytest.raises(ApplicationError):
             await payouts.apply_event(session, checker, held.id, E.REVIEW_APPROVED, fake_clock)
-        approved = await payouts.apply_event(
-            session, checker, held.id, E.REVIEW_APPROVED, fake_clock, reason="Spoke to the client"
+    # One person alone cannot release it, even straight to the table: it takes an approved
+    # release by someone other than its proposer.
+    with pytest.raises(DBAPIError, match="approved release"):
+        async with app_database.actor_transaction(checker) as session:
+            await payouts.apply_event(
+                session, checker, held.id, E.REVIEW_APPROVED, fake_clock, reason="Alone"
+            )
+    async with app_database.actor_transaction(maker) as session:
+        release = await reviews.propose_release(
+            session,
+            maker,
+            held.id,
+            reason="Spoke to the client",
+            idempotency_key=key(),
+            clock=fake_clock,
+        )
+    with pytest.raises(reviews.ReviewRefused, match="proposed_by_you"):
+        async with app_database.actor_transaction(maker) as session:
+            await reviews.approve_release(
+                session,
+                maker,
+                release.id,
+                reason="Me again",
+                idempotency_key=key(),
+                clock=fake_clock,
+            )
+    async with app_database.actor_transaction(checker) as session:
+        approved = await reviews.approve_release(
+            session, checker, release.id, reason="Agree", idempotency_key=key(), clock=fake_clock
         )
     assert (approved.status, approved.reviewed_by) == (S.QUEUED, checker.id)
     assert (await world.worker_event(held.id, E.SEND_CONFIRMED)).status is S.PAID
@@ -659,3 +688,58 @@ async def test_racing_reports_from_the_provider_finish_a_payout_once(world: Worl
     assert (pot, pending) == ((7_000_000, 0) if final == "status_paid" else (8_000_000, 1_000_000))
     assert await world.balance(payout.in_flight_account_id) == 0
     await world.no_drift()
+
+
+async def test_racing_decisions_on_a_held_payout_leave_one_outcome(
+    app_database: Database, worker_database: Database, fake_clock: FakeClock
+) -> None:
+    world = await bank_world(app_database, worker_database, fake_clock)
+    maker, approver, decliner = staff(), staff(), staff()
+    held = await world.request(12_000_000)
+    # The database checks that a release is proposed and decided now.
+    fake_clock.current = datetime.now(UTC)
+    async with app_database.actor_transaction(maker) as session:
+        release = await reviews.propose_release(
+            session, maker, held.id, reason="Fine", idempotency_key=key(), clock=fake_clock
+        )
+
+    async def approve() -> str:
+        try:
+            async with app_database.actor_transaction(approver) as session:
+                await reviews.approve_release(
+                    session,
+                    approver,
+                    release.id,
+                    reason="Agree",
+                    idempotency_key=key(),
+                    clock=fake_clock,
+                )
+        except reviews.ReviewRefused as refusal:
+            return refusal.code
+        return "approved"
+
+    async def decline() -> str:
+        try:
+            async with app_database.actor_transaction(decliner) as session:
+                await reviews.decline(
+                    session,
+                    decliner,
+                    held.id,
+                    reason="No",
+                    idempotency_key=key(),
+                    clock=fake_clock,
+                )
+        except reviews.ReviewRefused as refusal:
+            return refusal.code
+        return "declined"
+
+    outcomes = sorted(await asyncio.gather(approve(), decline()))
+    assert outcomes in (["approved", "payout_not_held"], ["declined", "release_already_decided"])
+    async with app_database.actor_transaction(approver) as session:
+        final = await payouts.get_payout(session, held.id)
+        closed = await reviews.get_release(session, release.id)
+    if "approved" in outcomes:
+        assert (final.status, closed.status) == (S.QUEUED, reviews.ReleaseStatus.APPROVED)
+    else:
+        assert (final.status, closed.status) == (S.CANCELLED, reviews.ReleaseStatus.DECLINED)
+        assert await world.balance(world.holding) == 30_000_000

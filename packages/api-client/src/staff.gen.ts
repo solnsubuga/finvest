@@ -923,6 +923,19 @@ export type GroupProgressView = z.infer<typeof GroupProgressView>;
 export const GroupStatus = z.enum(["active", "closed"]);
 export type GroupStatus = z.infer<typeof GroupStatus>;
 
+export const ReleaseOut = z.object({
+  decided_at: z.string().nullable(),
+  decided_by: z.string().nullable(),
+  decision_reason: z.string().nullable(),
+  id: z.string(),
+  payout_id: z.string(),
+  proposed_at: z.string(),
+  proposed_by: z.string(),
+  reason: z.string(),
+  status: z.enum(["proposed", "approved", "declined", "withdrawn"]),
+});
+export type ReleaseOut = z.infer<typeof ReleaseOut>;
+
 export const HeldPayoutOut = z.object({
   amount: MoneyView,
   business_date: z.string(),
@@ -931,6 +944,7 @@ export const HeldPayoutOut = z.object({
   destination_id: z.string(),
   id: z.string(),
   kind: z.enum(["mobile_money", "bank"]),
+  release: ReleaseOut.nullable(),
 });
 export type HeldPayoutOut = z.infer<typeof HeldPayoutOut>;
 
@@ -3229,6 +3243,32 @@ export const operations = {
     status: 200,
     response: StaffDestinationOut,
   },
+  "POST /staff/payout-releases/{release_id}/approve": {
+    method: "POST",
+    path: "/staff/payout-releases/{release_id}/approve",
+    params: z.object({
+    release_id: z.string(),
+  }),
+    query: z.object({}),
+    body: ReviewIn,
+    bodyKind: "json",
+    idempotent: true,
+    status: 200,
+    response: ReviewedPayoutOut,
+  },
+  "POST /staff/payout-releases/{release_id}/withdraw": {
+    method: "POST",
+    path: "/staff/payout-releases/{release_id}/withdraw",
+    params: z.object({
+    release_id: z.string(),
+  }),
+    query: z.object({}),
+    body: ReviewIn,
+    bodyKind: "json",
+    idempotent: false,
+    status: 200,
+    response: ReleaseOut,
+  },
   "POST /staff/payout-resolutions/{resolution_id}/approve": {
     method: "POST",
     path: "/staff/payout-resolutions/{resolution_id}/approve",
@@ -3301,19 +3341,6 @@ export const operations = {
     status: 200,
     response: z.array(StrandedPayoutOut),
   },
-  "POST /staff/payouts/{payout_id}/approve": {
-    method: "POST",
-    path: "/staff/payouts/{payout_id}/approve",
-    params: z.object({
-    payout_id: z.string(),
-  }),
-    query: z.object({}),
-    body: ReviewIn,
-    bodyKind: "json",
-    idempotent: true,
-    status: 200,
-    response: ReviewedPayoutOut,
-  },
   "POST /staff/payouts/{payout_id}/decline": {
     method: "POST",
     path: "/staff/payouts/{payout_id}/decline",
@@ -3326,6 +3353,19 @@ export const operations = {
     idempotent: true,
     status: 200,
     response: ReviewedPayoutOut,
+  },
+  "POST /staff/payouts/{payout_id}/release": {
+    method: "POST",
+    path: "/staff/payouts/{payout_id}/release",
+    params: z.object({
+    payout_id: z.string(),
+  }),
+    query: z.object({}),
+    body: ReviewIn,
+    bodyKind: "json",
+    idempotent: true,
+    status: 201,
+    response: ReleaseOut,
   },
   "POST /staff/payouts/{payout_id}/resolutions": {
     method: "POST",
