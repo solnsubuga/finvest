@@ -48,7 +48,7 @@ type Form = "move" | "note" | "propose" | "reject" | null;
 const FIELD = "w-full rounded-lg border border-border-strong bg-surface px-3.5 py-3 text-md font-medium text-ink";
 
 export function DetailPanel({ detail, clientName, clientStatus, staffName, team, me, canManage, canClose, busy, error, onCommand }: DetailPanelProps) {
-  const { complaint, history, pendingOutcome: pending } = detail;
+  const { complaint, history, pendingOutcome: pending, lastRejected: rejected } = detail;
   const open = complaint.status !== "closed";
   const logged = history.find((item) => item.action === "logged");
   const iLoggedIt = logged?.actor === "staff" && logged.actorId === me;
@@ -61,6 +61,12 @@ export function DetailPanel({ detail, clientName, clientStatus, staffName, team,
   const [tried, setTried] = useState(false);
 
   function show(next: Form, status?: MoveTo) {
+    if (next === "propose" && rejected && outcome === null && resolution.trim() === "" && accepted === null) {
+      // Start from the outcome that was rejected, so only what was asked needs to change.
+      setOutcome(rejected.outcome);
+      setResolution(rejected.resolution);
+      setAccepted(rejected.clientAccepted);
+    }
     setForm(next);
     setTried(false);
     if (status) setMoveTo(status);
@@ -259,6 +265,12 @@ export function DetailPanel({ detail, clientName, clientStatus, staffName, team,
             );
           }}
         >
+          {rejected ? (
+            <p className="m-0 rounded-md bg-warning-surface px-3 py-2.5 text-sm text-warning-text">
+              {staffName(rejected.decidedBy)} rejected the last outcome, {stamp(rejected.decidedAt)}, and asked: “{rejected.reason}” It is
+              filled in below, so change what was asked and send it again.
+            </p>
+          ) : null}
           <fieldset className="m-0 flex flex-col gap-2 border-0 p-0">
             <legend className="mb-1.5 text-sm font-bold">Outcome</legend>
             {OUTCOMES.map((option) => (
