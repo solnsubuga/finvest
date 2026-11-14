@@ -73,6 +73,7 @@ export function toInvestment(view: ClientInvestmentOut): Investment {
     canWithdraw: view.can_withdraw,
     withdrawalRequestedAt: view.withdrawal_requested_at,
     canSend: view.can_send ?? false,
+    lockedUntil: view.withdrawal_locked_until ?? null,
   };
 }
 

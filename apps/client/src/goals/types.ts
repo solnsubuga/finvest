@@ -79,6 +79,15 @@ export type Goal = {
   progress: Progress;
   plan: Plan | null;
   savings: Saving[];
+  /** The day of the month the client is paid, 1 to 31, and nudged to save. Null when not named. */
+  payday: number | null;
+  /**
+   * While locked, YYYY-MM-DD: the first day its savings can be taken out early or sent on
+   * again. Null when not locked.
+   */
+  lockedUntil: string | null;
+  /** ISO 8601. When the client asked to unlock, which brings `lockedUntil` to seven days later. */
+  unlockRequestedAt: string | null;
 };
 
 export type GoalDetails = {
@@ -128,6 +137,12 @@ export type GoalsClient = {
    * is what the pay screens pay for.
    */
   saveToGoal(goalId: string, amount: Money, idempotencyKey: string): Promise<Saving>;
+  /** Lock the goal's savings until its date. Needs a date in the future. */
+  lockGoal(goalId: string): Promise<Goal>;
+  /** Ask to unlock. The savings are free seven days later. */
+  unlockGoal(goalId: string): Promise<Goal>;
+  /** Name the day the client is paid, 1 to 31, or null to stop the nudge. */
+  setPayday(goalId: string, day: number | null): Promise<Goal>;
 };
 
 const errorCopy: Record<GoalErrorCode, string> = {

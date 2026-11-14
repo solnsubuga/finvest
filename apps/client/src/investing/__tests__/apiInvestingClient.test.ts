@@ -205,6 +205,7 @@ describe("the investing client for the real API", () => {
       canWithdraw: false,
       withdrawalRequestedAt: null,
       canSend: false,
+      lockedUntil: null,
     });
 
     const one = serve(200, { ...investment, interest_at_maturity_minor: null, total_at_maturity_minor: null });

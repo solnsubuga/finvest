@@ -65,6 +65,9 @@ export function toGoal(view: GoalView): Goal {
     },
     plan: view.plan ? toPlan(view.plan) : null,
     savings: view.savings.map((saving) => toSaving(saving, currency)),
+    payday: view.payday,
+    lockedUntil: view.locked_until ?? null,
+    unlockRequestedAt: view.unlock_requested_at ?? null,
   };
 }
 
@@ -173,6 +176,18 @@ export function createApiGoalsClient(): GoalsClient {
           throw error;
         }
       }),
+
+    // Each answers with the goal as it now is, and sending one twice changes nothing.
+    lockGoal: (goalId) =>
+      wrap(async () => toGoal(await api("POST /client/goals/{goal_id}/lock", { params: { goal_id: goalId } }))),
+
+    unlockGoal: (goalId) =>
+      wrap(async () => toGoal(await api("POST /client/goals/{goal_id}/unlock", { params: { goal_id: goalId } }))),
+
+    setPayday: (goalId, day) =>
+      wrap(async () =>
+        toGoal(await api("PUT /client/goals/{goal_id}/payday", { params: { goal_id: goalId }, body: { day } })),
+      ),
 
     saveToGoal: (goalId, amount, idempotencyKey) =>
       wrap(async () =>

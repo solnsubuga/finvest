@@ -53,6 +53,8 @@ Undoing a lock takes seven days (Solo, 2026-11-14). The client asks to unlock, a
 
 The lock is kept on each investment, in the investments module's own table `investment_withdrawal_locks` (migration 0303), so early withdrawal and sending refuse a locked investment without asking the goals module. They answer `conflict` with field problem `investment` / `locked`, and a client investment shows `withdrawal_locked_until` with `can_withdraw` and `can_send` false. The goal keeps its own copy, `locked_until` and `unlock_requested_at`, for its screens. A withdrawal staff start on the client's written ask is refused too while the lock runs, because it asks the same way. Changing the goal's date does not move the lock: the client locks again to lock until the new date, and a lock is never shortened that way.
 
+In the client app the goal screen shows a lock card: lock until the date, then locked, then unlocking with the day the savings are free. Each step asks to confirm. An investment saved towards a locked goal shows "Locked by your goal until" with its date. The payday reminder is set from the goal screen too (`/goals/payday/{id}`).
+
 ## Reminders
 
 The worker runs `goals.send_reminders` every morning at 08:00 Kampala time, so no text arrives at night. It reads every active goal and raises two notices through the notifications contract, with the goal as the link:

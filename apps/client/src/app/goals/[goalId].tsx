@@ -9,6 +9,7 @@ import { Button, TextLink } from "@/components/Button";
 import { Screen } from "@/components/Screen";
 import { Eyebrow, Title, Txt } from "@/components/Txt";
 import { useGoals } from "@/goals/GoalsProvider";
+import { LockCard, paydayLine } from "@/goals/Keep";
 import { goalSubtitle, ProgressBar, StandingBadge } from "@/goals/Parts";
 import { savingLine } from "@/goals/savings";
 import { describeGoalError, Goal, Saving } from "@/goals/types";
@@ -141,7 +142,7 @@ export default function GoalDetail() {
             </Card>
           )}
 
-          {open && goal.savings.some((saving) => saving.status === "active") ? (
+          {open && goal.savings.some((saving) => saving.status === "active") && !goal.lockedUntil ? (
             <Txt size={12} color={colors.muted} testID="goal-take-out-note">
               Need some of it sooner? Open a saving to take it out early. Each saving comes out
               whole, with the interest it has earned after tax and no fee, and stops counting towards
@@ -150,6 +151,28 @@ export default function GoalDetail() {
           ) : null}
 
           <DetailList rows={facts(goal)} />
+
+          <LockCard goal={goal} onChanged={(changed) => setState({ status: "ready", goal: changed })} />
+
+          {open ? (
+            <Pressable
+              style={styles.payday}
+              onPress={() => router.push(`/goals/payday/${goalId}`)}
+              accessibilityRole="link"
+              accessibilityLabel={`Payday reminder. ${paydayLine(goal) ?? "Not set"}`}
+              testID="goal-payday"
+            >
+              <View style={{ flex: 1, gap: 2 }}>
+                <Txt size={14} weight="bold">
+                  Payday reminder
+                </Txt>
+                <Txt size={12} color={colors.muted}>
+                  {paydayLine(goal) ?? "Tell us when you are paid, and we remind you to save that morning"}
+                </Txt>
+              </View>
+              <Icon name="chevron" size={16} strokeWidth={2.2} />
+            </Pressable>
+          ) : null}
 
           {open ? (
             <TextLink
@@ -167,6 +190,12 @@ export default function GoalDetail() {
                   Your investments keep running and earning, and stay in your portfolio. Nothing more is
                   saved to this goal, and a closed goal cannot be opened again.
                 </Txt>
+                {goal.lockedUntil && !goal.unlockRequestedAt ? (
+                  <Txt size={13} color={colors.muted} testID="close-locked-note">
+                    This goal is locked, so closing it starts the 7 day wait: its savings are free 7 days
+                    after you close it.
+                  </Txt>
+                ) : null}
                 {closeError ? <Notice tone="danger">{closeError}</Notice> : null}
                 <Button label="Close goal" onPress={close} loading={closing} height={48} testID="close-yes" />
                 <TextLink label="Keep it" onPress={() => setConfirmClose(false)} underline={false} />
@@ -266,6 +295,17 @@ const styles = StyleSheet.create({
   row: { flexDirection: "row", alignItems: "center", gap: 12, paddingVertical: 12, paddingHorizontal: 16 },
   divider: { borderTopWidth: 1, borderTopColor: colors.divider },
   dot: { width: 10, height: 10, borderRadius: 5 },
+  payday: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: 20,
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+  },
   confirm: {
     backgroundColor: colors.surface,
     borderWidth: 1,
