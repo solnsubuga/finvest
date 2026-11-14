@@ -10,9 +10,11 @@ from sqlalchemy.exc import DBAPIError
 
 from app.infrastructure.database import Database
 from app.infrastructure.jobs import Worker, WorkerConfig
+from app.modules.goals import reminders
 from app.modules.goals import service as goals
 from app.modules.goals.domain.goals import MAX_ACTIVE_GOALS, GoalCategory, GoalStatus, Standing
 from app.modules.goals.domain.plans import add_months
+from app.modules.goals.domain.reminders import next_due
 from app.modules.goals.events import FOLLOW_ROLLOVER_KIND
 from app.modules.goals.jobs import GoalJobs
 from app.modules.investments import service as investments
@@ -781,3 +783,70 @@ async def test_a_goal_closed_after_the_rollover_is_read_is_not_followed(
         # The job's transaction is still usable, so it completes cleanly.
         assert await session.scalar(text("SELECT 1")) == 1
     assert await linked(worker_database, goal.id) == [(first, None)]
+
+
+# Reminders --------------------------------------------------------------------------------------
+
+
+async def told(database: Database, client: Actor) -> list[tuple[str, str, str | None, str]]:
+    async with database.actor_transaction(SYSTEM) as session:
+        rows = await session.execute(
+            text(
+                "SELECT event, idempotency_key, link_kind, body FROM notifications "
+                "WHERE client_id = :client_id AND event LIKE 'goal_%' ORDER BY event, created_at"
+            ),
+            {"client_id": client.id},
+        )
+        return [(row.event, row.idempotency_key, row.link_kind, row.body) for row in rows]
+
+
+async def remind(database: Database, day: date) -> dict[str, int]:
+    async with database.actor_transaction(SYSTEM) as session:
+        return await reminders.send_reminders(session, at(day, hour=5))
+
+
+async def test_a_reached_goal_is_told_once(
+    app_database: Database, worker_database: Database
+) -> None:
+    client = await approved_client(app_database, NOW)
+    goal = await new_goal(app_database, client, name="New roof", target=ugx(1_000_000))
+    await started_saving(app_database, worker_database, client, goal.id, ugx(1_000_000))
+    await remind(worker_database, DAY)
+    await remind(worker_database, DAY + timedelta(days=1))
+    seen = await told(worker_database, client)
+    assert [(event, k, link) for event, k, link, _ in seen] == [
+        ("goal_reached", f"goal-reached:{goal.id}", "goal")
+    ]
+    assert "New roof" in seen[0][3]
+    assert "UGX" not in seen[0][3]
+
+
+async def test_a_saving_due_in_three_days_is_reminded_once(
+    app_database: Database, worker_database: Database
+) -> None:
+    client = await approved_client(app_database, NOW)
+    goal = await new_goal(app_database, client, name="School fees 2027")
+    due = next_due(DAY, DAY)
+    # Too early: more than three days before.
+    await remind(worker_database, due - timedelta(days=4))
+    assert await told(worker_database, client) == []
+    await remind(worker_database, due - timedelta(days=3))
+    await remind(worker_database, due - timedelta(days=2))
+    seen = await told(worker_database, client)
+    assert [(event, k) for event, k, _, _ in seen] == [
+        ("goal_top_up_due", f"goal-top-up:{goal.id}:{due.isoformat()}")
+    ]
+    assert "School fees 2027" in seen[0][3]
+    assert "UGX" not in seen[0][3]
+
+
+async def test_goals_with_no_date_or_closed_are_not_reminded(
+    app_database: Database, worker_database: Database
+) -> None:
+    client = await approved_client(app_database, NOW)
+    await new_goal(app_database, client, name="Emergency", target_date=None)
+    closed = await new_goal(app_database, client, name="Car")
+    async with app_database.actor_transaction(client) as session:
+        await goals.close_goal(session, client, closed.id, clock=NOW)
+    await remind(worker_database, next_due(DAY, DAY) - timedelta(days=2))
+    assert await told(worker_database, client) == []
