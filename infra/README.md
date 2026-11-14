@@ -191,7 +191,6 @@ In each of the `staging` and `production` GitHub environments, beside what Terra
 
 | Name | Kind | Value |
 | --- | --- | --- |
-| `DEPLOY_FIREWALL_TOKEN` | Secret | A DigitalOcean token with only the `firewall` read and update scopes. The deploy uses it to open and close SSH for itself. Do not reuse the write token here. |
 | `FINVEST_AUTHENTICATOR_KEY` | Secret | `python3 -c "import secrets; print(secrets.token_urlsafe(32))"`, one per environment. It protects staff authenticator secrets. Never change it once staff have enrolled, and keep an offline copy. |
 | `FINVEST_IDENTITY_DATA_KEY` | Secret | `python3 -c "import secrets; print(secrets.token_urlsafe(32))"`, one per environment. It encrypts clients' document numbers, dates of birth and TINs, and reaches the API and worker only. Never change it once clients have been checked: saved checks become unreadable. Keep an offline copy. |
 | `FINVEST_PAYMENTS_PROVIDER`, `FINVEST_IOTEC_CURRENCY_CODE` | Variables | `iotec` and `UGX` once ioTec Pay is set up ([docs/payments.md](../docs/payments.md)). Leave unset until then. The API, worker and scheduler get them. `ITX` (an ioTec test wallet) is refused in production. |
