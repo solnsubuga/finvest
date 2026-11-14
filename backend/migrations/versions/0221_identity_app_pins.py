@@ -12,7 +12,7 @@ ends the session. A browser session never has a PIN.
 from alembic import op
 
 revision = "0221_identity_app_pins"
-down_revision = "0250_finance_journal_exports"
+down_revision = "0182_transaction_monitoring"
 branch_labels = None
 depends_on = None
 
