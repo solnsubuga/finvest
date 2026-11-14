@@ -2,6 +2,8 @@ import { API_URL } from "@/api/config";
 import { ApiError, setFetch } from "@/api/http";
 import { readToken, saveToken } from "@/api/token";
 
+import { registerPush, setPushDevice } from "@/push/registration";
+
 import { createApiAuthClient, toAuthError, toSession } from "../apiAuthClient";
 import { AuthError } from "../types";
 
@@ -181,6 +183,19 @@ describe("the sign-in client for the real API", () => {
     await expect(client.sendEmailProof()).resolves.toBe("proved");
     await expect(client.confirmEmail("t".repeat(43))).rejects.toEqual(new AuthError("expired"));
     expect(seen[1]?.body).toEqual({ token: "t".repeat(43) });
+  });
+
+  it("gives up this phone's push token before signing out", async () => {
+    setPushDevice({ platform: "ios", permission: async () => "granted", ask: async () => "granted", token: async () => "ExponentPushToken[x]" });
+    const seen = serve({
+      "PUT /client/push-devices": { status: 204 },
+      "POST /client/push-devices/remove": { status: 204 },
+      "POST /client/sign-out": { status: 204 },
+    });
+    await registerPush({ ask: false });
+    await createApiAuthClient().signOut();
+    setPushDevice(null);
+    expect(seen.map((s) => s.key)).toEqual(["PUT /client/push-devices", "POST /client/push-devices/remove", "POST /client/sign-out"]);
   });
 
   it("adds nothing the API did not list", async () => {

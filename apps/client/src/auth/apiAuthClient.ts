@@ -2,6 +2,7 @@ import type { ClientSignedIn } from "@finvest/api-client/client";
 
 import { api, ApiError } from "@/api/http";
 import { saveToken } from "@/api/token";
+import { forgetPush } from "@/push/registration";
 
 import { AuthClient, AuthError, AuthErrorCode, Device, SecondStep, Session } from "./types";
 import { createPasskey, PasskeyCancelled, passkeysSupported, signWithPasskey } from "./webauthn";
@@ -236,6 +237,8 @@ export function createApiAuthClient(): AuthClient {
 
     signOut: async () => {
       try {
+        // While the session still works, so the API knows whose phone to stop.
+        await forgetPush();
         await api("POST /client/sign-out", {});
       } catch {
         // Signing out on this device goes ahead even when the API cannot be reached.
