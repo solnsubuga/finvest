@@ -410,6 +410,8 @@ function DecisionForm({
   const needsDate = account.proofKind === "bank_statement";
   // A number is checked with the name its network holds. Nobody types it.
   const fromNetwork = account.proofKind === "network_registered_name";
+  // Until the network's name is read there is nothing to check, and the backend would refuse it.
+  const nothingToCheck = action === "check" && fromNetwork && !account.networkName;
 
   function problems(): FieldErrors {
     const found: FieldErrors = {};
@@ -477,9 +479,14 @@ function DecisionForm({
         ))}
       </div>
 
-      {action === "check" && fromNetwork ? (
+      {nothingToCheck ? (
+        <Notice>
+          The network has not given a name for this number yet, so there is nothing to check. You can still refuse the proof
+          or remove the account.
+        </Notice>
+      ) : action === "check" && fromNetwork ? (
         <p className="m-0 text-md leading-normal">
-          You are checking the name the network holds, <strong>{account.networkName ?? "not read yet"}</strong>, against the
+          You are checking the name the network holds, <strong>{account.networkName}</strong>, against the
           name on the ID{account.idName ? <>, <strong>{account.idName}</strong></> : null}. Finvest compares them, and a
           different name is never approved.
         </p>
@@ -552,21 +559,23 @@ function DecisionForm({
         </div>
       ) : null}
 
-      <div className="flex flex-col gap-1.5">
-        <Label htmlFor={`${ids}-reason`}>Reason for your decision</Label>
-        <Input
-          id={`${ids}-reason`}
-          value={reason}
-          maxLength={MAX_REASON}
-          onChange={(event) => setReason(event.target.value)}
-          aria-invalid={errors.reason ? true : undefined}
-          aria-describedby={`${ids}-reason-help`}
-          className={FIELD}
-        />
-        <FieldNote id={`${ids}-reason-help`} error={errors.reason}>
-          {action === "remove" ? "Recorded as an operator control. The client does not see it." : "Kept in the audit trail. The client does not see it."}
-        </FieldNote>
-      </div>
+      {nothingToCheck ? null : (
+        <div className="flex flex-col gap-1.5">
+          <Label htmlFor={`${ids}-reason`}>Reason for your decision</Label>
+          <Input
+            id={`${ids}-reason`}
+            value={reason}
+            maxLength={MAX_REASON}
+            onChange={(event) => setReason(event.target.value)}
+            aria-invalid={errors.reason ? true : undefined}
+            aria-describedby={`${ids}-reason-help`}
+            className={FIELD}
+          />
+          <FieldNote id={`${ids}-reason-help`} error={errors.reason}>
+            {action === "remove" ? "Recorded as an operator control. The client does not see it." : "Kept in the audit trail. The client does not see it."}
+          </FieldNote>
+        </div>
+      )}
 
       {error ? <ErrorNote>{error}</ErrorNote> : null}
 
@@ -582,7 +591,7 @@ function DecisionForm({
             </Button>
           </div>
         </div>
-      ) : (
+      ) : nothingToCheck ? null : (
         <Button variant={action === "approve" || action === "check" ? "primary" : "secondary"} disabled={busy} onClick={() => attempt()} className="h-12 self-start px-6">
           {busy ? "Saving" : action === "check" && account.check ? "Check again" : ACTION_LABELS[action]}
         </Button>

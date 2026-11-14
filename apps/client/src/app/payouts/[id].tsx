@@ -1,4 +1,4 @@
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Platform, Pressable, StyleSheet, View } from "react-native";
 import { Stack, useLocalSearchParams, useRouter } from "expo-router";
 
@@ -15,9 +15,10 @@ import { chooseReceiptFile, photographReceipt } from "@/payments/pickReceipt";
 import { checkReceipt, PickedFile, receiptProblemCopy } from "@/payments/receipt";
 import { ReceiptFile } from "@/payments/types";
 import { accountProvider, accountStatusPill, canProveAgain, isPayable, proofKindCopy, rejectionCopy } from "@/payouts/format";
+import { NAME_DECISION_READ_AGAIN_MS } from "@/payouts/timing";
 import { Pill, useFocusLoaded } from "@/payouts/Parts";
 import { usePayouts } from "@/payouts/PayoutsProvider";
-import { describePayoutsError, PayoutAccount, PayoutsClient, PayoutsError, ProofKind } from "@/payouts/types";
+import { describePayoutsError, PayoutAccount, PayoutsClient, PayoutsError, PayoutsErrorCode, ProofKind } from "@/payouts/types";
 import { colors, fontSizes, radii } from "@/theme";
 
 /**
@@ -181,18 +182,50 @@ function NameCheckStep({ account, onChanged }: Omit<NextProps, "codeSent">) {
   const client = usePayouts();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Asked again once the ID was approved: the comparison is queued, so the answer still says
+  // waiting. Show that it is under way and read the account again shortly.
+  const [comparing, setComparing] = useState(false);
+
+  useEffect(() => {
+    if (!comparing) return;
+    const timer = setTimeout(async () => {
+      try {
+        onChanged(await client.getAccount(account.id));
+      } catch {
+        // Still shown as comparing. Opening the screen again reads it afresh.
+        return;
+      }
+      setComparing(false);
+    }, NAME_DECISION_READ_AGAIN_MS);
+    return () => clearTimeout(timer);
+  }, [comparing, client, account.id, onChanged]);
 
   const again = async () => {
     setBusy(true);
     setError(null);
     try {
-      onChanged(await client.checkNameAgain(account.id));
+      const answered = await client.checkNameAgain(account.id);
+      onChanged(answered);
+      if (answered.status === "awaiting_proof" && answered.nameCheck === "waiting_for_id") setComparing(true);
     } catch (caught) {
-      if (await movedOn(caught, client, account.id, onChanged)) return;
-      setError(describePayoutsError(caught));
+      // These say the screen is out of date: show where the account is instead.
+      if (!(await movedOn(caught, client, account.id, onChanged, STALE_NAME_CHECK))) {
+        setError(describePayoutsError(caught));
+      }
+    } finally {
+      setBusy(false);
     }
-    setBusy(false);
   };
+
+  if (comparing) {
+    return (
+      <View testID="name-check-comparing">
+        <Notice tone="neutral">
+          We are comparing the name the network holds with the name on your ID now. This takes a few seconds.
+        </Notice>
+      </View>
+    );
+  }
 
   switch (account.nameCheck) {
     case "not_answered":
@@ -312,13 +345,16 @@ function EnterCode({ account, codeSent, onChanged }: NextProps) {
 }
 
 /** When the account is no longer at the step shown, reads it again and shows where it is. */
+const STALE_NAME_CHECK: readonly PayoutsErrorCode[] = ["moved_on", "name_check_in_progress", "name_check_limit_reached"];
+
 async function movedOn(
   caught: unknown,
   client: PayoutsClient,
   accountId: string,
   onChanged: (account: PayoutAccount) => void,
+  codes: readonly PayoutsErrorCode[] = ["moved_on"],
 ): Promise<boolean> {
-  if (!(caught instanceof PayoutsError) || caught.code !== "moved_on") return false;
+  if (!(caught instanceof PayoutsError) || !codes.includes(caught.code)) return false;
   try {
     onChanged(await client.getAccount(accountId));
     return true;
