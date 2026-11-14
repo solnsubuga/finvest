@@ -317,12 +317,17 @@ How each answer is sorted:
 | ioTec answered | Send | Status read |
 | --- | --- | --- |
 | No token, the connection was never made, 401 after a new token, 404, 429 | Deferred, tried again | Unavailable, read again |
-| 400 about Finvest's wallet or its balance | Deferred, so the client's payout waits and staff see it held up after two hours | |
+| Before the send, the wallet's `actualBalance` is below the payout | Deferred for `wallet_short`, nothing sent | |
+| 400 about the wallet's balance or funds | Deferred for `wallet_short` | |
+| Any other 400 about Finvest's wallet, such as "Invalid wallet" | Deferred, so the client's payout waits and staff see it held up after two hours | |
 | Any other 400 | Rejected | |
 | No answer after sending, a dropped connection, a 5xx, or an answer that cannot be read | Uncertain, read and never sent again | Unavailable |
 | `Pending`, `SentToVendor`, `AwaitingApproval`, `Scheduled` or a status we do not know | Accepted | Pending |
 | `Success` | Accepted | Paid, if the amount is the payout's |
+| `Failed` with a `statusCode` or `statusMessage` about the wallet's balance or funds | Deferred for `wallet_short` | Failed |
 | `Failed`, `Rejected`, `Cancelled`, `RolledBack` | Rejected | Failed |
+
+**When Finvest's wallet is short.** A payout the wallet cannot pay is never failed back to the client. Before each send the adapter reads the wallet's balance. If the balance is below the payout, nothing is sent and the attempt ends `deferred` with `deferred_for = 'wallet_short'` (migration `0270_payout_wallet_short`). A refusal or a `Failed` answer to the send that is about the balance ends the same way. A balance that cannot be read does not stop the send, because ioTec refuses one it cannot pay. The payout stays queued with its money in flight, and the sweep sends it again every 10 minutes. It shows on `GET /staff/payouts/held-up` straight away with `waiting_for: "wallet_short"`, not after two hours, and `/health/operations` fails with `payouts_waiting_on_wallet` until the wallet is topped up ([observability.md](observability.md)). A `Failed` status read after ioTec accepted a payout still fails it as usual: by then the provider took the request, and the client can send it again.
 
 ioTec's statuses and refusal texts are not codes we have seen from the live service yet, so a refusal reads as `other`. ioTec's test numbers (`011177777x` paid, `011177799x` failed, `011177778x` pending) start with no network's prefix, so a payout destination cannot hold one. Against a test wallet (`FINVEST_IOTEC_CURRENCY_CODE=ITX`) they are tried by hand, not by the worker.
 

@@ -102,6 +102,7 @@ async def test_each_kind_of_stopped_work_is_counted(
         "jobs_stalled": 1,
         "jobs_failed": 1,
         "schedules_late": 0,
+        "payouts_waiting_on_wallet": 0,
     }
 
 

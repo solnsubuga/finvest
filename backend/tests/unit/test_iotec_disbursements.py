@@ -14,6 +14,7 @@ from app.modules.payments.domain.deposits import Network
 from app.modules.payments.domain.outcomes import (
     Accepted,
     Confirmed,
+    DeferReason,
     Deferred,
     NotFound,
     Pending,
@@ -52,11 +53,14 @@ def settings(currency: str = "UGX") -> IotecSettings:
 
 
 class FakeIotec:
-    """Answers the token route itself, and hands every Pay call to `route`."""
+    """Answers the token route and the wallet balance itself, and hands every other Pay call to
+    `route`. `balance` is what the wallet holds; a Response answers the balance read instead."""
 
-    def __init__(self, route: Route) -> None:
+    def __init__(self, route: Route, balance: int | httpx.Response = 10_000_000) -> None:
         self.route = route
+        self.balance = balance
         self.calls: list[httpx.Request] = []
+        self.balance_reads = 0
         self.tokens_issued = 0
 
     def __call__(self, request: httpx.Request) -> httpx.Response:
@@ -65,12 +69,21 @@ class FakeIotec:
             return httpx.Response(
                 200, json={"access_token": f"token-{self.tokens_issued}", "expires_in": 300}
             )
+        if request.url.path.startswith("/api/wallet-balance/"):
+            self.balance_reads += 1
+            if isinstance(self.balance, httpx.Response):
+                return self.balance
+            return httpx.Response(
+                200, json={"id": WALLET, "currency": "UGX", "actualBalance": self.balance}
+            )
         self.calls.append(request)
         return self.route(request)
 
 
-def adapter(route: Route, currency: str = "UGX") -> tuple[IotecDisbursements, FakeIotec]:
-    fake = FakeIotec(route)
+def adapter(
+    route: Route, currency: str = "UGX", balance: int | httpx.Response = 10_000_000
+) -> tuple[IotecDisbursements, FakeIotec]:
+    fake = FakeIotec(route, balance)
     http = httpx.AsyncClient(transport=httpx.MockTransport(fake))
     chosen = settings(currency)
     return IotecDisbursements(chosen, IotecTokens(chosen, http, FakeClock()), http), fake
@@ -150,18 +163,59 @@ async def test_a_refusal_about_the_number_rejects_the_payout() -> None:
 
 
 @pytest.mark.parametrize(
-    "refused",
+    ("refused", "reason"),
     [
-        {"code": "BadRequest", "message": "Invalid wallet"},
-        {"code": "InsufficientFunds", "message": None},
-        {"code": "BadRequest", "message": "Wallet balance is too low"},
+        ({"code": "BadRequest", "message": "Invalid wallet"}, None),
+        ({"code": "InsufficientFunds", "message": None}, DeferReason.WALLET_SHORT),
+        ({"code": "BadRequest", "message": "Wallet balance is too low"}, DeferReason.WALLET_SHORT),
     ],
 )
 async def test_a_refusal_about_our_wallet_waits_instead_of_failing_the_client(
-    refused: dict[str, object],
+    refused: dict[str, object], reason: DeferReason | None
 ) -> None:
     provider, _ = adapter(answer(400, refused))
-    assert await provider.send_disbursement(REQUEST) == Deferred()
+    assert await provider.send_disbursement(REQUEST) == Deferred(reason=reason)
+
+
+async def test_a_wallet_holding_less_than_the_payout_waits_without_sending() -> None:
+    provider, fake = adapter(answer(200, view()), balance=249_999)
+    assert await provider.send_disbursement(REQUEST) == Deferred(reason=DeferReason.WALLET_SHORT)
+    assert fake.balance_reads == 1
+    assert fake.calls == []
+
+
+async def test_a_wallet_holding_exactly_the_payout_sends_it() -> None:
+    provider, fake = adapter(answer(200, view()), balance=250_000)
+    assert await provider.send_disbursement(REQUEST) == Accepted(IOTEC_ID)
+    assert [call.method for call in fake.calls] == ["POST"]
+
+
+@pytest.mark.parametrize(
+    "balance",
+    [
+        httpx.Response(500),
+        httpx.Response(200, json={"id": WALLET, "currency": "ITX", "actualBalance": 0}),
+        httpx.Response(200, json={"id": WALLET, "currency": "UGX", "actualBalance": "lots"}),
+        httpx.Response(200, content=b"not json"),
+    ],
+)
+async def test_a_balance_that_cannot_be_read_does_not_stop_the_send(
+    balance: httpx.Response,
+) -> None:
+    provider, _ = adapter(answer(200, view()), balance=balance)
+    assert await provider.send_disbursement(REQUEST) == Accepted(IOTEC_ID)
+
+
+async def test_a_failed_send_for_our_balance_waits_instead_of_failing_the_client() -> None:
+    failed = view("Failed", statusCode="failed", statusMessage="Insufficient wallet balance")
+    provider, _ = adapter(answer(200, failed))
+    assert await provider.send_disbursement(REQUEST) == Deferred(reason=DeferReason.WALLET_SHORT)
+
+
+async def test_a_failed_send_for_another_reason_still_fails() -> None:
+    failed = view("Failed", statusCode="failed", statusMessage="Payee number not registered")
+    provider, _ = adapter(answer(200, failed))
+    assert await provider.send_disbursement(REQUEST) == Rejected(RejectionCode.OTHER, IOTEC_ID)
 
 
 @pytest.mark.parametrize(

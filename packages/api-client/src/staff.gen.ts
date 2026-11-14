@@ -1211,6 +1211,7 @@ export const HeldUpPayoutOut = z.object({
   kind: z.literal("mobile_money"),
   last_tried_at: z.string(),
   tries: z.number().int(),
+  waiting_for: z.literal("wallet_short").nullable().optional(),
 });
 export type HeldUpPayoutOut = z.infer<typeof HeldUpPayoutOut>;
 
