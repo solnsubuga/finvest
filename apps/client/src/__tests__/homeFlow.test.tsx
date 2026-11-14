@@ -19,6 +19,10 @@ jest.mock("@/investing/stubInvestingClient", () => {
   };
 });
 
+jest.mock("expo-crypto", () => ({
+  randomUUID: () => jest.requireActual("node:crypto").randomUUID(),
+}));
+
 jest.mock("expo-font", () => ({
   ...jest.requireActual("expo-font"),
   useFonts: () => [true, null],
@@ -72,6 +76,14 @@ describe("Home", () => {
     expect(await screen.findByText("Choose the investment you want to withdraw from.")).toBeTruthy();
     expect(await screen.findByTestId("portfolio-totals")).toHaveTextContent(/Invested in shillings/);
     expect(screen.getByTestId("product-split")).toHaveTextContent(/91 Day Treasury Bill, \d+%/);
+  });
+
+  it("goes from Send straight to sending the investment chosen", async () => {
+    await logIn();
+    await fireEvent.press(await screen.findByTestId("quick-send"));
+    expect(await screen.findByText("Choose the investment you want to send to someone.")).toBeTruthy();
+    await fireEvent.press((await screen.findAllByLabelText(/^91 Day Treasury Bill, Running/))[0]!);
+    expect(await screen.findByTestId("send-to")).toBeTruthy();
   });
 
   it("greets a client with nothing invested with what a first investment could earn", async () => {

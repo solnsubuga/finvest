@@ -201,10 +201,9 @@ test("sending an investment to someone meets WCAG 2.1 AA at every step", async (
   await page.getByTestId("use-passkey").click();
   await typePin(page, DEMO_PIN);
   await typePin(page, DEMO_PIN);
-  await expect(page.getByText("Welcome, Amara")).toBeVisible();
+  await expect(page.getByTestId("home")).toBeVisible();
   await visit(page, "/portfolio");
-  await page.getByLabel(/^91 Day Treasury Bill, Running/).first().click();
-  await page.getByTestId("send-investment").click();
+  await openToSend(page);
   await expect(page.getByTestId("send-to")).toBeVisible();
   const found: string[] = [];
   const check = async (step: string) => found.push(...(await violations(page)).map((line) => `${step} ${line}`));
@@ -264,3 +263,17 @@ test("a claim link that no longer works meets WCAG 2.1 AA", async ({ page }) => 
   await expect(page.getByText("Open the link from our message")).toBeVisible();
   expect(await violations(page), "claim without a link").toEqual([]);
 });
+
+/** A phone opens the investment's own screen to send; a wide Portfolio has Send in the detail beside its table. */
+async function openToSend(page: Page) {
+  const card = page.getByLabel(/^91 Day Treasury Bill, Running/).first();
+  const row = page.getByLabel(/^91 Day Treasury Bill, worth/).first();
+  await card.or(row).first().waitFor();
+  if (await card.count()) {
+    await card.click();
+    await page.getByTestId("send-investment").click();
+  } else {
+    await row.click();
+    await page.getByTestId("detail-send").click();
+  }
+}

@@ -286,14 +286,13 @@ test("a client sends part of an investment to another client after checking the 
   await logIn(page);
   await id(page, "use-passkey").click();
   await createPin(page);
-  await expect(page.getByText("Welcome, Amara")).toBeVisible();
+  await expect(page.getByTestId("home")).toBeVisible();
   // Portfolio opens from Profile; the app's router keeps the sample session.
   await page.evaluate(() => {
     window.history.pushState({}, "", "/portfolio");
     window.dispatchEvent(new PopStateEvent("popstate"));
   });
-  await page.getByLabel(/^91 Day Treasury Bill, Running/).first().click();
-  await id(page, "send-investment").click();
+  await openToSend(page);
 
   await id(page, "send-to").fill("0772 555 170");
   await id(page, "find-recipient").click();
@@ -310,3 +309,17 @@ test("a client sends part of an investment to another client after checking the 
   // The new investment holds what was kept. Screens left behind in the stack stay hidden.
   await expect(page.locator("text=You invested >> visible=true")).toBeVisible();
 });
+
+/** A phone opens the investment's own screen to send; a wide Portfolio has Send in the detail beside its table. */
+async function openToSend(page: Page) {
+  const card = page.getByLabel(/^91 Day Treasury Bill, Running/).first();
+  const row = page.getByLabel(/^91 Day Treasury Bill, worth/).first();
+  await card.or(row).first().waitFor();
+  if (await card.count()) {
+    await card.click();
+    await page.getByTestId("send-investment").click();
+  } else {
+    await row.click();
+    await page.getByTestId("detail-send").click();
+  }
+}

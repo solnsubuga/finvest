@@ -89,7 +89,7 @@ async function signIn() {
   await fireEvent.changeText(screen.getByTestId("password-input"), DEMO_PASSWORD);
   await fireEvent.press(screen.getByTestId("login-submit"));
   await fireEvent.press(await screen.findByTestId("use-passkey"));
-  await screen.findByText("Welcome, Amara");
+  await screen.findByTestId("home");
 }
 
 beforeAll(warmRouter, WARM_ROUTER_MS);
