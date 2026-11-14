@@ -52,6 +52,8 @@ DECISIONS = {
     "POST /staff/payout-returns/{return_id}/approve",
     "POST /staff/payout-returns/{return_id}/decline",
     "POST /staff/payouts/{payout_id}/decline",
+    "POST /staff/reconciliation/custodian-checks/{check_id}/send-back",
+    "POST /staff/reconciliation/custodian-checks/{check_id}/sign-off",
     "POST /staff/reconciliation/days/{day}/approve",
     "POST /staff/reconciliation/pot-transfers/{transfer_id}/approve",
     "POST /staff/reconciliation/pot-transfers/{transfer_id}/decline",
@@ -74,6 +76,7 @@ DECISIONS = {
     "POST /staff/dealing/orders/{order_id}/confirm-result",
     "POST /staff/dealing/buffer/rules/{proposal_id}/approve",
     "POST /staff/dealing/buffer/capital/{movement_id}/approve",
+    "POST /staff/dealing/auctions/changes/{change_id}/approve",
     "POST /staff/tax/remittances/{remittance_id}/approve",
     "POST /staff/compliance/proposals/{proposal_id}/approve",
 }

@@ -26,8 +26,12 @@ from typing import Protocol
 
 KEY = re.compile(r"^[a-z][a-z0-9-]{0,30}(/[A-Za-z0-9_-]{1,64}){1,6}$")
 # The only kinds of file modules keep. Nothing a browser would run as a page (HTML, SVG) can be
-# stored, so a read link can never open one from the bucket's address inside the console.
-CONTENT_TYPES = frozenset({"application/pdf", "image/jpeg", "image/png", "image/webp", "text/csv"})
+# stored, so a read link can never open one from the bucket's address inside the console. An
+# Excel workbook (a custodian's statement) is only ever downloaded.
+XLSX = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+CONTENT_TYPES = frozenset(
+    {"application/pdf", "image/jpeg", "image/png", "image/webp", "text/csv", XLSX}
+)
 SHA256 = re.compile(r"^[a-f0-9]{64}$")
 # Long enough to open a file in the console, short enough that a copied link soon stops working.
 MAX_LINK_LIFETIME = timedelta(minutes=15)
@@ -70,7 +74,7 @@ class FileMismatch(StorageError):
 
 def check_content_type(content_type: str) -> str:
     if content_type not in CONTENT_TYPES:
-        raise InvalidFile("Only PDF, JPEG, PNG, WebP and CSV files can be stored")
+        raise InvalidFile("Only PDF, JPEG, PNG, WebP, CSV and XLSX files can be stored")
     return content_type
 
 

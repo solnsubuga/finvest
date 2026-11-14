@@ -1,17 +1,25 @@
-"""Add the Treasury bill auction calendar, so the desk shows each product's next auction.
+"""Add the Treasury bill auction calendar, kept by two people, so the desk shows each product's
+next auction.
 
 Revision ID: 0088_dealing_auctions
-Revises: 0335_note_reissues
+Revises: 0371_kyc_pose_frames
 
-The Bank of Uganda publishes the dates of its Treasury bill auctions. A member of staff with
-`dealing_orders.change` enters each date for a product and can cancel one, with a reason, if the
-Bank moves it. An auction date moves no money and no order depends on it, so one person enters
-it (decided for now, see docs/decisions.md), and every entry and cancellation is audited.
+The Bank of Uganda publishes the dates of its Treasury bill auctions. Each row of
+`dealing_auctions` is one proposed change to the calendar, by a member of staff with
+`dealing_orders.change`:
 
-* A date is for one product and is never on a day already past when it is entered.
-* One date per product and day, while it stands. A cancelled date stays, with who cancelled it,
-  when and why, and the day can be entered again.
-* Nothing is ever deleted, and only the cancellation columns ever change, once.
+* `add` puts a date forward for a product. It counts once a different person approves it.
+* `cancel` puts forward cancelling an approved date, with a reason, if the Bank moves it. The
+  date stops counting once a different person approves the cancellation.
+
+Only the proposer may withdraw a change while it waits, and only someone else may approve or
+decline it, as for the platform settings (migration 0340). PostgreSQL enforces all of it:
+
+* One add waiting per product and day, and no second approved date for the same product and
+  day while one stands.
+* A cancellation names an approved date of the same product and day, and one waits or stands
+  per date.
+* A decided change never changes again, and nothing is ever deleted.
 
 See docs/dealing-desk.md.
 """
@@ -21,7 +29,7 @@ from collections.abc import Sequence
 from alembic import op
 
 revision: str = "0088_dealing_auctions"
-down_revision: str | None = "0335_note_reissues"
+down_revision: str | None = "0371_kyc_pose_frames"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 
@@ -32,61 +40,103 @@ T = "dealing_auctions"
 TABLE = """
 CREATE TABLE dealing_auctions (
     id push_id NOT NULL,
+    action varchar(6) NOT NULL,
     product_code varchar(32) COLLATE "C" NOT NULL,
     auction_date date NOT NULL,
-    added_by push_id NOT NULL,
-    added_at timestamptz NOT NULL,
-    cancelled_by push_id,
-    cancelled_at timestamptz,
-    cancel_reason varchar(500),
+    cancels push_id,
+    reason varchar(500),
+    status varchar(10) NOT NULL DEFAULT 'proposed',
+    proposed_by push_id NOT NULL,
+    proposed_at timestamptz NOT NULL,
+    decided_by push_id,
+    decided_at timestamptz,
+    decision_note varchar(500),
     CONSTRAINT pk_dealing_auctions PRIMARY KEY (id),
+    CONSTRAINT fk_dealing_auctions_cancels FOREIGN KEY (cancels) REFERENCES dealing_auctions (id),
+    CONSTRAINT ck_dealing_auctions_action CHECK (action IN ('add', 'cancel')),
     CONSTRAINT ck_dealing_auctions_product CHECK (btrim(product_code) <> ''),
-    CONSTRAINT ck_dealing_auctions_cancelled CHECK (
-        (cancelled_by IS NULL) = (cancelled_at IS NULL)
-        AND (cancelled_by IS NULL) = (cancel_reason IS NULL)
-        AND (cancel_reason IS NULL OR btrim(cancel_reason) <> ''))
+    -- A cancellation names the date it cancels and says why. An add names nothing.
+    CONSTRAINT ck_dealing_auctions_cancels CHECK (
+        (action = 'add') = (cancels IS NULL)
+        AND (action = 'add' OR btrim(coalesce(reason, '')) <> '')),
+    CONSTRAINT ck_dealing_auctions_status
+        CHECK (status IN ('proposed', 'approved', 'declined', 'withdrawn')),
+    CONSTRAINT ck_dealing_auctions_decided CHECK (
+        (status = 'proposed') = (decided_by IS NULL)
+        AND (decided_by IS NULL) = (decided_at IS NULL)
+        AND (status <> 'declined' OR btrim(coalesce(decision_note, '')) <> '')),
+    -- Two people. Only the proposer can withdraw, and never approve or decline, their own.
+    CONSTRAINT ck_dealing_auctions_two_people CHECK (
+        status = 'proposed'
+        OR (status = 'withdrawn' AND decided_by = proposed_by)
+        OR (status IN ('approved', 'declined') AND decided_by <> proposed_by))
 );
-CREATE UNIQUE INDEX uq_dealing_auctions_standing
-    ON dealing_auctions (product_code, auction_date) WHERE cancelled_by IS NULL;
+CREATE UNIQUE INDEX uq_dealing_auctions_add_waiting ON dealing_auctions (product_code, auction_date)
+    WHERE action = 'add' AND status = 'proposed';
+CREATE UNIQUE INDEX uq_dealing_auctions_cancel_live ON dealing_auctions (cancels)
+    WHERE action = 'cancel' AND status IN ('proposed', 'approved');
 CREATE INDEX ix_dealing_auctions_date ON dealing_auctions (auction_date, product_code)
 """
 
+# The actor settings are a fence against bugs, not a credential (see migration 0001). The guard
+# names the acting member of staff on every row, so the two-person check compares the people
+# whose transactions wrote the proposal and the decision.
 GUARD = """
 CREATE FUNCTION finvest_dealing_auctions_guard() RETURNS trigger
-    LANGUAGE plpgsql SET search_path = pg_catalog, pg_temp
+    LANGUAGE plpgsql SET search_path = pg_catalog, public, pg_temp
     AS $$
+    DECLARE
+        target dealing_auctions%ROWTYPE;
     BEGIN
         IF TG_OP NOT IN ('INSERT', 'UPDATE') THEN
             RAISE EXCEPTION 'an auction date is never removed, only cancelled'
                 USING ERRCODE = '42501';
         END IF;
-        IF public.finvest_actor_kind() IS DISTINCT FROM 'staff' THEN
+        IF finvest_actor_kind() IS DISTINCT FROM 'staff' THEN
             RAISE EXCEPTION 'the auction calendar is kept by staff' USING ERRCODE = '42501';
         END IF;
         IF TG_OP = 'INSERT' THEN
-            IF NEW.added_by IS DISTINCT FROM public.finvest_actor_id()
-                OR NEW.cancelled_by IS NOT NULL THEN
-                RAISE EXCEPTION 'an auction date is entered by the person signed in'
+            IF NEW.status <> 'proposed' OR NEW.decided_by IS NOT NULL
+                OR NEW.proposed_by IS DISTINCT FROM finvest_actor_id() THEN
+                RAISE EXCEPTION 'a change starts as a proposal by the acting member of staff'
                     USING ERRCODE = '42501';
+            END IF;
+            IF NEW.action = 'cancel' THEN
+                SELECT * INTO target FROM dealing_auctions WHERE id = NEW.cancels;
+                IF target.action IS DISTINCT FROM 'add' OR target.status <> 'approved'
+                    OR target.product_code <> NEW.product_code
+                    OR target.auction_date <> NEW.auction_date THEN
+                    RAISE EXCEPTION 'only an approved date is cancelled' USING ERRCODE = '42501';
+                END IF;
             END IF;
             RETURN NEW;
         END IF;
-        IF OLD.cancelled_by IS NOT NULL OR NEW.cancelled_by IS NULL
-            OR NEW.cancelled_by IS DISTINCT FROM public.finvest_actor_id() THEN
-            RAISE EXCEPTION 'a standing auction date is cancelled once, by the person signed in'
+        IF OLD.status <> 'proposed' THEN
+            RAISE EXCEPTION 'a decided change never changes' USING ERRCODE = '42501';
+        END IF;
+        IF NEW.status = 'proposed' OR NEW.decided_by IS DISTINCT FROM finvest_actor_id()
+            OR (to_jsonb(NEW) - ARRAY['status', 'decided_by', 'decided_at', 'decision_note'])
+               <> (to_jsonb(OLD) - ARRAY['status', 'decided_by', 'decided_at', 'decision_note'])
+        THEN
+            RAISE EXCEPTION 'a change is decided once, by the acting member of staff'
                 USING ERRCODE = '42501';
         END IF;
-        IF (NEW.id, NEW.product_code, NEW.auction_date, NEW.added_by, NEW.added_at)
-           IS DISTINCT FROM
-           (OLD.id, OLD.product_code, OLD.auction_date, OLD.added_by, OLD.added_at) THEN
-            RAISE EXCEPTION 'an auction date does not change' USING ERRCODE = '42501';
+        IF NEW.status = 'approved' AND NEW.action = 'add' AND EXISTS (
+            SELECT FROM dealing_auctions a
+            WHERE a.action = 'add' AND a.status = 'approved' AND a.id <> NEW.id
+              AND a.product_code = NEW.product_code AND a.auction_date = NEW.auction_date
+              AND NOT EXISTS (
+                  SELECT FROM dealing_auctions c
+                  WHERE c.action = 'cancel' AND c.cancels = a.id AND c.status = 'approved'))
+        THEN
+            RAISE EXCEPTION 'that auction already stands in the calendar' USING ERRCODE = '23505';
         END IF;
         RETURN NEW;
     END;
     $$
 """
 
-STAFF = "public.finvest_actor_kind() = 'staff'"
+STAFF = "finvest_actor_kind() = 'staff'"
 
 RULES = [
     "REVOKE ALL ON FUNCTION finvest_dealing_auctions_guard() FROM PUBLIC",
@@ -95,8 +145,9 @@ RULES = [
     f"CREATE TRIGGER {T}_no_truncate BEFORE TRUNCATE ON {T} "
     "FOR EACH STATEMENT EXECUTE FUNCTION finvest_dealing_auctions_guard()",
     f"REVOKE ALL ON {T} FROM PUBLIC",
-    f"GRANT SELECT, INSERT ON {T} TO {APP_ROLE}",
-    f"GRANT UPDATE (cancelled_by, cancelled_at, cancel_reason) ON {T} TO {APP_ROLE}",
+    # No DELETE for anyone: who put a date forward, and who agreed, is part of the record.
+    f"GRANT SELECT, INSERT, UPDATE (status, decided_by, decided_at, decision_note) ON {T} "
+    f"TO {APP_ROLE}",
     f"GRANT SELECT ON {T} TO {WORKER_ROLE}",
     f"ALTER TABLE {T} ENABLE ROW LEVEL SECURITY",
     f"CREATE POLICY {T}_app_read ON {T} FOR SELECT TO {APP_ROLE} USING ({STAFF})",

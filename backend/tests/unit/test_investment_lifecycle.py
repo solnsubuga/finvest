@@ -6,6 +6,7 @@ from app.modules.investments.domain.investments import (
     CANCEL_GRACE,
     PAYMENT_WINDOW,
     AtMaturity,
+    GoalMiss,
     HoldReason,
     InvestmentStatus,
     MaturityPlan,
@@ -195,6 +196,41 @@ def test_money_at_maturity_follows_the_clients_choice_or_waits(
     choice: AtMaturity, has_destination: bool, product_open: bool, plan: MaturityPlan
 ) -> None:
     assert plan_maturity(choice, has_destination=has_destination, product_open=product_open) == plan
+
+
+@pytest.mark.parametrize(
+    ("product_open", "miss", "plan"),
+    [
+        # The goal can take it: the principal rolls over and the interest is saved.
+        (True, None, MaturityPlan(MaturityStep.ROLL_OVER_INTEREST_TO_GOAL)),
+        # The goal cannot: the interest rolls over with the principal, never waits.
+        (
+            True,
+            GoalMiss.GOAL_CLOSED,
+            MaturityPlan(MaturityStep.ROLL_OVER, goal_miss=GoalMiss.GOAL_CLOSED),
+        ),
+        (
+            True,
+            GoalMiss.GOAL_PRODUCT_NOT_OPEN,
+            MaturityPlan(MaturityStep.ROLL_OVER, goal_miss=GoalMiss.GOAL_PRODUCT_NOT_OPEN),
+        ),
+        # The investment's own product closed: all of it waits, as for paying the interest.
+        (False, None, MaturityPlan(MaturityStep.HOLD, HoldReason.PRODUCT_NOT_OPEN)),
+        (False, GoalMiss.GOAL_CLOSED, MaturityPlan(MaturityStep.HOLD, HoldReason.PRODUCT_NOT_OPEN)),
+    ],
+)
+def test_interest_for_a_goal_is_saved_or_stays_with_the_principal(
+    product_open: bool, miss: GoalMiss | None, plan: MaturityPlan
+) -> None:
+    assert (
+        plan_maturity(
+            AtMaturity.INTEREST_TO_GOAL,
+            has_destination=False,
+            product_open=product_open,
+            goal_miss=miss,
+        )
+        == plan
+    )
 
 
 @pytest.mark.parametrize(

@@ -13,7 +13,7 @@ They are the only ones a client-facing route may use.
 """
 
 import hashlib
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import date, datetime, timedelta
 from typing import Any
 
@@ -39,6 +39,7 @@ from app.modules.goals.saving_rules import ClientSavingRule, client_rule, end_ru
 from app.modules.investments import service as investments
 from app.modules.investments.domain.investments import InvestmentStatus
 from app.modules.investments.domain.products import ProductStatus
+from app.modules.notifications import contract as notifications
 from app.shared.actors import Actor
 from app.shared.business_day import business_date
 from app.shared.clock import Clock
@@ -127,6 +128,12 @@ class ClientGoal:
     # when it is not locked, or the lock has lapsed.
     locked_until: date | None = None
     unlock_requested_at: datetime | None = None
+    # The client's investments that will save their interest here when they mature, soonest
+    # first.
+    interest_coming: tuple[investments.ClientInvestment, ...] = ()
+    # For each saving started from another investment's interest: that investment's product
+    # name, by the saving's investment ID.
+    interest_from_products: dict[str, str] = field(default_factory=dict)
 
 
 @dataclass(frozen=True, slots=True)
@@ -181,6 +188,11 @@ _INSERT_ROLLOVER = text(
     "INSERT INTO goal_savings (investment_id, goal_id, client_id, created_at, "
     "rolled_from_investment_id) VALUES (:investment_id, :goal_id, :client_id, :now, :rolled_from) "
     "ON CONFLICT (investment_id) DO NOTHING"
+)
+_INSERT_INTEREST_SAVING = text(
+    "INSERT INTO goal_savings (investment_id, goal_id, client_id, created_at, "
+    "interest_from_investment_id) VALUES (:investment_id, :goal_id, :client_id, :now, "
+    ":interest_from) ON CONFLICT (investment_id) DO NOTHING"
 )
 _INSERT_SAVING = text(
     "INSERT INTO goal_savings (investment_id, goal_id, client_id, created_at) "
@@ -683,6 +695,55 @@ async def follow_rollover(
     return True
 
 
+async def link_interest_saving(
+    session: AsyncSession,
+    *,
+    investment_id: str,
+    saving_investment_id: str,
+    goal_id: str,
+    client_id: str,
+    clock: Clock,
+) -> bool:
+    """Record the investment an investment's interest started at maturity as a saving towards
+    the goal its client chose, and tell the client. For the worker.
+
+    False when the goal was closed since the maturity: the investment then carries on as the
+    client's ordinary investment, as a closed goal's savings do. Running it again changes
+    nothing and tells nobody twice.
+    """
+    try:
+        # A savepoint, so a goal closed since the maturity leaves the job's transaction usable.
+        async with session.begin_nested():
+            await session.execute(
+                _INSERT_INTEREST_SAVING,
+                {
+                    "investment_id": saving_investment_id,
+                    "goal_id": goal_id,
+                    "client_id": client_id,
+                    "now": clock.now(),
+                    "interest_from": investment_id,
+                },
+            )
+    except DBAPIError as error:
+        if getattr(error.orig, "sqlstate", None) != _REFUSED:
+            raise
+        logger.info("goal_interest_not_linked", goal_id=goal_id, investment_id=investment_id)
+        return False
+    goal = await get_goal(session, goal_id)
+    matured = await investments.get_investment(session, investment_id)
+    await notifications.notify(
+        session,
+        event_name="goal_interest_saved",
+        client_id=client_id,
+        idempotency_key=saving_investment_id,
+        variables={"goal": goal.name, "product": matured.product_name},
+        link=notifications.Link("goal", goal_id),
+        now=clock.now(),
+    )
+    logger.info("goal_interest_linked", goal_id=goal_id, investment_id=saving_investment_id)
+    return True
+
+
 async def client_goal_value(
     session: AsyncSession, client: Actor, goal_id: str, clock: Clock
 ) -> Money:
@@ -852,6 +913,18 @@ async def _client_view(
         own = [p for p in products if p.code == goal.product_code]
         found = best_plan(own, needed, today, goal.target_date)
         plan = None if found is None else _client_plan(found)
+    interest_from = {
+        saving.id: saving.interest_from_id for saving in savings if saving.interest_from_id
+    }
+    sources = await investments.client_investments_by_id(
+        session, client, sorted(set(interest_from.values())), clock
+    )
+    source_names = {source.id: source.product_name for source in sources}
+    coming = (
+        await investments.client_investments_saving_interest_to(session, client, goal.id, clock)
+        if goal.status is GoalStatus.ACTIVE
+        else []
+    )
     return ClientGoal(
         id=goal.id,
         name=goal.name,
@@ -868,6 +941,12 @@ async def _client_view(
         payday=goal.payday,
         locked_until=goal.locked_until if goal.is_locked(today) else None,
         unlock_requested_at=goal.unlock_requested_at if goal.is_locked(today) else None,
+        interest_coming=tuple(coming),
+        interest_from_products={
+            saving_id: source_names[source_id]
+            for saving_id, source_id in interest_from.items()
+            if source_id in source_names
+        },
     )
 
 

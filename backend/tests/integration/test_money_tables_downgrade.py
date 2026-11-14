@@ -11,7 +11,8 @@ account, the journals sent to the accounting system, who set the bank account cl
 into, why a payout send waited, the account code maps, the deposits taken back as mistakes,
 what clients owe for them, the runs staff asked for again, staff notes and actions on a
 client, the account freezes, why an investment was sent to another client, the platform
-settings, the withdrawal limit changes, the paydays clients named or the auction calendar."""
+settings, the withdrawal limit changes, the paydays clients named, the custodian statement
+checks, the choice to save an investment's interest to a goal or the auction calendar."""
 
 import os
 from collections.abc import Iterator
@@ -297,9 +298,9 @@ ROWS = {
     "0088_dealing_auctions": (
         "BEGIN; SELECT set_config('finvest.actor_kind', 'staff', true); "
         "SELECT set_config('finvest.actor_id', '-Nabc0000000000000B1', true); "
-        "INSERT INTO dealing_auctions (id, product_code, auction_date, added_by, added_at) "
-        "VALUES ('-Nabc0000000000000A1', 'TREA-91', DATE '2026-11-18', '-Nabc0000000000000B1', "
-        "now()); COMMIT",
+        "INSERT INTO dealing_auctions (id, action, product_code, auction_date, proposed_by, "
+        "proposed_at) VALUES ('-Nabc0000000000000A1', 'add', 'TREA-91', DATE '2026-11-18', "
+        "'-Nabc0000000000000B1', now()); COMMIT",
         "refusing to drop the auction calendar",
     ),
     # The owner turns the guards off: a real funding from a sale needs a settled sale.
@@ -1266,6 +1267,30 @@ ROWS = {
         "proposed_at) VALUES ('-Nabc0000000000000R1', current_date - 1, current_date - 1, "
         "'The emails failed that day', '-Nabc0000000000000S1', now()); COMMIT",
         "refusing to drop the record of notes staff sent again",
+    ),
+    "0410_custodian_statement_checks": (
+        "BEGIN; SELECT set_config('finvest.actor_kind', 'staff', true); "
+        "SELECT set_config('finvest.actor_id', '-Nabc0000000000000S1', true); "
+        "INSERT INTO reconciliation_custodian_checks (id, statement_date, file_key, "
+        "file_sha256, file_content_type, file_bytes, uploaded_by, uploaded_at, updated_at) "
+        "VALUES ('-Nabc0000000000000C1', current_date - 1, 'custodian/a/b', repeat('ab', 32), "
+        "'text/csv', 10, '-Nabc0000000000000S1', now(), now()); COMMIT",
+        "refusing to drop custodian statement checks",
+    ),
+    "0400_maturity_interest_to_goal": (
+        "BEGIN; SELECT set_config('finvest.actor_kind', 'client', true); "
+        "SELECT set_config('finvest.actor_id', '-Nabc0000000000000B1', true); "
+        "INSERT INTO goals (id, client_id, name, category, currency, target_minor, "
+        "product_code, created_at, updated_at) VALUES ('-Nabc0000000000000G1', "
+        "'-Nabc0000000000000B1', 'School fees', 'school_fees', 'UGX', 2000000, 'TREA-182', "
+        "now(), now()); "
+        "INSERT INTO investments (id, client_id, product_id, currency, principal_minor, "
+        "annual_rate_bps, tax_bps, term_days, at_maturity, created_at, pay_by, updated_at) "
+        "VALUES ('-Nabc0000000000000A1', '-Nabc0000000000000B1', 'FvProduct1TREA91_001', "
+        "'UGX', 1000000, 1250, 1500, 91, 'roll_over', now(), now() + interval '72 hours', "
+        "now()); UPDATE investments SET at_maturity = 'interest_to_goal', "
+        "interest_goal_id = '-Nabc0000000000000G1'; COMMIT",
+        "refusing to drop the choice clients made to save their interest",
     ),
 }
 
