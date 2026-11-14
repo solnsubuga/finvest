@@ -66,6 +66,14 @@ The document number, date of birth and TIN are encrypted before they are saved (
 
 `verified_name(session, client_id)` gives other modules the name on an approved client's document, and nothing before approval.
 
+## How a name is shown
+
+The check keeps the surname and given names exactly as printed on the document, usually in capitals ("NAKATO", "AMARA JOY"). That is the KYC record: screening, the phone name check and the client's data export use it as it is, and payouts compare it in a way that forgives case and order. Everywhere a person reads the name it is shown given names first, in proper case: "Amara Joy Nakato" (`app/modules/kyc/domain/names.py`). Only a word written all in capitals or all in small letters is re-cased, so "McDonald" stays as written.
+
+- `verified_name`, `identities` and `AccountHolder.name` give the shown name: the console's client pages, closures, organisations, screening and payouts, statements, receipts, the tax certificate and reassignments.
+- `GET /client/session` carries `display_name` ("Amara Nakato") and `first_name` ("Amara") once the check is approved, null before (`kyc.own_name`). The app greets the client by them on Home, in the wide sidebar and on the PIN screen.
+- The staff review screen shows the raw `surname` and `given_names` beside the shown `name`.
+
 Handing a check in also asks the screening module for a sanctions and PEP screen in the same transaction, once a screening provider is set up ([screening.md](screening.md)). The staff check carries the client's standing as `screening` (`clear`, `possible_match`, `confirmed_match`, `unavailable`, `pending`, `not_run`, or null if never screened). Anything but `clear` is a reason to look before approving. The decision stays with the one reviewer, and a possible match is decided on the screening case by two people.
 
 `screening_subject(session, sealer, client_id)` gives the screening module who to screen: the names, date of birth, document type and issuing country on a check that has been handed in or approved, and never the ID number. It returns nothing for a draft or a rejected check. While staff have sent a check back for photos, it gives the details as they stand. Nationality is not recorded. The issuing country is the nationality for a passport, but for a national ID it only shows the client lives in Uganda. Only the worker and staff can read it, because a client cannot read another client's check.
