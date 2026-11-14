@@ -474,6 +474,23 @@ async def confirmed_automatically(
     return int(row.confirmed)
 
 
+_REQUESTED_BETWEEN = text(
+    f"SELECT {_COLUMNS} FROM payment_deposits "  # noqa: S608 - constant column list
+    "WHERE created_at >= :since AND created_at < :until ORDER BY created_at, id LIMIT :limit"
+)
+
+
+async def deposits_requested_between(
+    session: AsyncSession, *, since: datetime, until: datetime, limit: int
+) -> list[Deposit]:
+    """Deposits asked for from `since` up to `until`, oldest first, at most `limit`. For staff
+    reports: a staff transaction sees every deposit."""
+    rows = await session.execute(
+        _REQUESTED_BETWEEN, {"since": since, "until": until, "limit": max(1, limit)}
+    )
+    return [_deposit(row) for row in rows.all()]
+
+
 async def record_notice(
     session: AsyncSession, provider: str, notice: ProviderNotice, clock: Clock
 ) -> bool:

@@ -2406,6 +2406,29 @@
         "title": "CaseProposeIn",
         "type": "object"
       },
+      "CatalogueOut": {
+        "additionalProperties": false,
+        "properties": {
+          "reports": {
+            "items": {
+              "$ref": "#/components/schemas/ReportOut"
+            },
+            "title": "Reports",
+            "type": "array"
+          },
+          "today": {
+            "format": "date",
+            "title": "Today",
+            "type": "string"
+          }
+        },
+        "required": [
+          "today",
+          "reports"
+        ],
+        "title": "CatalogueOut",
+        "type": "object"
+      },
       "CategoryChannels": {
         "additionalProperties": false,
         "properties": {
@@ -13987,6 +14010,69 @@
           "display_name"
         ],
         "title": "Rename",
+        "type": "object"
+      },
+      "ReportOut": {
+        "additionalProperties": false,
+        "properties": {
+          "about": {
+            "title": "About",
+            "type": "string"
+          },
+          "by_currency": {
+            "title": "By Currency",
+            "type": "boolean"
+          },
+          "date_from": {
+            "format": "date",
+            "title": "Date From",
+            "type": "string"
+          },
+          "date_to": {
+            "format": "date",
+            "title": "Date To",
+            "type": "string"
+          },
+          "key": {
+            "enum": [
+              "daily_position",
+              "deposits_and_withdrawals",
+              "interest_and_tax",
+              "maturity_ladder",
+              "identity_and_risk",
+              "client_statements",
+              "complaints_quarterly"
+            ],
+            "title": "Key",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "period": {
+            "enum": [
+              "day",
+              "days",
+              "month",
+              "quarter",
+              "ahead",
+              "now"
+            ],
+            "title": "Period",
+            "type": "string"
+          }
+        },
+        "required": [
+          "key",
+          "name",
+          "about",
+          "period",
+          "by_currency",
+          "date_from",
+          "date_to"
+        ],
+        "title": "ReportOut",
         "type": "object"
       },
       "ResendIn": {
@@ -57339,6 +57425,160 @@
         "summary": "Close Recovery Request",
         "tags": [
           "client numbers"
+        ]
+      }
+    },
+    "/staff/reports": {
+      "get": {
+        "description": "The reports this member of staff may download.",
+        "operationId": "catalogue_staff_reports_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogueOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          }
+        },
+        "summary": "Catalogue",
+        "tags": [
+          "staff reports"
+        ]
+      }
+    },
+    "/staff/reports/{key}.csv": {
+      "get": {
+        "description": "One report for one period, as CSV. Recorded on the audit trail.",
+        "operationId": "download_staff_reports__key__csv_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "key",
+            "required": true,
+            "schema": {
+              "enum": [
+                "daily_position",
+                "deposits_and_withdrawals",
+                "interest_and_tax",
+                "maturity_ladder",
+                "identity_and_risk",
+                "client_statements",
+                "complaints_quarterly"
+              ],
+              "title": "Key",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "date_from",
+            "required": true,
+            "schema": {
+              "format": "date",
+              "title": "Date From",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "date_to",
+            "required": true,
+            "schema": {
+              "format": "date",
+              "title": "Date To",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "currency",
+            "required": false,
+            "schema": {
+              "default": "UGX",
+              "enum": [
+                "UGX",
+                "USD"
+              ],
+              "title": "Currency",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "text/csv": {}
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          }
+        },
+        "summary": "Download",
+        "tags": [
+          "staff reports"
         ]
       }
     },
