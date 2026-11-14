@@ -99,7 +99,7 @@ export default function Receipt() {
       <ShareNote outcome={shared} />
       <View style={{ marginTop: 16, gap: 4 }}>
         <Txt size={fontSizes.sm} color={colors.muted}>
-          We also email you this receipt as a PDF and keep it in Documents.
+          A PDF of this receipt is kept in Documents, and emailed to you if you have proved your email address.
         </Txt>
         <TextLink label="Open Documents" onPress={() => router.push("/documents")} />
       </View>
