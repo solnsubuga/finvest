@@ -42,6 +42,8 @@ DECISIONS = {
     "POST /staff/payout-bank-batches/{batch_id}/decline",
     "POST /staff/payout-bank-settlements/{settlement_id}/approve",
     "POST /staff/payout-bank-settlements/{settlement_id}/decline",
+    "POST /staff/payout-bank-bulk-settlements/{bulk_id}/approve",
+    "POST /staff/payout-bank-bulk-settlements/{bulk_id}/decline",
     "POST /staff/payout-returns/{return_id}/approve",
     "POST /staff/payout-returns/{return_id}/decline",
     "POST /staff/payouts/{payout_id}/decline",

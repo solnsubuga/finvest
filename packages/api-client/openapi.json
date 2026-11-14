@@ -1708,6 +1708,229 @@
         "title": "BufferScreenOut",
         "type": "object"
       },
+      "BulkDebitLineOut": {
+        "additionalProperties": false,
+        "description": "A trust statement line going out, as the first person picks the bulk debit.",
+        "properties": {
+          "amount": {
+            "$ref": "#/components/schemas/MoneyView"
+          },
+          "id": {
+            "maxLength": 20,
+            "minLength": 20,
+            "pattern": "^[-0-9A-Z_a-z]{20}$",
+            "title": "Id",
+            "type": "string"
+          },
+          "narrative": {
+            "title": "Narrative",
+            "type": "string"
+          },
+          "reference": {
+            "title": "Reference",
+            "type": "string"
+          },
+          "value_date": {
+            "format": "date",
+            "title": "Value Date",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "value_date",
+          "amount",
+          "reference",
+          "narrative"
+        ],
+        "title": "BulkDebitLineOut",
+        "type": "object"
+      },
+      "BulkDebitOut": {
+        "additionalProperties": false,
+        "description": "An approved batch's payouts still to settle, and the lines that could be their debit.",
+        "properties": {
+          "batch": {
+            "$ref": "#/components/schemas/BatchOut"
+          },
+          "lines": {
+            "items": {
+              "$ref": "#/components/schemas/BulkDebitLineOut"
+            },
+            "title": "Lines",
+            "type": "array"
+          },
+          "payouts": {
+            "items": {
+              "$ref": "#/components/schemas/BankPayoutOut"
+            },
+            "title": "Payouts",
+            "type": "array"
+          }
+        },
+        "required": [
+          "batch",
+          "payouts",
+          "lines"
+        ],
+        "title": "BulkDebitOut",
+        "type": "object"
+      },
+      "BulkIn": {
+        "additionalProperties": false,
+        "properties": {
+          "payout_ids": {
+            "items": {
+              "maxLength": 20,
+              "minLength": 20,
+              "pattern": "^[-0-9A-Z_a-z]{20}$",
+              "type": "string"
+            },
+            "maxItems": 200,
+            "minItems": 1,
+            "title": "Payout Ids",
+            "type": "array"
+          },
+          "reason": {
+            "maxLength": 500,
+            "minLength": 1,
+            "title": "Reason",
+            "type": "string"
+          },
+          "statement_line_id": {
+            "maxLength": 20,
+            "minLength": 20,
+            "pattern": "^[-0-9A-Z_a-z]{20}$",
+            "title": "Statement Line Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "statement_line_id",
+          "payout_ids",
+          "reason"
+        ],
+        "title": "BulkIn",
+        "type": "object"
+      },
+      "BulkOut": {
+        "additionalProperties": false,
+        "properties": {
+          "batch_id": {
+            "maxLength": 20,
+            "minLength": 20,
+            "pattern": "^[-0-9A-Z_a-z]{20}$",
+            "title": "Batch Id",
+            "type": "string"
+          },
+          "decided_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Decided At"
+          },
+          "decided_by": {
+            "anyOf": [
+              {
+                "maxLength": 20,
+                "minLength": 20,
+                "pattern": "^[-0-9A-Z_a-z]{20}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Decided By"
+          },
+          "decision_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Decision Reason"
+          },
+          "id": {
+            "maxLength": 20,
+            "minLength": 20,
+            "pattern": "^[-0-9A-Z_a-z]{20}$",
+            "title": "Id",
+            "type": "string"
+          },
+          "payout_ids": {
+            "items": {
+              "maxLength": 20,
+              "minLength": 20,
+              "pattern": "^[-0-9A-Z_a-z]{20}$",
+              "type": "string"
+            },
+            "title": "Payout Ids",
+            "type": "array"
+          },
+          "proposed_at": {
+            "format": "date-time",
+            "title": "Proposed At",
+            "type": "string"
+          },
+          "proposed_by": {
+            "maxLength": 20,
+            "minLength": 20,
+            "pattern": "^[-0-9A-Z_a-z]{20}$",
+            "title": "Proposed By",
+            "type": "string"
+          },
+          "reason": {
+            "title": "Reason",
+            "type": "string"
+          },
+          "statement_line_id": {
+            "maxLength": 20,
+            "minLength": 20,
+            "pattern": "^[-0-9A-Z_a-z]{20}$",
+            "title": "Statement Line Id",
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "proposed",
+              "approved",
+              "declined",
+              "withdrawn"
+            ],
+            "title": "Status",
+            "type": "string"
+          },
+          "total": {
+            "$ref": "#/components/schemas/MoneyView"
+          }
+        },
+        "required": [
+          "id",
+          "batch_id",
+          "statement_line_id",
+          "reason",
+          "status",
+          "proposed_by",
+          "proposed_at",
+          "decided_by",
+          "decided_at",
+          "decision_reason",
+          "payout_ids",
+          "total"
+        ],
+        "title": "BulkOut",
+        "type": "object"
+      },
       "CaseAmountOut": {
         "additionalProperties": false,
         "properties": {
@@ -14732,6 +14955,20 @@
             "pattern": "^[-0-9A-Z_a-z]{20}$",
             "title": "Batch Id",
             "type": "string"
+          },
+          "bulk_id": {
+            "anyOf": [
+              {
+                "maxLength": 20,
+                "minLength": 20,
+                "pattern": "^[-0-9A-Z_a-z]{20}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Bulk Id"
           },
           "decided_at": {
             "anyOf": [
@@ -47039,6 +47276,206 @@
         ]
       }
     },
+    "/staff/payout-bank-batches/{batch_id}/bulk-debit": {
+      "get": {
+        "description": "The batch's sent payouts that no open settlement names, and the trust statement lines\ngoing out since it was approved that no settlement names and that are no more than those\npayouts together. 409 `batch_not_approved`.",
+        "operationId": "bulk_debit_staff_payout_bank_batches__batch_id__bulk_debit_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "batch_id",
+            "required": true,
+            "schema": {
+              "maxLength": 20,
+              "minLength": 20,
+              "pattern": "^[-0-9A-Z_a-z]{20}$",
+              "title": "Batch Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BulkDebitOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          }
+        },
+        "summary": "Bulk Debit",
+        "tags": [
+          "staff payouts"
+        ]
+      }
+    },
+    "/staff/payout-bank-batches/{batch_id}/bulk-settlements": {
+      "post": {
+        "description": "Say one bulk debit paid these payouts of the batch. 422 `bulk_payouts_invalid`; 409\n`batch_not_approved`, `payout_not_in_batch`, `payout_not_to_settle`,\n`statement_line_in_use`, `statement_line_not_this_batch` or `amounts_do_not_add_up`.",
+        "operationId": "propose_staff_payout_bank_batches__batch_id__bulk_settlements_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "batch_id",
+            "required": true,
+            "schema": {
+              "maxLength": 20,
+              "minLength": 20,
+              "pattern": "^[-0-9A-Z_a-z]{20}$",
+              "title": "Batch Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "A value the caller chooses once per intended action and sends again on every retry of it. Pattern: `[A-Za-z0-9._:-]{8,128}`.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "A value the caller chooses once per intended action and sends again on every retry of it. Pattern: `[A-Za-z0-9._:-]{8,128}`.",
+              "title": "Idempotency-Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BulkIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BulkOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          }
+        },
+        "summary": "Propose",
+        "tags": [
+          "staff payouts"
+        ]
+      }
+    },
     "/staff/payout-bank-batches/{batch_id}/decline": {
       "post": {
         "description": "Someone other than the preparer refuses the batch. Its payouts stay queued. 403\n`prepared_by_you`; 409 `batch_already_decided`.",
@@ -47331,9 +47768,476 @@
         ]
       }
     },
+    "/staff/payout-bank-bulk-settlements": {
+      "get": {
+        "description": "Bulk settlements waiting for a second person, oldest first, at most 100.",
+        "operationId": "waiting_staff_payout_bank_bulk_settlements_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/BulkOut"
+                  },
+                  "title": "Response Waiting Staff Payout Bank Bulk Settlements Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          }
+        },
+        "summary": "Waiting",
+        "tags": [
+          "staff payouts"
+        ]
+      }
+    },
+    "/staff/payout-bank-bulk-settlements/{bulk_id}": {
+      "get": {
+        "operationId": "get_bulk_staff_payout_bank_bulk_settlements__bulk_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "bulk_id",
+            "required": true,
+            "schema": {
+              "maxLength": 20,
+              "minLength": 20,
+              "pattern": "^[-0-9A-Z_a-z]{20}$",
+              "title": "Bulk Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BulkOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          }
+        },
+        "summary": "Get Bulk",
+        "tags": [
+          "staff payouts"
+        ]
+      }
+    },
+    "/staff/payout-bank-bulk-settlements/{bulk_id}/approve": {
+      "post": {
+        "description": "The second signature. Every payout in it becomes paid and each client is told. 403\n`proposed_by_you`; 409 `settlement_already_decided` or `payout_not_sent`.",
+        "operationId": "approve_staff_payout_bank_bulk_settlements__bulk_id__approve_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "bulk_id",
+            "required": true,
+            "schema": {
+              "maxLength": 20,
+              "minLength": 20,
+              "pattern": "^[-0-9A-Z_a-z]{20}$",
+              "title": "Bulk Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "A value the caller chooses once per intended action and sends again on every retry of it. Pattern: `[A-Za-z0-9._:-]{8,128}`.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "A value the caller chooses once per intended action and sends again on every retry of it. Pattern: `[A-Za-z0-9._:-]{8,128}`.",
+              "title": "Idempotency-Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReasonIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BulkOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          }
+        },
+        "summary": "Approve",
+        "tags": [
+          "staff payouts"
+        ]
+      }
+    },
+    "/staff/payout-bank-bulk-settlements/{bulk_id}/decline": {
+      "post": {
+        "description": "Someone other than the proposer refuses it. Its payouts stay sent. 403\n`proposed_by_you`; 409 `settlement_already_decided`.",
+        "operationId": "decline_staff_payout_bank_bulk_settlements__bulk_id__decline_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "bulk_id",
+            "required": true,
+            "schema": {
+              "maxLength": 20,
+              "minLength": 20,
+              "pattern": "^[-0-9A-Z_a-z]{20}$",
+              "title": "Bulk Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReasonIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BulkOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          }
+        },
+        "summary": "Decline",
+        "tags": [
+          "staff payouts"
+        ]
+      }
+    },
+    "/staff/payout-bank-bulk-settlements/{bulk_id}/withdraw": {
+      "post": {
+        "description": "The proposer takes it back. 403 `not_proposed_by_you`; 409 `settlement_already_decided`.",
+        "operationId": "withdraw_staff_payout_bank_bulk_settlements__bulk_id__withdraw_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "bulk_id",
+            "required": true,
+            "schema": {
+              "maxLength": 20,
+              "minLength": 20,
+              "pattern": "^[-0-9A-Z_a-z]{20}$",
+              "title": "Bulk Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReasonIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BulkOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          }
+        },
+        "summary": "Withdraw",
+        "tags": [
+          "staff payouts"
+        ]
+      }
+    },
     "/staff/payout-bank-settlements/{settlement_id}/approve": {
       "post": {
-        "description": "A different person approves, and the payout is paid or failed, with its money settled\nfrom the trust account or parked. 403 `proposed_by_you`; 409 `settlement_already_decided`\nor `payout_not_sent`.",
+        "description": "A different person approves, and the payout is paid or failed, with its money settled\nfrom the trust account or parked. 403 `proposed_by_you`; 409 `settlement_already_decided`,\n`settlement_in_bulk` or `payout_not_sent`.",
         "operationId": "approve_settlement_staff_payout_bank_settlements__settlement_id__approve_post",
         "parameters": [
           {
@@ -47447,7 +48351,7 @@
     },
     "/staff/payout-bank-settlements/{settlement_id}/decline": {
       "post": {
-        "description": "Someone other than the proposer refuses it. The payout stays sent. 403 `proposed_by_you`;\n409 `settlement_already_decided`.",
+        "description": "Someone other than the proposer refuses it. The payout stays sent. 403 `proposed_by_you`;\n409 `settlement_already_decided` or `settlement_in_bulk`.",
         "operationId": "decline_settlement_staff_payout_bank_settlements__settlement_id__decline_post",
         "parameters": [
           {
@@ -47543,7 +48447,7 @@
     },
     "/staff/payout-bank-settlements/{settlement_id}/withdraw": {
       "post": {
-        "description": "The proposer takes it back. 403 `not_proposed_by_you`; 409 `settlement_already_decided`.",
+        "description": "The proposer takes it back. 403 `not_proposed_by_you`; 409 `settlement_already_decided` or\n`settlement_in_bulk`.",
         "operationId": "withdraw_settlement_staff_payout_bank_settlements__settlement_id__withdraw_post",
         "parameters": [
           {
