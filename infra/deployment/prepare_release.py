@@ -281,6 +281,9 @@ def prepare(output: Path, env: Mapping[str, str]) -> None:
             ),
             (api, worker),
         ),
+        # The worker reads the name a network holds for a payout number (ioTec Verify, with the
+        # FINVEST_IOTEC_VERIFY_* credentials above).
+        (("FINVEST_PAYOUT_NAME_PROVIDER",), (worker,)),
         # Checks ioTec's collection callbacks, which only the API receives.
         (("FINVEST_IOTEC_CALLBACK_TOKEN",), (api,)),
     ):
