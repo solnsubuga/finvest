@@ -2680,7 +2680,21 @@
       },
       "ClientLoginStart": {
         "additionalProperties": false,
+        "description": "The mobile number, or an email address the client has proved, with the password.",
         "properties": {
+          "email": {
+            "anyOf": [
+              {
+                "maxLength": 254,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Email"
+          },
           "password": {
             "maxLength": 1024,
             "minLength": 1,
@@ -2688,14 +2702,20 @@
             "type": "string"
           },
           "phone": {
-            "maxLength": 32,
-            "minLength": 1,
-            "title": "Phone",
-            "type": "string"
+            "anyOf": [
+              {
+                "maxLength": 32,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Phone"
           }
         },
         "required": [
-          "phone",
           "password"
         ],
         "title": "ClientLoginStart",
@@ -4793,6 +4813,7 @@
               "confirm_it_is_you",
               "expired",
               "phone_taken",
+              "email_taken",
               "leaked_password",
               "forbidden",
               "conflict",
@@ -19849,6 +19870,16 @@
             },
             "description": "Forbidden"
           },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
           "410": {
             "content": {
               "application/json": {
@@ -19888,7 +19919,7 @@
     },
     "/client/email/verification/confirm": {
       "post": {
-        "description": "Spend the link from the email. It works on any device, without signing in.",
+        "description": "Spend the link from the email. It works on any device, without signing in.\n\n`email_taken` when another account proved the same address first.",
         "operationId": "confirm_email_client_email_verification_confirm_post",
         "requestBody": {
           "content": {
@@ -19923,6 +19954,16 @@
               }
             },
             "description": "Forbidden"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Conflict"
           },
           "410": {
             "content": {
@@ -23814,7 +23855,7 @@
     },
     "/client/login/start": {
       "post": {
-        "description": "Check the mobile number and password. Never opens a session by itself.",
+        "description": "Check the mobile number or proved email, and the password. Never opens a session.",
         "operationId": "client_login_start_client_login_start_post",
         "requestBody": {
           "content": {

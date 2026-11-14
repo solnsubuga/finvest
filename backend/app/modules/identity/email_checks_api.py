@@ -11,7 +11,7 @@ from app.shared.errors import ErrorEnvelope
 router = APIRouter(
     prefix="/client/email",
     tags=["client email"],
-    responses={**_REFUSALS, 410: {"model": ErrorEnvelope}},
+    responses={**_REFUSALS, 409: {"model": ErrorEnvelope}, 410: {"model": ErrorEnvelope}},
 )
 
 
@@ -38,7 +38,10 @@ async def send_email_link(request: Request, client: CurrentClient) -> EmailLinkS
 
 @router.post("/verification/confirm", status_code=204)
 async def confirm_email(body: EmailConfirm, request: Request) -> None:
-    """Spend the link from the email. It works on any device, without signing in."""
+    """Spend the link from the email. It works on any device, without signing in.
+
+    `email_taken` when another account proved the same address first.
+    """
     check_origin(request, "client", required=False)
     await _service(request).confirm(body.token)
 
