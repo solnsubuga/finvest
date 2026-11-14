@@ -211,7 +211,12 @@ In each of the `prod` and `dev` GitHub environments, beside what Terraform write
 | `FINVEST_OPENAI_API_KEY` | Secret, optional | The OpenAI API key. Required only when the reader is `openai`. API and worker. |
 | `FINVEST_GEMINI_API_KEY` | Secret, optional | The Gemini API key. Required only when the reader is `gemini`. API and worker. |
 | `FINVEST_CUSTODIAN_READER_MODEL` | Variable | The model the reader uses. There is no default in the code, so it is required whenever the reader is on, and the reader refuses to start without it. API and worker. |
-| `FINVEST_SMS_BACKEND`, `FINVEST_SMS_IOTEC_CLIENT_ID` | Variables | `iotec`, and the client id from the ioTec Messaging portal (Management, Settings, Configuration). Only the worker gets them; it sends every SMS. |
+| `FINVEST_SMS_BACKEND`, `FINVEST_SMS_FALLBACK` | Variables | `africastalking` and `iotec`: Africa's Talking sends every SMS, and ioTec Messaging sends one only when Africa's Talking certainly did not take it (down, turned away or refused). A message Africa's Talking may have taken is never sent again. Only the worker gets these and every SMS setting below; it sends every SMS. |
+| `FINVEST_SMS_AFRICASTALKING_USERNAME` | Variable | The username of the Africa's Talking app (the live app, never `sandbox`, which production refuses). |
+| `FINVEST_SMS_AFRICASTALKING_API_KEY` | Secret | The API key of that app, from the Africa's Talking dashboard (Settings, API Key). Worker only. |
+| `FINVEST_SMS_AFRICASTALKING_SENDER_ID` | Variable, optional | The registered alphanumeric sender name, `FINVEST`, once Africa's Talking has approved it. Unset, Africa's Talking sends from its shared sender. |
+| `FINVEST_SMS_AFRICASTALKING_BASE_URL` | Variable, optional | Defaults to `https://api.africastalking.com`. The host's firewall already allows outbound HTTPS. |
+| `FINVEST_SMS_IOTEC_CLIENT_ID` | Variable | The client id from the ioTec Messaging portal (Management, Settings, Configuration), for the fallback. |
 | `FINVEST_SMS_IOTEC_API_KEY` | Secret | The ioTec Messaging API key from the same page. Worker only. |
 | `FINVEST_SMS_IOTEC_BASE_URL` | Variable, optional | Defaults to `https://messaging-api.iotec.io`. The host's firewall already allows outbound HTTPS. |
 | `FINVEST_EMAIL_HASH_KEY` | Secret | `python3 -c "import secrets; print(secrets.token_urlsafe(32))"`, one per environment. It keys the hash under which email addresses are kept on the suppression list and in delivery events, and reaches the API and worker only. Never change it once set: every stored hash would stop matching. Keep an offline copy. |
