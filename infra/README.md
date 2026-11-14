@@ -8,7 +8,7 @@ Infrastructure as code for Finvest, modelled on Fidiba's provisioning. Terraform
 | `terraform/` | One environment: host, network, database, buckets, DNS, back office access, alerts, and the settings it writes into GitHub. |
 | `terraform/environments/*.tfvars` | What differs between `staging` and `production`. Each has its own state, so planning one never touches the other. |
 | `terraform/tests/` | `terraform test` with mock providers: the rules below that must not drift. |
-| `deployment/` | The deployed stack and its scripts, ported from Fidiba: `compose.yaml`, `Caddyfile`, `deploy.sh`, `prepare_release.py`, `ship-release.sh`, the console and website images, `prepare-host.sh`, `create-roles.sh`, and `rehearse.sh`. |
+| `deployment/` | The deployed stack and its scripts, ported from Fidiba: `compose.yaml`, `Caddyfile`, `deploy.sh`, `prepare_release.py`, `ship-release.sh`, the console, client app and website images, `prepare-host.sh`, `create-roles.sh`, and `rehearse.sh`. |
 
 ## What an environment gets
 
@@ -162,7 +162,7 @@ To switch staging on: set the repository variable `STAGING_ENABLED` to `true`, c
 
 Each run:
 
-1. Builds the backend, console and website images, pushes them to GitHub's container registry and deploys their exact digests. The console is built with `VITE_DEPLOY_ENV` set to the environment, so a production console cannot contain the sample sign-in.
+1. Builds the backend, console, client app and website images, pushes them to GitHub's container registry and deploys their exact digests. The console is built with `VITE_DEPLOY_ENV` set to the environment, so a production console cannot contain the sample sign-in. The client app (`app.Dockerfile`) is Expo's web export of `apps/client`, built with `EXPO_PUBLIC_API_URL` set to the environment's API, and refuses a build that carries the demo.
 2. Writes one release bundle (`prepare_release.py`). Each process gets a runtime file with only its own database role, verified TLS to the database against DigitalOcean's CA, and the sign-in settings for the environment's domains.
 3. Admits its own address to SSH on the firewall, copies the bundle to `/opt/finvest/releases/<id>` and runs `deploy.sh` there, then removes its address again.
 
@@ -196,6 +196,7 @@ In each of the `prod` and `dev` GitHub environments, beside what Terraform write
 | `FINVEST_IOTEC_CLIENT_SECRET` | Secret | From the ioTec Pay portal. API and worker only. |
 | `FINVEST_IOTEC_CALLBACK_TOKEN` | Secret | A random value you choose (`python3 -c "import secrets; print(secrets.token_urlsafe(32))"`). Enter the same value in ioTec's portal as the security header `Authorization: Bearer <value>` on the wallet's collection callback, pointing at `https://api.finvestug.com/provider-callbacks/collections/iotec`. API only. |
 | `FINVEST_IOTEC_TOKEN_URL`, `FINVEST_IOTEC_PAY_URL`, `FINVEST_IOTEC_TIMEOUT_SECONDS` | Variables, optional | Default to `https://id.iotec.io/connect/token`, `https://pay.iotec.io` and `30`. |
+| `FINVEST_REGULA_FACE_URL` | Variable | Regula's Face service, https only. The client app is built with it as `EXPO_PUBLIC_REGULA_FACE_URL`, and its policy lets the browser reach that address, so the selfie starts with Regula's liveness check. Unset, the app uses the guided camera selfie alone. Takes effect on the next deploy. |
 | `FINVEST_IDENTITY_PROVIDER` | Variable | Unset (manual review) until the ioTec Verify credentials exist, then `iotec` ([docs/identity-checks.md](../docs/identity-checks.md)). API and worker. |
 | `FINVEST_IOTEC_VERIFY_CLIENT_ID`, `FINVEST_IOTEC_VERIFY_API_KEY` | Secrets | From the ioTec Verify portal (Management, Settings, Configuration). Required once the provider is `iotec`. API and worker. |
 | `FINVEST_IOTEC_VERIFY_BASE_URL` | Variable, optional | Defaults to `https://verify-api.iotec.io`. |
@@ -232,7 +233,7 @@ Every process also gets `FINVEST_ENVIRONMENT` (`staging` or `production`), taken
 | API | The backend |
 | Back office | The console, behind Cloudflare Access in production |
 | Public website | The website from `apps/site`, built for the environment's own addresses. Staging always serves it. Production answers "on its way" until `SITE_PUBLISHED` is `true`. |
-| Client app | A "coming soon" answer until the web app is built |
+| Client app | The web version of `apps/client` (`app.Dockerfile`). Its policy (`app-csp.mjs`) lets the guided selfie run its WebAssembly face detector and Regula's liveness check, and the edge allows the camera for this address only. In production it stays behind Cloudflare Access until `CLIENT_APP_PUBLIC` is `true` and Provision has run. |
 
 ### Rehearsal
 

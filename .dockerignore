@@ -1,0 +1,10 @@
+# The console, client app and website images are built from the repository root
+# (infra/deployment/*.Dockerfile). Each installs its own dependencies and builds inside the image,
+# so a developer's local installs and builds never enter it.
+**/node_modules
+**/dist
+**/.expo
+**/.astro
+apps/client/public/face
+apps/client/public/regula
+.git

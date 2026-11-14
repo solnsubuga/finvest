@@ -139,6 +139,7 @@ def prepare(output: Path, env: Mapping[str, str]) -> None:
 
     backend_image = setting(env, "BACKEND_IMAGE", pattern=IMAGE)
     console_image = setting(env, "CONSOLE_IMAGE", pattern=IMAGE)
+    app_image = setting(env, "APP_IMAGE", pattern=IMAGE)
     site_image = setting(env, "SITE_IMAGE", pattern=IMAGE)
     # Staging always serves the website. Production serves it only once the owner launches it
     # (SITE_PUBLISHED=true).
@@ -147,7 +148,7 @@ def prepare(output: Path, env: Mapping[str, str]) -> None:
     # A rehearsal turns database TLS off, so it is accepted only with images from the throwaway
     # registry on the same machine, which a real deployment never uses.
     if rehearsal and not all(
-        image.startswith("localhost:") for image in (backend_image, console_image, site_image)
+        image.startswith("localhost:") for image in (backend_image, console_image, app_image, site_image)
     ):
         raise SettingError("FINVEST_REHEARSAL is for a local rehearsal only")
 
@@ -322,6 +323,7 @@ def prepare(output: Path, env: Mapping[str, str]) -> None:
         "FINVEST_DEPLOY_PROJECT": project,
         "BACKEND_IMAGE": backend_image,
         "CONSOLE_IMAGE": console_image,
+        "APP_IMAGE": app_image,
         "SITE_IMAGE": site_image,
         "FINVEST_API_DOMAIN": api_domain,
         "FINVEST_ADMIN_DOMAIN": admin_domain,
