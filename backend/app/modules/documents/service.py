@@ -28,6 +28,7 @@ from app.shared.push_ids import push_id
 BUILD_KIND = "documents.build"
 EMAIL_KIND = "documents.email"
 MONTHLY_KIND = "documents.monthly_run"
+EXPIRE_EMAILS_KIND = "documents.expire_emails"
 # A client may ask for this many statements a day. Each one reads their whole history.
 REQUESTS_PER_DAY = 10
 MAX_PAGE_SIZE = 100
