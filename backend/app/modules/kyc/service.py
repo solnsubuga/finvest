@@ -25,6 +25,7 @@ from app.modules.account_numbers.service import issue_account_number
 from app.modules.audit import service as audit
 from app.modules.audit.domain.events import AuditActor, AuditCategory, AuditEvent
 from app.modules.kyc import phone_names as phone_lookups
+from app.modules.kyc.domain import names
 from app.modules.kyc.domain.checks import (
     CLIENT_EDITABLE,
     COUNTRY,
@@ -771,13 +772,36 @@ _VERIFIED_NAME = text(
 
 
 async def verified_name(session: AsyncSession, client_id: str) -> str | None:
-    """The name on an approved client's identity document, as "SURNAME Given names".
+    """The name on an approved client's identity document, to show: "Amara Nakato", given
+    names first and in proper case (`domain/names.py`). The check keeps it as printed.
 
     None until the client is approved. For staff transactions, such as checking that a payout
-    destination is in the client's own name.
+    destination is in the client's own name: that comparison forgives case and order.
     """
     row = (await session.execute(_VERIFIED_NAME, {"client_id": client_id})).one_or_none()
-    return None if row is None else f"{row.surname} {row.given_names}"
+    return None if row is None else names.full_name(row.surname, row.given_names)
+
+
+@dataclass(frozen=True, slots=True)
+class ClientName:
+    """An approved client's own name, for the app to greet them by."""
+
+    full: str  # "Amara Nakato"
+    first: str  # "Amara"
+
+
+async def own_name(session: AsyncSession, client_id: str) -> ClientName | None:
+    """The signed-in client's verified name, or None until their check is approved.
+
+    For the client's own transaction: they may read their own check.
+    """
+    row = (await session.execute(_VERIFIED_NAME, {"client_id": client_id})).one_or_none()
+    if row is None:
+        return None
+    return ClientName(
+        names.full_name(row.surname, row.given_names),
+        names.first_name(row.surname, row.given_names),
+    )
 
 
 @dataclass(frozen=True, slots=True)
@@ -867,7 +891,7 @@ async def approved_client_ids(session: AsyncSession, *, after: str | None, limit
 class Identity:
     """What a client's check says about who they are, for a card that names them."""
 
-    # "SURNAME Given names" from the document. None until the check is approved.
+    # "Amara Nakato": given names first, in proper case. None until the check is approved.
     verified_name: str | None
     # Issued when the check is approved.
     account_number: str | None
@@ -889,7 +913,9 @@ async def identities(session: AsyncSession, client_ids: list[str]) -> dict[str, 
     rows = await session.execute(_IDENTITIES, {"ids": list(dict.fromkeys(client_ids))})
     return {
         row.client_id: Identity(
-            verified_name=f"{row.surname} {row.given_names}" if row.status == "approved" else None,
+            verified_name=(
+                names.full_name(row.surname, row.given_names) if row.status == "approved" else None
+            ),
             account_number=row.account_number,
         )
         for row in rows
@@ -919,11 +945,24 @@ async def tax_numbers(
 
 @dataclass(frozen=True, slots=True)
 class AccountHolder:
-    """Who an approved account belongs to, as printed on a statement or a receipt."""
+    """Who an approved account belongs to, for a statement or a receipt.
+
+    `surname` and `given_names` are as printed on the document. `name` and `first_name` are how
+    they are shown.
+    """
 
     surname: str
     given_names: str
     account_number: str  # ten digits, issued at approval
+
+    @property
+    def name(self) -> str:
+        """ "Amara Nakato": given names first, in proper case."""
+        return names.full_name(self.surname, self.given_names)
+
+    @property
+    def first_name(self) -> str:
+        return names.first_name(self.surname, self.given_names)
 
 
 _ACCOUNT_HOLDER = text(

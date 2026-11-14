@@ -12,6 +12,7 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, Request, Response
 from pydantic import Field, model_validator
 
+from app.infrastructure.database import Database
 from app.infrastructure.settings import Settings
 from app.modules.identity.domain.permissions import Permission, Role
 from app.modules.identity.domain.sessions import SecondStep
@@ -23,6 +24,7 @@ from app.modules.identity.service import (
     IssuedSession,
     StaffSession,
 )
+from app.modules.kyc import service as kyc
 from app.shared.contracts import Contract, PushId
 from app.shared.errors import ApplicationError, ErrorEnvelope
 
@@ -240,10 +242,20 @@ class ClientSessionView(Contract):
     # null: the app asks for the passkey or app first, instead of waiting for 403
     # `confirm_it_is_you`.
     confirmed_until: datetime | None = None
+    # The name on the client's approved identity document, given names first and in proper
+    # case ("Amara Nakato"), and the first given name to greet them by. Null until approved.
+    display_name: str | None = None
+    first_name: str | None = None
 
 
-def client_view(client: ClientSession) -> ClientSessionView:
+async def client_view(request: Request, client: ClientSession) -> ClientSessionView:
+    """The session as the app sees it, with the client's verified name from the KYC module."""
+    database: Database = request.app.state.database
+    async with database.actor_transaction(client.actor) as session:
+        name = await kyc.own_name(session, client.client_id)
     return ClientSessionView(
+        display_name=name.full if name else None,
+        first_name=name.first if name else None,
         client_id=client.client_id,
         phone=client.phone,
         restricted_until=client.restricted_until,
@@ -298,9 +310,9 @@ async def client_login_start(
 
 
 @client_router.get("/session")
-async def client_session(client: CurrentClientEvenLocked) -> ClientSessionView:
+async def client_session(client: CurrentClientEvenLocked, request: Request) -> ClientSessionView:
     """The signed-in client. A locked session answers too, so the app knows to ask for the PIN."""
-    return client_view(client)
+    return await client_view(request, client)
 
 
 async def _sign_out(

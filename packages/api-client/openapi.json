@@ -4709,6 +4709,17 @@
             ],
             "title": "Confirmed Until"
           },
+          "display_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Display Name"
+          },
           "email": {
             "anyOf": [
               {
@@ -4724,6 +4735,17 @@
             "default": false,
             "title": "Email Verified",
             "type": "boolean"
+          },
+          "first_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "First Name"
           },
           "locked": {
             "default": false,

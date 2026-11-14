@@ -151,7 +151,7 @@ async def client_signed_in(
         token=None if browser else issued.token,
         idle_expires_at=issued.idle_expires_at,
         absolute_expires_at=issued.absolute_expires_at,
-        session=client_view(session),
+        session=await client_view(request, session),
     )
 
 
