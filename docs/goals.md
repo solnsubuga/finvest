@@ -62,7 +62,7 @@ A saving rule saves a set amount towards a goal on a set day of every month, by 
 - **The worker sends the prompt.** On the day, the automatic investing worker saves the investment and the mobile money deposit, and the client's phone is prompted for the amount. A failed payment is tried once more the next day, and the client is told, as for any plan.
 - **Each run's investment is a saving towards the goal.** The run publishes `autoinvest.run_requested` with the consumer `goals.link_plan_run`, and the worker records the investment in `goal_savings` with the rule that made it. It shows as awaiting payment until paid, and counts in the goal's value once it starts, like a saving made by hand. A plan that is no goal's rule is ignored.
 - **One rule per goal.** A second is refused with `conflict` until the first ends. Ending a rule stops its plan. Savings already made, and a prompt already sent, carry on. Closing a goal ends its rule. A plan stopped from the automatic investing screens ends the rule too, so the goal can have a new one.
-- **No reminder to pay by hand.** `goal_top_up_due` is not sent for a goal with a rule.
+- **No reminder to pay by hand.** `goal_top_up_due` is not sent for a goal whose rule's plan is active. A paused plan collects nothing, so its goal is reminded again, as is one whose plan was stopped from the automatic investing screens.
 - The plan also shows in the client's automatic investing list, since it is one.
 
 The database holds these:

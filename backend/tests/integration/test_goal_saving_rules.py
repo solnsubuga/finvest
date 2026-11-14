@@ -5,7 +5,7 @@ the goal as a saving when autoinvest publishes `autoinvest.run_requested`.
 """
 
 from collections.abc import Iterator
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, date, datetime, timedelta
 
 import pytest
 from sqlalchemy import text
@@ -16,10 +16,11 @@ from app.infrastructure.database import Database
 from app.modules.autoinvest import requests
 from app.modules.autoinvest import runs as autoinvest_runs
 from app.modules.autoinvest import service as autoinvest
-from app.modules.goals import saving_rules
+from app.modules.goals import reminders, saving_rules
 from app.modules.goals import service as goals
 from app.modules.goals.domain.goals import GoalCategory
 from app.modules.goals.domain.plans import add_months
+from app.modules.goals.domain.reminders import next_due
 from app.modules.identity import service as identity_service
 from app.modules.investments.domain.investments import AtMaturity, InvestmentStatus
 from app.modules.payments.domain.deposits import Network
@@ -27,7 +28,7 @@ from app.shared.actors import SYSTEM, Actor
 from app.shared.errors import ApplicationError
 from app.shared.push_ids import push_id
 from tests.support.clock import FakeClock
-from tests.support.investments import PRESENT, approved_client, today
+from tests.support.investments import PRESENT, approved_client, at, today
 from tests.support.ledger import key, ugx
 from tests.support.payments import phone
 
@@ -223,8 +224,21 @@ async def test_a_runs_investment_is_a_saving_towards_the_goal_and_is_linked_once
     for _ in range(2):
         async with worker_database.actor_transaction(SYSTEM) as session:
             assert await saving_rules.link_plan_run(
-                session, plan_id=rule.plan_id, investment_id=asked.investment_id, clock=clock
+                session,
+                plan_id=rule.plan_id,
+                client_id=str(client.id),
+                investment_id=asked.investment_id,
+                clock=clock,
             )
+    # A run said to be another client's links nothing.
+    async with worker_database.actor_transaction(SYSTEM) as session:
+        assert not await saving_rules.link_plan_run(
+            session,
+            plan_id=rule.plan_id,
+            client_id=push_id(),
+            investment_id=push_id(),
+            clock=clock,
+        )
     seen = await view(app_database, client, goal.id)
     assert [(s.id, s.status) for s in seen.savings] == [
         (asked.investment_id, InvestmentStatus.AWAITING_PAYMENT)
@@ -239,8 +253,54 @@ async def test_a_runs_investment_is_a_saving_towards_the_goal_and_is_linked_once
 async def test_a_plan_that_is_no_goals_rule_links_nothing(worker_database: Database) -> None:
     async with worker_database.actor_transaction(SYSTEM) as session:
         assert not await saving_rules.link_plan_run(
-            session, plan_id=push_id(), investment_id=push_id(), clock=PRESENT
+            session, plan_id=push_id(), client_id=push_id(), investment_id=push_id(), clock=PRESENT
         )
+
+
+# Reminders --------------------------------------------------------------------------------------
+
+
+async def test_a_goal_saved_by_its_rule_is_not_reminded_until_its_plan_is_paused(
+    app_database: Database, worker_database: Database, contacts: Contacts
+) -> None:
+    client, goal, number = await goal_for(app_database, contacts)
+    rule = await set_up(app_database, client, goal.id, number)
+    due = next_due(today(), today())
+    await remind(worker_database, due - timedelta(days=2))
+    assert await top_ups(worker_database, client) == []
+    async with app_database.actor_transaction(client) as session:
+        await autoinvest.pause_plan(session, client, rule.plan_id, PRESENT)
+    await remind(worker_database, due - timedelta(days=1))
+    assert await top_ups(worker_database, client) == [f"goal-top-up:{goal.id}:{due.isoformat()}"]
+
+
+async def test_a_goal_whose_plan_was_stopped_elsewhere_is_reminded_again(
+    app_database: Database, worker_database: Database, contacts: Contacts
+) -> None:
+    client, goal, number = await goal_for(app_database, contacts)
+    rule = await set_up(app_database, client, goal.id, number)
+    async with app_database.actor_transaction(client) as session:
+        await autoinvest.stop_plan(session, client, rule.plan_id, PRESENT)
+    due = next_due(today(), today())
+    await remind(worker_database, due - timedelta(days=2))
+    assert await top_ups(worker_database, client) == [f"goal-top-up:{goal.id}:{due.isoformat()}"]
+
+
+async def remind(database: Database, day: date) -> None:
+    async with database.actor_transaction(SYSTEM) as session:
+        await reminders.send_reminders(session, at(day, hour=5))
+
+
+async def top_ups(database: Database, client: Actor) -> list[str]:
+    async with database.actor_transaction(SYSTEM) as session:
+        rows = await session.execute(
+            text(
+                "SELECT idempotency_key FROM notifications WHERE client_id = :client_id "
+                "AND event = 'goal_top_up_due' ORDER BY created_at"
+            ),
+            {"client_id": client.id},
+        )
+    return [row.idempotency_key for row in rows]
 
 
 # The fences -------------------------------------------------------------------------------------
