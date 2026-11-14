@@ -12890,6 +12890,57 @@
         "title": "PhoneChangeView",
         "type": "object"
       },
+      "PhoneName": {
+        "description": "Where the lookup of the client's phone number stands, as staff see it.",
+        "enum": [
+          "checking",
+          "matches",
+          "partly_matches",
+          "different",
+          "no_name",
+          "not_answered"
+        ],
+        "title": "PhoneName",
+        "type": "string"
+      },
+      "PhoneNameOut": {
+        "additionalProperties": false,
+        "properties": {
+          "answered_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Answered At"
+          },
+          "registered_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Registered Name"
+          },
+          "status": {
+            "$ref": "#/components/schemas/PhoneName"
+          }
+        },
+        "required": [
+          "status",
+          "registered_name",
+          "answered_at"
+        ],
+        "title": "PhoneNameOut",
+        "type": "object"
+      },
       "PhotoKind": {
         "enum": [
           "front",
@@ -19289,6 +19340,16 @@
             ],
             "title": "Name"
           },
+          "phone_name": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PhoneNameOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "photos": {
             "items": {
               "$ref": "#/components/schemas/StaffPhoto"
@@ -19369,7 +19430,8 @@
           "decided_at",
           "carried_over",
           "allowed",
-          "screening"
+          "screening",
+          "phone_name"
         ],
         "title": "StaffCheck",
         "type": "object"
