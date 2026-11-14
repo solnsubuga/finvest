@@ -288,6 +288,72 @@ async def test_a_rejected_destination_can_be_proved_again(
     assert unchecked.value.code == "destination_not_checked"
 
 
+async def told(database: Database, destination_id: str) -> list[tuple[str, str, str]]:
+    """What the client was told about an account, oldest first."""
+    async with database.actor_transaction(SYSTEM) as session:
+        rows = await session.execute(
+            text(
+                "SELECT event, body, sms FROM notifications WHERE link_kind = "
+                "'payout_destination' AND link_id = :id ORDER BY created_at, id"
+            ),
+            {"id": destination_id},
+        )
+        return [(row.event, row.body, row.sms) for row in rows]
+
+
+async def test_the_client_is_told_each_refusal_and_the_approval(
+    app_database: Database, worker_database: Database, fake_clock: FakeClock
+) -> None:
+    owner, checker = client(), staff()
+    destination_id = await in_review(app_database, owner, fake_clock)
+    await checked(app_database, destination_id, fake_clock)
+    async with app_database.actor_transaction(checker) as session:
+        await service.reject(
+            session,
+            checker,
+            destination_id,
+            RejectionReason.PROOF_UNREADABLE,
+            "Blurred",
+            fake_clock,
+        )
+    async with app_database.actor_transaction(owner) as session:
+        await service.submit_proof(
+            session, owner, destination_id, ProofKind.BANK_CARD, "doc-2", fake_clock
+        )
+    async with app_database.actor_transaction(checker) as session:
+        await service.reject(
+            session, checker, destination_id, RejectionReason.PROOF_TOO_OLD, "Old", fake_clock
+        )
+    async with app_database.actor_transaction(owner) as session:
+        await service.submit_proof(
+            session, owner, destination_id, ProofKind.BANK_LETTER, "doc-3", fake_clock
+        )
+    await checked(app_database, destination_id, fake_clock)
+    await approve(app_database, staff(), destination_id, fake_clock)
+
+    # Each decision is told once, naming the bank and never the account number.
+    assert await told(worker_database, destination_id) == [
+        (
+            "payout_destination_refused",
+            "We could not approve your Stanbic Bank account. See why in the app.",
+            "Finvest: we could not approve your Stanbic Bank account for withdrawals. "
+            "See why in the app.",
+        ),
+        (
+            "payout_destination_refused",
+            "We could not approve your Stanbic Bank account. See why in the app.",
+            "Finvest: we could not approve your Stanbic Bank account for withdrawals. "
+            "See why in the app.",
+        ),
+        (
+            "payout_destination_approved",
+            "We approved your Stanbic Bank account. You can withdraw to it after the 24 hour wait.",
+            "Finvest: we approved your Stanbic Bank account for withdrawals after the 24 hour "
+            "wait.",
+        ),
+    ]
+
+
 # --- Who may do what --------------------------------------------------------------------------
 
 
