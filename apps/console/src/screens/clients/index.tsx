@@ -16,6 +16,8 @@ import { ClosureQueue, ClosureSection } from "./Closures.tsx";
 import { createHttpClosuresApi, createStubClosuresApi, notConnectedClosuresApi, type ClosuresApi } from "./closures.ts";
 import { ProfileSection } from "./Profile.tsx";
 import { createHttpProfileApi, createStubProfileApi, notConnectedProfileApi, type ProfileApi } from "./profile.ts";
+import { RecoverySection } from "./Recovery.tsx";
+import { createHttpRecoveryApi, createStubRecoveryApi, notConnectedRecoveryApi, type RecoveryApi } from "./recovery.ts";
 import { createStubClientsApi } from "./stub.ts";
 import { ClientEmailStatus, SuppressionsSection } from "./Suppressions.tsx";
 import { createHttpSuppressionsApi, notConnectedSuppressionsApi, type SuppressionsApi } from "./suppressions.ts";
@@ -37,9 +39,11 @@ interface ClientsScreenProps {
   closures?: ClosuresApi | null;
   /** Next of kin and investing answers. Null leaves the section out. */
   profiles?: ProfileApi | null;
+  /** Null without `client_phones.change`: the requests for a call back are not shown. */
+  recovery?: RecoveryApi | null;
 }
 
-export function ClientsScreen({ api, suppressions, canLift, phones = null, closures = null, profiles = null }: ClientsScreenProps) {
+export function ClientsScreen({ api, suppressions, canLift, phones = null, closures = null, profiles = null, recovery = null }: ClientsScreenProps) {
   const [params, setParams] = useSearchParams();
   const clientId = params.get("client");
   const [query, setQuery] = useState("");
@@ -108,6 +112,7 @@ export function ClientsScreen({ api, suppressions, canLift, phones = null, closu
           <p className="m-0 max-w-[720px] rounded-xl border border-border bg-surface p-5 text-md text-muted">
             Find a client to see their account, what Finvest holds for them, where their payouts go, and to lock or unlock them.
           </p>
+          {recovery ? <RecoverySection api={recovery} onOpenClient={(id) => setParams({ client: id })} /> : null}
           {closures ? <ClosureQueue api={closures} onOpen={(id) => setParams({ client: id })} /> : null}
           <SuppressionsSection api={suppressions} canLift={canLift} />
         </>
@@ -258,12 +263,13 @@ export default function ClientsPage() {
   const canLift = session ? can(session, "email_suppressions.lift") : false;
   const canChangePhones = session ? can(session, "client_phones.change") : false;
   const canClose = session ? can(session, "clients.close") : false;
-  const [{ api, suppressions, phones, closures, profiles }] = useState<{
+  const [{ api, suppressions, phones, closures, profiles, recovery }] = useState<{
     api: ClientsApi;
     suppressions: SuppressionsApi;
     phones: PhoneChangesApi | null;
     closures: ClosuresApi | null;
     profiles: ProfileApi;
+    recovery: RecoveryApi | null;
   }>(() => {
     if (isStubAuth() && session) {
       // Under the stub, `?sample=offline` shows the screen as if Finvest could not be reached.
@@ -274,6 +280,7 @@ export default function ClientsPage() {
           phones: canChangePhones ? notConnectedPhoneChangesApi : null,
           closures: canClose ? notConnectedClosuresApi : null,
           profiles: notConnectedProfileApi,
+          recovery: canChangePhones ? notConnectedRecoveryApi : null,
         };
       }
       const me = { id: session.staffId, name: session.name };
@@ -288,6 +295,7 @@ export default function ClientsPage() {
         phones: canChangePhones ? createStubPhoneChangesApi(me) : null,
         closures: canClose ? createStubClosuresApi(me, Date.now, (id) => clients.closeAccount(id)) : null,
         profiles: createStubProfileApi(),
+        recovery: canChangePhones ? createStubRecoveryApi() : null,
       };
     }
     const base = apiBaseUrl();
@@ -298,6 +306,7 @@ export default function ClientsPage() {
         phones: canChangePhones ? notConnectedPhoneChangesApi : null,
         closures: canClose ? notConnectedClosuresApi : null,
         profiles: notConnectedProfileApi,
+        recovery: canChangePhones ? notConnectedRecoveryApi : null,
       };
     }
     const http = createHttp(base);
@@ -307,7 +316,10 @@ export default function ClientsPage() {
       phones: canChangePhones && session ? createHttpPhoneChangesApi(http, createHttpDirectory(http), session.staffId) : null,
       closures: canClose ? createHttpClosuresApi(http) : null,
       profiles: createHttpProfileApi(http),
+      recovery: canChangePhones ? createHttpRecoveryApi(http) : null,
     };
   });
-  return <ClientsScreen api={api} suppressions={suppressions} canLift={canLift} phones={phones} closures={closures} profiles={profiles} />;
+  return (
+    <ClientsScreen api={api} suppressions={suppressions} canLift={canLift} phones={phones} closures={closures} profiles={profiles} recovery={recovery} />
+  );
 }
