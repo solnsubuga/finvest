@@ -25,6 +25,7 @@ from app.modules.dealing import allocations_api as dealing_allocations_api
 from app.modules.dealing import api as dealing_api
 from app.modules.dealing import buffer_api as dealing_buffer_api
 from app.modules.documents import api as documents_api
+from app.modules.finance import api as finance_api
 from app.modules.goals import api as goals_api
 from app.modules.identity import api as identity_api
 from app.modules.identity import (
@@ -229,4 +230,5 @@ def create_app(
     app.include_router(dealing_buffer_api.router)
     app.include_router(dealing_allocations_api.router)
     app.include_router(tax_api.create_router(identity_sealer))
+    app.include_router(finance_api.create_router())
     return app

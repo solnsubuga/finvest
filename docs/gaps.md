@@ -47,7 +47,7 @@ Four screens were still the placeholder page. The Review Queue is connected to `
 | --- | --- | --- |
 | Money Movement | Payouts that are held up or stranded, and deposits under way | `GET /staff/payouts/held-up`; stranded payouts in PR #263 (payouts thread) |
 | ~~Maturities~~ | ~~The daily maturity run and its exceptions~~ Closed by the Maturities screen PR. | `GET /staff/maturities` |
-| Finance | Day close, fee income, withholding tax owed and the accounting export | Reconciliation routes below; tax in the tax certificates thread |
+| ~~Finance~~ | ~~Day close, fee income, withholding tax owed and the accounting export~~ Built: income and costs, the books by code and the daily journal export ([finance.md](finance.md)). The ioTec collection charge is not booked yet. | `GET /staff/finance`, `GET /staff/finance/journal.csv` |
 | Compliance | Screening results and monitoring alerts | Nothing built (see below) |
 
 ~~Staff routes with no screen at all: `/staff/phone-changes` (three; the Clients screen does not show pending phone changes) and `/staff/sessions` (three).~~ Closed by the mobile number and devices PR: the client page has a Mobile number section, and every member of staff has Your devices.
