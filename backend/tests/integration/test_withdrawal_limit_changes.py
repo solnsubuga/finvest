@@ -27,6 +27,7 @@ from app.shared.actors import Actor
 from app.shared.business_day import business_date
 from app.shared.errors import ApplicationError
 from app.shared.money import Currency, Money
+from app.shared.push_ids import push_id
 from tests.support.clock import FakeClock
 from tests.support.database import TestDatabase
 from tests.support.ledger import client as new_client
@@ -192,6 +193,47 @@ async def test_nobody_approves_their_own_limits_even_by_writing_the_rows(
             await session.execute(
                 text("DELETE FROM withdrawal_limit_changes WHERE id = :id"), {"id": change.id}
             )
+
+
+_DIRECT = text(
+    "INSERT INTO withdrawal_limits (id, effective_from, currency, mobile_money_per_payout, "
+    "mobile_money_per_day, review_above, proposed_by, approved_by, reason, created_at) VALUES "
+    "(:id, :day, 'UGX', :per_payout, :per_day, :review_above, :proposed_by, :approved_by, "
+    "'Direct', now())"
+)
+
+
+async def test_a_version_is_only_ever_the_approval_of_a_waiting_change(
+    app_database: Database, fake_clock: FakeClock
+) -> None:
+    maker, checker = new_staff(), new_staff()
+    day = far_day()
+
+    async def insert(by: Actor, proposed_by: str | None, per_payout: int = 2_000_000) -> None:
+        async with app_database.actor_transaction(by) as session:
+            await session.execute(
+                _DIRECT,
+                {
+                    "id": push_id(),
+                    "day": day,
+                    "per_payout": per_payout,
+                    "per_day": 4_000_000,
+                    "review_above": 5_000_000,
+                    "proposed_by": proposed_by,
+                    "approved_by": by.id,
+                },
+            )
+
+    # One person, naming a colleague as proposer, with no change waiting.
+    with pytest.raises(DBAPIError, match="row-level security"):
+        await insert(checker, maker.id)
+    change = await propose(app_database, maker, fake_clock, day)
+    # Other limits than the ones waiting, or the proposer approving their own.
+    with pytest.raises(DBAPIError, match="row-level security"):
+        await insert(checker, maker.id, per_payout=3_000_000)
+    with pytest.raises(DBAPIError, match="row-level security"):
+        await insert(maker, maker.id)
+    await decide(app_database, checker, change.id, "approved", fake_clock)
 
 
 async def test_a_version_starts_on_a_later_day_and_one_change_waits_at_a_time(
