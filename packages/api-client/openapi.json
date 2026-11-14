@@ -6535,6 +6535,7 @@
               "payload_too_large",
               "rate_limited",
               "unavailable",
+              "maintenance",
               "internal_error"
             ],
             "title": "Code",
