@@ -60,11 +60,11 @@ CREATE FUNCTION finvest_lock_may_change(old_until date, new_until date) RETURNS 
 
 LOCKS_GUARD = """
 CREATE FUNCTION finvest_investment_withdrawal_locks_guard() RETURNS trigger
-    LANGUAGE plpgsql SECURITY DEFINER SET search_path = pg_catalog, public, pg_temp
+    LANGUAGE plpgsql SECURITY DEFINER SET search_path = pg_catalog, pg_temp
     AS $$
     DECLARE
-        actor text := finvest_actor_kind();
-        investment investments%ROWTYPE;
+        actor text := public.finvest_actor_kind();
+        investment public.investments%ROWTYPE;
         today date := (clock_timestamp() AT TIME ZONE 'Africa/Kampala')::date;
     BEGIN
         IF actor IS DISTINCT FROM 'client' AND actor IS DISTINCT FROM 'system' THEN
@@ -72,7 +72,7 @@ CREATE FUNCTION finvest_investment_withdrawal_locks_guard() RETURNS trigger
                 USING ERRCODE = '42501';
         END IF;
         IF TG_OP = 'INSERT' THEN
-            SELECT * INTO investment FROM investments WHERE id = NEW.investment_id;
+            SELECT * INTO investment FROM public.investments WHERE id = NEW.investment_id;
             IF investment.id IS NULL OR investment.client_id <> NEW.client_id
                 OR investment.status NOT IN ('awaiting_payment', 'active')
                 OR NEW.locked_until <= today THEN
@@ -85,7 +85,7 @@ CREATE FUNCTION finvest_investment_withdrawal_locks_guard() RETURNS trigger
             OR NEW.created_at <> OLD.created_at THEN
             RAISE EXCEPTION 'a lock keeps its investment' USING ERRCODE = '42501';
         END IF;
-        IF NOT finvest_lock_may_change(OLD.locked_until, NEW.locked_until) THEN
+        IF NOT public.finvest_lock_may_change(OLD.locked_until, NEW.locked_until) THEN
             RAISE EXCEPTION 'a lock is undone seven days after asking, not sooner'
                 USING ERRCODE = '42501';
         END IF;
@@ -98,11 +98,11 @@ CREATE FUNCTION finvest_investment_withdrawal_locks_guard() RETURNS trigger
 # a refusal, and read the locks whoever asks.
 WITHDRAWAL_FENCE = """
 CREATE FUNCTION finvest_investments_withdrawal_lock() RETURNS trigger
-    LANGUAGE plpgsql SECURITY DEFINER SET search_path = pg_catalog, public, pg_temp
+    LANGUAGE plpgsql SECURITY DEFINER SET search_path = pg_catalog, pg_temp
     AS $$
     BEGIN
         IF NEW.withdrawal_requested_at IS NOT NULL AND OLD.withdrawal_requested_at IS NULL
-            AND EXISTS (SELECT FROM investment_withdrawal_locks WHERE investment_id = NEW.id
+            AND EXISTS (SELECT FROM public.investment_withdrawal_locks WHERE investment_id = NEW.id
                         AND locked_until > (clock_timestamp() AT TIME ZONE 'Africa/Kampala')::date)
         THEN
             RAISE EXCEPTION 'a locked investment is not withdrawn early' USING ERRCODE = '42501';
@@ -114,10 +114,10 @@ CREATE FUNCTION finvest_investments_withdrawal_lock() RETURNS trigger
 
 TRANSFER_FENCE = """
 CREATE FUNCTION finvest_investment_transfers_lock() RETURNS trigger
-    LANGUAGE plpgsql SECURITY DEFINER SET search_path = pg_catalog, public, pg_temp
+    LANGUAGE plpgsql SECURITY DEFINER SET search_path = pg_catalog, pg_temp
     AS $$
     BEGIN
-        IF EXISTS (SELECT FROM investment_withdrawal_locks WHERE investment_id = NEW.investment_id
+        IF EXISTS (SELECT FROM public.investment_withdrawal_locks WHERE investment_id = NEW.investment_id
                    AND locked_until > (clock_timestamp() AT TIME ZONE 'Africa/Kampala')::date)
         THEN
             RAISE EXCEPTION 'a locked investment is not sent to another client'
