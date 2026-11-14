@@ -29,6 +29,8 @@ export function fromApi(item: ApiDocument): DocumentItem {
     fileName: item.file_name,
     byteSize: item.byte_size,
     notFinalFrom: item.not_final_from,
+    investmentId: item.investment_id,
+    depositId: item.deposit_id,
   };
 }
 

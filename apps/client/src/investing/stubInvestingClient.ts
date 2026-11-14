@@ -207,6 +207,7 @@ export function createStubInvestingClient(options: StubOptions = {}): InvestingC
 
   if (options.sample !== "empty") {
     const today = kampalaDay(now());
+    let seeded = 0;
     const seed = (
       code: string,
       minor: number,
@@ -215,8 +216,10 @@ export function createStubInvestingClient(options: StubOptions = {}): InvestingC
       destinationId: string | null = null,
     ) => {
       const product = find(code) as Product & Terms;
-      nextId += 1;
-      const id = `demo-investment-${nextId}`;
+      // Seeds are numbered on their own, so other demo areas can name them: Documents holds
+      // the note for the first. They are running already, so no payment ever uses their IDs.
+      seeded += 1;
+      const id = `demo-investment-seed-${seeded}`;
       stored.set(id, {
         id,
         product,

@@ -40,6 +40,10 @@ export type DocumentItem = {
    * whose figures may still change. Null when every figure is final.
    */
   notFinalFrom: string | null;
+  /** The investment an investment note confirms. Null on every other kind. */
+  investmentId: string | null;
+  /** The payment a receipt is for. Null on every other kind. */
+  depositId: string | null;
 };
 
 /** Why a statement could not be asked for, from the backend's field codes. */

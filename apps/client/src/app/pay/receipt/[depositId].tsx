@@ -3,6 +3,7 @@ import { Redirect, Stack, useLocalSearchParams, useRouter } from "expo-router";
 
 import { Notice } from "@/components/Blocks";
 import { Button } from "@/components/Button";
+import { DocumentLink, useDocumentFor } from "@/documents/DocumentLink";
 import { Icon } from "@/components/Icon";
 import { Screen } from "@/components/Screen";
 import { Txt } from "@/components/Txt";
@@ -16,6 +17,7 @@ export default function Receipt() {
   const router = useRouter();
   const { depositId } = useLocalSearchParams<{ depositId: string }>();
   const { deposit, missing, stale } = useDeposit(depositId);
+  const pdf = useDocumentFor("receipt", depositId);
   const done = () => router.replace("/");
 
   if (missing) {
@@ -81,6 +83,11 @@ export default function Receipt() {
       <View style={{ marginTop: 24 }}>
         <DetailList rows={rows} />
       </View>
+      {pdf ? (
+        <View style={{ marginTop: 12 }}>
+          <DocumentLink document={pdf} title="Receipt (PDF)" testID="receipt-pdf" />
+        </View>
+      ) : null}
     </Screen>
   );
 }

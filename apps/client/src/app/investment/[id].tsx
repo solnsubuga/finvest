@@ -3,6 +3,7 @@ import { View } from "react-native";
 import { Href, Stack, useLocalSearchParams, useRouter } from "expo-router";
 
 import { BackButton } from "@/components/BackButton";
+import { DocumentLink, useDocumentFor } from "@/documents/DocumentLink";
 import { Notice } from "@/components/Blocks";
 import { Button, TextLink } from "@/components/Button";
 import { Screen } from "@/components/Screen";
@@ -77,6 +78,8 @@ export default function InvestmentDetail() {
 }
 
 function Body({ investment, onOpen }: { investment: Investment; onOpen: (href: Href) => void }) {
+  // The note that confirms it started. A rollover and an investment not yet started have none.
+  const note = useDocumentFor("investment_note", investment.id);
   const rows: Detail[] = [
     { label: "You invested", value: formatAmount(investment.amount) },
     { label: "Rate after tax", value: `${investment.ratePercent}% a year` },
@@ -129,6 +132,7 @@ function Body({ investment, onOpen }: { investment: Investment; onOpen: (href: H
         </Txt>
       </View>
       <DetailList rows={rows} />
+      {note ? <DocumentLink document={note} title="Transaction note" testID="investment-note" /> : null}
       {investment.status === "transferred" ? (
         <Notice tone="neutral">
           You sent this to another Finvest client. What you kept, if any, is in a new investment on the same terms.
