@@ -412,7 +412,7 @@ export const BodyImportStatementStaffReconciliationStatementsPost = z.object({
   account_reference: z.string(),
   closing_balance: z.string(),
   file: Upload,
-  format: z.literal("standard").optional(),
+  format: z.string().optional(),
   opening_balance: z.string(),
   source: z.enum(["iotec", "bank"]),
   statement_date: z.string(),
@@ -3226,6 +3226,18 @@ export const StaffWriteFirst = z.object({
   topic: z.enum(["deposit", "withdrawal", "investment", "identity", "account", "other"]).optional(),
 });
 export type StaffWriteFirst = z.infer<typeof StaffWriteFirst>;
+
+export const StatementFormatOut = z.object({
+  built_in: z.boolean(),
+  label: z.string(),
+  name: z.string(),
+});
+export type StatementFormatOut = z.infer<typeof StatementFormatOut>;
+
+export const StatementFormatsOut = z.object({
+  formats: z.array(StatementFormatOut),
+});
+export type StatementFormatsOut = z.infer<typeof StatementFormatsOut>;
 
 export const StatementOut = z.object({
   account_reference: z.string(),
@@ -6529,6 +6541,17 @@ export const operations = {
     idempotent: false,
     status: 200,
     response: z.array(ReconciliationApiPotOut),
+  },
+  "GET /staff/reconciliation/statement-formats": {
+    method: "GET",
+    path: "/staff/reconciliation/statement-formats",
+    params: z.object({}),
+    query: z.object({}),
+    body: null,
+    bodyKind: null,
+    idempotent: false,
+    status: 200,
+    response: StatementFormatsOut,
   },
   "GET /staff/reconciliation/statements": {
     method: "GET",

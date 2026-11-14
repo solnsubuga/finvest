@@ -1888,8 +1888,8 @@
             "type": "string"
           },
           "format": {
-            "const": "standard",
             "default": "standard",
+            "pattern": "^[a-z][a-z0-9_]{1,39}$",
             "title": "Format",
             "type": "string"
           },
@@ -22143,6 +22143,47 @@
           "blockers"
         ],
         "title": "StandingView",
+        "type": "object"
+      },
+      "StatementFormatOut": {
+        "additionalProperties": false,
+        "properties": {
+          "built_in": {
+            "title": "Built In",
+            "type": "boolean"
+          },
+          "label": {
+            "title": "Label",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "label",
+          "built_in"
+        ],
+        "title": "StatementFormatOut",
+        "type": "object"
+      },
+      "StatementFormatsOut": {
+        "additionalProperties": false,
+        "properties": {
+          "formats": {
+            "items": {
+              "$ref": "#/components/schemas/StatementFormatOut"
+            },
+            "title": "Formats",
+            "type": "array"
+          }
+        },
+        "required": [
+          "formats"
+        ],
+        "title": "StatementFormatsOut",
         "type": "object"
       },
       "StatementLayoutValue": {
@@ -61212,6 +61253,78 @@
         ]
       }
     },
+    "/staff/reconciliation/statement-formats": {
+      "get": {
+        "description": "The layouts a statement can be imported in: the built-in standard one, then those set on\nSettings.",
+        "operationId": "statement_formats_staff_reconciliation_statement_formats_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StatementFormatsOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          }
+        },
+        "summary": "Statement Formats",
+        "tags": [
+          "staff reconciliation"
+        ]
+      }
+    },
     "/staff/reconciliation/statements": {
       "get": {
         "description": "One pot's statements in a range of days, at most 100, oldest first. 422\n`date_range_reversed` when `date_to` is before `date_from`.",
@@ -61334,7 +61447,7 @@
         ]
       },
       "post": {
-        "description": "Import one pot's statement for one ended day, whole or not at all.\n\nThe balances are as the statement prints them, such as `1,500,000`. 422 names the problem\nand, for a row, its number, never its contents. 409 `statement_already_imported`,\n`statement_day_out_of_order`, `statement_opening_balance_differs` or\n`statement_day_not_over`.",
+        "description": "Import one pot's statement for one ended day, whole or not at all.\n\n`format` is `standard` or the name of a layout set on Settings\n(`GET /staff/reconciliation/statement-formats`); 422 `statement_format_unknown` for any\nother. The balances are as the statement prints them, such as `1,500,000`. 422 names the\nproblem and, for a row, its number, never its contents. 409 `statement_already_imported`,\n`statement_day_out_of_order`, `statement_opening_balance_differs` or\n`statement_day_not_over`.",
         "operationId": "import_statement_staff_reconciliation_statements_post",
         "requestBody": {
           "content": {
