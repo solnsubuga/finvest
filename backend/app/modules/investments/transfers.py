@@ -234,10 +234,11 @@ _INVESTMENT_LOCKED = select_investments("WHERE i.id = :id FOR UPDATE OF i")
 _DATABASE_NOW = text("SELECT clock_timestamp()")
 _INSERT_INVESTMENT = text(
     "INSERT INTO investments (id, client_id, product_id, currency, principal_minor, "
-    "annual_rate_bps, tax_bps, term_days, at_maturity, payout_destination_id, created_at, "
-    "pay_by, updated_at, source_type, source_id) SELECT :id, :client_id, product_id, currency, "
-    ":principal_minor, annual_rate_bps, tax_bps, :term_days, :at_maturity, :destination_id, "
-    ":created_at, :pay_by, :now, :source_type, :transfer_id FROM investments WHERE id = :from_id"
+    "annual_rate_bps, tax_bps, term_days, at_maturity, payout_destination_id, interest_goal_id, "
+    "created_at, pay_by, updated_at, source_type, source_id) SELECT :id, :client_id, product_id, "
+    "currency, :principal_minor, annual_rate_bps, tax_bps, :term_days, :at_maturity, "
+    ":destination_id, :goal_id, :created_at, :pay_by, :now, :source_type, :transfer_id "
+    "FROM investments WHERE id = :from_id"
 )
 _START = text(
     "UPDATE investments SET status = 'active', start_date = :start_date, "
@@ -897,9 +898,12 @@ async def _open(
     new_id = push_id()
     at_maturity = None
     destination_id = None
+    goal_id = None
     if kept:
+        # What the sender keeps keeps their choice, the goal for its interest included.
         at_maturity = investment.at_maturity.value if investment.at_maturity else None
         destination_id = investment.payout_destination_id
+        goal_id = investment.interest_goal_id
     elif term_days is not None:
         at_maturity = "roll_over"
     await session.execute(
@@ -911,6 +915,7 @@ async def _open(
             "term_days": term_days,
             "at_maturity": at_maturity,
             "destination_id": destination_id,
+            "goal_id": goal_id,
             "created_at": quoted_at,
             "pay_by": pay_by(quoted_at),
             "now": now,

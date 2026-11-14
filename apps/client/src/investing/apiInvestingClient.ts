@@ -5,7 +5,7 @@ import { banksOrNone, nameOf } from "@/payouts/banks";
 import { accountLabel } from "@/payouts/format";
 import type { Bank } from "@/payouts/types";
 
-import { Amount, Currency, Investment, InvestingClient, InvestingError, PayoutAccount, Portfolio, Product, Quote, Transfer } from "./types";
+import { Amount, AtMaturity, Currency, Investment, InvestingClient, InvestingError, PayoutAccount, Portfolio, Product, Quote, Transfer } from "./types";
 
 /**
  * The investing screens' contract, answered by the real API (`/client/products`,
@@ -54,7 +54,7 @@ export function toInvestment(view: ClientInvestmentOut): Investment {
     amount: money(view.amount_minor, currency),
     ratePercent: view.client_rate_percent,
     termDays: view.term_days,
-    atMaturity: view.at_maturity,
+    atMaturity: shownChoice(view.at_maturity),
     payoutDestinationId: view.payout_destination_id,
     canChangeMaturity: view.can_change_maturity,
     payBy: view.pay_by,
@@ -121,7 +121,7 @@ export function toPortfolio(view: PortfolioView): Portfolio {
           investmentId: view.next_maturity.investment_id,
           productName: view.next_maturity.product_name,
           on: view.next_maturity.on,
-          atMaturity: view.next_maturity.at_maturity,
+          atMaturity: shownChoice(view.next_maturity.at_maturity),
           termDays: view.next_maturity.term_days,
           daysEarned: view.next_maturity.days_earned,
           daysLeft: view.next_maturity.days_left,
@@ -370,4 +370,9 @@ export function createApiInvestingClient(): InvestingClient {
         "cancel",
       ),
   };
+}
+
+/** The app does not offer saving interest to a goal yet. Until it does, such a term is shown as rolling over, which its principal does. */
+function shownChoice(choice: AtMaturity | "interest_to_goal" | null): AtMaturity | null {
+  return choice === "interest_to_goal" ? "roll_over" : choice;
 }

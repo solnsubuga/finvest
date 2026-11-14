@@ -33,6 +33,7 @@ from app.modules.investments.domain.interest import (
     days_earned,
 )
 from app.modules.investments.domain.investments import (
+    CHOSEN_LATER,
     MAX_AWAITING_PAYMENT,
     AtMaturity,
     InvestmentStatus,
@@ -109,6 +110,12 @@ class Investment:
     withdrawal_payout_id: str | None = None
     # The first day it may be withdrawn early or sent on again, if the client locked it.
     withdrawal_locked_until: date | None = None
+    # With `interest_to_goal`: the goal, in the goals module, the interest is saved to.
+    interest_goal_id: str | None = None
+    # What made it, when it was not the client by hand or a rollover: an automatic investing
+    # run, a goal saving rule, a transfer, a staff booking, or another investment's interest.
+    source_type: str | None = None
+    source_id: str | None = None
 
     @property
     def amount(self) -> Money:
@@ -187,6 +194,10 @@ class ClientInvestment:
     # Locked through a goal: the first day it may be withdrawn early or sent on again. None
     # when it is not locked, or its lock has lapsed.
     withdrawal_locked_until: date | None = None
+    # With `interest_to_goal`: the goal the interest is saved to at maturity.
+    interest_goal_id: str | None = None
+    # Started from another investment's interest at its maturity: that investment.
+    interest_from_id: str | None = None
 
 
 _COLUMNS = (
@@ -196,7 +207,8 @@ _COLUMNS = (
     "i.accrued_gross_minor, i.accrued_tax_minor, i.payout_destination_id, i.matured_at, "
     "i.rolled_into_id, i.rolled_from_id, i.payout_id, i.payout_refusal, "
     "i.withdrawal_requested_at, i.withdrawal_destination_id, i.withdrawn_at, "
-    "i.withdrawal_payout_id, l.locked_until AS withdrawal_locked_until"
+    "i.withdrawal_payout_id, l.locked_until AS withdrawal_locked_until, i.interest_goal_id, "
+    "i.source_type, i.source_id"
 )
 _FROM = (
     "FROM investments i JOIN investment_products p ON p.id = i.product_id "
@@ -242,6 +254,9 @@ _BY_SOURCE = text(
 )
 # What `source_type` says of an investment two members of staff booked for a client.
 BOOKING_SOURCE = "investment_booking"
+# What `source_type` says of an investment started from another's interest at maturity, saved
+# to the goal the client chose. `source_id` is the investment that matured.
+GOAL_INTEREST_SOURCE = "goal_interest"
 _START = text(
     "UPDATE investments SET status = 'active', start_date = :start_date, "
     "maturity_date = :maturity_date, started_at = :now, start_entry_id = :entry_id, "
@@ -392,6 +407,9 @@ async def _create(
     rate = rate_in_force(await rates_for(session, row.id), business_date(now))
     if rate is None:
         raise ApplicationError("not_found")
+    if at_maturity in CHOSEN_LATER:
+        # The goal is chosen on the running investment's own screen, once it exists.
+        raise invalid("at_maturity", "chosen_later")
     if product.has_fixed_term:
         at_maturity = at_maturity or AtMaturity.ROLL_OVER
     elif at_maturity is not None:
@@ -706,6 +724,25 @@ async def client_investments_by_id(
     ]
 
 
+_SAVING_INTEREST_TO = text(
+    f"SELECT {_COLUMNS} {_FROM} WHERE i.client_id = :client_id "
+    "AND i.interest_goal_id = :goal_id AND i.status IN ('awaiting_payment', 'active') "
+    "AND i.withdrawal_requested_at IS NULL ORDER BY i.maturity_date NULLS LAST, i.id"
+)
+
+
+async def client_investments_saving_interest_to(
+    session: AsyncSession, client: Actor, goal_id: str, clock: Clock
+) -> list[ClientInvestment]:
+    """The client's investments that will save their interest to the goal when they mature,
+    soonest first. Figures after tax."""
+    if client.kind != "client":
+        raise ApplicationError("forbidden")
+    today = business_date(clock.now())
+    rows = await session.execute(_SAVING_INTEREST_TO, {"client_id": client.id, "goal_id": goal_id})
+    return [_client_view(investment_from_row(row), today) for row in rows.all()]
+
+
 # Internals --------------------------------------------------------------------------------------
 
 
@@ -749,6 +786,9 @@ def investment_from_row(row: Row[Any]) -> Investment:
         withdrawn_at=row.withdrawn_at,
         withdrawal_payout_id=row.withdrawal_payout_id,
         withdrawal_locked_until=row.withdrawal_locked_until,
+        interest_goal_id=row.interest_goal_id,
+        source_type=row.source_type,
+        source_id=row.source_id,
     )
 
 
@@ -812,6 +852,10 @@ def _client_view(investment: Investment, today: date) -> ClientInvestment:
         and (investment.maturity_date is None or today < investment.maturity_date)
         and not locked,
         withdrawal_locked_until=investment.withdrawal_locked_until if locked else None,
+        interest_goal_id=investment.interest_goal_id,
+        interest_from_id=investment.source_id
+        if investment.source_type == GOAL_INTEREST_SOURCE
+        else None,
     )
 
 

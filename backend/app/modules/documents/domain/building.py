@@ -194,4 +194,6 @@ def at_maturity_wording(choice: str | None) -> str:
     """What happens when a fixed term ends, as the client chose. Rolling over is the default."""
     if choice == "pay_out":
         return "Pay out to you"
+    if choice == "interest_to_goal":
+        return "Roll over, and save the interest to your goal"
     return "Roll over into a new investment"

@@ -896,7 +896,8 @@
         "enum": [
           "roll_over",
           "pay_out",
-          "pay_interest"
+          "pay_interest",
+          "interest_to_goal"
         ],
         "title": "AtMaturity",
         "type": "string"
@@ -4054,6 +4055,45 @@
               }
             ],
             "title": "Interest At Maturity Minor"
+          },
+          "interest_from_investment_id": {
+            "anyOf": [
+              {
+                "maxLength": 20,
+                "minLength": 20,
+                "pattern": "^[-0-9A-Z_a-z]{20}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Interest From Investment Id"
+          },
+          "interest_goal_id": {
+            "anyOf": [
+              {
+                "maxLength": 20,
+                "minLength": 20,
+                "pattern": "^[-0-9A-Z_a-z]{20}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Interest Goal Id"
+          },
+          "interest_goal_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Interest Goal Name"
           },
           "interest_so_far_minor": {
             "title": "Interest So Far Minor",
@@ -8136,6 +8176,13 @@
             "title": "Goal Id",
             "type": "string"
           },
+          "interest_coming": {
+            "items": {
+              "$ref": "#/components/schemas/InterestComingView"
+            },
+            "title": "Interest Coming",
+            "type": "array"
+          },
           "locked_until": {
             "anyOf": [
               {
@@ -8872,6 +8919,54 @@
           "upcoming"
         ],
         "title": "InsightsView",
+        "type": "object"
+      },
+      "InterestComingView": {
+        "additionalProperties": false,
+        "description": "One of the client's investments that will save its interest to the goal when it\nmatures. Figures after tax, as quoted today.",
+        "properties": {
+          "interest_minor": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Interest Minor"
+          },
+          "investment_id": {
+            "maxLength": 20,
+            "minLength": 20,
+            "pattern": "^[-0-9A-Z_a-z]{20}$",
+            "title": "Investment Id",
+            "type": "string"
+          },
+          "maturity_date": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Maturity Date"
+          },
+          "product_name": {
+            "title": "Product Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "investment_id",
+          "product_name",
+          "maturity_date",
+          "interest_minor"
+        ],
+        "title": "InterestComingView",
         "type": "object"
       },
       "InterestOut": {
@@ -10680,6 +10775,20 @@
               }
             ],
             "title": "Destination Id"
+          },
+          "goal_id": {
+            "anyOf": [
+              {
+                "maxLength": 20,
+                "minLength": 20,
+                "pattern": "^[-0-9A-Z_a-z]{20}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Goal Id"
           }
         },
         "required": [
@@ -19767,6 +19876,31 @@
               }
             ]
           },
+          "interest_from_investment_id": {
+            "anyOf": [
+              {
+                "maxLength": 20,
+                "minLength": 20,
+                "pattern": "^[-0-9A-Z_a-z]{20}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Interest From Investment Id"
+          },
+          "interest_from_product_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Interest From Product Name"
+          },
           "interest_minor": {
             "title": "Interest Minor",
             "type": "integer"
@@ -22751,6 +22885,45 @@
             "title": "Id",
             "type": "string"
           },
+          "interest_from_investment_id": {
+            "anyOf": [
+              {
+                "maxLength": 20,
+                "minLength": 20,
+                "pattern": "^[-0-9A-Z_a-z]{20}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Interest From Investment Id"
+          },
+          "interest_goal_id": {
+            "anyOf": [
+              {
+                "maxLength": 20,
+                "minLength": 20,
+                "pattern": "^[-0-9A-Z_a-z]{20}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Interest Goal Id"
+          },
+          "interest_goal_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Interest Goal Name"
+          },
           "interest_gross_minor": {
             "title": "Interest Gross Minor",
             "type": "integer"
@@ -23618,6 +23791,20 @@
           "amount_minor": {
             "title": "Amount Minor",
             "type": "integer"
+          },
+          "interest_from_investment_id": {
+            "anyOf": [
+              {
+                "maxLength": 20,
+                "minLength": 20,
+                "pattern": "^[-0-9A-Z_a-z]{20}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Interest From Investment Id"
           },
           "investment_id": {
             "maxLength": 20,

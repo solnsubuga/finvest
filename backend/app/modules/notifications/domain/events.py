@@ -87,6 +87,11 @@ _SPECS = (
     _event("goal_top_up_due", Category.INVESTMENTS, "goals", "goal", "date"),
     _event("goal_reached", Category.INVESTMENTS, "goals", "goal"),
     _event("goal_payday", Category.INVESTMENTS, "goals", "goal"),
+    # A matured investment's interest started a new saving in the goal the client chose.
+    _event("goal_interest_saved", Category.INVESTMENTS, "goals", "goal", "product"),
+    # The goal was closed, or its product no longer takes money, so the interest rolled over
+    # with the rest instead.
+    _event("goal_interest_not_saved", Category.INVESTMENTS, "investments", "goal", "product"),
     # Automatic investing. Named by the run's due day, never the amount.
     _event("autoinvest_run_retrying", Category.INVESTMENTS, "autoinvest", "date"),
     _event("autoinvest_run_failed", Category.INVESTMENTS, "autoinvest", "date"),

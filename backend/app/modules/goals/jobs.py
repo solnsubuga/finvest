@@ -21,7 +21,11 @@ from app.infrastructure.jobs import (
     enqueue,
 )
 from app.modules.goals import groups, reminders, saving_rules, service
-from app.modules.goals.events import FOLLOW_ROLLOVER_KIND, LINK_PLAN_RUN_KIND
+from app.modules.goals.events import (
+    FOLLOW_ROLLOVER_KIND,
+    LINK_INTEREST_SAVING_KIND,
+    LINK_PLAN_RUN_KIND,
+)
 from app.shared.clock import Clock
 
 # The scheduler asks for this once a day, after interest and maturities.
@@ -40,6 +44,7 @@ class GoalJobs:
     def handlers(self) -> dict[str, JobHandler | Handler]:
         return {
             FOLLOW_ROLLOVER_KIND: self.follow_rollover,
+            LINK_INTEREST_SAVING_KIND: self.link_interest_saving,
             LINK_PLAN_RUN_KIND: self.link_plan_run,
             REFRESH_GROUPS_KIND: self.refresh_groups,
             SEND_REMINDERS_KIND: self.send_reminders,
@@ -58,6 +63,32 @@ class GoalJobs:
                 session, investment_id=old, new_investment_id=new, clock=self._clock
             )
             return {"followed": followed}
+
+        await context.apply(effect)
+
+    async def link_interest_saving(self, job: ClaimedJob, context: JobContext) -> None:
+        """An investment matured and its interest started a new investment for the goal the
+        client chose. That investment is a saving towards the goal."""
+        data = job.payload.get("data")
+        data = data if isinstance(data, Mapping) else {}
+        values = [
+            data.get(name)
+            for name in ("investment_id", "saving_investment_id", "goal_id", "client_id")
+        ]
+        if not all(isinstance(value, str) for value in values):
+            raise PermanentJobError(code="interest_saving_missing")
+        investment_id, saving_id, goal_id, client_id = (str(value) for value in values)
+
+        async def effect(session: AsyncSession) -> Mapping[str, object]:
+            linked = await service.link_interest_saving(
+                session,
+                investment_id=investment_id,
+                saving_investment_id=saving_id,
+                goal_id=goal_id,
+                client_id=client_id,
+                clock=self._clock,
+            )
+            return {"linked": linked}
 
         await context.apply(effect)
 
