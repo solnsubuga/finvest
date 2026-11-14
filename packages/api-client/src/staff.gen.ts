@@ -98,6 +98,19 @@ export const AnnouncementList = z.object({
 });
 export type AnnouncementList = z.infer<typeof AnnouncementList>;
 
+export const Profile = z.enum(["careful", "balanced", "long_term"]);
+export type Profile = z.infer<typeof Profile>;
+
+export const AnswersView = z.object({
+  answered_at: z.string(),
+  answers: z.record(z.string(), z.unknown()),
+  due_again_at: z.string(),
+  id: z.string(),
+  longest_term_days: z.number().int().nullable(),
+  profile: Profile,
+});
+export type AnswersView = z.infer<typeof AnswersView>;
+
 export const Approval = z.object({
   reason: z.string(),
 });
@@ -1410,14 +1423,14 @@ export const PasskeyOptions = z.object({
 });
 export type PasskeyOptions = z.infer<typeof PasskeyOptions>;
 
-export const PersonView = z.object({
+export const IdentityPeopleApiPersonView = z.object({
   id: z.string(),
   name: z.string(),
 });
-export type PersonView = z.infer<typeof PersonView>;
+export type IdentityPeopleApiPersonView = z.infer<typeof IdentityPeopleApiPersonView>;
 
 export const PeopleList = z.object({
-  people: z.array(PersonView),
+  people: z.array(IdentityPeopleApiPersonView),
 });
 export type PeopleList = z.infer<typeof PeopleList>;
 
@@ -1696,6 +1709,9 @@ export const Rejection = z.object({
   note: z.string(),
 });
 export type Rejection = z.infer<typeof Rejection>;
+
+export const Relationship = z.enum(["spouse", "child", "parent", "sibling", "other_relative", "friend", "other"]);
+export type Relationship = z.infer<typeof Relationship>;
 
 export const RemittanceIn = z.object({
   amount_minor: z.number().int(),
@@ -2067,6 +2083,15 @@ export const StaffLoginStart = z.object({
 });
 export type StaffLoginStart = z.infer<typeof StaffLoginStart>;
 
+export const StaffPersonView = z.object({
+  full_name: z.string(),
+  id_number_masked: z.string(),
+  phone: z.string(),
+  relationship: Relationship,
+  share_bps: z.number().int(),
+});
+export type StaffPersonView = z.infer<typeof StaffPersonView>;
+
 export const StaffProductOut = z.object({
   code: z.string(),
   currency: Currency,
@@ -2081,6 +2106,13 @@ export const StaffProductOut = z.object({
   term_days: z.number().int().nullable(),
 });
 export type StaffProductOut = z.infer<typeof StaffProductOut>;
+
+export const StaffProfileView = z.object({
+  next_of_kin: z.array(StaffPersonView).nullable(),
+  next_of_kin_updated_at: z.string().nullable(),
+  risk: z.array(AnswersView),
+});
+export type StaffProfileView = z.infer<typeof StaffProfileView>;
 
 export const StaffRunView = z.object({
   amount_minor: z.number().int(),
@@ -2578,6 +2610,19 @@ export const operations = {
     idempotent: false,
     status: 201,
     response: Proposed,
+  },
+  "GET /staff/clients/{client_id}/profile": {
+    method: "GET",
+    path: "/staff/clients/{client_id}/profile",
+    params: z.object({
+    client_id: z.string(),
+  }),
+    query: z.object({}),
+    body: null,
+    bodyKind: null,
+    idempotent: false,
+    status: 200,
+    response: StaffProfileView,
   },
   "GET /staff/complaints": {
     method: "GET",

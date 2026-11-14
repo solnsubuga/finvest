@@ -5,7 +5,8 @@ resolutions and their bank batches, the migration checks, the imported statement
 closes and their recorded matches, the pot transfers, the help chat, the complaints register,
 the goals, the email delivery records, the unclaimed accounts, the complaint outcomes, the
 suppression lifts, the client locks, the announcements, the team changes, Finvest's own money in
-the buffer, the payments of tax to URA or the payments moved to the right client."""
+the buffer, the payments of tax to URA, the payments moved to the right client, next of kin or the
+answers to the investing questions."""
 
 import os
 from collections.abc import Iterator
@@ -778,6 +779,16 @@ ROWS = {
         "decode(repeat('00', 32), 'hex'), 'passkey', 'cookie', now(), now(), now(), now(), "
         "now())",
         "refusing to drop staff re-confirmations",
+    ),
+    "0230_kyc_next_of_kin": (
+        "INSERT INTO kyc_next_of_kin_lists (client_id, people, updated_at) "
+        "VALUES ('-Nabc0000000000000B1', 0, now())",
+        "refusing to drop next of kin",
+    ),
+    "0231_kyc_risk_answers": (
+        "INSERT INTO kyc_risk_answers (id, client_id, answers, score, profile, answered_at) "
+        "VALUES ('-Nabc0000000000000A1', '-Nabc0000000000000B1', '{}', 0, 'careful', now())",
+        "refusing to drop the answers clients gave",
     ),
 }
 
