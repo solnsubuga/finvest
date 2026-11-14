@@ -81,7 +81,12 @@ export type Closure = {
 };
 
 export type ProfileErrorCode =
+  /** The request never reached Finvest, or no answer came back. */
   | "unavailable"
+  /** Too many tries in a short time. */
+  | "rate_limited"
+  /** Finvest answered, but refused for a reason the screen has no words of its own for. */
+  | "refused"
   | "invalid"
   | "blocked"
   | "sign_in_again"
@@ -123,9 +128,24 @@ export function describeProfileError(error: unknown): string {
         return "Your account still has things to finish first. They are listed above.";
       case "invalid":
         return "Some details need fixing. They are marked below.";
+      case "rate_limited":
+        return "Too many tries. Wait a few minutes and try again.";
+      case "refused":
+        return "Finvest could not do this just now. Try again later, or ask us in Help.";
       default:
         break;
     }
   }
   return "We could not reach Finvest. Check your connection and try again.";
+}
+
+/**
+ * What the screens understand from a refusal that has only a code and an HTTP status, as a
+ * file download gets. With no status the request never reached Finvest.
+ */
+export function refusalFor(code: string | undefined, status: number | null): ProfileError {
+  if (status === null) return new ProfileError("unavailable");
+  if (code === "sign_in_again") return new ProfileError("sign_in_again");
+  if (code === "rate_limited" || status === 429) return new ProfileError("rate_limited");
+  return new ProfileError("refused");
 }

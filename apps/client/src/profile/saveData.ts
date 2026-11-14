@@ -4,7 +4,7 @@ import * as Sharing from "expo-sharing";
 import { API_URL } from "@/api/config";
 import { readToken } from "@/api/token";
 
-import { ProfileError } from "./types";
+import { ProfileError, refusalFor } from "./types";
 
 export const DATA_PATH = "/client/data-export";
 
@@ -40,11 +40,18 @@ export async function saveMyData(fileName: string): Promise<void> {
 }
 
 async function refusal(headers: Record<string, string>): Promise<ProfileError> {
+  let response: Response;
   try {
-    const response = await fetch(`${API_URL}${DATA_PATH}`, { headers });
-    const body = (await response.json()) as { error?: { code?: string } };
-    return new ProfileError(body.error?.code === "sign_in_again" ? "sign_in_again" : "unavailable");
+    response = await fetch(`${API_URL}${DATA_PATH}`, { headers });
   } catch {
     return new ProfileError("unavailable");
   }
+  let code: string | undefined;
+  try {
+    code = ((await response.json()) as { error?: { code?: string } }).error?.code;
+  } catch {
+    code = undefined;
+  }
+  // It worked this time, so the first try failed on the way: say so, and let them try again.
+  return response.ok ? new ProfileError("unavailable") : refusalFor(code, response.status);
 }

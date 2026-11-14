@@ -94,6 +94,20 @@ describe("the profile client for the real API", () => {
     expect((other as ProfileError).code).toBe("conflict");
   });
 
+  it("gives a rate limit and other refusals their own words, and keeps 'could not reach' for no answer", async () => {
+    const client = createApiProfileClient();
+    serve({ "GET /client/next-of-kin": refused("rate_limited", 429) });
+    expect(((await client.getNextOfKin().catch((e: unknown) => e)) as ProfileError).code).toBe("rate_limited");
+    serve({ "GET /client/next-of-kin": refused("forbidden", 403) });
+    expect(((await client.getNextOfKin().catch((e: unknown) => e)) as ProfileError).code).toBe("refused");
+    serve({ "GET /client/next-of-kin": refused("not_found", 404) });
+    expect(((await client.getNextOfKin().catch((e: unknown) => e)) as ProfileError).code).toBe("refused");
+    setFetch(async () => {
+      throw new TypeError("Network request failed");
+    });
+    expect(((await client.getNextOfKin().catch((e: unknown) => e)) as ProfileError).code).toBe("unavailable");
+  });
+
   it("asks for a fresh sign-in when the server does", async () => {
     serve({ "POST /client/account-closure": refused("sign_in_again", 403) });
     const error = await createApiProfileClient().askToClose("Moving abroad").catch((e: unknown) => e);
