@@ -12102,6 +12102,29 @@
         "title": "Queue",
         "type": "object"
       },
+      "QueueAmount": {
+        "additionalProperties": false,
+        "properties": {
+          "currency": {
+            "enum": [
+              "UGX",
+              "USD"
+            ],
+            "title": "Currency",
+            "type": "string"
+          },
+          "minor": {
+            "title": "Minor",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "minor",
+          "currency"
+        ],
+        "title": "QueueAmount",
+        "type": "object"
+      },
       "QueueEntry": {
         "additionalProperties": false,
         "properties": {
@@ -12158,6 +12181,107 @@
           "review_flags"
         ],
         "title": "QueueEntry",
+        "type": "object"
+      },
+      "QueueItemOut": {
+        "additionalProperties": false,
+        "properties": {
+          "amount": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/QueueAmount"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "client_id": {
+            "anyOf": [
+              {
+                "maxLength": 20,
+                "minLength": 20,
+                "pattern": "^[-0-9A-Z_a-z]{20}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Client Id"
+          },
+          "group": {
+            "enum": [
+              "deposits",
+              "withdrawals",
+              "identity",
+              "transfers",
+              "accounts"
+            ],
+            "title": "Group",
+            "type": "string"
+          },
+          "id": {
+            "maxLength": 20,
+            "minLength": 20,
+            "pattern": "^[-0-9A-Z_a-z]{20}$",
+            "title": "Id",
+            "type": "string"
+          },
+          "kind": {
+            "enum": [
+              "bank_transfer",
+              "identity_check",
+              "payout_account",
+              "held_payout",
+              "payout_held_up",
+              "payout_unanswered",
+              "investment_transfer",
+              "organisation"
+            ],
+            "title": "Kind",
+            "type": "string"
+          },
+          "proposed_by": {
+            "anyOf": [
+              {
+                "maxLength": 20,
+                "minLength": 20,
+                "pattern": "^[-0-9A-Z_a-z]{20}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Proposed By"
+          },
+          "reason": {
+            "title": "Reason",
+            "type": "string"
+          },
+          "waiting_since": {
+            "format": "date-time",
+            "title": "Waiting Since",
+            "type": "string"
+          },
+          "yours": {
+            "title": "Yours",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "kind",
+          "group",
+          "id",
+          "client_id",
+          "amount",
+          "reason",
+          "waiting_since",
+          "proposed_by",
+          "yours"
+        ],
+        "title": "QueueItemOut",
         "type": "object"
       },
       "QuoteOut": {
@@ -13951,6 +14075,64 @@
           "approved_at"
         ],
         "title": "ReviewOut",
+        "type": "object"
+      },
+      "ReviewQueueOut": {
+        "additionalProperties": false,
+        "properties": {
+          "cleared_automatically_today": {
+            "title": "Cleared Automatically Today",
+            "type": "integer"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/QueueItemOut"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "kinds": {
+            "items": {
+              "enum": [
+                "bank_transfer",
+                "identity_check",
+                "payout_account",
+                "held_payout",
+                "payout_held_up",
+                "payout_unanswered",
+                "investment_transfer",
+                "organisation"
+              ],
+              "type": "string"
+            },
+            "title": "Kinds",
+            "type": "array"
+          },
+          "oldest_waiting_since": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Oldest Waiting Since"
+          },
+          "waiting": {
+            "title": "Waiting",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "items",
+          "kinds",
+          "waiting",
+          "cleared_automatically_today",
+          "oldest_waiting_since"
+        ],
+        "title": "ReviewQueueOut",
         "type": "object"
       },
       "ReviewedPayoutOut": {
@@ -53674,6 +53856,58 @@
         "summary": "Close Recovery Request",
         "tags": [
           "client numbers"
+        ]
+      }
+    },
+    "/staff/review-queue": {
+      "get": {
+        "description": "Everything waiting for a person that this member of staff may see, longest first.",
+        "operationId": "review_queue_staff_review_queue_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReviewQueueOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          }
+        },
+        "summary": "Review Queue",
+        "tags": [
+          "staff review queue"
         ]
       }
     },
