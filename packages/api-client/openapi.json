@@ -1348,6 +1348,46 @@
         "title": "Body_upload_proof_client_payout_destinations__destination_id__proof_post",
         "type": "object"
       },
+      "BookLineOut": {
+        "additionalProperties": false,
+        "properties": {
+          "closing": {
+            "$ref": "#/components/schemas/AmountOut"
+          },
+          "code": {
+            "title": "Code",
+            "type": "string"
+          },
+          "credits": {
+            "$ref": "#/components/schemas/AmountOut"
+          },
+          "debits": {
+            "$ref": "#/components/schemas/AmountOut"
+          },
+          "kind": {
+            "title": "Kind",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "opening": {
+            "$ref": "#/components/schemas/AmountOut"
+          }
+        },
+        "required": [
+          "code",
+          "name",
+          "kind",
+          "opening",
+          "debits",
+          "credits",
+          "closing"
+        ],
+        "title": "BookLineOut",
+        "type": "object"
+      },
       "BufferLevel": {
         "enum": [
           "on_target",
@@ -3766,6 +3806,27 @@
         "title": "DayOut",
         "type": "object"
       },
+      "DaysOut": {
+        "additionalProperties": false,
+        "properties": {
+          "date_from": {
+            "format": "date",
+            "title": "Date From",
+            "type": "string"
+          },
+          "date_to": {
+            "format": "date",
+            "title": "Date To",
+            "type": "string"
+          }
+        },
+        "required": [
+          "date_from",
+          "date_to"
+        ],
+        "title": "DaysOut",
+        "type": "object"
+      },
       "DecideAnnouncement": {
         "additionalProperties": false,
         "properties": {
@@ -5080,6 +5141,64 @@
         "title": "ExceptionOut",
         "type": "object"
       },
+      "ExportOut": {
+        "additionalProperties": false,
+        "properties": {
+          "date_from": {
+            "format": "date",
+            "title": "Date From",
+            "type": "string"
+          },
+          "date_to": {
+            "format": "date",
+            "title": "Date To",
+            "type": "string"
+          },
+          "debit_total": {
+            "$ref": "#/components/schemas/AmountOut"
+          },
+          "exported_at": {
+            "format": "date-time",
+            "title": "Exported At",
+            "type": "string"
+          },
+          "exported_by": {
+            "title": "Exported By",
+            "type": "string"
+          },
+          "exported_by_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Exported By Name"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "lines": {
+            "title": "Lines",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "date_from",
+          "date_to",
+          "lines",
+          "debit_total",
+          "exported_by",
+          "exported_by_name",
+          "exported_at"
+        ],
+        "title": "ExportOut",
+        "type": "object"
+      },
       "Facets": {
         "additionalProperties": false,
         "properties": {
@@ -5224,6 +5343,93 @@
           "custodian_reference"
         ],
         "title": "FillOut",
+        "type": "object"
+      },
+      "FinanceScreenOut": {
+        "additionalProperties": false,
+        "properties": {
+          "accounts": {
+            "items": {
+              "$ref": "#/components/schemas/BookLineOut"
+            },
+            "title": "Accounts",
+            "type": "array"
+          },
+          "closed_through": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Closed Through"
+          },
+          "currency": {
+            "$ref": "#/components/schemas/Currency"
+          },
+          "date_from": {
+            "format": "date",
+            "title": "Date From",
+            "type": "string"
+          },
+          "date_to": {
+            "format": "date",
+            "title": "Date To",
+            "type": "string"
+          },
+          "exports": {
+            "items": {
+              "$ref": "#/components/schemas/ExportOut"
+            },
+            "title": "Exports",
+            "type": "array"
+          },
+          "income": {
+            "$ref": "#/components/schemas/IncomeOut"
+          },
+          "month": {
+            "title": "Month",
+            "type": "string"
+          },
+          "next_export": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/DaysOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "sent_through": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sent Through"
+          }
+        },
+        "required": [
+          "currency",
+          "month",
+          "date_from",
+          "date_to",
+          "accounts",
+          "income",
+          "closed_through",
+          "sent_through",
+          "next_export",
+          "exports"
+        ],
+        "title": "FinanceScreenOut",
         "type": "object"
       },
       "Frequency": {
@@ -5826,6 +6032,66 @@
           "unread"
         ],
         "title": "InboxRow",
+        "type": "object"
+      },
+      "IncomeLineOut": {
+        "additionalProperties": false,
+        "properties": {
+          "amount": {
+            "$ref": "#/components/schemas/AmountOut"
+          },
+          "code": {
+            "title": "Code",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "code",
+          "name",
+          "amount"
+        ],
+        "title": "IncomeLineOut",
+        "type": "object"
+      },
+      "IncomeOut": {
+        "additionalProperties": false,
+        "properties": {
+          "cost_total": {
+            "$ref": "#/components/schemas/AmountOut"
+          },
+          "costs": {
+            "items": {
+              "$ref": "#/components/schemas/IncomeLineOut"
+            },
+            "title": "Costs",
+            "type": "array"
+          },
+          "income": {
+            "items": {
+              "$ref": "#/components/schemas/IncomeLineOut"
+            },
+            "title": "Income",
+            "type": "array"
+          },
+          "income_total": {
+            "$ref": "#/components/schemas/AmountOut"
+          },
+          "net": {
+            "$ref": "#/components/schemas/AmountOut"
+          }
+        },
+        "required": [
+          "income",
+          "costs",
+          "income_total",
+          "cost_total",
+          "net"
+        ],
+        "title": "IncomeOut",
         "type": "object"
       },
       "InsightsView": {
@@ -33749,6 +34015,183 @@
         "summary": "Staff Enrolment Passkey Verify",
         "tags": [
           "staff sign-in"
+        ]
+      }
+    },
+    "/staff/finance": {
+      "get": {
+        "operationId": "get_finance_staff_finance_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "currency",
+            "required": false,
+            "schema": {
+              "$ref": "#/components/schemas/Currency",
+              "default": "UGX"
+            }
+          },
+          {
+            "in": "query",
+            "name": "month",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "pattern": "^[0-9]{4}-[0-9]{2}$",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Month"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FinanceScreenOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          }
+        },
+        "summary": "The books by account code for a month, and the journals sent",
+        "tags": [
+          "finance"
+        ]
+      }
+    },
+    "/staff/finance/journal.csv": {
+      "get": {
+        "operationId": "export_journal_staff_finance_journal_csv_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "date_from",
+            "required": true,
+            "schema": {
+              "format": "date",
+              "title": "Date From",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "date_to",
+            "required": true,
+            "schema": {
+              "format": "date",
+              "title": "Date To",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "currency",
+            "required": false,
+            "schema": {
+              "$ref": "#/components/schemas/Currency",
+              "default": "UGX"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "text/csv": {}
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          }
+        },
+        "summary": "The daily journal for closed days, by account code, for the accounting system",
+        "tags": [
+          "finance"
         ]
       }
     },
