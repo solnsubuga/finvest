@@ -1626,16 +1626,6 @@ export const NoteIn = z.object({
 });
 export type NoteIn = z.infer<typeof NoteIn>;
 
-export const Verdict = z.enum(["pass", "fail", "unsure"]);
-export type Verdict = z.infer<typeof Verdict>;
-
-export const Outcome = z.object({
-  check: AutomaticCheck,
-  score: z.number().int().nullable(),
-  verdict: Verdict,
-});
-export type Outcome = z.infer<typeof Outcome>;
-
 export const SwitchView = z.object({
   as_of: z.string(),
   clients_carried: z.number().int(),
@@ -2319,10 +2309,23 @@ export const StaffChat = z.object({
 });
 export type StaffChat = z.infer<typeof StaffChat>;
 
+export const Verdict = z.enum(["pass", "fail", "unsure"]);
+export type Verdict = z.infer<typeof Verdict>;
+
+export const KycApiOutcome = z.object({
+  check: AutomaticCheck,
+  score: z.number().int().nullable(),
+  verdict: Verdict,
+});
+export type KycApiOutcome = z.infer<typeof KycApiOutcome>;
+
+export const ScreeningDomainStandingOutcome = z.enum(["clear", "possible_match", "confirmed_match", "unavailable", "pending", "not_run"]);
+export type ScreeningDomainStandingOutcome = z.infer<typeof ScreeningDomainStandingOutcome>;
+
 export const StaffCheck = z.object({
   account_number: z.string().nullable(),
   allowed: z.array(z.enum(["approve", "reject", "ask_for_photos", "escalate"])),
-  automatic_checks: z.array(Outcome),
+  automatic_checks: z.array(KycApiOutcome),
   carried_over: z.boolean(),
   client_id: z.string(),
   client_message: z.string().nullable(),
@@ -2338,6 +2341,7 @@ export const StaffCheck = z.object({
   photos: z.array(StaffPhoto),
   retake_photos: z.array(PhotoKind),
   review_flags: z.array(z.string()),
+  screening: ScreeningDomainStandingOutcome.nullable(),
   status: CheckStatus,
   submitted_at: z.string().nullable(),
   surname: z.string().nullable(),

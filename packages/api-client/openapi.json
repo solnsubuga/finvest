@@ -10149,35 +10149,6 @@
         "title": "OrderStatus",
         "type": "string"
       },
-      "Outcome": {
-        "additionalProperties": false,
-        "properties": {
-          "check": {
-            "$ref": "#/components/schemas/AutomaticCheck"
-          },
-          "score": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Score"
-          },
-          "verdict": {
-            "$ref": "#/components/schemas/Verdict"
-          }
-        },
-        "required": [
-          "check",
-          "verdict",
-          "score"
-        ],
-        "title": "Outcome",
-        "type": "object"
-      },
       "OverviewView": {
         "additionalProperties": false,
         "properties": {
@@ -15583,7 +15554,7 @@
           },
           "automatic_checks": {
             "items": {
-              "$ref": "#/components/schemas/Outcome"
+              "$ref": "#/components/schemas/app__modules__kyc__api__Outcome"
             },
             "title": "Automatic Checks",
             "type": "array"
@@ -15714,6 +15685,16 @@
             "title": "Review Flags",
             "type": "array"
           },
+          "screening": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/app__modules__screening__domain__standing__Outcome"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "status": {
             "$ref": "#/components/schemas/CheckStatus"
           },
@@ -15762,7 +15743,8 @@
           "account_number",
           "decided_at",
           "carried_over",
-          "allowed"
+          "allowed",
+          "screening"
         ],
         "title": "StaffCheck",
         "type": "object"
@@ -20457,6 +20439,35 @@
         "title": "PersonView",
         "type": "object"
       },
+      "app__modules__kyc__api__Outcome": {
+        "additionalProperties": false,
+        "properties": {
+          "check": {
+            "$ref": "#/components/schemas/AutomaticCheck"
+          },
+          "score": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Score"
+          },
+          "verdict": {
+            "$ref": "#/components/schemas/Verdict"
+          }
+        },
+        "required": [
+          "check",
+          "verdict",
+          "score"
+        ],
+        "title": "Outcome",
+        "type": "object"
+      },
       "app__modules__kyc__profile_api__PersonView": {
         "additionalProperties": false,
         "properties": {
@@ -20814,6 +20825,19 @@
         ],
         "title": "PotOut",
         "type": "object"
+      },
+      "app__modules__screening__domain__standing__Outcome": {
+        "description": "Where a client stands, for the identity check review and for payouts.",
+        "enum": [
+          "clear",
+          "possible_match",
+          "confirmed_match",
+          "unavailable",
+          "pending",
+          "not_run"
+        ],
+        "title": "Outcome",
+        "type": "string"
       },
       "app__modules__support__api__Amount": {
         "additionalProperties": false,
