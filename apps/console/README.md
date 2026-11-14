@@ -68,7 +68,7 @@ Whenever the stub is active, a banner reading "Sample sign-in. Not connected to 
 
 The session carries a list of permissions, and each menu item names the one it needs. The console uses them only to decide what to show. The API must check every request itself.
 
-Opening a screen needs its `.view` permission. Changing something on it needs its own action permission, with the backend's names: `support.reply`, `complaints.manage`, `complaints.close`, `wordings.change`, `announcements.send`, `bank_accounts.change`, `bank_transfers.change` and `payout_accounts.change`. A screen hides what the person cannot do. The menu lists only the `.view` ones.
+Opening a screen needs its `.view` permission. Changing something on it needs its own action permission, with the backend's names: `support.reply`, `complaints.manage`, `complaints.close`, `wordings.change`, `announcements.send`, `bank_accounts.change`, `withdrawal_limits.change`, `payment_channels.change`, `calendar.change`, `staff_security.change`, `statement_layouts.change`, `bank_transfers.change` and `payout_accounts.change`. A screen hides what the person cannot do. The menu lists only the `.view` ones.
 
 The role to screen table in `src/auth/stub.ts` is a proposal, read from the role matrix on the canvas ("Team and permissions"). The backend's permissions module is the authority once it exists.
 
