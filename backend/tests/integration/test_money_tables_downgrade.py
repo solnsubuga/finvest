@@ -8,7 +8,7 @@ complaint outcomes, the suppression lifts, the client locks, the announcements, 
 changes, Finvest's own money in the buffer, the payments of tax to URA, the payments moved to
 the right client, next of kin, the answers to the investing questions, the requests to close an
 account, the journals sent to the accounting system, who set the bank account clients pay
-into or why a payout send waited."""
+into, why a payout send waited or the product changes staff proposed."""
 
 import os
 from collections.abc import Iterator
@@ -966,6 +966,17 @@ ROWS = {
         "expires_at) VALUES ('-Nabc0000000000000C1', '-Nabc0000000000000A1', 'withdrawal', "
         "decode(repeat('11', 32), 'hex'), now(), now() + interval '3 minutes')",
         "refusing to drop PIN confirmations that are not used yet",
+    ),
+    "0360_investment_product_changes": (
+        "BEGIN; SELECT set_config('finvest.actor_kind', 'staff', true); "
+        "SELECT set_config('finvest.actor_id', '-Nabc0000000000000S1', true); "
+        "INSERT INTO investment_product_changes (id, action, code, name, kind, currency, "
+        "term_days, minimum_minor, interest_paid, product_status, first_annual_rate_bps, "
+        "first_tax_bps, reason, proposed_by, proposed_at) VALUES ('-Nabc0000000000000A1', "
+        "'create', 'TREA-28', 'Treasury bill, 28 days', 'treasury_bill', 'UGX', 28, 100000, "
+        "'at_maturity', 'draft', 1000, 1500, 'A shorter bill', '-Nabc0000000000000S1', now()); "
+        "COMMIT",
+        "refusing to drop product changes",
     ),
 }
 
