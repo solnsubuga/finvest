@@ -15,6 +15,7 @@ import {
   type Investment,
   type InvestmentStatus,
   type InvestmentsApi,
+  type PositionsFile,
 } from "./api.ts";
 import { BookingsPanel } from "./bookings/index.tsx";
 import { CorrectionsPanel } from "./corrections/index.tsx";
@@ -52,6 +53,8 @@ interface InvestmentsScreenProps {
   directory?: Directory;
   /** The Kampala business day, as a calendar date. */
   today?: () => string;
+  /** Hands an exported file to the browser. Tests pass their own. */
+  save?: (file: PositionsFile) => void;
 }
 
 const kampalaToday = () => new Intl.DateTimeFormat("en-CA", { timeZone: "Africa/Kampala" }).format(new Date());
@@ -62,7 +65,48 @@ function addDays(isoDate: string, days: number): string {
   return date.toISOString().slice(0, 10);
 }
 
-export function InvestmentsScreen({ api, directory = emptyDirectory, today = kampalaToday }: InvestmentsScreenProps) {
+/** Hands the browser the exported file. */
+function saveFile({ file, filename }: PositionsFile) {
+  const url = URL.createObjectURL(file);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = filename;
+  link.click();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+/** "Export positions": every running investment as a CSV file, recorded on the audit trail. */
+function ExportPositions({ api, save }: { api: InvestmentsApi; save: (file: PositionsFile) => void }) {
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  async function run() {
+    setBusy(true);
+    setError(null);
+    try {
+      save(await api.exportPositions());
+    } catch (failure) {
+      setError(investmentsErrorMessage(failure));
+    } finally {
+      setBusy(false);
+    }
+  }
+  return (
+    <div className="flex max-w-[360px] flex-col items-end gap-1.5">
+      <Button variant="secondary" disabled={busy} onClick={() => void run()}>
+        {busy ? "Preparing the positions" : "Export positions"}
+      </Button>
+      {error ? (
+        <p role="alert" className="m-0 text-right text-sm font-bold text-danger">
+          {error}
+        </p>
+      ) : (
+        <p className="m-0 text-right text-sm text-muted">Every running investment, as a CSV file.</p>
+      )}
+    </div>
+  );
+}
+
+export function InvestmentsScreen({ api, directory = emptyDirectory, today = kampalaToday, save = saveFile }: InvestmentsScreenProps) {
   const [tab, setTab] = useState<InvestmentStatus>("active");
   const [load, setLoad] = useState<Load>({ state: "loading" });
   const [cards, setCards] = useState<Record<string, ClientCard | null>>({});
@@ -136,7 +180,10 @@ export function InvestmentsScreen({ api, directory = emptyDirectory, today = kam
 
   return (
     <>
-      <PageHeader title="Investments" summary={SUMMARY} />
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <PageHeader title="Investments" summary={SUMMARY} />
+        <ExportPositions api={api} save={save} />
+      </div>
       <div className="grid grid-cols-[repeat(auto-fit,minmax(300px,1fr))] items-start gap-4">
         <LatestRun runs={load.runs} today={day} />
         <Maturing investments={maturing} />

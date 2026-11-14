@@ -57,7 +57,7 @@ from app.modules.payments.domain.deposits import Purpose
 from app.shared.actors import Actor
 from app.shared.business_day import business_date
 from app.shared.clock import Clock
-from app.shared.errors import ApplicationError
+from app.shared.errors import ApplicationError, FieldProblem
 from app.shared.money import Currency, Money
 from app.shared.push_ids import push_id
 
@@ -238,6 +238,13 @@ _FOR_STAFF = text(
     "WHERE (CAST(:status AS text) IS NULL OR i.status = :status) "
     "ORDER BY i.created_at DESC, i.id DESC LIMIT :limit"
 )
+# Every running investment, the soonest to mature first, for the positions file.
+_POSITIONS = text(
+    f"SELECT {_COLUMNS} {_FROM} "
+    "WHERE i.status = 'active' "
+    "ORDER BY i.maturity_date NULLS LAST, i.start_date, i.id LIMIT :limit"
+)
+POSITIONS_LIMIT = 20_000
 _COUNT_AWAITING = text(
     "SELECT count(*) FROM investments WHERE client_id = :client_id "
     "AND status = 'awaiting_payment' AND pay_by > :now"
@@ -682,6 +689,20 @@ async def list_investments(
         {"status": status.value if status else None, "limit": max(1, min(limit, MAX_PAGE_SIZE))},
     )
     return [investment_from_row(row) for row in rows.all()]
+
+
+async def positions(session: AsyncSession, staff: Actor) -> list[Investment]:
+    """Every running investment, the soonest to mature first, for the positions file. Raises
+    `too_many_positions` (422) beyond POSITIONS_LIMIT, which a single file should not hold."""
+    if staff.kind != "staff":
+        raise ApplicationError("forbidden")
+    rows = (await session.execute(_POSITIONS, {"limit": POSITIONS_LIMIT + 1})).all()
+    if len(rows) > POSITIONS_LIMIT:
+        raise ApplicationError(
+            "validation_failed",
+            fields=[FieldProblem(field_path=["positions"], code="too_many_positions")],
+        )
+    return [investment_from_row(row) for row in rows]
 
 
 async def client_investments(

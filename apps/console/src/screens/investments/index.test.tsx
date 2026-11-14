@@ -111,4 +111,26 @@ describe("investments screen", () => {
     expect(second?.[0]).toBe("-ClientSample0000002");
     expect(asked.filter((id) => id === "-ClientSample0000001")).toHaveLength(1);
   });
+
+  it("exports the positions as a file", async () => {
+    const saved: string[] = [];
+    const user = userEvent.setup();
+    render(<InvestmentsScreen api={createStubInvestmentsApi()} today={() => TODAY} save={(file) => saved.push(file.filename)} />);
+    await user.click(await screen.findByRole("button", { name: "Export positions" }));
+    expect(saved).toEqual(["finvest-positions-sample.csv"]);
+  });
+
+  it("says why the positions could not be exported", async () => {
+    const stub = createStubInvestmentsApi();
+    const user = userEvent.setup();
+    render(
+      <InvestmentsScreen
+        api={{ ...stub, exportPositions: () => Promise.reject(new InvestmentsError("too_many_positions")) }}
+        today={() => TODAY}
+        save={() => undefined}
+      />,
+    );
+    await user.click(await screen.findByRole("button", { name: "Export positions" }));
+    expect(await screen.findByRole("alert")).toHaveTextContent("more than 20,000 running investments");
+  });
 });

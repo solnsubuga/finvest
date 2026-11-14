@@ -1,5 +1,5 @@
 import { useCallback } from "react";
-import { View } from "react-native";
+import { StyleSheet, View } from "react-native";
 import { Href, Stack, useLocalSearchParams, useRouter } from "expo-router";
 
 import { BackButton } from "@/components/BackButton";
@@ -13,6 +13,7 @@ import { useInvesting } from "@/investing/InvestingProvider";
 import { Failed } from "@/investing/Parts";
 import { Investment } from "@/investing/types";
 import { useLoaded } from "@/investing/useLoaded";
+import { termProgress } from "@/home/format";
 import { formatDateTime } from "@/payments/format";
 import { Detail, DetailList, Loading } from "@/payments/Parts";
 import { colors, fontSizes } from "@/theme";
@@ -25,6 +26,8 @@ export default function InvestmentDetail() {
   const [loaded, retry] = useLoaded(useCallback(() => client.getInvestment(id), [client, id]));
 
   const investment = loaded.state === "ready" ? loaded.value : null;
+  // A running investment's amount is fixed, so more money starts a new one of the same product.
+  const addMore = investment?.status === "active" && !investment.withdrawalRequestedAt;
   return (
     <Screen
       signedIn
@@ -41,11 +44,19 @@ export default function InvestmentDetail() {
             onPress={() => router.push(`/investment/pay-out/${investment.id}`)}
             testID="choose-pay-out"
           />
-        ) : investment?.canSend || investment?.canWithdraw ? (
+        ) : investment && (addMore || investment.canSend || investment.canWithdraw) ? (
           <View style={{ gap: 10 }}>
+            {addMore ? (
+              <Button
+                label="Add more"
+                onPress={() => router.push(`/invest/${encodeURIComponent(investment.productCode)}`)}
+                testID="add-more"
+              />
+            ) : null}
             {investment.canSend ? (
               <Button
                 label="Send to someone"
+                variant={addMore ? "secondary" : "primary"}
                 onPress={() => router.push(`/investment/send/${investment.id}`)}
                 testID="send-investment"
               />
@@ -78,6 +89,8 @@ export default function InvestmentDetail() {
 }
 
 function Body({ investment, onOpen }: { investment: Investment; onOpen: (href: Href) => void }) {
+  // A fixed term that is running shows how far through it is. An early withdrawal ends the term.
+  const running = investment.status === "active" && investment.termDays !== null && !investment.withdrawalRequestedAt;
   // The note that confirms it started. A rollover and an investment not yet started have none.
   const note = useDocumentFor("investment_note", investment.id);
   const rows: Detail[] = [
@@ -144,6 +157,23 @@ function Body({ investment, onOpen }: { investment: Investment; onOpen: (href: H
               ? `+${formatAmount(investment.interestToday)} today, ${investment.daysEarned} days earned`
               : `${investment.daysEarned} days earned`}
         </Txt>
+        {running && investment.termDays ? (
+          <View style={{ gap: 8, marginTop: 12 }} testID="term-progress">
+            <View
+              style={styles.track}
+              accessibilityRole="progressbar"
+              accessibilityLabel="Term"
+              accessibilityValue={{ min: 0, max: investment.termDays, now: Math.min(investment.daysEarned, investment.termDays) }}
+            >
+              <View style={[styles.bar, { width: termProgress(investment.daysEarned, investment.termDays) }]} />
+            </View>
+            <Txt size={fontSizes.sm} color={colors.onBlackMuted}>
+              {investment.maturityDate
+                ? `Day ${Math.min(investment.daysEarned, investment.termDays)} of ${investment.termDays}. Matures ${formatDay(investment.maturityDate)}.`
+                : `Day ${Math.min(investment.daysEarned, investment.termDays)} of ${investment.termDays}.`}
+            </Txt>
+          </View>
+        ) : null}
       </View>
       <DetailList rows={rows} />
       {note ? <DocumentLink document={note} title="Transaction note" testID="investment-note" /> : null}
@@ -195,3 +225,8 @@ function Body({ investment, onOpen }: { investment: Investment; onOpen: (href: H
     </View>
   );
 }
+
+const styles = StyleSheet.create({
+  track: { height: 8, borderRadius: 4, backgroundColor: colors.onBlackSurface, flexDirection: "row" },
+  bar: { borderRadius: 4, backgroundColor: colors.lime },
+});

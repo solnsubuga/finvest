@@ -66,9 +66,18 @@ export function toInterestRun(json: InterestRunOut): InterestRun {
   };
 }
 
+/** "finvest-positions-2026-11-14.csv", named for the Kampala day, as the API names it. */
+export function positionsFilename(now: Date = new Date()): string {
+  const day = new Intl.DateTimeFormat("en-CA", { timeZone: "Africa/Kampala" }).format(now);
+  return `finvest-positions-${day}.csv`;
+}
+
 export function toInvestmentsError(error: unknown): InvestmentsError {
   if (error instanceof InvestmentsError) return error;
   if (error instanceof ApiError && error.code === "forbidden") return new InvestmentsError("forbidden");
+  if (error instanceof ApiError && error.fields.some((field) => field.code === "too_many_positions")) {
+    return new InvestmentsError("too_many_positions");
+  }
   return new InvestmentsError("unavailable");
 }
 
@@ -92,6 +101,14 @@ export function createHttpInvestmentsApi(http: Http): InvestmentsApi {
     async interestRuns() {
       try {
         return (await http.request<InterestRunOut[]>("GET", "/staff/interest-runs")).map(toInterestRun);
+      } catch (error) {
+        throw toInvestmentsError(error);
+      }
+    },
+    async exportPositions() {
+      try {
+        // A POST: every export is recorded on the audit trail.
+        return { file: await http.download("/staff/investments/positions.csv", { method: "POST" }), filename: positionsFilename() };
       } catch (error) {
         throw toInvestmentsError(error);
       }

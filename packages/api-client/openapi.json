@@ -55994,6 +55994,74 @@
         ]
       }
     },
+    "/staff/investments/positions.csv": {
+      "post": {
+        "description": "Soonest to mature first, each client by account number only. Every export is on the audit\ntrail. More than 20,000 running investments is refused with `too_many_positions`.",
+        "operationId": "export_positions_staff_investments_positions_csv_post",
+        "responses": {
+          "200": {
+            "content": {
+              "text/csv": {}
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          }
+        },
+        "summary": "Every running investment as a CSV file: the positions",
+        "tags": [
+          "staff investing"
+        ]
+      }
+    },
     "/staff/investments/{investment_id}": {
       "get": {
         "operationId": "staff_investment_staff_investments__investment_id__get",
