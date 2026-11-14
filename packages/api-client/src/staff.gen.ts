@@ -6,6 +6,14 @@ import { z } from "zod";
 export type Upload = Blob | { uri: string; name: string; type: string };
 export const Upload = z.custom<Upload>((value) => value !== null && typeof value === "object");
 
+export const AccessSyncView = z.object({
+  error_code: z.string().nullable(),
+  requested_at: z.string(),
+  state: z.enum(["waiting", "in_access", "removed", "failed", "not_set_up"]),
+  synced_at: z.string().nullable(),
+});
+export type AccessSyncView = z.infer<typeof AccessSyncView>;
+
 export const AccountView = z.object({
   created_at: z.string(),
   email: z.string().nullable(),
@@ -3600,6 +3608,7 @@ export const TaxScreenOut = z.object({
 export type TaxScreenOut = z.infer<typeof TaxScreenOut>;
 
 export const TeamMemberView = z.object({
+  access: AccessSyncView.nullable(),
   created_at: z.string(),
   email: z.string(),
   has_authenticator: z.boolean(),
@@ -7560,6 +7569,19 @@ export const operations = {
     idempotent: false,
     status: 200,
     response: ChangeView,
+  },
+  "POST /staff/team/members/{staff_id}/access-sync": {
+    method: "POST",
+    path: "/staff/team/members/{staff_id}/access-sync",
+    params: z.object({
+    staff_id: z.string(),
+  }),
+    query: z.object({}),
+    body: null,
+    bodyKind: null,
+    idempotent: false,
+    status: 202,
+    response: AccessSyncView,
   },
   "GET /staff/withdrawal-limits": {
     method: "GET",

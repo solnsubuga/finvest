@@ -54,6 +54,32 @@ describe("team over HTTP", () => {
     expect(fetch.mock.calls[1]?.[0]).toBe("https://api.test/staff/team/changes/-Nchange00000000000A/decision");
   });
 
+  it("reads Cloudflare Access for each person and asks for it again", async () => {
+    const member = {
+      id: "-Nstaff000000000000A",
+      name: "Amina Kintu",
+      email: "amina@finvestug.com",
+      role: "support",
+      status: "active",
+      has_passkey: true,
+      has_authenticator: false,
+      created_at: "2026-11-01T08:00:00Z",
+      last_signed_in_at: null,
+      access: { state: "failed", error_code: "cloudflare_token_refused", requested_at: "2026-11-13T08:00:00Z", synced_at: null },
+    };
+    const fetch = vi.fn<typeof globalThis.fetch>()
+      .mockImplementationOnce(() => reply(200, { members: [member, { ...member, id: "-Nstaff000000000000B", access: null }], changes: [], roles: [], can_change: true }))
+      .mockImplementationOnce(() => reply(202, { state: "waiting", error_code: null, requested_at: "2026-11-13T09:00:00Z", synced_at: null }));
+    const api = createHttpTeamApi(createHttp("https://api.test", fetch));
+    const team = await api.load();
+    expect(team.members[0]?.access).toEqual({ state: "failed", errorCode: "cloudflare_token_refused", requestedAt: "2026-11-13T08:00:00Z", syncedAt: null });
+    expect(team.members[1]?.access).toBeNull();
+    const again = await api.syncAccess("-Nstaff000000000000A");
+    expect(fetch.mock.calls[1]?.[0]).toBe("https://api.test/staff/team/members/-Nstaff000000000000A/access-sync");
+    expect(fetch.mock.calls[1]?.[1]?.method).toBe("POST");
+    expect(again.state).toBe("waiting");
+  });
+
   it("turns the backend's refusals into the screen's", () => {
     const refused = (code: string, field?: string, status = 409) =>
       toTeamError(new ApiError(code, status, field ? [{ field_path: ["body", "kind"], code: field }] : []));
