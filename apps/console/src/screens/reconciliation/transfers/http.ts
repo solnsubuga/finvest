@@ -32,10 +32,19 @@ interface TransferJson {
   proposed_at: string;
 }
 
+// The API names both ioTec pots "ioTec wallet", one per network. Staff must tell them apart to
+// record a transfer against the right one, so the network is added to the name.
+const NETWORKS: Readonly<Record<string, string>> = { mtn: "MTN", airtel: "Airtel" };
+
+export function potName(json: { source: PotSource; account_reference: string; name: string }): string {
+  const network = json.source === "iotec" ? NETWORKS[json.account_reference] : undefined;
+  return network && !json.name.includes(network) ? `${json.name}, ${network}` : json.name;
+}
+
 const pot = (json: { source: PotSource; account_reference: string; name: string }) => ({
   source: json.source,
   accountReference: json.account_reference,
-  name: json.name,
+  name: potName(json),
 });
 
 export function toTransfer(json: TransferJson): PotTransfer {
