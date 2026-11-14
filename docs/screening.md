@@ -4,10 +4,10 @@ Sanctions and politically exposed person (PEP) screening, and the compliance cas
 
 ## In short
 
-- Every client is screened when they hand in their identity check, again every 30 days once approved, and before a payout unless they were screened clear in the last 24 hours.
+- Every client is screened when they hand in their identity check, again every 30 days once approved, and before a payout unless they were screened clear in the last 24 hours. The call at hand-in lands with the identity checks thread's next PR; until then a newly approved client's first screen comes from the nightly sweep.
 - The provider is behind a port, so it can be swapped. The owner chose Sigma360. Until its account exists, no provider is set up and every screen is recorded as **not run**; the Compliance screen says screening is off.
 - A screen that finds a listed entity that may be the client opens a **case**. Two members of staff close it: one proposes the outcome, a different one approves it.
-- An entity staff already ruled out for a client, or accepted as a PEP, is recognised the next time and opens no new case.
+- An entity already on a case for the client (still open, ruled out, accepted as a PEP, or confirmed as sanctioned) is recognised the next time and opens no new case.
 - Clients never see any of this. Telling a client they matched a list could tip them off.
 
 ## The provider port
@@ -104,7 +104,7 @@ What the database enforces: `screening_payout_clearance(client, at)` holds the r
 | Screening | `not_a_match`: the listed entity is someone else. `pep_accepted`: the client is a PEP (or family or close associate) and stays a client, with the enhanced due diligence done written in the reason. `sanctioned`: the client is on a sanctions list. Payouts stay held and a report is owed to the Financial Intelligence Authority. |
 | Monitoring | `no_concern`, or `report_to_fia`: a suspicious transaction report is owed to the Financial Intelligence Authority. |
 
-A `not_a_match` or `pep_accepted` case tells later screens that its entities are decided for this client. A `sanctioned` client stays `confirmed_match`.
+A case tells later screens that its entities are already dealt with for this client, whether it is still open or closed as `not_a_match`, `pep_accepted` or `sanctioned`, so finding them again opens no new case. A `sanctioned` client stays `confirmed_match`.
 
 Filing the report to the Financial Intelligence Authority is not built: staff file it on the FIA's own system and write the reference in the reason.
 

@@ -381,6 +381,42 @@ async def test_a_confirmed_sanctions_match_stands_after_later_clear_screens(
     assert standing.case_id == case_id
 
 
+async def test_a_match_already_on_an_open_case_opens_no_second_one(
+    api: Api, worker_database: Database
+) -> None:
+    setup = Setup()
+    client_id, case_id = await matched_case(api.database, worker_database, api.clock, setup)
+    # Screened again before staff decide, as a payout or a member of staff would ask.
+    setup.provider.answers[client_id] = [ScreeningResult((SANCTIONS,))]
+    again = await ask(worker_database, client_id, api.clock)
+    await work(worker_database, api.clock, setup)
+    run = await run_of(worker_database, again)
+    assert (run.status, run.match_count, run.new_match_count) == (
+        RunStatus.POSSIBLE_MATCH,
+        1,
+        0,
+    )
+    assert [case.id for case in await cases_of(api.database, client_id)] == [case_id]
+    standing = await standing_of(worker_database, client_id)
+    assert standing is not None and standing.outcome is Outcome.POSSIBLE_MATCH
+    assert standing.case_id == case_id
+
+
+async def test_a_confirmed_sanctions_match_found_again_opens_no_new_case(
+    api: Api, worker_database: Database
+) -> None:
+    setup = Setup()
+    client_id, case_id = await matched_case(api.database, worker_database, api.clock, setup)
+    await ruled_out(api, case_id, "sanctioned")
+    setup.provider.answers[client_id] = [ScreeningResult((SANCTIONS,))]
+    again = await ask(worker_database, client_id, api.clock)
+    await work(worker_database, api.clock, setup)
+    assert (await run_of(worker_database, again)).new_match_count == 0
+    assert len(await cases_of(api.database, client_id)) == 1
+    standing = await standing_of(worker_database, client_id)
+    assert standing is not None and standing.outcome is Outcome.CONFIRMED_MATCH
+
+
 async def propose(api: Api, case_id: str, outcome: str = "not_a_match") -> httpx.Response:
     return await api.http.post(
         f"/staff/compliance/cases/{case_id}/proposals",
