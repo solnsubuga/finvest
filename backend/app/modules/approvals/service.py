@@ -51,6 +51,8 @@ async def waiting_for(session: AsyncSession, staff: StaffSession, now: datetime)
         found += await _buffer_capital(session)
     if "rate_change" in kinds:
         found += await _rates(session, staff)
+    if "product_change" in kinds:
+        found += await _product_changes(session, staff)
     if kinds & {"migration_totals", "migration_sign_off"}:
         found += await _migration(session)
     if "phone_change" in kinds:
@@ -193,6 +195,15 @@ async def _buffer_capital(session: AsyncSession) -> list[Waiting]:
             m.proposed_at,
         )
         for m in await capital.waiting(session)
+    ]
+
+
+async def _product_changes(session: AsyncSession, staff: StaffSession) -> list[Waiting]:
+    return [
+        Waiting("product_change", c.id, c.target.code, c.proposed_by, c.proposed_at)
+        for c in await investments.list_product_changes(
+            session, staff.actor, status=ProposalStatus.PROPOSED
+        )
     ]
 
 

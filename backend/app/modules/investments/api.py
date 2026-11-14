@@ -15,7 +15,7 @@ Each request opens one transaction for the caller and does all its work inside i
 from collections.abc import AsyncIterator, Awaitable, Callable
 from contextlib import asynccontextmanager
 from datetime import date, datetime
-from typing import Annotated
+from typing import Annotated, Literal
 
 from fastapi import APIRouter, Depends, Query, Request, Response
 from pydantic import Field
@@ -206,6 +206,76 @@ class ProposalOut(Contract):
     decision_note: str | None
 
 
+KindIn = Annotated[ProductKind, Field(strict=False)]
+InterestPaidIn = Annotated[InterestPaid, Field(strict=False)]
+NewCode = Annotated[
+    str, Field(min_length=1, max_length=24, pattern=r"^[A-Z][A-Z0-9]*(-[A-Z0-9]+)*$")
+]
+Name = Annotated[str, Field(min_length=1, max_length=80)]
+TermDays = Annotated[int, Field(ge=1, le=3650)]
+Bps = Annotated[int, Field(ge=0, le=9999)]
+
+
+class NewProductIn(Contract):
+    """A new product. It is created as a draft, with this first rate, once a second person
+    approves. Opening it to clients is a change of its own."""
+
+    code: NewCode
+    name: Name
+    kind: KindIn
+    currency: CurrencyIn
+    # None for an open term, which runs until the client withdraws.
+    term_days: TermDays | None
+    minimum_minor: AmountMinor
+    interest_paid: InterestPaidIn
+    annual_rate_bps: Bps
+    tax_bps: Bps
+    reason: Note
+
+
+class NewTermsIn(Contract):
+    """New terms for an existing product. The code and currency never change, and the kind and
+    when interest is paid change only while it is a draft. The rate changes on its own route."""
+
+    product_code: ProductCode
+    name: Name
+    kind: KindIn
+    term_days: TermDays | None
+    minimum_minor: AmountMinor
+    interest_paid: InterestPaidIn
+    reason: Note
+
+
+class StatusChangeIn(Contract):
+    product_code: ProductCode
+    # `live` opens the product to new investments. `paused` stops them; running ones carry on.
+    to: Literal["live", "paused"]
+    reason: Note
+
+
+class ProductChangeOut(Contract):
+    id: PushId
+    action: service.ProductAction
+    product_code: str
+    # The whole product as it will be once approved.
+    name: str
+    kind: ProductKind
+    currency: Currency
+    term_days: int | None
+    minimum_minor: int
+    interest_paid: InterestPaid
+    product_status: ProductStatus
+    # A new product's first rate. None for any other change.
+    first_rate: RateOut | None
+    reason: str
+    status: ProposalStatus
+    proposed_by: PushId
+    proposed_at: datetime
+    decided_by: PushId | None
+    decided_at: datetime | None
+    decision_note: str | None
+
+
 class CorrectionIn(Contract):
     kind: service.CorrectionKind = Field(strict=False)
     investment_id: PushId
@@ -324,6 +394,8 @@ RatesViewer = Annotated[StaffSession, Depends(require_permission("rates.view"))]
 RatesChanger = Annotated[StaffSession, Depends(require_permission("rates.change"))]
 # Deciding needs a passkey or app code from the last few minutes.
 RatesApprover = Annotated[StaffSession, Depends(require_confirmed("rates.change"))]
+ProductsChanger = Annotated[StaffSession, Depends(require_permission("products.change"))]
+ProductsApprover = Annotated[StaffSession, Depends(require_confirmed("products.change"))]
 InvestmentsViewer = Annotated[StaffSession, Depends(require_permission("investments.view"))]
 MaturitiesViewer = Annotated[StaffSession, Depends(require_permission("maturities.view"))]
 CorrectionsChanger = Annotated[
@@ -428,6 +500,39 @@ def _staff_product_out(view: service.ProductView) -> StaffProductOut:
         status=product.status,
         rate=_rate_out(view.rate),
         next_rate=_rate_out(view.next_rate),
+    )
+
+
+def _product_change_out(view: service.ProductChangeView) -> ProductChangeOut:
+    product = view.target
+    first = (
+        None
+        if view.first_annual_rate_bps is None or view.first_tax_bps is None
+        else RateVersion(
+            business_date(view.decided_at or view.proposed_at),
+            view.first_annual_rate_bps,
+            view.first_tax_bps,
+        )
+    )
+    return ProductChangeOut(
+        id=view.id,
+        action=view.action,
+        product_code=product.code,
+        name=product.name,
+        kind=product.kind,
+        currency=product.currency,
+        term_days=product.term_days,
+        minimum_minor=product.minimum.minor,
+        interest_paid=product.interest_paid,
+        product_status=product.status,
+        first_rate=_rate_out(first),
+        reason=view.reason,
+        status=view.status,
+        proposed_by=view.proposed_by,
+        proposed_at=view.proposed_at,
+        decided_by=view.decided_by,
+        decided_at=view.decided_at,
+        decision_note=view.decision_note,
     )
 
 
@@ -804,6 +909,97 @@ async def staff_withdraw_rate(
     async with _transaction(request, staff.actor) as session:
         view = await service.withdraw_rate(session, staff.actor, proposal_id, clock)
     return _proposal_out(view)
+
+
+@staff_router.get("/product-changes")
+async def staff_product_changes(
+    request: Request, staff: ProductsViewer, status: ProposalStatus | None = None
+) -> list[ProductChangeOut]:
+    """New products, new terms, pauses and openings, newest first."""
+    async with _transaction(request, staff.actor) as session:
+        views = await service.list_product_changes(session, staff.actor, status=status)
+    return [_product_change_out(view) for view in views]
+
+
+@staff_router.post("/product-changes/new-product", status_code=201)
+async def staff_propose_new_product(
+    request: Request, staff: ProductsChanger, clock: AppClock, body: NewProductIn
+) -> ProductChangeOut:
+    """Propose a new product. A second member of staff must approve it, and it starts as a draft."""
+    new = service.NewProduct(
+        code=body.code,
+        name=body.name,
+        kind=body.kind,
+        currency=body.currency,
+        term_days=body.term_days,
+        minimum_minor=body.minimum_minor,
+        interest_paid=body.interest_paid,
+        annual_rate_bps=body.annual_rate_bps,
+        tax_bps=body.tax_bps,
+    )
+    async with _transaction(request, staff.actor) as session:
+        view = await service.propose_new_product(session, staff.actor, new, body.reason, clock)
+    return _product_change_out(view)
+
+
+@staff_router.post("/product-changes/new-terms", status_code=201)
+async def staff_propose_new_terms(
+    request: Request, staff: ProductsChanger, clock: AppClock, body: NewTermsIn
+) -> ProductChangeOut:
+    """Propose new terms for a product. New investments take them once a second person approves."""
+    terms = service.NewTerms(
+        name=body.name,
+        kind=body.kind,
+        term_days=body.term_days,
+        minimum_minor=body.minimum_minor,
+        interest_paid=body.interest_paid,
+    )
+    async with _transaction(request, staff.actor) as session:
+        view = await service.propose_new_terms(
+            session, staff.actor, body.product_code, terms, body.reason, clock
+        )
+    return _product_change_out(view)
+
+
+@staff_router.post("/product-changes/status", status_code=201)
+async def staff_propose_status(
+    request: Request, staff: ProductsChanger, clock: AppClock, body: StatusChangeIn
+) -> ProductChangeOut:
+    """Propose opening or pausing a product. A second member of staff must approve it."""
+    async with _transaction(request, staff.actor) as session:
+        view = await service.propose_status(
+            session, staff.actor, body.product_code, ProductStatus(body.to), body.reason, clock
+        )
+    return _product_change_out(view)
+
+
+@staff_router.post("/product-changes/{change_id}/approve")
+async def staff_approve_product_change(
+    request: Request, staff: ProductsApprover, clock: AppClock, change_id: str
+) -> ProductChangeOut:
+    async with _transaction(request, staff.actor) as session:
+        view = await service.approve_product_change(session, staff.actor, change_id, clock)
+    return _product_change_out(view)
+
+
+@staff_router.post("/product-changes/{change_id}/send-back")
+async def staff_send_back_product_change(
+    request: Request, staff: ProductsChanger, clock: AppClock, change_id: str, body: SendBack
+) -> ProductChangeOut:
+    async with _transaction(request, staff.actor) as session:
+        view = await service.send_back_product_change(
+            session, staff.actor, change_id, body.note, clock
+        )
+    return _product_change_out(view)
+
+
+@staff_router.post("/product-changes/{change_id}/withdraw")
+async def staff_withdraw_product_change(
+    request: Request, staff: ProductsChanger, clock: AppClock, change_id: str
+) -> ProductChangeOut:
+    async with _transaction(request, staff.actor) as session:
+        view = await service.withdraw_product_change(session, staff.actor, change_id, clock)
+    return _product_change_out(view)
 
 
 @staff_router.get("/investment-corrections")

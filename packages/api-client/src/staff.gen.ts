@@ -113,7 +113,7 @@ export type Approval = z.infer<typeof Approval>;
 export const ApprovalItemOut = z.object({
   can_decide: z.boolean(),
   id: z.string(),
-  kind: z.enum(["wording_change", "ledger_correction", "pot_transfer", "bank_transfer_match", "day_close", "dealing_order", "dealing_result", "buffer_rules", "buffer_capital", "rate_change", "migration_totals", "migration_sign_off", "phone_change", "team_change", "client_lock", "suppression_lift", "complaint_outcome", "announcement", "payout_account", "investment_correction", "payout_resolution", "tax_remittance", "deposit_reassignment", "payout_release", "investment_transfer", "organisation", "account_closure", "compliance_case", "bank_account_change"]),
+  kind: z.enum(["wording_change", "ledger_correction", "pot_transfer", "bank_transfer_match", "day_close", "dealing_order", "dealing_result", "buffer_rules", "buffer_capital", "rate_change", "product_change", "migration_totals", "migration_sign_off", "phone_change", "team_change", "client_lock", "suppression_lift", "complaint_outcome", "announcement", "payout_account", "investment_correction", "payout_resolution", "tax_remittance", "deposit_reassignment", "payout_release", "investment_transfer", "organisation", "account_closure", "compliance_case", "bank_account_change"]),
   proposed_at: z.string(),
   proposed_by: z.string(),
   proposed_by_name: z.string().nullable(),
@@ -1598,11 +1598,39 @@ export const NewOrderIn = z.object({
 });
 export type NewOrderIn = z.infer<typeof NewOrderIn>;
 
+export const ProductKind = z.enum(["treasury_bill", "fixed_income"]);
+export type ProductKind = z.infer<typeof ProductKind>;
+
+export const NewProductIn = z.object({
+  annual_rate_bps: z.number().int(),
+  code: z.string(),
+  currency: Currency,
+  interest_paid: InterestPaid,
+  kind: ProductKind,
+  minimum_minor: z.number().int(),
+  name: z.string(),
+  reason: z.string(),
+  tax_bps: z.number().int(),
+  term_days: z.number().int().nullable(),
+});
+export type NewProductIn = z.infer<typeof NewProductIn>;
+
 export const NewSavedReply = z.object({
   body: z.string(),
   title: z.string(),
 });
 export type NewSavedReply = z.infer<typeof NewSavedReply>;
+
+export const NewTermsIn = z.object({
+  interest_paid: InterestPaid,
+  kind: ProductKind,
+  minimum_minor: z.number().int(),
+  name: z.string(),
+  product_code: z.string(),
+  reason: z.string(),
+  term_days: z.number().int().nullable(),
+});
+export type NewTermsIn = z.infer<typeof NewTermsIn>;
 
 export const NotCarriedView = z.object({
   attempt: z.number().int(),
@@ -1787,11 +1815,52 @@ export type PotIn = z.infer<typeof PotIn>;
 export const Problem = z.enum(["signatories_waiting", "too_few_signatories", "approvals_more_than_signatories", "approvals_too_few", "documents_missing", "registration_number_missing"]);
 export type Problem = z.infer<typeof Problem>;
 
-export const ProductKind = z.enum(["treasury_bill", "fixed_income"]);
-export type ProductKind = z.infer<typeof ProductKind>;
+export const ProductAction = z.enum(["create", "edit", "pause", "open"]);
+export type ProductAction = z.infer<typeof ProductAction>;
 
 export const ProductStatus = z.enum(["draft", "live", "paused"]);
 export type ProductStatus = z.infer<typeof ProductStatus>;
+
+export const RateOut = z.object({
+  annual_rate_bps: z.number().int(),
+  client_rate_percent: z.string(),
+  effective_from: z.string(),
+  tax_bps: z.number().int(),
+});
+export type RateOut = z.infer<typeof RateOut>;
+
+export const ProductChangeOut = z.object({
+  action: ProductAction,
+  currency: Currency,
+  decided_at: z.string().nullable(),
+  decided_by: z.string().nullable(),
+  decision_note: z.string().nullable(),
+  first_rate: RateOut.nullable(),
+  id: z.string(),
+  interest_paid: InterestPaid,
+  kind: ProductKind,
+  minimum_minor: z.number().int(),
+  name: z.string(),
+  product_code: z.string(),
+  product_status: ProductStatus,
+  proposed_at: z.string(),
+  proposed_by: z.string(),
+  reason: z.string(),
+  status: ProposalStatus,
+  term_days: z.number().int().nullable(),
+});
+export type ProductChangeOut = z.infer<typeof ProductChangeOut>;
+
+export const ProductReachOut = z.object({
+  active_plans: z.number().int(),
+  awaiting_payment: z.number().int(),
+  clients: z.number().int(),
+  open_goals: z.number().int(),
+  paused_plans: z.number().int(),
+  product_code: z.string(),
+  running_investments: z.number().int(),
+});
+export type ProductReachOut = z.infer<typeof ProductReachOut>;
 
 export const ProgressView = z.object({
   awaiting_payment_minor: z.number().int(),
@@ -1816,14 +1885,6 @@ export const ProposalIn = z.object({
   tax_bps: z.number().int(),
 });
 export type ProposalIn = z.infer<typeof ProposalIn>;
-
-export const RateOut = z.object({
-  annual_rate_bps: z.number().int(),
-  client_rate_percent: z.string(),
-  effective_from: z.string(),
-  tax_bps: z.number().int(),
-});
-export type RateOut = z.infer<typeof RateOut>;
 
 export const ProposalOut = z.object({
   decided_at: z.string().nullable(),
@@ -2207,7 +2268,7 @@ export const ReviewedPayoutOut = z.object({
 export type ReviewedPayoutOut = z.infer<typeof ReviewedPayoutOut>;
 
 export const RoleView = z.object({
-  permissions: z.array(z.enum(["overview.view", "review_queue.view", "identity_checks.view", "identity_checks.review", "maturities.view", "support.view", "support.reply", "complaints.view", "complaints.manage", "complaints.close", "clients.view", "clients.lock", "clients.close", "money_movement.view", "reconciliation.view", "reconciliation.change", "investments.view", "automatic_investing.view", "goals.view", "dealing_desk.view", "dealing_orders.change", "finance.view", "tax_remittances.change", "products.view", "rates.view", "rates.change", "compliance.view", "compliance_cases.change", "team.view", "team.change", "reports.view", "audit.view", "settings.view", "wordings.change", "bank_accounts.change", "email_suppressions.lift", "announcements.send", "migration.view", "bank_transfers.change", "deposit_reassignments.change", "payout_accounts.change", "bank_payouts.change", "migration.import", "migration.sign_off", "client_phones.change", "investment_corrections.change", "investment_transfers.change", "organisations.review"])),
+  permissions: z.array(z.enum(["overview.view", "review_queue.view", "identity_checks.view", "identity_checks.review", "maturities.view", "support.view", "support.reply", "complaints.view", "complaints.manage", "complaints.close", "clients.view", "clients.lock", "clients.close", "money_movement.view", "reconciliation.view", "reconciliation.change", "investments.view", "automatic_investing.view", "goals.view", "dealing_desk.view", "dealing_orders.change", "finance.view", "tax_remittances.change", "products.view", "products.change", "rates.view", "rates.change", "compliance.view", "compliance_cases.change", "team.view", "team.change", "reports.view", "audit.view", "settings.view", "wordings.change", "bank_accounts.change", "email_suppressions.lift", "announcements.send", "migration.view", "bank_transfers.change", "deposit_reassignments.change", "payout_accounts.change", "bank_payouts.change", "migration.import", "migration.sign_off", "client_phones.change", "investment_corrections.change", "investment_transfers.change", "organisations.review"])),
   role: z.enum(["admin", "operations", "finance", "compliance", "support"]),
 });
 export type RoleView = z.infer<typeof RoleView>;
@@ -2633,7 +2694,7 @@ export type StaffSendMessage = z.infer<typeof StaffSendMessage>;
 export const StaffSessionView = z.object({
   confirmed_until: z.string(),
   name: z.string(),
-  permissions: z.array(z.enum(["overview.view", "review_queue.view", "identity_checks.view", "identity_checks.review", "maturities.view", "support.view", "support.reply", "complaints.view", "complaints.manage", "complaints.close", "clients.view", "clients.lock", "clients.close", "money_movement.view", "reconciliation.view", "reconciliation.change", "investments.view", "automatic_investing.view", "goals.view", "dealing_desk.view", "dealing_orders.change", "finance.view", "tax_remittances.change", "products.view", "rates.view", "rates.change", "compliance.view", "compliance_cases.change", "team.view", "team.change", "reports.view", "audit.view", "settings.view", "wordings.change", "bank_accounts.change", "email_suppressions.lift", "announcements.send", "migration.view", "bank_transfers.change", "deposit_reassignments.change", "payout_accounts.change", "bank_payouts.change", "migration.import", "migration.sign_off", "client_phones.change", "investment_corrections.change", "investment_transfers.change", "organisations.review"])),
+  permissions: z.array(z.enum(["overview.view", "review_queue.view", "identity_checks.view", "identity_checks.review", "maturities.view", "support.view", "support.reply", "complaints.view", "complaints.manage", "complaints.close", "clients.view", "clients.lock", "clients.close", "money_movement.view", "reconciliation.view", "reconciliation.change", "investments.view", "automatic_investing.view", "goals.view", "dealing_desk.view", "dealing_orders.change", "finance.view", "tax_remittances.change", "products.view", "products.change", "rates.view", "rates.change", "compliance.view", "compliance_cases.change", "team.view", "team.change", "reports.view", "audit.view", "settings.view", "wordings.change", "bank_accounts.change", "email_suppressions.lift", "announcements.send", "migration.view", "bank_transfers.change", "deposit_reassignments.change", "payout_accounts.change", "bank_payouts.change", "migration.import", "migration.sign_off", "client_phones.change", "investment_corrections.change", "investment_transfers.change", "organisations.review"])),
   role: z.enum(["admin", "operations", "finance", "compliance", "support"]),
   second_steps: z.array(z.enum(["passkey", "authenticator", "code", "signup"])),
   staff_id: z.string(),
@@ -2685,6 +2746,13 @@ export const StatementOut = z.object({
   source: z.enum(["iotec", "bank"]),
 });
 export type StatementOut = z.infer<typeof StatementOut>;
+
+export const StatusChangeIn = z.object({
+  product_code: z.string(),
+  reason: z.string(),
+  to: z.enum(["live", "paused"]),
+});
+export type StatusChangeIn = z.infer<typeof StatusChangeIn>;
 
 export const StrandedPayoutOut = z.object({
   amount: MoneyView,
@@ -5286,6 +5354,91 @@ export const operations = {
     status: 204,
     response: null,
   },
+  "GET /staff/product-changes": {
+    method: "GET",
+    path: "/staff/product-changes",
+    params: z.object({}),
+    query: z.object({
+    status: ProposalStatus.nullable().optional(),
+  }),
+    body: null,
+    bodyKind: null,
+    idempotent: false,
+    status: 200,
+    response: z.array(ProductChangeOut),
+  },
+  "POST /staff/product-changes/new-product": {
+    method: "POST",
+    path: "/staff/product-changes/new-product",
+    params: z.object({}),
+    query: z.object({}),
+    body: NewProductIn,
+    bodyKind: "json",
+    idempotent: false,
+    status: 201,
+    response: ProductChangeOut,
+  },
+  "POST /staff/product-changes/new-terms": {
+    method: "POST",
+    path: "/staff/product-changes/new-terms",
+    params: z.object({}),
+    query: z.object({}),
+    body: NewTermsIn,
+    bodyKind: "json",
+    idempotent: false,
+    status: 201,
+    response: ProductChangeOut,
+  },
+  "POST /staff/product-changes/status": {
+    method: "POST",
+    path: "/staff/product-changes/status",
+    params: z.object({}),
+    query: z.object({}),
+    body: StatusChangeIn,
+    bodyKind: "json",
+    idempotent: false,
+    status: 201,
+    response: ProductChangeOut,
+  },
+  "POST /staff/product-changes/{change_id}/approve": {
+    method: "POST",
+    path: "/staff/product-changes/{change_id}/approve",
+    params: z.object({
+    change_id: z.string(),
+  }),
+    query: z.object({}),
+    body: null,
+    bodyKind: null,
+    idempotent: false,
+    status: 200,
+    response: ProductChangeOut,
+  },
+  "POST /staff/product-changes/{change_id}/send-back": {
+    method: "POST",
+    path: "/staff/product-changes/{change_id}/send-back",
+    params: z.object({
+    change_id: z.string(),
+  }),
+    query: z.object({}),
+    body: SendBack,
+    bodyKind: "json",
+    idempotent: false,
+    status: 200,
+    response: ProductChangeOut,
+  },
+  "POST /staff/product-changes/{change_id}/withdraw": {
+    method: "POST",
+    path: "/staff/product-changes/{change_id}/withdraw",
+    params: z.object({
+    change_id: z.string(),
+  }),
+    query: z.object({}),
+    body: null,
+    bodyKind: null,
+    idempotent: false,
+    status: 200,
+    response: ProductChangeOut,
+  },
   "GET /staff/products": {
     method: "GET",
     path: "/staff/products",
@@ -5309,6 +5462,19 @@ export const operations = {
     idempotent: false,
     status: 200,
     response: z.array(RateOut),
+  },
+  "GET /staff/products/{code}/reach": {
+    method: "GET",
+    path: "/staff/products/{code}/reach",
+    params: z.object({
+    code: z.string(),
+  }),
+    query: z.object({}),
+    body: null,
+    bodyKind: null,
+    idempotent: false,
+    status: 200,
+    response: ProductReachOut,
   },
   "GET /staff/rate-proposals": {
     method: "GET",

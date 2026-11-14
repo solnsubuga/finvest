@@ -16,6 +16,21 @@ A product is draft, live or paused. Only a live product takes new investments. A
 
 There is no wallet, so an investment is paid for in one payment and that payment must meet the minimum by itself.
 
+### Changing a product
+
+Staff never change a product directly. Each change is proposed by one member of staff with a reason and approved, or sent back with a note, by a different one, exactly as a rate is. The proposer can withdraw it while it waits. One change waits per product at a time. A change is one of four:
+
+| Change | What it does | Rules |
+| --- | --- | --- |
+| New product | Creates the product as a draft, with its first rate starting the day it is approved. | The code is new. A draft is never shown to clients or on the website. |
+| New terms | Changes the name, term, minimum, and for a draft its kind and when interest is paid. | The code and currency never change, because investments, goals, plans and the ledger refer to them. Once a product has left draft, its kind and when interest is paid stay as clients were told. The rate changes on its own, under [Rates](#rates). |
+| Pause | Stops new investments. Running ones carry on to maturity. | Only a live product pauses. |
+| Open | Lets clients start new investments. | The product needs a rate in force, and its currency must be one Finvest can take payments in and pay out in. Today that is shillings only (`CURRENCIES_THAT_CAN_OPEN` in `domain/product_changes.py`), so the dollar product stays paused. When paying in and out in dollars exists, adding USD there is all it takes to open it, still with two people. |
+
+New terms affect new investments only: an investment keeps the term and rate it started with, and one waiting for payment keeps the terms it was quoted. A proposal names the whole product as it will be and the version of the product it was made against, and the approval is refused if anything moved in between. Proposing, approving, sending back and withdrawing are each recorded in the audit trail with the reason and the product's values. Changes waiting for a second person appear in the console's approvals inbox as `product_change`.
+
+Before deciding a change, staff can see who it reaches: `GET /staff/products/{code}/reach` counts the running investments and investments waiting for payment that keep their terms, the clients holding them, and the open goals and automatic investing plans whose new money takes the change. Counts only, no personal data.
+
 ## Rates
 
 A product does not hold a rate. Each product has dated rate versions: the yearly rate before tax, the tax on interest, and the day the version starts.
@@ -50,7 +65,9 @@ One change waits for approval per product at a time. Proposing, approving, sendi
 | An approved proposal has its rate | A constraint checked at commit refuses an approval that wrote no rate. |
 | Nobody acts in another's name | A trigger requires the proposer, and later the decider, to be the member of staff the transaction acts for. |
 | A decision is final | A decided proposal never changes, and a proposal's product, rate, date and reason never change at all. |
-| Products are read-only | The application roles hold only SELECT on `investment_products`. Editing a product arrives with its own approval flow. |
+| A product changes only by an approved change | Migration 0360: the application can write a product only with `change_id` naming an approved change, decided by the member of staff the transaction acts for, that holds exactly the values written. An existing product moves on one version at a time, only by a change made against the version it is at, so an approved change can never be replayed. Its code, currency and creation time never change, and nothing removes a product. |
+| An approved change is in the catalogue | A constraint checked at commit refuses an approval that wrote no product, or a new product without its first rate. |
+| A new product's first rate is its own | The rates trigger accepts a rate with `product_change_id` only when its product was created by that approved new product, with the change's own rate and tax. Every other rate still needs an approved rate proposal. |
 | Proposals are staff business | A row policy shows proposals to staff transactions only. |
 
 Products and rates are readable by any API transaction, including one with nobody signed in, because the public website shows rates. The rows hold the tax rate, so the fence for clients is in the service: see below.
@@ -149,6 +166,9 @@ The code is `backend/app/modules/investments/api.py`. Amounts are integers in th
 | `GET /staff/investment-transfers?status=&limit=`, `GET /staff/investment-transfers/held` | `review_queue.view` | Transfers and their state, and those held for two people. |
 | `POST /staff/investment-transfers/{id}/release`, `/approve`, `/withdraw`, `/decline` | `investment_transfers.change` | Proposing, approving or withdrawing the release of a held transfer, with a second person enforced in the database, or declining it. |
 | `GET /staff/products`, `GET /staff/products/{code}/rates` | `products.view`, `rates.view` | Products with the rate and tax in force and the next approved one, and each product's rate history. |
+| `GET /staff/products/{code}/reach` | `products.view` | Who a change to the product reaches: running and unpaid investments, the clients holding them, open goals and automatic investing plans. |
+| `GET /staff/product-changes?status=` | `products.view` | New products, new terms, pauses and openings, and their state. |
+| `POST /staff/product-changes/new-product`, `/new-terms`, `/status`, `POST /staff/product-changes/{id}/approve`, `/send-back`, `/withdraw` | `products.change` | Proposing and deciding product changes, with the second person enforced in the database. Approving asks the person to confirm it is them. |
 | `GET /staff/rate-proposals?status=` | `rates.view` | Rate changes and their state. |
 | `POST /staff/rate-proposals`, `POST /staff/rate-proposals/{id}/approve`, `/send-back`, `/withdraw` | `rates.change` | Proposing and deciding rate changes, with the second person enforced in the database. |
 | `GET /staff/investments?status=&limit=`, `GET /staff/investments/{id}`, `GET /staff/interest-runs` | `investments.view` | Every investment with its tax, and the record of daily runs. |
@@ -156,7 +176,7 @@ The code is `backend/app/modules/investments/api.py`. Amounts are integers in th
 | `GET /staff/investment-corrections?status=&investment_id=&limit=` | `investments.view` | Unwinds and refunds and their state. |
 | `POST /staff/investment-corrections`, `POST /staff/investment-corrections/{id}/approve`, `/send-back`, `/withdraw` | `investment_corrections.change`, `Idempotency-Key` | Proposing and deciding an unwind or a refund. See [Undoing a mistake](#undoing-a-mistake). |
 
-Seeing rates needs `rates.view`. Proposing, approving, sending back and withdrawing a rate change need `rates.change`, held by admin and finance for now. A rate still never takes effect without a second person.
+Seeing rates needs `rates.view`. Proposing, approving, sending back and withdrawing a rate change need `rates.change`, held by admin and finance for now. Product changes need `products.change`, held by the same two roles. A rate still never takes effect without a second person.
 
 ## What clients see
 
@@ -315,4 +335,4 @@ Audit events on resource `investment_correction`: `investments.correction.propos
 
 ## Not built yet
 
-Editing a product, the monthly coupon for open terms, and the early withdrawal screen in the client app. The client app's Send screens and the console's held transfers follow the transfers backend in their own pull requests. The dealing desk is its own module: see [dealing-desk.md](dealing-desk.md).
+The monthly coupon for open terms, and the early withdrawal screen in the client app. The client app's Send screens and the console's held transfers follow the transfers backend in their own pull requests. The dealing desk is its own module: see [dealing-desk.md](dealing-desk.md).
