@@ -33,6 +33,13 @@ export const KIND_INFO: Record<Kind, KindInfo> = {
   // The subject is the payment's ID; the reassignment opens by its own.
   deposit_reassignment: { label: "Payment to move to another client", path: (item) => `/reconciliation?reassignment=${encodeURIComponent(item.id)}` },
   tax_remittance: { label: "Payment to URA", path: at("/finance") },
+  // The subject is the outcome proposed: "paid" or "failed".
+  payout_resolution: { label: "Stranded payout to settle", path: at("/money-movement") },
+  // The subject is the payout's ID, which the held payouts tab opens by.
+  payout_release: {
+    label: "Large payout to release",
+    path: (item) => `/review-queue?tab=held&payout=${encodeURIComponent(item.subject)}`,
+  },
 };
 
 const SUBJECT_WORDS: Record<string, string> = {

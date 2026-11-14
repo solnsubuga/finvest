@@ -48,6 +48,16 @@ def key() -> dict[str, str]:
     return {"Idempotency-Key": push_id()}
 
 
+async def inbox_item(api: Api, release_id: str) -> tuple[str, bool, bool] | None:
+    """The release's row in the reader's approvals inbox: subject, yours, can decide."""
+    listed = await api.http.get("/staff/approvals")
+    assert listed.status_code == 200, listed.text
+    for item in listed.json()["items"]:
+        if item["kind"] == "payout_release" and item["id"] == release_id:
+            return (item["subject"], item["yours"], item["can_decide"])
+    return None
+
+
 def code(response: object) -> str:
     body = response.json()  # type: ignore[attr-defined]
     fields = body["error"].get("fields") or []
@@ -83,12 +93,15 @@ async def test_two_members_of_staff_release_a_held_payout(api: Api, world: World
         each for each in (await api.http.get("/staff/payouts/held")).json() if each["id"] == held.id
     ]
     assert item["release"] == release
+    assert await inbox_item(api, release["id"]) == (held.id, True, False)
 
     approve = f"/staff/payout-releases/{release['id']}/approve"
     own = await api.http.post(approve, json={"reason": "Fine"}, headers=key())
     assert (own.status_code, code(own)) == (403, "proposed_by_you")
 
     checker = await api.staff("operations")
+    # The second person finds it waiting for them in the approvals inbox, under the payout's ID.
+    assert await inbox_item(api, release["id"]) == (held.id, False, True)
     headers = key()
     approved = await api.http.post(approve, json={"reason": "Agree"}, headers=headers)
     assert approved.status_code == 200, approved.text
@@ -102,6 +115,7 @@ async def test_two_members_of_staff_release_a_held_payout(api: Api, world: World
     assert (late.status_code, code(late)) == (409, "release_already_decided")
     after = await api.http.post(propose, json={"reason": "Again"}, headers=key())
     assert (after.status_code, code(after)) == (409, "payout_not_held")
+    assert await inbox_item(api, release["id"]) is None
     assert held.id not in [
         each["id"] for each in (await api.http.get("/staff/payouts/held")).json()
     ]

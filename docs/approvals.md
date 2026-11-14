@@ -44,6 +44,7 @@ The inbox only reads. Deciding happens on the owning module's own route, which c
 | `payout_resolution` | payouts `resolutions.waiting` | `reconciliation.view` | `reconciliation.view` |
 | `deposit_reassignment` | payments `reassignments.proposals_awaiting_approval`. The subject is the deposit's ID. | `reconciliation.view` | `deposit_reassignments.change` |
 | `payout_account` | payouts `destinations.checks_awaiting_approval`: a check recorded, not yet approved | `review_queue.view` | `payout_accounts.change` |
+| `payout_release` | payouts `reviews.waiting`: a proposal to release a payout held because it is large. The subject is the payout's ID. | `review_queue.view` | `payout_accounts.change` |
 | `investment_correction` | investments `list_corrections`, proposed. The subject is `unwind` or `refund`. | `investments.view` | `investment_corrections.change` |
 | `tax_remittance` | tax `service.waiting`: a payment to URA recorded, not yet approved. The subject is the month and currency, never the amount. | `finance.view` | `tax_remittances.change` |
 

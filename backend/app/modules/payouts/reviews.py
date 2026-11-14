@@ -89,6 +89,10 @@ _OPEN_FOR = text(
     f"SELECT {_COLUMNS} FROM payout_releases "  # noqa: S608 - constant column list
     "WHERE payout_id = :payout_id AND status = 'proposed' FOR UPDATE"
 )
+_WAITING = text(
+    f"SELECT {_COLUMNS} FROM payout_releases "  # noqa: S608 - constant column list
+    "WHERE status = 'proposed' ORDER BY proposed_at, id LIMIT 200"
+)
 _DECIDE = text(
     "UPDATE payout_releases SET status = :status, decided_by = :decided_by, "
     "decided_at = :now, decision_reason = :reason WHERE id = :id"
@@ -103,6 +107,12 @@ async def held(session: AsyncSession, *, limit: int = 100) -> list[HeldPayout]:
         row = (await session.execute(_OPEN_FOR, {"payout_id": payout.id})).one_or_none()
         found.append(HeldPayout(payout, None if row is None else _view(row)))
     return found
+
+
+async def waiting(session: AsyncSession) -> list[ReleaseView]:
+    """Open proposals to release a held payout, oldest first, for the approvals inbox. Empty
+    outside a staff transaction."""
+    return [_view(row) for row in (await session.execute(_WAITING)).all()]
 
 
 async def propose_release(

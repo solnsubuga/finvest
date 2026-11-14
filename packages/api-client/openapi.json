@@ -364,7 +364,8 @@
               "investment_correction",
               "payout_resolution",
               "tax_remittance",
-              "deposit_reassignment"
+              "deposit_reassignment",
+              "payout_release"
             ],
             "title": "Kind",
             "type": "string"
