@@ -89,6 +89,8 @@ export const ACTION_PERMISSIONS = [
   "tax_remittances.change",
   // Proposing a new mobile number for a client, or approving or rejecting someone else's.
   "client_phones.change",
+  // Proposing how a screening or monitoring case closes, approving or sending back someone else's, withdrawing your own, and screening a client again.
+  "compliance_cases.change",
 ] as const;
 
 export const PERMISSIONS = [...SCREEN_PERMISSIONS, ...ACTION_PERMISSIONS] as const;
