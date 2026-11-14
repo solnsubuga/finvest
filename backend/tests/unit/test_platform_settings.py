@@ -1,6 +1,6 @@
 """The platform settings catalogue: every value's rules, defaults and round trip."""
 
-from datetime import UTC, date, datetime, time
+from datetime import UTC, date, datetime, time, timedelta, timezone
 from typing import Any
 
 import pytest
@@ -14,12 +14,14 @@ from app.modules.platform_settings.domain.catalogue import (
     PERMISSIONS,
     SECTIONS,
     BankPayoutCutoff,
+    Holiday,
     InvalidSetting,
     MaturityReminders,
     OfficeNetworks,
     PaymentChannels,
     PublicHolidays,
     StatementLayouts,
+    bank_payout_day,
     checked,
     default,
 )
@@ -206,3 +208,28 @@ def test_a_statement_layout_names_its_money_columns_one_way_only() -> None:
         (["value", 0, "date_format"], "invalid")
     ]
     assert problems("statement_layouts", [LAYOUT, LAYOUT]) == [(["value"], "same_name_twice")]
+
+
+def test_a_bank_payout_asked_for_after_the_cutoff_or_on_a_holiday_goes_the_next_working_day() -> (
+    None
+):
+    eat = timezone(timedelta(hours=3))
+    cutoff = BankPayoutCutoff(time(14, 0))
+    holidays = PublicHolidays((Holiday(date(2026, 10, 9), "Independence Day"),))
+    # Wednesday before and after the cut-off. 13:59 in Kampala is 10:59 UTC.
+    assert bank_payout_day(datetime(2026, 10, 7, 10, 59, tzinfo=UTC), cutoff, holidays) == date(
+        2026, 10, 7
+    )
+    assert bank_payout_day(datetime(2026, 10, 7, 14, 0, tzinfo=eat), cutoff, holidays) == date(
+        2026, 10, 8
+    )
+    # Thursday after the cut-off: Friday is a holiday, so Monday.
+    assert bank_payout_day(datetime(2026, 10, 8, 15, 0, tzinfo=eat), cutoff, holidays) == date(
+        2026, 10, 12
+    )
+    # A Saturday morning goes on Monday.
+    assert bank_payout_day(datetime(2026, 10, 10, 9, 0, tzinfo=eat), cutoff, holidays) == date(
+        2026, 10, 12
+    )
+    with pytest.raises(ValueError):
+        bank_payout_day(datetime(2026, 10, 7, 9, 0), cutoff, holidays)

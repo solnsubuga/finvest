@@ -784,6 +784,7 @@ export const JoinGroup = z.object({
 export type JoinGroup = z.infer<typeof JoinGroup>;
 
 export const LimitsOut = z.object({
+  bank_payout_day: z.string(),
   bank_per_day: MoneyView.nullable(),
   bank_per_payout: MoneyView.nullable(),
   effective_from: z.string(),

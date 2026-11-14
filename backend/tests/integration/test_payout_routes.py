@@ -12,6 +12,7 @@ from app.infrastructure.storage import MemoryStorage
 from app.modules.identity.api import COOKIES
 from app.modules.payouts import destinations
 from app.shared.actors import Actor
+from app.shared.business_day import business_date
 from tests.support.clock import FakeClock
 from tests.support.database import TestDatabase
 from tests.support.http import CLIENT_ORIGIN, Api, running_api
@@ -222,6 +223,7 @@ async def test_a_client_sees_the_withdrawal_limits_in_force(api: Api) -> None:
     limits = (await api.http.get("/client/withdrawal-limits")).json()
     assert limits["mobile_money_per_payout"] == {"minor": 5_000_000, "currency": "UGX"}
     assert "review_above" not in limits
+    assert limits["bank_payout_day"] >= business_date(api.clock.now()).isoformat()
 
 
 async def test_the_payout_routes_need_a_signed_in_client(api: Api) -> None:

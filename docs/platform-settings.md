@@ -69,6 +69,10 @@ Migration `0340_platform_settings`:
 | `payment_channels` | payments `request_deposit` and the bank transfer details route; payouts `create_payout` | A paused pay in refuses a new payment with 503 `channel_paused`. A paused payout refuses a client's new withdrawal with `channel_paused`; a maturity payout the system asks for is still made |
 | `staff_idle_minutes` | identity, on every staff request and when a staff session opens | Once approved, it replaces the deploy setting. A session idle for longer than a newly shortened time ends at its next request. It never stretches past the session's absolute limit |
 | `office_networks` | identity, on every staff request | A request from outside every listed network is refused with 403 and field code `outside_office_network`, and does not count as use of the session. The session goes on working from the office |
+| `public_holidays`, `bank_payout_cutoff` | payouts `GET /client/withdrawal-limits` | `bank_payout_day`, the day a bank payout asked for now is paid (`catalogue.bank_payout_day`) |
+| `maturity_reminders` | investments `remind_maturing`, every morning at 08:30 | Which days before maturity a client is told their investment matures soon |
+
+Complaint deadlines still count Monday to Friday only. Whether public holidays are left out is open for counsel ([decisions.md](decisions.md)); once decided, the complaints rule reads `public_holidays` here.
 
 ## For other modules
 
