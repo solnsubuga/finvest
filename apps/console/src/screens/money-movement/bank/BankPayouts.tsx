@@ -7,6 +7,7 @@ import { cn } from "@/lib.ts";
 import { formatDay, formatExact, formatMoment } from "@/screens/reconciliation/format.ts";
 import { Decide, DoneNote, Empty, ErrorNote, Failure, type Decision } from "../Decide.tsx";
 import { useClients, useCommandKeys, useLoad } from "../load.ts";
+import { BulkDebits } from "./BulkDebits.tsx";
 import {
   BankPayoutsError,
   bankPayoutsErrorMessage,
@@ -47,7 +48,7 @@ function Client({ id, clients }: { id: string; clients: Clients }) {
   );
 }
 
-type Area = "waiting" | "batches" | "sent";
+type Area = "waiting" | "batches" | "sent" | "bulk";
 
 // Refusals that mean the lists on screen are out of date.
 const REFRESH: ReadonlySet<string> = new Set([
@@ -59,6 +60,8 @@ const REFRESH: ReadonlySet<string> = new Set([
   "payout_not_sent",
   "settlement_already_proposed",
   "settlement_already_decided",
+  "payout_not_to_settle",
+  "settlement_in_bulk",
 ]);
 
 const CURRENCIES: Currency[] = ["UGX", "USD"];
@@ -81,6 +84,7 @@ export function BankPayouts({ api, me, canChange, newKey = () => crypto.randomUU
   );
   const [batches, reloadBatches] = useLoad(useCallback(() => api.listBatches(), [api]), bankPayoutsErrorMessage);
   const [sent, reloadSent] = useLoad(useCallback(() => api.listSent(), [api]), bankPayoutsErrorMessage);
+  const [bulks, reloadBulks] = useLoad(useCallback(() => api.listBulks(), [api]), bankPayoutsErrorMessage, canChange);
   const [busy, setBusy] = useState(false);
   const [note, setNote] = useState<{ area: Area; id: string; kind: "done" | "failed"; message: string } | null>(null);
   const keys = useCommandKeys(newKey);
@@ -91,7 +95,7 @@ export function BankPayouts({ api, me, canChange, newKey = () => crypto.randomUU
     ...(batches.state === "ready" ? batches.value.flatMap((each) => (each.items ?? []).map((item) => item.clientId)) : []),
   ]);
 
-  const reloadAll = () => Promise.all([reloadWaiting(), reloadBatches(), reloadSent()]);
+  const reloadAll = () => Promise.all([reloadWaiting(), reloadBatches(), reloadSent(), ...(canChange ? [reloadBulks()] : [])]);
 
   async function run(area: Area, id: string, request: unknown, command: (key: string) => Promise<void>, done: string) {
     setBusy(true);
@@ -285,9 +289,52 @@ export function BankPayouts({ api, me, canChange, newKey = () => crypto.randomUU
           />
         )}
       </div>
+
+      <BulkDebits
+        api={api}
+        me={me}
+        canChange={canChange}
+        busy={busy}
+        bulks={bulks}
+        onRetry={() => void reloadBulks()}
+        sent={sent.state === "ready" ? sent.value : null}
+        batches={batches.state === "ready" ? batches.value : null}
+        clients={clients}
+        noteFor={(id) => noteFor("bulk", id)}
+        done={note?.area === "bulk" && note.kind === "done" ? note : null}
+        onPropose={(batchId, lineId, payoutIds, reason) =>
+          void run(
+            "bulk",
+            "new",
+            { bulk: batchId, lineId, payoutIds, reason },
+            (key) => api.proposeBulk(key, batchId, lineId, payoutIds, reason),
+            "Proposed. A different person must now approve the bulk debit before its payouts are settled.",
+          )
+        }
+        onDecide={(bulk, decision, reason) =>
+          void run(
+            "bulk",
+            bulk.id,
+            { bulkDecision: bulk.id, decision, reason },
+            (key) =>
+              decision === "approve"
+                ? api.approveBulk(key, bulk.id, reason)
+                : decision === "decline"
+                  ? api.declineBulk(bulk.id, reason)
+                  : api.withdrawBulk(bulk.id, reason),
+            BULK_DONE[decision],
+          )
+        }
+      />
     </section>
   );
 }
+
+const BULK_DONE: Record<Decision, string> = {
+  approve: "Approved. Every payout in the bulk debit is settled as paid, and each client has been told.",
+  decline: "Declined. Its payouts are waiting to be settled again.",
+  withdraw: "Withdrawn. Its payouts are waiting to be settled again.",
+};
 
 const BATCH_DONE: Record<Decision, string> = {
   approve: "Approved. The payouts count as sent. Download the file and upload it in the bank's portal.",
@@ -597,6 +644,14 @@ function SettleBank({ item, clients, me, canChange, busy, note, onPropose, onDec
       </header>
       {!canChange ? (
         <p className="m-0 text-md text-muted">Settling a bank payout needs the "Pay and settle bank payouts" permission.</p>
+      ) : proposal?.bulkId ? (
+        <div className="rounded-lg bg-surface-sunken px-4 py-3 text-md leading-normal">
+          <p className="m-0 font-bold">
+            {mine ? "You proposed" : "A colleague proposed"} it paid in one debit for its batch, {formatMoment(proposal.proposedAt)}
+          </p>
+          <p className="m-0">{proposal.reason}</p>
+          <p className="m-0 text-xs text-muted">Decide it with the rest of the bulk debit under "One debit for a whole batch".</p>
+        </div>
       ) : proposal ? (
         <div className="flex flex-col gap-3">
           <div className="rounded-lg bg-surface-sunken px-4 py-3 text-md leading-normal">

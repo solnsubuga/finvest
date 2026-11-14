@@ -111,6 +111,7 @@ export function Returns({ api, me, canChange, newKey = () => crypto.randomUUID()
                   )}
                 >
                   <span className="text-md font-bold">{clients.get(item.clientId)?.name ?? "A client"}</span>
+                  <span className="text-md font-bold tabular-nums">{formatExact(item.payout.amount)}</span>
                   <span className="font-mono text-xs">{item.payoutId}</span>
                   <span className="text-xs text-muted">Proposed {formatMoment(item.proposedAt)}</span>
                   <span className="mt-1 text-xs font-bold text-muted">{item.proposedBy === me ? "Waiting for a second person" : "Needs a second person"}</span>
@@ -169,18 +170,37 @@ function ReturnCard({
     <article aria-label={`Return of payout ${item.payoutId}`} className="flex flex-col gap-4 rounded-xl border border-border bg-surface p-5">
       <header className="flex flex-col gap-1">
         <h3 className="m-0 text-lg font-extrabold">{clientName ? `${clientName}'s payout came back` : "Payout came back"}</h3>
+        <p className="m-0 text-xl font-extrabold tabular-nums">{formatExact(item.payout.amount)}</p>
+        <p className="m-0 text-md">
+          Paid to {whereItWent(item.payout)}, held by {item.payout.holderName}
+        </p>
         <p className="m-0 text-xs text-muted">
           Payout <span className="font-mono">{item.payoutId}</span>, client <span className="font-mono">{item.clientId}</span>
         </p>
       </header>
+      <section aria-label="The line that brought it back" className="flex flex-col gap-1 rounded-lg border border-border px-4 py-3">
+        <h4 className="m-0 text-xs font-bold text-muted">The line that brought it back</h4>
+        {item.line ? (
+          <>
+            <p className="m-0 flex flex-wrap items-baseline gap-x-3 gap-y-0.5 text-md">
+              <span className="font-bold tabular-nums">{formatExact(item.line.amount)}</span>
+              <span>{formatDay(item.line.valueDate)}</span>
+              <span className="font-mono text-xs">{item.line.reference}</span>
+            </p>
+            <p className="m-0 text-md text-muted">{item.line.narrative}</p>
+          </>
+        ) : (
+          <p className="m-0 text-md text-muted">This line is not on the statement of the account the payout was paid from. Do not approve until it is checked.</p>
+        )}
+        <p className="m-0 text-xs text-muted">
+          Statement line <span className="font-mono">{item.statementLineId}</span>
+        </p>
+      </section>
       <div className="rounded-lg bg-surface-sunken px-4 py-3 text-md leading-normal">
         <p className="m-0 font-bold">
           {mine ? "You proposed" : "A colleague proposed"} it, {formatMoment(item.proposedAt)}
         </p>
         <p className="m-0">{item.reason}</p>
-        <p className="m-0 text-xs text-muted">
-          Statement line <span className="font-mono">{item.statementLineId}</span>
-        </p>
       </div>
       <Decide
         mine={mine}
@@ -195,7 +215,7 @@ function ReturnCard({
 
 const NETWORKS: Record<string, string> = { mtn: "MTN Mobile Money", airtel: "Airtel Money" };
 
-function whereItWent(payout: ReturnablePayout): string {
+function whereItWent(payout: Pick<ReturnablePayout, "kind" | "bankName" | "network" | "maskedAccount">): string {
   const place = payout.kind === "bank" ? (payout.bankName ?? "Bank account") : (NETWORKS[payout.network ?? ""] ?? "Mobile money");
   return `${place} ${payout.maskedAccount}`;
 }

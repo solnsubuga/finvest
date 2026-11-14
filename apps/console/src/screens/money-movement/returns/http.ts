@@ -61,6 +61,15 @@ interface ReturnJson {
   status: PayoutReturn["status"];
   proposed_by: string;
   proposed_at: string;
+  payout: {
+    kind: "bank" | "mobile_money";
+    amount: Amount;
+    bank_name: string | null;
+    network: string | null;
+    masked_account: string;
+    holder_name: string;
+  };
+  line: LineJson | null;
 }
 
 export function toReturn(json: ReturnJson): PayoutReturn {
@@ -73,6 +82,15 @@ export function toReturn(json: ReturnJson): PayoutReturn {
     status: json.status,
     proposedBy: json.proposed_by,
     proposedAt: json.proposed_at,
+    payout: {
+      kind: json.payout.kind,
+      amount: json.payout.amount,
+      bankName: json.payout.bank_name,
+      network: json.payout.network,
+      maskedAccount: json.payout.masked_account,
+      holderName: json.payout.holder_name,
+    },
+    line: json.line ? toLine(json.line) : null,
   };
 }
 
