@@ -139,6 +139,10 @@ The days are limited (`domain/runs.py`). Interest may be asked for any day from 
 
 Audit events on resource `investment_run_request`: `investments.run_request.proposed`, `.approved`, `.declined` and `.withdrawn`, with the run, the day and the job.
 
+### Reminders before maturity
+
+Every morning at 08:30 Kampala time the worker runs `investments.remind_maturing` (`investments/reminders.py`). It reads how many days before maturity to remind from Settings (7 days and 1 day unless staff changed it, [platform-settings.md](platform-settings.md)) and raises `investment_maturing` for every active investment maturing on one of those days, naming the product and the date, never an amount. Each reminder is keyed by the investment, its maturity date and the number of days, so a second run tells nobody twice. A morning the run missed is not made up: the next reminder day sends its own.
+
 ## HTTP routes
 
 The code is `backend/app/modules/investments/api.py`. Amounts are integers in the smallest unit (`amount_minor`), and a request that sends one as text or with a fraction is refused. Client and public responses are built only from after-tax figures, and a unit test checks that no field of those contracts names tax, a gross figure or basis points.

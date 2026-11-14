@@ -9088,6 +9088,11 @@
         "additionalProperties": false,
         "description": "The withdrawal limits in force today. A limit that is None is not set.",
         "properties": {
+          "bank_payout_day": {
+            "format": "date",
+            "title": "Bank Payout Day",
+            "type": "string"
+          },
           "bank_per_day": {
             "anyOf": [
               {
@@ -9132,7 +9137,8 @@
           "mobile_money_per_payout",
           "mobile_money_per_day",
           "bank_per_payout",
-          "bank_per_day"
+          "bank_per_day",
+          "bank_payout_day"
         ],
         "title": "LimitsOut",
         "type": "object"
