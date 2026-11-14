@@ -8,6 +8,12 @@ address they proved by its link. Two accounts may still type the same address, b
 prove it: the second proof fails with a unique violation, which the API answers `email_taken`.
 Changing the address clears the proof (0163), so the index never holds an address an account
 no longer has.
+
+Only the link sets `email_verified_at`. Accounts carried over from Finvest 1.0 arrive with it
+unset, whatever address the old system held, so the import cannot add duplicate proofs. If two
+accounts had already proved the same address before this runs, creating the index fails and the
+upgrade stops: clear one of the two proofs by hand, and that client proves their address again.
+Production has no clients yet, so this can only happen in a test or a copy of the database.
 """
 
 from alembic import op
