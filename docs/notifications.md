@@ -173,7 +173,7 @@ An address on the suppression list gets no email. When a client whose address bo
 
 Each event has a title and a body, used in the app, in a push notification and in an email, and a shorter text for SMS. The built-in words are in `domain/wording.py`.
 
-Staff can change them under Settings in the back office. Seeing the words needs the `settings.view` permission. Changing them needs `wordings.change`, which only the admin role holds for now. A change needs two people: one proposes it with a reason, and a different one approves or rejects it. The proposer can withdraw their own. PostgreSQL enforces that the person who decides is not the person who proposed, and that a decided change is never altered. Every step is written to the audit trail.
+Staff can change them under Settings in the back office. Seeing the words needs the `settings.view` permission. Changing them needs `wordings.change`, which only the admin role holds for now. A change needs two people: one proposes it with a reason, and a different one approves or rejects it. The proposer can withdraw their own. Proposing takes an `Idempotency-Key`: the console picks one when the form opens, so sending the same words again after a lost answer returns the announcement already proposed instead of putting a second one forward. PostgreSQL enforces that the person who decides is not the person who proposed, and that a decided change is never altered. Every step is written to the audit trail.
 
 An edited wording must pass these rules:
 

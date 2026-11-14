@@ -29663,8 +29663,28 @@
         ]
       },
       "post": {
-        "description": "Put an announcement to every client forward. A different member of staff approves it.",
+        "description": "Put an announcement to every client forward. A different member of staff approves it.\nThe same `Idempotency-Key` with the same words answers with the one already proposed.",
         "operationId": "propose_announcement_staff_announcements_post",
+        "parameters": [
+          {
+            "description": "A value the caller chooses once per intended action and sends again on every retry of it. Pattern: `[A-Za-z0-9._:-]{8,128}`.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "A value the caller chooses once per intended action and sends again on every retry of it. Pattern: `[A-Za-z0-9._:-]{8,128}`.",
+              "title": "Idempotency-Key"
+            }
+          }
+        ],
         "requestBody": {
           "content": {
             "application/json": {

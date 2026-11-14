@@ -240,9 +240,11 @@ export function createHttpAnnouncementsApi(http: Http): AnnouncementsApi {
         throw toAnnouncementsError(error);
       }
     },
-    async propose(announcement) {
+    async propose(announcement, idempotencyKey) {
       try {
-        return toAnnouncement(await http.request<AnnouncementJson>("POST", "/staff/announcements", announcement));
+        return toAnnouncement(
+          await http.request<AnnouncementJson>("POST", "/staff/announcements", announcement, { idempotencyKey }),
+        );
       } catch (error) {
         throw toAnnouncementsError(error);
       }
