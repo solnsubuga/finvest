@@ -4,10 +4,10 @@ Sanctions and politically exposed person (PEP) screening, transaction monitoring
 
 ## In short
 
-- Every client is screened when they hand in their identity check, again every 30 days once approved, and before a payout unless they were screened clear in the last 24 hours.
+- Every client is screened when they hand in their identity check, again every 30 days once approved, and before a payout unless they were screened clear in the last 24 hours. The call at hand-in lands with the identity checks thread's next PR; until then a newly approved client's first screen comes from the nightly sweep.
 - The provider is behind a port, so it can be swapped. The owner chose Sigma360. Until its account exists, no provider is set up and every screen is recorded as **not run**; the Compliance screen says screening is off.
 - A screen that finds a listed entity that may be the client opens a **case**. Two members of staff close it: one proposes the outcome, a different one approves it.
-- An entity staff already ruled out for a client, or accepted as a PEP, is recognised the next time and opens no new case.
+- An entity already on a case for the client (still open, ruled out, accepted as a PEP, or confirmed as sanctioned) is recognised the next time and opens no new case.
 - Every confirmed deposit and every payout is checked against monitoring rules, and a rule that fires opens a case the same way.
 - Clients never see any of this. Telling a client they matched a list could tip them off.
 
@@ -29,7 +29,7 @@ A provider that does not answer raises `ProviderUnavailable` and the job asks ag
 
 | Setting | Values |
 | --- | --- |
-| `FINVEST_SCREENING_PROVIDER` | `none` (default): nothing is screened and each screen is recorded as not run. `development-stub`: for a developer's own machine; surname `SANCTIONED` matches a sanctions list and `POLITICIAN` a PEP list. Refused in production. The Sigma360 adapter adds `sigma360`. |
+| `FINVEST_SCREENING_PROVIDER` | `none` (default): nothing is screened and each screen is recorded as not run. `development-stub`: for a developer's own machine; surname `SANCTIONED` matches a sanctions list and `POLITICIAN` a PEP list. Refused in production. The Sigma360 adapter adds `sigma360`. Set it on the API and the worker alike: the API reads it to decide whether a payout waits for a screen. |
 
 A provider needs `FINVEST_IDENTITY_DATA_KEY`, because the date of birth is sealed with it. The worker refuses to start without it.
 
@@ -88,6 +88,10 @@ A payout in `screening` has its money reserved and nothing sent. The client app 
 
 Whenever a client's standing may have changed (a screen finished, a case closed), screening publishes `screening.standing_changed`, and payouts' consumer `payouts.release_screened` moves the client's waiting payouts on once they are clear: to the queue, or to staff review if the payout is above the review amount in force that day. A payout still waiting can be found on the Compliance screen (`GET /staff/compliance/payouts`), and staff may decline it from the review queue's decline route, which returns the money to where it came from, as for a held payout. A person never releases one: only a clear screen does.
 
+Nothing else asks again for a screen that could not run (the provider refused, or never answered), so the worker's hourly pass `payouts.retry_screening` tries `release_screened` for every client with a payout waiting. Within a day of the failed screen the client still waits; after that the pass asks for a fresh screen, and the payout moves on once it comes back clear. A payout still waiting after 24 hours is logged as `payout_waiting_for_screening` with its ID, and staff see it on the Compliance screen with how long it has waited.
+
+A client whose identity check has no date of birth to send, such as one carried over from Finvest 1.0 without it, is recorded `no_subject` and their payouts wait once a provider is on. Staff then complete the client's identity details and screen them again from the Compliance screen.
+
 With no screening provider set up there is no screen to wait for, so `screen` counts as `clear`. An open case or a confirmed sanctions match still holds the payout. Decided for now.
 
 What the database enforces: `screening_payout_clearance(client, at)` holds the rule. A payout is never created held or queued for a client who is blocked, has an open screening case or is being screened. Only the worker moves a payout out of `screening` to queued or held, and only under the same condition. Staff may move it only to cancelled, in their own name. A client may ask the function only about themselves.
@@ -132,7 +136,7 @@ Known limits: a deposit moved to the right client by a reassignment stays in the
 | Screening | `not_a_match`: the listed entity is someone else. `pep_accepted`: the client is a PEP (or family or close associate) and stays a client, with the enhanced due diligence done written in the reason. `sanctioned`: the client is on a sanctions list. Payouts stay held and a report is owed to the Financial Intelligence Authority. |
 | Monitoring | `no_concern`: looked into and nothing to report. `report_to_fia`: a suspicious transaction report is owed to the Financial Intelligence Authority. |
 
-A `not_a_match` or `pep_accepted` case tells later screens that its entities are decided for this client. A `sanctioned` client stays `confirmed_match`.
+A case tells later screens that its entities are already dealt with for this client, whether it is still open or closed as `not_a_match`, `pep_accepted` or `sanctioned`, so finding them again opens no new case. A `sanctioned` client stays `confirmed_match`.
 
 Filing the report to the Financial Intelligence Authority is not built: staff file it on the FIA's own system and write the reference in the reason.
 
