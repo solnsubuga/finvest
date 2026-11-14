@@ -48,7 +48,7 @@ describe("the Documents screen", () => {
     expect(screen.getByText("Privacy notice")).toBeTruthy();
     expect(
       within(screen.getByTestId("agreement-terms")).getByText(
-        /^Version of 14 Nov 2026\. You agreed on 4 Mar 2025, .*, when you signed up\.$/,
+        /^Version of 14 Nov 2026\. You agreed on 14 Nov 2026, .*, when you signed up\.$/,
       ),
     ).toBeTruthy();
     await fireEvent.press(screen.getByTestId("open-agreement-privacy"));
