@@ -1080,6 +1080,54 @@ export const LookupResult = z.object({
 });
 export type LookupResult = z.infer<typeof LookupResult>;
 
+export const MaturityDayOut = z.object({
+  currency: Currency,
+  day: z.string(),
+  held: z.number().int(),
+  investments: z.number().int(),
+  open_pay_out: z.number().int(),
+  open_roll_over: z.number().int(),
+  paid_out: z.number().int(),
+  principal_minor: z.number().int(),
+  rolled_over: z.number().int(),
+});
+export type MaturityDayOut = z.infer<typeof MaturityDayOut>;
+
+export const StaffInvestmentOut = z.object({
+  accrued_through: z.string().nullable(),
+  amount_minor: z.number().int(),
+  annual_rate_bps: z.number().int(),
+  at_maturity: AtMaturity.nullable(),
+  client_id: z.string(),
+  created_at: z.string(),
+  currency: Currency,
+  id: z.string(),
+  interest_gross_minor: z.number().int(),
+  interest_net_minor: z.number().int(),
+  maturity_date: z.string().nullable(),
+  pay_by: z.string(),
+  payout_id: z.string().nullable(),
+  payout_refusal: z.string().nullable(),
+  product_code: z.string(),
+  product_name: z.string(),
+  rolled_from_id: z.string().nullable(),
+  rolled_into_id: z.string().nullable(),
+  start_date: z.string().nullable(),
+  status: InvestmentStatus,
+  tax_bps: z.number().int(),
+  tax_minor: z.number().int(),
+  term_days: z.number().int().nullable(),
+});
+export type StaffInvestmentOut = z.infer<typeof StaffInvestmentOut>;
+
+export const MaturitiesOut = z.object({
+  days: z.array(MaturityDayOut),
+  held: z.array(StaffInvestmentOut),
+  not_closed: z.array(StaffInvestmentOut),
+  today: z.string(),
+});
+export type MaturitiesOut = z.infer<typeof MaturitiesOut>;
+
 export const MessageItem = z.object({
   author: z.enum(["client", "staff"]),
   author_name: z.string().nullable(),
@@ -1823,33 +1871,6 @@ export const StaffGroupList = z.object({
   groups: z.array(StaffGroupView),
 });
 export type StaffGroupList = z.infer<typeof StaffGroupList>;
-
-export const StaffInvestmentOut = z.object({
-  accrued_through: z.string().nullable(),
-  amount_minor: z.number().int(),
-  annual_rate_bps: z.number().int(),
-  at_maturity: AtMaturity.nullable(),
-  client_id: z.string(),
-  created_at: z.string(),
-  currency: Currency,
-  id: z.string(),
-  interest_gross_minor: z.number().int(),
-  interest_net_minor: z.number().int(),
-  maturity_date: z.string().nullable(),
-  pay_by: z.string(),
-  payout_id: z.string().nullable(),
-  payout_refusal: z.string().nullable(),
-  product_code: z.string(),
-  product_name: z.string(),
-  rolled_from_id: z.string().nullable(),
-  rolled_into_id: z.string().nullable(),
-  start_date: z.string().nullable(),
-  status: InvestmentStatus,
-  tax_bps: z.number().int(),
-  tax_minor: z.number().int(),
-  term_days: z.number().int().nullable(),
-});
-export type StaffInvestmentOut = z.infer<typeof StaffInvestmentOut>;
 
 export const StaffLoginStart = z.object({
   email: z.string(),
@@ -2916,6 +2937,17 @@ export const operations = {
     idempotent: false,
     status: 200,
     response: LoginStarted,
+  },
+  "GET /staff/maturities": {
+    method: "GET",
+    path: "/staff/maturities",
+    params: z.object({}),
+    query: z.object({}),
+    body: null,
+    bodyKind: null,
+    idempotent: false,
+    status: 200,
+    response: MaturitiesOut,
   },
   "GET /staff/migration": {
     method: "GET",
