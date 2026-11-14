@@ -54,7 +54,7 @@ Date,Journal,Account code,Account name,Kind,Currency,Debit,Credit
 
 The export moves no money and changes no client fact, so one member of staff with `finance.view` does it. Each export is saved in `finance_journal_exports` (migration 0250) with the days, the number of lines, the debit total, who exported it and when, together with an audit event `finance.journal_exported` in the same transaction. The database lets only the signed-in member of staff add a row as themselves, and never changes or removes one.
 
-The screen shows the last day sent and offers the next closed days not yet sent: from the day after the last one sent, or the last closed day if nothing was ever sent, up to 31 days at a time. It also lists the last five exports.
+Nothing is sent to the accounting system from Finvest: staff download the file and import it there by hand. The screen shows the last day downloaded and offers the next closed days not yet downloaded: from the day after the last one, or the last closed day if nothing was ever downloaded, up to 31 days at a time. It also lists the last five exports, each with Download again, because the server records an export as it answers and a file lost on the way would otherwise be gone from the screen. Downloading again is recorded as another export.
 
 Which accounting system Finvest uses is not decided, so the file is a plain CSV that most systems import. Mapping Finvest's codes to the accountant's chart is done on import until the system is chosen.
 
