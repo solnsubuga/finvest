@@ -28,6 +28,8 @@ export function hrefFor(link: Notification["link"]): Href | null {
       return { pathname: "/goals/[goalId]", params: { goalId: link.id } };
     case "identity_check":
       return "/id-check";
+    case "organisation":
+      return { pathname: "/account/organisations/[organisationId]", params: { organisationId: link.id } };
     default:
       return null;
   }
