@@ -86,6 +86,11 @@ _SPECS = (
     _event("kyc_approved", Category.ACCOUNT, "kyc"),
     _event("kyc_retake_requested", Category.ACCOUNT, "kyc"),
     _event("kyc_rejected", Category.ACCOUNT, "kyc"),
+    # Company and group accounts.
+    _event("organisation_invited", Category.ACCOUNT, "organisations", "organisation", "person"),
+    _event("organisation_returned", Category.ACCOUNT, "organisations", "organisation"),
+    _event("organisation_rejected", Category.ACCOUNT, "organisations", "organisation"),
+    _event("organisation_approved", Category.ACCOUNT, "organisations", "organisation"),
     _event("payout_destination_approved", Category.ACCOUNT, "payouts", "destination"),
     _event("payout_destination_refused", Category.ACCOUNT, "payouts", "destination"),
     _event("statement_ready", Category.ACCOUNT, "statements", "period"),

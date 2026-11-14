@@ -6,6 +6,11 @@ import { z } from "zod";
 export type Upload = Blob | { uri: string; name: string; type: string };
 export const Upload = z.custom<Upload>((value) => value !== null && typeof value === "object");
 
+export const AnswerBody = z.object({
+  join: z.boolean(),
+});
+export type AnswerBody = z.infer<typeof AnswerBody>;
+
 export const AnswersBody = z.object({
   answers: z.record(z.string(), z.unknown()),
 });
@@ -23,6 +28,18 @@ export const AnswersView = z.object({
   profile: Profile,
 });
 export type AnswersView = z.infer<typeof AnswersView>;
+
+export const Kind = z.enum(["company", "group"]);
+export type Kind = z.infer<typeof Kind>;
+
+export const ApplyBody = z.object({
+  approvals_needed: z.number().int(),
+  kind: Kind,
+  name: z.string(),
+  registration_number: z.string().nullable().optional(),
+  role: z.string(),
+});
+export type ApplyBody = z.infer<typeof ApplyBody>;
 
 export const AskBody = z.object({
   reason: z.string().nullable().optional(),
@@ -68,6 +85,11 @@ export type BankTransferDetails = z.infer<typeof BankTransferDetails>;
 export const Blocker = z.enum(["investments_running", "money_owed", "deposits_in_progress", "payouts_in_progress", "goals_open", "plans_live"]);
 export type Blocker = z.infer<typeof Blocker>;
 
+export const BodyAddDocumentClientOrganisationsOrganisationIdDocumentsKindPut = z.object({
+  document: Upload,
+});
+export type BodyAddDocumentClientOrganisationsOrganisationIdDocumentsKindPut = z.infer<typeof BodyAddDocumentClientOrganisationsOrganisationIdDocumentsKindPut>;
+
 export const BodyAddPhotoClientClaimCheckPhotosKindPut = z.object({
   photo: Upload,
 });
@@ -99,6 +121,13 @@ export const CategoryChannels = z.object({
   channels: z.array(z.enum(["push", "sms", "email"])),
 });
 export type CategoryChannels = z.infer<typeof CategoryChannels>;
+
+export const ChangeBody = z.object({
+  approvals_needed: z.number().int().nullable().optional(),
+  name: z.string().nullable().optional(),
+  registration_number: z.string().nullable().optional(),
+});
+export type ChangeBody = z.infer<typeof ChangeBody>;
 
 export const CheckStatus = z.enum(["draft", "submitted", "needs_review", "with_compliance", "awaiting_client", "approved", "rejected"]);
 export type CheckStatus = z.infer<typeof CheckStatus>;
@@ -323,6 +352,65 @@ export const ClientLoginStart = z.object({
   phone: z.string().nullable().optional(),
 });
 export type ClientLoginStart = z.infer<typeof ClientLoginStart>;
+
+export const DocumentKind = z.enum(["certificate_of_incorporation", "board_resolution", "constitution", "group_resolution"]);
+export type DocumentKind = z.infer<typeof DocumentKind>;
+
+export const DocumentOut = z.object({
+  byte_size: z.number().int(),
+  content_type: z.string(),
+  kind: DocumentKind,
+  uploaded_at: z.string(),
+});
+export type DocumentOut = z.infer<typeof DocumentOut>;
+
+export const Problem = z.enum(["signatories_waiting", "too_few_signatories", "approvals_more_than_signatories", "approvals_too_few", "documents_missing", "registration_number_missing"]);
+export type Problem = z.infer<typeof Problem>;
+
+export const SignatoryStatus = z.enum(["invited", "joined", "declined", "removed"]);
+export type SignatoryStatus = z.infer<typeof SignatoryStatus>;
+
+export const SignatoryOut = z.object({
+  account_number: z.string(),
+  answered_at: z.string().nullable(),
+  client_id: z.string(),
+  invited_at: z.string(),
+  is_applicant: z.boolean(),
+  name: z.string(),
+  role: z.string(),
+  status: SignatoryStatus,
+});
+export type SignatoryOut = z.infer<typeof SignatoryOut>;
+
+export const Status = z.enum(["draft", "submitted", "checked", "approved", "rejected"]);
+export type Status = z.infer<typeof Status>;
+
+export const ClientOrganisationOut = z.object({
+  account_number: z.string().nullable(),
+  approvals_needed: z.number().int(),
+  created_at: z.string(),
+  decided_at: z.string().nullable(),
+  documents: z.array(DocumentOut),
+  documents_needed: z.array(DocumentKind),
+  id: z.string(),
+  invited: z.boolean(),
+  is_applicant: z.boolean(),
+  kind: Kind,
+  name: z.string(),
+  problems: z.array(Problem),
+  registration_number: z.string().nullable(),
+  return_note: z.string().nullable(),
+  returned_at: z.string().nullable(),
+  signatories: z.array(SignatoryOut),
+  status: Status,
+  submitted_at: z.string().nullable(),
+});
+export type ClientOrganisationOut = z.infer<typeof ClientOrganisationOut>;
+
+export const ClientOrganisationList = z.object({
+  items: z.array(ClientOrganisationOut),
+});
+export type ClientOrganisationList = z.infer<typeof ClientOrganisationList>;
 
 export const ClientSessionView = z.object({
   client_id: z.string(),
@@ -630,6 +718,12 @@ export const Invite = z.object({
 });
 export type Invite = z.infer<typeof Invite>;
 
+export const InviteBody = z.object({
+  role: z.string(),
+  to: z.string(),
+});
+export type InviteBody = z.infer<typeof InviteBody>;
+
 export const InvitePreview = z.object({
   category: GoalCategory,
   currency: Currency,
@@ -668,7 +762,7 @@ export type LimitsOut = z.infer<typeof LimitsOut>;
 
 export const LinkView = z.object({
   id: z.string(),
-  kind: z.enum(["deposit", "payout", "investment", "identity_check", "payout_destination", "statement", "security", "conversation", "complaint", "goal"]),
+  kind: z.enum(["deposit", "payout", "investment", "identity_check", "payout_destination", "statement", "security", "conversation", "complaint", "goal", "organisation"]),
 });
 export type LinkView = z.infer<typeof LinkView>;
 
@@ -2164,6 +2258,121 @@ export const operations = {
     idempotent: false,
     status: 200,
     response: Unread,
+  },
+  "GET /client/organisations": {
+    method: "GET",
+    path: "/client/organisations",
+    params: z.object({}),
+    query: z.object({}),
+    body: null,
+    bodyKind: null,
+    idempotent: false,
+    status: 200,
+    response: ClientOrganisationList,
+  },
+  "POST /client/organisations": {
+    method: "POST",
+    path: "/client/organisations",
+    params: z.object({}),
+    query: z.object({}),
+    body: ApplyBody,
+    bodyKind: "json",
+    idempotent: false,
+    status: 201,
+    response: ClientOrganisationOut,
+  },
+  "GET /client/organisations/{organisation_id}": {
+    method: "GET",
+    path: "/client/organisations/{organisation_id}",
+    params: z.object({
+    organisation_id: z.string(),
+  }),
+    query: z.object({}),
+    body: null,
+    bodyKind: null,
+    idempotent: false,
+    status: 200,
+    response: ClientOrganisationOut,
+  },
+  "PATCH /client/organisations/{organisation_id}": {
+    method: "PATCH",
+    path: "/client/organisations/{organisation_id}",
+    params: z.object({
+    organisation_id: z.string(),
+  }),
+    query: z.object({}),
+    body: ChangeBody,
+    bodyKind: "json",
+    idempotent: false,
+    status: 200,
+    response: ClientOrganisationOut,
+  },
+  "POST /client/organisations/{organisation_id}/answer": {
+    method: "POST",
+    path: "/client/organisations/{organisation_id}/answer",
+    params: z.object({
+    organisation_id: z.string(),
+  }),
+    query: z.object({}),
+    body: AnswerBody,
+    bodyKind: "json",
+    idempotent: false,
+    status: 200,
+    response: ClientOrganisationOut,
+  },
+  "PUT /client/organisations/{organisation_id}/documents/{kind}": {
+    method: "PUT",
+    path: "/client/organisations/{organisation_id}/documents/{kind}",
+    params: z.object({
+    organisation_id: z.string(),
+    kind: DocumentKind,
+  }),
+    query: z.object({}),
+    body: BodyAddDocumentClientOrganisationsOrganisationIdDocumentsKindPut,
+    bodyKind: "multipart",
+    idempotent: false,
+    status: 200,
+    response: ClientOrganisationOut,
+  },
+  "POST /client/organisations/{organisation_id}/signatories": {
+    method: "POST",
+    path: "/client/organisations/{organisation_id}/signatories",
+    params: z.object({
+    organisation_id: z.string(),
+  }),
+    query: z.object({}),
+    body: InviteBody,
+    bodyKind: "json",
+    idempotent: false,
+    status: 201,
+    response: ClientOrganisationOut,
+  },
+  "DELETE /client/organisations/{organisation_id}/signatories/{client_id}": {
+    method: "DELETE",
+    path: "/client/organisations/{organisation_id}/signatories/{client_id}",
+    params: z.object({
+    organisation_id: z.string(),
+    client_id: z.string(),
+  }),
+    query: z.object({}),
+    body: null,
+    bodyKind: null,
+    idempotent: false,
+    status: 200,
+    response: ClientOrganisationOut,
+  },
+  "POST /client/organisations/{organisation_id}/submission": {
+    method: "POST",
+    path: "/client/organisations/{organisation_id}/submission",
+    params: z.object({
+    organisation_id: z.string(),
+  }),
+    query: z.object({}),
+    body: null,
+    bodyKind: null,
+    idempotent: false,
+    status: 200,
+    response: ClientOrganisationOut,
   },
   "GET /client/passkeys": {
     method: "GET",
