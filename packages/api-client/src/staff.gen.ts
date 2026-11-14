@@ -1299,6 +1299,7 @@ export const NotCarriedView = z.object({
   legacy_client_ref: z.string(),
   noted_at: z.string(),
   proposed_by: z.string().nullable(),
+  reason: z.string().nullable(),
   resolution_id: z.string().nullable(),
   state: z.enum(["noted", "retry_proposed", "close_proposed", "retrying"]),
 });
