@@ -196,7 +196,8 @@ async def choose_at_maturity(
             details={
                 "at_maturity": at_maturity.value,
                 "destination_id": destination_id,
-                "goal_id": goal_id,
+                # Only a choice that saves to a goal names one, so other choices keep their shape.
+                **({"goal_id": goal_id} if goal_id is not None else {}),
             },
         ),
         clock,
