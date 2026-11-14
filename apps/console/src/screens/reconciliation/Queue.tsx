@@ -29,7 +29,7 @@ export function Queue({ items, selectedId, onSelect }: QueueProps) {
               <span className="text-xs text-muted">
                 {item.bankName}, sent {formatDay(item.sentOn)}
               </span>
-              <span className={cn("mt-1 text-xs font-bold", item.stage === "to_match" ? "text-warning-text" : "text-muted")}>
+              <span className={cn("mt-1 text-xs font-bold", item.stage === "to_match" || item.stage === "in_review" ? "text-warning-text" : "text-muted")}>
                 {STAGE_LABELS[item.stage]}
               </span>
             </button>

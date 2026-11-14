@@ -80,6 +80,8 @@ export const ACTION_PERMISSIONS = [
   "dealing_orders.change",
   // Approving, rejecting, asking for new photos or escalating an identity check. One person decides.
   "identity_checks.review",
+  // Recording a payment of withholding tax to URA, approving someone else's, or declining it.
+  "tax_remittances.change",
 ] as const;
 
 export const PERMISSIONS = [...SCREEN_PERMISSIONS, ...ACTION_PERMISSIONS] as const;

@@ -15,6 +15,7 @@ import {
   type TransferDetail,
 } from "./api.ts";
 import { Queue } from "./Queue.tsx";
+import { createHttpBankTransfersApi } from "./http.ts";
 import { notConnectedReassignmentsApi, type ReassignmentsApi } from "./reassignments/api.ts";
 import { createHttpReassignmentsApi } from "./reassignments/http.ts";
 import { Reassignments } from "./reassignments/Reassignments.tsx";
@@ -127,12 +128,16 @@ export function BankTransfersScreen({ api, canDecide, newKey = () => crypto.rand
 
   const toMatch = items?.filter((item) => item.stage === "to_match").length ?? 0;
   const toApprove = items?.filter((item) => item.stage === "to_approve").length ?? 0;
+  // Until the list says which check each transfer waits for, the queue can only count them.
+  const unsorted = items?.filter((item) => item.stage === "in_review").length ?? 0;
   const summary =
     items === null
       ? "Bank transfers clients told us about, checked against the bank statement by two people."
-      : toMatch + toApprove === 0
+      : toMatch + toApprove + unsorted === 0
         ? "Nothing is waiting. New transfers appear here as clients send their receipts."
-        : `${count(toMatch, "to match")}, ${count(toApprove, "waiting for a second person")}.`;
+        : unsorted > 0
+          ? `${count(toMatch + toApprove + unsorted, "waiting to be checked")}. Open one to see whether it needs matching or a second person.`
+          : `${count(toMatch, "to match")}, ${count(toApprove, "waiting for a second person")}.`;
 
   return (
     <>
@@ -211,20 +216,27 @@ function Failure({ message, onRetry }: { message: string; onRetry?: () => void }
 
 function stubCase(): StubCase {
   const sample = new URLSearchParams(window.location.search).get("sample");
-  return sample === "empty" || sample === "error" ? sample : "sample";
+  return sample === "empty" || sample === "error" || sample === "unsorted" ? sample : "sample";
 }
 
 export default function ReconciliationPage() {
   const { session } = useAuth();
   // Sample transfers under `pnpm dev` or a preview build, like sign-in. `?sample=empty` and
-  // `?sample=error` show those states. Otherwise nothing until the API client exists.
-  const [api] = useState<BankTransfersApi>(() =>
-    isStubAuth() && session ? createStubBankTransfersApi(session.staffId, 150, stubCase()) : notConnectedBankTransfersApi,
-  );
+  // `?sample=error` show those states. Otherwise the real routes.
+  const [api] = useState<BankTransfersApi>(() => {
+    if (!session) return notConnectedBankTransfersApi;
+    if (isStubAuth()) return createStubBankTransfersApi(session.staffId, 150, stubCase());
+    const base = apiBaseUrl();
+    return base ? createHttpBankTransfersApi(createHttp(base), session.staffId) : notConnectedBankTransfersApi;
+  });
   // Moving a payment credited to the wrong client: sample moves under the stub, like the
-  // transfers above, and the real API otherwise.
+  // transfers above, and the real API otherwise. `?sample=unsorted` is about the queue, so the
+  // moves show their usual sample there.
   const [moves] = useState<ReassignmentsApi>(() => {
-    if (isStubAuth() && session) return createStubReassignmentsApi(session.staffId, 150, stubCase());
+    if (isStubAuth() && session) {
+      const which = stubCase();
+      return createStubReassignmentsApi(session.staffId, 150, which === "unsorted" ? "sample" : which);
+    }
     const base = apiBaseUrl();
     return base ? createHttpReassignmentsApi(createHttp(base)) : notConnectedReassignmentsApi;
   });

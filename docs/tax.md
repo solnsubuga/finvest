@@ -86,3 +86,7 @@ A client's withholding tax certificate covers Uganda's tax year, 1 July to 30 Ju
 It is built only from the ledger, writes nothing, and runs as the worker or staff. It raises `NoAccount` for a client who is not approved and `DoesNotAddUp` when a line or total does not add up (before tax less tax is after tax, and the totals are the sums of the lines), in which case nothing is issued. A line can be negative when an investment undone this year earned in the last one.
 
 The certificate is the one place a client sees a tax amount. It never shows a rate.
+
+## In the console
+
+The Finance screen (`apps/console/src/screens/finance`, `finance.view`) shows the tax held for URA, each of the last twelve months with its status (to pay, overdue, waiting for approval, paid, credit), one month client by client with the CSV download, and the payments to URA. Staff with `tax_remittances.change` record a payment from an ended month's row, and a second person approves or declines it on its card. Under the sample sign-in, `?sample=empty` and `?sample=offline` show the empty and error states.
