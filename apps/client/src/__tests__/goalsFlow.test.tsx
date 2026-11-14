@@ -151,4 +151,16 @@ describe("goals", () => {
     await fireEvent.press(screen.getByTestId("save-continue"));
     expect(await screen.findByText("Pay UGX 250,000")).toBeTruthy();
   });
+
+  it("opens a running saving, where it can be taken out early", async () => {
+    await signIn("772123456");
+    await screen.findByText("Welcome, Amara");
+    await fireEvent.press(screen.getByLabelText("Goals"));
+    await fireEvent.press(await screen.findByText("School fees, Term 1"));
+    expect(await screen.findByTestId("goal-take-out-note")).toBeTruthy();
+    const rows = screen.getAllByTestId(/^saving-/);
+    expect(rows.length).toBeGreaterThan(0);
+    await fireEvent.press(rows[0]!);
+    expect(screen).toHavePathname(`/investment/${rows[0]!.props.testID.replace("saving-", "")}`);
+  });
 });
