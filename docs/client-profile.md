@@ -45,6 +45,23 @@ There are no wrong answers and the profile refuses nothing: it is used to sugges
 | `PUT /client/risk-profile` | Client | Answer every question: `{"answers": {"purpose": "...", ...}}`. |
 | `GET /staff/clients/{id}/profile` | `clients.view` | Next of kin with ID numbers masked (null without the data key), and every set of answers, newest first. |
 
+## Freezing the account
+
+A client who loses their phone, or thinks someone else knows their password, freezes their own account from Profile, Freeze my account. It takes effect at once:
+
+- The account moves from `active` to `locked`, so nobody can log in, the client included, and every session the client holds ends (`revoked_reason = 'frozen'`).
+- Nothing in the ledger moves. Investments and automatic plans carry on as they would under a staff lock.
+- No fresh sign-in is asked for: freezing only protects the account, and someone who has just lost their phone may not have their second step.
+- No message is sent, because Finvest sends a locked client no messages ([client-accounts.md](client-accounts.md#locking)).
+
+Unfreezing is never done from the app. The client gets in touch, and staff use the existing two-person unlock: one person checks it is really them and proposes the unlock, a different person approves it ([client-accounts.md](client-accounts.md)). The client page shows the freeze, with the client's reason, above the lock section.
+
+Migration `0235_client_freezes` adds `identity_client_freezes`, one row each time a client froze their account, never changed or removed. The only way in is `identity_freeze_client`, a SECURITY DEFINER function that takes the client from the actor settings, so a client freezes only themselves; the API holds no write on the table. It records the freeze and locks the client in the same transaction, and the status guard on `identity_clients` accepts `active` to `locked` only with a freeze recorded in that transaction. Freezing an account that is already locked, closed or not yet claimed is refused with `conflict`. Each freeze is the audit event `identity.client.frozen`.
+
+| Route | Who | Use |
+| --- | --- | --- |
+| `POST /client/account-freeze` | Client | `{"reason": "..." or null}`, at most 500 characters. Answers 201 with `frozen_at`. The session that asked has ended by the time the answer arrives. |
+
 ## Not built yet
 
 - The investing screens do not yet filter or mark products by profile, and investing does not ask for the questions before a first investment. The client app asks for them from Profile and before the first investment.

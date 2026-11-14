@@ -545,6 +545,11 @@ export const EmailLinkSent = z.object({
 });
 export type EmailLinkSent = z.infer<typeof EmailLinkSent>;
 
+export const FreezeBody = z.object({
+  reason: z.string().nullable().optional(),
+});
+export type FreezeBody = z.infer<typeof FreezeBody>;
+
 export const Frequency = z.enum(["weekly", "monthly"]);
 export type Frequency = z.infer<typeof Frequency>;
 
@@ -1254,6 +1259,11 @@ export const WithdrawalRequest = z.object({
 });
 export type WithdrawalRequest = z.infer<typeof WithdrawalRequest>;
 
+export const IdentityFreezeApiFreezeView = z.object({
+  frozen_at: z.string(),
+});
+export type IdentityFreezeApiFreezeView = z.infer<typeof IdentityFreezeApiFreezeView>;
+
 /** Every route, by method and path, with what it takes and what it answers. */
 export const operations = {
   "GET /client/account-closure": {
@@ -1290,6 +1300,17 @@ export const operations = {
     idempotent: false,
     status: 200,
     response: ClientClosureView,
+  },
+  "POST /client/account-freeze": {
+    method: "POST",
+    path: "/client/account-freeze",
+    params: z.object({}),
+    query: z.object({}),
+    body: FreezeBody,
+    bodyKind: "json",
+    idempotent: false,
+    status: 201,
+    response: IdentityFreezeApiFreezeView,
   },
   "GET /client/authenticator": {
     method: "GET",

@@ -722,12 +722,20 @@ export const ConsoleApiComplaintSummary = z.object({
 });
 export type ConsoleApiComplaintSummary = z.infer<typeof ConsoleApiComplaintSummary>;
 
+export const ConsoleApiFreezeView = z.object({
+  frozen_at: z.string(),
+  id: z.string(),
+  reason: z.string().nullable(),
+});
+export type ConsoleApiFreezeView = z.infer<typeof ConsoleApiFreezeView>;
+
 export const ClientPageView = z.object({
   account: AccountView,
   can_lock: z.boolean(),
   complaints: z.array(ConsoleApiComplaintSummary).nullable(),
   conversation: ConversationSummary.nullable(),
   destinations: z.array(DestinationView),
+  freezes: z.array(ConsoleApiFreezeView),
   identity_check: IdentityCheckView.nullable(),
   locks: z.array(LockView),
   owed: z.array(OwedView),

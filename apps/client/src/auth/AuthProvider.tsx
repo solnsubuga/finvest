@@ -2,6 +2,7 @@ import { createContext, ReactNode, useContext, useEffect, useMemo, useRef, useSt
 import { AppState, View } from "react-native";
 
 import { onLocked, onUnauthorized } from "@/api/http";
+import { AccountFrozen } from "@/components/AccountFrozen";
 import { SignedOutForPins, UnlockScreen } from "@/components/pin/UnlockScreen";
 import { colors } from "@/theme";
 
@@ -55,6 +56,12 @@ type AuthState = {
    */
   signedOutForPins: boolean;
   setSignedOutForPins: (signedOut: boolean) => void;
+  /**
+   * The client froze their account. Every session has ended, so the screen that says so stays up
+   * with no session at all, until the client leaves it.
+   */
+  frozen: boolean;
+  setFrozen: (frozen: boolean) => void;
   /** Set by finishing sign up, so the set-up screens that follow can offer a passkey. */
   justSignedUp: boolean;
   setJustSignedUp: (justSignedUp: boolean) => void;
@@ -97,6 +104,7 @@ export function AuthProvider({
   const [returnTo, setReturnTo] = useState<ReturnTo | null>(null);
   const [locked, setLocked] = useState(false);
   const [signedOutForPins, setSignedOutForPins] = useState(false);
+  const [frozen, setFrozen] = useState(false);
   // Read by the unauthorized listener, which is set up once.
   const lockedNow = useRef(false);
   useEffect(() => {
@@ -194,10 +202,12 @@ export function AuthProvider({
       setLocked,
       signedOutForPins,
       setSignedOutForPins,
+      frozen,
+      setFrozen,
       justSignedUp,
       setJustSignedUp,
     }),
-    [resolved, session, signup, ticket, login, reset, returnTo, pinApplies, locked, signedOutForPins, justSignedUp],
+    [resolved, session, signup, ticket, login, reset, returnTo, pinApplies, locked, signedOutForPins, frozen, justSignedUp],
   );
 
   if (restoring) {
@@ -206,7 +216,15 @@ export function AuthProvider({
 
   return (
     <AuthContext.Provider value={value}>
-      {signedOutForPins ? <SignedOutForPins /> : session && locked ? <UnlockScreen /> : children}
+      {frozen ? (
+        <AccountFrozen />
+      ) : signedOutForPins ? (
+        <SignedOutForPins />
+      ) : session && locked ? (
+        <UnlockScreen />
+      ) : (
+        children
+      )}
     </AuthContext.Provider>
   );
 }

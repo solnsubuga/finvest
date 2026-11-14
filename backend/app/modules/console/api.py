@@ -125,6 +125,12 @@ class ComplaintSummary(Contract):
     overdue: bool
 
 
+class FreezeView(Contract):
+    id: PushId
+    frozen_at: datetime
+    reason: str | None
+
+
 class ClientPageView(Contract):
     account: AccountView
     verified_name: str | None
@@ -132,6 +138,8 @@ class ClientPageView(Contract):
     owed: list[OwedView]
     destinations: list[DestinationView]
     locks: list[LockView]
+    # Each time the client froze their own account, newest first. Unfreezing is an unlock.
+    freezes: list[FreezeView]
     # None when this member of staff may not see support chats or complaints.
     conversation: ConversationSummary | None
     complaints: list[ComplaintSummary] | None
@@ -253,6 +261,10 @@ async def client_page(
             for item in page.destinations
         ],
         locks=[_lock(item, staff) for item in page.locks],
+        freezes=[
+            FreezeView(id=item.id, frozen_at=item.frozen_at, reason=item.reason)
+            for item in page.freezes
+        ],
         conversation=ConversationSummary(
             id=page.conversation.id,
             topic=page.conversation.topic,

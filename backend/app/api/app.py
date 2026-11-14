@@ -33,6 +33,7 @@ from app.modules.identity import api as identity_api
 from app.modules.identity import (
     codes_api,
     email_checks_api,
+    freeze_api,
     passkeys_api,
     people_api,
     phone_changes_api,
@@ -230,6 +231,7 @@ def create_app(
         *reconciliation_api.routers,
         *pot_transfers_api.routers,
         *closures_api.routers,
+        freeze_api.router,
     ):
         app.include_router(router)
     app.include_router(payments_api.create_router(collections))

@@ -7,8 +7,8 @@ complaints register, the goals, the email delivery records, the unclaimed accoun
 complaint outcomes, the suppression lifts, the client locks, the announcements, the team
 changes, Finvest's own money in the buffer, the payments of tax to URA, the payments moved to
 the right client, next of kin, the answers to the investing questions, the requests to close an
-account, the journals sent to the accounting system, who set the bank account clients pay
-into or why a payout send waited."""
+account, the record of clients who froze their accounts, the journals sent to the accounting
+system, who set the bank account clients pay into or why a payout send waited."""
 
 import os
 from collections.abc import Iterator
@@ -883,6 +883,14 @@ ROWS = {
         "decode(repeat('00', 32), 'hex'), 'passkey', 'cookie', now(), now(), now(), now(), "
         "now())",
         "refusing to drop staff re-confirmations",
+    ),
+    "0235_client_freezes": (
+        "INSERT INTO identity_clients (id, phone, password_hash, password_changed_at, status, "
+        "created_at) VALUES ('-Nabc0000000000000B1', '+256772123456', 'x', now(), 'active', "
+        "now()); "
+        "INSERT INTO identity_client_freezes (id, client_id, frozen_at, frozen_in) VALUES "
+        "('-Nabc0000000000000A1', '-Nabc0000000000000B1', now(), pg_current_xact_id())",
+        "refusing to drop the record of clients who froze their accounts",
     ),
     "0230_kyc_next_of_kin": (
         "INSERT INTO kyc_next_of_kin_lists (client_id, people, updated_at) "

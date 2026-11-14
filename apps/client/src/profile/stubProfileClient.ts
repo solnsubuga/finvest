@@ -155,5 +155,12 @@ export function createStubProfileClient(account: string | null): ProfileClient {
     async downloadMyData() {
       await reach();
     },
+    async freezeAccount(reason) {
+      await reach();
+      if (reason && reason.length > 500) {
+        throw new ProfileError("invalid", [{ field: "reason", code: "too_long" }]);
+      }
+      return { frozenAt: new Date().toISOString() };
+    },
   };
 }

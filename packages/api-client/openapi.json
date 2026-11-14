@@ -3873,6 +3873,13 @@
             "title": "Destinations",
             "type": "array"
           },
+          "freezes": {
+            "items": {
+              "$ref": "#/components/schemas/app__modules__console__api__FreezeView"
+            },
+            "title": "Freezes",
+            "type": "array"
+          },
           "identity_check": {
             "anyOf": [
               {
@@ -3916,6 +3923,7 @@
           "owed",
           "destinations",
           "locks",
+          "freezes",
           "conversation",
           "complaints",
           "can_lock"
@@ -6878,6 +6886,25 @@
           "exports"
         ],
         "title": "FinanceScreenOut",
+        "type": "object"
+      },
+      "FreezeBody": {
+        "additionalProperties": false,
+        "properties": {
+          "reason": {
+            "anyOf": [
+              {
+                "maxLength": 550,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason"
+          }
+        },
+        "title": "FreezeBody",
         "type": "object"
       },
       "Frequency": {
@@ -20185,6 +20212,41 @@
         "title": "ComplaintSummary",
         "type": "object"
       },
+      "app__modules__console__api__FreezeView": {
+        "additionalProperties": false,
+        "properties": {
+          "frozen_at": {
+            "format": "date-time",
+            "title": "Frozen At",
+            "type": "string"
+          },
+          "id": {
+            "maxLength": 20,
+            "minLength": 20,
+            "pattern": "^[-0-9A-Z_a-z]{20}$",
+            "title": "Id",
+            "type": "string"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason"
+          }
+        },
+        "required": [
+          "id",
+          "frozen_at",
+          "reason"
+        ],
+        "title": "FreezeView",
+        "type": "object"
+      },
       "app__modules__dealing__api__PositionOut": {
         "additionalProperties": false,
         "properties": {
@@ -20433,6 +20495,21 @@
           "raised_to_minimum"
         ],
         "title": "PlanView",
+        "type": "object"
+      },
+      "app__modules__identity__freeze_api__FreezeView": {
+        "additionalProperties": false,
+        "properties": {
+          "frozen_at": {
+            "format": "date-time",
+            "title": "Frozen At",
+            "type": "string"
+          }
+        },
+        "required": [
+          "frozen_at"
+        ],
+        "title": "FreezeView",
         "type": "object"
       },
       "app__modules__identity__people_api__PersonView": {
@@ -21143,6 +21220,68 @@
         "summary": "Cancel Closure",
         "tags": [
           "account closure"
+        ]
+      }
+    },
+    "/client/account-freeze": {
+      "post": {
+        "description": "Lock the account now and end every session, this one included.\n\nTo unfreeze, the client contacts support and two members of staff unlock it.",
+        "operationId": "freeze_account_client_account_freeze_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FreezeBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/app__modules__identity__freeze_api__FreezeView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          }
+        },
+        "summary": "Freeze Account",
+        "tags": [
+          "account freeze"
         ]
       }
     },
