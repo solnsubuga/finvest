@@ -48,3 +48,9 @@ There are no wrong answers and the profile refuses nothing: it is used to sugges
 ## Not built yet
 
 - The investing screens do not yet filter or mark products by profile, and investing does not ask for the questions before a first investment. The client app asks for them from Profile and before the first investment.
+
+## A copy of my data
+
+`GET /client/data-export` gives the signed-in client one JSON file (`finvest-my-data-<date>.json`, format `finvest-client-data/1`) with everything Finvest holds about them that they may see: the account, the identity check and its details (including the ID number), next of kin, every set of answers to the investing questions, investments with after-tax figures, goals, automatic investing plans, payout accounts (masked), payouts, notification channels and the latest closure request. It never holds tax rates, provider answers, review flags or who on staff did what.
+
+It is put together by `backend/app/modules/client_data`, which owns no tables and reads through the owning modules' functions in the client's own transaction. It needs a sign-in from the last 10 minutes and the identity data key, is sent with `Cache-Control: no-store`, and each download is recorded as `client_data.exported`. Investments and payouts are capped at the most recent 100 each.

@@ -19468,6 +19468,64 @@
         ]
       }
     },
+    "/client/data-export": {
+      "get": {
+        "description": "Everything Finvest holds about the signed-in client, as an attachment.\n\nIt holds the client's ID number and details, so it needs a sign-in from the last few\nminutes. Each download is written to the audit trail.",
+        "operationId": "export_client_data_export_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {}
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "summary": "Download a copy of my data",
+        "tags": [
+          "client data"
+        ]
+      }
+    },
     "/client/documents": {
       "get": {
         "description": "The client's statements and receipts, newest first.",
