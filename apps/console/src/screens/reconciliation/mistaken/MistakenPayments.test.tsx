@@ -100,8 +100,11 @@ describe("payments credited by mistake", () => {
     expect(within(form).getByRole("radio", { name: /Write it off as a loss/ })).toBeChecked();
     await user.type(within(form).getByLabelText("What happened"), "Airtel will not return it.");
     await user.click(within(form).getByRole("button", { name: "Propose it" }));
-    await card("Write it off as a loss, UGX 450,000");
-    expect(within(await card("Write it off as a loss, UGX 450,000")).getByText(/You proposed this/)).toBeInTheDocument();
+    const step = await card("Write it off as a loss, UGX 450,000");
+    expect(within(step).getByText(/You proposed this/)).toBeInTheDocument();
+    expect(within(screen.getByRole("list", { name: "Mistaken payment steps" })).getByRole("button", { current: true })).toHaveTextContent(
+      /UGX 450,000.*Write it off as a loss/,
+    );
   });
 
   it("proposes a step and says what the service refused", async () => {
