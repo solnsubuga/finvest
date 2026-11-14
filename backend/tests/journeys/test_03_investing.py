@@ -174,7 +174,8 @@ async def test_a_matured_investment_pays_out_to_a_number_in_the_clients_own_name
         "investments.matured",
         "payouts.destination_added",
         "payouts.destination_code_confirmed",
-        "payouts.destination_proof_submitted",
+        "payouts.destination_network_name_matched",
+        "payouts.destination_refused_by_network",
         "payouts.destination_approved",
         "payouts.payout_requested",
     )
