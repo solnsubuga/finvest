@@ -1063,6 +1063,28 @@ ROWS = {
         "ALTER TABLE investments ENABLE TRIGGER USER; COMMIT",
         "refusing to drop the record of held money staff sent on",
     ),
+    "0350_console_client_notes": (
+        "INSERT INTO identity_clients (id, phone, status, created_at) VALUES "
+        "('-Nabc0000000000000B1', '+256772123456', 'unclaimed', now()); "
+        "INSERT INTO identity_staff (id, email, name, role, created_at) "
+        "VALUES ('-Nabc0000000000000S1', 'ada@example.com', 'Ada Nakato', 'support', now()); "
+        "INSERT INTO console_client_notes (id, client_id, body, written_by, written_at) "
+        "VALUES ('-Nabc0000000000000A1', '-Nabc0000000000000B1', 'Called', "
+        "'-Nabc0000000000000S1', now())",
+        "refusing to drop staff notes that hold records",
+    ),
+    "0351_console_client_actions": (
+        # The guard admits only active staff proposing in their own name.
+        "ALTER TABLE console_client_actions DISABLE TRIGGER console_client_actions_guard; "
+        "INSERT INTO identity_clients (id, phone, status, created_at) VALUES "
+        "('-Nabc0000000000000B1', '+256772123456', 'unclaimed', now()); "
+        "INSERT INTO identity_staff (id, email, name, role, created_at) "
+        "VALUES ('-Nabc0000000000000S1', 'ada@example.com', 'Ada Nakato', 'support', now()); "
+        "INSERT INTO console_client_actions (id, client_id, kind, reason, proposed_by, "
+        "proposed_at) VALUES ('-Nabc0000000000000A1', '-Nabc0000000000000B1', 'pin_reset', "
+        "'Phone lost', '-Nabc0000000000000S1', now())",
+        "refusing to drop staff actions that hold records",
+    ),
 }
 
 
