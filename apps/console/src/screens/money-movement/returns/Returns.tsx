@@ -190,7 +190,7 @@ function ReturnCard({
             <p className="m-0 text-md text-muted">{item.line.narrative}</p>
           </>
         ) : (
-          <p className="m-0 text-md text-muted">The line is no longer in the statement search. Find it on the statement by its ID.</p>
+          <p className="m-0 text-md text-muted">This line is not on the statement of the account the payout was paid from. Do not approve until it is checked.</p>
         )}
         <p className="m-0 text-xs text-muted">
           Statement line <span className="font-mono">{item.statementLineId}</span>

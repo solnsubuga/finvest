@@ -23,7 +23,7 @@ export interface PayoutReturn {
   proposedAt: string;
   /** What the second person checks: the payout and where it went, masked. */
   payout: ReturnedPayout;
-  /** The line that brought it back. Null only once it has left the statement search window. */
+  /** The line that brought it back. Null only if it is not on the statement of the pot the payout was paid from. */
   line: ReturnLine | null;
 }
 
