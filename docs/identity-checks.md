@@ -117,7 +117,7 @@ The module talks to an `IdentityProvider` port (`domain/provider.py`) with three
 
 ### ioTec Verify
 
-`app/modules/kyc/iotec.py`, against `https://verify-api.iotec.io` with the `Client-Id` and `X-Api-Key` headers. One submission is up to three ioTec requests, each sent in the background with the submission's key as its `referenceId`:
+`app/modules/kyc/iotec.py`, against `https://verify-api.iotec.io`. It sends through the ioTec Verify connection shared with the payout name check (`app/infrastructure/iotec_verify.py`), which holds the `Client-Id` and `X-Api-Key` headers, https only, the one retry of a request that never arrived, and how a send is sorted. One submission is up to three ioTec requests, each sent in the background with the submission's key as its `referenceId`:
 
 | Check | ioTec request | Pass | Otherwise |
 | --- | --- | --- | --- |
