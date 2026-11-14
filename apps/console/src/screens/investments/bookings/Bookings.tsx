@@ -7,6 +7,7 @@ import { parseAmount } from "@/screens/dealing-desk/format.ts";
 import { formatExact, formatStamp, formatTerm } from "../../products/format.ts";
 import type { AtMaturity } from "../api.ts";
 import {
+  AT_MATURITY_WORDS,
   BookingsError,
   bookingFailureText,
   bookingProblemText,
@@ -17,17 +18,12 @@ import {
   type BookingsApi,
   type NewBooking,
 } from "./api.ts";
+import { UploadForm } from "./UploadForm.tsx";
 
 const INPUT = "w-full rounded-lg border border-border-strong bg-surface px-3.5 py-3 text-md font-medium text-ink aria-invalid:border-danger";
 const REASON_LIMIT = 500;
 // Decided bookings stay in view for a while, so the person who booked one sees what became of it.
 const DECIDED_SHOWN = 4;
-
-export const AT_MATURITY_WORDS: Record<AtMaturity, string> = {
-  roll_over: "Roll it over",
-  pay_out: "Pay it out",
-  pay_interest: "Pay the interest, keep the rest invested",
-};
 
 const STATUS: Record<Booking["status"], { label: string; className: string }> = {
   proposed: { label: "Waiting for a second person", className: "bg-warning-surface text-warning-text" },
@@ -57,7 +53,7 @@ interface BookingsProps {
 /** Booking an investment a client asked for. One person books it, another approves. */
 export function Bookings({ api, directory, me, canChange, newKey = () => crypto.randomUUID() }: BookingsProps) {
   const [load, setLoad] = useState<Load>({ state: "loading" });
-  const [writing, setWriting] = useState(false);
+  const [writing, setWriting] = useState<"one" | "sheet" | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const [failed, setFailed] = useState<Failure | null>(null);
   const [staffNames, setStaffNames] = useState<Record<string, string | null>>({});
@@ -147,15 +143,26 @@ export function Bookings({ api, directory, me, canChange, newKey = () => crypto.
           </p>
         </div>
         {canChange && !writing && load.state === "ready" ? (
-          <Button
-            variant="secondary"
-            onClick={() => {
-              setWriting(true);
-              setFailed(null);
-            }}
-          >
-            Book an investment
-          </Button>
+          <div className="flex flex-wrap gap-2">
+            <Button
+              variant="secondary"
+              onClick={() => {
+                setWriting("one");
+                setFailed(null);
+              }}
+            >
+              Book an investment
+            </Button>
+            <Button
+              variant="secondary"
+              onClick={() => {
+                setWriting("sheet");
+                setFailed(null);
+              }}
+            >
+              Upload a spreadsheet
+            </Button>
+          </div>
         ) : null}
       </div>
       {load.state === "loading" ? (
@@ -177,7 +184,27 @@ export function Bookings({ api, directory, me, canChange, newKey = () => crypto.
         </div>
       ) : (
         <>
-          {writing ? (
+          {writing === "sheet" ? (
+            <UploadForm
+              directory={directory}
+              products={load.products}
+              newKey={newKey}
+              onBook={async (input, key) => {
+                try {
+                  await api.propose(key, input);
+                  return null;
+                } catch (error) {
+                  return error instanceof BookingsError ? error : new BookingsError("unavailable");
+                }
+              }}
+              onDone={async () => {
+                const fresh = await fetchList();
+                if (fresh.state === "ready") setLoad(fresh);
+              }}
+              onClose={() => setWriting(null)}
+            />
+          ) : null}
+          {writing === "one" ? (
             <BookForm
               directory={directory}
               products={load.products}
@@ -185,13 +212,13 @@ export function Bookings({ api, directory, me, canChange, newKey = () => crypto.
               error={failed?.on === "new" ? failed.message : null}
               refused={failed?.on === "new" ? failed.problems : []}
               onCancel={() => {
-                setWriting(false);
+                setWriting(null);
                 setFailed(null);
                 pending.current.delete("new");
               }}
               onSubmit={(input) =>
                 run("new", input, (key) => api.propose(key, input)).then((done) => {
-                  if (done) setWriting(false);
+                  if (done) setWriting(null);
                   return done;
                 })
               }
