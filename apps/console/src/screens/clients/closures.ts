@@ -59,7 +59,19 @@ export interface ClosuresApi {
   decline(id: string, note: string): Promise<Closure>;
 }
 
-export type ClosuresErrorCode = "invalid" | "blocked" | "moved" | "same_person" | "forbidden" | "not_found" | "not_connected" | "not_confirmed" | "unavailable";
+export type ClosuresErrorCode =
+  | "invalid"
+  | "blocked"
+  | "moved"
+  | "same_person"
+  | "forbidden"
+  | "not_found"
+  | "not_connected"
+  | "not_confirmed"
+  /** Finvest answered, but refused for another reason, such as too many tries. */
+  | "refused"
+  /** The request got no answer. */
+  | "unavailable";
 
 export class ClosuresError extends Error {
   constructor(readonly code: ClosuresErrorCode) {
@@ -87,6 +99,8 @@ export function closuresErrorMessage(error: unknown): string {
         return "This console is not connected to Finvest yet.";
       case "not_confirmed":
         return "Not done. Confirm it is you with your passkey or authenticator app, then try again.";
+      case "refused":
+        return "Finvest could not do that just now. Try again in a few minutes.";
       case "unavailable":
         return "Finvest could not be reached. Check your connection and try again.";
     }
@@ -102,6 +116,8 @@ function toClosuresError(error: unknown, approving = false): ClosuresError {
     if (error.code === "confirm_it_is_you") return new ClosuresError("not_confirmed");
     if (error.code === "forbidden") return new ClosuresError(approving ? "same_person" : "forbidden");
     if (error.code === "not_found") return new ClosuresError("not_found");
+    // Status 0 means no answer came back; anything else was a refusal.
+    return new ClosuresError(error.status === 0 ? "unavailable" : "refused");
   }
   return new ClosuresError("unavailable");
 }
