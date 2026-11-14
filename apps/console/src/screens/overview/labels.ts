@@ -30,6 +30,8 @@ export const KIND_INFO: Record<Kind, KindInfo> = {
   suppression_lift: { label: "Email suppression lift", path: at("/clients") },
   complaint_outcome: { label: "Complaint outcome", path: at("/complaints") },
   payout_account: { label: "Payout account check", path: at("/review-queue") },
+  // The subject is the payment's ID; the reassignment opens by its own.
+  deposit_reassignment: { label: "Payment to move to another client", path: (item) => `/reconciliation?reassignment=${encodeURIComponent(item.id)}` },
   tax_remittance: { label: "Payment to URA", path: at("/finance") },
 };
 

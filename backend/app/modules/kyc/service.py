@@ -19,6 +19,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.infrastructure.jobs import JobRequest, enqueue
+from app.infrastructure.jobs.outbox import Consumer, publish
 from app.infrastructure.sealing import Sealer, associated_data
 from app.modules.account_numbers.domain.numbers import AccountType
 from app.modules.account_numbers.service import issue_account_number
@@ -56,6 +57,10 @@ from app.shared.push_ids import push_id
 RESOURCE = "kyc_check"
 # The same as a Finvest 1.0 reference on the migration sheet.
 _LEGACY_REFERENCE = re.compile(r"[A-Za-z0-9][A-Za-z0-9._/-]{0,63}")
+# Published when a check is approved or rejected, by staff or by the worker. Other modules that
+# need to hear, such as migration for a client claiming an account, add their consumer here.
+DECIDED_TOPIC = "kyc.check_decided"
+DECIDED_CONSUMERS: tuple[Consumer, ...] = ()
 # The worker's jobs (app/modules/kyc/jobs.py). One send per submission, whatever is retried.
 SEND_CHECK = "kyc.send_check"
 READ_RESULT = "kyc.read_result"
@@ -65,6 +70,9 @@ READ_WITHIN = timedelta(minutes=20)
 # Longer than a send and a read can take together, so the sweep never races a live job.
 UNANSWERED_AFTER = timedelta(minutes=30)
 MAX_PHOTO_BYTES = 10 * 1024 * 1024
+# Every photo is kept, replaced ones too, so a check holds at most this many in all. Far more
+# than any honest retake needs; it stops one client filling private storage.
+MAX_PHOTOS_PER_CHECK = 30
 PHOTO_CONTENT_TYPES = frozenset({"image/jpeg", "image/png", "image/webp"})
 MAX_CLIENT_MESSAGE = 300
 DEFAULT_PAGE_SIZE = 50
@@ -236,6 +244,7 @@ _PHOTOS = text(
     "SELECT id, kind, storage_key, content_type, byte_size, created_at FROM kyc_photos "
     "WHERE check_id = :check_id AND replaced_at IS NULL ORDER BY kind"
 )
+_PHOTO_COUNT = text("SELECT count(*) FROM kyc_photos WHERE check_id = :check_id")
 _REPLACE_PHOTO = text(
     "UPDATE kyc_photos SET replaced_at = :now "
     "WHERE check_id = :check_id AND kind = :kind AND replaced_at IS NULL"
@@ -309,6 +318,7 @@ async def photo_slot(
     """
     row = await _editable(session, client)
     _check_photo(row, kind, content_type, byte_size)
+    await _require_room_for_photo(session, row.id)
     return str(row.id)
 
 
@@ -330,6 +340,7 @@ async def add_photo(
     """
     row = await _editable(session, client)
     _check_photo(row, kind, content_type, byte_size)
+    await _require_room_for_photo(session, row.id)
     now = clock.now()
     photo_id = photo_id or push_id()
     storage_key = photo_key(row.id, photo_id)
@@ -927,6 +938,7 @@ async def reject(
         },
     )
     await _tell(session, row, "kyc_rejected", row.id, clock)
+    await _publish_decision(session, row, approved=False, clock=clock)
     await _audit(session, staff, "approval", "kyc.check.rejected", row.id, clock, reason=reason)
     return await _view_by_id(session, sealer, row.id)
 
@@ -1019,6 +1031,12 @@ def _require_move(actor: ActorKind, current: CheckStatus, target: CheckStatus) -
         raise ApplicationError("conflict")
 
 
+async def _require_room_for_photo(session: AsyncSession, check_id: str) -> None:
+    taken = (await session.execute(_PHOTO_COUNT, {"check_id": check_id})).scalar_one()
+    if taken >= MAX_PHOTOS_PER_CHECK:
+        raise _invalid("photo", "too_many_photos")
+
+
 def _check_photo(row: Row[Any], kind: PhotoKind, content_type: str, byte_size: int) -> None:
     if kind not in _required(row):
         raise _invalid("kind", "photo_not_part_of_document")
@@ -1099,7 +1117,22 @@ async def _approve(
         return False
     # A check is approved once, so its ID is the key.
     await _tell(session, row, "kyc_approved", row.id, clock)
+    await _publish_decision(session, row, approved=True, clock=clock)
     return True
+
+
+async def _publish_decision(
+    session: AsyncSession, row: Row[Any], *, approved: bool, clock: Clock
+) -> None:
+    """Publish `kyc.check_decided` in the decision's transaction. A check is decided once."""
+    await publish(
+        session,
+        topic=DECIDED_TOPIC,
+        idempotency_key=row.id,
+        payload={"client_id": row.client_id, "check_id": row.id, "approved": approved},
+        consumers=DECIDED_CONSUMERS,
+        now=clock.now(),
+    )
 
 
 async def _tell(

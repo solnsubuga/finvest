@@ -16,6 +16,8 @@ from app.modules.investments.domain.investments import InvestmentStatus
 from app.shared.money import Currency, Money
 
 DEPOSIT_CONFIRMED = "payment.deposit_confirmed"
+# A bank transfer credited to the wrong client, moved to the client whose money it was.
+DEPOSIT_REASSIGNED = "payment.deposit_reassigned"
 INTEREST_ACCRUED = "investment.interest_accrued"
 PAYOUT_PREFIX = "payout."
 
@@ -62,6 +64,16 @@ def activity_line(change: EntryChange, names: Names) -> Activity | None:
         method = names.deposit_methods.get(reference)
         description = f"Payment received, {method_name(method)}" if method else "Payment received"
         return Activity(change.on, ActivityKind.PAID_IN, description, reference, owed)
+    if change.entry_type == DEPOSIT_REASSIGNED and owed.is_positive:
+        # For the right client this is their payment arriving. Who it was first credited to is
+        # never shown. For that client it is a correction, below.
+        return Activity(
+            change.on,
+            ActivityKind.PAID_IN,
+            f"Payment received, {method_name('bank_transfer')}",
+            reference,
+            owed,
+        )
     if change.entry_type == INTEREST_ACCRUED and owed.is_positive:
         investment = change.investment_ids[0] if len(change.investment_ids) == 1 else reference
         product = names.products.get(investment, "your investment")

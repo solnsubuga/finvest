@@ -25,6 +25,7 @@ const ACTIONS: readonly { permission: Permission; label: string; under: ScreenPe
   { permission: "email_suppressions.lift", label: "Lift email suppressions", under: "clients.view" },
   { permission: "bank_transfers.change", label: "Match bank transfers", under: "reconciliation.view" },
   { permission: "identity_checks.review", label: "Decide identity checks", under: "identity_checks.view" },
+  { permission: "deposit_reassignments.change", label: "Move payments credited to the wrong client", under: "reconciliation.view" },
   { permission: "payout_accounts.change", label: "Check payout accounts", under: "review_queue.view" },
   { permission: "dealing_orders.change", label: "Deal and settle orders", under: "dealing_desk.view" },
   { permission: "tax_remittances.change", label: "Pay withholding tax to URA", under: "finance.view" },

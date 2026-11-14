@@ -2,6 +2,7 @@ import { API_URL } from "@/api/config";
 import { setFetch } from "@/api/http";
 
 import { createApiPayoutsClient } from "../apiPayoutsClient";
+import { forgetBanks } from "../banks";
 import { resolvePayoutsClient } from "../resolvePayouts";
 import { PayoutsError } from "../types";
 
@@ -60,7 +61,21 @@ function refusal(code: string, fields: { field_path: string[]; code: string }[] 
   return { request_id: "R".repeat(20), error: { code, message: "x", fields } };
 }
 
-afterEach(() => setFetch(null));
+/** Answers the bank list as the backend does and everything else with `body`. */
+function serveWithBanks(body: unknown, banks: unknown = [{ code: "stanbic", name: "Stanbic Bank" }]): Seen[] {
+  const seen: Seen[] = [];
+  setFetch(async (url, init) => {
+    const path = String(url).replace(API_URL, "");
+    seen.push({ method: String(init?.method ?? "GET"), path, body: null });
+    return new Response(JSON.stringify(path === "/client/banks" ? banks : body), { status: 200 });
+  });
+  return seen;
+}
+
+afterEach(() => {
+  setFetch(null);
+  forgetBanks();
+});
 
 describe("the payouts client for the real API", () => {
   it("is the API outside the demo", () => {
@@ -68,14 +83,15 @@ describe("the payouts client for the real API", () => {
   });
 
   it("lists accounts with the number as masked by the API", async () => {
-    const seen = serve(200, [destination({ status: "approved", payable_from: "2026-11-14T09:00:00Z" })]);
+    const seen = serveWithBanks([destination({ status: "approved", payable_from: "2026-11-14T09:00:00Z" })]);
     const [account] = await createApiPayoutsClient().listAccounts();
-    expect(seen[0]).toEqual({ method: "GET", path: "/client/payout-destinations", body: null });
+    expect(seen.map((call) => call.path).sort()).toEqual(["/client/banks", "/client/payout-destinations"]);
     expect(account).toEqual({
       id: ID,
       kind: "bank",
       network: null,
       bankCode: "stanbic",
+      bankName: "Stanbic Bank",
       account: "•••• 4821",
       holderName: "Amara Nakato",
       status: "approved",
@@ -85,6 +101,27 @@ describe("the payouts client for the real API", () => {
       firstPaidAt: null,
       createdAt: "2026-11-13T09:00:00Z",
     });
+  });
+
+  it("reads the bank list once and names an account by it", async () => {
+    const seen = serveWithBanks(destination());
+    const client = createApiPayoutsClient();
+    expect(await client.listBanks()).toEqual([{ code: "stanbic", name: "Stanbic Bank" }]);
+    expect((await client.getAccount(ID)).bankName).toBe("Stanbic Bank");
+    expect(seen.filter((call) => call.path === "/client/banks")).toHaveLength(1);
+  });
+
+  it("still shows an account when the bank list cannot be read, and reads it again next time", async () => {
+    setFetch(async (url) =>
+      String(url).endsWith("/client/banks")
+        ? new Response(JSON.stringify(refusal("internal")), { status: 500 })
+        : new Response(JSON.stringify(destination()), { status: 200 }),
+    );
+    const client = createApiPayoutsClient();
+    expect((await client.getAccount(ID)).bankName).toBeNull();
+    await expect(client.listBanks()).rejects.toEqual(new PayoutsError("unavailable"));
+    serveWithBanks(destination());
+    expect((await client.getAccount(ID)).bankName).toBe("Stanbic Bank");
   });
 
   it("adds a mobile money number or a bank account in the API's shape", async () => {

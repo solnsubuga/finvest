@@ -76,6 +76,19 @@ async def told(database: Database, client: Actor, check_id: str) -> list[str]:
         return list(rows.scalars())
 
 
+async def published(database: Database, check_id: str) -> list[object]:
+    """What `kyc.check_decided` carried for this check."""
+    async with database.transaction() as session:
+        rows = await session.execute(
+            text(
+                "SELECT payload FROM outbox_events WHERE topic = 'kyc.check_decided' "
+                "AND idempotency_key = :id"
+            ),
+            {"id": check_id},
+        )
+        return list(rows.scalars())
+
+
 def refused(error: pytest.ExceptionInfo[ApplicationError]) -> tuple[str, list[tuple[str, str]]]:
     return error.value.code, [
         (str(problem.field_path[0]), problem.code) for problem in error.value.fields
@@ -174,7 +187,7 @@ async def test_bad_details_are_refused_field_by_field(
 
 
 async def test_without_a_provider_staff_approve_and_the_account_number_is_issued(
-    app_database: Database, fake_clock: FakeClock
+    app_database: Database, worker_database: Database, fake_clock: FakeClock
 ) -> None:
     client, check_id = await in_review(app_database, fake_clock)
     staff = new_staff()
@@ -201,6 +214,9 @@ async def test_without_a_provider_staff_approve_and_the_account_number_is_issued
     assert seen.account_number == number.value
     assert await actions(app_database, check_id) == ["kyc.check.submitted", "kyc.check.approved"]
     assert await told(app_database, client, check_id) == ["kyc_approved"]
+    assert await published(worker_database, check_id) == [
+        {"client_id": client.id, "check_id": check_id, "approved": True}
+    ]
 
 
 async def test_a_staff_decision_needs_a_reason(
@@ -243,6 +259,7 @@ async def test_the_worker_approves_a_clean_result_when_that_is_switched_on(
     assert view.automatic_checks == all_passed()
     assert await actions(app_database, check_id) == ["kyc.check.submitted", "kyc.check.approved"]
     assert await told(app_database, client, check_id) == ["kyc_approved"]
+    assert len(await published(worker_database, check_id)) == 1
 
 
 async def test_a_clean_result_goes_to_a_person_unless_approval_is_switched_on(
@@ -410,7 +427,7 @@ async def test_staff_ask_for_one_photo_and_the_client_retakes_only_that(
 
 
 async def test_compliance_decides_an_escalated_check_and_a_rejection_is_final(
-    app_database: Database, fake_clock: FakeClock
+    app_database: Database, worker_database: Database, fake_clock: FakeClock
 ) -> None:
     client, check_id = await in_review(app_database, fake_clock)
     staff = new_staff()
@@ -436,6 +453,9 @@ async def test_compliance_decides_an_escalated_check_and_a_rejection_is_final(
     assert rejected.client_message == "We cannot open an account for you."
     # Escalating told the client nothing. The rejection does.
     assert await told(app_database, client, check_id) == ["kyc_rejected"]
+    assert await published(worker_database, check_id) == [
+        {"client_id": client.id, "check_id": check_id, "approved": False}
+    ]
     with pytest.raises(ApplicationError) as error:
         async with app_database.actor_transaction(staff) as session:
             await kyc.approve(session, SEALER, staff, check_id, "Changed my mind", fake_clock)
@@ -959,3 +979,26 @@ async def test_a_photo_cannot_be_inserted_already_retired(
                 ),
                 photo_row(check_id, "back"),
             )
+
+
+async def test_a_check_holds_a_limited_number_of_photos(
+    app_database: Database, fake_clock: FakeClock
+) -> None:
+    client = new_client()
+    async with app_database.actor_transaction(client) as session:
+        view = await ready_draft(session, client, fake_clock)
+        # Every photo is kept, replaced ones too, so retakes count towards the limit.
+        for _ in range(kyc.MAX_PHOTOS_PER_CHECK - len(view.photos)):
+            await add_photos(session, client, fake_clock, PhotoKind.SELFIE)
+        with pytest.raises(ApplicationError) as error:
+            await kyc.photo_slot(
+                session, client, PhotoKind.SELFIE, content_type="image/jpeg", byte_size=2048
+            )
+        assert refused(error) == ("validation_failed", [("photo", "too_many_photos")])
+        with pytest.raises(ApplicationError) as error:
+            await add_photos(session, client, fake_clock, PhotoKind.FRONT)
+        assert refused(error) == ("validation_failed", [("photo", "too_many_photos")])
+        count = await session.execute(
+            text("SELECT count(*) FROM kyc_photos WHERE check_id = :id"), {"id": view.id}
+        )
+    assert count.scalar_one() == kyc.MAX_PHOTOS_PER_CHECK

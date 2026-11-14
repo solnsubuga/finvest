@@ -74,6 +74,11 @@ _DECIDE = text(
     "UPDATE tax_remittances SET status = :status, decided_by = :by, decided_at = :now, "
     "decision_reason = :reason, ledger_entry_id = :entry WHERE id = :id"
 )
+_PAID_OUT = text(
+    "SELECT ledger_entry_id, bank_reference, currency, amount_minor, paid_on "
+    "FROM tax_remittances WHERE status = 'approved' AND paid_on BETWEEN :date_from AND :date_to "
+    "ORDER BY paid_on, id"
+)
 _LOCK_MONTH = text(
     "SELECT pg_advisory_xact_lock(hashtext('tax_remittance'), hashtext(:currency || :month))"
 )
@@ -97,7 +102,35 @@ class RemittanceView:
     ledger_entry_id: str | None
 
 
+@dataclass(frozen=True, slots=True)
+class BankPayment:
+    """An approved payment to URA, as the trust bank account's statement should show it."""
+
+    ledger_entry_id: str
+    bank_reference: str
+    amount: Money
+    paid_on: date
+
+
 # Queries -----------------------------------------------------------------------------------------
+
+
+async def expected_bank_movements(
+    session: AsyncSession, *, date_from: date, date_to: date
+) -> list[BankPayment]:
+    """Approved payments to URA paid between two days, for reconciliation to pair with the
+    trust bank account's statement by the bank's reference. Empty outside a staff or worker
+    transaction."""
+    rows = await session.execute(_PAID_OUT, {"date_from": date_from, "date_to": date_to})
+    return [
+        BankPayment(
+            ledger_entry_id=row.ledger_entry_id,
+            bank_reference=row.bank_reference,
+            amount=Money(int(row.amount_minor), Currency(row.currency)),
+            paid_on=row.paid_on,
+        )
+        for row in rows.all()
+    ]
 
 
 async def get_remittance(session: AsyncSession, remittance_id: str) -> RemittanceView:

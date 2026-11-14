@@ -15,7 +15,15 @@ import {
   type TransferDetail,
 } from "./api.ts";
 import { Queue } from "./Queue.tsx";
+import { notConnectedDayCloseApi, type DayCloseApi } from "./dayclose/api.ts";
+import { DayClose } from "./dayclose/DayClose.tsx";
+import { createHttpDayCloseApi } from "./dayclose/http.ts";
+import { createStubDayCloseApi, type DayCloseStubCase } from "./dayclose/stub.ts";
 import { createHttpBankTransfersApi } from "./http.ts";
+import { notConnectedReassignmentsApi, type ReassignmentsApi } from "./reassignments/api.ts";
+import { createHttpReassignmentsApi } from "./reassignments/http.ts";
+import { Reassignments } from "./reassignments/Reassignments.tsx";
+import { createStubReassignmentsApi } from "./reassignments/stub.ts";
 import { createStubBankTransfersApi, type StubCase } from "./stub.ts";
 import { Transfer, type TransferCommand } from "./Transfer.tsx";
 
@@ -225,5 +233,34 @@ export default function ReconciliationPage() {
     const base = apiBaseUrl();
     return base ? createHttpBankTransfersApi(createHttp(base), session.staffId) : notConnectedBankTransfersApi;
   });
-  return <BankTransfersScreen api={api} canDecide={session ? can(session, "bank_transfers.change") : false} />;
+  // Moving a payment credited to the wrong client: sample moves under the stub, like the
+  // transfers above, and the real API otherwise. `?sample=unsorted` is about the queue, so the
+  // moves show their usual sample there.
+  const [moves] = useState<ReassignmentsApi>(() => {
+    if (isStubAuth() && session) {
+      const which = stubCase();
+      return createStubReassignmentsApi(session.staffId, 150, which === "unsorted" ? "sample" : which);
+    }
+    const base = apiBaseUrl();
+    return base ? createHttpReassignmentsApi(createHttp(base)) : notConnectedReassignmentsApi;
+  });
+  // Closing the day: a sample day under the stub, with `?sample=prepared` for one waiting for a
+  // second person, and the real API otherwise.
+  const [days] = useState<DayCloseApi>(() => {
+    if (!session) return notConnectedDayCloseApi;
+    if (isStubAuth()) {
+      const sample = new URLSearchParams(window.location.search).get("sample");
+      const which: DayCloseStubCase = sample === "prepared" || sample === "empty" || sample === "error" ? sample : "sample";
+      return createStubDayCloseApi(session.staffId, 150, which);
+    }
+    const base = apiBaseUrl();
+    return base ? createHttpDayCloseApi(createHttp(base), session.staffId) : notConnectedDayCloseApi;
+  });
+  return (
+    <>
+      <BankTransfersScreen api={api} canDecide={session ? can(session, "bank_transfers.change") : false} />
+      <DayClose api={days} canAct={session ? can(session, "reconciliation.view") : false} />
+      <Reassignments api={moves} canChange={session ? can(session, "deposit_reassignments.change") : false} />
+    </>
+  );
 }

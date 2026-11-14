@@ -156,6 +156,12 @@ export function monthLabel(from: string): string {
   return `${MONTH_NAMES[month - 1] ?? ""} ${year}`;
 }
 
+/** "2026-27" for the tax year that starts on 1 July 2026, as URA writes it. */
+export function taxYearLabel(from: string): string {
+  const [year] = parts(from);
+  return `${year}-${String((year + 1) % 100).padStart(2, "0")}`;
+}
+
 /** The receipt's reference, "RC-…", from its file name. */
 export function receiptReference(document: DocumentItem): string | null {
   const match = /receipt (\S+)\.pdf$/i.exec(document.fileName ?? "");

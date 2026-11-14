@@ -5,7 +5,7 @@ attempts and their resolutions, the migration checks, the imported statements, t
 and their recorded matches, the pot transfers, the help chat, the complaints register, the
 goals, the email delivery records, the unclaimed accounts, the complaint outcomes, the
 suppression lifts, the client locks, the announcements, the team changes, Finvest's own money
-in the buffer or the payments of tax to URA."""
+in the buffer, the payments of tax to URA or the payments moved to the right client."""
 
 import os
 from collections.abc import Iterator
@@ -213,6 +213,18 @@ ROWS = {
         "DATE '2026-11-12', 'Test', 'proposed', '-Nabc0000000000000B1', now()); COMMIT",
         "refusing to drop tax remittances",
     ),
+    # A reassignment cannot be saved without a confirmed, reviewed transfer and its ledger entry,
+    # so the row is the history event an applied one leaves on the right client's new deposit.
+    "0171_payment_reassignments": (
+        "INSERT INTO payment_deposits (id, client_id, purpose_type, purpose_id, method, provider, "
+        "currency, amount_minor, status, created_at, updated_at) VALUES ('-Nabc0000000000000A1', "
+        "'-Nabc0000000000000B1', 'investment', '-Nabc0000000000000C1', 'bank_transfer', 'bank', "
+        "'UGX', 1000, 'in_review', now(), now()); "
+        "INSERT INTO payment_deposit_events (id, deposit_id, occurred_at, from_status, to_status, "
+        "cause) VALUES ('-Nabc0000000000000E1', '-Nabc0000000000000A1', now(), NULL, "
+        "'confirmed', 'reassignment')",
+        "refusing to drop the record of reassigned deposits",
+    ),
     "0087_dealing_buffer_capital": (
         "BEGIN; SELECT set_config('finvest.actor_kind', 'staff', true); "
         "SELECT set_config('finvest.actor_id', '-Nabc0000000000000B1', true); "
@@ -393,6 +405,24 @@ ROWS = {
         "proposed_by, proposed_at) VALUES ('-Nabc0000000000000R1', '-Nabc0000000000000A1', "
         "'failed', '-Nabc0000000000000C1', 'Checked', 'proposed', '-Nabc0000000000000S1', now())",
         "refusing to drop the resolutions of payouts",
+    ),
+    "0038_payout_releases": (
+        "INSERT INTO payout_destinations (id, client_id, kind, network, account_number, "
+        "holder_name, status, created_at, updated_at) VALUES ('-Nabc0000000000000D1', "
+        "'-Nabc0000000000000B1', 'mobile_money', 'mtn', '256772000000', 'Test', "
+        "'awaiting_code', now(), now()); "
+        "INSERT INTO payouts (id, client_id, destination_id, kind, amount_minor, currency, "
+        "status, business_date, source_account_id, source_reference, in_flight_account_id, "
+        "request_key, created_at, updated_at) VALUES ('-Nabc0000000000000A1', "
+        "'-Nabc0000000000000B1', '-Nabc0000000000000D1', 'mobile_money', 1000, 'UGX', 'held', "
+        "DATE '2026-11-10', '-Nabc0000000000000E1', 'investment-1', '-Nabc0000000000000F1', "
+        "'request-key-1', now(), now()); "
+        # The guard admits only staff proposing, by the person signed in.
+        "ALTER TABLE payout_releases DISABLE TRIGGER payout_releases_guard; "
+        "INSERT INTO payout_releases (id, payout_id, reason, status, proposed_by, proposed_at) "
+        "VALUES ('-Nabc0000000000000R1', '-Nabc0000000000000A1', 'Checked', 'proposed', "
+        "'-Nabc0000000000000S1', now())",
+        "refusing to drop the releases of payouts",
     ),
     "0051_kyc_sealed_details": (
         "INSERT INTO kyc_checks (id, client_id, document_type, document_country, "

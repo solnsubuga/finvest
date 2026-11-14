@@ -85,6 +85,22 @@ describe("Proving an email address", () => {
     await screen.findByText("This link no longer works");
   });
 
+  it("says proved when a spent link is opened again by a client whose address went through", async () => {
+    await logInAndOpenProfile("772123456");
+    await fireEvent.press(screen.getByTestId("use-passkey"));
+    await fireEvent.press(await screen.findByLabelText("Profile"));
+    await fireEvent.press(await screen.findByTestId("send-email-proof"));
+    await screen.findByText(/We emailed a link/);
+    const token = mockMail.tokens[0]!;
+    await openLink(token);
+    await screen.findByText("Your email address is proved");
+
+    // The same link again, as "Try again" sends it when the first answer was lost.
+    await openLink(token);
+    await screen.findByText("Your email address is proved");
+    expect(screen.queryByText("This link no longer works")).toBeNull();
+  });
+
   it("says nothing needs proving for an address that already is", async () => {
     await logInAndOpenProfile("701000200");
     await fireEvent.press(screen.getByTestId("use-authenticator"));

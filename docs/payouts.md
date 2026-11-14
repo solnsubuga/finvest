@@ -189,14 +189,14 @@ In `apps/client`: the data layer in `src/payouts` (`apiPayoutsClient.ts` for the
 | Screen | What it does |
 | --- | --- |
 | Payout accounts (`/payouts`) | Every account not removed, with where it is: enter the code, send proof, checking, ready soon (approved, inside the 24 hour wait), ready, or not approved. Links to Payouts |
-| Add a payout account (`/payouts/add`) | Mobile money (the client's own number filled in) or a bank account from the list in `src/payouts/format.ts`, and the name on the account. Saving texts the code at once |
+| Add a payout account (`/payouts/add`) | Mobile money (the client's own number filled in) or a bank account from the backend's list (`GET /client/banks`), and the name on the account. Saving texts the code at once |
 | One account (`/payouts/{id}`) | The four steps, then the next one: the texted code, the proof for a bank account (statement, bank letter or card photo, PDF, JPG or PNG up to 10 MB), or what we are doing. A refusal says why; new proof is offered unless the name differs or fraud is suspected, which are final. Remove asks once on the page, never in a dialog |
 | Payouts (`/payouts/history`) | The client's payouts, newest first, and today's withdrawal limits. Never the review threshold |
 | One payout (`/payouts/payout/{id}`) | Amount, account and status. `in_review` reads "Checking", `processing` "On its way" (never "paid" until the provider confirms), `failed` "Not sent" with the money safe with us |
 | When the term ends (`/investment/maturity/{id}`) | Roll over or pay out, and to which approved account. An account in its first day can be chosen, because it will be payable by maturity. Up to the day before maturity |
 | Choose where to be paid (`/investment/pay-out/{id}`) | A matured investment waiting for an account: choose one past its first day and send it. The same account asked twice is the same payout, so a lost answer is tried again as it was, with the account locked |
 
-The backend checks only the shape of a bank code, so the app's bank list is where the codes are set. Adding an account takes no idempotency key: a second try after a lost answer gets 409 for the same account, which the screen explains as already saved. A mobile money number stays at "Checking" after its code until Finvest can read the name the network holds for it (ioTec Verify, not built).
+The app names banks from `GET /client/banks`, read once per session. If the list cannot be read, an account still shows as "Bank" and the add screen offers to try again. Adding an account takes no idempotency key: a second try after a lost answer gets 409 for the same account, which the screen explains as already saved. A mobile money number stays at "Checking" after its code until Finvest can read the name the network holds for it (ioTec Verify, not built).
 
 ## Staff routes
 
@@ -217,19 +217,21 @@ The database guard runs with its search path pinned to `pg_catalog, pg_temp` and
 
 ### Held payouts
 
-A payout above the review threshold starts held, with its money already reserved (`backend/app/modules/payouts/reviews.py`, routes in `staff_held_api.py`). The client asked for it, so one member of staff with `payout_accounts.change` is the second person who decides it, as for payout accounts. Deciding needs the second step in the last ten minutes (403 `confirm_it_is_you`), a reason and an `Idempotency-Key`: a retried request returns what the first one did, and a key reused for a different request is refused with `idempotency_key_reused`.
+A payout above the review threshold starts held, with its money already reserved (`backend/app/modules/payouts/reviews.py`, routes in `staff_held_api.py`, migration 0038). Releasing it to be sent takes two people with `payout_accounts.change`, from the owner's standing rule that staff operations that can be maker and checker must be: one proposes with a reason, and a different one approves. Declining it is one person's step, as refusing a bank transfer is, and tells the client (`payout_declined`). Approving and declining need the second step in the last ten minutes (403 `confirm_it_is_you`). Every step needs a reason. Proposing, approving and declining need an `Idempotency-Key`: a retried request returns what the first one did, and a key reused for a different request is refused with `idempotency_key_reused`.
 
 | Route | What it does |
 | --- | --- |
-| `GET /staff/payouts/held` | Held payouts, oldest first, at most 100. Needs `review_queue.view`. The amount, kind, client and destination, never the account number |
-| `POST /staff/payouts/{id}/approve` | `{reason}`. The payout is queued; a mobile money payout is sent, a bank payout waits for staff to pay it. 409 `payout_not_held` |
-| `POST /staff/payouts/{id}/decline` | `{reason}`. The payout is cancelled and its money goes back where it came from. 409 `payout_not_held` |
+| `GET /staff/payouts/held` | Held payouts, oldest first, at most 100, each with `release`, its open proposal or null. Needs `review_queue.view`. The amount, kind, client and destination, never the account number |
+| `POST /staff/payouts/{id}/release` | `{reason}`. 201 with the proposal. 409 `payout_not_held` or `release_already_proposed` |
+| `POST /staff/payout-releases/{id}/approve` | `{reason}`, by someone other than the proposer (403 `proposed_by_you`). The payout is queued; a mobile money payout is sent, a bank payout waits for staff to pay it. 409 `release_already_decided` or `payout_not_held` |
+| `POST /staff/payout-releases/{id}/withdraw` | `{reason}`, by the proposer only (403 `not_proposed_by_you`). The payout stays held. 409 `release_already_decided` |
+| `POST /staff/payouts/{id}/decline` | `{reason}`. The payout is cancelled, its money goes back where it came from, the client is told, and any open proposal is closed: declined, or withdrawn when its proposer declines. 409 `payout_not_held` |
 
-Both are written to the audit trail as approvals, with the reason, and the database still checks that `reviewed_by` is the member of staff of the transaction.
+Each step is written to the audit trail as an approval, with the reason. The database checks it too: a staff step from held to queued needs an approved release decided by the same person, a release is approved only by someone other than its proposer, and an approved release whose payout is still held cannot commit.
 
 ## Sending a payout
 
-A queued mobile money payout gets a send job in the same transaction that queued it: when it is created, or when staff approve a held one. The worker sends it through the disbursements provider and reads its status back. The code is in `backend/app/modules/payouts/jobs.py`, the rules in `domain/sending.py`, and migration 0033 adds `payout_send_attempts`.
+A queued mobile money payout gets a send job in the same transaction that queued it: when it is created, or when a second member of staff approves the release of a held one. The worker sends it through the disbursements provider and reads its status back. The code is in `backend/app/modules/payouts/jobs.py`, the rules in `domain/sending.py`, and migration 0033 adds `payout_send_attempts`.
 
 A payout is sent at most once:
 

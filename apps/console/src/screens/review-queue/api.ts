@@ -75,7 +75,19 @@ export interface NewCheck {
   reason: string;
 }
 
-/** A payout above the review threshold, waiting for a member of staff. */
+/**
+ * A proposal to release a held payout. Releasing takes two members of staff: one proposes, a
+ * different one approves. Only an open proposal is listed.
+ */
+export interface Release {
+  id: string;
+  payoutId: string;
+  reason: string;
+  proposedBy: string;
+  proposedAt: string;
+}
+
+/** A payout above the review threshold, waiting for members of staff. */
 export interface HeldPayout {
   id: string;
   clientId: string;
@@ -85,9 +97,12 @@ export interface HeldPayout {
   /** `YYYY-MM-DD`, the Kampala business day it was asked for. */
   businessDate: string;
   createdAt: string;
+  /** Null until someone proposes releasing it. With a proposal it waits for a different person. */
+  release: Release | null;
 }
 
-export type HeldDecision = "approve" | "decline";
+/** What a person can do to a held payout: propose or approve its release, withdraw their own proposal, or decline it. */
+export type HeldAction = "propose" | "approve" | "withdraw" | "decline";
 
 export interface DecidedPayout {
   id: string;
@@ -105,13 +120,20 @@ export interface ReviewQueueApi {
   approve(id: string, reason: string): Promise<PayoutAccount>;
   reject(id: string, rejectionReason: RejectionReason, reason: string): Promise<PayoutAccount>;
   remove(id: string, reason: string): Promise<PayoutAccount>;
-  /** Held payouts, oldest first, at most 100. */
+  /** Held payouts, oldest first, at most 100, each with any open proposal to release it. */
   listHeld(): Promise<HeldPayout[]>;
-  /**
-   * Approves or declines a held payout. The key belongs to the decision: the same key for a
-   * retry of the same decision and reason, a new one when either changes.
+  /*
+   * Each key belongs to the step: the same key for a retry of the same step and reason, a new
+   * one when either changes.
    */
-  decideHeld(id: string, decision: HeldDecision, reason: string, idempotencyKey: string): Promise<DecidedPayout>;
+  /** The first person proposes releasing the payout. */
+  proposeRelease(payoutId: string, reason: string, idempotencyKey: string): Promise<Release>;
+  /** A different person approves the proposal and the payout is queued. Needs the person to have confirmed it is them. */
+  approveRelease(releaseId: string, reason: string, idempotencyKey: string): Promise<DecidedPayout>;
+  /** The proposer takes their proposal back. */
+  withdrawRelease(releaseId: string, reason: string): Promise<void>;
+  /** One person cancels the payout and gives the money back. Closes any open proposal. Needs the person to have confirmed it is them. */
+  decline(payoutId: string, reason: string, idempotencyKey: string): Promise<DecidedPayout>;
 }
 
 export type ReviewQueueErrorCode =
@@ -125,6 +147,10 @@ export type ReviewQueueErrorCode =
   | "account_in_use"
   | "checked_by_you"
   | "payout_not_held"
+  | "release_already_proposed"
+  | "release_already_decided"
+  | "proposed_by_you"
+  | "not_proposed_by_you"
   | "key_reused"
   | "conflict"
   | "forbidden"
@@ -156,6 +182,10 @@ const MESSAGES: Record<ReviewQueueErrorCode, string> = {
     "This account is already approved for another client. Do not approve it: look at both clients, and refuse the proof if it is not this client's.",
   checked_by_you: "You made this check, so a different person must approve it.",
   payout_not_held: "Someone has already decided this payout. The list has been reloaded.",
+  release_already_proposed: "Someone else has already proposed releasing this payout. The list has been reloaded.",
+  release_already_decided: "This proposal has already been decided or withdrawn. The list has been reloaded.",
+  proposed_by_you: "You proposed this release, so a different person must approve it.",
+  not_proposed_by_you: "Only the person who proposed this release can withdraw it.",
   key_reused: "This decision was already sent with other details. Reload the page and decide again.",
   conflict: "Someone else has already acted on this account. It has been reloaded.",
   forbidden: "You are not allowed to decide payout accounts or held payouts.",
@@ -180,5 +210,8 @@ export const notConnectedReviewQueueApi: ReviewQueueApi = {
   reject: notConnected,
   remove: notConnected,
   listHeld: notConnected,
-  decideHeld: notConnected,
+  proposeRelease: notConnected,
+  approveRelease: notConnected,
+  withdrawRelease: notConnected,
+  decline: notConnected,
 };

@@ -4,7 +4,8 @@ import { api, ApiError } from "@/api/http";
 import { uploadable } from "@/payments/apiPaymentsClient";
 import type { Money } from "@/payments/types";
 
-import { Limits, Payout, PayoutAccount, PayoutsClient, PayoutsError } from "./types";
+import { banksOrNone, nameOf, readBanks } from "./banks";
+import { Bank, Limits, Payout, PayoutAccount, PayoutsClient, PayoutsError } from "./types";
 
 /**
  * The payout screens' contract, answered by the real API
@@ -16,12 +17,13 @@ function money(view: MoneyView): Money {
   return { currency: view.currency, minor: view.minor };
 }
 
-export function toAccount(view: DestinationOut): PayoutAccount {
+export function toAccount(view: DestinationOut, banks: Bank[]): PayoutAccount {
   return {
     id: view.id,
     kind: view.kind,
     network: view.network,
     bankCode: view.bank_code,
+    bankName: view.kind === "bank" ? nameOf(banks, view.bank_code) : null,
     account: view.account,
     holderName: view.holder_name,
     status: view.status,
@@ -59,7 +61,7 @@ const FIELD_CODES: Record<string, PayoutsError["code"]> = {
   phone_invalid: "phone_invalid",
   phone_network_unsupported: "phone_network_unsupported",
   bank_invalid: "bank_invalid",
-  // A code the backend's list of banks does not hold (payouts PR #298).
+  // A code the backend's list of banks does not hold.
   bank_unknown: "bank_invalid",
   bank_account_number_invalid: "account_number_invalid",
 };
@@ -118,11 +120,20 @@ async function wrap<T>(work: () => Promise<T>): Promise<T> {
 
 export function createApiPayoutsClient(): PayoutsClient {
   return {
-    listAccounts: () => wrap(async () => (await api("GET /client/payout-destinations", {})).map(toAccount)),
+    listBanks: () => wrap(readBanks),
+
+    listAccounts: () =>
+      wrap(async () => {
+        const [views, banks] = await Promise.all([api("GET /client/payout-destinations", {}), banksOrNone()]);
+        return views.map((view) => toAccount(view, banks));
+      }),
 
     getAccount: (accountId) =>
       wrap(async () =>
-        toAccount(await api("GET /client/payout-destinations/{destination_id}", { params: { destination_id: accountId } })),
+        toAccount(
+          await api("GET /client/payout-destinations/{destination_id}", { params: { destination_id: accountId } }),
+          await banksOrNone(),
+        ),
       ),
 
     addAccount: (account) =>
@@ -139,6 +150,7 @@ export function createApiPayoutsClient(): PayoutsClient {
                     holder_name: account.holderName.trim(),
                   },
           }),
+          await banksOrNone(),
         ),
       ),
 
@@ -154,6 +166,7 @@ export function createApiPayoutsClient(): PayoutsClient {
             params: { destination_id: accountId },
             body: { code },
           }),
+          await banksOrNone(),
         ),
       ),
 
@@ -164,6 +177,7 @@ export function createApiPayoutsClient(): PayoutsClient {
             params: { destination_id: accountId },
             body: { proof_kind: proofKind, file: await uploadable(file) },
           }),
+          await banksOrNone(),
         ),
       ),
 

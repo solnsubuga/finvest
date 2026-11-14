@@ -1,5 +1,4 @@
-import { BANKS } from "./format";
-import { Limits, NewAccount, Payout, PayoutAccount, PayoutsClient, PayoutsError } from "./types";
+import { Bank, Limits, NewAccount, Payout, PayoutAccount, PayoutsClient, PayoutsError } from "./types";
 
 /**
  * In-memory payout accounts and payouts for the demo build and tests. It refuses what the
@@ -15,7 +14,21 @@ const MAX_AWAITING_CODE = 5;
 const MAX_WRONG_CODES = 5;
 const NETWORKS: Record<string, "mtn" | "airtel"> = { "76": "mtn", "77": "mtn", "78": "mtn", "39": "mtn", "70": "airtel", "74": "airtel", "75": "airtel", "20": "airtel" };
 
-type Stored = PayoutAccount & { number: string; removed: boolean; wrongCodes: number; codeSent: boolean };
+/**
+ * The demo's banks. The real list comes from the backend (GET /client/banks); this one only
+ * has to hold the codes the demo accounts use and enough others to choose from.
+ */
+export const DEMO_BANKS: readonly Bank[] = [
+  { code: "absa", name: "Absa Bank" },
+  { code: "centenary", name: "Centenary Bank" },
+  { code: "dfcu", name: "dfcu Bank" },
+  { code: "equity", name: "Equity Bank" },
+  { code: "housing_finance", name: "Housing Finance Bank" },
+  { code: "stanbic", name: "Stanbic Bank" },
+  { code: "standard_chartered", name: "Standard Chartered" },
+];
+
+type Stored = Omit<PayoutAccount, "bankName"> & { number: string; removed: boolean; wrongCodes: number; codeSent: boolean };
 
 export type StubOptions = {
   /** "empty" is a new client with no accounts and no payouts. */
@@ -119,7 +132,7 @@ function parsePhone(typed: string): string {
 
 function view(account: Stored): PayoutAccount {
   const { number: _number, removed: _removed, wrongCodes: _wrong, codeSent: _sent, ...shown } = account;
-  return { ...shown };
+  return { ...shown, bankName: DEMO_BANKS.find((bank) => bank.code === account.bankCode)?.name ?? null };
 }
 
 export function createStubPayoutsClient(options: StubOptions = {}): PayoutsClient {
@@ -141,6 +154,11 @@ export function createStubPayoutsClient(options: StubOptions = {}): PayoutsClien
   }
 
   return {
+    async listBanks() {
+      await reachable();
+      return [...DEMO_BANKS];
+    },
+
     async listAccounts() {
       await reachable();
       return accounts
@@ -161,7 +179,7 @@ export function createStubPayoutsClient(options: StubOptions = {}): PayoutsClien
       if (account.kind === "mobile_money") {
         number = parsePhone(account.phone);
       } else {
-        if (!BANKS.some((bank) => bank.code === account.bankCode)) throw new PayoutsError("bank_invalid");
+        if (!DEMO_BANKS.some((bank) => bank.code === account.bankCode)) throw new PayoutsError("bank_invalid");
         number = account.accountNumber.trim().replace(/[ -]/g, "");
         if (!/^[0-9]{6,20}$/.test(number)) throw new PayoutsError("account_number_invalid");
       }

@@ -7,6 +7,7 @@ import {
   pickFor,
   problemCopy,
   quickPeriod,
+  taxYearLabel,
 } from "../periods";
 
 const TODAY = "2026-11-13";
@@ -77,4 +78,11 @@ describe("the backend's rules", () => {
 it("labels periods and months", () => {
   expect(periodLabel("2026-08-01", TODAY)).toBe("1 Aug 2026 to 13 Nov 2026");
   expect(monthLabel("2026-10-01")).toBe("October 2026");
+});
+
+describe("a tax year", () => {
+  it("is written as URA writes it, from the 1 July it starts on", () => {
+    expect(taxYearLabel("2026-07-01")).toBe("2026-27");
+    expect(taxYearLabel("2099-07-01")).toBe("2099-00");
+  });
 });
