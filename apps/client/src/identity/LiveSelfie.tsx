@@ -40,6 +40,8 @@ export function LiveSelfie({ check, top, frame, onCamera, onDone }: Props) {
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [opened, setOpened] = useState(false);
+  // Counts failed reads while a check waits, so the next read is still scheduled.
+  const [failedReads, setFailedReads] = useState(0);
   const finishing = useRef(false);
 
   const read = useCallback(async () => {
@@ -70,7 +72,12 @@ export function LiveSelfie({ check, top, frame, onCamera, onDone }: Props) {
             setState(next);
             if (!state && !next.available) onCamera();
           },
-          (caught: unknown) => current && setLoadError(describeIdentityError(caught)),
+          (caught: unknown) => {
+            if (!current) return;
+            setLoadError(describeIdentityError(caught));
+            // With nothing read yet the page offers a retry. While a check waits, keep reading.
+            if (state) setFailedReads((n) => n + 1);
+          },
         );
       },
       state ? LIVENESS_POLL_MS : 0,
@@ -79,7 +86,7 @@ export function LiveSelfie({ check, top, frame, onCamera, onDone }: Props) {
       current = false;
       clearTimeout(timer);
     };
-  }, [client, state, waiting, onCamera]);
+  }, [client, state, waiting, onCamera, failedReads]);
 
   useEffect(() => {
     if (latest?.status !== "passed" || finishing.current) return;
@@ -106,6 +113,11 @@ export function LiveSelfie({ check, top, frame, onCamera, onDone }: Props) {
 
   const open = async (url: string) => {
     setError(null);
+    // The server only hands out the partner's https pages. This is a second lock.
+    if (!url.startsWith("https://")) {
+      setError("We could not open the live check. Try again, or take a photo instead.");
+      return;
+    }
     try {
       await Linking.openURL(url);
       setOpened(true);
@@ -164,7 +176,7 @@ export function LiveSelfie({ check, top, frame, onCamera, onDone }: Props) {
         <View style={{ marginTop: 28, gap: 8 }}>
           <Title>Live selfie done</Title>
           <Txt color={colors.muted}>
-            The check saw it is really you. What it captured is now your selfie, and we match it to your ID.
+            The check saw a live person. What it captured is now your selfie, and we match it to your ID.
           </Txt>
         </View>
         <View style={{ marginTop: 20, gap: 14 }}>
@@ -254,7 +266,7 @@ export function LiveSelfie({ check, top, frame, onCamera, onDone }: Props) {
   const failed = latest?.status === "failed";
   const unfinished = latest?.status === "expired" || latest?.status === "not_started";
   const heading = failed
-    ? "We could not confirm it was you"
+    ? "We could not finish the live check"
     : unfinished
       ? "Your live check did not finish"
       : "Take a live selfie";
@@ -262,7 +274,7 @@ export function LiveSelfie({ check, top, frame, onCamera, onDone }: Props) {
     ? "It happens in poor light or when the face is partly hidden. Try again facing a window, with your whole face in view."
     : unfinished
       ? "It ran out of time or could not start. Start a new one, it only takes a minute."
-      : "A short check on a page from ioTec, our identity partner. You look at the camera and move a little, so we know it is really you. It takes about a minute.";
+      : "A short check on a page from ioTec, our identity partner. You look at the camera and move a little, so we know a real person is in front of the camera. It takes about a minute.";
 
   return (
     <Screen
@@ -305,7 +317,7 @@ export function LiveSelfie({ check, top, frame, onCamera, onDone }: Props) {
           ))}
         </View>
         <Txt size={fontSizes.xs} color={colors.muted}>
-          Only used to confirm it is you. ioTec gets no name or number from us, and the photo is never shown to anyone outside Finvest.
+          ioTec takes the picture and gets no name or number from us. Finvest uses it only to confirm it is you.
         </Txt>
         {errorNotice}
       </View>
