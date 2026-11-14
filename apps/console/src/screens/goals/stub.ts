@@ -14,7 +14,7 @@ interface Sample {
 
 const SAMPLES: readonly Sample[] = [
   {
-    goal: { clientId: "client-1", clientName: "Sarah Namubiru", accountNumber: "1004 2381 76", name: "School fees, Term 1", category: "school_fees", target: "2000000", status: "active", productName: "91 Day Treasury Bill", createdDaysAgo: 61, dueInDays: 151 },
+    goal: { clientId: "client-1", clientName: "Sarah Namubiru", accountNumber: "1004 2381 76", name: "School fees, Term 1", category: "school_fees", currency: "UGX", target: "2000000", status: "active", productName: "91 Day Treasury Bill", createdDaysAgo: 61, dueInDays: 151 },
     progress: { value: "1585080", interest: "25080", awaitingPayment: "0", percent: 79, standing: "on_track" },
     savings: [
       { investmentId: "inv-1", productName: "91 Day Treasury Bill", status: "active", amount: "200000", accruedNet: "931", startedDaysAgo: 16, termDays: 91, rolledFrom: null },
@@ -22,7 +22,7 @@ const SAMPLES: readonly Sample[] = [
     ],
   },
   {
-    goal: { clientId: "client-2", clientName: "Brian Okello", accountNumber: "1007 5520 13", name: "Plot in Wakiso", category: "land_or_home", target: "20000000", status: "active", productName: "91 Day Treasury Bill", createdDaysAgo: 200, dueInDays: 530 },
+    goal: { clientId: "client-2", clientName: "Brian Okello", accountNumber: "1007 5520 13", name: "Plot in Wakiso", category: "land_or_home", currency: "UGX", target: "20000000", status: "active", productName: "91 Day Treasury Bill", createdDaysAgo: 200, dueInDays: 530 },
     progress: { value: "3120400", interest: "120400", awaitingPayment: "819000", percent: 15, standing: "behind" },
     savings: [
       { investmentId: "inv-3", productName: "91 Day Treasury Bill", status: "awaiting_payment", amount: "819000", accruedNet: "0", startedDaysAgo: null, termDays: 91, rolledFrom: null },
@@ -31,12 +31,12 @@ const SAMPLES: readonly Sample[] = [
     ],
   },
   {
-    goal: { clientId: "client-3", clientName: "Grace Atim", accountNumber: "1002 9917 40", name: "Emergency fund", category: "emergency", target: "3000000", status: "active", productName: "91 Day Treasury Bill", createdDaysAgo: 30, dueInDays: null },
+    goal: { clientId: "client-3", clientName: "Grace Atim", accountNumber: "1002 9917 40", name: "Emergency fund", category: "emergency", currency: "UGX", target: "3000000", status: "active", productName: "91 Day Treasury Bill", createdDaysAgo: 30, dueInDays: null },
     progress: { value: "1009024", interest: "9024", awaitingPayment: "0", percent: 33, standing: "no_date" },
     savings: [{ investmentId: "inv-6", productName: "91 Day Treasury Bill", status: "active", amount: "1000000", accruedNet: "9024", startedDaysAgo: 30, termDays: 91, rolledFrom: null }],
   },
   {
-    goal: { clientId: "client-4", clientName: "Peter Mugisha", accountNumber: "1005 7741 39", name: "Wedding in August", category: "wedding", target: "5000000", status: "closed", productName: "182 Day Treasury Bill", createdDaysAgo: 120, closedDaysAgo: 8, dueInDays: 270 },
+    goal: { clientId: "client-4", clientName: "Peter Mugisha", accountNumber: "1005 7741 39", name: "Wedding in August", category: "wedding", currency: "UGX", target: "5000000", status: "closed", productName: "182 Day Treasury Bill", createdDaysAgo: 120, closedDaysAgo: 8, dueInDays: 270 },
     progress: { value: "0", interest: "0", awaitingPayment: "0", percent: 0, standing: "behind" },
     savings: [],
   },

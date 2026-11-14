@@ -10,6 +10,8 @@ import { toKycError } from "@/screens/identity-checks/http.ts";
 import { announcementsErrorMessage } from "@/screens/settings/announcements.ts";
 import { wordingsErrorMessage } from "@/screens/settings/api.ts";
 import { toAnnouncementsError, toWordingsError } from "@/screens/settings/http.ts";
+import { catalogueErrorMessage } from "@/screens/products/api.ts";
+import { toCatalogueError } from "@/screens/products/http.ts";
 import { teamErrorMessage } from "@/screens/team/api.ts";
 import { toTeamError } from "@/screens/team/http.ts";
 import { CONFIRM_IT_IS_YOU } from "./confirmation.ts";
@@ -25,6 +27,7 @@ const SCREENS: [string, (error: unknown) => unknown, (error: unknown) => string]
   ["client locks", (e) => toClientsError(e, true), clientsErrorMessage],
   ["suppression lifts", (e) => toSuppressionsError(e, true), suppressionsErrorMessage],
   ["liquidity buffer", toBufferError, bufferErrorMessage],
+  ["rate approvals", toCatalogueError, catalogueErrorMessage],
 ];
 
 describe("a decision the person did not confirm", () => {

@@ -10,7 +10,6 @@ import { PageHeader } from "@/pages/PageHeader.tsx";
 import {
   CatalogueError,
   catalogueErrorMessage,
-  notConnectedCatalogueApi,
   type CatalogueApi,
   type NewProposal,
   type Product,
@@ -18,6 +17,7 @@ import {
   type Rate,
 } from "../products/api.ts";
 import { formatBps, formatDay, formatStamp, parsePercent, previewClientRate } from "../products/format.ts";
+import { connectedCatalogueApi } from "../products/http.ts";
 import { createStubCatalogueApi } from "../products/stub.ts";
 
 const SUMMARY = "Every rate change is proposed by one person, approved by another, and starts on a set date.";
@@ -443,7 +443,7 @@ function Row({ name, value }: { name: string; value: string }) {
 
 export default function RatesPage() {
   const { session } = useAuth();
-  // Sample rates under `pnpm dev` or a preview build. `?sample=empty` shows nothing waiting.
+  // Sample rates under `pnpm dev` or a preview build, otherwise the real API. `?sample=empty` shows nothing waiting.
   const [api] = useState<CatalogueApi>(() =>
     isStubAuth() && session
       ? createStubCatalogueApi({
@@ -451,7 +451,7 @@ export default function RatesPage() {
           today: kampalaToday(),
           sample: new URLSearchParams(window.location.search).get("sample") === "empty" ? "empty" : "default",
         })
-      : notConnectedCatalogueApi,
+      : connectedCatalogueApi(),
   );
   return (
     <RatesScreen api={api} me={session?.staffId ?? ""} canChange={session ? can(session, "rates.change") : false} />

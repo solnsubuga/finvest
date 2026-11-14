@@ -2,11 +2,9 @@
  * The console's view of the investment catalogue: products, their rates, and
  * rate changes that one person proposes and another approves.
  *
- * A stand-in for the generated client in packages/api-client, like AuthApi.
- * The shapes follow the staff routes in backend/app/modules/investments/api.py
- * (`/staff/products`, `/staff/products/{code}/rates`, `/staff/rate-proposals`).
- * When the generated client exists, an implementation that calls them
- * replaces the stub and the screens do not change.
+ * `http.ts` calls the staff routes in backend/app/modules/investments/api.py
+ * (`/staff/products`, `/staff/products/{code}/rates`, `/staff/rate-proposals`);
+ * `stub.ts` stands in for them under `pnpm dev` and previews.
  *
  * Staff see rates before tax and the tax. Clients never do: they see only
  * `clientRatePercent`, the rate after tax, which the backend works out.
@@ -93,9 +91,11 @@ export type CatalogueErrorCode =
   | "date_already_taken"
   | "nothing_changes"
   | "out_of_range"
+  | "invalid"
   | "conflict"
   | "not_found"
   | "forbidden"
+  | "not_confirmed"
   | "not_connected"
   | "unavailable";
 
@@ -115,9 +115,11 @@ const MESSAGES: Record<CatalogueErrorCode, string> = {
   date_already_taken: "This product already has a rate starting on that day. Pick another day.",
   nothing_changes: "That is the rate already in force. Change the rate or the tax.",
   out_of_range: "The rate must be between 0.01% and 50%, and the tax below 100%.",
+  invalid: "Finvest did not accept these details. Check them and try again.",
   conflict: "Someone else has already decided this change. The list has been reloaded.",
   not_found: "This rate change no longer exists.",
   forbidden: "A second person has to approve this, or you are not allowed to change rates.",
+  not_confirmed: "Not done. Confirm it is you with your passkey or authenticator app, then try again.",
   not_connected: "Products and rates are not connected to the Finvest service yet.",
   unavailable: "We could not reach Finvest. Check your connection and try again.",
 };

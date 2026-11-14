@@ -5,7 +5,7 @@ import { isStubAuth } from "@/auth/index.ts";
 import { Button } from "@/components/ui/button.tsx";
 import { cn } from "@/lib.ts";
 import { PageHeader } from "@/pages/PageHeader.tsx";
-import { catalogueErrorMessage, notConnectedCatalogueApi, type CatalogueApi, type Product, type ProductStatus } from "./api.ts";
+import { catalogueErrorMessage, type CatalogueApi, type Product, type ProductStatus } from "./api.ts";
 import {
   formatBps,
   formatDay,
@@ -15,6 +15,7 @@ import {
   KIND_LABELS,
   PRODUCT_STATUS_LABELS,
 } from "./format.ts";
+import { connectedCatalogueApi } from "./http.ts";
 import { createStubCatalogueApi } from "./stub.ts";
 
 const SUMMARY = "What clients can invest in, at what rate, and what they see after tax.";
@@ -197,9 +198,9 @@ const kampalaToday = () => new Intl.DateTimeFormat("en-CA", { timeZone: "Africa/
 
 export default function ProductsPage() {
   const { session } = useAuth();
-  // Sample products under `pnpm dev` or a preview build. Otherwise nothing until the API client exists.
+  // Sample products under `pnpm dev` or a preview build, like sign-in. Otherwise the real API.
   const [api] = useState<CatalogueApi>(() =>
-    isStubAuth() && session ? createStubCatalogueApi({ me: session.staffId, today: kampalaToday() }) : notConnectedCatalogueApi,
+    isStubAuth() && session ? createStubCatalogueApi({ me: session.staffId, today: kampalaToday() }) : connectedCatalogueApi(),
   );
   return <ProductsScreen api={api} />;
 }

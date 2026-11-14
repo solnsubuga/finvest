@@ -1,12 +1,12 @@
-import { GoalsError, type GoalCategory, type Standing } from "./api.ts";
+import { GoalsError, type Currency, type GoalCategory, type Standing } from "./api.ts";
 
 /**
  * The console's view of group goals.
  *
  * The shapes follow the staff routes GET /staff/goal-groups and
  * GET /staff/goal-groups/{id} in backend/app/modules/goals/api.py (see the
- * "Group goals" section of docs/goals.md). Like GoalsApi, a stub stands in until
- * the console is connected, and the screen does not change when it is.
+ * "Group goals" section of docs/goals.md). Like GoalsApi, `http.ts` calls them
+ * and a stub stands in under `pnpm dev` and previews.
  *
  * A group holds no money. Each member saves into their own goal, so the screen
  * only reads: nothing here changes a group or anyone's goal.
@@ -20,7 +20,9 @@ export interface Group {
   ownerClientId: string;
   name: string;
   category: GoalCategory;
-  /** Shillings, as a whole-number string. The target for every member together. */
+  /** Every member's goal is in this currency. */
+  currency: Currency;
+  /** The smallest unit of the currency, as a whole-number string. The target for every member together. */
   target: string;
   /** YYYY-MM-DD, or null for a group with no date. */
   targetDate: string | null;
