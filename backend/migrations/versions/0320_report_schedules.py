@@ -158,14 +158,26 @@ RULES = [
     f"CREATE POLICY {D}_worker ON {D} FOR ALL TO {WORKER_ROLE} USING (true) WITH CHECK (true)",
     # The worker emails staff their reports. It never reads the staff table itself, which holds
     # sign-in secrets: this function answers the few columns a send needs, for the IDs asked.
+    # Only a member of staff signed in to the API, or the worker's own login, may ask. The
+    # system actor is not trusted from the API role: only the worker acts as the system.
     """
 CREATE FUNCTION identity_staff_contacts(p_ids text[])
     RETURNS TABLE (id text, email text, name text, role text, status text)
-    LANGUAGE sql STABLE SECURITY DEFINER SET search_path = pg_catalog, pg_temp
+    LANGUAGE plpgsql STABLE SECURITY DEFINER SET search_path = pg_catalog, pg_temp
     AS $$
-        SELECT s.id::text, s.email::text, s.name::text, s.role::text, s.status::text
-        FROM public.identity_staff AS s
-        WHERE s.id = ANY(p_ids)
+    BEGIN
+        IF NOT (
+            (pg_has_role(session_user, 'finvest_app', 'MEMBER')
+                AND public.finvest_actor_kind() IS NOT DISTINCT FROM 'staff')
+            OR pg_has_role(session_user, 'finvest_worker', 'MEMBER')
+        ) THEN
+            RAISE EXCEPTION 'staff contacts are for staff and the worker' USING ERRCODE = '42501';
+        END IF;
+        RETURN QUERY
+            SELECT s.id::text, s.email::text, s.name::text, s.role::text, s.status::text
+            FROM public.identity_staff AS s
+            WHERE s.id = ANY(p_ids);
+    END
     $$
 """,
     "REVOKE ALL ON FUNCTION identity_staff_contacts(text[]) FROM PUBLIC",

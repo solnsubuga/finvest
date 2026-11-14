@@ -1002,6 +1002,15 @@ ROWS = {
         "deferred_for = 'wallet_short' WHERE payout_id = '-Nabc0000000000000A1'; COMMIT",
         "refusing to drop why payout sends were deferred",
     ),
+    "0320_report_schedules": (
+        "BEGIN; SELECT set_config('finvest.actor_kind', 'staff', true); "
+        "SELECT set_config('finvest.actor_id', '-Nabc0000000000000S1', true); "
+        "INSERT INTO report_schedules (id, report_key, frequency, currency, recipients, reason, "
+        "status, proposed_by, proposed_at) VALUES ('-Nabc0000000000000A1', 'daily_position', "
+        "'daily', 'UGX', ARRAY['-Nabc0000000000000S2']::push_id[], 'Test', 'proposed', "
+        "'-Nabc0000000000000S1', now()); COMMIT",
+        "refusing to drop report schedules",
+    ),
     "0290_finance_code_maps": (
         "BEGIN; SELECT set_config('finvest.actor_kind', 'staff', true); "
         "SELECT set_config('finvest.actor_id', '-Nabc0000000000000S1', true); "
