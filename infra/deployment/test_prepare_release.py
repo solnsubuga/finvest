@@ -217,10 +217,11 @@ class PrepareRelease(unittest.TestCase):
             "FINVEST_IOTEC_VERIFY_CLIENT_ID": "verify-client",
             "FINVEST_IOTEC_VERIFY_API_KEY": "v" * 32,
             "FINVEST_IOTEC_VERIFY_BASE_URL": "https://verify-api.iotec.io",
+            "FINVEST_PAYOUT_NAME_PROVIDER": "iotec",
+            "FINVEST_SCREENING_PROVIDER": "none",
         }
         api_only = {"FINVEST_IOTEC_CALLBACK_TOKEN": "c" * 43}
-        worker_only = {"FINVEST_PAYOUT_NAME_PROVIDER": "iotec"}
-        pr.prepare(self.out, settings(**everywhere, **api_and_worker, **api_only, **worker_only))
+        pr.prepare(self.out, settings(**everywhere, **api_and_worker, **api_only))
         files = {s: read_env(self.out / "runtime" / f"{s}.env") for s in ("api", "worker", "scheduler", "migrate")}
         for name, value in everywhere.items():
             for service in ("api", "worker", "scheduler"):
@@ -232,9 +233,6 @@ class PrepareRelease(unittest.TestCase):
         self.assertEqual(files["api"]["FINVEST_IOTEC_CALLBACK_TOKEN"], "c" * 43)
         for service in ("worker", "scheduler"):
             self.assertNotIn("FINVEST_IOTEC_CALLBACK_TOKEN", files[service])
-        self.assertEqual(files["worker"]["FINVEST_PAYOUT_NAME_PROVIDER"], "iotec")
-        for service in ("api", "scheduler"):
-            self.assertNotIn("FINVEST_PAYOUT_NAME_PROVIDER", files[service])
         self.assertFalse([name for name in files["migrate"] if "IOTEC" in name or "PROVIDER" in name])
 
     def test_iotec_settings_are_left_out_when_unset(self):

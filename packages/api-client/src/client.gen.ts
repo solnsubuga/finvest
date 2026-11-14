@@ -328,7 +328,9 @@ export const ClientSessionView = z.object({
   client_id: z.string(),
   email: z.string().nullable().optional(),
   email_verified: z.boolean().optional(),
+  locked: z.boolean().optional(),
   phone: z.string(),
+  pin_set: z.boolean().optional(),
   restricted_until: z.string().nullable(),
 });
 export type ClientSessionView = z.infer<typeof ClientSessionView>;
@@ -379,10 +381,11 @@ export const DestinationOut = z.object({
   holder_name: z.string(),
   id: z.string(),
   kind: z.enum(["mobile_money", "bank"]),
+  name_check: z.enum(["checking", "not_answered", "limit_reached", "waiting_for_id"]).nullable().optional(),
   network: z.enum(["mtn", "airtel"]).nullable(),
   payable_from: z.string().nullable(),
   proof_kind: z.enum(["bank_statement", "bank_letter", "bank_card", "network_registered_name"]).nullable(),
-  rejection_reason: z.enum(["name_different", "proof_unreadable", "proof_too_old", "proof_wrong_account", "proof_wrong_document", "suspected_fraud"]).nullable(),
+  rejection_reason: z.enum(["name_different", "proof_unreadable", "proof_too_old", "proof_wrong_account", "proof_wrong_document", "suspected_fraud", "network_name_unavailable"]).nullable(),
   status: z.enum(["awaiting_code", "awaiting_proof", "in_review", "approved", "rejected"]),
 });
 export type DestinationOut = z.infer<typeof DestinationOut>;
@@ -883,6 +886,17 @@ export const PayoutOut = z.object({
 });
 export type PayoutOut = z.infer<typeof PayoutOut>;
 
+export const PinBody = z.object({
+  pin: z.string(),
+});
+export type PinBody = z.infer<typeof PinBody>;
+
+export const PinChecked = z.object({
+  tries_left: z.number().int(),
+  unlocked: z.boolean(),
+});
+export type PinChecked = z.infer<typeof PinChecked>;
+
 export const PlanDetails = z.object({
   amount_minor: z.number().int(),
   at_maturity: AtMaturity.nullable().optional(),
@@ -1005,6 +1019,13 @@ export const RecipientOut = z.object({
   name: z.string(),
 });
 export type RecipientOut = z.infer<typeof RecipientOut>;
+
+export const RecoveryAsk = z.object({
+  contact_phone: z.string(),
+  phone: z.string(),
+  reason: z.enum(["lost_phone", "new_number", "no_codes", "other"]),
+});
+export type RecoveryAsk = z.infer<typeof RecoveryAsk>;
 
 export const Rename = z.object({
   display_name: z.string(),
@@ -2296,6 +2317,19 @@ export const operations = {
     status: 200,
     response: DestinationOut,
   },
+  "POST /client/payout-destinations/{destination_id}/name-check": {
+    method: "POST",
+    path: "/client/payout-destinations/{destination_id}/name-check",
+    params: z.object({
+    destination_id: z.string(),
+  }),
+    query: z.object({}),
+    body: null,
+    bodyKind: null,
+    idempotent: false,
+    status: 200,
+    response: DestinationOut,
+  },
   "POST /client/payout-destinations/{destination_id}/proof": {
     method: "POST",
     path: "/client/payout-destinations/{destination_id}/proof",
@@ -2346,6 +2380,28 @@ export const operations = {
     status: 201,
     response: PayoutOut,
   },
+  "PUT /client/pin": {
+    method: "PUT",
+    path: "/client/pin",
+    params: z.object({}),
+    query: z.object({}),
+    body: PinBody,
+    bodyKind: "json",
+    idempotent: false,
+    status: 204,
+    response: null,
+  },
+  "POST /client/pin/unlock": {
+    method: "POST",
+    path: "/client/pin/unlock",
+    params: z.object({}),
+    query: z.object({}),
+    body: PinBody,
+    bodyKind: "json",
+    idempotent: false,
+    status: 200,
+    response: PinChecked,
+  },
   "GET /client/products": {
     method: "GET",
     path: "/client/products",
@@ -2393,6 +2449,17 @@ export const operations = {
     idempotent: false,
     status: 204,
     response: null,
+  },
+  "POST /client/recovery-requests": {
+    method: "POST",
+    path: "/client/recovery-requests",
+    params: z.object({}),
+    query: z.object({}),
+    body: RecoveryAsk,
+    bodyKind: "json",
+    idempotent: false,
+    status: 202,
+    response: z.record(z.string(), z.unknown()),
   },
   "GET /client/risk-profile": {
     method: "GET",

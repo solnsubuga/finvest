@@ -280,8 +280,12 @@ def prepare(output: Path, env: Mapping[str, str]) -> None:
             (api, worker),
         ),
         # The worker reads the name a network holds for a payout number (ioTec Verify, with the
-        # FINVEST_IOTEC_VERIFY_* credentials above).
-        (("FINVEST_PAYOUT_NAME_PROVIDER",), (worker,)),
+        # FINVEST_IOTEC_VERIFY_* credentials above). The API reads the provider too, to tell whether
+        # a new number waits for that check or for proof.
+        (("FINVEST_PAYOUT_NAME_PROVIDER",), (api, worker)),
+        # Sanctions and PEP screening (docs/screening.md). The worker runs the screens; the API reads
+        # the provider to decide whether a payout waits for one.
+        (("FINVEST_SCREENING_PROVIDER",), (api, worker)),
         # Checks ioTec's collection callbacks, which only the API receives.
         (("FINVEST_IOTEC_CALLBACK_TOKEN",), (api,)),
     ):

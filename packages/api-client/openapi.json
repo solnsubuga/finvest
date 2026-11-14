@@ -3338,9 +3338,19 @@
             "title": "Email Verified",
             "type": "boolean"
           },
+          "locked": {
+            "default": false,
+            "title": "Locked",
+            "type": "boolean"
+          },
           "phone": {
             "title": "Phone",
             "type": "string"
+          },
+          "pin_set": {
+            "default": false,
+            "title": "Pin Set",
+            "type": "boolean"
           },
           "restricted_until": {
             "anyOf": [
@@ -4718,6 +4728,23 @@
             "title": "Kind",
             "type": "string"
           },
+          "name_check": {
+            "anyOf": [
+              {
+                "enum": [
+                  "checking",
+                  "not_answered",
+                  "limit_reached",
+                  "waiting_for_id"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name Check"
+          },
           "network": {
             "anyOf": [
               {
@@ -4771,7 +4798,8 @@
                   "proof_too_old",
                   "proof_wrong_account",
                   "proof_wrong_document",
-                  "suspected_fraud"
+                  "suspected_fraud",
+                  "network_name_unavailable"
                 ],
                 "type": "string"
               },
@@ -5421,6 +5449,7 @@
               "passkey_failed",
               "second_step_missing",
               "sign_in_again",
+              "app_locked",
               "confirm_it_is_you",
               "expired",
               "phone_taken",
@@ -8439,10 +8468,17 @@
         "description": "What the first person read on the proof. The name is compared on the server.",
         "properties": {
           "proof_name": {
-            "maxLength": 120,
-            "minLength": 1,
-            "title": "Proof Name",
-            "type": "string"
+            "anyOf": [
+              {
+                "maxLength": 120,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Proof Name"
           },
           "reason": {
             "maxLength": 500,
@@ -8464,7 +8500,6 @@
           }
         },
         "required": [
-          "proof_name",
           "reason"
         ],
         "title": "NewCheck",
@@ -9907,6 +9942,42 @@
           "expires_at"
         ],
         "title": "PhotoLinks",
+        "type": "object"
+      },
+      "PinBody": {
+        "additionalProperties": false,
+        "properties": {
+          "pin": {
+            "maxLength": 16,
+            "minLength": 1,
+            "title": "Pin",
+            "type": "string"
+          }
+        },
+        "required": [
+          "pin"
+        ],
+        "title": "PinBody",
+        "type": "object"
+      },
+      "PinChecked": {
+        "additionalProperties": false,
+        "description": "`unlocked` when the PIN was right. Otherwise the tries left before this device signs out.",
+        "properties": {
+          "tries_left": {
+            "title": "Tries Left",
+            "type": "integer"
+          },
+          "unlocked": {
+            "title": "Unlocked",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "unlocked",
+          "tries_left"
+        ],
+        "title": "PinChecked",
         "type": "object"
       },
       "PlanCountsView": {
@@ -11496,6 +11567,129 @@
           "name"
         ],
         "title": "RecipientOut",
+        "type": "object"
+      },
+      "RecoveryAsk": {
+        "additionalProperties": false,
+        "description": "The number on the account, a number to call now, and what happened. No free text.",
+        "properties": {
+          "contact_phone": {
+            "maxLength": 32,
+            "minLength": 1,
+            "title": "Contact Phone",
+            "type": "string"
+          },
+          "phone": {
+            "maxLength": 32,
+            "minLength": 1,
+            "title": "Phone",
+            "type": "string"
+          },
+          "reason": {
+            "enum": [
+              "lost_phone",
+              "new_number",
+              "no_codes",
+              "other"
+            ],
+            "title": "Reason",
+            "type": "string"
+          }
+        },
+        "required": [
+          "phone",
+          "contact_phone",
+          "reason"
+        ],
+        "title": "RecoveryAsk",
+        "type": "object"
+      },
+      "RecoveryClose": {
+        "additionalProperties": false,
+        "properties": {
+          "outcome": {
+            "enum": [
+              "number_changed",
+              "helped",
+              "not_the_client"
+            ],
+            "title": "Outcome",
+            "type": "string"
+          }
+        },
+        "required": [
+          "outcome"
+        ],
+        "title": "RecoveryClose",
+        "type": "object"
+      },
+      "RecoveryList": {
+        "additionalProperties": false,
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/RecoveryView"
+            },
+            "title": "Items",
+            "type": "array"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "title": "RecoveryList",
+        "type": "object"
+      },
+      "RecoveryView": {
+        "additionalProperties": false,
+        "properties": {
+          "account_phone": {
+            "title": "Account Phone",
+            "type": "string"
+          },
+          "client_id": {
+            "maxLength": 20,
+            "minLength": 20,
+            "pattern": "^[-0-9A-Z_a-z]{20}$",
+            "title": "Client Id",
+            "type": "string"
+          },
+          "contact_phone": {
+            "title": "Contact Phone",
+            "type": "string"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "id": {
+            "maxLength": 20,
+            "minLength": 20,
+            "pattern": "^[-0-9A-Z_a-z]{20}$",
+            "title": "Id",
+            "type": "string"
+          },
+          "reason": {
+            "enum": [
+              "lost_phone",
+              "new_number",
+              "no_codes",
+              "other"
+            ],
+            "title": "Reason",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "client_id",
+          "account_phone",
+          "contact_phone",
+          "reason",
+          "created_at"
+        ],
+        "title": "RecoveryView",
         "type": "object"
       },
       "Refusal": {
@@ -14836,6 +15030,17 @@
             ],
             "title": "Network"
           },
+          "network_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Network Name"
+          },
           "payable_from": {
             "anyOf": [
               {
@@ -14889,6 +15094,10 @@
                 "type": "string"
               },
               {
+                "const": "network_name_unavailable",
+                "type": "string"
+              },
+              {
                 "type": "null"
               }
             ],
@@ -14917,6 +15126,7 @@
           "holder_name",
           "status",
           "proof_kind",
+          "network_name",
           "check",
           "rejection_reason",
           "approved_by",
@@ -15031,6 +15241,17 @@
             ],
             "title": "Network"
           },
+          "network_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Network Name"
+          },
           "payable_from": {
             "anyOf": [
               {
@@ -15074,6 +15295,10 @@
                 "type": "string"
               },
               {
+                "const": "network_name_unavailable",
+                "type": "string"
+              },
+              {
                 "type": "null"
               }
             ],
@@ -15102,6 +15327,7 @@
           "holder_name",
           "status",
           "proof_kind",
+          "network_name",
           "check",
           "rejection_reason",
           "approved_by",
@@ -27345,6 +27571,92 @@
         ]
       }
     },
+    "/client/payout-destinations/{destination_id}/name-check": {
+      "post": {
+        "description": "Ask again for the name the network holds for a mobile money number.\n\nFor a number whose `name_check` is `not_answered`, or `waiting_for_id` once the client's\nID is approved. The answer comes later: the number stays `awaiting_proof` with\n`name_check` `checking` until it does. 409 `name_check_in_progress`,\n`name_check_limit_reached`, `client_not_verified`, `destination_not_awaiting_proof` or\n`name_check_not_for_this_account`. Once a name that waited for the ID is being compared,\n`name_check` is `checking`. While no provider reads names, every ask is 409\n`name_check_in_progress`: the number waits and none of its lookups are used up.",
+        "operationId": "check_name_again_client_payout_destinations__destination_id__name_check_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "destination_id",
+            "required": true,
+            "schema": {
+              "maxLength": 20,
+              "minLength": 20,
+              "pattern": "^[-0-9A-Z_a-z]{20}$",
+              "title": "Destination Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DestinationOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          }
+        },
+        "summary": "Check Name Again",
+        "tags": [
+          "client payouts"
+        ]
+      }
+    },
     "/client/payout-destinations/{destination_id}/proof": {
       "post": {
         "description": "Upload proof that a bank account is the client's, and send it to staff.\n\nA `multipart/form-data` body. A bank statement must be dated within the last three months.\nAfter a refusal the client may upload another. 409 if the account is not waiting for proof.",
@@ -27698,6 +28010,183 @@
         ]
       }
     },
+    "/client/pin": {
+      "put": {
+        "description": "Set or replace the PIN for this phone. Needs a log in from the last ten minutes.",
+        "operationId": "set_pin_client_pin_put",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PinBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "423": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Locked"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          }
+        },
+        "summary": "Set Pin",
+        "tags": [
+          "client sign-in"
+        ]
+      }
+    },
+    "/client/pin/unlock": {
+      "post": {
+        "description": "Open a locked app. The fifth wrong PIN in a row signs this device out (401).",
+        "operationId": "unlock_client_pin_unlock_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PinBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PinChecked"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "423": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Locked"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          }
+        },
+        "summary": "Unlock",
+        "tags": [
+          "client sign-in"
+        ]
+      }
+    },
     "/client/products": {
       "get": {
         "operationId": "client_products_client_products_get",
@@ -27976,6 +28465,76 @@
         ]
       }
     },
+    "/client/recovery-requests": {
+      "post": {
+        "description": "Ask Finvest to call back. The same answer whether or not the number has an account.",
+        "operationId": "ask_for_recovery_client_recovery_requests_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RecoveryAsk"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          }
+        },
+        "summary": "Ask For Recovery",
+        "tags": [
+          "client sign-in"
+        ]
+      }
+    },
     "/client/risk-profile": {
       "get": {
         "description": "The questions, the client's latest answers, and whether they are due again.",
@@ -28211,6 +28770,7 @@
     },
     "/client/session": {
       "get": {
+        "description": "The signed-in client. A locked session answers too, so the app knows to ask for the PIN.",
         "operationId": "client_session_client_session_get",
         "responses": {
           "200": {
@@ -43719,7 +44279,7 @@
     },
     "/staff/payout-destinations/{destination_id}/check": {
       "post": {
-        "description": "Record what you read on the proof. The account then waits for a different person.\n\n422 `name_different` when the name on the proof is not the client's; refuse the proof\ninstead. 409 `client_not_verified` when the client has no approved identity check.",
+        "description": "Record what you read on the proof. The account then waits for a different person.\n\n422 `name_different` when the name on the proof is not the client's; refuse the proof\ninstead. 422 `proof_name_required` when it is left out for a bank account, and\n`proof_name_from_network` when it is given for a mobile money number, which is checked with\n`network_name`. 409 `client_not_verified` when the client has no approved identity check.",
         "operationId": "check_destination_staff_payout_destinations__destination_id__check_post",
         "parameters": [
           {
@@ -48228,6 +48788,147 @@
         "summary": "Import Statement",
         "tags": [
           "staff reconciliation"
+        ]
+      }
+    },
+    "/staff/recovery-requests": {
+      "get": {
+        "description": "Requests for a real account that nobody has closed yet, oldest first.",
+        "operationId": "open_recovery_requests_staff_recovery_requests_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RecoveryList"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          }
+        },
+        "summary": "Open Recovery Requests",
+        "tags": [
+          "client numbers"
+        ]
+      }
+    },
+    "/staff/recovery-requests/{request_id}/close": {
+      "post": {
+        "description": "Close a request once the person was called back. The number changes separately.",
+        "operationId": "close_recovery_request_staff_recovery_requests__request_id__close_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "request_id",
+            "required": true,
+            "schema": {
+              "maxLength": 20,
+              "minLength": 20,
+              "pattern": "^[-0-9A-Z_a-z]{20}$",
+              "title": "Request Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RecoveryClose"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          }
+        },
+        "summary": "Close Recovery Request",
+        "tags": [
+          "client numbers"
         ]
       }
     },

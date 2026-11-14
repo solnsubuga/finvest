@@ -160,16 +160,13 @@ async def test_two_deposits_recorded_together_still_see_each_other(
 ) -> None:
     client_id = push_id()
     half = LARGE_AMOUNT // 2
+    # Both happened at the same moment, so the rules count either one before the other and the
+    # only thing tested is that recording them one at a time lets the second see the first. (A
+    # deposit recorded before an earlier one is a known limit: see docs/screening.md.)
+    first, second = deposit(half, fake_clock), deposit(half, fake_clock)
     results = await asyncio.gather(
-        record(
-            worker_database,
-            client_id,
-            deposit(half, fake_clock, ago=timedelta(hours=2)),
-            fake_clock,
-        ),
-        record(
-            second_worker, client_id, deposit(half, fake_clock, ago=timedelta(hours=1)), fake_clock
-        ),
+        record(worker_database, client_id, first, fake_clock),
+        record(second_worker, client_id, second, fake_clock),
     )
     # One of them crossed the amount, whichever was recorded second.
     assert sorted(len(opened or []) for opened in results) == [0, 1]

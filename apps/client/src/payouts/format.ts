@@ -48,11 +48,15 @@ export const rejectionCopy: Record<RejectionReason, string> = {
   proof_wrong_account: "The proof was for a different account number. Send proof for this account.",
   proof_wrong_document: "That document does not prove the account is yours. Send a statement, a bank letter or a photo of the card.",
   suspected_fraud: "This account cannot be used. Talk to us in Help if you think this is a mistake.",
+  network_name_unavailable:
+    "The network could not give us a name for this number, so we cannot check it is yours. Use a number registered in your name.",
 };
 
 /** Whether the client can send new proof after this refusal. A different name and suspected fraud are final. */
 export function canProveAgain(reason: RejectionReason | null): boolean {
-  return reason !== null && reason !== "name_different" && reason !== "suspected_fraud";
+  return (
+    reason !== null && reason !== "name_different" && reason !== "suspected_fraud" && reason !== "network_name_unavailable"
+  );
 }
 
 export const payoutStatusCopy: Record<PayoutStatus, { label: string; tone: Tone; detail: string }> = {

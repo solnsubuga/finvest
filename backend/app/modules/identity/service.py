@@ -25,6 +25,7 @@ from app.modules.identity.domain.devices import UNKNOWN as UNKNOWN_DEVICE
 from app.modules.identity.domain.devices import kampala_time
 from app.modules.identity.domain.passwords import password_problem
 from app.modules.identity.domain.permissions import Permission, Role, permissions_for
+from app.modules.identity.domain.pins import is_locked
 from app.modules.identity.domain.sessions import (
     LOGIN_CHALLENGE_LIFETIME,
     SecondStep,
@@ -71,6 +72,10 @@ class ClientSession:
     signed_in_at: datetime
     email: str | None = None
     email_verified: bool = False
+    transport: Transport = "cookie"
+    # The phone app's PIN for this session. A locked session answers nothing but the PIN.
+    pin_set: bool = False
+    locked: bool = False
 
     @property
     def actor(self) -> Actor:
@@ -439,8 +444,10 @@ class IdentityService:
             row = (
                 await session.execute(
                     text(
-                        "SELECT id, actor_id, transport, created_at, idle_expires_at, "
-                        "reverified_at FROM identity_sessions "
+                        "SELECT id, actor_id, transport, created_at, last_seen_at, "
+                        "idle_expires_at, reverified_at, EXISTS (SELECT FROM identity_app_pins "
+                        "WHERE session_id = identity_sessions.id) AS pin_set "
+                        "FROM identity_sessions "
                         "WHERE token_hash = :hash AND actor_kind = :kind AND revoked_at IS NULL "
                         "AND idle_expires_at > :now AND absolute_expires_at > :now"
                     ),
@@ -450,8 +457,11 @@ class IdentityService:
             if row is None:
                 return None, None
             idle, _ = self._policies[(kind, row.transport)].expiry(row.created_at, now)
+            # Judged before this request counts as use. A locked session stays locked, and its
+            # idle time keeps running, until the PIN opens it.
+            locked = is_locked(pin_set=row.pin_set, last_seen_at=row.last_seen_at, now=now)
             # A busy page makes many requests. One write a minute keeps the session alive.
-            if idle - row.idle_expires_at >= TOUCH_INTERVAL:
+            if not locked and idle - row.idle_expires_at >= TOUCH_INTERVAL:
                 await session.execute(
                     text(
                         "UPDATE identity_sessions SET last_seen_at = :now, "
@@ -483,6 +493,11 @@ class IdentityService:
             row.created_at,
             email=account.email,
             email_verified=account.email_verified_at is not None,
+            transport=row.transport,
+            pin_set=row.pin_set,
+            locked=is_locked(
+                pin_set=row.pin_set, last_seen_at=row.last_seen_at, now=self.clock.now()
+            ),
         )
 
     async def staff_session(self, token: str) -> StaffSession | None:
