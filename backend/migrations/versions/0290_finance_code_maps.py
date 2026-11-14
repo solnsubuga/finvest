@@ -13,7 +13,8 @@ account code map: which of the system's accounts each Finvest ledger code is pos
   withdraws it. The approved map decided last is the one in use. A decided map never changes,
   and no row is removed, so every map ever used is kept.
 * `finance_code_map_lines` holds a proposal's accounts, one row per Finvest code. They are
-  written by the proposer while the proposal waits, and never change after.
+  written in the transaction that wrote the proposal, and never change after, so the approver
+  always decides on the whole map they read.
 * `finance_journal_exports` gains the format of each export and the map it used, so what was
   sent to the accounting system can always be told again.
 
@@ -48,6 +49,8 @@ CREATE TABLE finance_code_maps (
     decided_by push_id,
     decided_at timestamptz,
     decision_reason varchar(500),
+    -- The transaction that wrote the proposal. Its accounts are written in that transaction only.
+    created_xact xid8 NOT NULL DEFAULT pg_current_xact_id(),
     CONSTRAINT pk_finance_code_maps PRIMARY KEY (id),
     CONSTRAINT ck_finance_code_maps_system CHECK (system IN ('quickbooks', 'xero', 'sage', 'zoho')),
     CONSTRAINT ck_finance_code_maps_tax_rate CHECK (
@@ -101,26 +104,28 @@ ALTER TABLE finance_journal_exports
 # people whose transactions wrote the proposal and the decision.
 MAPS_GUARD = """
 CREATE FUNCTION finvest_finance_code_maps_guard() RETURNS trigger
-    LANGUAGE plpgsql SET search_path = pg_catalog, public, pg_temp
+    LANGUAGE plpgsql SET search_path = pg_catalog, pg_temp
     AS $$
     BEGIN
         IF TG_OP IN ('DELETE', 'TRUNCATE') THEN
             RAISE EXCEPTION 'a code map is never removed' USING ERRCODE = '42501';
         END IF;
-        IF finvest_actor_kind() IS DISTINCT FROM 'staff' THEN
+        IF public.finvest_actor_kind() IS DISTINCT FROM 'staff' THEN
             RAISE EXCEPTION 'only staff change a code map' USING ERRCODE = '42501';
         END IF;
         IF TG_OP = 'INSERT' THEN
-            IF NEW.status <> 'proposed' OR NEW.proposed_by <> finvest_actor_id() THEN
+            IF NEW.status <> 'proposed' OR NEW.proposed_by <> public.finvest_actor_id() THEN
                 RAISE EXCEPTION 'a code map starts as a proposal by the acting member of staff'
                     USING ERRCODE = '42501';
             END IF;
+            -- Never trust a supplied value: the accounts are tied to this transaction.
+            NEW.created_xact := pg_current_xact_id();
             RETURN NEW;
         END IF;
         IF OLD.status <> 'proposed' THEN
             RAISE EXCEPTION 'a decided code map never changes' USING ERRCODE = '42501';
         END IF;
-        IF NEW.status = 'proposed' OR NEW.decided_by IS DISTINCT FROM finvest_actor_id()
+        IF NEW.status = 'proposed' OR NEW.decided_by IS DISTINCT FROM public.finvest_actor_id()
             OR (to_jsonb(NEW) - ARRAY['status', 'decided_by', 'decided_at', 'decision_reason'])
                <> (to_jsonb(OLD) - ARRAY['status', 'decided_by', 'decided_at', 'decision_reason'])
         THEN
@@ -134,18 +139,19 @@ CREATE FUNCTION finvest_finance_code_maps_guard() RETURNS trigger
 
 LINES_GUARD = """
 CREATE FUNCTION finvest_finance_code_map_lines_guard() RETURNS trigger
-    LANGUAGE plpgsql SET search_path = pg_catalog, public, pg_temp
+    LANGUAGE plpgsql SET search_path = pg_catalog, pg_temp
     AS $$
     BEGIN
         IF TG_OP <> 'INSERT' THEN
             RAISE EXCEPTION 'the accounts of a code map never change' USING ERRCODE = '42501';
         END IF;
         IF NOT EXISTS (
-            SELECT FROM finance_code_maps
+            SELECT FROM public.finance_code_maps
             WHERE id = NEW.map_id AND status = 'proposed'
-                AND finvest_actor_kind() = 'staff' AND proposed_by = finvest_actor_id()
+                AND created_xact = pg_current_xact_id()
+                AND public.finvest_actor_kind() = 'staff' AND proposed_by = public.finvest_actor_id()
         ) THEN
-            RAISE EXCEPTION 'only the proposer names accounts, while the map waits'
+            RAISE EXCEPTION 'accounts are named only in the transaction that proposes the map'
                 USING ERRCODE = '42501';
         END IF;
         RETURN NEW;
@@ -156,11 +162,11 @@ CREATE FUNCTION finvest_finance_code_map_lines_guard() RETURNS trigger
 # An export names the map it used only if that map was approved, for the export's own system.
 EXPORT_MAP_GUARD = """
 CREATE FUNCTION finvest_finance_journal_exports_map_guard() RETURNS trigger
-    LANGUAGE plpgsql SET search_path = pg_catalog, public, pg_temp
+    LANGUAGE plpgsql SET search_path = pg_catalog, pg_temp
     AS $$
     BEGIN
         IF NEW.code_map_id IS NOT NULL AND NOT EXISTS (
-            SELECT FROM finance_code_maps
+            SELECT FROM public.finance_code_maps
             WHERE id = NEW.code_map_id AND status = 'approved' AND system = NEW.format
         ) THEN
             RAISE EXCEPTION 'an export uses an approved map of its own system'
@@ -171,7 +177,7 @@ CREATE FUNCTION finvest_finance_journal_exports_map_guard() RETURNS trigger
     $$
 """
 
-STAFF = "finvest_actor_kind() = 'staff'"
+STAFF = "public.finvest_actor_kind() = 'staff'"
 
 RULES = [
     "REVOKE ALL ON FUNCTION finvest_finance_code_maps_guard() FROM PUBLIC",
