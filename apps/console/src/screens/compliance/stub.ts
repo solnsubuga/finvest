@@ -72,7 +72,7 @@ function samples(me: { id: string; name: string }): Sample[] {
       case: {
         ...base,
         id: "-CaseSample000000001",
-        client: { id: "-ClientSample0000011", name: "Sarah Nakato", accountNumber: "FV 2034 5521" },
+        client: { id: "-ClientSample0000011", name: "Sarah Nakato", accountNumber: "1001005521" },
         source: "screening",
         code: "possible_match",
         openedAt: "2026-11-12T07:40:00Z",
@@ -96,7 +96,7 @@ function samples(me: { id: string; name: string }): Sample[] {
       case: {
         ...base,
         id: "-CaseSample000000002",
-        client: { id: "-ClientSample0000012", name: "Joseph Okello", accountNumber: "FV 2034 7702" },
+        client: { id: "-ClientSample0000012", name: "Joseph Okello", accountNumber: "1001007702" },
         source: "screening",
         code: "possible_match",
         openedAt: "2026-11-13T02:16:00Z",
@@ -113,7 +113,7 @@ function samples(me: { id: string; name: string }): Sample[] {
       case: {
         ...base,
         id: "-CaseSample000000003",
-        client: { id: "-ClientSample0000013", name: "Ruth Achieng", accountNumber: "FV 2035 0118" },
+        client: { id: "-ClientSample0000013", name: "Ruth Achieng", accountNumber: "1001000118" },
         source: "monitoring",
         code: "split_deposits",
         openedAt: "2026-11-13T11:02:00Z",
@@ -140,7 +140,7 @@ function samples(me: { id: string; name: string }): Sample[] {
       case: {
         ...base,
         id: "-CaseSample000000004",
-        client: { id: "-ClientSample0000014", name: "Peter Mugisha", accountNumber: "FV 2034 9930" },
+        client: { id: "-ClientSample0000014", name: "Peter Mugisha", accountNumber: "1001009930" },
         source: "monitoring",
         code: "large_deposit",
         openedAt: "2026-11-14T06:20:00Z",
@@ -154,7 +154,7 @@ function samples(me: { id: string; name: string }): Sample[] {
       case: {
         ...base,
         id: "-CaseSample000000005",
-        client: { id: "-ClientSample0000015", name: "Esther Namubiru", accountNumber: "FV 2033 4410" },
+        client: { id: "-ClientSample0000015", name: "Esther Namubiru", accountNumber: "1001004410" },
         source: "monitoring",
         code: "quick_withdrawal",
         openedAt: "2026-11-09T09:00:00Z",
@@ -194,7 +194,7 @@ function samples(me: { id: string; name: string }): Sample[] {
 const PAYOUTS: WaitingPayout[] = [
   {
     id: "-PaySample0000000011",
-    client: { id: "-ClientSample0000011", name: "Sarah Nakato", accountNumber: "FV 2034 5521" },
+    client: { id: "-ClientSample0000011", name: "Sarah Nakato", accountNumber: "1001005521" },
     kind: "mobile_money",
     amount: { minor: 1_200_000, currency: "UGX" },
     createdAt: "2026-11-13T09:05:00Z",
@@ -202,7 +202,7 @@ const PAYOUTS: WaitingPayout[] = [
   },
   {
     id: "-PaySample0000000016",
-    client: { id: "-ClientSample0000016", name: "Moses Kato", accountNumber: "FV 2035 2207" },
+    client: { id: "-ClientSample0000016", name: "Moses Kato", accountNumber: "1001002207" },
     kind: "bank",
     amount: { minor: 15_000_000, currency: "UGX" },
     createdAt: "2026-11-14T07:58:00Z",
