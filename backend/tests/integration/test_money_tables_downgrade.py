@@ -7,7 +7,8 @@ complaints register, the goals, the email delivery records, the unclaimed accoun
 complaint outcomes, the suppression lifts, the client locks, the announcements, the team
 changes, Finvest's own money in the buffer, the payments of tax to URA, the payments moved to
 the right client, next of kin, the answers to the investing questions, the requests to close an
-account or the journals sent to the accounting system."""
+account, the journals sent to the accounting system or who set the bank account clients pay
+into."""
 
 import os
 from collections.abc import Iterator
@@ -868,6 +869,15 @@ ROWS = {
         "created_at) VALUES ('-Nabc0000000000000A1', '-Nabc0000000000000B1', '+256701555013', "
         "'lost_phone', 'open', now())",
         "refusing to drop recovery requests staff have not closed",
+    ),
+    "0260_payment_bank_accounts": (
+        # The guard admits only staff proposing in their own name.
+        "ALTER TABLE payment_bank_accounts DISABLE TRIGGER payment_bank_accounts_guard; "
+        "INSERT INTO payment_bank_accounts (id, currency, bank_name, account_name, "
+        "account_number, reason, proposed_by, proposed_at) VALUES ('-Nabc0000000000000A1', "
+        "'UGX', 'Example Bank', 'Finvest Clients', '9030001234567', 'Trust account', "
+        "'-Nabc0000000000000S1', now())",
+        "refusing to drop bank accounts that hold records",
     ),
 }
 
