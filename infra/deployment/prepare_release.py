@@ -260,11 +260,40 @@ def prepare(output: Path, env: Mapping[str, str]) -> None:
         if optional(env, name):
             worker[name] = optional(env, name)
 
+    scheduler = {**database, "FINVEST_DATABASE_URL": urls["scheduler"]}
+    # ioTec Pay (backend payments and payouts, docs/payments.md) and ioTec Verify (identity checks,
+    # docs/identity-checks.md). Each setting goes only to the processes that read it.
+    for names, targets in (
+        # The scheduler reads which provider and currency to plan for, and holds no credentials.
+        (("FINVEST_PAYMENTS_PROVIDER", "FINVEST_IOTEC_CURRENCY_CODE"), (api, worker, scheduler)),
+        (
+            (
+                "FINVEST_IOTEC_CLIENT_ID",
+                "FINVEST_IOTEC_CLIENT_SECRET",
+                "FINVEST_IOTEC_WALLET_ID",
+                "FINVEST_IOTEC_TOKEN_URL",
+                "FINVEST_IOTEC_PAY_URL",
+                "FINVEST_IOTEC_TIMEOUT_SECONDS",
+                "FINVEST_IDENTITY_PROVIDER",
+                "FINVEST_IOTEC_VERIFY_CLIENT_ID",
+                "FINVEST_IOTEC_VERIFY_API_KEY",
+                "FINVEST_IOTEC_VERIFY_BASE_URL",
+            ),
+            (api, worker),
+        ),
+        # Checks ioTec's collection callbacks, which only the API receives.
+        (("FINVEST_IOTEC_CALLBACK_TOKEN",), (api,)),
+    ):
+        for name in names:
+            if optional(env, name):
+                for target in targets:
+                    target[name] = single_line(name, optional(env, name))
+
     runtime = {
         "migrate": {**database, "FINVEST_DATABASE_URL": urls["migrate"]},
         "api": api,
         "worker": worker,
-        "scheduler": {**database, "FINVEST_DATABASE_URL": urls["scheduler"]},
+        "scheduler": scheduler,
     }
 
     release = {

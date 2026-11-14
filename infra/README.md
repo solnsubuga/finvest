@@ -194,6 +194,14 @@ In each of the `staging` and `production` GitHub environments, beside what Terra
 | `DEPLOY_FIREWALL_TOKEN` | Secret | A DigitalOcean token with only the `firewall` read and update scopes. The deploy uses it to open and close SSH for itself. Do not reuse the write token here. |
 | `FINVEST_AUTHENTICATOR_KEY` | Secret | `python3 -c "import secrets; print(secrets.token_urlsafe(32))"`, one per environment. It protects staff authenticator secrets. Never change it once staff have enrolled, and keep an offline copy. |
 | `FINVEST_IDENTITY_DATA_KEY` | Secret | `python3 -c "import secrets; print(secrets.token_urlsafe(32))"`, one per environment. It encrypts clients' document numbers, dates of birth and TINs, and reaches the API and worker only. Never change it once clients have been checked: saved checks become unreadable. Keep an offline copy. |
+| `FINVEST_PAYMENTS_PROVIDER`, `FINVEST_IOTEC_CURRENCY_CODE` | Variables | `iotec` and `UGX` once ioTec Pay is set up ([docs/payments.md](../docs/payments.md)). Leave unset until then. The API, worker and scheduler get them. `ITX` (an ioTec test wallet) is refused in production. |
+| `FINVEST_IOTEC_CLIENT_ID`, `FINVEST_IOTEC_WALLET_ID` | Variables | From the ioTec Pay portal. API and worker only. Payments and payouts share them. |
+| `FINVEST_IOTEC_CLIENT_SECRET` | Secret | From the ioTec Pay portal. API and worker only. |
+| `FINVEST_IOTEC_CALLBACK_TOKEN` | Secret | A random value you choose (`python3 -c "import secrets; print(secrets.token_urlsafe(32))"`). Enter the same value in ioTec's portal as the security header `Authorization: Bearer <value>` on the wallet's collection callback, pointing at `https://api.finvestug.com/provider-callbacks/collections/iotec`. API only. |
+| `FINVEST_IOTEC_TOKEN_URL`, `FINVEST_IOTEC_PAY_URL`, `FINVEST_IOTEC_TIMEOUT_SECONDS` | Variables, optional | Default to `https://id.iotec.io/connect/token`, `https://pay.iotec.io` and `30`. |
+| `FINVEST_IDENTITY_PROVIDER` | Variable | Unset (manual review) until the ioTec Verify credentials exist, then `iotec` ([docs/identity-checks.md](../docs/identity-checks.md)). API and worker. |
+| `FINVEST_IOTEC_VERIFY_CLIENT_ID`, `FINVEST_IOTEC_VERIFY_API_KEY` | Secrets | From the ioTec Verify portal (Management, Settings, Configuration). Required once the provider is `iotec`. API and worker. |
+| `FINVEST_IOTEC_VERIFY_BASE_URL` | Variable, optional | Defaults to `https://verify-api.iotec.io`. |
 | `FINVEST_SMS_BACKEND`, `FINVEST_SMS_IOTEC_CLIENT_ID` | Variables | `iotec`, and the client id from the ioTec Messaging portal (Management, Settings, Configuration). Only the worker gets them; it sends every SMS. |
 | `FINVEST_SMS_IOTEC_API_KEY` | Secret | The ioTec Messaging API key from the same page. Worker only. |
 | `FINVEST_SMS_IOTEC_BASE_URL` | Variable, optional | Defaults to `https://messaging-api.iotec.io`. The host's firewall already allows outbound HTTPS. |
