@@ -35,6 +35,7 @@ from app.modules.goals.domain.goals import (
     progress,
 )
 from app.modules.goals.domain.plans import Plan, PlanProduct, best_plan, product_for_goal
+from app.modules.goals.saving_rules import ClientSavingRule, client_rule, end_rule
 from app.modules.investments import service as investments
 from app.modules.investments.domain.investments import InvestmentStatus
 from app.modules.investments.domain.products import ProductStatus
@@ -108,6 +109,8 @@ class ClientGoal:
     plan: ClientPlan | None
     # The investments made for this goal, newest first, without cancelled ones.
     savings: list[investments.ClientInvestment]
+    # The monthly saving collected by itself, if the client set one up and has not ended it.
+    saving_rule: ClientSavingRule | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -370,6 +373,8 @@ async def close_goal(
                 raise ApplicationError("conflict")
             # A closed goal takes no saving, so it leaves its group.
             await session.execute(_LEAVE_GROUP, {"goal_id": goal.id, "now": clock.now()})
+        # Nor does it take its monthly saving: the rule ends and its plan stops.
+        await end_rule(session, client, goal.id, clock)
         await session.execute(_CLOSE, {"id": goal.id, "now": clock.now()})
         logger.info("goal_closed", goal_id=goal.id)
     return await client_goal(session, client, goal.id, clock)
@@ -721,6 +726,7 @@ async def _client_view(
         progress=standing,
         plan=plan,
         savings=savings,
+        saving_rule=await client_rule(session, goal.id),
     )
 
 

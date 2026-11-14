@@ -575,6 +575,25 @@ export const ProgressView = z.object({
 });
 export type ProgressView = z.infer<typeof ProgressView>;
 
+export const Network = z.enum(["mtn", "airtel"]);
+export type Network = z.infer<typeof Network>;
+
+export const PlanStatus = z.enum(["active", "paused", "stopped"]);
+export type PlanStatus = z.infer<typeof PlanStatus>;
+
+export const SavingRuleView = z.object({
+  amount_minor: z.number().int(),
+  created_at: z.string(),
+  currency: Currency,
+  day: z.number().int(),
+  network: Network,
+  next_run_on: z.string().nullable(),
+  payer_msisdn: z.string(),
+  plan_id: z.string(),
+  status: PlanStatus,
+});
+export type SavingRuleView = z.infer<typeof SavingRuleView>;
+
 export const SavingView = z.object({
   amount_minor: z.number().int(),
   at_maturity: AtMaturity.nullable(),
@@ -617,6 +636,7 @@ export const GoalView = z.object({
   plan: GoalsApiPlanView.nullable(),
   product_code: z.string(),
   progress: ProgressView,
+  saving_rule: SavingRuleView.nullable(),
   savings: z.array(SavingView),
   status: GoalStatus,
   target_date: z.string().nullable(),
@@ -834,9 +854,6 @@ export const MobileMoneyPayment = z.object({
 });
 export type MobileMoneyPayment = z.infer<typeof MobileMoneyPayment>;
 
-export const Network = z.enum(["mtn", "airtel"]);
-export type Network = z.infer<typeof Network>;
-
 export const NewDestination = z.object({
   account_number: z.string().nullable().optional(),
   bank_code: z.string().nullable().optional(),
@@ -869,6 +886,14 @@ export const NewSaving = z.object({
   currency: Currency.optional(),
 });
 export type NewSaving = z.infer<typeof NewSaving>;
+
+export const NewSavingRule = z.object({
+  amount_minor: z.number().int(),
+  currency: Currency.optional(),
+  day: z.number().int(),
+  network: Network,
+});
+export type NewSavingRule = z.infer<typeof NewSavingRule>;
 
 export const Relationship = z.enum(["spouse", "child", "parent", "sibling", "other_relative", "friend", "other"]);
 export type Relationship = z.infer<typeof Relationship>;
@@ -1015,9 +1040,6 @@ export const PlanDetails = z.object({
   product_code: z.string(),
 });
 export type PlanDetails = z.infer<typeof PlanDetails>;
-
-export const PlanStatus = z.enum(["active", "paused", "stopped"]);
-export type PlanStatus = z.infer<typeof PlanStatus>;
 
 export const RunStatus = z.enum(["due", "requested", "paid", "failed", "missed"]);
 export type RunStatus = z.infer<typeof RunStatus>;
@@ -1867,6 +1889,32 @@ export const operations = {
   "POST /client/goals/{goal_id}/close": {
     method: "POST",
     path: "/client/goals/{goal_id}/close",
+    params: z.object({
+    goal_id: z.string(),
+  }),
+    query: z.object({}),
+    body: null,
+    bodyKind: null,
+    idempotent: false,
+    status: 200,
+    response: GoalView,
+  },
+  "POST /client/goals/{goal_id}/saving-rule": {
+    method: "POST",
+    path: "/client/goals/{goal_id}/saving-rule",
+    params: z.object({
+    goal_id: z.string(),
+  }),
+    query: z.object({}),
+    body: NewSavingRule,
+    bodyKind: "json",
+    idempotent: true,
+    status: 201,
+    response: GoalView,
+  },
+  "POST /client/goals/{goal_id}/saving-rule/stop": {
+    method: "POST",
+    path: "/client/goals/{goal_id}/saving-rule/stop",
     params: z.object({
     goal_id: z.string(),
   }),
