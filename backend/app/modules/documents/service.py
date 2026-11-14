@@ -43,6 +43,8 @@ class DocumentKind(StrEnum):
     # Uganda's tax year, 1 July to 30 June, keyed by its label (`2026-27`). The only document
     # that shows tax withheld, and never a rate.
     TAX_CERTIFICATE = "tax_certificate"
+    # The note that confirms an investment started, keyed `started:<investment id>`.
+    INVESTMENT_NOTE = "investment_note"
 
 
 class DocumentStatus(StrEnum):
