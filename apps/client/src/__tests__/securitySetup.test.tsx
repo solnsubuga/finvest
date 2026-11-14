@@ -95,7 +95,7 @@ describe("Sign in and security", () => {
     expect(screen.getByText("Your passkey")).toBeTruthy();
     await fireEvent.press(screen.getByTestId("use-passkey"));
     await screen.findByText("Welcome to Finvest");
-    expect(screen.queryByText(/You signed in with an SMS code/)).toBeNull();
+    expect(screen.queryByText(/You signed in with a code/)).toBeNull();
   });
 
   it("sets up an authenticator app only after a right code, and the next log in accepts it", async () => {

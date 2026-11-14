@@ -49,7 +49,9 @@ export type ReturnTo =
   | "/security/passkey"
   | "/security/authenticator"
   | "/security/passkeys"
-  | "/security/authenticator-off";
+  | "/security/authenticator-off"
+  | "/account/close"
+  | "/account/language";
 
 /** The return address is for logging in again right away, not for a later visit. */
 export const RETURN_TO_LIFETIME_MS = 5 * 60 * 1000;

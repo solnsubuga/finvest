@@ -3,8 +3,8 @@ import { Pressable, StyleSheet, View } from "react-native";
 import { Redirect, Stack, useRouter } from "expo-router";
 
 import { useAuth } from "@/auth/AuthProvider";
-import { maskE164 } from "@/auth/phone";
-import { describeAuthError, SecondStep } from "@/auth/types";
+import { CodeTarget, codeTargetFor } from "@/auth/codeTarget";
+import { CodeChannel, describeAuthError, SecondStep } from "@/auth/types";
 import { BackButton } from "@/components/BackButton";
 import { Card, Notice } from "@/components/Blocks";
 import { Button, TextLink } from "@/components/Button";
@@ -24,7 +24,7 @@ type MethodCopy = {
   intro: string;
 };
 
-function copyFor(method: SecondStep, maskedPhone: string): MethodCopy {
+function copyFor(method: SecondStep, target: CodeTarget): MethodCopy {
   switch (method) {
     case "passkey":
       return {
@@ -45,14 +45,23 @@ function copyFor(method: SecondStep, maskedPhone: string): MethodCopy {
         intro: "Your password was correct. Now enter a code from your authenticator app.",
       };
     case "code":
-      return {
-        icon: "message",
-        title: "A code by SMS",
-        detail: `We will send a 6 digit code to ${maskedPhone}.`,
-        action: "Send me a code",
-        row: "Send me a code",
-        intro: "Your password was correct. Now we will send a code to your phone.",
-      };
+      return target.channel === "email"
+        ? {
+            icon: "mail",
+            title: "A code by email",
+            detail: `We will email a 6 digit code to ${target.where}.`,
+            action: "Email me a code",
+            row: "Email me a code",
+            intro: "Your password was correct. Now we will email you a code.",
+          }
+        : {
+            icon: "message",
+            title: "A code by SMS",
+            detail: `We will send a 6 digit code to ${target.where}.`,
+            action: "Send me a code",
+            row: "Send me a code",
+            intro: "Your password was correct. Now we will send a code to your phone.",
+          };
   }
 }
 
@@ -64,16 +73,30 @@ function copyFor(method: SecondStep, maskedPhone: string): MethodCopy {
 export default function LoginVerify() {
   const router = useRouter();
   const { client, login, setLogin, setSession } = useAuth();
-  const [busy, setBusy] = useState<SecondStep | null>(null);
+  const [busy, setBusy] = useState<SecondStep | "sms" | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   if (!login) {
     return <Redirect href="/login" />;
   }
 
-  const maskedPhone = maskE164(login.phone);
+  const target = codeTargetFor(login);
   const [primary = "code", ...others] = login.methods;
-  const primaryCopy = copyFor(primary, maskedPhone);
+  const primaryCopy = copyFor(primary, target);
+
+  const sendCode = async (channel: CodeChannel, key: SecondStep | "sms") => {
+    setError(null);
+    setBusy(key);
+    try {
+      await client.sendLoginCode(login.loginId, channel);
+      setLogin({ ...login, codeSentBy: channel });
+      router.push("/login/code");
+      setBusy(null);
+    } catch (caught) {
+      setError(describeAuthError(caught));
+      setBusy(null);
+    }
+  };
 
   const choose = async (method: SecondStep) => {
     setError(null);
@@ -81,17 +104,15 @@ export default function LoginVerify() {
       router.push("/login/authenticator");
       return;
     }
+    if (method === "code") {
+      await sendCode(target.channel, "code");
+      return;
+    }
     setBusy(method);
     try {
-      if (method === "passkey") {
-        const session = await client.verifyWithPasskey(login.loginId);
-        setLogin(null);
-        setSession(session);
-        return;
-      }
-      await client.sendLoginCode(login.loginId);
-      router.push("/login/code");
-      setBusy(null);
+      const session = await client.verifyWithPasskey(login.loginId);
+      setLogin(null);
+      setSession(session);
     } catch (caught) {
       setError(describeAuthError(caught));
       setBusy(null);
@@ -149,7 +170,7 @@ export default function LoginVerify() {
           <Eyebrow>Or use another way</Eyebrow>
           <Card padded={false}>
             {others.map((method, index) => {
-              const copy = copyFor(method, maskedPhone);
+              const copy = copyFor(method, target);
               return (
                 <Pressable
                   key={method}
@@ -171,7 +192,9 @@ export default function LoginVerify() {
                   <View style={{ flex: 1 }}>
                     <Txt weight="bold">{copy.row}</Txt>
                     <Txt size={fontSizes.sm} color={colors.muted}>
-                      {method === "code" ? `By SMS to ${maskedPhone}` : copy.detail}
+                      {method === "code"
+                        ? `By ${target.channel === "email" ? "email" : "SMS"} to ${target.where}`
+                        : copy.detail}
                     </Txt>
                   </View>
                   <Icon name="chevron" size={16} strokeWidth={2.2} />
@@ -182,11 +205,21 @@ export default function LoginVerify() {
         </View>
       ) : null}
 
+      {target.channel === "email" ? (
+        <View style={{ marginTop: 8, alignItems: "flex-start" }}>
+          <TextLink
+            label="Text the code to my phone instead"
+            onPress={() => void sendCode("sms", "sms")}
+            testID="use-sms"
+          />
+        </View>
+      ) : null}
+
       <View style={{ marginTop: 14 }}>
         <Notice tone="warning">
           {login.methods.length > 1
-            ? "Signing in with an SMS code limits withdrawals to accounts you have used before for 24 hours. A passkey or an authenticator app does not."
-            : "Signing in with an SMS code limits withdrawals to accounts you have used before for 24 hours. Add a passkey or an authenticator app to avoid this."}
+            ? "Signing in with a code limits withdrawals to accounts you have used before for 24 hours. A passkey or an authenticator app does not."
+            : "Signing in with a code limits withdrawals to accounts you have used before for 24 hours. Add a passkey or an authenticator app to avoid this."}
         </Notice>
       </View>
     </Screen>

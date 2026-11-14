@@ -17,7 +17,7 @@ from collections.abc import Sequence
 from alembic import op
 
 revision: str = "0240_kyc_transfer_recipients"
-down_revision: str | None = "0250_finance_journal_exports"
+down_revision: str | None = "0182_transaction_monitoring"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 

@@ -59,6 +59,11 @@ Permission = Literal[
     # Not a screen: the console's own list gains it with the rates screen.
     "rates.change",
     "compliance.view",
+    # Proposing how to close a compliance case (a possible sanctions or politically exposed
+    # person match, or a transaction monitoring alert), approving or sending back someone
+    # else's proposal, withdrawing your own, and asking for a client to be screened again.
+    # Seeing cases is `compliance.view`. Closing a case always takes a second person.
+    "compliance_cases.change",
     "team.view",
     # Proposing or deciding a change to the team: an invite, a new role, deactivating or
     # reactivating someone, or a new set-up link. Seeing the team is `team.view`. Admin only.
@@ -191,6 +196,7 @@ ROLE_PERMISSIONS: dict[Role, frozenset[Permission]] = {
             "clients.lock",
             "clients.close",
             "compliance.view",
+            "compliance_cases.change",
             "reports.view",
             "audit.view",
             "payout_accounts.change",

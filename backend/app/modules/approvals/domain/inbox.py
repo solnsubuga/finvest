@@ -37,6 +37,7 @@ Kind = Literal[
     "payout_release",
     "investment_transfer",
     "account_closure",
+    "compliance_case",
 ]
 
 
@@ -82,6 +83,8 @@ SOURCES: dict[Kind, Source] = {
     "investment_transfer": Source("review_queue.view", "investment_transfers.change"),
     # A client's request to close their account, once one member of staff has prepared it.
     "account_closure": Source("clients.view", "clients.close"),
+    # Closing a screening or transaction monitoring case, decided on the Compliance screen.
+    "compliance_case": Source("compliance.view", "compliance_cases.change"),
 }
 
 
