@@ -79,3 +79,15 @@ describe("the demo goals", () => {
     await expect(client().getGoal("nope")).rejects.toEqual(new GoalError("not_found"));
   });
 });
+
+describe("a saving taken out early in the demo", () => {
+  it("is listed as withdrawn and leaves the goal's value", async () => {
+    const goals = await createStubGoalsClient({ delayMs: 0, now: () => NOW, seeded: true }).listGoals();
+    const emergency = goals.find((goal) => goal.name === "Emergency fund");
+    const withdrawn = emergency?.savings.filter((saving) => saving.status === "withdrawn") ?? [];
+    expect(withdrawn).toHaveLength(1);
+    expect(withdrawn[0]?.value.minor).toBeGreaterThan(250_000);
+    const running = emergency?.savings.find((saving) => saving.status === "active");
+    expect(emergency?.progress.value).toEqual(running?.value);
+  });
+});

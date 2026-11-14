@@ -34,6 +34,8 @@ type StoredSaving = {
   createdOn: string;
   /** Null until paid. In the demo a saving is paid the moment it is confirmed. */
   startDate: string | null;
+  /** The day it was taken out early. It stops earning then and no longer counts. */
+  withdrawnOn?: string;
 };
 
 type StoredGoal = {
@@ -86,7 +88,7 @@ export function createStubGoalsClient(options: StubOptions = {}): GoalsClient {
       return { value: 0, interest: 0 };
     }
     const days = Math.min(
-      Math.max(daysBetween(saving.startDate, today()), 0),
+      Math.max(daysBetween(saving.startDate, saving.withdrawnOn ?? today()), 0),
       saving.product.termDays,
     );
     const interest = netInterest(saving.amount, saving.product, days);
@@ -98,6 +100,9 @@ export function createStubGoalsClient(options: StubOptions = {}): GoalsClient {
     let interest = 0;
     let waiting = 0;
     for (const saving of goal.savings) {
+      if (saving.withdrawnOn) {
+        continue;
+      }
       if (saving.startDate) {
         const worth = valueOf(saving);
         value += worth.value;
@@ -134,7 +139,11 @@ export function createStubGoalsClient(options: StubOptions = {}): GoalsClient {
       .slice()
       .reverse()
       .map((saving) => {
-        const status: SavingStatus = saving.startDate ? "active" : "awaiting_payment";
+        const status: SavingStatus = saving.withdrawnOn
+          ? "withdrawn"
+          : saving.startDate
+            ? "active"
+            : "awaiting_payment";
         return {
           investmentId: saving.investmentId,
           productName: saving.product.name,
@@ -143,9 +152,10 @@ export function createStubGoalsClient(options: StubOptions = {}): GoalsClient {
           value: ugx(valueOf(saving).value),
           payBy: new Date(now() + 72 * 3_600_000).toISOString(),
           startDate: saving.startDate,
-          maturityDate: saving.startDate
-            ? addDays(saving.startDate, saving.product.termDays)
-            : null,
+          maturityDate:
+            saving.startDate && !saving.withdrawnOn
+              ? addDays(saving.startDate, saving.product.termDays)
+              : null,
         };
       });
     return {
@@ -243,6 +253,15 @@ export function createStubGoalsClient(options: StubOptions = {}): GoalsClient {
           amount: 1_000_000,
           createdOn: addMonths(start, -1),
           startDate: addMonths(start, -1),
+        },
+        {
+          // Taken out early, to show a saving that no longer counts towards its goal.
+          investmentId: nextId("inv"),
+          product: product("TREA-91"),
+          amount: 250_000,
+          createdOn: addMonths(start, -1),
+          startDate: addMonths(start, -1),
+          withdrawnOn: addDays(start, -6),
         },
       ],
     };
