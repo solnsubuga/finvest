@@ -1,13 +1,23 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Navigate, Outlet, useLocation } from "react-router";
 import { useAuth } from "@/auth/context.ts";
+import { createMenuCountsApi, useMenuCounts, type MenuCountsApi } from "@/nav/counts.ts";
 import { LogoMark } from "./Logo.tsx";
 import { Sidebar } from "./Sidebar.tsx";
 
 /** The signed-in frame: the menu on the left and the current screen beside it. */
-export function AppShell() {
+export function AppShell({ countsApi }: { countsApi?: MenuCountsApi | null } = {}) {
   const { session, loading } = useAuth();
   const location = useLocation();
+  const staffId = session?.staffId ?? null;
+  const api = useMemo(
+    () => (countsApi !== undefined ? countsApi : session ? createMenuCountsApi(session) : null),
+    // A new person signing in reads their own counts. The session object itself changes more often.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [countsApi, staffId],
+  );
+  // Moving to another screen asks again, so a decision just made shows at once.
+  const counts = useMenuCounts(api, location.pathname);
   const [menuOpen, setMenuOpen] = useState(false);
   const dialogRef = useRef<HTMLDialogElement>(null);
 
@@ -33,7 +43,7 @@ export function AppShell() {
   return (
     <div className="flex min-h-dvh flex-col bg-paper text-ink lg:flex-row">
       {/* Wide screens: the menu is always there. */}
-      <Sidebar session={session} className="sticky top-0 hidden h-dvh lg:flex" />
+      <Sidebar session={session} counts={counts} className="sticky top-0 hidden h-dvh lg:flex" />
 
       {/* Phones and narrow windows: a top bar that opens the same menu. */}
       <header className="on-black sticky top-0 z-10 flex h-14 items-center justify-between bg-black px-4 text-white lg:hidden">
@@ -96,7 +106,11 @@ export function AppShell() {
                 </svg>
               </button>
             </div>
-            <Sidebar session={session} onNavigate={() => setMenuOpen(false)} className="min-h-0 w-full flex-1 pt-2" />
+            <Sidebar
+              session={session}
+              counts={counts}
+              onNavigate={() => setMenuOpen(false)} className="min-h-0 w-full flex-1 pt-2"
+            />
           </div>
         ) : null}
       </dialog>

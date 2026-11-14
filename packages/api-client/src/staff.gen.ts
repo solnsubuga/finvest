@@ -1960,6 +1960,17 @@ export const MaturityRemindersProposal = z.object({
 });
 export type MaturityRemindersProposal = z.infer<typeof MaturityRemindersProposal>;
 
+export const MenuCount = z.object({
+  count: z.number().int(),
+  screen: z.enum(["review-queue", "identity-checks", "maturities", "support", "complaints", "reconciliation", "rates", "compliance"]),
+});
+export type MenuCount = z.infer<typeof MenuCount>;
+
+export const MenuCountsOut = z.object({
+  counts: z.array(MenuCount),
+});
+export type MenuCountsOut = z.infer<typeof MenuCountsOut>;
+
 export const MessageItem = z.object({
   author: z.enum(["client", "staff"]),
   author_name: z.string().nullable(),
@@ -5711,6 +5722,17 @@ export const operations = {
     idempotent: false,
     status: 200,
     response: MaturitiesOut,
+  },
+  "GET /staff/menu-counts": {
+    method: "GET",
+    path: "/staff/menu-counts",
+    params: z.object({}),
+    query: z.object({}),
+    body: null,
+    bodyKind: null,
+    idempotent: false,
+    status: 200,
+    response: MenuCountsOut,
   },
   "GET /staff/migration": {
     method: "GET",

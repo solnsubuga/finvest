@@ -181,8 +181,20 @@ describe("console shell", () => {
     await signIn(user, "admin@finvest.test");
 
     const nav = (await screen.findAllByRole("navigation", { name: "Console" }))[0]!;
-    expect(within(nav).getByRole("link", { name: "Review Queue" })).toHaveAttribute("aria-current", "page");
+    expect(within(nav).getByRole("link", { name: /^Review Queue/ })).toHaveAttribute("aria-current", "page");
     expect(within(nav).getByRole("link", { name: "Overview" })).not.toHaveAttribute("aria-current");
+  });
+
+  it("shows how much waits beside each screen, only for screens the role can open", async () => {
+    const { user } = renderApp("/overview");
+    await signIn(user, "support@finvest.test");
+
+    const nav = (await screen.findAllByRole("navigation", { name: "Console" }))[0]!;
+    expect(await within(nav).findByRole("link", { name: "Support and Messages, 4 waiting" })).toBeInTheDocument();
+    expect(within(nav).getByRole("link", { name: "Complaints, 5 waiting" })).toBeInTheDocument();
+    // Overview carries no count, and support cannot open the money screens at all.
+    expect(within(nav).getByRole("link", { name: "Overview" })).toBeInTheDocument();
+    expect(within(nav).queryByTestId("menu-count-review-queue")).not.toBeInTheDocument();
   });
 
   it("signs out and returns to sign-in", async () => {

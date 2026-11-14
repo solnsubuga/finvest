@@ -1,4 +1,5 @@
 """GET /staff/review-queue: everything waiting for a person, for the console's Review queue.
+GET /staff/menu-counts: how much of it, and of other screens' work, the console menu shows.
 
 The work itself is still done on each owning module's screen and routes, which check their own
 permissions.
@@ -10,9 +11,10 @@ from typing import Annotated, Literal
 from fastapi import APIRouter, Depends, Request
 
 from app.infrastructure.database import Database
-from app.modules.identity.api import require_permission
+from app.modules.identity.api import CurrentStaff, require_permission
 from app.modules.identity.service import StaffSession
-from app.modules.review_queue import service
+from app.modules.review_queue import menu, service
+from app.modules.review_queue.domain.menu import Screen
 from app.modules.review_queue.domain.queue import GROUPS, Group, Kind
 from app.shared.contracts import Contract, PushId
 from app.shared.errors import ErrorEnvelope
@@ -47,6 +49,19 @@ class ReviewQueueOut(Contract):
     waiting: int
     cleared_automatically_today: int
     oldest_waiting_since: datetime | None
+
+
+class MenuCount(Contract):
+    # The screen's menu path in the console.
+    screen: Screen
+    # At most 100.
+    count: int
+
+
+class MenuCountsOut(Contract):
+    # One count for each screen this member of staff may open that can carry one, in menu
+    # order. A screen they may not open is left out, not shown as zero.
+    counts: list[MenuCount]
 
 
 router = APIRouter(
@@ -84,4 +99,15 @@ async def review_queue(request: Request, staff: Reader) -> ReviewQueueOut:
         waiting=len(found.items),
         cleared_automatically_today=found.cleared_automatically_today,
         oldest_waiting_since=found.oldest,
+    )
+
+
+@router.get("/menu-counts")
+async def menu_counts(request: Request, staff: CurrentStaff) -> MenuCountsOut:
+    """Work waiting on each screen this member of staff may open, for the badges on the menu."""
+    database: Database = request.app.state.database
+    async with database.actor_transaction(staff.actor) as session:
+        counts = await menu.counts(session, staff, request.app.state.clock)
+    return MenuCountsOut(
+        counts=[MenuCount(screen=screen, count=count) for screen, count in counts.items()]
     )

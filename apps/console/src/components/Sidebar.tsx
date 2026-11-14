@@ -2,18 +2,21 @@ import { NavLink } from "react-router";
 import { useAuth } from "@/auth/context.ts";
 import { ROLE_LABELS, type StaffSession } from "@/auth/types.ts";
 import { cn, initials } from "@/lib.ts";
+import { badge, type MenuCounts } from "@/nav/counts.ts";
 import { visibleNav } from "@/nav/nav.ts";
 import { LogoMark } from "./Logo.tsx";
 import { Button } from "./ui/button.tsx";
 
 interface SidebarProps {
   session: StaffSession;
+  /** Work waiting on each screen, by path. A screen with none shows no number. */
+  counts?: MenuCounts;
   /** Called after a link is chosen, so the phone drawer can close. */
   onNavigate?: () => void;
   className?: string;
 }
 
-export function Sidebar({ session, onNavigate, className }: SidebarProps) {
+export function Sidebar({ session, counts = {}, onNavigate, className }: SidebarProps) {
   const { signOut } = useAuth();
   const groups = visibleNav(session);
 
@@ -33,23 +36,34 @@ export function Sidebar({ session, onNavigate, className }: SidebarProps) {
             <h2 className="px-3 pb-1.5 text-2xs font-bold tracking-[0.8px] text-on-black-muted uppercase">
               {group.title}
             </h2>
-            {group.items.map((item) => (
-              <NavLink
-                key={item.path}
-                to={`/${item.path}`}
-                {...(onNavigate ? { onClick: onNavigate } : {})}
-                className={({ isActive }) =>
-                  cn(
-                    "ml-2.5 flex h-[34px] shrink-0 items-center rounded-sm px-2.5 text-sm",
-                    isActive
-                      ? "bg-lime font-bold text-ink"
-                      : "font-semibold text-white hover:bg-on-black-surface",
-                  )
-                }
-              >
-                {item.label}
-              </NavLink>
-            ))}
+            {group.items.map((item) => {
+              const shown = badge(counts[item.path]);
+              return (
+                <NavLink
+                  key={item.path}
+                  to={`/${item.path}`}
+                  {...(onNavigate ? { onClick: onNavigate } : {})}
+                  className={({ isActive }) =>
+                    cn(
+                      "ml-2.5 flex h-[34px] shrink-0 items-center justify-between gap-2 rounded-sm px-2.5 text-sm",
+                      isActive
+                        ? "bg-lime font-bold text-ink"
+                        : "font-semibold text-white hover:bg-on-black-surface",
+                    )
+                  }
+                >
+                  {item.label}
+                  {shown ? (
+                    <>
+                      <span aria-hidden="true" data-testid={`menu-count-${item.path}`} className="font-bold tabular-nums">
+                        {shown}
+                      </span>
+                      <span className="sr-only">, {shown} waiting</span>
+                    </>
+                  ) : null}
+                </NavLink>
+              );
+            })}
           </section>
         ))}
       </div>
