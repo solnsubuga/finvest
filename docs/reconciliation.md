@@ -119,7 +119,7 @@ The pots closed today are the two ioTec wallets and the trust bank account (`dom
 
 ## Staff routes
 
-In `backend/app/modules/reconciliation/api.py`. Everything needs `reconciliation.view`. Approving a close also needs the second step in the last ten minutes (403 `confirm_it_is_you`). Refusals carry their code in `fields`.
+In `backend/app/modules/reconciliation/api.py`. Reading needs `reconciliation.view`. Importing a statement, refreshing, pairing by hand and both signatures on a day close need `reconciliation.change`, because they confirm money. Approving a close also needs the second step in the last ten minutes (403 `confirm_it_is_you`). Refusals carry their code in `fields`.
 
 | Route | What it does |
 | --- | --- |

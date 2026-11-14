@@ -23,6 +23,7 @@ const ACTIONS: readonly { permission: Permission; label: string; under: ScreenPe
   { permission: "complaints.close", label: "Close complaints", under: "complaints.view" },
   { permission: "clients.lock", label: "Lock client accounts", under: "clients.view" },
   { permission: "email_suppressions.lift", label: "Lift email suppressions", under: "clients.view" },
+  { permission: "reconciliation.change", label: "Import statements, close days and settle stranded payouts", under: "reconciliation.view" },
   { permission: "bank_transfers.change", label: "Match bank transfers", under: "reconciliation.view" },
   { permission: "identity_checks.review", label: "Decide identity checks", under: "identity_checks.view" },
   { permission: "deposit_reassignments.change", label: "Move payments credited to the wrong client", under: "reconciliation.view" },

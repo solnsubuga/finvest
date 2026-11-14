@@ -12,6 +12,7 @@ import pytest
 from httpx import Response
 
 from app.infrastructure.database import Database
+from app.modules.identity.domain.permissions import ROLE_PERMISSIONS
 from app.modules.reconciliation import statements
 from app.modules.reconciliation.domain.statements import StatementSource
 from app.shared.business_day import business_date
@@ -206,3 +207,32 @@ async def test_reconciliation_needs_its_permission(api: Api) -> None:
     day = (business_date(api.clock.now()) - timedelta(days=1)).isoformat()
     assert (await api.http.get(f"/staff/reconciliation/days/{day}")).status_code == 403
     assert (await api.http.post(f"/staff/reconciliation/days/{day}/prepare")).status_code == 403
+
+
+async def test_seeing_reconciliation_is_not_enough_to_import_pair_or_sign(
+    api: Api, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # No role sees reconciliation without the right to change it today. Give support the view
+    # alone, as the owner might, and it can read every figure but confirm nothing.
+    monkeypatch.setitem(
+        ROLE_PERMISSIONS, "support", ROLE_PERMISSIONS["support"] | {"reconciliation.view"}
+    )
+    await api.staff("support")
+    day = (business_date(api.clock.now()) - timedelta(days=1)).isoformat()
+    assert (await api.http.get("/staff/reconciliation/pots")).status_code == 200
+    assert (await api.http.get(f"/staff/reconciliation/days/{day}")).status_code == 200
+    statement_day, opening = await next_day(api.database)
+    imported = await upload(api, statement_day, f"{opening:,}", f"{opening:,}", HEADER)
+    assert (imported.status_code, code(imported)) == (403, "forbidden")
+    for path, body in (
+        (f"/staff/reconciliation/days/{day}/refresh", None),
+        (f"/staff/reconciliation/days/{day}/prepare", None),
+        (f"/staff/reconciliation/days/{day}/approve", None),
+        (f"/staff/reconciliation/days/{day}/send-back", {"reason": "Not right"}),
+        (
+            "/staff/reconciliation/matches",
+            {"statement_line_id": push_id(), "entry_id": push_id(), "line_no": 1, "reason": "Same"},
+        ),
+    ):
+        refused = await api.http.post(path, json=body)
+        assert (refused.status_code, code(refused)) == (403, "forbidden"), path

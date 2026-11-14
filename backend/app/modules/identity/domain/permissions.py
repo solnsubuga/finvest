@@ -30,6 +30,11 @@ Permission = Literal[
     "clients.lock",
     "money_movement.view",
     "reconciliation.view",
+    # Importing a statement, pairing a line by hand, either signature on a day close, and
+    # proposing, approving or declining the settlement of a payout the provider never answered
+    # for. These confirm or move money, so a permission named for seeing does not allow them.
+    # Seeing reconciliation is `reconciliation.view`. Not a screen.
+    "reconciliation.change",
     "investments.view",
     "automatic_investing.view",
     "goals.view",
@@ -117,6 +122,7 @@ ROLE_PERMISSIONS: dict[Role, frozenset[Permission]] = {
             "clients.lock",
             "money_movement.view",
             "reconciliation.view",
+            "reconciliation.change",
             "investments.view",
             "automatic_investing.view",
             "goals.view",
@@ -137,6 +143,7 @@ ROLE_PERMISSIONS: dict[Role, frozenset[Permission]] = {
             "clients.view",
             "money_movement.view",
             "reconciliation.view",
+            "reconciliation.change",
             "investments.view",
             "automatic_investing.view",
             "goals.view",

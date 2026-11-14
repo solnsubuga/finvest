@@ -9,6 +9,7 @@ import pytest
 from app.infrastructure.database import Database
 from app.infrastructure.storage import MemoryStorage
 from app.modules.audit import service as audit
+from app.modules.identity.domain.permissions import ROLE_PERMISSIONS
 from app.modules.payouts import destinations
 from app.shared.actors import Actor
 from app.shared.push_ids import push_id
@@ -292,3 +293,26 @@ async def test_stranded_payouts_and_their_resolutions_need_reconciliation(api: A
             "/staff/payout-resolutions/-Nabc0000000000000Z3/decline", json={"reason": "No"}
         )
     ).status_code == 403
+
+
+async def test_seeing_stranded_payouts_is_not_enough_to_settle_one(
+    api: Api, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # Settling moves money, so `reconciliation.view` alone lists stranded payouts and no more.
+    monkeypatch.setitem(
+        ROLE_PERMISSIONS, "support", ROLE_PERMISSIONS["support"] | {"reconciliation.view"}
+    )
+    await api.staff("support")
+    assert (await api.http.get("/staff/payouts/stranded")).status_code == 200
+    resolution = "/staff/payout-resolutions/-Nabc0000000000000Z3"
+    for path, body in (
+        (
+            "/staff/payouts/-Nabc0000000000000Z1/resolutions",
+            {"outcome": "failed", "statement_id": "-Nabc0000000000000Z2", "reason": "Checked"},
+        ),
+        (f"{resolution}/approve", {"reason": "Agree"}),
+        (f"{resolution}/decline", {"reason": "No"}),
+        (f"{resolution}/withdraw", {"reason": "Mine"}),
+    ):
+        refused = await api.http.post(path, json=body, headers={"Idempotency-Key": push_id()})
+        assert refused.status_code == 403, path
