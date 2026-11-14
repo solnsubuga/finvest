@@ -2,7 +2,7 @@
 on until its date, and unlocking frees them seven days after the client asks (Solo's rule)."""
 
 import secrets
-from datetime import timedelta
+from datetime import date, timedelta
 
 import pytest
 from sqlalchemy import text
@@ -25,10 +25,18 @@ from tests.support.ledger import key, ugx
 
 pytestmark = pytest.mark.integration
 
-DAY = today()
+
+def year_on() -> date:
+    """A year from today in Kampala, read when asked rather than at import, so a run that crosses
+    midnight still agrees with the database."""
+    return add_months(today(), 12)
+
+
+def week_on() -> date:
+    return today() + timedelta(days=7)
+
+
 NOW = PRESENT
-YEAR_ON = add_months(DAY, 12)
-WEEK_ON = DAY + timedelta(days=7)
 
 
 def refused(error: pytest.ExceptionInfo[ApplicationError]) -> tuple[str, list[tuple[str, str]]]:
@@ -55,8 +63,10 @@ async def person(app_database: Database) -> Actor:
 
 
 async def new_goal(
-    database: Database, client: Actor, *, target_date: object = YEAR_ON
+    database: Database, client: Actor, *, target_date: object = ...
 ) -> goals.ClientGoal:
+    if target_date is ...:
+        target_date = year_on()
     async with database.actor_transaction(client) as session:
         return await goals.create_goal(
             session,
@@ -87,7 +97,7 @@ async def started_saving(
         investment = await investments.get_investment(session, saving.id)
     await pay(worker_database, investment, investment.amount, NOW)
     async with worker_database.actor_transaction(SYSTEM) as session:
-        await investments.start_investment(session, saving.id, confirmed_on=DAY, clock=NOW)
+        await investments.start_investment(session, saving.id, confirmed_on=today(), clock=NOW)
     return saving.id
 
 
@@ -141,21 +151,21 @@ async def test_a_locked_goal_locks_its_savings_and_each_new_one_until_its_date(
     assert (await seen(app_database, client, running)).can_withdraw
 
     locked = await lock(app_database, client, goal.id)
-    assert (locked.locked_until, locked.unlock_requested_at) == (YEAR_ON, None)
+    assert (locked.locked_until, locked.unlock_requested_at) == (year_on(), None)
     for investment_id in (running, waiting):
         view = await seen(app_database, client, investment_id)
-        assert view.withdrawal_locked_until == YEAR_ON
+        assert view.withdrawal_locked_until == year_on()
         assert not view.can_withdraw
         assert not view.can_send
     later = (await save(app_database, client, goal.id, ugx(500_000))).id
-    assert await lock_row(worker_database, later) == YEAR_ON
+    assert await lock_row(worker_database, later) == year_on()
 
     with pytest.raises(ApplicationError) as error:
         await ask_to_withdraw(app_database, client, running)
     assert refused(error) == ("conflict", [("investment", "locked")])
     # Locking again changes nothing.
     again = await lock(app_database, client, goal.id)
-    assert (again.locked_until, again.unlock_requested_at) == (YEAR_ON, None)
+    assert (again.locked_until, again.unlock_requested_at) == (year_on(), None)
 
 
 async def test_a_goal_with_no_date_or_closed_cannot_be_locked(app_database: Database) -> None:
@@ -224,29 +234,29 @@ async def test_unlocking_frees_the_savings_seven_days_after_asking(
     await lock(app_database, client, goal.id)
 
     asked = await unlock(app_database, client, goal.id)
-    assert asked.locked_until == WEEK_ON
+    assert asked.locked_until == week_on()
     assert asked.unlock_requested_at is not None
-    assert await lock_row(worker_database, running) == WEEK_ON
+    assert await lock_row(worker_database, running) == week_on()
     # Asking again changes nothing, and a new saving is locked only until the same day.
     assert (await unlock(app_database, client, goal.id)).unlock_requested_at == (
         asked.unlock_requested_at
     )
     later = (await save(app_database, client, goal.id, ugx(500_000))).id
-    assert await lock_row(worker_database, later) == WEEK_ON
+    assert await lock_row(worker_database, later) == week_on()
 
     # Still locked the day before; free on the day.
-    eve = at(WEEK_ON - timedelta(days=1))
+    eve = at(week_on() - timedelta(days=1))
     assert not (await seen(app_database, client, running, eve)).can_withdraw
-    free = await seen(app_database, client, running, at(WEEK_ON))
+    free = await seen(app_database, client, running, at(week_on()))
     assert (free.can_withdraw, free.can_send, free.withdrawal_locked_until) == (True, True, None)
     async with app_database.actor_transaction(client) as session:
-        lapsed = await goals.client_goal(session, client, goal.id, at(WEEK_ON))
+        lapsed = await goals.client_goal(session, client, goal.id, at(week_on()))
     assert (lapsed.locked_until, lapsed.unlock_requested_at) == (None, None)
 
     # Locking again before the day cancels the ask.
     relocked = await lock(app_database, client, goal.id)
-    assert (relocked.locked_until, relocked.unlock_requested_at) == (YEAR_ON, None)
-    assert await lock_row(worker_database, running) == YEAR_ON
+    assert (relocked.locked_until, relocked.unlock_requested_at) == (year_on(), None)
+    assert await lock_row(worker_database, running) == year_on()
 
 
 async def test_closing_a_locked_goal_starts_the_wait_to_unlock(
@@ -258,9 +268,9 @@ async def test_closing_a_locked_goal_starts_the_wait_to_unlock(
     await lock(app_database, client, goal.id)
     async with app_database.actor_transaction(client) as session:
         closed = await goals.close_goal(session, client, goal.id, NOW)
-    assert closed.locked_until == WEEK_ON
+    assert closed.locked_until == week_on()
     assert closed.unlock_requested_at is not None
-    assert await lock_row(worker_database, running) == WEEK_ON
+    assert await lock_row(worker_database, running) == week_on()
 
 
 async def test_a_rolled_over_saving_keeps_its_lock(
@@ -278,7 +288,7 @@ async def test_a_rolled_over_saving_keeps_its_lock(
             session, first, investment.maturity_date, at(investment.maturity_date)
         )
     assert old.rolled_into_id is not None
-    assert await lock_row(worker_database, old.rolled_into_id) == YEAR_ON
+    assert await lock_row(worker_database, old.rolled_into_id) == year_on()
 
 
 # What the database holds ------------------------------------------------------------------------
@@ -294,7 +304,7 @@ async def test_the_database_holds_a_lock_to_its_day(
             session,
             client_id=investment.client_id,
             investment_ids=[investment.id],
-            until=YEAR_ON,
+            until=year_on(),
             now=NOW.now(),
         )
 
@@ -306,7 +316,7 @@ async def test_the_database_holds_a_lock_to_its_day(
     # Sooner than seven days from today is refused, for the client and the worker alike.
     for database, actor in ((app_database, client), (worker_database, SYSTEM)):
         with pytest.raises(DBAPIError, match="seven days after asking"):
-            await run(database, actor, shorten, day=WEEK_ON - timedelta(days=1), id=investment.id)
+            await run(database, actor, shorten, day=week_on() - timedelta(days=1), id=investment.id)
     with pytest.raises(DBAPIError, match="permission denied"):
         await run(
             app_database,
@@ -336,10 +346,12 @@ async def test_the_database_holds_a_lock_to_its_day(
         )
 
     # Seven days on is allowed, and after that only a later day.
-    await run(app_database, client, shorten, day=WEEK_ON, id=investment.id)
+    await run(app_database, client, shorten, day=week_on(), id=investment.id)
     with pytest.raises(DBAPIError, match="seven days after asking"):
-        await run(app_database, client, shorten, day=WEEK_ON - timedelta(days=1), id=investment.id)
-    await run(app_database, client, shorten, day=YEAR_ON, id=investment.id)
+        await run(
+            app_database, client, shorten, day=week_on() - timedelta(days=1), id=investment.id
+        )
+    await run(app_database, client, shorten, day=year_on(), id=investment.id)
 
 
 async def test_a_lock_is_only_on_ones_own_waiting_or_running_investment(
@@ -359,16 +371,16 @@ async def test_a_lock_is_only_on_ones_own_waiting_or_running_investment(
 
     # Another client's investment, under their own name or its owner's.
     with pytest.raises(DBAPIError, match="waiting or running investment"):
-        await run(stranger, id=investment.id, client_id=stranger.id, until=YEAR_ON)
+        await run(stranger, id=investment.id, client_id=stranger.id, until=year_on())
     with pytest.raises(DBAPIError, match="row-level security"):
-        await run(stranger, id=investment.id, client_id=owner.id, until=YEAR_ON)
+        await run(stranger, id=investment.id, client_id=owner.id, until=year_on())
     # Today or earlier is no lock.
     with pytest.raises(DBAPIError, match="waiting or running investment"):
-        await run(owner, id=investment.id, client_id=owner.id, until=DAY)
+        await run(owner, id=investment.id, client_id=owner.id, until=today())
     # Staff never lock.
     staff_kind = Actor("staff", push_id())
     with pytest.raises(DBAPIError):
-        await run(staff_kind, id=investment.id, client_id=owner.id, until=YEAR_ON)
+        await run(staff_kind, id=investment.id, client_id=owner.id, until=year_on())
 
 
 async def test_the_goals_own_copy_of_the_lock_is_held_the_same_way(
@@ -377,7 +389,7 @@ async def test_the_goals_own_copy_of_the_lock_is_held_the_same_way(
     client = await approved_client(app_database, NOW)
     goal = await new_goal(app_database, client)
     await lock(app_database, client, goal.id)
-    for day in (None, WEEK_ON - timedelta(days=1)):
+    for day in (None, week_on() - timedelta(days=1)):
         with pytest.raises(DBAPIError, match="seven days after asking"):
             async with app_database.actor_transaction(client) as session:
                 await session.execute(

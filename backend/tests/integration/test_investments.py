@@ -41,7 +41,6 @@ from tests.support.payments import start_deposit
 
 pytestmark = pytest.mark.integration
 
-DAY = today()
 NOW = PRESENT
 ACTIVE, AWAITING, CANCELLED = (
     InvestmentStatus.ACTIVE,
@@ -60,12 +59,12 @@ async def start(
     worker_database: Database,
     investment_id: str,
     *,
-    confirmed_on: date = DAY,
+    confirmed_on: date | None = None,
     clock: FakeClock = NOW,
 ) -> investments.Investment:
     async with worker_database.actor_transaction(SYSTEM) as session:
         return await investments.start_investment(
-            session, investment_id, confirmed_on=confirmed_on, clock=clock
+            session, investment_id, confirmed_on=confirmed_on or today(), clock=clock
         )
 
 
@@ -328,8 +327,8 @@ async def test_the_confirmed_payment_moves_into_the_holding_and_the_investment_s
     running = await start(worker_database, investment.id)
 
     assert running.status is ACTIVE
-    assert running.start_date == DAY
-    assert running.maturity_date == DAY + timedelta(days=91)
+    assert running.start_date == today()
+    assert running.maturity_date == today() + timedelta(days=91)
     assert await account_balance(worker_database, investment, AWAITING_START) == 0
     assert await account_balance(worker_database, investment, HOLDING) == 1_000_000
     async with worker_database.actor_transaction(SYSTEM) as session:
@@ -371,7 +370,7 @@ async def test_starting_twice_changes_nothing(
     app_database: Database, worker_database: Database
 ) -> None:
     investment = await started(app_database, worker_database, NOW)
-    again = await start(worker_database, investment.id, clock=at(DAY + timedelta(days=1)))
+    again = await start(worker_database, investment.id, clock=at(today() + timedelta(days=1)))
     assert again == investment
     assert await account_balance(worker_database, investment, HOLDING) == 1_000_000
 
@@ -382,10 +381,10 @@ async def test_the_start_date_is_the_day_the_payment_was_confirmed_not_the_day_i
     client = await approved_client(app_database, NOW)
     investment = await request(app_database, client, NOW)
     await pay(worker_database, investment, ugx(1_000_000), NOW)
-    two_days_later = at(DAY + timedelta(days=2))
+    two_days_later = at(today() + timedelta(days=2))
     running = await start(worker_database, investment.id, clock=two_days_later)
-    assert running.start_date == DAY
-    assert running.maturity_date == DAY + timedelta(days=91)
+    assert running.start_date == today()
+    assert running.maturity_date == today() + timedelta(days=91)
 
 
 @pytest.mark.parametrize("paid", [0, 999_999, 1_000_001])
@@ -405,10 +404,11 @@ async def test_anything_but_the_exact_amount_starts_nothing_and_moves_nothing(
         assert (await investments.get_investment(session, investment.id)).status is AWAITING
 
 
-@pytest.mark.parametrize("confirmed_on", [DAY - timedelta(days=1), DAY + timedelta(days=1)])
+@pytest.mark.parametrize("days", [-1, 1])
 async def test_an_impossible_confirmation_date_starts_nothing(
-    app_database: Database, worker_database: Database, confirmed_on: date
+    app_database: Database, worker_database: Database, days: int
 ) -> None:
+    confirmed_on = today() + timedelta(days=days)
     client = await approved_client(app_database, NOW)
     investment = await request(app_database, client, NOW)
     await pay(worker_database, investment, ugx(1_000_000), NOW)
@@ -429,7 +429,7 @@ async def test_two_workers_starting_one_investment_post_one_entry(
         async with worker_database.actor_transaction(SYSTEM) as session:
             await barrier.wait()
             result = await investments.start_investment(
-                session, investment.id, confirmed_on=DAY, clock=NOW
+                session, investment.id, confirmed_on=today(), clock=NOW
             )
             return result.status
 
@@ -495,7 +495,7 @@ async def test_a_confirmed_deposit_starts_its_investment(
     client = await approved_client(app_database, NOW)
     investment = await request(app_database, client, NOW)
     await pay(worker_database, investment, ugx(1_000_000), NOW)
-    processed_late = at(DAY + timedelta(days=1))
+    processed_late = at(today() + timedelta(days=1))
 
     outcome = await run_start_job(
         worker_database,
@@ -503,7 +503,7 @@ async def test_a_confirmed_deposit_starts_its_investment(
             "deposit_id": push_id(),
             "purpose_type": "investment",
             "purpose_id": investment.id,
-            "confirmed_on": DAY.isoformat(),
+            "confirmed_on": today().isoformat(),
         },
         processed_late,
     )
@@ -511,7 +511,7 @@ async def test_a_confirmed_deposit_starts_its_investment(
     assert outcome == ("succeeded", None)
     async with worker_database.actor_transaction(SYSTEM) as session:
         running = await investments.get_investment(session, investment.id)
-    assert (running.status, running.start_date) == (ACTIVE, DAY)
+    assert (running.status, running.start_date) == (ACTIVE, today())
 
 
 async def test_a_deposit_for_a_goal_is_left_alone(worker_database: Database) -> None:
@@ -636,7 +636,7 @@ async def test_the_portfolio_shows_figures_after_tax_only(
     assert view.amount == view.value == ugx(1_000_000)
     assert view.interest_so_far == view.interest_today == ugx(0)
     assert view.at_maturity_returns == ClientReturns(ugx(26_490), ugx(1_026_490))
-    assert (view.start_date, view.maturity_date) == (DAY, DAY + timedelta(days=91))
+    assert (view.start_date, view.maturity_date) == (today(), today() + timedelta(days=91))
     assert not [name for name in investments.ClientInvestment.__slots__ if "tax" in name]
     assert not [name for name in investments.ClientInvestment.__slots__ if "gross" in name]
 

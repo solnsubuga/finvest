@@ -49,7 +49,7 @@ async def noted(
     app_database: Database, worker_database: Database, email: FakeEmail
 ) -> tuple[Actor, str]:
     """A client whose investment's note was built and emailed today. Returns the note's ID."""
-    client, investment = await invested(app_database, worker_database, on=today())
+    client, investment = await invested(app_database, worker_database)
     assert client.id is not None
     async with worker_database.actor_transaction(SYSTEM) as session:
         await enqueue(

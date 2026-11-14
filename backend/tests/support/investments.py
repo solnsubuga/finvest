@@ -42,6 +42,12 @@ def after(**duration: float) -> FakeClock:
     return FakeClock(datetime.now(UTC) + timedelta(**duration))
 
 
+def days_on(days: int, hour: int = 9) -> FakeClock:
+    """A clock that many days after today in Kampala, at `hour` UTC. Today is read when this is
+    called, not when a test module is imported, so a run that crosses midnight stays right."""
+    return at(today() + timedelta(days=days), hour)
+
+
 def at(day: date, hour: int = 9) -> FakeClock:
     """A clock at `hour` UTC on `day`, which is three hours later in Kampala."""
     return FakeClock(datetime(day.year, day.month, day.day, hour, tzinfo=UTC))

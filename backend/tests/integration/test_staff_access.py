@@ -5,6 +5,7 @@ it off, and every attempt asks the list before it changes it.
 """
 
 import asyncio
+import secrets
 from collections.abc import AsyncIterator
 from datetime import timedelta
 
@@ -33,7 +34,9 @@ async def api(test_database: TestDatabase, app_database: Database) -> AsyncItera
 
 
 def an_email() -> str:
-    return f"access.{push_id().lower().replace('_', 'a').replace('-', 'b')}@finvestug.com"
+    # Hex keeps every address distinct. Folding a push ID's case did not: two IDs made in the
+    # same millisecond differ only in letters that lowercase to the same one.
+    return f"access.{secrets.token_hex(8)}@finvestug.com"
 
 
 def worker(database: Database, api: Api, access: StaffAccessList | None) -> Worker:

@@ -21,6 +21,7 @@ from tests.support.investments import (
     approved_client,
     approved_destination,
     at,
+    days_on,
     pay,
     request,
     started,
@@ -30,10 +31,7 @@ from tests.support.ledger import staff as new_staff
 
 pytestmark = pytest.mark.integration
 
-DAY = today()
-MATURED = DAY + timedelta(days=91)
 # The day after: the client calls about the money, past any new account's safety wait.
-CALLED = at(MATURED + timedelta(days=1))
 Kind = corrections.CorrectionKind
 Status = corrections.CorrectionStatus
 
@@ -43,9 +41,10 @@ async def held(app_database: Database, worker_database: Database) -> investments
     client = await approved_client(app_database, PRESENT)
     chosen = await request(app_database, client, PRESENT, at_maturity=AtMaturity.PAY_OUT)
     await pay(worker_database, chosen, chosen.amount, PRESENT)
+    ends = today() + timedelta(days=91)
     async with worker_database.actor_transaction(SYSTEM) as session:
-        await investments.start_investment(session, chosen.id, confirmed_on=DAY, clock=PRESENT)
-        await investments.mature_investment(session, chosen.id, MATURED, at(MATURED))
+        await investments.start_investment(session, chosen.id, confirmed_on=today(), clock=PRESENT)
+        await investments.mature_investment(session, chosen.id, ends, at(ends))
         matured = await investments.get_investment(session, chosen.id)
     assert matured.payout_id is None and matured.payout_refusal == "no_destination"
     return matured
@@ -63,19 +62,19 @@ async def propose(
             investment_id=investment_id,
             reason="The client called and asked for it to go to their other number",
             destination_id=destination_id,
-            clock=CALLED,
+            clock=days_on(92),
         )
 
 
 async def approve(app_database: Database, correction_id: str) -> None:
     staff = new_staff()
     async with app_database.actor_transaction(staff) as session:
-        await investments.approve_correction(session, staff, correction_id, CALLED)
+        await investments.approve_correction(session, staff, correction_id, days_on(92))
 
 
 async def apply(worker_database: Database, correction_id: str) -> corrections.Correction:
     async with worker_database.actor_transaction(SYSTEM) as session:
-        return await corrections.apply_correction(session, correction_id, CALLED)
+        return await corrections.apply_correction(session, correction_id, days_on(92))
 
 
 async def test_two_staff_send_held_money_to_another_account_of_the_clients(
@@ -100,7 +99,7 @@ async def test_two_staff_send_held_money_to_another_account_of_the_clients(
     staff = new_staff()
     async with app_database.actor_transaction(staff) as session:
         after = await investments.get_investment(session, investment.id)
-        view = await investments.maturities(session, staff, CALLED)
+        view = await investments.maturities(session, staff, days_on(92))
     assert (after.payout_id, after.payout_refusal) == (done.payout_id, None)
     assert investment.id not in [i.id for i in view.held]
 
@@ -108,7 +107,7 @@ async def test_two_staff_send_held_money_to_another_account_of_the_clients(
     with pytest.raises(ApplicationError) as again:
         async with app_database.actor_transaction(client) as session:
             await investments.pay_out_matured(
-                session, client, investment.id, destination_id=destination_id, clock=CALLED
+                session, client, investment.id, destination_id=destination_id, clock=days_on(92)
             )
     assert again.value.code == "conflict"
     assert (await apply(worker_database, proposed.id)).payout_id == done.payout_id
@@ -126,7 +125,7 @@ async def test_money_the_client_sent_on_meanwhile_is_left_alone(
     # Before the worker gets to it, the client chooses in the app.
     async with app_database.actor_transaction(client) as session:
         sent = await investments.pay_out_matured(
-            session, client, investment.id, destination_id=theirs, clock=CALLED
+            session, client, investment.id, destination_id=theirs, clock=days_on(92)
         )
 
     failed = await apply(worker_database, proposed.id)
@@ -178,7 +177,7 @@ async def test_the_client_and_staff_sending_at_once_make_one_payout(
             await concurrency_barrier.wait()
             try:
                 await investments.pay_out_matured(
-                    session, client, investment.id, destination_id=theirs, clock=CALLED
+                    session, client, investment.id, destination_id=theirs, clock=days_on(92)
                 )
             except ApplicationError as error:
                 return error.code
@@ -187,7 +186,7 @@ async def test_the_client_and_staff_sending_at_once_make_one_payout(
     async def by_worker() -> str:
         async with worker_database.actor_transaction(SYSTEM) as session:
             await concurrency_barrier.wait()
-            finished = await corrections.apply_correction(session, proposed.id, CALLED)
+            finished = await corrections.apply_correction(session, proposed.id, days_on(92))
         return finished.failure_code or "staff_sent"
 
     outcomes = sorted(await asyncio.gather(by_client(), by_worker()))

@@ -41,7 +41,12 @@ pytestmark = pytest.mark.integration
 
 TIN = "1000123456"
 # A month that has ended, so a payment for it can be recorded today.
-LAST_MONTH = months_back(month_of(today()), 1)
+# Dates are read when a test asks, not when this file is imported, so a run that crosses
+# midnight in Kampala still agrees with the database about which day it is.
+
+
+def last_month() -> date:
+    return months_back(month_of(today()), 1)
 
 
 async def approved_client(database: Database, *, tin: str | None = None) -> Actor:
@@ -149,7 +154,7 @@ async def fund_trust(worker_database: Database, amount: int) -> None:
             session,
             EntryDraft(
                 entry_type="test.funding",
-                effective_date=LAST_MONTH,
+                effective_date=last_month(),
                 lines=(debit(bank.id, ugx(amount)), credit(source.id, ugx(amount))),
                 idempotency_key=key(),
             ),
@@ -172,10 +177,11 @@ async def propose(
     staff: Actor,
     amount: int,
     *,
-    month: date = LAST_MONTH,
+    month: date | None = None,
     paid_on: date | None = None,
     clock: FakeClock = PRESENT,
 ) -> remittances.RemittanceView:
+    month = month or last_month()
     async with database.actor_transaction(staff) as session:
         return await remittances.propose(
             session,
@@ -238,13 +244,13 @@ async def test_a_client_without_a_tin_is_on_the_return_without_one(
 ) -> None:
     client = await approved_client(app_database)
     investment = await running(app_database, worker_database, client)
-    await withhold(worker_database, investment, LAST_MONTH, 1_000, 150)
+    await withhold(worker_database, investment, last_month(), 1_000, 150)
     (line,) = [
-        p for p in (await report(app_database, LAST_MONTH)).payees if p.client_id == client.id
+        p for p in (await report(app_database, last_month())).payees if p.client_id == client.id
     ]
     assert (line.gross, line.tax, line.tin) == (ugx(1_000), ugx(150), None)
     async with app_database.actor_transaction(new_staff()) as session:
-        without_key = await withholding.month_report(session, None, Currency.UGX, LAST_MONTH)
+        without_key = await withholding.month_report(session, None, Currency.UGX, last_month())
     assert not without_key.tins_shown
 
 
@@ -253,9 +259,9 @@ async def test_a_month_summary_counts_what_was_withheld_by_the_entries_dates(
 ) -> None:
     client = await approved_client(app_database)
     investment = await running(app_database, worker_database, client)
-    before = await summary(app_database, LAST_MONTH)
-    await withhold(worker_database, investment, month_end(LAST_MONTH), 2_000, 300)
-    after = await summary(app_database, LAST_MONTH)
+    before = await summary(app_database, last_month())
+    await withhold(worker_database, investment, month_end(last_month()), 2_000, 300)
+    after = await summary(app_database, last_month())
     assert after.withheld - before.withheld == ugx(300)
     assert after.outstanding - before.outstanding == ugx(300)
 
@@ -269,8 +275,8 @@ async def test_a_certificate_has_each_investment_that_earned_in_the_tax_year(
     amara = await approved_client(app_database, tin=TIN)
     first = await running(app_database, worker_database, amara)
     second = await running(app_database, worker_database, amara, amount=500_000)
-    year = tax_year_of(LAST_MONTH)
-    inside = max(LAST_MONTH, year.first_day)
+    year = tax_year_of(last_month())
+    inside = max(last_month(), year.first_day)
     await withhold(worker_database, first, inside, 31_164, 4_674)
     await withhold(worker_database, second, inside, 1_000, 150)
     await withhold(worker_database, second, inside, -100, -15)
@@ -302,9 +308,9 @@ async def withheld_last_month(
 ) -> MonthSummary:
     client = await approved_client(app_database)
     investment = await running(app_database, worker_database, client)
-    await withhold(worker_database, investment, LAST_MONTH, tax * 10, tax)
+    await withhold(worker_database, investment, last_month(), tax * 10, tax)
     await fund_trust(worker_database, tax)
-    return await summary(app_database, LAST_MONTH)
+    return await summary(app_database, last_month())
 
 
 async def held(database: Database) -> Money:
@@ -317,11 +323,11 @@ async def test_a_payment_to_ura_posts_once_a_second_person_approves(
 ) -> None:
     await withheld_last_month(app_database, worker_database, 5_000)
     held_before = await held(app_database)
-    before = await summary(app_database, LAST_MONTH)
+    before = await summary(app_database, last_month())
     daniel, grace = new_staff(), new_staff()
     recorded = await propose(app_database, daniel, 5_000)
     assert recorded.status is RemittanceStatus.PROPOSED
-    assert (await summary(app_database, LAST_MONTH)).waiting - before.waiting == ugx(5_000)
+    assert (await summary(app_database, last_month())).waiting - before.waiting == ugx(5_000)
     assert await held(app_database) == held_before
     with pytest.raises(ApplicationError) as same:
         await approve(app_database, daniel, recorded.id)
@@ -331,7 +337,7 @@ async def test_a_payment_to_ura_posts_once_a_second_person_approves(
     assert (approved.status, approved.decided_by) == (RemittanceStatus.APPROVED, grace.id)
     assert approved.ledger_entry_id is not None
     assert held_before - await held(app_database) == ugx(5_000)
-    after = await summary(app_database, LAST_MONTH)
+    after = await summary(app_database, last_month())
     assert after.remitted - before.remitted == ugx(5_000)
     assert after.outstanding == before.outstanding - ugx(5_000)
     with pytest.raises(ApplicationError) as again:
@@ -404,7 +410,7 @@ async def test_a_payment_is_refused_for_a_month_not_ended_or_more_than_it_owes(
             await remittances.propose(
                 session,
                 staff,
-                month=LAST_MONTH,
+                month=last_month(),
                 amount=ugx(1),
                 ura_reference=recorded.ura_reference,
                 bank_reference=f"FT{push_id()}",
@@ -431,7 +437,7 @@ async def test_two_people_recording_at_once_never_pay_more_than_the_month_owes(
                 await remittances.propose(
                     session,
                     staff,
-                    month=LAST_MONTH,
+                    month=last_month(),
                     amount=ugx(amount),
                     ura_reference=f"PRN{push_id()}",
                     bank_reference=f"FT{push_id()}",
@@ -445,7 +451,7 @@ async def test_two_people_recording_at_once_never_pay_more_than_the_month_owes(
 
     results = await asyncio.gather(record(), record())
     assert sorted(results) == ["more_than_outstanding", "recorded"]
-    assert (await summary(app_database, LAST_MONTH)).outstanding == ugx(0)
+    assert (await summary(app_database, last_month())).outstanding == ugx(0)
 
 
 async def test_a_decline_posts_nothing_and_frees_the_amount(
@@ -463,13 +469,13 @@ async def test_a_decline_posts_nothing_and_frees_the_amount(
             session, grace, recorded.id, "PRN not on URA's receipt", PRESENT
         )
     assert (declined.status, declined.ledger_entry_id) == (RemittanceStatus.DECLINED, None)
-    assert (await summary(app_database, LAST_MONTH)).outstanding == owed.outstanding
+    assert (await summary(app_database, last_month())).outstanding == owed.outstanding
     # The references can be recorded again once declined.
     async with app_database.actor_transaction(grace) as session:
         await remittances.propose(
             session,
             grace,
-            month=LAST_MONTH,
+            month=last_month(),
             amount=ugx(1),
             ura_reference=recorded.ura_reference,
             bank_reference=recorded.bank_reference,
@@ -528,7 +534,7 @@ async def test_the_database_refuses_one_person_a_changed_payment_and_a_made_up_e
             ":month, 'UGX', 1, :ura, 'FT1', :paid, 'x', 'proposed', :by, now())",
             {
                 "id": push_id(),
-                "month": LAST_MONTH,
+                "month": last_month(),
                 "ura": push_id(),
                 "paid": today(),
                 "by": daniel.id,

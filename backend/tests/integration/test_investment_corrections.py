@@ -27,6 +27,7 @@ from tests.support.investments import (
     account_balance,
     approved_destination,
     at,
+    days_on,
     pay,
     started,
     today,
@@ -36,9 +37,7 @@ from tests.support.ledger import ugx
 
 pytestmark = pytest.mark.integration
 
-DAY = today()
 # Past a new payout account's first day's safety wait.
-LATER = at(DAY + timedelta(days=2))
 Kind = corrections.CorrectionKind
 Status = corrections.CorrectionStatus
 
@@ -50,8 +49,9 @@ async def propose(
     kind: corrections.CorrectionKind,
     *,
     destination_id: str | None = None,
-    clock: FakeClock = LATER,
+    clock: FakeClock | None = None,
 ) -> corrections.Correction:
+    clock = clock or days_on(2)
     async with app_database.actor_transaction(staff) as session:
         return await investments.propose_correction(
             session,
@@ -68,12 +68,12 @@ async def approve(
     app_database: Database, staff: Actor, correction_id: str
 ) -> corrections.Correction:
     async with app_database.actor_transaction(staff) as session:
-        return await investments.approve_correction(session, staff, correction_id, LATER)
+        return await investments.approve_correction(session, staff, correction_id, days_on(2))
 
 
 async def apply(worker_database: Database, correction_id: str) -> corrections.Correction:
     async with worker_database.actor_transaction(SYSTEM) as session:
-        return await corrections.apply_correction(session, correction_id, LATER)
+        return await corrections.apply_correction(session, correction_id, days_on(2))
 
 
 async def running_with_interest(
@@ -82,7 +82,7 @@ async def running_with_interest(
     investment = await started(app_database, worker_database, PRESENT)
     async with worker_database.actor_transaction(SYSTEM) as session:
         await accrual.accrue_investment(
-            session, investment.id, DAY + timedelta(days=5), at(DAY + timedelta(days=5))
+            session, investment.id, today() + timedelta(days=5), at(today() + timedelta(days=5))
         )
         return await investments.get_investment(session, investment.id)
 
@@ -141,9 +141,9 @@ async def test_an_unwind_takes_two_people_and_reverses_principal_and_interest(
     # And the client no longer sees it.
     client = Actor("client", investment.client_id)
     async with app_database.actor_transaction(client) as session:
-        assert await investments.client_investments(session, client, LATER) == []
+        assert await investments.client_investments(session, client, days_on(2)) == []
         with pytest.raises(ApplicationError):
-            await investments.client_investment(session, client, investment.id, LATER)
+            await investments.client_investment(session, client, investment.id, days_on(2))
 
 
 async def test_a_refund_after_an_unwind_pays_the_money_back_with_two_people(
@@ -190,7 +190,7 @@ async def test_a_refund_whose_amount_changed_fails_and_moves_nothing(
     )
     await approve(app_database, new_staff(), refund.id)
     # More money arrives for it after the proposal: what was approved is no longer the amount.
-    await pay(worker_database, investment, ugx(5_000), LATER)
+    await pay(worker_database, investment, ugx(5_000), days_on(2))
 
     failed = await apply(worker_database, refund.id)
     assert (failed.status, failed.failure_code) == (Status.FAILED, "amount_changed")
@@ -225,21 +225,21 @@ async def test_sending_back_and_withdrawing_move_nothing(
     first = await propose(app_database, maker, investment.id, Kind.UNWIND)
     async with app_database.actor_transaction(maker) as session:
         with pytest.raises(ApplicationError) as own:
-            await investments.send_back_correction(session, maker, first.id, "No", LATER)
+            await investments.send_back_correction(session, maker, first.id, "No", days_on(2))
     assert own.value.code == "forbidden"
     async with app_database.actor_transaction(checker) as session:
         sent_back = await investments.send_back_correction(
-            session, checker, first.id, "Check the bank statement first", LATER
+            session, checker, first.id, "Check the bank statement first", days_on(2)
         )
     assert sent_back.status is Status.SENT_BACK
 
     second = await propose(app_database, maker, investment.id, Kind.UNWIND)
     async with app_database.actor_transaction(checker) as session:
         with pytest.raises(ApplicationError) as not_theirs:
-            await investments.withdraw_correction(session, checker, second.id, LATER)
+            await investments.withdraw_correction(session, checker, second.id, days_on(2))
     assert not_theirs.value.code == "forbidden"
     async with app_database.actor_transaction(maker) as session:
-        withdrawn = await investments.withdraw_correction(session, maker, second.id, LATER)
+        withdrawn = await investments.withdraw_correction(session, maker, second.id, days_on(2))
     assert withdrawn.status is Status.WITHDRAWN
     # A decided one is never decided again.
     with pytest.raises(ApplicationError) as decided:
@@ -261,7 +261,7 @@ async def test_two_approvals_at_once_approve_once(
         async with app_database.actor_transaction(staff) as session:
             await barrier.wait()
             try:
-                await investments.approve_correction(session, staff, proposed.id, LATER)
+                await investments.approve_correction(session, staff, proposed.id, days_on(2))
             except ApplicationError as error:
                 return error.code
             return "approved"
@@ -337,11 +337,11 @@ async def test_a_carried_over_investment_is_never_unwound(
             client_id=push_id(),
             product_code="TREA-91",
             principal=ugx(1_000_000),
-            start_date=DAY - timedelta(days=30),
+            start_date=today() - timedelta(days=30),
             annual_rate_bps=1300,
             tax_bps=1500,
-            interest_through=DAY - timedelta(days=1),
-            opened_on=DAY,
+            interest_through=today() - timedelta(days=1),
+            opened_on=today(),
             legacy_reference=f"FV1-INV-{push_id()[-8:].encode().hex()}",
             opening_account=AccountSpec(
                 "migration.opening_balances",

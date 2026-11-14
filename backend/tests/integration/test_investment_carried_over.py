@@ -3,7 +3,8 @@ opening entry, the interest to date by the new formula, the daily run carrying o
 reference opening each one once, and the fence that only the worker opens one."""
 
 import asyncio
-from datetime import timedelta
+from collections.abc import Callable
+from datetime import date, timedelta
 
 import pytest
 from sqlalchemy import text
@@ -28,9 +29,20 @@ from tests.support.ledger import ugx
 
 pytestmark = pytest.mark.integration
 
-DAY = today()
-STARTED = DAY - timedelta(days=30)
-AS_OF = DAY - timedelta(days=1)
+# Dates are read when a test asks, not when this file is imported, so a run that crosses
+# midnight in Kampala still agrees with the database about which day it is.
+
+
+def started_on() -> date:
+    """When the carried-over investment started, a month back."""
+    return today() - timedelta(days=30)
+
+
+def as_of() -> date:
+    """The last day interest was earned under the old system."""
+    return today() - timedelta(days=1)
+
+
 PRINCIPAL = ugx(1_000_000)
 TERMS = Terms(PRINCIPAL, annual_rate_bps=1300, tax_bps=1500)
 
@@ -56,11 +68,13 @@ async def carry_over(
     client_id: str | None = None,
     principal: Money = PRINCIPAL,
     annual_rate_bps: int = 1300,
-    interest_through: object = AS_OF,
+    interest_through: object = ...,
     product_code: str = "TREA-91",
     actor: Actor = SYSTEM,
     clock: Clock = PRESENT,
 ) -> investments.Investment:
+    if interest_through is ...:
+        interest_through = as_of()
     async with worker_database.actor_transaction(actor) as session:
         return await investments.open_existing_investment(
             session,
@@ -68,11 +82,11 @@ async def carry_over(
             client_id=client_id or push_id(),
             product_code=product_code,
             principal=principal,
-            start_date=STARTED,
+            start_date=started_on(),
             annual_rate_bps=annual_rate_bps,
             tax_bps=1500,
             interest_through=interest_through,  # type: ignore[arg-type]
-            opened_on=DAY,
+            opened_on=today(),
             legacy_reference=legacy_reference,
             opening_account=opening_balances(),
             clock=clock,
@@ -108,17 +122,17 @@ async def test_an_investment_is_carried_over_running_with_its_interest_to_date(
     investment = await carry_over(worker_database, reference())
 
     # The new system's own formula, from the start to the "as of" day.
-    earned = accrued(TERMS, days_earned(STARTED, AS_OF, 91))
+    earned = accrued(TERMS, days_earned(started_on(), as_of(), 91))
     assert earned.net.is_positive
     assert investment.status is InvestmentStatus.ACTIVE
     assert (investment.start_date, investment.maturity_date) == (
-        STARTED,
-        STARTED + timedelta(days=91),
+        started_on(),
+        started_on() + timedelta(days=91),
     )
     assert investment.at_maturity is AtMaturity.ROLL_OVER
     assert (investment.terms.annual_rate_bps, investment.terms.tax_bps) == (1300, 1500)
     assert (investment.accrued_through, investment.accrued_gross, investment.accrued_tax) == (
-        AS_OF,
+        as_of(),
         earned.gross,
         earned.tax,
     )
@@ -132,11 +146,11 @@ async def test_an_investment_is_carried_over_running_with_its_interest_to_date(
 
 async def test_the_daily_run_carries_on_from_the_next_day(worker_database: Database) -> None:
     investment = await carry_over(worker_database, reference())
-    days = days_earned(STARTED, AS_OF, 91)
+    days = days_earned(started_on(), as_of(), 91)
 
     async with worker_database.actor_transaction(SYSTEM) as session:
-        posted = await accrual.accrue_investment(session, investment.id, DAY, at(DAY, 12))
-        again = await accrual.accrue_investment(session, investment.id, DAY, at(DAY, 12))
+        posted = await accrual.accrue_investment(session, investment.id, today(), at(today(), 12))
+        again = await accrual.accrue_investment(session, investment.id, today(), at(today(), 12))
         after = await investments.get_investment(session, investment.id)
 
     # One more day, never the days already carried over.
@@ -160,7 +174,10 @@ async def test_the_same_reference_opens_one_investment(worker_database: Database
     # So is another "as of" day: the first call does not silently win.
     with pytest.raises(ApplicationError) as refused:
         await carry_over(
-            worker_database, legacy, client_id=client_id, interest_through=AS_OF - timedelta(days=1)
+            worker_database,
+            legacy,
+            client_id=client_id,
+            interest_through=as_of() - timedelta(days=1),
         )
     assert refused.value.code == "conflict"
 
@@ -179,11 +196,11 @@ async def test_two_openings_at_once_open_once(worker_database: Database) -> None
                 client_id=client_id,
                 product_code="TREA-91",
                 principal=PRINCIPAL,
-                start_date=STARTED,
+                start_date=started_on(),
                 annual_rate_bps=1300,
                 tax_bps=1500,
-                interest_through=AS_OF,
-                opened_on=DAY,
+                interest_through=as_of(),
+                opened_on=today(),
                 legacy_reference=legacy,
                 opening_account=opening_balances(),
                 clock=PRESENT,
@@ -198,15 +215,15 @@ async def test_two_openings_at_once_open_once(worker_database: Database) -> None
 @pytest.mark.parametrize(
     ("interest_through", "code"),
     [
-        (DAY, "invalid"),
-        (STARTED - timedelta(days=1), "invalid"),
+        (today, "invalid"),
+        (lambda: started_on() - timedelta(days=1), "invalid"),
     ],
 )
 async def test_interest_is_carried_over_only_for_days_already_earned(
-    worker_database: Database, interest_through: object, code: str
+    worker_database: Database, interest_through: Callable[[], date], code: str
 ) -> None:
     with pytest.raises(ApplicationError) as refused:
-        await carry_over(worker_database, reference(), interest_through=interest_through)
+        await carry_over(worker_database, reference(), interest_through=interest_through())
     assert refused.value.code == "validation_failed"
     assert refused.value.fields[0].code == code
 
@@ -217,7 +234,7 @@ async def test_a_term_that_has_ended_is_not_carried_over(worker_database: Databa
             worker_database,
             reference(),
             product_code="TREA-91",
-            interest_through=STARTED + timedelta(days=91),
+            interest_through=started_on() + timedelta(days=91),
             clock=FakeClock(PRESENT.now() + timedelta(days=90)),
         )
     assert refused.value.code == "validation_failed"
@@ -235,11 +252,11 @@ async def test_only_the_worker_carries_an_investment_over(
                 client_id=push_id(),
                 product_code="TREA-91",
                 principal=PRINCIPAL,
-                start_date=STARTED,
+                start_date=started_on(),
                 annual_rate_bps=1300,
                 tax_bps=1500,
-                interest_through=AS_OF,
-                opened_on=DAY,
+                interest_through=as_of(),
+                opened_on=today(),
                 legacy_reference=reference(),
                 opening_account=opening_balances(),
                 clock=PRESENT,
