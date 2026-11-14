@@ -608,7 +608,11 @@ async def test_a_client_adds_a_passkey_and_signs_in_with_it(api: Api) -> None:
     )
     assert verified.status_code == 200, verified.text
     assert verified.json()["token"] is None
-    assert verified.json()["session"] == {
+    session = verified.json()["session"]
+    # A passkey log in confirms it is the client from that moment, for ten minutes.
+    confirmed_at, confirmed_until = session.pop("confirmed_at"), session.pop("confirmed_until")
+    assert confirmed_at is not None and confirmed_until > confirmed_at
+    assert session == {
         "client_id": client_id,
         "phone": phone,
         "restricted_until": None,

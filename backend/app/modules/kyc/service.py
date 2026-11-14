@@ -854,6 +854,55 @@ async def verified_name(session: AsyncSession, client_id: str) -> str | None:
 
 
 @dataclass(frozen=True, slots=True)
+class ApprovedSelfie:
+    """The face on file for an approved client, to compare a new live selfie with."""
+
+    check_id: str
+    # Exactly one is set: a selfie on the approved check, or, for a check carried over from
+    # Finvest 1.0, the selfie the client took when they claimed it and staff matched.
+    photo_id: str | None
+    claim_photo_id: str | None
+    photo: PhotoRef
+
+
+_APPROVED_SELFIE = text(
+    "SELECT c.id AS check_id, p.id AS photo_id, p.storage_key, p.sha256, p.content_type "
+    "FROM kyc_checks c JOIN kyc_photos p ON p.check_id = c.id "
+    "WHERE c.client_id = :client_id AND c.status = 'approved' "
+    "AND p.kind = 'selfie' AND p.replaced_at IS NULL"
+)
+_MATCHED_CLAIM_SELFIE = text(
+    "SELECT c.id AS check_id, p.id AS photo_id, p.storage_key, p.sha256, p.content_type "
+    "FROM kyc_checks c JOIN kyc_claim_checks m ON m.check_id = c.id "
+    "JOIN kyc_claim_photos p ON p.claim_check_id = m.id "
+    "WHERE c.client_id = :client_id AND c.status = 'approved' AND m.status = 'matched' "
+    "AND p.kind = 'selfie' AND p.replaced_at IS NULL"
+)
+
+
+async def approved_selfie(session: AsyncSession, client_id: str) -> ApprovedSelfie | None:
+    """The current selfie of the client's approved check, or of its matched claim.
+
+    None when the client has no approved check, or a carried-over one whose claim staff have
+    not matched: there is no face on file then.
+    """
+    row = (await session.execute(_APPROVED_SELFIE, {"client_id": client_id})).one_or_none()
+    if row is not None:
+        return ApprovedSelfie(
+            row.check_id,
+            row.photo_id,
+            None,
+            PhotoRef(row.storage_key, row.sha256, row.content_type),
+        )
+    row = (await session.execute(_MATCHED_CLAIM_SELFIE, {"client_id": client_id})).one_or_none()
+    if row is None:
+        return None
+    return ApprovedSelfie(
+        row.check_id, None, row.photo_id, PhotoRef(row.storage_key, row.sha256, row.content_type)
+    )
+
+
+@dataclass(frozen=True, slots=True)
 class ScreeningSubject:
     """Who to screen against sanctions and politically exposed person lists. No ID number."""
 

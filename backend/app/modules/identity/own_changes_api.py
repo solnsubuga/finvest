@@ -3,6 +3,10 @@
 Every route needs a passkey or authenticator app used on this session in the last ten minutes.
 Without one the answer is 403 `confirm_it_is_you`: the app confirms with
 `POST /client/session/confirmation/passkey` or `/authenticator`, then sends the change again.
+A password or number change also needs a live selfie on this session in the last ten minutes,
+when the client's approved identity check has a selfie to compare it with. Without one the
+answer is 403 `confirm_with_selfie`: the app takes it with
+`POST /client/session/confirmation/selfie` (see app/modules/kyc/face_confirmations_api.py).
 """
 
 from typing import Annotated
@@ -12,6 +16,7 @@ from pydantic import Field
 
 from app.modules.identity.api import _REFUSALS, CurrentConfirmedClient
 from app.modules.identity.own_changes import OwnChangeService
+from app.modules.kyc.face_confirmations_api import CurrentFaceConfirmedClient
 from app.shared.contracts import Contract, PushId
 from app.shared.errors import ErrorEnvelope
 
@@ -63,7 +68,7 @@ class EmailChanged(Contract):
 
 @router.put("/password", status_code=204)
 async def change_password(
-    body: PasswordChange, request: Request, client: CurrentConfirmedClient
+    body: PasswordChange, request: Request, client: CurrentFaceConfirmedClient
 ) -> None:
     """Change the password. A wrong current one is 401 `invalid_credentials`. Every other
     session ends."""
@@ -72,7 +77,7 @@ async def change_password(
 
 @router.post("/phone-change", status_code=201)
 async def start_phone_change(
-    body: PhoneChangeStart, request: Request, client: CurrentConfirmedClient
+    body: PhoneChangeStart, request: Request, client: CurrentFaceConfirmedClient
 ) -> PhoneChangeStarted:
     """Text a code to the new number."""
     return PhoneChangeStarted(
@@ -82,7 +87,10 @@ async def start_phone_change(
 
 @router.post("/phone-change/{challenge_id}/confirmation")
 async def confirm_phone_change(
-    challenge_id: PushId, body: PhoneChangeConfirm, request: Request, client: CurrentConfirmedClient
+    challenge_id: PushId,
+    body: PhoneChangeConfirm,
+    request: Request,
+    client: CurrentFaceConfirmedClient,
 ) -> PhoneChanged:
     """Move the account to the new number with its code. Every other session ends, and for a day
     withdrawals go only to accounts the client already uses. 409 `phone_taken` when the number

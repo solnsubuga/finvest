@@ -26,6 +26,7 @@ from app.modules.documents.jobs import DocumentJobs
 from app.modules.goals.jobs import GoalJobs
 from app.modules.identity.service import client_contact
 from app.modules.investments.jobs import InvestmentJobs
+from app.modules.kyc.face_confirmation_jobs import FaceConfirmationJobs
 from app.modules.kyc.jobs import ProviderJobs, sweep_unanswered
 from app.modules.kyc.liveness_jobs import LivenessJobs
 from app.modules.kyc.phone_name_jobs import PhoneNameJobs
@@ -118,6 +119,14 @@ def handlers(
         if live is not None:
             # The face a liveness check captured is stored as the check's selfie.
             kinds.update(LivenessJobs(database, identity.sealer(), live, storage, clock).handlers())
+            matcher = identity.face_matcher(storage)
+            if matcher is not None:
+                # A live selfie, matched to the approved check, confirms a sign-in change.
+                kinds.update(
+                    FaceConfirmationJobs(
+                        database, identity.sealer(), live, matcher, storage, clock
+                    ).handlers()
+                )
     screening = ScreeningSettings().provider()
     if screening is not None and identity.identity_data_key is None:
         # The date of birth a screen sends is sealed with the identity data key.

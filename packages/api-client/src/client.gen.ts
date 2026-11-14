@@ -416,6 +416,8 @@ export type ClientOrganisationList = z.infer<typeof ClientOrganisationList>;
 
 export const ClientSessionView = z.object({
   client_id: z.string(),
+  confirmed_at: z.string().nullable().optional(),
+  confirmed_until: z.string().nullable().optional(),
   email: z.string().nullable().optional(),
   email_verified: z.boolean().optional(),
   locked: z.boolean().optional(),
@@ -473,6 +475,9 @@ export const ConfirmWithPasskey = z.object({
   credential: z.record(z.string(), z.unknown()),
 });
 export type ConfirmWithPasskey = z.infer<typeof ConfirmWithPasskey>;
+
+export const ConfirmationStatus = z.enum(["starting", "open", "matching", "passed", "failed", "not_started", "expired"]);
+export type ConfirmationStatus = z.infer<typeof ConfirmationStatus>;
 
 export const Confirmed = z.object({
   confirmed_until: z.string(),
@@ -1309,6 +1314,25 @@ export const SecondSteps = z.object({
   methods: z.array(z.enum(["passkey", "authenticator", "code", "signup"])),
 });
 export type SecondSteps = z.infer<typeof SecondSteps>;
+
+export const SelfieConfirmation = z.object({
+  counts_until: z.string().nullable(),
+  expires_at: z.string(),
+  failure_code: z.string().nullable(),
+  id: z.string(),
+  status: ConfirmationStatus,
+  url: z.string().nullable(),
+});
+export type SelfieConfirmation = z.infer<typeof SelfieConfirmation>;
+
+export const SelfieConfirmationState = z.object({
+  attempts_left: z.number().int(),
+  confirmed: z.boolean(),
+  latest: SelfieConfirmation.nullable(),
+  needed: z.boolean(),
+  problem: z.string().nullable(),
+});
+export type SelfieConfirmationState = z.infer<typeof SelfieConfirmationState>;
 
 export const SendLoginCode = z.object({
   channel: z.enum(["sms", "email"]).optional(),
@@ -3099,6 +3123,41 @@ export const operations = {
     idempotent: false,
     status: 200,
     response: PasskeyOptions,
+  },
+  "GET /client/session/confirmation/selfie": {
+    method: "GET",
+    path: "/client/session/confirmation/selfie",
+    params: z.object({}),
+    query: z.object({}),
+    body: null,
+    bodyKind: null,
+    idempotent: false,
+    status: 200,
+    response: SelfieConfirmationState,
+  },
+  "POST /client/session/confirmation/selfie": {
+    method: "POST",
+    path: "/client/session/confirmation/selfie",
+    params: z.object({}),
+    query: z.object({}),
+    body: null,
+    bodyKind: null,
+    idempotent: false,
+    status: 201,
+    response: SelfieConfirmation,
+  },
+  "GET /client/session/confirmation/selfie/{attempt_id}": {
+    method: "GET",
+    path: "/client/session/confirmation/selfie/{attempt_id}",
+    params: z.object({
+    attempt_id: z.string(),
+  }),
+    query: z.object({}),
+    body: null,
+    bodyKind: null,
+    idempotent: false,
+    status: 200,
+    response: SelfieConfirmation,
   },
   "GET /client/sessions": {
     method: "GET",

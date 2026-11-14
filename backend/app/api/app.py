@@ -63,7 +63,9 @@ from app.modules.investments import api as investments_api
 from app.modules.investments import transfers_api as investment_transfers_api
 from app.modules.kyc import api as kyc_api
 from app.modules.kyc import claims_api as kyc_claims_api
+from app.modules.kyc import face_confirmations_api
 from app.modules.kyc import profile_api as kyc_profile_api
+from app.modules.kyc.domain.face_confirmations import FaceMatcher
 from app.modules.kyc.domain.liveness import LivenessProvider
 from app.modules.kyc.domain.provider import IdentityProvider
 from app.modules.kyc.settings import KycSettings
@@ -124,6 +126,7 @@ def create_app(
     identity_sealer: Sealer | None = None,
     identity_provider: IdentityProvider | None = None,
     identity_liveness: LivenessProvider | None = None,
+    face_matcher: FaceMatcher | None = None,
     email_hash: EmailHashSettings | None = None,
     iotec_wallet: WalletBalances | None = None,
     payout_names: bool | None = None,
@@ -144,6 +147,7 @@ def create_app(
         identity_provider = identity_checks.provider(storage)
         # A provider passed in (a test's) comes without liveness unless one is passed too.
         identity_liveness = identity_liveness or identity_checks.liveness()
+        face_matcher = face_matcher or identity_checks.face_matcher(storage)
 
     @asynccontextmanager
     async def lifespan(_: FastAPI) -> AsyncIterator[None]:
@@ -286,6 +290,13 @@ def create_app(
         identity_sealer, identity_provider, storage, identity_liveness
     ):
         app.include_router(router)
+    # A live selfie confirms a password or number change only with both providers and the key.
+    app.state.face_confirmations_on = (
+        identity_liveness is not None and face_matcher is not None and identity_sealer is not None
+    )
+    app.include_router(
+        face_confirmations_api.create_router(identity_sealer, identity_liveness, face_matcher)
+    )
     for router in organisations_api.create_routers(storage):
         app.include_router(router)
     for router in kyc_claims_api.create_routers(storage):

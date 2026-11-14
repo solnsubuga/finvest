@@ -8,11 +8,14 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from app.infrastructure.sealing import Sealer, key_from_text
 from app.infrastructure.storage import FileStorage
+from app.modules.kyc.domain.face_confirmations import FaceMatcher
 from app.modules.kyc.domain.liveness import LivenessProvider
 from app.modules.kyc.domain.provider import IdentityProvider
 from app.modules.kyc.iotec import BASE_URL, IotecVerifyProvider
+from app.modules.kyc.iotec_face_match import IotecFaceMatcher
 from app.modules.kyc.iotec_liveness import IotecLivenessProvider
 from app.modules.kyc.providers import (
+    DevelopmentStubFaceMatcher,
     DevelopmentStubLiveness,
     DevelopmentStubProvider,
     ManualProvider,
@@ -103,4 +106,22 @@ class KycSettings(BaseSettings):
             )
         if self.identity_provider == "development-stub":
             return DevelopmentStubLiveness()
+        return None
+
+    def face_matcher(self, storage: FileStorage) -> FaceMatcher | None:
+        """The face match for face confirmations, or None when liveness is off.
+
+        Always paired with `liveness()`: a live capture with nothing to compare it to, or a
+        comparison of a photo the client chose, would not prove who is there.
+        """
+        if self.identity_provider == "iotec":
+            assert self.iotec_verify_client_id and self.iotec_verify_api_key  # checked above
+            return IotecFaceMatcher(
+                client_id=self.iotec_verify_client_id,
+                api_key=self.iotec_verify_api_key,
+                storage=storage,
+                base_url=self.iotec_verify_base_url,
+            )
+        if self.identity_provider == "development-stub":
+            return DevelopmentStubFaceMatcher()
         return None
