@@ -2,7 +2,7 @@
 
 from typing import Annotated
 
-from fastapi import APIRouter, Request
+from fastapi import APIRouter, Depends, Request
 from pydantic import Field
 
 from app.modules.identity.api import _REFUSALS, CurrentClient, CurrentClientEvenLocked
@@ -29,6 +29,10 @@ Pin = Annotated[str, Field(min_length=1, max_length=16)]
 def _service(request: Request) -> PinService:
     service: PinService = request.app.state.pins
     return service
+
+
+# For the routes of other modules whose action a PIN confirms.
+Pins = Annotated[PinService, Depends(_service)]
 
 
 class PinBody(Contract):

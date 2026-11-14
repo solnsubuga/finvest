@@ -8758,6 +8758,18 @@
               }
             ],
             "title": "Phone"
+          },
+          "pin_confirmation": {
+            "anyOf": [
+              {
+                "maxLength": 200,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pin Confirmation"
           }
         },
         "required": [
@@ -26932,7 +26944,7 @@
         ]
       },
       "post": {
-        "description": "Add a mobile money number or bank account. It starts awaiting the SMS code.\n\n409 `conflict` if the client already has the same account saved.",
+        "description": "Add a mobile money number or bank account. It starts awaiting the SMS code.\n\n409 `conflict` if the client already has the same account saved. On the phone app with a\nPIN, 428 `pin_required` without a confirmation for `payout_account`; the confirmation is\nused up only when the account is saved.",
         "operationId": "add_destination_client_payout_destinations_post",
         "requestBody": {
           "content": {
@@ -27004,6 +27016,16 @@
               }
             },
             "description": "Unprocessable Content"
+          },
+          "428": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Precondition Required"
           }
         },
         "summary": "Add Destination",

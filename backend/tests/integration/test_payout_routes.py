@@ -9,11 +9,12 @@ from sqlalchemy import text
 
 from app.infrastructure.database import Database
 from app.infrastructure.storage import MemoryStorage
+from app.modules.identity.api import COOKIES
 from app.modules.payouts import destinations
 from app.shared.actors import Actor
 from tests.support.clock import FakeClock
 from tests.support.database import TestDatabase
-from tests.support.http import Api, running_api
+from tests.support.http import CLIENT_ORIGIN, Api, running_api
 from tests.support.payouts import World
 
 pytestmark = pytest.mark.integration
@@ -390,3 +391,58 @@ async def test_a_client_holds_only_a_few_accounts_awaiting_their_code(api: Api) 
     )
     assert sixth.status_code == 409
     assert sixth.json()["error"]["fields"][0]["code"] == "too_many_unconfirmed_accounts"
+
+
+async def test_a_phone_with_a_pin_confirms_a_new_payout_account_with_it(api: Api) -> None:
+    await api.client()
+    assert (await api.http.put("/client/pin", json={"pin": "48151"})).status_code == 204
+    phone = number()
+    body = {"kind": "mobile_money", "holder_name": "Sarah Nakato", "phone": phone}
+
+    refused = await api.http.post("/client/payout-destinations", json=body)
+    assert (refused.status_code, refused.json()["error"]["code"]) == (428, "pin_required")
+    assert (await api.http.get("/client/payout-destinations")).json() == []
+
+    async def confirmation() -> str:
+        answer = await api.http.post(
+            "/client/pin/confirm", json={"pin": "48151", "action": "payout_account"}
+        )
+        token: str = answer.json()["confirmation"]
+        return token
+
+    given = await confirmation()
+    added = await api.http.post(
+        "/client/payout-destinations", json={**body, "pin_confirmation": given}
+    )
+    assert added.status_code == 201
+    # Used once.
+    again = await api.http.post(
+        "/client/payout-destinations",
+        json={**body, "phone": number(), "pin_confirmation": given},
+    )
+    assert again.status_code == 428
+
+    # An account that is refused does not use the confirmation up.
+    kept = await confirmation()
+    duplicate = await api.http.post(
+        "/client/payout-destinations", json={**body, "pin_confirmation": kept}
+    )
+    assert duplicate.status_code == 409
+    other = await api.http.post(
+        "/client/payout-destinations",
+        json={**body, "phone": number(), "pin_confirmation": kept},
+    )
+    assert other.status_code == 201
+
+
+async def test_a_browser_adds_a_payout_account_without_a_pin(api: Api) -> None:
+    actor = await api.client()
+    issued = await api.identity.issue_session(actor, second_step="passkey", transport="cookie")
+    api.http.headers.pop("Authorization", None)
+    api.http.cookies.set(COOKIES["client"], issued.token)
+    api.http.headers["Origin"] = CLIENT_ORIGIN
+    try:
+        await add(api, phone=number())
+    finally:
+        api.http.cookies.clear()
+        api.http.headers.pop("Origin", None)
