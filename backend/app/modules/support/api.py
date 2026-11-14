@@ -111,6 +111,12 @@ class StaffSendMessage(Contract):
     key: MessageKey
 
 
+class StaffWriteFirst(Contract):
+    body: MessageBody
+    key: MessageKey
+    topic: Topic = "other"
+
+
 class InboxRow(Contract):
     conversation: ConversationItem
     client_id: PushId
@@ -263,6 +269,30 @@ async def staff_send(
     async with database.actor_transaction(staff.actor) as session:
         message = await conversations.send_as_staff(
             session, staff.actor, staff.name, conversation_id, body.body, body.key, clock.now()
+        )
+    return _message(message)
+
+
+@staff_router.post("/support/clients/{client_id}/messages", status_code=201)
+async def staff_write_first(
+    client_id: PushId,
+    body: StaffWriteFirst,
+    staff: SupportReplier,
+    database: Db,
+    clock: Time,
+) -> MessageItem:
+    """Write to a client in their open chat, opening one if there is none. 404 for a client
+    who is not active."""
+    async with database.actor_transaction(staff.actor) as session:
+        message = await conversations.write_to_client(
+            session,
+            staff.actor,
+            staff.name,
+            client_id,
+            body.body,
+            body.key,
+            clock.now(),
+            topic=body.topic,
         )
     return _message(message)
 

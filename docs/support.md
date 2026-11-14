@@ -6,7 +6,7 @@ The code is `backend/app/modules/support` and migration `0100_support`. The modu
 
 ## Help chat
 
-A client has one chat with Finvest, not a list of tickets. The first message opens a conversation. Staff answer in it. When staff mark it solved, the client's next message opens a new one, and the app still shows the earlier messages above it.
+A client has one chat with Finvest, not a list of tickets. The first message opens a conversation. Staff answer in it, and may write first when they follow something up, such as the money of a term that ended and waits because its payout could not be made. When staff mark it solved, the client's next message opens a new one, and the app still shows the earlier messages above it.
 
 | Route | Who | Use |
 | --- | --- | --- |
@@ -16,6 +16,7 @@ A client has one chat with Finvest, not a list of tickets. The first message ope
 | `GET /staff/support/conversations` | `support.view` | The inbox. The client who has waited longest comes first. `status` is `open` or `solved`. |
 | `GET /staff/support/conversations/{id}` | `support.view` | One conversation with its messages. Marks it read by staff. |
 | `POST /staff/support/conversations/{id}/messages` | `support.reply` | Reply. The client gets the `support_reply` notification. |
+| `POST /staff/support/clients/{client_id}/messages` | `support.reply` | Write to a client first: `{body, key, topic?}`. It goes into the client's open chat, or opens one (migration 0332), and the client gets the `support_reply` notification. A chat staff open is not waiting for staff. 404 for a client who is not active or carried over from Finvest 1.0, so nobody is written to after closing their account. |
 | `POST /staff/support/conversations/{id}/solve` | `support.reply` | Mark it solved. |
 | `PUT /staff/support/conversations/{id}/topic` | `support.reply` | Correct the topic. |
 | `GET /staff/support/saved-replies` | `support.view` | Replies staff reuse. |
@@ -28,7 +29,7 @@ Rules:
 - **A message is plain text of up to 2,000 characters.** Control characters are refused.
 - **The client sees a first name.** A reply shows "Grace", never a member of staff's full name or ID.
 - **The app asks for new messages.** There is no web socket. The app calls `GET /client/support/chat?after=` every few seconds while Help is open, and the notification brings the client back when it is closed.
-- **Staff see the client by ID.** The inbox returns `client_id`. The console looks up the name through the client record it already shows. The support module does not read identity tables.
+- **Staff see the client by ID.** The inbox returns `client_id`. The console looks up the name through the client record it already shows. The support module does not read identity tables; writing first asks `identity.service.client_contact` only whether the client may still be written to.
 - **Topics** are `deposit`, `withdrawal`, `investment`, `identity`, `account` and `other`.
 
 ## Complaints

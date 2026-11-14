@@ -20014,6 +20014,42 @@
         "title": "StaffTransferOut",
         "type": "object"
       },
+      "StaffWriteFirst": {
+        "additionalProperties": false,
+        "properties": {
+          "body": {
+            "maxLength": 4000,
+            "minLength": 1,
+            "title": "Body",
+            "type": "string"
+          },
+          "key": {
+            "maxLength": 64,
+            "minLength": 8,
+            "title": "Key",
+            "type": "string"
+          },
+          "topic": {
+            "default": "other",
+            "enum": [
+              "deposit",
+              "withdrawal",
+              "investment",
+              "identity",
+              "account",
+              "other"
+            ],
+            "title": "Topic",
+            "type": "string"
+          }
+        },
+        "required": [
+          "body",
+          "key"
+        ],
+        "title": "StaffWriteFirst",
+        "type": "object"
+      },
       "Standing": {
         "description": "How a goal is doing, as the app labels it.",
         "enum": [
@@ -59138,6 +59174,102 @@
         "summary": "Staff Sign Out",
         "tags": [
           "staff sign-in"
+        ]
+      }
+    },
+    "/staff/support/clients/{client_id}/messages": {
+      "post": {
+        "description": "Write to a client in their open chat, opening one if there is none. 404 for a client\nwho is not active.",
+        "operationId": "staff_write_first_staff_support_clients__client_id__messages_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "client_id",
+            "required": true,
+            "schema": {
+              "maxLength": 20,
+              "minLength": 20,
+              "pattern": "^[-0-9A-Z_a-z]{20}$",
+              "title": "Client Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/StaffWriteFirst"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MessageItem"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          }
+        },
+        "summary": "Staff Write First",
+        "tags": [
+          "staff support"
         ]
       }
     },
