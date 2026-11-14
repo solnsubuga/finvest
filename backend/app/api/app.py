@@ -66,6 +66,7 @@ from app.modules.notifications import api as notifications_api
 from app.modules.notifications import hooks as notification_hooks
 from app.modules.notifications import suppressions_api
 from app.modules.notifications.settings import EmailHashSettings
+from app.modules.organisations import api as organisations_api
 from app.modules.payments import api as payments_api
 from app.modules.payments import bank_account_routes, reassignment_routes
 from app.modules.payments import routes as payment_routes
@@ -247,6 +248,8 @@ def create_app(
     for router in kyc_api.create_routers(
         identity_sealer, identity_provider, storage, identity_liveness
     ):
+        app.include_router(router)
+    for router in organisations_api.create_routers(storage):
         app.include_router(router)
     for router in kyc_claims_api.create_routers(storage):
         app.include_router(router)

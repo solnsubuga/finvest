@@ -36,6 +36,7 @@ const ACTIONS: readonly { permission: Permission; label: string; under: ScreenPe
   { permission: "rates.change", label: "Change rates", under: "rates.view" },
   { permission: "investment_corrections.change", label: "Undo investments and refund", under: "investments.view" },
   { permission: "investment_transfers.change", label: "Let large investment transfers through", under: "review_queue.view" },
+  { permission: "organisations.review", label: "Check and open company and group accounts", under: "review_queue.view" },
   { permission: "team.change", label: "Change the team", under: "team.view" },
   { permission: "compliance_cases.change", label: "Close screening and monitoring cases", under: "compliance.view" },
   { permission: "audit.view", label: "Read the audit trail", under: "reports.view" },

@@ -120,6 +120,10 @@ Permission = Literal[
     # declining one. Letting one through always takes a second person. Seeing them is
     # `review_queue.view`. Not a screen.
     "investment_transfers.change",
+    # Checking an application for a company or group account, approving someone else's check,
+    # sending one back or rejecting it. Approving always takes a second person. Not a screen:
+    # applications are in the review queue.
+    "organisations.review",
 ]
 PERMISSIONS: tuple[Permission, ...] = get_args(Permission)
 
@@ -155,6 +159,7 @@ ROLE_PERMISSIONS: dict[Role, frozenset[Permission]] = {
             "deposit_reassignments.change",
             "payout_accounts.change",
             "investment_transfers.change",
+            "organisations.review",
             "migration.import",
             "client_phones.change",
         }
@@ -209,6 +214,7 @@ ROLE_PERMISSIONS: dict[Role, frozenset[Permission]] = {
             "audit.view",
             "payout_accounts.change",
             "investment_transfers.change",
+            "organisations.review",
         }
     ),
     # Support answers clients and logs and works complaints. Closing one is for operations and

@@ -20,6 +20,8 @@ DECISIONS = {
     "POST /staff/team/changes/{change_id}/decision",
     "POST /staff/phone-changes/{change_id}/approval",
     "POST /staff/closures/{request_id}/approval",
+    "POST /staff/organisations/{organisation_id}/approval",
+    "POST /staff/organisations/{organisation_id}/rejection",
     "POST /staff/notification-wordings/proposals/{proposal_id}/decision",
     "POST /staff/payments/bank-accounts/proposals/{proposal_id}/decision",
     "POST /staff/announcements/{announcement_id}/decision",
