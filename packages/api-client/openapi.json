@@ -3332,9 +3332,19 @@
             "title": "Email Verified",
             "type": "boolean"
           },
+          "locked": {
+            "default": false,
+            "title": "Locked",
+            "type": "boolean"
+          },
           "phone": {
             "title": "Phone",
             "type": "string"
+          },
+          "pin_set": {
+            "default": false,
+            "title": "Pin Set",
+            "type": "boolean"
           },
           "restricted_until": {
             "anyOf": [
@@ -5315,6 +5325,7 @@
               "passkey_failed",
               "second_step_missing",
               "sign_in_again",
+              "app_locked",
               "confirm_it_is_you",
               "expired",
               "phone_taken",
@@ -9797,6 +9808,42 @@
           "expires_at"
         ],
         "title": "PhotoLinks",
+        "type": "object"
+      },
+      "PinBody": {
+        "additionalProperties": false,
+        "properties": {
+          "pin": {
+            "maxLength": 16,
+            "minLength": 1,
+            "title": "Pin",
+            "type": "string"
+          }
+        },
+        "required": [
+          "pin"
+        ],
+        "title": "PinBody",
+        "type": "object"
+      },
+      "PinChecked": {
+        "additionalProperties": false,
+        "description": "`unlocked` when the PIN was right. Otherwise the tries left before this device signs out.",
+        "properties": {
+          "tries_left": {
+            "title": "Tries Left",
+            "type": "integer"
+          },
+          "unlocked": {
+            "title": "Unlocked",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "unlocked",
+          "tries_left"
+        ],
+        "title": "PinChecked",
         "type": "object"
       },
       "PlanCountsView": {
@@ -27211,6 +27258,183 @@
         ]
       }
     },
+    "/client/pin": {
+      "put": {
+        "description": "Set or replace the PIN for this phone. Needs a log in from the last ten minutes.",
+        "operationId": "set_pin_client_pin_put",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PinBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "423": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Locked"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          }
+        },
+        "summary": "Set Pin",
+        "tags": [
+          "client sign-in"
+        ]
+      }
+    },
+    "/client/pin/unlock": {
+      "post": {
+        "description": "Open a locked app. The fifth wrong PIN in a row signs this device out (401).",
+        "operationId": "unlock_client_pin_unlock_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PinBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PinChecked"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "423": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Locked"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          }
+        },
+        "summary": "Unlock",
+        "tags": [
+          "client sign-in"
+        ]
+      }
+    },
     "/client/products": {
       "get": {
         "operationId": "client_products_client_products_get",
@@ -27724,6 +27948,7 @@
     },
     "/client/session": {
       "get": {
+        "description": "The signed-in client. A locked session answers too, so the app knows to ask for the PIN.",
         "operationId": "client_session_client_session_get",
         "responses": {
           "200": {

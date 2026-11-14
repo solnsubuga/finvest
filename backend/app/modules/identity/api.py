@@ -90,11 +90,20 @@ def _credentials(request: Request, kind: AccountKind) -> str | None:
     return token
 
 
-async def current_client(request: Request, identity: Identity) -> ClientSession:
+async def current_client_even_locked(request: Request, identity: Identity) -> ClientSession:
+    """The client's session, even one the app PIN has locked. Only for the PIN and the session."""
     token = _credentials(request, "client")
     session = await identity.client_session(token) if token else None
     if session is None:
         raise ApplicationError("unauthorized")
+    return session
+
+
+async def current_client(request: Request, identity: Identity) -> ClientSession:
+    session = await current_client_even_locked(request, identity)
+    if session.locked:
+        # The phone app has been unused for a while: only its PIN opens it again.
+        raise ApplicationError("app_locked")
     return session
 
 
@@ -107,6 +116,7 @@ async def current_staff(request: Request, identity: Identity) -> StaffSession:
 
 
 CurrentClient = Annotated[ClientSession, Depends(current_client)]
+CurrentClientEvenLocked = Annotated[ClientSession, Depends(current_client_even_locked)]
 CurrentStaff = Annotated[StaffSession, Depends(current_staff)]
 
 
@@ -203,6 +213,10 @@ class ClientSessionView(Contract):
     email: str | None = None
     # Whether the client proved `email` with a link. Statements go only to a proved address.
     email_verified: bool = False
+    # The phone app's PIN for this session. Always false in a browser.
+    pin_set: bool = False
+    # True when the PIN must be entered before anything else answers (423 `app_locked`).
+    locked: bool = False
 
 
 class StaffSessionView(Contract):
@@ -245,13 +259,16 @@ async def client_login_start(
 
 
 @client_router.get("/session")
-async def client_session(client: CurrentClient) -> ClientSessionView:
+async def client_session(client: CurrentClientEvenLocked) -> ClientSessionView:
+    """The signed-in client. A locked session answers too, so the app knows to ask for the PIN."""
     return ClientSessionView(
         client_id=client.client_id,
         phone=client.phone,
         restricted_until=client.restricted_until,
         email=client.email,
         email_verified=client.email_verified,
+        pin_set=client.pin_set,
+        locked=client.locked,
     )
 
 
