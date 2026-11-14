@@ -41,6 +41,8 @@ Once a goal is set up, its plan is worked out again on every read for what is st
 
 The client can change the name, what it is for, the target and the date. A new target or date can change the product for later savings. Savings already made are not touched. The currency never changes. In the app, "Change name, target or date" on the goal's screen opens the change screen, which sends `PUT /client/goals/{id}`. The date can be kept, moved to 6 months to 5 years from today, or taken away.
 
+**Taking money out early.** Money comes out of a goal one saving at a time. Each saving is an investment, so the client opens it from the goal and withdraws it early as any investment is withdrawn ([investing.md](investing.md#early-withdrawal)): the whole saving, with the interest earned after tax and no fee. A saving taken out early, or sent to another client, stays listed on the goal and no longer counts towards it. The owner chose this on 2026-11-14. While early withdrawal is switched off, the investment's screen offers no withdrawal.
+
 Closing a goal is final. Its investments carry on as the client's ordinary investments, because they are the client's own and closing moves no money. A closed goal takes no saving.
 
 ## Reminders
@@ -144,4 +146,3 @@ Client responses carry net figures and the yearly rate after tax as a label. No 
 ## Not built yet
 
 - Connecting the console's Goals screen, goals and group goals alike, to the staff routes. It shows sample data under `pnpm dev` and says it is not connected in a normal build.
-- Withdrawing from a goal before its date, which waits for early withdrawal.
