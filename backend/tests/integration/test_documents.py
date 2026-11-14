@@ -1083,6 +1083,57 @@ async def test_a_deferred_email_waits_and_a_refused_one_is_recorded(
     assert await emails_of(worker_database, asked.id) == [("failed", "email_rejected")]
 
 
+async def expire_emails(worker_database: Database, clock: FakeClock) -> None:
+    """Run the daily sweep alone, as the scheduler starts it."""
+    async with worker_database.actor_transaction(SYSTEM) as session:
+        await enqueue(
+            session,
+            JobRequest(
+                kind=service.EXPIRE_EMAILS_KIND,
+                idempotency_key=f"documents.expire_emails:{clock.now():%Y-%m-%d}",
+                payload={},
+                queue=service.QUEUE,
+                max_age=timedelta(hours=20),
+            ),
+            now=clock.now(),
+        )
+    jobs = DocumentJobs(worker_database, clock, email=FakeEmail(), closed_through=closed(None))
+    handlers = {service.EXPIRE_EMAILS_KIND: jobs.handlers()[service.EXPIRE_EMAILS_KIND]}
+    runner = Worker(worker_database, handlers, WorkerConfig(queue=service.QUEUE), clock)
+    assert await runner.run_once()
+
+
+async def test_an_email_whose_job_ended_unsent_is_closed_as_expired_after_a_week(
+    http: tuple[httpx.AsyncClient, IdentityService],
+    app_database: Database,
+    worker_database: Database,
+) -> None:
+    _, identity = http
+    client = await client_with_email(identity, app_database, worker_database)
+    resend_down = FakeEmail(EmailDeferred("Resend is unreachable"))
+    ended = await ask(app_database, client)
+    await run_jobs(worker_database, email=resend_down)
+    # Two days on, the retry is past its age: the worker fails the job without sending.
+    await run_jobs(worker_database, FakeClock(LATER.now() + timedelta(days=2)), email=resend_down)
+    assert await emails_of(worker_database, ended.id) == [("queued", None)]
+    # Another email whose job is still waiting to be retried.
+    waiting = await ask(app_database, client)
+    await run_jobs(worker_database, email=resend_down)
+    assert await emails_of(worker_database, waiting.id) == [("queued", None)]
+
+    # Within the week, nothing is closed.
+    await expire_emails(worker_database, FakeClock(LATER.now() + timedelta(days=6)))
+    assert await emails_of(worker_database, ended.id) == [("queued", None)]
+    await expire_emails(worker_database, FakeClock(LATER.now() + timedelta(days=8)))
+    assert await emails_of(worker_database, ended.id) == [("failed", "expired")]
+    # A job that is still waiting is left to finish, however old the email.
+    assert await emails_of(worker_database, waiting.id) == [("queued", None)]
+    # The document itself stays in the app.
+    async with app_database.actor_transaction(client) as session:
+        listed = await service.client_documents(session, client)
+    assert ended.id in {view.id for view in listed}
+
+
 async def test_only_a_ready_document_is_queued_for_email_and_a_sent_one_never_changes(
     app_database: Database, worker_database: Database
 ) -> None:

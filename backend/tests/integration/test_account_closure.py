@@ -10,13 +10,14 @@ from sqlalchemy.exc import DBAPIError
 
 from app.infrastructure.database import Database
 from app.modules.closures import service as closures
+from app.modules.investments import service as investments
 from app.shared.actors import Actor
 from app.shared.errors import ApplicationError
 from tests.support.database import TestDatabase
 from tests.support.http import Api, running_api
 from tests.support.investments import PRESENT, pay, request
 from tests.support.kyc import verify
-from tests.support.ledger import ugx
+from tests.support.ledger import key, ugx
 
 pytestmark = pytest.mark.integration
 
@@ -132,13 +133,30 @@ async def test_staff_check_again_before_closing(api: Api) -> None:
     client = await api.client()
     await verify(api.database, client, api.clock)
     await api.as_client(client)
+    # An investment checked before the request existed and saved just after it, which the
+    # pause on new investments cannot see (see test_closure_pending.py for the pause).
+    asked: asyncio.Event = asyncio.Event()
+
+    async def invest() -> None:
+        async with api.database.actor_transaction(client) as session:
+            await investments.request_investment(
+                session,
+                client,
+                idempotency_key=key(),
+                product_code="TREA-91",
+                amount=ugx(1_000_000),
+                at_maturity=None,
+                clock=PRESENT,
+            )
+            await asked.wait()
+
+    started = asyncio.create_task(invest())
+    await asyncio.sleep(0.3)
     request_id = (await ask(api)).json()["request"]["id"]
+    asked.set()
+    await started
     await api.staff("operations")
-    await step(api, request_id, "preparation")
-    # The client starts an investment after the request was prepared.
-    await request(api.database, client, PRESENT, amount=ugx(1_000_000))
-    await api.staff("compliance")
-    refused = await step(api, request_id, "approval")
+    refused = await step(api, request_id, "preparation")
     assert refused.status_code == 409
     assert [f["code"] for f in refused.json()["error"]["fields"]] == ["investments_running"]
     assert await status_of(api, client) == "active"

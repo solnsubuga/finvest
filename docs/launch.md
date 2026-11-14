@@ -16,7 +16,7 @@ Staging is set up but switched off to save cost (Solo, 2026-11-13), so productio
 | A restore drill of the production database passed ([backup-and-restore.md](backup-and-restore.md)) | Engineering | |
 | The alerts in [observability.md](observability.md) are on in production, and `ALERT_EMAILS` holds at least two people | Infrastructure | |
 | Payment and payout providers are live in production with real credentials, tested with a small real payment and payout | Solo, engineering | |
-| `FINVEST_BANK_TRANSFER_ACCOUNTS` in production names the real client trust account, and a person has confirmed it is the same bank account whose statements reconciliation imports. Nothing checks that link automatically, and if they differ no bank transfer can ever be matched. Without the setting, clients are not shown where to send a transfer and only mobile money works (payments PR #197). | Solo (account details), finance (confirms the match) | |
+| The bank account approved on the production console's Settings screen is the real client trust account, and a person has confirmed it is the same bank account whose statements reconciliation imports. Nothing checks that link automatically, and if they differ no bank transfer can ever be matched. Until one is approved, clients are not shown where to send a transfer and only mobile money works. | Solo (account details), finance (confirms the match) | |
 | The regulator has been told of the change of system, if it must be | Solo | |
 | A real Finvest 1.0 export has been through the trial import with no errors | Operations | |
 | Every check in [Real device checks](#real-device-checks) has passed on an Android and an iPhone build of the release | Engineering | |
@@ -98,7 +98,7 @@ The web download is covered by automated tests.
 
 - The penetration testing firm, the test dates and the signed authorisation letter. Staging is switched on for those weeks only.
 - Production credentials for the payment and payout providers.
-- The client trust account's bank details for `FINVEST_BANK_TRANSFER_ACCOUNTS`.
+- The client trust account's bank details, entered on the console's Settings screen by two people.
 - Whether, when and how the regulator must be told of the change of system.
 - The switch date, and the go or no go.
 - Approval of the invitation texts and of the recovery targets in [backup-and-restore.md](backup-and-restore.md).

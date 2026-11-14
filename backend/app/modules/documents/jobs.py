@@ -37,6 +37,7 @@ from app.infrastructure.jobs import (
     RetryableJobError,
     enqueue,
     external_effect,
+    is_active,
 )
 from app.infrastructure.sealing import Sealer
 from app.modules.documents import building, pdf, service
@@ -92,6 +93,15 @@ _EMAIL_DONE = text(
 )
 # Resend drops a repeat of a key for 24 hours, so a send is retried only within that time.
 EMAIL_MAX_AGE = timedelta(hours=20)
+# An email still queued this long after its document was ready will not be sent: its job
+# expired, or failed and was not put right. It is closed as `failed` with `expired`, so staff
+# and the record show it was never delivered. The document stays in the app.
+EMAIL_GIVE_UP_AFTER = timedelta(days=7)
+EXPIRE_PAGE = 500
+_STALE_EMAILS = text(
+    "SELECT document_id FROM document_emails WHERE status = 'queued' AND queued_at < :before "
+    "ORDER BY queued_at, document_id LIMIT :limit FOR UPDATE SKIP LOCKED"
+)
 
 
 def statement_reference(document_id: str) -> str:
@@ -154,6 +164,7 @@ class DocumentJobs:
         return {
             service.BUILD_KIND: self.build,
             service.MONTHLY_KIND: self.monthly_run,
+            service.EXPIRE_EMAILS_KIND: self.expire_emails,
             RECEIPT_KIND: self.receipt_from_deposit,
             # Sending reaches Resend. Its idempotency key makes a lost answer safe to repeat,
             # and a crash mid-send stops the job instead of sending blind.
@@ -393,6 +404,43 @@ class DocumentJobs:
 
         result = await context.apply(effect)
         logger.info("monthly_statements_asked", month=label, count=result.get("asked"))
+
+    async def expire_emails(self, job: ClaimedJob, context: JobContext) -> None:
+        """Close document emails that will never be sent, so none stays `queued` for ever.
+
+        The scheduler starts this every day. An email whose job is still waiting or running is
+        left alone, however old. One run closes a page; the next day's run takes the rest.
+        """
+
+        async def effect(session: AsyncSession) -> Mapping[str, object]:
+            now = self._clock.now()
+            rows = await session.execute(
+                _STALE_EMAILS, {"before": now - EMAIL_GIVE_UP_AFTER, "limit": EXPIRE_PAGE}
+            )
+            closed = 0
+            for document_id in rows.scalars().all():
+                key = f"document-email:{document_id}"
+                if await is_active(session, kind=service.EMAIL_KIND, idempotency_key=key):
+                    continue
+                await session.execute(
+                    _EMAIL_DONE,
+                    {
+                        "id": document_id,
+                        "status": "failed",
+                        "failure_code": "expired",
+                        "provider": None,
+                        "message_id": None,
+                        "now": now,
+                    },
+                )
+                closed += 1
+            return {"closed": closed}
+
+        result = await context.apply(effect)
+        if result.get("closed"):
+            logger.warning(
+                "document_emails_expired", count=result.get("closed"), error_code="expired"
+            )
 
     async def receipt_from_deposit(self, job: ClaimedJob, context: JobContext) -> None:
         """A payment was confirmed: ask for its receipt, which is built and emailed next."""

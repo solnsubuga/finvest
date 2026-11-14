@@ -56,6 +56,9 @@ describe("requests for a call back", () => {
     expect(within(first!).getByText("Lost their phone or SIM card")).toBeInTheDocument();
     expect(within(first!).getByText("+256 701 555 013")).toBeInTheDocument();
     expect(within(second!).getByText("(the number on the account)")).toBeInTheDocument();
+    // Asked again with another number: staff are told plainly. One ask says nothing more.
+    expect(within(first!).getByText(/^Asked 3 times, last at/)).toBeInTheDocument();
+    expect(within(second!).queryByText(/times, last at/)).toBeNull();
 
     await user.click(within(first!).getByRole("button", { name: "Open the client" }));
     expect(screen.getByTestId("where")).toHaveTextContent("?client=-NstubClient00000042");
@@ -123,6 +126,8 @@ describe("the recovery API client", () => {
                 contact_phone: "+256701555013",
                 reason: "new_number",
                 created_at: "2026-11-14T08:00:00Z",
+                asks: 2,
+                last_asked_at: "2026-11-14T08:30:00Z",
               },
             ],
           }),
@@ -135,7 +140,7 @@ describe("the recovery API client", () => {
     });
     const api = createHttpRecoveryApi(createHttp("https://api.test", fetch));
     expect(await api.list()).toEqual([
-      { id: "R1", clientId: "C1", accountPhone: "+256772123456", contactPhone: "+256701555013", reason: "new_number", createdAt: "2026-11-14T08:00:00Z" },
+      { id: "R1", clientId: "C1", accountPhone: "+256772123456", contactPhone: "+256701555013", reason: "new_number", createdAt: "2026-11-14T08:00:00Z", asks: 2, lastAskedAt: "2026-11-14T08:30:00Z" },
     ]);
     await api.close("R1", "number_changed");
     expect(fetch).toHaveBeenCalledTimes(2);

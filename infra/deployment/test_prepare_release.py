@@ -1,6 +1,5 @@
 """Tests for prepare_release.py. Run with: python3 -m unittest discover -s infra/deployment"""
 
-import json
 import os
 import stat
 import tempfile
@@ -152,23 +151,11 @@ class PrepareRelease(unittest.TestCase):
         for service in ("worker", "scheduler", "migrate"):
             self.assertNotIn("FINVEST_CLIENT_SIGNUP_OPEN", read_env(self.out / "runtime" / f"{service}.env"))
 
-    def test_bank_transfer_accounts_reach_the_api_only_on_one_line(self):
-        accounts = '{\n  "UGX": {"bank_name": "Bank", "account_name": "Finvest Trust", "account_number": "0123", "branch": null}\n}'
-        pr.prepare(self.out, settings(FINVEST_BANK_TRANSFER_ACCOUNTS=accounts))
-        value = read_env(self.out / "runtime" / "api.env")["FINVEST_BANK_TRANSFER_ACCOUNTS"]
-        self.assertEqual(json.loads(value)["UGX"]["account_number"], "0123")
-        self.assertNotIn("\n", value)
-        for service in ("worker", "scheduler", "migrate"):
+    def test_bank_transfer_accounts_are_no_longer_passed(self):
+        # Staff set the account on console Settings (docs/payments.md), so a leftover variable is ignored.
+        pr.prepare(self.out, settings(FINVEST_BANK_TRANSFER_ACCOUNTS='{"UGX": {"account_number": "0123"}}'))
+        for service in ("api", "worker", "scheduler", "migrate"):
             self.assertNotIn("FINVEST_BANK_TRANSFER_ACCOUNTS", read_env(self.out / "runtime" / f"{service}.env"))
-
-    def test_bank_transfer_accounts_are_left_out_when_unset(self):
-        pr.prepare(self.out, settings())
-        self.assertNotIn("FINVEST_BANK_TRANSFER_ACCOUNTS", read_env(self.out / "runtime" / "api.env"))
-
-    def test_malformed_bank_transfer_accounts_are_refused(self):
-        for value in ("not json", "[]", "{}", '{"UGX": "x"}'):
-            with self.assertRaises(pr.SettingError):
-                pr.prepare(self.out, settings(FINVEST_BANK_TRANSFER_ACCOUNTS=value))
 
     def test_resend_hook_secret_reaches_the_api_only(self):
         pr.prepare(self.out, settings(RESEND_HOOK_SECRET="whsec_" + "h" * 32))
@@ -218,7 +205,10 @@ class PrepareRelease(unittest.TestCase):
             "FINVEST_IOTEC_VERIFY_API_KEY": "v" * 32,
             "FINVEST_IOTEC_VERIFY_BASE_URL": "https://verify-api.iotec.io",
             "FINVEST_PAYOUT_NAME_PROVIDER": "iotec",
-            "FINVEST_SCREENING_PROVIDER": "none",
+            "FINVEST_SCREENING_PROVIDER": "sigma360",
+            "FINVEST_SIGMA360_API_KEY": "k" * 32,
+            "FINVEST_SIGMA360_FILTER_SET_ID": "42",
+            "FINVEST_SIGMA360_BASE_URL": "https://api.sigma360.com/external/v2",
         }
         api_only = {"FINVEST_IOTEC_CALLBACK_TOKEN": "c" * 43}
         pr.prepare(self.out, settings(**everywhere, **api_and_worker, **api_only))
@@ -233,13 +223,15 @@ class PrepareRelease(unittest.TestCase):
         self.assertEqual(files["api"]["FINVEST_IOTEC_CALLBACK_TOKEN"], "c" * 43)
         for service in ("worker", "scheduler"):
             self.assertNotIn("FINVEST_IOTEC_CALLBACK_TOKEN", files[service])
-        self.assertFalse([name for name in files["migrate"] if "IOTEC" in name or "PROVIDER" in name])
+        self.assertFalse(
+            [name for name in files["migrate"] if any(k in name for k in ("IOTEC", "PROVIDER", "SIGMA360"))]
+        )
 
     def test_iotec_settings_are_left_out_when_unset(self):
         pr.prepare(self.out, settings())
         for service in ("api", "worker", "scheduler"):
             found = read_env(self.out / "runtime" / f"{service}.env")
-            self.assertFalse([name for name in found if "IOTEC" in name or "PROVIDER" in name])
+            self.assertFalse([name for name in found if any(k in name for k in ("IOTEC", "PROVIDER", "SIGMA360"))])
 
     def test_identity_data_key_reaches_the_api_and_worker_only(self):
         pr.prepare(self.out, settings(FINVEST_IDENTITY_DATA_KEY="d" * 43))

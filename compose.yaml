@@ -16,10 +16,6 @@ x-backend-environment: &backend-environment
   FINVEST_LOG_FORMAT: console
   # Local only: a stand-in for ioTec Pay that moves no money. See docs/payments.md.
   FINVEST_PAYMENTS_PROVIDER: sandbox
-  # Local only: a made-up account, so the bank transfer screen has details to show.
-  FINVEST_BANK_TRANSFER_ACCOUNTS: >-
-    {"UGX": {"bank_name": "Local Test Bank", "account_name": "Finvest Clients Trust Account (local)",
-    "account_number": "0000000000", "branch": null}}
 
 x-roles: &role-passwords
   FINVEST_MIGRATOR_PASSWORD: local-migrator
