@@ -113,4 +113,15 @@ describe("the profile client for the real API", () => {
     const error = await createApiProfileClient().askToClose("Moving abroad").catch((e: unknown) => e);
     expect((error as ProfileError).code).toBe("sign_in_again");
   });
+
+  it("freezes with the client's reason and gives back when", async () => {
+    const seen = serve({ "POST /client/account-freeze": json({ frozen_at: "2026-11-14T09:30:00Z" }, 201) });
+    const frozen = await createApiProfileClient().freezeAccount("Lost my phone");
+    expect(frozen).toEqual({ frozenAt: "2026-11-14T09:30:00Z" });
+    expect(seen[0]).toMatchObject({ method: "POST", url: "/client/account-freeze", body: { reason: "Lost my phone" } });
+
+    serve({ "POST /client/account-freeze": refused("conflict", 409) });
+    const again = await createApiProfileClient().freezeAccount(null).catch((e: unknown) => e);
+    expect((again as ProfileError).code).toBe("conflict");
+  });
 });

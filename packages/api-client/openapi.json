@@ -100,6 +100,198 @@
         "title": "Action",
         "type": "string"
       },
+      "ActionView": {
+        "additionalProperties": false,
+        "properties": {
+          "client_id": {
+            "maxLength": 20,
+            "minLength": 20,
+            "pattern": "^[-0-9A-Z_a-z]{20}$",
+            "title": "Client Id",
+            "type": "string"
+          },
+          "decided_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Decided At"
+          },
+          "decided_by": {
+            "anyOf": [
+              {
+                "maxLength": 20,
+                "minLength": 20,
+                "pattern": "^[-0-9A-Z_a-z]{20}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Decided By"
+          },
+          "decided_by_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Decided By Name"
+          },
+          "decision_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Decision Reason"
+          },
+          "id": {
+            "maxLength": 20,
+            "minLength": 20,
+            "pattern": "^[-0-9A-Z_a-z]{20}$",
+            "title": "Id",
+            "type": "string"
+          },
+          "kind": {
+            "enum": [
+              "pin_reset",
+              "withdrawal_limits",
+              "statement",
+              "withdrawal"
+            ],
+            "title": "Kind",
+            "type": "string"
+          },
+          "limits": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/app__modules__console__actions_api__LimitsView"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "proposed_at": {
+            "format": "date-time",
+            "title": "Proposed At",
+            "type": "string"
+          },
+          "proposed_by": {
+            "maxLength": 20,
+            "minLength": 20,
+            "pattern": "^[-0-9A-Z_a-z]{20}$",
+            "title": "Proposed By",
+            "type": "string"
+          },
+          "proposed_by_name": {
+            "title": "Proposed By Name",
+            "type": "string"
+          },
+          "reason": {
+            "title": "Reason",
+            "type": "string"
+          },
+          "statement": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/StatementPeriod"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "status": {
+            "enum": [
+              "proposed",
+              "approved",
+              "rejected",
+              "withdrawn"
+            ],
+            "title": "Status",
+            "type": "string"
+          },
+          "withdrawal": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/WithdrawalIn"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "yours": {
+            "title": "Yours",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "id",
+          "client_id",
+          "kind",
+          "reason",
+          "proposed_by",
+          "proposed_by_name",
+          "proposed_at",
+          "status",
+          "decided_by",
+          "decided_by_name",
+          "decided_at",
+          "decision_reason",
+          "limits",
+          "statement",
+          "withdrawal",
+          "yours"
+        ],
+        "title": "ActionView",
+        "type": "object"
+      },
+      "ActionsView": {
+        "additionalProperties": false,
+        "properties": {
+          "actions": {
+            "items": {
+              "$ref": "#/components/schemas/ActionView"
+            },
+            "title": "Actions",
+            "type": "array"
+          },
+          "allowed": {
+            "items": {
+              "enum": [
+                "pin_reset",
+                "withdrawal_limits",
+                "statement",
+                "withdrawal"
+              ],
+              "type": "string"
+            },
+            "title": "Allowed",
+            "type": "array"
+          }
+        },
+        "required": [
+          "actions",
+          "allowed"
+        ],
+        "title": "ActionsView",
+        "type": "object"
+      },
       "AllocationReportOut": {
         "additionalProperties": false,
         "properties": {
@@ -485,7 +677,16 @@
               "bank_account_change",
               "account_code_map",
               "deposit_reversal",
-              "deposit_receivable"
+              "deposit_receivable",
+              "client_pin_reset",
+              "client_limits",
+              "client_statement",
+              "client_withdrawal",
+              "payment_channels_change",
+              "calendar_change",
+              "staff_security_change",
+              "statement_layout_change",
+              "withdrawal_limits_change"
             ],
             "title": "Kind",
             "type": "string"
@@ -636,7 +837,8 @@
         "description": "What the client wants done when a fixed term ends. Rolling over is the default.",
         "enum": [
           "roll_over",
-          "pay_out"
+          "pay_out",
+          "pay_interest"
         ],
         "title": "AtMaturity",
         "type": "string"
@@ -919,6 +1121,129 @@
           "name"
         ],
         "title": "BankOut",
+        "type": "object"
+      },
+      "BankPayoutCutoffProposal": {
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "maxLength": 20,
+            "minLength": 20,
+            "pattern": "^[-0-9A-Z_a-z]{20}$",
+            "title": "Id",
+            "type": "string"
+          },
+          "proposed_at": {
+            "format": "date-time",
+            "title": "Proposed At",
+            "type": "string"
+          },
+          "proposed_by": {
+            "maxLength": 20,
+            "minLength": 20,
+            "pattern": "^[-0-9A-Z_a-z]{20}$",
+            "title": "Proposed By",
+            "type": "string"
+          },
+          "reason": {
+            "title": "Reason",
+            "type": "string"
+          },
+          "value": {
+            "pattern": "^\\d{2}:\\d{2}$",
+            "title": "Value",
+            "type": "string"
+          },
+          "yours": {
+            "title": "Yours",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "id",
+          "reason",
+          "proposed_by",
+          "proposed_at",
+          "yours",
+          "value"
+        ],
+        "title": "BankPayoutCutoffProposal",
+        "type": "object"
+      },
+      "BankPayoutCutoffSetting": {
+        "additionalProperties": false,
+        "properties": {
+          "can_change": {
+            "title": "Can Change",
+            "type": "boolean"
+          },
+          "changed_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Changed At"
+          },
+          "changed_by": {
+            "anyOf": [
+              {
+                "maxLength": 20,
+                "minLength": 20,
+                "pattern": "^[-0-9A-Z_a-z]{20}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Changed By"
+          },
+          "key": {
+            "const": "bank_payout_cutoff",
+            "title": "Key",
+            "type": "string"
+          },
+          "proposal": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/BankPayoutCutoffProposal"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "section": {
+            "enum": [
+              "channels",
+              "calendar",
+              "staff_security",
+              "statement_import"
+            ],
+            "title": "Section",
+            "type": "string"
+          },
+          "value": {
+            "pattern": "^\\d{2}:\\d{2}$",
+            "title": "Value",
+            "type": "string"
+          }
+        },
+        "required": [
+          "section",
+          "changed_at",
+          "changed_by",
+          "can_change",
+          "key",
+          "value",
+          "proposal"
+        ],
+        "title": "BankPayoutCutoffSetting",
         "type": "object"
       },
       "BankPayoutOut": {
@@ -1565,8 +1890,8 @@
             "type": "string"
           },
           "format": {
-            "const": "standard",
             "default": "standard",
+            "pattern": "^[a-z][a-z0-9_]{1,39}$",
             "title": "Format",
             "type": "string"
           },
@@ -3659,6 +3984,29 @@
             "title": "Waiting For Destination",
             "type": "boolean"
           },
+          "waiting_minor": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Waiting Minor"
+          },
+          "withdrawal_locked_until": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Withdrawal Locked Until"
+          },
           "withdrawal_requested_at": {
             "anyOf": [
               {
@@ -3700,6 +4048,39 @@
           "withdrawal_requested_at"
         ],
         "title": "ClientInvestmentOut",
+        "type": "object"
+      },
+      "ClientLimitsView": {
+        "additionalProperties": false,
+        "properties": {
+          "applied": {
+            "$ref": "#/components/schemas/app__modules__console__actions_api__LimitsView"
+          },
+          "can_change": {
+            "title": "Can Change",
+            "type": "boolean"
+          },
+          "own": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/app__modules__console__actions_api__LimitsView"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "shared": {
+            "$ref": "#/components/schemas/app__modules__console__actions_api__LimitsView"
+          }
+        },
+        "required": [
+          "shared",
+          "own",
+          "applied",
+          "can_change"
+        ],
+        "title": "ClientLimitsView",
         "type": "object"
       },
       "ClientLoginStart": {
@@ -4002,6 +4383,13 @@
             "title": "Destinations",
             "type": "array"
           },
+          "freezes": {
+            "items": {
+              "$ref": "#/components/schemas/app__modules__console__api__FreezeView"
+            },
+            "title": "Freezes",
+            "type": "array"
+          },
           "identity_check": {
             "anyOf": [
               {
@@ -4045,6 +4433,7 @@
           "owed",
           "destinations",
           "locks",
+          "freezes",
           "conversation",
           "complaints",
           "can_lock"
@@ -4078,6 +4467,34 @@
           "byte_size"
         ],
         "title": "ClientPhoto",
+        "type": "object"
+      },
+      "ClientRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "body": {
+            "title": "Body",
+            "type": "string"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "id": {
+            "maxLength": 20,
+            "minLength": 20,
+            "pattern": "^[-0-9A-Z_a-z]{20}$",
+            "title": "Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "body",
+          "created_at"
+        ],
+        "title": "ClientRequest",
         "type": "object"
       },
       "ClientScreeningOut": {
@@ -5333,6 +5750,32 @@
         "title": "DaysOut",
         "type": "object"
       },
+      "DecideAction": {
+        "additionalProperties": false,
+        "properties": {
+          "decision": {
+            "enum": [
+              "approved",
+              "rejected",
+              "withdrawn"
+            ],
+            "title": "Decision",
+            "type": "string"
+          },
+          "reason": {
+            "maxLength": 500,
+            "minLength": 1,
+            "title": "Reason",
+            "type": "string"
+          }
+        },
+        "required": [
+          "decision",
+          "reason"
+        ],
+        "title": "DecideAction",
+        "type": "object"
+      },
       "DecideAnnouncement": {
         "additionalProperties": false,
         "properties": {
@@ -5484,6 +5927,32 @@
         "title": "DecideLift",
         "type": "object"
       },
+      "DecideLimits": {
+        "additionalProperties": false,
+        "properties": {
+          "decision": {
+            "enum": [
+              "approved",
+              "rejected",
+              "withdrawn"
+            ],
+            "title": "Decision",
+            "type": "string"
+          },
+          "reason": {
+            "maxLength": 500,
+            "minLength": 1,
+            "title": "Reason",
+            "type": "string"
+          }
+        },
+        "required": [
+          "decision",
+          "reason"
+        ],
+        "title": "DecideLimits",
+        "type": "object"
+      },
       "DecideLock": {
         "additionalProperties": false,
         "properties": {
@@ -5547,6 +6016,32 @@
           "decision"
         ],
         "title": "DecideOutcome",
+        "type": "object"
+      },
+      "DecideSetting": {
+        "additionalProperties": false,
+        "properties": {
+          "decision": {
+            "enum": [
+              "approved",
+              "rejected",
+              "withdrawn"
+            ],
+            "title": "Decision",
+            "type": "string"
+          },
+          "reason": {
+            "maxLength": 500,
+            "minLength": 1,
+            "title": "Reason",
+            "type": "string"
+          }
+        },
+        "required": [
+          "decision",
+          "reason"
+        ],
+        "title": "DecideSetting",
         "type": "object"
       },
       "DecideWording": {
@@ -6153,6 +6648,17 @@
             ],
             "title": "Date To"
           },
+          "deposit_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Deposit Id"
+          },
           "file_name": {
             "anyOf": [
               {
@@ -6182,6 +6688,17 @@
             "pattern": "^[-0-9A-Z_a-z]{20}$",
             "title": "Id",
             "type": "string"
+          },
+          "investment_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Investment Id"
           },
           "kind": {
             "enum": [
@@ -6231,7 +6748,9 @@
           "finished_at",
           "file_name",
           "byte_size",
-          "not_final_from"
+          "not_final_from",
+          "investment_id",
+          "deposit_id"
         ],
         "title": "DocumentItem",
         "type": "object"
@@ -7191,6 +7710,25 @@
         "title": "FormatOut",
         "type": "object"
       },
+      "FreezeBody": {
+        "additionalProperties": false,
+        "properties": {
+          "reason": {
+            "anyOf": [
+              {
+                "maxLength": 550,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason"
+          }
+        },
+        "title": "FreezeBody",
+        "type": "object"
+      },
       "Frequency": {
         "enum": [
           "weekly",
@@ -7302,9 +7840,32 @@
             "title": "Goal Id",
             "type": "string"
           },
+          "locked_until": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Locked Until"
+          },
           "name": {
             "title": "Name",
             "type": "string"
+          },
+          "payday": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Payday"
           },
           "plan": {
             "anyOf": [
@@ -7358,6 +7919,18 @@
           "target_minor": {
             "title": "Target Minor",
             "type": "integer"
+          },
+          "unlock_requested_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Unlock Requested At"
           }
         },
         "required": [
@@ -7373,7 +7946,8 @@
           "progress",
           "plan",
           "savings",
-          "saving_rule"
+          "saving_rule",
+          "payday"
         ],
         "title": "GoalView",
         "type": "object"
@@ -7754,6 +8328,28 @@
           "principal"
         ],
         "title": "HoldingOut",
+        "type": "object"
+      },
+      "HolidayValue": {
+        "additionalProperties": false,
+        "properties": {
+          "date": {
+            "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+            "title": "Date",
+            "type": "string"
+          },
+          "name": {
+            "maxLength": 80,
+            "minLength": 1,
+            "title": "Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "date",
+          "name"
+        ],
+        "title": "HolidayValue",
         "type": "object"
       },
       "IdentityCheckView": {
@@ -8519,10 +9115,140 @@
         "title": "LiftView",
         "type": "object"
       },
+      "LimitsChangeView": {
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "maxLength": 20,
+            "minLength": 20,
+            "pattern": "^[-0-9A-Z_a-z]{20}$",
+            "title": "Id",
+            "type": "string"
+          },
+          "limits": {
+            "$ref": "#/components/schemas/app__modules__payouts__limits_api__LimitsView"
+          },
+          "proposed_at": {
+            "format": "date-time",
+            "title": "Proposed At",
+            "type": "string"
+          },
+          "proposed_by": {
+            "maxLength": 20,
+            "minLength": 20,
+            "pattern": "^[-0-9A-Z_a-z]{20}$",
+            "title": "Proposed By",
+            "type": "string"
+          },
+          "reason": {
+            "title": "Reason",
+            "type": "string"
+          },
+          "yours": {
+            "title": "Yours",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "id",
+          "limits",
+          "reason",
+          "proposed_by",
+          "proposed_at",
+          "yours"
+        ],
+        "title": "LimitsChangeView",
+        "type": "object"
+      },
+      "LimitsIn": {
+        "additionalProperties": false,
+        "description": "A client's own limits in whole shillings. Null leaves that sort to the shared limit.",
+        "properties": {
+          "bank_per_day": {
+            "anyOf": [
+              {
+                "maximum": 1000000000000000.0,
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Bank Per Day"
+          },
+          "bank_per_payout": {
+            "anyOf": [
+              {
+                "maximum": 1000000000000000.0,
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Bank Per Payout"
+          },
+          "mobile_money_per_day": {
+            "anyOf": [
+              {
+                "maximum": 1000000000000000.0,
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Mobile Money Per Day"
+          },
+          "mobile_money_per_payout": {
+            "anyOf": [
+              {
+                "maximum": 5000000.0,
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Mobile Money Per Payout"
+          },
+          "review_above": {
+            "anyOf": [
+              {
+                "maximum": 1000000000000000.0,
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Review Above"
+          }
+        },
+        "required": [
+          "mobile_money_per_payout",
+          "mobile_money_per_day",
+          "bank_per_payout",
+          "bank_per_day",
+          "review_above"
+        ],
+        "title": "LimitsIn",
+        "type": "object"
+      },
       "LimitsOut": {
         "additionalProperties": false,
         "description": "The withdrawal limits in force today. A limit that is None is not set.",
         "properties": {
+          "bank_payout_day": {
+            "format": "date",
+            "title": "Bank Payout Day",
+            "type": "string"
+          },
           "bank_per_day": {
             "anyOf": [
               {
@@ -8567,9 +9293,47 @@
           "mobile_money_per_payout",
           "mobile_money_per_day",
           "bank_per_payout",
-          "bank_per_day"
+          "bank_per_day",
+          "bank_payout_day"
         ],
         "title": "LimitsOut",
+        "type": "object"
+      },
+      "LimitsScreen": {
+        "additionalProperties": false,
+        "properties": {
+          "can_change": {
+            "title": "Can Change",
+            "type": "boolean"
+          },
+          "change": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/LimitsChangeView"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "in_force": {
+            "$ref": "#/components/schemas/app__modules__payouts__limits_api__LimitsView"
+          },
+          "upcoming": {
+            "items": {
+              "$ref": "#/components/schemas/app__modules__payouts__limits_api__LimitsView"
+            },
+            "title": "Upcoming",
+            "type": "array"
+          }
+        },
+        "required": [
+          "in_force",
+          "upcoming",
+          "change",
+          "can_change"
+        ],
+        "title": "LimitsScreen",
         "type": "object"
       },
       "LineOut": {
@@ -9550,6 +10314,139 @@
         "title": "MaturityDayOut",
         "type": "object"
       },
+      "MaturityRemindersProposal": {
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "maxLength": 20,
+            "minLength": 20,
+            "pattern": "^[-0-9A-Z_a-z]{20}$",
+            "title": "Id",
+            "type": "string"
+          },
+          "proposed_at": {
+            "format": "date-time",
+            "title": "Proposed At",
+            "type": "string"
+          },
+          "proposed_by": {
+            "maxLength": 20,
+            "minLength": 20,
+            "pattern": "^[-0-9A-Z_a-z]{20}$",
+            "title": "Proposed By",
+            "type": "string"
+          },
+          "reason": {
+            "title": "Reason",
+            "type": "string"
+          },
+          "value": {
+            "items": {
+              "maximum": 30.0,
+              "minimum": 1.0,
+              "type": "integer"
+            },
+            "maxItems": 3,
+            "title": "Value",
+            "type": "array"
+          },
+          "yours": {
+            "title": "Yours",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "id",
+          "reason",
+          "proposed_by",
+          "proposed_at",
+          "yours",
+          "value"
+        ],
+        "title": "MaturityRemindersProposal",
+        "type": "object"
+      },
+      "MaturityRemindersSetting": {
+        "additionalProperties": false,
+        "properties": {
+          "can_change": {
+            "title": "Can Change",
+            "type": "boolean"
+          },
+          "changed_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Changed At"
+          },
+          "changed_by": {
+            "anyOf": [
+              {
+                "maxLength": 20,
+                "minLength": 20,
+                "pattern": "^[-0-9A-Z_a-z]{20}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Changed By"
+          },
+          "key": {
+            "const": "maturity_reminders",
+            "title": "Key",
+            "type": "string"
+          },
+          "proposal": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/MaturityRemindersProposal"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "section": {
+            "enum": [
+              "channels",
+              "calendar",
+              "staff_security",
+              "statement_import"
+            ],
+            "title": "Section",
+            "type": "string"
+          },
+          "value": {
+            "items": {
+              "maximum": 30.0,
+              "minimum": 1.0,
+              "type": "integer"
+            },
+            "maxItems": 3,
+            "title": "Value",
+            "type": "array"
+          }
+        },
+        "required": [
+          "section",
+          "changed_at",
+          "changed_by",
+          "can_change",
+          "key",
+          "value",
+          "proposal"
+        ],
+        "title": "MaturityRemindersSetting",
+        "type": "object"
+      },
       "MemberView": {
         "additionalProperties": false,
         "description": "Another member: a name and when they joined. Never what they saved.",
@@ -10504,6 +11401,77 @@
         "title": "NoteIn",
         "type": "object"
       },
+      "NoteView": {
+        "additionalProperties": false,
+        "properties": {
+          "body": {
+            "title": "Body",
+            "type": "string"
+          },
+          "client_id": {
+            "maxLength": 20,
+            "minLength": 20,
+            "pattern": "^[-0-9A-Z_a-z]{20}$",
+            "title": "Client Id",
+            "type": "string"
+          },
+          "id": {
+            "maxLength": 20,
+            "minLength": 20,
+            "pattern": "^[-0-9A-Z_a-z]{20}$",
+            "title": "Id",
+            "type": "string"
+          },
+          "written_at": {
+            "format": "date-time",
+            "title": "Written At",
+            "type": "string"
+          },
+          "written_by": {
+            "maxLength": 20,
+            "minLength": 20,
+            "pattern": "^[-0-9A-Z_a-z]{20}$",
+            "title": "Written By",
+            "type": "string"
+          },
+          "written_by_name": {
+            "title": "Written By Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "client_id",
+          "body",
+          "written_by",
+          "written_by_name",
+          "written_at"
+        ],
+        "title": "NoteView",
+        "type": "object"
+      },
+      "NotesView": {
+        "additionalProperties": false,
+        "properties": {
+          "can_write": {
+            "title": "Can Write",
+            "type": "boolean"
+          },
+          "notes": {
+            "items": {
+              "$ref": "#/components/schemas/NoteView"
+            },
+            "title": "Notes",
+            "type": "array"
+          }
+        },
+        "required": [
+          "notes",
+          "can_write"
+        ],
+        "title": "NotesView",
+        "type": "object"
+      },
       "NotificationItem": {
         "additionalProperties": false,
         "properties": {
@@ -10607,6 +11575,158 @@
           "next_before"
         ],
         "title": "NotificationPage",
+        "type": "object"
+      },
+      "OfficeNetworkValue": {
+        "additionalProperties": false,
+        "properties": {
+          "label": {
+            "maxLength": 80,
+            "minLength": 1,
+            "title": "Label",
+            "type": "string"
+          },
+          "network": {
+            "maxLength": 50,
+            "minLength": 1,
+            "title": "Network",
+            "type": "string"
+          }
+        },
+        "required": [
+          "network",
+          "label"
+        ],
+        "title": "OfficeNetworkValue",
+        "type": "object"
+      },
+      "OfficeNetworksProposal": {
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "maxLength": 20,
+            "minLength": 20,
+            "pattern": "^[-0-9A-Z_a-z]{20}$",
+            "title": "Id",
+            "type": "string"
+          },
+          "proposed_at": {
+            "format": "date-time",
+            "title": "Proposed At",
+            "type": "string"
+          },
+          "proposed_by": {
+            "maxLength": 20,
+            "minLength": 20,
+            "pattern": "^[-0-9A-Z_a-z]{20}$",
+            "title": "Proposed By",
+            "type": "string"
+          },
+          "reason": {
+            "title": "Reason",
+            "type": "string"
+          },
+          "value": {
+            "items": {
+              "$ref": "#/components/schemas/OfficeNetworkValue"
+            },
+            "maxItems": 20,
+            "title": "Value",
+            "type": "array"
+          },
+          "yours": {
+            "title": "Yours",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "id",
+          "reason",
+          "proposed_by",
+          "proposed_at",
+          "yours",
+          "value"
+        ],
+        "title": "OfficeNetworksProposal",
+        "type": "object"
+      },
+      "OfficeNetworksSetting": {
+        "additionalProperties": false,
+        "properties": {
+          "can_change": {
+            "title": "Can Change",
+            "type": "boolean"
+          },
+          "changed_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Changed At"
+          },
+          "changed_by": {
+            "anyOf": [
+              {
+                "maxLength": 20,
+                "minLength": 20,
+                "pattern": "^[-0-9A-Z_a-z]{20}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Changed By"
+          },
+          "key": {
+            "const": "office_networks",
+            "title": "Key",
+            "type": "string"
+          },
+          "proposal": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/OfficeNetworksProposal"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "section": {
+            "enum": [
+              "channels",
+              "calendar",
+              "staff_security",
+              "statement_import"
+            ],
+            "title": "Section",
+            "type": "string"
+          },
+          "value": {
+            "items": {
+              "$ref": "#/components/schemas/OfficeNetworkValue"
+            },
+            "maxItems": 20,
+            "title": "Value",
+            "type": "array"
+          }
+        },
+        "required": [
+          "section",
+          "changed_at",
+          "changed_by",
+          "can_change",
+          "key",
+          "value",
+          "proposal"
+        ],
+        "title": "OfficeNetworksSetting",
         "type": "object"
       },
       "OptionView": {
@@ -11103,6 +12223,83 @@
         "title": "PayOutRequest",
         "type": "object"
       },
+      "PayableAccount": {
+        "additionalProperties": false,
+        "properties": {
+          "bank_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Bank Code"
+          },
+          "holder_name": {
+            "title": "Holder Name",
+            "type": "string"
+          },
+          "id": {
+            "maxLength": 20,
+            "minLength": 20,
+            "pattern": "^[-0-9A-Z_a-z]{20}$",
+            "title": "Id",
+            "type": "string"
+          },
+          "kind": {
+            "title": "Kind",
+            "type": "string"
+          },
+          "masked_account": {
+            "title": "Masked Account",
+            "type": "string"
+          },
+          "network": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Network"
+          }
+        },
+        "required": [
+          "id",
+          "kind",
+          "network",
+          "bank_code",
+          "masked_account",
+          "holder_name"
+        ],
+        "title": "PayableAccount",
+        "type": "object"
+      },
+      "Payday": {
+        "additionalProperties": false,
+        "properties": {
+          "day": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Day"
+          }
+        },
+        "required": [
+          "day"
+        ],
+        "title": "Payday",
+        "type": "object"
+      },
       "PayeeOut": {
         "additionalProperties": false,
         "properties": {
@@ -11159,6 +12356,165 @@
           "tax"
         ],
         "title": "PayeeOut",
+        "type": "object"
+      },
+      "PaymentChannelsProposal": {
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "maxLength": 20,
+            "minLength": 20,
+            "pattern": "^[-0-9A-Z_a-z]{20}$",
+            "title": "Id",
+            "type": "string"
+          },
+          "proposed_at": {
+            "format": "date-time",
+            "title": "Proposed At",
+            "type": "string"
+          },
+          "proposed_by": {
+            "maxLength": 20,
+            "minLength": 20,
+            "pattern": "^[-0-9A-Z_a-z]{20}$",
+            "title": "Proposed By",
+            "type": "string"
+          },
+          "reason": {
+            "title": "Reason",
+            "type": "string"
+          },
+          "value": {
+            "$ref": "#/components/schemas/PaymentChannelsValue"
+          },
+          "yours": {
+            "title": "Yours",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "id",
+          "reason",
+          "proposed_by",
+          "proposed_at",
+          "yours",
+          "value"
+        ],
+        "title": "PaymentChannelsProposal",
+        "type": "object"
+      },
+      "PaymentChannelsSetting": {
+        "additionalProperties": false,
+        "properties": {
+          "can_change": {
+            "title": "Can Change",
+            "type": "boolean"
+          },
+          "changed_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Changed At"
+          },
+          "changed_by": {
+            "anyOf": [
+              {
+                "maxLength": 20,
+                "minLength": 20,
+                "pattern": "^[-0-9A-Z_a-z]{20}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Changed By"
+          },
+          "key": {
+            "const": "payment_channels",
+            "title": "Key",
+            "type": "string"
+          },
+          "proposal": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PaymentChannelsProposal"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "section": {
+            "enum": [
+              "channels",
+              "calendar",
+              "staff_security",
+              "statement_import"
+            ],
+            "title": "Section",
+            "type": "string"
+          },
+          "value": {
+            "$ref": "#/components/schemas/PaymentChannelsValue"
+          }
+        },
+        "required": [
+          "section",
+          "changed_at",
+          "changed_by",
+          "can_change",
+          "key",
+          "value",
+          "proposal"
+        ],
+        "title": "PaymentChannelsSetting",
+        "type": "object"
+      },
+      "PaymentChannelsValue": {
+        "additionalProperties": false,
+        "description": "True where the channel is open. A paused channel refuses new requests only.",
+        "properties": {
+          "airtel_pay_in": {
+            "title": "Airtel Pay In",
+            "type": "boolean"
+          },
+          "airtel_payout": {
+            "title": "Airtel Payout",
+            "type": "boolean"
+          },
+          "bank_pay_in": {
+            "title": "Bank Pay In",
+            "type": "boolean"
+          },
+          "bank_payout": {
+            "title": "Bank Payout",
+            "type": "boolean"
+          },
+          "mtn_pay_in": {
+            "title": "Mtn Pay In",
+            "type": "boolean"
+          },
+          "mtn_payout": {
+            "title": "Mtn Payout",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "mtn_pay_in",
+          "airtel_pay_in",
+          "bank_pay_in",
+          "mtn_payout",
+          "airtel_payout",
+          "bank_payout"
+        ],
+        "title": "PaymentChannelsValue",
         "type": "object"
       },
       "PaymentPage": {
@@ -11556,6 +12912,67 @@
           "expires_at"
         ],
         "title": "PhoneChangeView",
+        "type": "object"
+      },
+      "PhoneName": {
+        "description": "Where the lookup of the client's phone number stands, as staff see it.",
+        "enum": [
+          "checking",
+          "matches",
+          "partly_matches",
+          "different",
+          "no_name",
+          "not_answered"
+        ],
+        "title": "PhoneName",
+        "type": "string"
+      },
+      "PhoneNameOut": {
+        "additionalProperties": false,
+        "properties": {
+          "answered_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Answered At"
+          },
+          "blocks_approval": {
+            "title": "Blocks Approval",
+            "type": "boolean"
+          },
+          "current_number": {
+            "title": "Current Number",
+            "type": "boolean"
+          },
+          "registered_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Registered Name"
+          },
+          "status": {
+            "$ref": "#/components/schemas/PhoneName"
+          }
+        },
+        "required": [
+          "status",
+          "registered_name",
+          "answered_at",
+          "current_number",
+          "blocks_approval"
+        ],
+        "title": "PhoneNameOut",
         "type": "object"
       },
       "PhotoKind": {
@@ -12519,6 +13936,63 @@
         "title": "ProposalView",
         "type": "object"
       },
+      "ProposeAction": {
+        "additionalProperties": false,
+        "properties": {
+          "kind": {
+            "enum": [
+              "pin_reset",
+              "withdrawal_limits",
+              "statement",
+              "withdrawal"
+            ],
+            "title": "Kind",
+            "type": "string"
+          },
+          "limits": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/LimitsIn"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "reason": {
+            "maxLength": 500,
+            "minLength": 1,
+            "title": "Reason",
+            "type": "string"
+          },
+          "statement": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/StatementPeriod"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "withdrawal": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/WithdrawalIn"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "kind",
+          "reason"
+        ],
+        "title": "ProposeAction",
+        "type": "object"
+      },
       "ProposeAnnouncement": {
         "additionalProperties": false,
         "properties": {
@@ -12567,6 +14041,34 @@
           "reason"
         ],
         "title": "ProposeBankAccount",
+        "type": "object"
+      },
+      "ProposeBankPayoutCutoff": {
+        "additionalProperties": false,
+        "properties": {
+          "key": {
+            "const": "bank_payout_cutoff",
+            "title": "Key",
+            "type": "string"
+          },
+          "reason": {
+            "maxLength": 500,
+            "minLength": 1,
+            "title": "Reason",
+            "type": "string"
+          },
+          "value": {
+            "pattern": "^\\d{2}:\\d{2}$",
+            "title": "Value",
+            "type": "string"
+          }
+        },
+        "required": [
+          "key",
+          "value",
+          "reason"
+        ],
+        "title": "ProposeBankPayoutCutoff",
         "type": "object"
       },
       "ProposeChange": {
@@ -12761,6 +14263,87 @@
         "title": "ProposeLift",
         "type": "object"
       },
+      "ProposeLimits": {
+        "additionalProperties": false,
+        "properties": {
+          "bank_per_day_minor": {
+            "anyOf": [
+              {
+                "maximum": 10000000000.0,
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Bank Per Day Minor"
+          },
+          "bank_per_payout_minor": {
+            "anyOf": [
+              {
+                "maximum": 10000000000.0,
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Bank Per Payout Minor"
+          },
+          "effective_from": {
+            "format": "date",
+            "title": "Effective From",
+            "type": "string"
+          },
+          "mobile_money_per_day_minor": {
+            "anyOf": [
+              {
+                "maximum": 10000000000.0,
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Mobile Money Per Day Minor"
+          },
+          "mobile_money_per_payout_minor": {
+            "maximum": 5000000.0,
+            "minimum": 1.0,
+            "title": "Mobile Money Per Payout Minor",
+            "type": "integer"
+          },
+          "reason": {
+            "maxLength": 500,
+            "minLength": 1,
+            "title": "Reason",
+            "type": "string"
+          },
+          "review_above_minor": {
+            "anyOf": [
+              {
+                "maximum": 10000000000.0,
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Review Above Minor"
+          }
+        },
+        "required": [
+          "effective_from",
+          "mobile_money_per_payout_minor",
+          "reason"
+        ],
+        "title": "ProposeLimits",
+        "type": "object"
+      },
       "ProposeLock": {
         "additionalProperties": false,
         "properties": {
@@ -12784,6 +14367,70 @@
           "reason"
         ],
         "title": "ProposeLock",
+        "type": "object"
+      },
+      "ProposeMaturityReminders": {
+        "additionalProperties": false,
+        "properties": {
+          "key": {
+            "const": "maturity_reminders",
+            "title": "Key",
+            "type": "string"
+          },
+          "reason": {
+            "maxLength": 500,
+            "minLength": 1,
+            "title": "Reason",
+            "type": "string"
+          },
+          "value": {
+            "items": {
+              "maximum": 30.0,
+              "minimum": 1.0,
+              "type": "integer"
+            },
+            "maxItems": 3,
+            "title": "Value",
+            "type": "array"
+          }
+        },
+        "required": [
+          "key",
+          "value",
+          "reason"
+        ],
+        "title": "ProposeMaturityReminders",
+        "type": "object"
+      },
+      "ProposeOfficeNetworks": {
+        "additionalProperties": false,
+        "properties": {
+          "key": {
+            "const": "office_networks",
+            "title": "Key",
+            "type": "string"
+          },
+          "reason": {
+            "maxLength": 500,
+            "minLength": 1,
+            "title": "Reason",
+            "type": "string"
+          },
+          "value": {
+            "items": {
+              "$ref": "#/components/schemas/OfficeNetworkValue"
+            },
+            "maxItems": 20,
+            "title": "Value",
+            "type": "array"
+          }
+        },
+        "required": [
+          "key",
+          "value",
+          "reason"
+        ],
+        "title": "ProposeOfficeNetworks",
         "type": "object"
       },
       "ProposeOutcome": {
@@ -12817,6 +14464,32 @@
         "title": "ProposeOutcome",
         "type": "object"
       },
+      "ProposePaymentChannels": {
+        "additionalProperties": false,
+        "properties": {
+          "key": {
+            "const": "payment_channels",
+            "title": "Key",
+            "type": "string"
+          },
+          "reason": {
+            "maxLength": 500,
+            "minLength": 1,
+            "title": "Reason",
+            "type": "string"
+          },
+          "value": {
+            "$ref": "#/components/schemas/PaymentChannelsValue"
+          }
+        },
+        "required": [
+          "key",
+          "value",
+          "reason"
+        ],
+        "title": "ProposePaymentChannels",
+        "type": "object"
+      },
       "ProposePhone": {
         "additionalProperties": false,
         "properties": {
@@ -12838,6 +14511,97 @@
           "reason"
         ],
         "title": "ProposePhone",
+        "type": "object"
+      },
+      "ProposePublicHolidays": {
+        "additionalProperties": false,
+        "properties": {
+          "key": {
+            "const": "public_holidays",
+            "title": "Key",
+            "type": "string"
+          },
+          "reason": {
+            "maxLength": 500,
+            "minLength": 1,
+            "title": "Reason",
+            "type": "string"
+          },
+          "value": {
+            "items": {
+              "$ref": "#/components/schemas/HolidayValue"
+            },
+            "maxItems": 60,
+            "title": "Value",
+            "type": "array"
+          }
+        },
+        "required": [
+          "key",
+          "value",
+          "reason"
+        ],
+        "title": "ProposePublicHolidays",
+        "type": "object"
+      },
+      "ProposeStaffIdleMinutes": {
+        "additionalProperties": false,
+        "properties": {
+          "key": {
+            "const": "staff_idle_minutes",
+            "title": "Key",
+            "type": "string"
+          },
+          "reason": {
+            "maxLength": 500,
+            "minLength": 1,
+            "title": "Reason",
+            "type": "string"
+          },
+          "value": {
+            "maximum": 240.0,
+            "minimum": 5.0,
+            "title": "Value",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "key",
+          "value",
+          "reason"
+        ],
+        "title": "ProposeStaffIdleMinutes",
+        "type": "object"
+      },
+      "ProposeStatementLayouts": {
+        "additionalProperties": false,
+        "properties": {
+          "key": {
+            "const": "statement_layouts",
+            "title": "Key",
+            "type": "string"
+          },
+          "reason": {
+            "maxLength": 500,
+            "minLength": 1,
+            "title": "Reason",
+            "type": "string"
+          },
+          "value": {
+            "items": {
+              "$ref": "#/components/schemas/StatementLayoutValue"
+            },
+            "maxItems": 10,
+            "title": "Value",
+            "type": "array"
+          }
+        },
+        "required": [
+          "key",
+          "value",
+          "reason"
+        ],
+        "title": "ProposeStatementLayouts",
         "type": "object"
       },
       "ProposeWording": {
@@ -12875,6 +14639,135 @@
           "id"
         ],
         "title": "Proposed",
+        "type": "object"
+      },
+      "PublicHolidaysProposal": {
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "maxLength": 20,
+            "minLength": 20,
+            "pattern": "^[-0-9A-Z_a-z]{20}$",
+            "title": "Id",
+            "type": "string"
+          },
+          "proposed_at": {
+            "format": "date-time",
+            "title": "Proposed At",
+            "type": "string"
+          },
+          "proposed_by": {
+            "maxLength": 20,
+            "minLength": 20,
+            "pattern": "^[-0-9A-Z_a-z]{20}$",
+            "title": "Proposed By",
+            "type": "string"
+          },
+          "reason": {
+            "title": "Reason",
+            "type": "string"
+          },
+          "value": {
+            "items": {
+              "$ref": "#/components/schemas/HolidayValue"
+            },
+            "maxItems": 60,
+            "title": "Value",
+            "type": "array"
+          },
+          "yours": {
+            "title": "Yours",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "id",
+          "reason",
+          "proposed_by",
+          "proposed_at",
+          "yours",
+          "value"
+        ],
+        "title": "PublicHolidaysProposal",
+        "type": "object"
+      },
+      "PublicHolidaysSetting": {
+        "additionalProperties": false,
+        "properties": {
+          "can_change": {
+            "title": "Can Change",
+            "type": "boolean"
+          },
+          "changed_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Changed At"
+          },
+          "changed_by": {
+            "anyOf": [
+              {
+                "maxLength": 20,
+                "minLength": 20,
+                "pattern": "^[-0-9A-Z_a-z]{20}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Changed By"
+          },
+          "key": {
+            "const": "public_holidays",
+            "title": "Key",
+            "type": "string"
+          },
+          "proposal": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PublicHolidaysProposal"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "section": {
+            "enum": [
+              "channels",
+              "calendar",
+              "staff_security",
+              "statement_import"
+            ],
+            "title": "Section",
+            "type": "string"
+          },
+          "value": {
+            "items": {
+              "$ref": "#/components/schemas/HolidayValue"
+            },
+            "maxItems": 60,
+            "title": "Value",
+            "type": "array"
+          }
+        },
+        "required": [
+          "section",
+          "changed_at",
+          "changed_by",
+          "can_change",
+          "key",
+          "value",
+          "proposal"
+        ],
+        "title": "PublicHolidaysSetting",
         "type": "object"
       },
       "PublicProducts": {
@@ -15561,6 +17454,11 @@
                 "wordings.change",
                 "bank_accounts.change",
                 "email_suppressions.lift",
+                "payment_channels.change",
+                "withdrawal_limits.change",
+                "calendar.change",
+                "staff_security.change",
+                "statement_layouts.change",
                 "announcements.send",
                 "account_codes.change",
                 "migration.view",
@@ -15573,7 +17471,12 @@
                 "client_phones.change",
                 "investment_corrections.change",
                 "investment_transfers.change",
-                "organisations.review"
+                "organisations.review",
+                "client_notes.write",
+                "client_pins.reset",
+                "client_limits.change",
+                "client_statements.send",
+                "client_withdrawals.start"
               ],
               "type": "string"
             },
@@ -16514,6 +18417,21 @@
             ],
             "title": "Message"
           },
+          "purpose": {
+            "$ref": "#/components/schemas/TransferPurpose"
+          },
+          "purpose_note": {
+            "anyOf": [
+              {
+                "maxLength": 140,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Purpose Note"
+          },
           "to_account_number": {
             "maxLength": 16,
             "minLength": 10,
@@ -16529,7 +18447,8 @@
         "required": [
           "to_account_number",
           "amount_minor",
-          "currency"
+          "currency",
+          "purpose"
         ],
         "title": "SendRequest",
         "type": "object"
@@ -16593,6 +18512,136 @@
           "topic"
         ],
         "title": "SetTopic",
+        "type": "object"
+      },
+      "SettingProposalOut": {
+        "additionalProperties": false,
+        "properties": {
+          "key": {
+            "enum": [
+              "payment_channels",
+              "public_holidays",
+              "bank_payout_cutoff",
+              "maturity_reminders",
+              "staff_idle_minutes",
+              "office_networks",
+              "statement_layouts"
+            ],
+            "title": "Key",
+            "type": "string"
+          },
+          "proposal": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PaymentChannelsProposal"
+              },
+              {
+                "$ref": "#/components/schemas/PublicHolidaysProposal"
+              },
+              {
+                "$ref": "#/components/schemas/BankPayoutCutoffProposal"
+              },
+              {
+                "$ref": "#/components/schemas/MaturityRemindersProposal"
+              },
+              {
+                "$ref": "#/components/schemas/StaffIdleMinutesProposal"
+              },
+              {
+                "$ref": "#/components/schemas/OfficeNetworksProposal"
+              },
+              {
+                "$ref": "#/components/schemas/StatementLayoutsProposal"
+              }
+            ],
+            "title": "Proposal"
+          }
+        },
+        "required": [
+          "key",
+          "proposal"
+        ],
+        "title": "SettingProposalOut",
+        "type": "object"
+      },
+      "SettingsList": {
+        "additionalProperties": false,
+        "properties": {
+          "date_formats": {
+            "items": {
+              "enum": [
+                "YYYY-MM-DD",
+                "DD/MM/YYYY",
+                "DD-MM-YYYY",
+                "DD.MM.YYYY",
+                "MM/DD/YYYY",
+                "DD MMM YYYY",
+                "DD-MMM-YYYY"
+              ],
+              "type": "string"
+            },
+            "title": "Date Formats",
+            "type": "array"
+          },
+          "settings": {
+            "items": {
+              "discriminator": {
+                "mapping": {
+                  "bank_payout_cutoff": "#/components/schemas/BankPayoutCutoffSetting",
+                  "maturity_reminders": "#/components/schemas/MaturityRemindersSetting",
+                  "office_networks": "#/components/schemas/OfficeNetworksSetting",
+                  "payment_channels": "#/components/schemas/PaymentChannelsSetting",
+                  "public_holidays": "#/components/schemas/PublicHolidaysSetting",
+                  "staff_idle_minutes": "#/components/schemas/StaffIdleMinutesSetting",
+                  "statement_layouts": "#/components/schemas/StatementLayoutsSetting"
+                },
+                "propertyName": "key"
+              },
+              "oneOf": [
+                {
+                  "$ref": "#/components/schemas/PaymentChannelsSetting"
+                },
+                {
+                  "$ref": "#/components/schemas/PublicHolidaysSetting"
+                },
+                {
+                  "$ref": "#/components/schemas/BankPayoutCutoffSetting"
+                },
+                {
+                  "$ref": "#/components/schemas/MaturityRemindersSetting"
+                },
+                {
+                  "$ref": "#/components/schemas/StaffIdleMinutesSetting"
+                },
+                {
+                  "$ref": "#/components/schemas/OfficeNetworksSetting"
+                },
+                {
+                  "$ref": "#/components/schemas/StatementLayoutsSetting"
+                }
+              ]
+            },
+            "title": "Settings",
+            "type": "array"
+          },
+          "your_address": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Your Address"
+          }
+        },
+        "required": [
+          "settings",
+          "your_address",
+          "date_formats"
+        ],
+        "title": "SettingsList",
         "type": "object"
       },
       "SettledPayoutOut": {
@@ -17325,6 +19374,16 @@
             ],
             "title": "Name"
           },
+          "phone_name": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PhoneNameOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "photos": {
             "items": {
               "$ref": "#/components/schemas/StaffPhoto"
@@ -17405,7 +19464,8 @@
           "decided_at",
           "carried_over",
           "allowed",
-          "screening"
+          "screening",
+          "phone_name"
         ],
         "title": "StaffCheck",
         "type": "object"
@@ -18601,6 +20661,131 @@
         "title": "StaffGroupView",
         "type": "object"
       },
+      "StaffIdleMinutesProposal": {
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "maxLength": 20,
+            "minLength": 20,
+            "pattern": "^[-0-9A-Z_a-z]{20}$",
+            "title": "Id",
+            "type": "string"
+          },
+          "proposed_at": {
+            "format": "date-time",
+            "title": "Proposed At",
+            "type": "string"
+          },
+          "proposed_by": {
+            "maxLength": 20,
+            "minLength": 20,
+            "pattern": "^[-0-9A-Z_a-z]{20}$",
+            "title": "Proposed By",
+            "type": "string"
+          },
+          "reason": {
+            "title": "Reason",
+            "type": "string"
+          },
+          "value": {
+            "maximum": 240.0,
+            "minimum": 5.0,
+            "title": "Value",
+            "type": "integer"
+          },
+          "yours": {
+            "title": "Yours",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "id",
+          "reason",
+          "proposed_by",
+          "proposed_at",
+          "yours",
+          "value"
+        ],
+        "title": "StaffIdleMinutesProposal",
+        "type": "object"
+      },
+      "StaffIdleMinutesSetting": {
+        "additionalProperties": false,
+        "properties": {
+          "can_change": {
+            "title": "Can Change",
+            "type": "boolean"
+          },
+          "changed_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Changed At"
+          },
+          "changed_by": {
+            "anyOf": [
+              {
+                "maxLength": 20,
+                "minLength": 20,
+                "pattern": "^[-0-9A-Z_a-z]{20}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Changed By"
+          },
+          "key": {
+            "const": "staff_idle_minutes",
+            "title": "Key",
+            "type": "string"
+          },
+          "proposal": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/StaffIdleMinutesProposal"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "section": {
+            "enum": [
+              "channels",
+              "calendar",
+              "staff_security",
+              "statement_import"
+            ],
+            "title": "Section",
+            "type": "string"
+          },
+          "value": {
+            "maximum": 240.0,
+            "minimum": 5.0,
+            "title": "Value",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "section",
+          "changed_at",
+          "changed_by",
+          "can_change",
+          "key",
+          "value",
+          "proposal"
+        ],
+        "title": "StaffIdleMinutesSetting",
+        "type": "object"
+      },
       "StaffInvestmentOut": {
         "additionalProperties": false,
         "properties": {
@@ -19649,6 +21834,11 @@
                 "wordings.change",
                 "bank_accounts.change",
                 "email_suppressions.lift",
+                "payment_channels.change",
+                "withdrawal_limits.change",
+                "calendar.change",
+                "staff_security.change",
+                "statement_layouts.change",
                 "announcements.send",
                 "account_codes.change",
                 "migration.view",
@@ -19661,7 +21851,12 @@
                 "client_phones.change",
                 "investment_corrections.change",
                 "investment_transfers.change",
-                "organisations.review"
+                "organisations.review",
+                "client_notes.write",
+                "client_pins.reset",
+                "client_limits.change",
+                "client_statements.send",
+                "client_withdrawals.start"
               ],
               "type": "string"
             },
@@ -19918,6 +22113,27 @@
             ],
             "title": "Message"
           },
+          "purpose": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/TransferPurpose"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "purpose_note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Purpose Note"
+          },
           "received_investment_id": {
             "anyOf": [
               {
@@ -20052,6 +22268,8 @@
           "currency",
           "whole",
           "message",
+          "purpose",
+          "purpose_note",
           "status",
           "held",
           "held_for",
@@ -20226,6 +22444,318 @@
         "title": "StandingView",
         "type": "object"
       },
+      "StatementFormatOut": {
+        "additionalProperties": false,
+        "properties": {
+          "built_in": {
+            "title": "Built In",
+            "type": "boolean"
+          },
+          "label": {
+            "title": "Label",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "label",
+          "built_in"
+        ],
+        "title": "StatementFormatOut",
+        "type": "object"
+      },
+      "StatementFormatsOut": {
+        "additionalProperties": false,
+        "properties": {
+          "formats": {
+            "items": {
+              "$ref": "#/components/schemas/StatementFormatOut"
+            },
+            "title": "Formats",
+            "type": "array"
+          }
+        },
+        "required": [
+          "formats"
+        ],
+        "title": "StatementFormatsOut",
+        "type": "object"
+      },
+      "StatementLayoutValue": {
+        "additionalProperties": false,
+        "description": "One provider's export. Give money_in and money_out, or amount, direction and its words.",
+        "properties": {
+          "amount": {
+            "anyOf": [
+              {
+                "maxLength": 60,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Amount"
+          },
+          "date_column": {
+            "maxLength": 60,
+            "minLength": 1,
+            "title": "Date Column",
+            "type": "string"
+          },
+          "date_format": {
+            "enum": [
+              "YYYY-MM-DD",
+              "DD/MM/YYYY",
+              "DD-MM-YYYY",
+              "DD.MM.YYYY",
+              "MM/DD/YYYY",
+              "DD MMM YYYY",
+              "DD-MMM-YYYY"
+            ],
+            "title": "Date Format",
+            "type": "string"
+          },
+          "direction": {
+            "anyOf": [
+              {
+                "maxLength": 60,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Direction"
+          },
+          "in_word": {
+            "anyOf": [
+              {
+                "maxLength": 60,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "In Word"
+          },
+          "label": {
+            "maxLength": 80,
+            "minLength": 1,
+            "title": "Label",
+            "type": "string"
+          },
+          "money_in": {
+            "anyOf": [
+              {
+                "maxLength": 60,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Money In"
+          },
+          "money_out": {
+            "anyOf": [
+              {
+                "maxLength": 60,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Money Out"
+          },
+          "name": {
+            "pattern": "^[a-z][a-z0-9_]{1,39}$",
+            "title": "Name",
+            "type": "string"
+          },
+          "narrative": {
+            "maxLength": 60,
+            "minLength": 1,
+            "title": "Narrative",
+            "type": "string"
+          },
+          "out_word": {
+            "anyOf": [
+              {
+                "maxLength": 60,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Out Word"
+          },
+          "reference": {
+            "anyOf": [
+              {
+                "maxLength": 60,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reference"
+          }
+        },
+        "required": [
+          "name",
+          "label",
+          "date_column",
+          "date_format",
+          "narrative"
+        ],
+        "title": "StatementLayoutValue",
+        "type": "object"
+      },
+      "StatementLayoutsProposal": {
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "maxLength": 20,
+            "minLength": 20,
+            "pattern": "^[-0-9A-Z_a-z]{20}$",
+            "title": "Id",
+            "type": "string"
+          },
+          "proposed_at": {
+            "format": "date-time",
+            "title": "Proposed At",
+            "type": "string"
+          },
+          "proposed_by": {
+            "maxLength": 20,
+            "minLength": 20,
+            "pattern": "^[-0-9A-Z_a-z]{20}$",
+            "title": "Proposed By",
+            "type": "string"
+          },
+          "reason": {
+            "title": "Reason",
+            "type": "string"
+          },
+          "value": {
+            "items": {
+              "$ref": "#/components/schemas/StatementLayoutValue"
+            },
+            "maxItems": 10,
+            "title": "Value",
+            "type": "array"
+          },
+          "yours": {
+            "title": "Yours",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "id",
+          "reason",
+          "proposed_by",
+          "proposed_at",
+          "yours",
+          "value"
+        ],
+        "title": "StatementLayoutsProposal",
+        "type": "object"
+      },
+      "StatementLayoutsSetting": {
+        "additionalProperties": false,
+        "properties": {
+          "can_change": {
+            "title": "Can Change",
+            "type": "boolean"
+          },
+          "changed_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Changed At"
+          },
+          "changed_by": {
+            "anyOf": [
+              {
+                "maxLength": 20,
+                "minLength": 20,
+                "pattern": "^[-0-9A-Z_a-z]{20}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Changed By"
+          },
+          "key": {
+            "const": "statement_layouts",
+            "title": "Key",
+            "type": "string"
+          },
+          "proposal": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/StatementLayoutsProposal"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "section": {
+            "enum": [
+              "channels",
+              "calendar",
+              "staff_security",
+              "statement_import"
+            ],
+            "title": "Section",
+            "type": "string"
+          },
+          "value": {
+            "items": {
+              "$ref": "#/components/schemas/StatementLayoutValue"
+            },
+            "maxItems": 10,
+            "title": "Value",
+            "type": "array"
+          }
+        },
+        "required": [
+          "section",
+          "changed_at",
+          "changed_by",
+          "can_change",
+          "key",
+          "value",
+          "proposal"
+        ],
+        "title": "StatementLayoutsSetting",
+        "type": "object"
+      },
       "StatementLineOut": {
         "additionalProperties": false,
         "properties": {
@@ -20316,6 +22846,28 @@
           "line_count"
         ],
         "title": "StatementOut",
+        "type": "object"
+      },
+      "StatementPeriod": {
+        "additionalProperties": false,
+        "description": "The days a statement covers, both included, as on a client's own request.",
+        "properties": {
+          "date_from": {
+            "format": "date",
+            "title": "Date From",
+            "type": "string"
+          },
+          "date_to": {
+            "format": "date",
+            "title": "Date To",
+            "type": "string"
+          }
+        },
+        "required": [
+          "date_from",
+          "date_to"
+        ],
+        "title": "StatementPeriod",
         "type": "object"
       },
       "StatementRequest": {
@@ -21452,6 +24004,18 @@
         "title": "TransferOut",
         "type": "object"
       },
+      "TransferPurpose": {
+        "description": "Why the sender sends it, picked from a short list, kept for anti money laundering.",
+        "enum": [
+          "family_support",
+          "gift",
+          "loan_repayment",
+          "business",
+          "other"
+        ],
+        "title": "TransferPurpose",
+        "type": "string"
+      },
       "TransferStatus": {
         "enum": [
           "waiting",
@@ -21921,6 +24485,124 @@
         "title": "WeekOut",
         "type": "object"
       },
+      "WithdrawableInvestment": {
+        "additionalProperties": false,
+        "properties": {
+          "currency": {
+            "title": "Currency",
+            "type": "string"
+          },
+          "id": {
+            "maxLength": 20,
+            "minLength": 20,
+            "pattern": "^[-0-9A-Z_a-z]{20}$",
+            "title": "Id",
+            "type": "string"
+          },
+          "maturity_date": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Maturity Date"
+          },
+          "product_name": {
+            "title": "Product Name",
+            "type": "string"
+          },
+          "value_minor": {
+            "title": "Value Minor",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "product_name",
+          "value_minor",
+          "currency",
+          "maturity_date"
+        ],
+        "title": "WithdrawableInvestment",
+        "type": "object"
+      },
+      "WithdrawalIn": {
+        "additionalProperties": false,
+        "description": "An early withdrawal for the client, from their own written request in help chat.",
+        "properties": {
+          "destination_id": {
+            "maxLength": 20,
+            "minLength": 20,
+            "pattern": "^[-0-9A-Z_a-z]{20}$",
+            "title": "Destination Id",
+            "type": "string"
+          },
+          "investment_id": {
+            "maxLength": 20,
+            "minLength": 20,
+            "pattern": "^[-0-9A-Z_a-z]{20}$",
+            "title": "Investment Id",
+            "type": "string"
+          },
+          "message_id": {
+            "maxLength": 20,
+            "minLength": 20,
+            "pattern": "^[-0-9A-Z_a-z]{20}$",
+            "title": "Message Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "investment_id",
+          "destination_id",
+          "message_id"
+        ],
+        "title": "WithdrawalIn",
+        "type": "object"
+      },
+      "WithdrawalOptions": {
+        "additionalProperties": false,
+        "description": "What a staff withdrawal for the client can name today.",
+        "properties": {
+          "accounts": {
+            "items": {
+              "$ref": "#/components/schemas/PayableAccount"
+            },
+            "title": "Accounts",
+            "type": "array"
+          },
+          "investments": {
+            "items": {
+              "$ref": "#/components/schemas/WithdrawableInvestment"
+            },
+            "title": "Investments",
+            "type": "array"
+          },
+          "open": {
+            "title": "Open",
+            "type": "boolean"
+          },
+          "requests": {
+            "items": {
+              "$ref": "#/components/schemas/ClientRequest"
+            },
+            "title": "Requests",
+            "type": "array"
+          }
+        },
+        "required": [
+          "investments",
+          "accounts",
+          "requests",
+          "open"
+        ],
+        "title": "WithdrawalOptions",
+        "type": "object"
+      },
       "WithdrawalRequest": {
         "additionalProperties": false,
         "properties": {
@@ -22088,6 +24770,22 @@
         "title": "WordingView",
         "type": "object"
       },
+      "WriteNote": {
+        "additionalProperties": false,
+        "properties": {
+          "body": {
+            "maxLength": 1000,
+            "minLength": 1,
+            "title": "Body",
+            "type": "string"
+          }
+        },
+        "required": [
+          "body"
+        ],
+        "title": "WriteNote",
+        "type": "object"
+      },
       "app__modules__autoinvest__api__PlanView": {
         "additionalProperties": false,
         "properties": {
@@ -22229,6 +24927,76 @@
         "title": "AmountView",
         "type": "object"
       },
+      "app__modules__console__actions_api__LimitsView": {
+        "additionalProperties": false,
+        "description": "Withdrawal limits in whole shillings (UGX). Null is no limit of that sort.",
+        "properties": {
+          "bank_per_day": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Bank Per Day"
+          },
+          "bank_per_payout": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Bank Per Payout"
+          },
+          "mobile_money_per_day": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Mobile Money Per Day"
+          },
+          "mobile_money_per_payout": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Mobile Money Per Payout"
+          },
+          "review_above": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Review Above"
+          }
+        },
+        "required": [
+          "mobile_money_per_payout",
+          "mobile_money_per_day",
+          "bank_per_payout",
+          "bank_per_day",
+          "review_above"
+        ],
+        "title": "LimitsView",
+        "type": "object"
+      },
       "app__modules__console__api__ComplaintSummary": {
         "additionalProperties": false,
         "properties": {
@@ -22281,6 +25049,41 @@
           "overdue"
         ],
         "title": "ComplaintSummary",
+        "type": "object"
+      },
+      "app__modules__console__api__FreezeView": {
+        "additionalProperties": false,
+        "properties": {
+          "frozen_at": {
+            "format": "date-time",
+            "title": "Frozen At",
+            "type": "string"
+          },
+          "id": {
+            "maxLength": 20,
+            "minLength": 20,
+            "pattern": "^[-0-9A-Z_a-z]{20}$",
+            "title": "Id",
+            "type": "string"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason"
+          }
+        },
+        "required": [
+          "id",
+          "frozen_at",
+          "reason"
+        ],
+        "title": "FreezeView",
         "type": "object"
       },
       "app__modules__dealing__api__PositionOut": {
@@ -22533,6 +25336,21 @@
         "title": "PlanView",
         "type": "object"
       },
+      "app__modules__identity__freeze_api__FreezeView": {
+        "additionalProperties": false,
+        "properties": {
+          "frozen_at": {
+            "format": "date-time",
+            "title": "Frozen At",
+            "type": "string"
+          }
+        },
+        "required": [
+          "frozen_at"
+        ],
+        "title": "FreezeView",
+        "type": "object"
+      },
       "app__modules__identity__people_api__PersonView": {
         "additionalProperties": false,
         "properties": {
@@ -22752,6 +25570,81 @@
           "statement_line_id"
         ],
         "title": "MatchIn",
+        "type": "object"
+      },
+      "app__modules__payouts__limits_api__LimitsView": {
+        "additionalProperties": false,
+        "description": "One version, in shillings. A limit that is None is not set.",
+        "properties": {
+          "bank_per_day_minor": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Bank Per Day Minor"
+          },
+          "bank_per_payout_minor": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Bank Per Payout Minor"
+          },
+          "currency": {
+            "const": "UGX",
+            "title": "Currency",
+            "type": "string"
+          },
+          "effective_from": {
+            "format": "date",
+            "title": "Effective From",
+            "type": "string"
+          },
+          "mobile_money_per_day_minor": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Mobile Money Per Day Minor"
+          },
+          "mobile_money_per_payout_minor": {
+            "title": "Mobile Money Per Payout Minor",
+            "type": "integer"
+          },
+          "review_above_minor": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Review Above Minor"
+          }
+        },
+        "required": [
+          "effective_from",
+          "currency",
+          "mobile_money_per_payout_minor",
+          "mobile_money_per_day_minor",
+          "bank_per_payout_minor",
+          "bank_per_day_minor",
+          "review_above_minor"
+        ],
+        "title": "LimitsView",
         "type": "object"
       },
       "app__modules__reconciliation__api__MatchIn": {
@@ -23397,6 +26290,68 @@
         "summary": "Cancel Closure",
         "tags": [
           "account closure"
+        ]
+      }
+    },
+    "/client/account-freeze": {
+      "post": {
+        "description": "Lock the account now and end every session, this one included.\n\nTo unfreeze, the client contacts support and two members of staff unlock it.",
+        "operationId": "freeze_account_client_account_freeze_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FreezeBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/app__modules__identity__freeze_api__FreezeView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          }
+        },
+        "summary": "Freeze Account",
+        "tags": [
+          "account freeze"
         ]
       }
     },
@@ -27510,6 +30465,188 @@
         ]
       }
     },
+    "/client/goals/{goal_id}/lock": {
+      "post": {
+        "description": "Lock the goal's savings until its date: none is taken out early or sent on before.",
+        "operationId": "lock_goal_client_goals__goal_id__lock_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "goal_id",
+            "required": true,
+            "schema": {
+              "maxLength": 20,
+              "minLength": 20,
+              "pattern": "^[-0-9A-Z_a-z]{20}$",
+              "title": "Goal Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GoalView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          }
+        },
+        "summary": "Lock Goal",
+        "tags": [
+          "goals"
+        ]
+      }
+    },
+    "/client/goals/{goal_id}/payday": {
+      "put": {
+        "description": "Name the day the client is paid, so they are nudged to save that morning.",
+        "operationId": "set_payday_client_goals__goal_id__payday_put",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "goal_id",
+            "required": true,
+            "schema": {
+              "maxLength": 20,
+              "minLength": 20,
+              "pattern": "^[-0-9A-Z_a-z]{20}$",
+              "title": "Goal Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Payday"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GoalView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          }
+        },
+        "summary": "Set Payday",
+        "tags": [
+          "goals"
+        ]
+      }
+    },
     "/client/goals/{goal_id}/saving-rule": {
       "post": {
         "description": "Save the amount towards the goal on that day of every month, by itself.\n\nOn each day the client's own number gets a mobile money prompt for the amount, which they\napprove as for any payment. 409 if the goal already has a rule or is closed. Answers with\nthe goal, which carries the rule.",
@@ -27819,6 +30956,92 @@
           }
         },
         "summary": "Save To Goal",
+        "tags": [
+          "goals"
+        ]
+      }
+    },
+    "/client/goals/{goal_id}/unlock": {
+      "post": {
+        "description": "Ask to unlock the goal. Its savings are free seven days from today.",
+        "operationId": "unlock_goal_client_goals__goal_id__unlock_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "goal_id",
+            "required": true,
+            "schema": {
+              "maxLength": 20,
+              "minLength": 20,
+              "pattern": "^[-0-9A-Z_a-z]{20}$",
+              "title": "Goal Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GoalView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          }
+        },
+        "summary": "Unlock Goal",
         "tags": [
           "goals"
         ]
@@ -29405,7 +32628,7 @@
     },
     "/client/investments/{investment_id}/send": {
       "post": {
-        "description": "Send part or all of a running investment to another client. Nothing is cashed out.\n\n422 on `amount_minor` with `below_product_minimum`, `more_than_investment_value`,\n`remainder_below_product_minimum`, `currency_not_the_investments` or `matures_today`; on\n`to` with `no_such_client` or `to_yourself`. 409 when the investment is not running, an\nearly withdrawal was asked for, or a transfer of it is already open. 403 with\n`restricted_after_code_sign_in` for a day after signing in with a code or a password reset.",
+        "description": "Send part or all of a running investment to another client. Nothing is cashed out.\n\n422 on `amount_minor` with `below_product_minimum`, `more_than_investment_value`,\n`remainder_below_product_minimum`, `currency_not_the_investments` or `matures_today`; on\n`to` with `no_such_client` or `to_yourself`; on `purpose_note` with `required` (for\n`other`), `only_for_other` or `too_long`. 409 when the investment is not running, an early\nwithdrawal was asked for, or a transfer of it is already open. 403 with\n`restricted_after_code_sign_in` for a day after signing in with a code or a password reset.",
         "operationId": "send_investment_client_investments__investment_id__send_post",
         "parameters": [
           {
@@ -37486,6 +40709,120 @@
         ]
       }
     },
+    "/staff/clients/actions/{action_id}/decision": {
+      "post": {
+        "description": "Approve or reject someone else's proposal, or withdraw your own.",
+        "operationId": "decide_action_staff_clients_actions__action_id__decision_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "action_id",
+            "required": true,
+            "schema": {
+              "maxLength": 20,
+              "minLength": 20,
+              "pattern": "^[-0-9A-Z_a-z]{20}$",
+              "title": "Action Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "A value the caller chooses once per intended action and sends again on every retry of it. Pattern: `[A-Za-z0-9._:-]{8,128}`.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "A value the caller chooses once per intended action and sends again on every retry of it. Pattern: `[A-Za-z0-9._:-]{8,128}`.",
+              "title": "Idempotency-Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DecideAction"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ActionView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          }
+        },
+        "summary": "Decide Action",
+        "tags": [
+          "staff clients"
+        ]
+      }
+    },
     "/staff/clients/cards": {
       "get": {
         "description": "Who these clients are, by ID: name once verified, account number, status and when they\njoined. For screens that list clients by ID, so they need not read each whole page.",
@@ -37844,6 +41181,290 @@
         ]
       }
     },
+    "/staff/clients/{client_id}/actions": {
+      "get": {
+        "description": "Every action proposed for the client, newest first, and what the reader may do.",
+        "operationId": "client_actions_staff_clients__client_id__actions_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "client_id",
+            "required": true,
+            "schema": {
+              "maxLength": 20,
+              "minLength": 20,
+              "pattern": "^[-0-9A-Z_a-z]{20}$",
+              "title": "Client Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ActionsView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          }
+        },
+        "summary": "Client Actions",
+        "tags": [
+          "staff clients"
+        ]
+      },
+      "post": {
+        "description": "Ask to act for the client. A different member of staff decides.",
+        "operationId": "propose_action_staff_clients__client_id__actions_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "client_id",
+            "required": true,
+            "schema": {
+              "maxLength": 20,
+              "minLength": 20,
+              "pattern": "^[-0-9A-Z_a-z]{20}$",
+              "title": "Client Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "A value the caller chooses once per intended action and sends again on every retry of it. Pattern: `[A-Za-z0-9._:-]{8,128}`.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "A value the caller chooses once per intended action and sends again on every retry of it. Pattern: `[A-Za-z0-9._:-]{8,128}`.",
+              "title": "Idempotency-Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ProposeAction"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ActionView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          }
+        },
+        "summary": "Propose Action",
+        "tags": [
+          "staff clients"
+        ]
+      }
+    },
+    "/staff/clients/{client_id}/limits": {
+      "get": {
+        "description": "The withdrawal limits that apply to the client today, and staff's own for them.",
+        "operationId": "client_withdrawal_limits_staff_clients__client_id__limits_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "client_id",
+            "required": true,
+            "schema": {
+              "maxLength": 20,
+              "minLength": 20,
+              "pattern": "^[-0-9A-Z_a-z]{20}$",
+              "title": "Client Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ClientLimitsView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          }
+        },
+        "summary": "Client Withdrawal Limits",
+        "tags": [
+          "staff clients"
+        ]
+      }
+    },
     "/staff/clients/{client_id}/locks": {
       "post": {
         "description": "Ask for the client to be locked or unlocked. A different member of staff decides.",
@@ -37935,6 +41556,186 @@
           }
         },
         "summary": "Propose Lock",
+        "tags": [
+          "staff clients"
+        ]
+      }
+    },
+    "/staff/clients/{client_id}/notes": {
+      "get": {
+        "description": "The client's staff notes, newest first.",
+        "operationId": "client_notes_staff_clients__client_id__notes_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "client_id",
+            "required": true,
+            "schema": {
+              "maxLength": 20,
+              "minLength": 20,
+              "pattern": "^[-0-9A-Z_a-z]{20}$",
+              "title": "Client Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotesView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          }
+        },
+        "summary": "Client Notes",
+        "tags": [
+          "staff clients"
+        ]
+      },
+      "post": {
+        "description": "Keep a note on the client for other staff. It is never changed or deleted.",
+        "operationId": "write_note_staff_clients__client_id__notes_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "client_id",
+            "required": true,
+            "schema": {
+              "maxLength": 20,
+              "minLength": 20,
+              "pattern": "^[-0-9A-Z_a-z]{20}$",
+              "title": "Client Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/WriteNote"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NoteView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          }
+        },
+        "summary": "Write Note",
         "tags": [
           "staff clients"
         ]
@@ -38129,6 +41930,92 @@
         "summary": "Client Profile",
         "tags": [
           "client profile"
+        ]
+      }
+    },
+    "/staff/clients/{client_id}/withdrawal-options": {
+      "get": {
+        "description": "The investments, accounts and written requests a staff withdrawal can name today.",
+        "operationId": "withdrawal_options_staff_clients__client_id__withdrawal_options_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "client_id",
+            "required": true,
+            "schema": {
+              "maxLength": 20,
+              "minLength": 20,
+              "pattern": "^[-0-9A-Z_a-z]{20}$",
+              "title": "Client Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WithdrawalOptions"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          }
+        },
+        "summary": "Withdrawal Options",
+        "tags": [
+          "staff clients"
         ]
       }
     },
@@ -58114,6 +62001,78 @@
         ]
       }
     },
+    "/staff/reconciliation/statement-formats": {
+      "get": {
+        "description": "The layouts a statement can be imported in: the built-in standard one, then those set on\nSettings.",
+        "operationId": "statement_formats_staff_reconciliation_statement_formats_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StatementFormatsOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          }
+        },
+        "summary": "Statement Formats",
+        "tags": [
+          "staff reconciliation"
+        ]
+      }
+    },
     "/staff/reconciliation/statements": {
       "get": {
         "description": "One pot's statements in a range of days, at most 100, oldest first. 422\n`date_range_reversed` when `date_to` is before `date_from`.",
@@ -58236,7 +62195,7 @@
         ]
       },
       "post": {
-        "description": "Import one pot's statement for one ended day, whole or not at all.\n\nThe balances are as the statement prints them, such as `1,500,000`. 422 names the problem\nand, for a row, its number, never its contents. 409 `statement_already_imported`,\n`statement_day_out_of_order`, `statement_opening_balance_differs` or\n`statement_day_not_over`.",
+        "description": "Import one pot's statement for one ended day, whole or not at all.\n\n`format` is `standard` or the name of a layout set on Settings\n(`GET /staff/reconciliation/statement-formats`); 422 `statement_format_unknown` for any\nother. The balances are as the statement prints them, such as `1,500,000`. 422 names the\nproblem and, for a row, its number, never its contents. 409 `statement_already_imported`,\n`statement_day_out_of_order`, `statement_opening_balance_differs` or\n`statement_day_not_over`.",
         "operationId": "import_statement_staff_reconciliation_statements_post",
         "requestBody": {
           "content": {
@@ -59180,6 +63139,291 @@
         "summary": "Staff Sign Out Device",
         "tags": [
           "staff sign-in"
+        ]
+      }
+    },
+    "/staff/settings/platform": {
+      "get": {
+        "description": "Every platform setting: the value in use, and any change waiting for a decision.",
+        "operationId": "list_platform_settings_staff_settings_platform_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SettingsList"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          }
+        },
+        "summary": "List Platform Settings",
+        "tags": [
+          "staff settings"
+        ]
+      }
+    },
+    "/staff/settings/platform/proposals": {
+      "post": {
+        "description": "Put a new value forward. A different member of staff must approve it.\n\n403 without the section's permission. 409 if a change to this setting is already waiting,\nor, for the office networks, `leaves_you_out` when the list leaves out the network this\nrequest came from.",
+        "operationId": "propose_platform_setting_staff_settings_platform_proposals_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "discriminator": {
+                  "mapping": {
+                    "bank_payout_cutoff": "#/components/schemas/ProposeBankPayoutCutoff",
+                    "maturity_reminders": "#/components/schemas/ProposeMaturityReminders",
+                    "office_networks": "#/components/schemas/ProposeOfficeNetworks",
+                    "payment_channels": "#/components/schemas/ProposePaymentChannels",
+                    "public_holidays": "#/components/schemas/ProposePublicHolidays",
+                    "staff_idle_minutes": "#/components/schemas/ProposeStaffIdleMinutes",
+                    "statement_layouts": "#/components/schemas/ProposeStatementLayouts"
+                  },
+                  "propertyName": "key"
+                },
+                "oneOf": [
+                  {
+                    "$ref": "#/components/schemas/ProposePaymentChannels"
+                  },
+                  {
+                    "$ref": "#/components/schemas/ProposePublicHolidays"
+                  },
+                  {
+                    "$ref": "#/components/schemas/ProposeBankPayoutCutoff"
+                  },
+                  {
+                    "$ref": "#/components/schemas/ProposeMaturityReminders"
+                  },
+                  {
+                    "$ref": "#/components/schemas/ProposeStaffIdleMinutes"
+                  },
+                  {
+                    "$ref": "#/components/schemas/ProposeOfficeNetworks"
+                  },
+                  {
+                    "$ref": "#/components/schemas/ProposeStatementLayouts"
+                  }
+                ],
+                "title": "Body"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SettingProposalOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          }
+        },
+        "summary": "Propose Platform Setting",
+        "tags": [
+          "staff settings"
+        ]
+      }
+    },
+    "/staff/settings/platform/proposals/{proposal_id}/decision": {
+      "post": {
+        "description": "Approve or reject another person's proposal, or withdraw your own.\n\nDeciding needs the section's permission and a passkey or app code from the last few\nminutes (`confirm_it_is_you`), asked for before the proposal is looked up. An approved\nvalue is in use at once. 409 `leaves_you_out` when approving office networks that leave\nout the network this request came from.",
+        "operationId": "decide_platform_setting_staff_settings_platform_proposals__proposal_id__decision_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "proposal_id",
+            "required": true,
+            "schema": {
+              "maxLength": 20,
+              "minLength": 20,
+              "pattern": "^[-0-9A-Z_a-z]{20}$",
+              "title": "Proposal Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DecideSetting"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SettingProposalOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          }
+        },
+        "summary": "Decide Platform Setting",
+        "tags": [
+          "staff settings"
         ]
       }
     },
@@ -60874,6 +65118,256 @@
         "summary": "Decide Change",
         "tags": [
           "staff team"
+        ]
+      }
+    },
+    "/staff/withdrawal-limits": {
+      "get": {
+        "description": "The limits in force today, versions approved for later days, and any change waiting.",
+        "operationId": "limits_screen_staff_withdrawal_limits_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LimitsScreen"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          }
+        },
+        "summary": "Limits Screen",
+        "tags": [
+          "staff withdrawal limits"
+        ]
+      }
+    },
+    "/staff/withdrawal-limits/changes": {
+      "post": {
+        "description": "Put a whole new version of the limits forward, starting on a later day.\n\n422 `limits_invalid` for limits that contradict themselves (a daily limit below the one for\none payout), `not_a_later_day` for a start of today or before. 409 if a change is already\nwaiting, or `day_taken` if a version already starts that day.",
+        "operationId": "propose_limits_staff_withdrawal_limits_changes_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ProposeLimits"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LimitsChangeView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          }
+        },
+        "summary": "Propose Limits",
+        "tags": [
+          "staff withdrawal limits"
+        ]
+      }
+    },
+    "/staff/withdrawal-limits/changes/{change_id}/decision": {
+      "post": {
+        "description": "Approve or reject another person's change, or withdraw your own.\n\nApproving makes the version, which applies from its start day. 409 `not_a_later_day` once\nthat day has come, `day_taken` if another version took it.",
+        "operationId": "decide_limits_staff_withdrawal_limits_changes__change_id__decision_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "change_id",
+            "required": true,
+            "schema": {
+              "maxLength": 20,
+              "minLength": 20,
+              "pattern": "^[-0-9A-Z_a-z]{20}$",
+              "title": "Change Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DecideLimits"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LimitsChangeView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          }
+        },
+        "summary": "Decide Limits",
+        "tags": [
+          "staff withdrawal limits"
         ]
       }
     },

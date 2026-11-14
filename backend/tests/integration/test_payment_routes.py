@@ -33,6 +33,7 @@ from app.modules.payments import bank_transfers as bank
 from app.modules.payments.bank_transfers import BankTransferJobs
 from app.modules.payments.domain.bank_accounts import BankAccount
 from app.modules.payments.domain.outcomes import Accepted, Pending
+from app.modules.platform_settings.domain.catalogue import CHANNELS
 from app.modules.reconciliation import statements
 from app.modules.reconciliation.domain.pots import CASH_POTS
 from app.modules.reconciliation.domain.statements import CsvFormat, StatementSource, parse_csv
@@ -48,6 +49,7 @@ from tests.support.kyc import SEALER, ready_draft
 from tests.support.ledger import staff as new_staff
 from tests.support.ledger import ugx
 from tests.support.payments import FakeCollections, drain, use_bank_account
+from tests.support.settings import clear_settings, set_setting
 
 pytestmark = pytest.mark.integration
 
@@ -328,8 +330,10 @@ async def test_only_staff_who_may_change_the_account_propose_or_decide(api: Api)
             },
             "reason": "Why",
         }
+        # Operations opens Settings, so it reads the account, but never changes it.
+        assert (await support.get("/staff/payments/bank-accounts")).status_code == 403
+        assert (await operations.get("/staff/payments/bank-accounts")).status_code == 200
         for http in (support, operations):
-            assert (await http.get("/staff/payments/bank-accounts")).status_code == 403
             assert (
                 await http.post("/staff/payments/bank-accounts/UGX/proposals", json=body)
             ).status_code == 403
@@ -792,3 +796,39 @@ async def test_without_storage_no_transfer_is_saved(
         assert refused.status_code == 503
         missing = await client_http.get(f"/client/investments/{investment.id}/payment")
         assert missing.status_code == 404
+
+
+async def test_a_paused_channel_refuses_a_new_payment_but_replays_one_already_made(
+    api: Api, migrator_database: Database
+) -> None:
+    channels = dict.fromkeys(CHANNELS, True)
+    async with api.http() as http:
+        client, phone = await api.client(http)
+        investment = await request_investment(api.database, client, api.clock)
+        api.collections.on_send(phone, Accepted("ref-p"))
+        url = f"/client/investments/{investment.id}/payments/mobile-money"
+        first_key = key()
+        made = await http.post(url, json={"network": "mtn"}, headers=first_key)
+        assert made.status_code == 201
+        paused = channels | {"mtn_pay_in": False, "bank_pay_in": False}
+        await set_setting(api.database, "payment_channels", paused, api.clock)
+        try:
+            again = await http.post(url, json={"network": "mtn"}, headers=first_key)
+            assert again.status_code == 201 and again.json()["id"] == made.json()["id"]
+
+            other = await request_investment(api.database, client, api.clock)
+            other_url = f"/client/investments/{other.id}/payments/mobile-money"
+            refused = await http.post(other_url, json={"network": "mtn"}, headers=key())
+            assert refused.status_code == 503
+            assert refused.json()["error"]["fields"] == [
+                {"field_path": ["network"], "code": "channel_paused"}
+            ]
+            details = await http.get(f"/client/investments/{other.id}/bank-transfer-details")
+            assert details.status_code == 503
+            assert details.json()["error"]["fields"][0]["code"] == "channel_paused"
+            # Airtel is still open.
+            api.collections.on_send(phone, Accepted("ref-q"))
+            airtel = await http.post(other_url, json={"network": "airtel"}, headers=key())
+            assert airtel.status_code == 201, airtel.text
+        finally:
+            await clear_settings(migrator_database)

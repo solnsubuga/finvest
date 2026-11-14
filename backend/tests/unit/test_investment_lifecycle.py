@@ -173,6 +173,22 @@ def test_only_a_running_investment_matures(status: InvestmentStatus) -> None:
             False,
             MaturityPlan(MaturityStep.HOLD, HoldReason.PRODUCT_NOT_OPEN),
         ),
+        # The principal stays invested and the interest is paid.
+        (AtMaturity.PAY_INTEREST, True, True, MaturityPlan(MaturityStep.ROLL_OVER_PAY_INTEREST)),
+        # Nowhere to send the interest: the principal still rolls over, the interest waits.
+        (
+            AtMaturity.PAY_INTEREST,
+            False,
+            True,
+            MaturityPlan(MaturityStep.ROLL_OVER_PAY_INTEREST, HoldReason.NO_DESTINATION),
+        ),
+        # The product closed: all of it waits, the interest is not paid alone.
+        (
+            AtMaturity.PAY_INTEREST,
+            True,
+            False,
+            MaturityPlan(MaturityStep.HOLD, HoldReason.PRODUCT_NOT_OPEN),
+        ),
     ],
 )
 def test_money_at_maturity_follows_the_clients_choice_or_waits(

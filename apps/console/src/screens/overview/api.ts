@@ -44,6 +44,10 @@ export const KINDS = [
   "organisation",
   "investment_correction",
   "investment_run",
+  "client_pin_reset",
+  "client_limits",
+  "client_statement",
+  "client_withdrawal",
 ] as const;
 
 export type Kind = (typeof KINDS)[number];

@@ -37,6 +37,7 @@ from app.modules.identity import api as identity_api
 from app.modules.identity import (
     codes_api,
     email_checks_api,
+    freeze_api,
     passkeys_api,
     people_api,
     phone_changes_api,
@@ -84,6 +85,7 @@ from app.modules.payments.domain.provider import CollectionsProvider
 from app.modules.payments.settings import PaymentsSettings
 from app.modules.payments.wiring import collections_provider
 from app.modules.payouts import api as payouts_api
+from app.modules.payouts import limits_api as withdrawal_limits_api
 from app.modules.payouts import staff_api as payouts_staff_api
 from app.modules.payouts import (
     staff_bank_api,
@@ -93,6 +95,7 @@ from app.modules.payouts import (
     staff_returns_api,
 )
 from app.modules.payouts.wiring import PayoutNameSettings
+from app.modules.platform_settings import api as platform_settings_api
 from app.modules.reconciliation import api as reconciliation_api
 from app.modules.reconciliation import transfers_api as pot_transfers_api
 from app.modules.reconciliation.domain.wallet import WalletBalances
@@ -247,6 +250,7 @@ def create_app(
         *reconciliation_api.routers,
         *pot_transfers_api.routers,
         *closures_api.routers,
+        freeze_api.router,
     ):
         app.include_router(router)
     app.include_router(payments_api.create_router(collections))
@@ -255,7 +259,11 @@ def create_app(
     app.include_router(notification_hooks.create_router(email_hooks))
     app.include_router(payment_routes.create_client_router(collections))
     app.include_router(payment_routes.staff_router)
-    for router in bank_account_routes.routers:
+    for router in (
+        *bank_account_routes.routers,
+        *platform_settings_api.routers,
+        *withdrawal_limits_api.routers,
+    ):
         app.include_router(router)
     for router in reassignment_routes.routers:
         app.include_router(router)

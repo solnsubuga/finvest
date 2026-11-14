@@ -9,8 +9,12 @@ closes it in one transaction, and the principal and the interest leave the holdi
 * **Paid out.** One ledger entry hands the money to the payouts module (the client's "payout
   pending" account for this investment), and a payout to the destination the client chose is
   created in the same transaction. This module never calls a provider.
+* **Interest paid, principal kept invested.** A new investment in the same product starts for
+  the principal alone, and the interest is handed to payouts and paid out as above, in one
+  ledger entry. The new term keeps the same choice and destination.
 * **Held.** If the client's choice cannot be carried out, or payouts refuses the payout, the
-  money is handed over just the same and waits there. The reason is kept on the investment, and
+  money is handed over just the same and waits there (only the interest, when the principal
+  was kept invested). The reason is kept on the investment, and
   the client sends the money on with `pay_out_matured`. Nothing is ever rolled over or paid on a
   guess.
 
@@ -34,6 +38,7 @@ from app.modules.investments import accrual
 from app.modules.investments.catalogue import invalid, product_from_row, product_row, rates_for
 from app.modules.investments.domain.interest import maturity_date
 from app.modules.investments.domain.investments import (
+    PAYS_OUT,
     AtMaturity,
     HoldReason,
     InvestmentStatus,
@@ -53,6 +58,7 @@ from app.modules.investments.holdings import (
     investment_from_row,
     select_investments,
 )
+from app.modules.investments.locks import inherit_lock
 from app.modules.ledger import service as ledger
 from app.modules.ledger.domain.entries import EntryDraft, Line, credit, debit
 from app.modules.notifications import contract as notifications
@@ -91,10 +97,10 @@ _CHOOSE = text(
 )
 _INSERT_ROLLED = text(
     "INSERT INTO investments (id, client_id, product_id, currency, principal_minor, "
-    "annual_rate_bps, tax_bps, term_days, at_maturity, created_at, pay_by, updated_at, "
-    "rolled_from_id) VALUES (:id, :client_id, :product_id, :currency, :principal_minor, "
-    ":annual_rate_bps, :tax_bps, :term_days, 'roll_over', :created_at, :pay_by, :now, "
-    ":rolled_from_id)"
+    "annual_rate_bps, tax_bps, term_days, at_maturity, payout_destination_id, created_at, "
+    "pay_by, updated_at, rolled_from_id) VALUES (:id, :client_id, :product_id, :currency, "
+    ":principal_minor, :annual_rate_bps, :tax_bps, :term_days, :at_maturity, :destination_id, "
+    ":created_at, :pay_by, :now, :rolled_from_id)"
 )
 _START_ROLLED = text(
     "UPDATE investments SET status = 'active', start_date = :start_date, "
@@ -126,8 +132,8 @@ async def choose_at_maturity(
 ) -> Investment:
     """Save what the client wants done at maturity. It can change up to the day before.
 
-    To be paid out the client names one of their approved payout destinations. Rolling over
-    takes none, and clears one chosen earlier.
+    To be paid out, all of it or the interest alone, the client names one of their approved
+    payout destinations. Rolling over takes none, and clears one chosen earlier.
     """
     investment = await _own_locked(session, client, investment_id)
     today = business_date(clock.now())
@@ -135,7 +141,7 @@ async def choose_at_maturity(
         investment.status, investment.term_days, investment.maturity_date, today
     ):
         raise ApplicationError("conflict")
-    if at_maturity is AtMaturity.PAY_OUT:
+    if at_maturity in PAYS_OUT:
         if destination_id is None:
             raise invalid("destination_id", "required")
         await _usable(session, investment.client_id, destination_id)
@@ -174,7 +180,8 @@ async def pay_out_matured(
     clock: Clock,
     confirm: Callable[[], Awaitable[None]] | None = None,
 ) -> Investment:
-    """Send on the money of a matured investment that is waiting for a destination.
+    """Send on the money of a matured investment that is waiting for a destination: all of
+    it, or the interest when the principal was kept invested.
 
     Raises `payouts.PayoutRefused` if payouts will not pay it there now. The money then keeps
     waiting, and the client can try again or choose another destination.
@@ -183,11 +190,8 @@ async def pay_out_matured(
     payout is made. The route passes the app PIN check, which raises to refuse.
     """
     investment = await _own_locked(session, client, investment_id)
-    if (
-        investment.status is not InvestmentStatus.MATURED
-        or investment.rolled_into_id is not None
-        or investment.payout_id is not None
-    ):
+    waiting = investment.waiting
+    if waiting is None:
         raise ApplicationError("conflict")
     await _usable(session, investment.client_id, destination_id)
     if confirm is not None:
@@ -197,7 +201,7 @@ async def pay_out_matured(
         client,
         client_id=investment.client_id,
         destination_id=destination_id,
-        amount=_proceeds(investment),
+        amount=waiting,
         source_reference=investment.id,
         # A new key for each destination tried: a refused payout left nothing behind, and
         # the same destination asked twice is the same payout.
@@ -293,6 +297,18 @@ async def _mature(
         await _roll_over(
             session, investment, row.id, rate.annual_rate_bps, rate.tax_bps, quoted_at, clock
         )
+    elif plan.step is MaturityStep.ROLL_OVER_PAY_INTEREST and rate is not None:
+        await _roll_over(
+            session,
+            investment,
+            row.id,
+            rate.annual_rate_bps,
+            rate.tax_bps,
+            quoted_at,
+            clock,
+            pay_interest=True,
+            hold_reason=plan.hold_reason,
+        )
     else:
         await _hand_over(session, investment, plan.step, plan.hold_reason, clock)
     await audit.record(
@@ -326,9 +342,16 @@ async def _roll_over(
     tax_bps: int,
     quoted_at: datetime,
     clock: Clock,
+    *,
+    pay_interest: bool = False,
+    hold_reason: HoldReason | None = None,
 ) -> None:
+    """Start a new term in the same product. With `pay_interest`, the new term is for the
+    principal alone, keeps the client's choice and destination, and the interest goes to
+    payouts in the same entry."""
     now = clock.now()
-    proceeds = _proceeds(investment)
+    interest = investment.accrued_net if pay_interest else Money.zero(investment.amount.currency)
+    proceeds = _proceeds(investment) - interest
     new_id = push_id()
     # The new term starts the day the old one ended, so no day is left without interest.
     start_date = _maturity(investment)
@@ -345,6 +368,10 @@ async def _roll_over(
             "annual_rate_bps": annual_rate_bps,
             "tax_bps": tax_bps,
             "term_days": investment.term_days,
+            "at_maturity": (
+                AtMaturity.PAY_INTEREST if pay_interest else AtMaturity.ROLL_OVER
+            ).value,
+            "destination_id": investment.payout_destination_id if pay_interest else None,
             "created_at": quoted_at,
             "pay_by": pay_by(quoted_at),
             "now": now,
@@ -353,21 +380,32 @@ async def _roll_over(
     )
     rolled = await get_investment(session, new_id)
     new_holding = await ledger.open_account(session, holding_account(rolled), clock)
+    lines = [*await out_of_holding(session, investment, clock), credit(new_holding.id, proceeds)]
+    if interest.is_positive:
+        handover = await ledger.open_account(
+            session,
+            payout_posting.funding_account(investment.client_id, investment.id, interest.currency),
+            clock,
+        )
+        lines.append(credit(handover.id, interest))
     entry = await ledger.post_entry(
         session,
         EntryDraft(
-            entry_type="investment.rolled_over",
+            entry_type="investment.rolled_over_interest_paid"
+            if pay_interest
+            else "investment.rolled_over",
             effective_date=business_date(now),
-            lines=(
-                *await out_of_holding(session, investment, clock),
-                credit(new_holding.id, proceeds),
-            ),
+            lines=tuple(lines),
             idempotency_key=f"investment-rollover:{investment.id}",
             source_type="investment",
             source_id=investment.id,
         ),
         clock,
     )
+    payout_id: str | None = None
+    refusal: str | None = None
+    if interest.is_positive:
+        payout_id, refusal = await _pay(session, investment, interest, hold_reason, clock)
     await session.execute(
         _START_ROLLED,
         {
@@ -378,14 +416,18 @@ async def _roll_over(
             "now": now,
         },
     )
+    # A saving locked through a goal stays locked in its next term, until the same day.
+    await inherit_lock(
+        session, old_id=investment.id, new_id=new_id, today=business_date(now), now=now
+    )
     await session.execute(
         _MATURE,
         {
             "id": investment.id,
             "entry_id": entry.id,
             "rolled_into_id": new_id,
-            "payout_id": None,
-            "refusal": None,
+            "payout_id": payout_id,
+            "refusal": refusal,
             "now": now,
         },
     )
@@ -405,7 +447,13 @@ async def _roll_over(
         consumers=[FOLLOW_ROLLOVER, NOTE_ON_END],
         now=now,
     )
-    logger.info("investment_rolled_over", investment_id=investment.id, new_investment_id=new_id)
+    logger.info(
+        "investment_rolled_over",
+        investment_id=investment.id,
+        new_investment_id=new_id,
+        interest_paid_out=payout_id is not None,
+        error_code=refusal,
+    )
 
 
 async def _hand_over(
@@ -441,27 +489,8 @@ async def _hand_over(
     )
     payout_id: str | None = None
     refusal: str | None = hold_reason.value if hold_reason else None
-    destination_id = investment.payout_destination_id
-    if step is MaturityStep.PAY_OUT and destination_id is not None:
-        try:
-            # In a savepoint, so a refusal part way leaves nothing of the payout behind.
-            async with session.begin_nested():
-                payout = await payouts.create_payout(
-                    session,
-                    SYSTEM,
-                    client_id=investment.client_id,
-                    destination_id=destination_id,
-                    amount=proceeds,
-                    source_reference=investment.id,
-                    request_key=f"maturity:{investment.id}:{destination_id}",
-                    clock=clock,
-                )
-            payout_id = payout.id
-        except payouts.PayoutRefused as refused:
-            refusal = refused.code
-        except ApplicationError as error:
-            # The destination was removed or is no longer the client's.
-            refusal = f"destination_{error.code}"
+    if step is MaturityStep.PAY_OUT:
+        payout_id, refusal = await _pay(session, investment, proceeds, hold_reason, clock)
     await session.execute(
         _MATURE,
         {
@@ -494,6 +523,39 @@ async def _hand_over(
         paid_out=payout_id is not None,
         error_code=refusal,
     )
+
+
+async def _pay(
+    session: AsyncSession,
+    investment: Investment,
+    amount: Money,
+    hold_reason: HoldReason | None,
+    clock: Clock,
+) -> tuple[str | None, str | None]:
+    """Pay `amount`, already handed to payouts, to the destination the client chose. Returns
+    the payout, or why the money waits instead."""
+    destination_id = investment.payout_destination_id
+    if destination_id is None or hold_reason is not None:
+        return None, (hold_reason or HoldReason.NO_DESTINATION).value
+    try:
+        # In a savepoint, so a refusal part way leaves nothing of the payout behind.
+        async with session.begin_nested():
+            payout = await payouts.create_payout(
+                session,
+                SYSTEM,
+                client_id=investment.client_id,
+                destination_id=destination_id,
+                amount=amount,
+                source_reference=investment.id,
+                request_key=f"maturity:{investment.id}:{destination_id}",
+                clock=clock,
+            )
+    except payouts.PayoutRefused as refused:
+        return None, refused.code
+    except ApplicationError as error:
+        # The destination was removed or is no longer the client's.
+        return None, f"destination_{error.code}"
+    return payout.id, None
 
 
 async def out_of_holding(

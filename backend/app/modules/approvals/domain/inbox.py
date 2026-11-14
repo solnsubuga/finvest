@@ -44,6 +44,15 @@ Kind = Literal[
     "account_code_map",
     "deposit_reversal",
     "deposit_receivable",
+    "client_pin_reset",
+    "client_limits",
+    "client_statement",
+    "client_withdrawal",
+    "payment_channels_change",
+    "calendar_change",
+    "staff_security_change",
+    "statement_layout_change",
+    "withdrawal_limits_change",
 ]
 
 
@@ -103,6 +112,18 @@ SOURCES: dict[Kind, Source] = {
     "deposit_reversal": Source("reconciliation.view", "deposit_reassignments.change"),
     # Recording, recovering or writing off what a client owes for a mistaken payment.
     "deposit_receivable": Source("reconciliation.view", "deposit_reassignments.change"),
+    # Acting for a client from their page (console `actions`), one kind per permission.
+    "client_pin_reset": Source("clients.view", "client_pins.reset"),
+    "client_limits": Source("clients.view", "client_limits.change"),
+    "client_statement": Source("clients.view", "client_statements.send"),
+    "client_withdrawal": Source("clients.view", "client_withdrawals.start"),
+    # The platform's other settings, on Settings, one kind per section of the screen.
+    "payment_channels_change": Source("settings.view", "payment_channels.change"),
+    "calendar_change": Source("settings.view", "calendar.change"),
+    "staff_security_change": Source("settings.view", "staff_security.change"),
+    "statement_layout_change": Source("settings.view", "statement_layouts.change"),
+    # The withdrawal limits and the review threshold, on Settings.
+    "withdrawal_limits_change": Source("settings.view", "withdrawal_limits.change"),
 }
 
 
