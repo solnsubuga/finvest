@@ -869,6 +869,14 @@ ROWS = {
         "'lost_phone', 'open', now())",
         "refusing to drop recovery requests staff have not closed",
     ),
+    "0224_identity_recovery_asks": (
+        "INSERT INTO identity_clients (id, phone, status, created_at) VALUES "
+        "('-Nabc0000000000000B1', '+256772123456', 'unclaimed', now()); "
+        "INSERT INTO identity_recovery_requests (id, client_id, contact_phone, reason, status, "
+        "created_at, asks, last_asked_at) VALUES ('-Nabc0000000000000A1', '-Nabc0000000000000B1', "
+        "'+256701555013', 'lost_phone', 'open', now(), 2, now())",
+        "refusing to drop the later asks on open recovery requests",
+    ),
 }
 
 

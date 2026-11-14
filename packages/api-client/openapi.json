@@ -11492,6 +11492,10 @@
             "title": "Account Phone",
             "type": "string"
           },
+          "asks": {
+            "title": "Asks",
+            "type": "integer"
+          },
           "client_id": {
             "maxLength": 20,
             "minLength": 20,
@@ -11515,6 +11519,11 @@
             "title": "Id",
             "type": "string"
           },
+          "last_asked_at": {
+            "format": "date-time",
+            "title": "Last Asked At",
+            "type": "string"
+          },
           "reason": {
             "enum": [
               "lost_phone",
@@ -11532,7 +11541,9 @@
           "account_phone",
           "contact_phone",
           "reason",
-          "created_at"
+          "created_at",
+          "asks",
+          "last_asked_at"
         ],
         "title": "RecoveryView",
         "type": "object"
