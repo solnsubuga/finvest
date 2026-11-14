@@ -135,7 +135,11 @@ class OwnChangeService:
             async with self.database.actor_transaction(client.actor) as session:
                 # A wrong code returns False and the transaction commits, so the try counts.
                 if await self.codes.spend_phone_change_code(
-                    session, client_id=client.client_id, code_id=code_id, code=code
+                    session,
+                    client_id=client.client_id,
+                    session_id=client.session_id,
+                    code_id=code_id,
+                    code=code,
                 ):
                     new_phone = await session.scalar(
                         text("SELECT phone FROM identity_codes WHERE id = :id"), {"id": code_id}

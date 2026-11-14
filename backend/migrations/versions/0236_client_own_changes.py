@@ -74,9 +74,11 @@ CREATE FUNCTION identity_change_own_phone(
         IF public.finvest_actor_kind() IS DISTINCT FROM 'client' THEN
             RAISE EXCEPTION 'only a client changes their own number' USING ERRCODE = '42501';
         END IF;
-        -- Spent by this client in this transaction, so a code cannot be replayed later.
+        -- Spent by this client, on the session that asked, in this transaction, so a code
+        -- cannot be replayed later or from another device.
         SELECT * INTO v_code FROM public.identity_codes
          WHERE id = p_code_id AND purpose = 'phone_change' AND actor_id = v_client
+           AND bound_to = p_session_id
            AND consumed_at IS NOT NULL AND xmin = pg_current_xact_id()::xid
            FOR UPDATE;
         IF NOT FOUND THEN
