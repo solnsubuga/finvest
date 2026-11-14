@@ -57,6 +57,12 @@ class AtMaturity(StrEnum):
 
     ROLL_OVER = "roll_over"
     PAY_OUT = "pay_out"
+    # Keep what was put in invested for another term, and pay the interest out.
+    PAY_INTEREST = "pay_interest"
+
+
+# The choices that send money to a payout destination, and so name one.
+PAYS_OUT = frozenset({AtMaturity.PAY_OUT, AtMaturity.PAY_INTEREST})
 
 
 class StartRefusal(StrEnum):
@@ -133,6 +139,8 @@ def start(confirmed_on: date, term_days: int | None) -> Start:
 class MaturityStep(StrEnum):
     ROLL_OVER = "roll_over"
     PAY_OUT = "pay_out"
+    # The principal rolls over into a new term and the interest goes to payouts.
+    ROLL_OVER_PAY_INTEREST = "roll_over_pay_interest"
     # Hand the money to payouts and wait for the client: there is nowhere to send it yet.
     HOLD = "hold"
 
@@ -147,6 +155,7 @@ class HoldReason(StrEnum):
 @dataclass(frozen=True, slots=True)
 class MaturityPlan:
     step: MaturityStep
+    # For HOLD, why all of it waits. For ROLL_OVER_PAY_INTEREST, why the interest waits.
     hold_reason: HoldReason | None = None
 
 
@@ -196,6 +205,15 @@ def plan_maturity(
         if has_destination:
             return MaturityPlan(MaturityStep.PAY_OUT)
         return MaturityPlan(MaturityStep.HOLD, HoldReason.NO_DESTINATION)
+    if choice is AtMaturity.PAY_INTEREST:
+        # The principal can only stay invested if the product still takes money. If it does
+        # not, all of it waits, as a rollover would: nothing is half done on a guess.
+        if not product_open:
+            return MaturityPlan(MaturityStep.HOLD, HoldReason.PRODUCT_NOT_OPEN)
+        return MaturityPlan(
+            MaturityStep.ROLL_OVER_PAY_INTEREST,
+            None if has_destination else HoldReason.NO_DESTINATION,
+        )
     if product_open:
         return MaturityPlan(MaturityStep.ROLL_OVER)
     return MaturityPlan(MaturityStep.HOLD, HoldReason.PRODUCT_NOT_OPEN)

@@ -47,6 +47,8 @@ from app.modules.payments.domain.deposits import (
 )
 from app.modules.payments.domain.outcomes import StatusReading
 from app.modules.payments.domain.provider import ProviderNotice
+from app.modules.platform_settings import service as platform_settings
+from app.modules.platform_settings.domain.catalogue import PAY_IN_BY_NETWORK
 from app.modules.screening.events import MONITOR_DEPOSIT
 from app.shared.actors import Actor
 from app.shared.business_day import business_date
@@ -230,6 +232,13 @@ async def request_deposit(
     now = clock.now()
 
     async def command() -> Receipt:
+        # Only a new payment is refused while its network is paused on Settings. A repeat of a
+        # request already made returns the deposit it made, as it would have.
+        channels = await platform_settings.payment_channels(session, now)
+        if not channels.is_open(PAY_IN_BY_NETWORK[request.network.value]):
+            raise ApplicationError(
+                "unavailable", fields=[FieldProblem(field_path=["network"], code="channel_paused")]
+            )
         deposit_id = push_id()
         await insert_deposit(
             session,
@@ -457,6 +466,40 @@ async def list_deposits(
     return [_deposit(row) for row in rows.all()]
 
 
+_CONFIRMED_AUTOMATICALLY = text(
+    "SELECT count(*) AS confirmed FROM payment_deposits "
+    "WHERE status = 'confirmed' AND method <> 'bank_transfer' "
+    "AND settled_at >= :since AND settled_at < :until"
+)
+
+
+async def confirmed_automatically(
+    session: AsyncSession, *, since: datetime, until: datetime
+) -> int:
+    """Mobile money deposits the provider confirmed from `since` up to `until`: money that
+    arrived and started its investment with no person involved. For the review queue's figures.
+    A staff transaction sees every deposit."""
+    row = (await session.execute(_CONFIRMED_AUTOMATICALLY, {"since": since, "until": until})).one()
+    return int(row.confirmed)
+
+
+_REQUESTED_BETWEEN = text(
+    f"SELECT {_COLUMNS} FROM payment_deposits "  # noqa: S608 - constant column list
+    "WHERE created_at >= :since AND created_at < :until ORDER BY created_at, id LIMIT :limit"
+)
+
+
+async def deposits_requested_between(
+    session: AsyncSession, *, since: datetime, until: datetime, limit: int
+) -> list[Deposit]:
+    """Deposits asked for from `since` up to `until`, oldest first, at most `limit`. For staff
+    reports: a staff transaction sees every deposit."""
+    rows = await session.execute(
+        _REQUESTED_BETWEEN, {"since": since, "until": until, "limit": max(1, limit)}
+    )
+    return [_deposit(row) for row in rows.all()]
+
+
 async def record_notice(
     session: AsyncSession, provider: str, notice: ProviderNotice, clock: Clock
 ) -> bool:
@@ -664,6 +707,20 @@ async def _tell_client(
     await notifications.notify(
         session,
         event_name="payment_confirmed" if status is DepositStatus.CONFIRMED else "payment_failed",
+        client_id=deposit.client_id,
+        idempotency_key=deposit.id,
+        variables={"amount": deposit.amount, "method": _METHOD_LABELS[deposit.method]},
+        link=notifications.Link("deposit", deposit.id),
+        now=now,
+    )
+
+
+async def tell_client_reversed(session: AsyncSession, deposit: Deposit, now: datetime) -> None:
+    """Tell the client a payment credited to them by mistake was taken back, in the caller's
+    transaction. Once per deposit. The words name the method, never the amount."""
+    await notifications.notify(
+        session,
+        event_name="payment_reversed",
         client_id=deposit.client_id,
         idempotency_key=deposit.id,
         variables={"amount": deposit.amount, "method": _METHOD_LABELS[deposit.method]},

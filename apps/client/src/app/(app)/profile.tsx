@@ -204,6 +204,14 @@ export default function Profile() {
             <TextLink label="Documents" onPress={() => router.navigate("/documents")} />
           </View>
         )}
+        <Button
+          label="Freeze my account"
+          icon="lock"
+          variant="secondary"
+          height={52}
+          onPress={() => router.push("/account/freeze")}
+          testID="profile-freeze"
+        />
         <Button label="Log out" onPress={signOut} loading={busy} testID="sign-out" />
         <View style={{ alignSelf: "center" }}>
           <TextLink label="Close my account" onPress={() => router.push("/account/close")} testID="profile-close" />

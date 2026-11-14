@@ -25,7 +25,7 @@ export type Upcoming = {
   on: string;
   investmentId: string;
   productName: string;
-  atMaturity: "roll_over" | "pay_out" | null;
+  atMaturity: "roll_over" | "pay_out" | "pay_interest" | null;
   /** What comes back at maturity, after tax. */
   amount: Money;
 };

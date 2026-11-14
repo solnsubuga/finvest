@@ -10,19 +10,28 @@ from sqlalchemy import text
 from sqlalchemy.exc import DBAPIError
 
 from app.infrastructure.database import Database
+from app.infrastructure.jobs import Worker, WorkerConfig
 from app.modules.audit import service as audit
 from app.modules.closures import service as closures
 from app.modules.identity import client_locks
 from app.modules.investments import accrual, transfers
 from app.modules.investments import service as investments
 from app.modules.investments.domain.investments import InvestmentStatus
-from app.modules.investments.domain.transfers import NOT_POSSIBLE, HeldFor, TransferStatus
+from app.modules.investments.domain.transfers import (
+    NOT_POSSIBLE,
+    HeldFor,
+    TransferPurpose,
+    TransferStatus,
+)
 from app.modules.investments.holdings import HOLDING
 from app.modules.ledger import service as ledger
 from app.modules.screening import contract as screening
+from app.modules.screening import monitoring
+from app.modules.screening.domain.monitoring import Kind, Transaction
+from app.modules.screening.monitor_jobs import MonitoringJobs
 from app.shared.actors import SYSTEM, Actor
 from app.shared.errors import ApplicationError
-from app.shared.money import Money
+from app.shared.money import Currency, Money
 from app.shared.push_ids import push_id
 from tests.support.clock import AsyncBarrier, FakeClock
 from tests.support.investments import (
@@ -34,6 +43,7 @@ from tests.support.investments import (
     request,
     today,
 )
+from tests.support.jobs import run_due
 from tests.support.kyc import verify
 from tests.support.ledger import key, ugx
 from tests.support.ledger import staff as new_staff
@@ -108,6 +118,8 @@ async def send(
             to_account_number=to,
             amount=amount,
             message="For the wedding",
+            purpose=TransferPurpose.GIFT,
+            purpose_note=None,
             restricted_until=restricted_until,  # type: ignore[arg-type]
             idempotency_key=idempotency_key or key(),
             clock=PRESENT,
@@ -408,6 +420,8 @@ async def test_what_a_client_cannot_send(app_database: Database, worker_database
                 to_account_number=to,
                 amount=ugx(1_000_000),
                 message=None,
+                purpose=TransferPurpose.FAMILY_SUPPORT,
+                purpose_note=None,
                 restricted_until=None,
                 idempotency_key=key(),
                 clock=PRESENT,
@@ -538,8 +552,9 @@ async def test_the_database_fences_who_does_what(
                 text(
                     "INSERT INTO investment_transfers (id, investment_id, sender_client_id, "
                     "recipient_client_id, sender_name, recipient_name, currency, amount_minor, "
-                    "whole, status, held, requested_at) VALUES (:id, :investment, :sender, "
-                    ":recipient, 'A.', 'B.', 'UGX', 100000, false, 'waiting', false, now())"
+                    "whole, purpose, status, held, requested_at) VALUES (:id, :investment, "
+                    ":sender, :recipient, 'A.', 'B.', 'UGX', 100000, false, 'gift', 'waiting', "
+                    "false, now())"
                 ),
                 {
                     "id": push_id(),
@@ -619,9 +634,9 @@ async def test_a_sender_on_hold_cannot_insert_an_unheld_transfer(
                 text(
                     "INSERT INTO investment_transfers (id, investment_id, sender_client_id, "
                     "recipient_client_id, sender_name, recipient_name, currency, amount_minor, "
-                    "whole, status, held, requested_at) VALUES (:id, :investment, :sender, "
-                    ":recipient, 'Amara N.', 'Brian K.', 'UGX', 1000000, false, 'waiting', "
-                    "false, clock_timestamp())"
+                    "whole, purpose, status, held, requested_at) VALUES (:id, :investment, "
+                    ":sender, :recipient, 'Amara N.', 'Brian K.', 'UGX', 1000000, false, 'gift', "
+                    "'waiting', false, clock_timestamp())"
                 ),
                 {
                     "id": push_id(),
@@ -809,3 +824,173 @@ async def test_nothing_is_sent_to_a_client_whose_request_to_close_waits(
     )
     async with app_database.actor_transaction(recipient) as session:
         await closures.cancel(session, recipient, request_id, PRESENT)
+
+
+async def monitored(worker_database: Database, transfer_id: str) -> list[tuple[str, str, int]]:
+    async with worker_database.actor_transaction(SYSTEM) as session:
+        rows = await session.execute(
+            text(
+                "SELECT client_id, kind, amount_minor FROM monitoring_transactions "
+                "WHERE source_id = :id ORDER BY kind"
+            ),
+            {"id": transfer_id},
+        )
+    return [(row.client_id, row.kind, int(row.amount_minor)) for row in rows]
+
+
+async def monitoring_cases(worker_database: Database, client_id: str) -> list[str]:
+    async with worker_database.actor_transaction(SYSTEM) as session:
+        rows = await session.scalars(
+            text("SELECT code FROM compliance_cases WHERE client_id = :id ORDER BY code"),
+            {"id": client_id},
+        )
+    return list(rows)
+
+
+async def test_a_made_transfer_is_monitored_for_both_clients(
+    app_database: Database, worker_database: Database
+) -> None:
+    sender, _ = await person(app_database)
+    recipient, _ = await person(app_database)
+    assert sender.id is not None and recipient.id is not None
+    source = await running(app_database, worker_database, sender)
+    # What came in for the sender over the last week, as monitoring saw it.
+    async with worker_database.actor_transaction(SYSTEM) as session:
+        await monitoring.record(
+            session,
+            client_id=sender.id,
+            transaction=Transaction(
+                push_id(), Kind.DEPOSIT, 5_000_000, Currency.UGX, PRESENT.now() - timedelta(days=1)
+            ),
+            clock=PRESENT,
+        )
+    asked = await send(
+        app_database, sender, source.id, await number_of(app_database, recipient), ugx(3_000_000)
+    )
+    assert (await carry_out(worker_database, asked.id)).status is TransferStatus.DONE
+    worker = Worker(
+        worker_database,
+        MonitoringJobs(worker_database, PRESENT).handlers(),
+        WorkerConfig(),
+        PRESENT,
+    )
+    await run_due(worker)
+
+    assert sorted(await monitored(worker_database, asked.id)) == sorted(
+        [(sender.id, "transfer_sent", 3_000_000), (recipient.id, "transfer_received", 3_000_000)]
+    )
+    # Most of what came in sent straight on: a case for the sender, and none for the recipient.
+    assert await monitoring_cases(worker_database, sender.id) == ["quick_withdrawal"]
+    assert await monitoring_cases(worker_database, recipient.id) == []
+
+    # Asked again, nothing is recorded twice and no case opens twice.
+    async with worker_database.actor_transaction(SYSTEM) as session:
+        await screening.watch_transfer(session, asked.id, PRESENT.now())
+    await run_due(worker)
+    assert len(await monitored(worker_database, asked.id)) == 2
+    assert await monitoring_cases(worker_database, sender.id) == ["quick_withdrawal"]
+
+
+async def test_a_transfer_that_failed_is_not_monitored(
+    app_database: Database, worker_database: Database
+) -> None:
+    sender, _ = await person(app_database)
+    recipient, _ = await person(app_database)
+    source = await running(app_database, worker_database, sender)
+    asked = await send(
+        app_database, sender, source.id, await number_of(app_database, recipient), ugx(1_000_000)
+    )
+    assert source.maturity_date is not None
+    failed = await carry_out(worker_database, asked.id, at(source.maturity_date))
+    assert failed.status is TransferStatus.FAILED
+    async with worker_database.actor_transaction(SYSTEM) as session:
+        # Nothing asked for, and a stray request records nothing.
+        assert (
+            await session.scalar(
+                text("SELECT count(*) FROM jobs WHERE kind = :kind AND idempotency_key = :id"),
+                {"kind": monitoring.MONITOR_TRANSFER_KIND, "id": asked.id},
+            )
+            == 0
+        )
+        await screening.watch_transfer(session, asked.id, PRESENT.now())
+    await run_due(
+        Worker(
+            worker_database,
+            MonitoringJobs(worker_database, PRESENT).handlers(),
+            WorkerConfig(),
+            PRESENT,
+        )
+    )
+    assert await monitored(worker_database, asked.id) == []
+
+
+async def test_a_sender_says_why_and_the_reason_never_changes(
+    app_database: Database, worker_database: Database, migrator_database: Database
+) -> None:
+    sender, _ = await person(app_database)
+    recipient, _ = await person(app_database)
+    source = await running(app_database, worker_database, sender)
+    to = await number_of(app_database, recipient)
+
+    async def asked(purpose: TransferPurpose, note: str | None) -> transfers.Transfer:
+        async with app_database.actor_transaction(sender) as session:
+            return await transfers.send_investment(
+                session,
+                sender,
+                source.id,
+                to_account_number=to,
+                amount=ugx(1_000_000),
+                message=None,
+                purpose=purpose,
+                purpose_note=note,
+                restricted_until=None,
+                idempotency_key=key(),
+                clock=PRESENT,
+            )
+
+    async def refusal(purpose: TransferPurpose, note: str | None) -> tuple[str, str]:
+        with pytest.raises(ApplicationError) as refused:
+            await asked(purpose, note)
+        problem = refused.value.fields[0]
+        return (str(problem.field_path[0]), problem.code)
+
+    assert await refusal(TransferPurpose.OTHER, None) == ("purpose_note", "required")
+    assert await refusal(TransferPurpose.OTHER, "   ") == ("purpose_note", "required")
+    assert await refusal(TransferPurpose.OTHER, "x" * 141) == ("purpose_note", "too_long")
+    assert await refusal(TransferPurpose.GIFT, "Birthday") == ("purpose_note", "only_for_other")
+
+    sent = await asked(TransferPurpose.OTHER, "  School fees for my niece ")
+    staff = await active_staff(app_database)
+    async with app_database.actor_transaction(staff) as session:
+        seen = await transfers.get_transfer(session, staff, sent.id)
+    assert (seen.purpose, seen.purpose_note) == (TransferPurpose.OTHER, "School fees for my niece")
+
+    # The database refuses a transfer without a reason, and any change to one.
+    async with app_database.actor_transaction(sender) as session:
+        with pytest.raises(DBAPIError, match="says why it is sent"):
+            await session.execute(
+                text(
+                    "INSERT INTO investment_transfers (id, investment_id, sender_client_id, "
+                    "recipient_client_id, sender_name, recipient_name, currency, amount_minor, "
+                    "whole, status, held, requested_at) VALUES (:id, :investment, :sender, "
+                    ":recipient, 'Amara N.', 'Brian K.', 'UGX', 1000000, false, 'waiting', "
+                    "false, clock_timestamp())"
+                ),
+                {
+                    "id": push_id(),
+                    "investment": source.id,
+                    "sender": sender.id,
+                    "recipient": recipient.id,
+                },
+            )
+    # The 0241 guard already refuses every change but a status step. With it set aside, as
+    # the owner of the tables could, the reason's own guard still refuses.
+    async with migrator_database.actor_transaction(SYSTEM) as session:
+        await session.execute(
+            text("ALTER TABLE investment_transfers DISABLE TRIGGER investment_transfers_guard")
+        )
+        with pytest.raises(DBAPIError, match="why a transfer is sent never changes"):
+            await session.execute(
+                text("UPDATE investment_transfers SET purpose = 'gift' WHERE id = :id"),
+                {"id": sent.id},
+            )

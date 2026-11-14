@@ -1,3 +1,4 @@
+import { Share } from "react-native";
 import { act, fireEvent, screen } from "@testing-library/react-native";
 import { router } from "expo-router";
 import { renderRouter } from "expo-router/testing-library";
@@ -109,6 +110,15 @@ describe("paying for an investment by mobile money", () => {
     expect(screen.getByText("+256 77• ••• •56")).toBeTruthy();
     // Its PDF receipt is in Documents, so the receipt offers it.
     expect(await screen.findByTestId("receipt-pdf")).toHaveTextContent(/Receipt \(PDF\).*Signed PDF, saved in Documents/);
+
+    const share = jest.spyOn(Share, "share").mockResolvedValue({ action: "sharedAction", activityType: undefined });
+    await fireEvent.press(screen.getByTestId("receipt-share"));
+    expect(share).toHaveBeenCalledTimes(1);
+    const message = share.mock.calls[0]![0] as { message: string };
+    expect(message.message).toMatch(/^Finvest receipt: UGX [\d,]+ paid into 91 Day Treasury Bill/);
+    expect(message.message).toContain("Number: +256 77• ••• •56");
+    expect(message.message).toMatch(/Finvest reference: \S+/);
+    share.mockRestore();
 
     await fireEvent.press(screen.getByTestId("receipt-done"));
     await screen.findByText("Welcome, Amara");

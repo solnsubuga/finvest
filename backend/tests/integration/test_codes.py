@@ -15,7 +15,7 @@ from app.modules.identity.api import COOKIES
 from app.modules.identity.codes import MAX_TRIES, SENDS_PER_NUMBER
 from app.modules.identity.hashing import PasswordHasher
 from app.modules.identity.service import IdentityService
-from app.shared.actors import Actor
+from app.shared.actors import SYSTEM, Actor
 from tests.support.clock import FakeClock
 from tests.support.database import TestDatabase
 
@@ -442,6 +442,20 @@ async def test_a_reset_sets_the_password_ends_sessions_and_restricts(api: Api) -
     session = await api.identity.client_session(issued.token)
     assert session is not None
     assert session.restricted_until == api.clock.now().replace(day=2)
+    # The client is told: security alerts cannot be switched off.
+    async with api.worker.actor_transaction(SYSTEM) as reading:
+        told = (
+            await reading.execute(
+                text(
+                    "SELECT title, link_kind FROM notifications WHERE client_id = :id "
+                    "AND event = 'password_changed'"
+                ),
+                {"id": client_id},
+            )
+        ).all()
+    assert [(row.title, row.link_kind) for row in told] == [
+        ("Your password was changed", "security")
+    ]
 
 
 async def test_a_reset_for_an_unknown_number_looks_the_same_and_sends_nothing(api: Api) -> None:
