@@ -72,3 +72,15 @@ Profile, "Company and group accounts" (`apps/client/src/app/account/organisation
 - **Asked to sign** shows who asked and as what, with Join and Decline. The reader's own row is found by their personal account number. An `organisation` notification opens the application.
 
 The demo build (`EXPO_PUBLIC_DEMO_AUTH=1`) uses `stubOrganisationsClient.ts`, which seeds the canvas's Kira Road Savings Group and an invitation to sign for a company. Screenshots are in `apps/client/docs/screenshots/organisations/`.
+
+## Console
+
+Staff work these under **Review queue → Company accounts** (`apps/console/src/screens/review-queue/Organisations.tsx`), a tab shown only to staff with `organisations.review`. The list is every application handed in and not decided, oldest first. One opens beside the list, or below it on a phone, with:
+
+- the application (kind, registration number, when it was handed in, how many must approve money leaving) and, once checked, who checked it and their note;
+- who signs, each by the name on their ID, with their role, Finvest account number and whether they joined;
+- the documents, with a button that asks for five-minute links to them.
+
+The form takes a note, kept on the audit trail and shown to the applicant when the application is sent back. Before it is checked the buttons are **Mark as checked**, **Send back** and **Reject**. Once checked, the person who checked it sees that a different person must approve, and anyone else sees **Approve and open the account**. Approving and rejecting ask once more before they go, and the console asks for a fresh passkey or app code when the API wants one. A checked application also shows in the Overview's approvals inbox as "Company or group account to open", which links to it.
+
+Screenshots are in `apps/console/docs/screenshots/organisations/`.
