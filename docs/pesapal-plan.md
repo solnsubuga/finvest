@@ -1,15 +1,16 @@
-# Plan: card payments through Pesapal
+# Plan: mobile money and card payments through Pesapal
 
-**Status: a plan, not built.** Nothing here is in the code yet. Building waits for the owner's approval of this plan and the choices in [Choices for the owner](#choices-for-the-owner). Facts about Pesapal come from its public API 3.0 documentation, read on 14 November 2026. Items marked "confirm" are not documented publicly and must be checked with Pesapal before anyone relies on them.
+**Status: a plan, not built.** The owner decided on 14 November 2026 that Pesapal takes both mobile money and card payments and that ioTec is to go, and asked for the screens to be redesigned before anything is built ([the designs](#the-designs)). Nothing here is in the code yet. Building waits for the owner's approval of this plan and the choices in [Choices for the owner](#choices-for-the-owner). Facts about Pesapal come from its public API 3.0 documentation, read on 14 November 2026. Items marked "confirm" are not documented publicly and must be checked with Pesapal before anyone relies on them.
 
 ## In short
 
-- **Pesapal takes Visa and Mastercard card payments.** Mobile money stays on ioTec Pay, which already works end to end ([payments.md](payments.md)). Bank transfer stays as it is.
-- A card payment is a new deposit method, `card`, beside `mtn`, `airtel` and `bank_transfer`. It pays for one investment or one goal saving, exactly as every other deposit does. There is still no wallet.
-- The card number is typed only on Pesapal's own page. Finvest's servers and apps never see it, which keeps Finvest in the smallest card security scope (PCI DSS SAQ A, confirm).
-- Pesapal holds the money until it is settled to the trust bank account, so the Pesapal balance becomes a new pot in reconciliation, closed every day like the ioTec wallets.
-- Refunds of card money go back to the card through Pesapal, approved by two people. A chargeback is put right with the corrections payments already has.
-- Pesapal offers no payouts through its API, so payouts are unchanged: mobile money through ioTec, bank through the trust account.
+- **Pesapal takes every mobile money and card payment in.** MTN Mobile Money, Airtel Money, Visa and Mastercard are paid on Pesapal's own secure page. Bank transfer stays as it is.
+- **ioTec Pay collections are switched off** once Pesapal is live. What ioTec does that Pesapal cannot is set out in [Replacing ioTec](#replacing-ioTec): mobile money payouts, SMS and the phone-name check.
+- A payment is still for one investment or one goal saving, as every deposit is. There is still no wallet.
+- Card numbers and mobile money PINs are typed only on Pesapal's page. Finvest's servers and apps never see them, which keeps Finvest in the smallest card security scope (PCI DSS SAQ A, confirm).
+- On Pesapal's page the payer can type any mobile number, so the rule that a client pays only from their own number is checked when the payment is read back. A payment from another number is refunded in full to that number by two people, and the investment does not start.
+- Pesapal holds the money until it is settled to the trust bank account, so the Pesapal balance becomes a new pot in reconciliation, closed every day.
+- Pesapal takes at most UGX 5,000,000 in one mobile money payment. Larger investments are paid by bank transfer.
 
 ## Pesapal at a glance
 
@@ -31,21 +32,30 @@
 
 Fees for Uganda are not published. Ask for a quote. Third parties quote 1.5% to 3.5%, which nobody has confirmed.
 
-## How Pesapal fits next to ioTec
+## Replacing ioTec {#replacing-ioTec}
 
-| Way to pay | Provider | Why |
-| --- | --- | --- |
-| MTN Mobile Money, Airtel Money | ioTec Pay (unchanged) | Built, tested and deployed. ioTec prompts the account's own number, which enforces the owner's rule that the payer is the client's own number before anything is sent. |
-| Visa, Mastercard | **Pesapal (new)** | ioTec takes no cards. Pesapal is licensed by the Bank of Uganda and runs a hosted card page. |
-| Bank transfer | The trust account (unchanged) | |
+| What ioTec does today | After the switch |
+| --- | --- |
+| Mobile money collections (MTN, Airtel) | **Pesapal.** The ioTec collections adapter is switched off (`FINVEST_PAYMENTS_PROVIDER` no longer `iotec`) and removed once its last deposits are settled. |
+| Card payments | Never had them. **Pesapal.** |
+| Mobile money payouts | Pesapal's API has none. Its payout product, Openfloat, is run from a dashboard. Recommended: ioTec keeps sending payouts until Pesapal gives an Openfloat API, then payouts move behind the existing payout port. The owner is asked on a decision card. |
+| SMS (sign-in codes, alerts) | Pesapal has none. Recommended: stays on ioTec for now. The owner is asked on a decision card. |
+| Phone-name check (Verify) for payout numbers and KYC | Pesapal has none. Recommended: stays on ioTec for now, same card. |
 
-**Pesapal mobile money as a fallback is not planned.** On Pesapal's page the payer types any number, so the "payer must be the account's own number" rule could only be checked after the money has moved, then refunded in full. A mobile money payment through Pesapal is also capped at UGX 5,000,000. When ioTec is down, staff already pause the channel and the app offers another way ([platform-settings.md](platform-settings.md)). A fallback can be added later behind the same adapter if the owner wants it (see the choices).
+The switch day: card and mobile money pay in move to Pesapal together. Any ioTec collection still open is carried through by the existing status reads. The money already in the ioTec wallet from collections is swept to the trust account as a transfer between pots by two people, so the ioTec wallet holds payout float only.
 
-## A card payment, step by step
+### Mobile money through Pesapal
 
-The same shape as a mobile money deposit, so every rule in [rules.md](rules.md) holds.
+- The client picks "Mobile money" in the app and finishes on Pesapal's page, which offers MTN and Airtel. `billing_address.phone_number` is set to the number on the client's account, so Pesapal can fill it in (confirm that it does).
+- The status read gives `payment_account`, the number that paid. Payments compares it with the account's number. When they differ, the deposit is held as `uncertain` with the new code `payer_not_account_phone`, nothing is posted to the client, and staff refund it in full to the paying number with two people (Pesapal refunds mobile money only in full). The client is told and asked to pay from their own number.
+- A mobile money payment above UGX 5,000,000 is refused before anything is saved (`above_channel_limit`), and the app offers bank transfer.
+- Automatic investing asks for a payment on the client's behalf, which today is an ioTec prompt with no page. Pesapal has no prompt without its page, so an automatic run sends the client a link to pay instead (a notification that opens the pay screen). Confirm with Pesapal whether a direct mobile money prompt exists for merchants.
 
-1. **The client asks to pay by card.** `POST /client/investments/{id}/payments/card` with an `Idempotency-Key`. In the client's own transaction, payments saves the deposit as `created` (method `card`, provider `pesapal`, no payer number) and a job to send it. The request cannot name an amount; it is the investment's. The one live deposit per investment rule covers cards too. The answer is `202` with the deposit.
+## A payment, step by step
+
+The same for mobile money and cards, and the same shape as today's ioTec deposit, so every rule in [rules.md](rules.md) holds.
+
+1. **The client asks to pay.** `POST /client/investments/{id}/payments/pesapal` with `{"method": "mobile_money" or "card"}` with an `Idempotency-Key`. In the client's own transaction, payments saves the deposit as `created` (method `mobile_money` or `card`, provider `pesapal`; a mobile money deposit carries the account's number as the payer it expects) and a job to send it. The request cannot name an amount; it is the investment's. The one live deposit per investment rule covers cards too. The answer is `202` with the deposit.
 2. **The worker opens the order.** It marks the deposit `sending` and commits, then calls `SubmitOrderRequest` with no transaction open. Our reference (`id`) is the deposit ID. `billing_address` carries the client's proved email or phone, nothing else. The amount is turned from integer shillings into Pesapal's decimal only inside the adapter. It saves `order_tracking_id` as the provider reference and the `redirect_url`, and the deposit becomes `awaiting_payer` (the existing `awaiting_approval` status, shown to the client as "Waiting for your card payment").
 3. **The app opens Pesapal's page.** The app polls `GET /client/payments/{id}` (it already does for mobile money) until the redirect address appears, usually in a second or two, then opens it. The payer types the card and passes 3-D Secure on Pesapal's page.
 4. **The payer comes back.** Pesapal sends them to `callback_url`, a page of the client app that shows the payment as it polls. The return carries no result and changes nothing.
@@ -75,10 +85,10 @@ All in `backend/app/modules/payments` unless said otherwise, with a migration ra
 
 - **Port.** A `CardCollectionsProvider` in `domain/provider.py`: open an order (returns the tracking ID and redirect address, or rejected, deferred or uncertain), read its status, cancel it, request a refund, and read a notice. Every failure is sorted and never raised, as the mobile money port does.
 - **Adapters.** `providers/pesapal.py` (token cached and refreshed before its 5 minutes, shared in `app/infrastructure/pesapal`), and a card sandbox whose amount's last digits choose the result, refused in production like the mobile money sandbox. Tested against a fake that returns success, rejection, timeout and an uncertain outcome.
-- **Deposits.** Method `card` and provider `pesapal` added to the check constraints. A card deposit has no payer number. New columns, set once by the worker: the redirect address, the card brand and masked card from the status read (`payment_account`, sealed like other account details), and Pesapal's `confirmation_code`, which a refund needs. The state trigger and its every-pair test gain the card path.
-- **Client routes.** `POST /client/investments/{id}/payments/card`, then the existing `GET /client/investments/{id}/payment` and `GET /client/payments/{id}`, which gain `redirect_url` while waiting and `card` (brand and last four) once paid. Goals use the same route once goal payments over HTTP exist.
+- **Deposits.** Methods `mobile_money` and `card` and provider `pesapal` added to the check constraints. A card deposit has no payer number. New columns, set once by the worker: the redirect address, the card brand and masked card from the status read (`payment_account`, sealed like other account details), and Pesapal's `confirmation_code`, which a refund needs. The state trigger and its every-pair test gain the card path.
+- **Client routes.** `POST /client/investments/{id}/payments/pesapal`; the ioTec route `.../payments/mobile-money` is retired with ioTec collections, then the existing `GET /client/investments/{id}/payment` and `GET /client/payments/{id}`, which gain `redirect_url` while waiting and `card` (brand and last four) once paid. Goals use the same route once goal payments over HTTP exist.
 - **Charge.** Booked as ioTec's is, from what Pesapal reports, rounded up to a whole shilling. If the client pays the charge, it is added to what Pesapal collects and shown before paying (see the choices).
-- **Channel switch.** `payment_channels` gains `card` pay in, paused by two people like the others. A paused card channel answers `503` `channel_paused`.
+- **Channel switch.** `payment_channels` replaces MTN and Airtel pay in with Pesapal mobile money pay in, and gains card pay in, paused by two people like the others. A paused card channel answers `503` `channel_paused`.
 - **Monitoring and fraud.** Card deposits feed `screening.monitor_deposit` like any other. A masked card seen on another client's paid deposit is flagged to staff, as a reused bank receipt is. Card limits (see below) are checked before the deposit is saved.
 - **Settings** (`FINVEST_PESAPAL_*`): `CONSUMER_KEY` and `CONSUMER_SECRET` (secrets), `IPN_ID` (registered once with a command, then a variable), `IPN_TOKEN` (secret), `BASE_URL`, `TIMEOUT_SECONDS`, and `FINVEST_CARD_PROVIDER` = `disabled` (default), `sandbox` or `pesapal`. API and worker need the credentials; the API also needs the IPN token. The infrastructure thread wires them into the deploy.
 - **Audit.** `payments.deposit_requested`, `_confirmed` and `_failed` with method `card`, and new events for refunds. Never the card, the amount or the client's details in logs.
@@ -96,7 +106,7 @@ Stolen cards are the main risk: a stolen card pays for an investment, and the mo
 
 In `apps/client/src/payments` and the pay screens.
 
-- **Pick a way to pay** gains "Card (Visa or Mastercard)", shown only when the card channel is open. If the client pays the charge, the screen shows it in shillings and the total before they go on. No rate is shown.
+- **Pick a way to pay** becomes mobile money, card or bank transfer (MTN and Airtel are chosen on Pesapal's page), each shown only when its channel is open and the amount is within its limit. If the client pays the charge, the screen shows it in shillings and the total before they go on. No rate is shown.
 - **Paying.** On the web (app.finvestug.com) the app sends the whole page to Pesapal and Pesapal sends it back to `https://app.finvestug.com/pay/card/return?payment=<id>`. On Android and iPhone the app opens Pesapal's page in the system's secure in-app browser (`expo-web-browser`, a new dependency), which closes when the payer reaches the return address. **No iframe.** A full redirect keeps card entry entirely on Pesapal's page, which is what keeps us at SAQ A, and the client app's Content Security Policy needs no frame source for Pesapal.
 - **Waiting and result.** The return screen polls the payment and shows "Confirming your card payment", then the existing paid or failed screens. Closing the browser early returns to the same waiting screen, with "Open the card page again" while the order is open.
 - **Receipts, Activity and notices** say "Visa card ending 0010". Notifications gain the method word "your card".
@@ -117,7 +127,7 @@ In `apps/client/src/payments` and the pay screens.
 
 | Account | Kind | Use |
 | --- | --- | --- |
-| `pesapal.balance`, reference `card` | Asset | Card money Pesapal holds for Finvest until settlement. A pot of its own. |
+| `pesapal.balance` | Asset | Mobile money and card money Pesapal holds for Finvest until settlement. One pot with one statement. |
 | `fees.provider.pesapal` | Expense | Pesapal's charge, when Finvest bears it |
 | `client.refund_in_flight` | Liability, per client | A card refund approved and sent, not yet on Pesapal's statement |
 
@@ -125,11 +135,11 @@ In `apps/client/src/payments` and the pay screens.
 
 | Event | Debit | Credit |
 | --- | --- | --- |
-| Card payment confirmed (`payment.deposit_confirmed`) | `pesapal.balance` | `client.awaiting_start`, the client, reference the investment |
+| Payment confirmed, mobile money or card (`payment.deposit_confirmed`) | `pesapal.balance` | `client.awaiting_start`, the client, reference the investment |
 | Pesapal's charge (`payment.provider_charge`) | `fees.provider.pesapal` | `pesapal.balance` |
 | Settlement to the bank (`pot_transfer`, two people) | `bank.trust` with what arrived | `pesapal.balance` with what left, any difference to `fees.provider.pesapal` |
-| Card refund sent (`payment.card_refund_sent`) | `client.awaiting_start` | `client.refund_in_flight` |
-| Card refund on the statement (`payment.card_refund_settled`) | `client.refund_in_flight` | `pesapal.balance` |
+| Refund sent, card or mobile money (`payment.pesapal_refund_sent`) | `client.awaiting_start` | `client.refund_in_flight` |
+| Refund on the statement (`payment.pesapal_refund_settled`) | `client.refund_in_flight` | `pesapal.balance` |
 
 If the client pays the charge instead, the deposit entry debits `pesapal.balance` with the whole amount collected, credits `client.awaiting_start` with the investment's amount and credits income `fees.card_charges_recovered` with the charge. Pesapal's actual charge is then booked against `fees.provider.pesapal` as above. Whether Pesapal takes its charge per payment or at settlement decides when that entry is posted (confirm).
 
@@ -206,11 +216,33 @@ A refund's `username` sent to Pesapal is the approver's staff ID, never a name. 
 
 The first live check is a small real card payment after deploy, refunded to the card, before the channel is opened to clients.
 
+## The designs
+
+Redesigned before building, as the owner asked. One image per screen and layout, in [screenshots/pesapal-design](screenshots/pesapal-design/) (made from static mockups in its `source` folder, not from the app):
+
+| Screen | Shows |
+| --- | --- |
+| `client-*-01-pay-mobile-money` | Pay with mobile money, card or bank transfer, mobile money chosen, the number to pay from |
+| `client-*-02-pay-card-with-charge` | Card chosen, with the card charge and the total shown before paying |
+| `client-*-03-finish-on-pesapal` | What happens on Pesapal's page, before it opens |
+| `client-*-04-confirming` | Back from Pesapal, waiting for the confirmation, with a way to open the page again |
+| `client-*-05-paid-by-card` | Paid, with the card's last four digits and the charge |
+| `client-*-06-card-declined` | Declined, nothing taken, try again or pay another way |
+| `client-*-07-paid-from-another-number` | Mobile money from a number that is not the client's, being sent back |
+| `client-*-08-above-mobile-and-card-limits` | An investment above UGX 5,000,000, steered to bank transfer |
+| `client-*-09-card-payments-paused` | Card payments paused by staff |
+| `console-*-c1-settings-payment-channels` | Payment channels on Pesapal, a pause waiting for a second person, and the limits |
+| `console-*-c2-card-payment-detail` | A client's card payment with Pesapal's references and its history |
+| `console-*-c3-refunds-through-pesapal` | Refunds to the card or number paid from, the two people and Pesapal's own approval |
+| `console-*-c4-close-the-day-pesapal` | The Pesapal pot in the day close, and recording a settlement |
+
 ## Choices for the owner
 
 | Choice | Recommended for now |
 | --- | --- |
-| What Pesapal is used for | Cards only. Mobile money stays on ioTec, with no Pesapal fallback. |
+| What Pesapal is used for | Decided by the owner: mobile money and cards, and ioTec goes. |
+| Mobile money payouts | ioTec keeps sending them until Pesapal has a payout API (on a decision card). |
+| SMS and the phone-name check | Stay on ioTec for now (on a decision card). |
 | Who pays the card charge | The client, shown in shillings before paying, if Pesapal allows it. Otherwise Finvest, as with ioTec. A card charge of a few percent is a large share of a short bill's return, so absorbing it would cost far more than ioTec's charge. |
 | Card limits | UGX 5,000,000 per payment and UGX 10,000,000 per client in 30 days, changeable on Settings by two people. |
 | Early withdrawal of money paid by card | Within 30 days of the payment, refunded to the card rather than paid out. |
