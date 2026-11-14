@@ -52,6 +52,7 @@ Nothing personal goes into a job payload or a log. The words live in the `notifi
 | `payout_failed` | Payouts | `amount`, `destination` | Money |
 | `payout_declined` | Payouts | `amount`, `destination` | Money |
 | `investment_started` | Investments | `amount`, `product` | Investments |
+| `investment_booked` | Investments | `product` | Investments |
 | `investment_maturing` | Investments | `product`, `date` | Investments |
 | `investment_matured` | Investments | `amount`, `product` | Investments |
 | `investment_withdrawal_requested` | Investments | `amount`, `product` | Investments |

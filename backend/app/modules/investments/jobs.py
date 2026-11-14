@@ -25,6 +25,7 @@ from app.infrastructure.jobs import (
 from app.infrastructure.jobs import queue as job_queue
 from app.modules.investments import (
     accrual,
+    bookings,
     corrections,
     holdings,
     maturity,
@@ -62,6 +63,7 @@ class InvestmentJobs:
             TELL_EARNINGS_KIND: self.tell_earnings,
             REMIND_MATURING_KIND: self.remind_maturing,
             corrections.APPLY_KIND: self.apply_correction,
+            bookings.CARRY_OUT_KIND: self.carry_out_booking,
             WITHDRAW_KIND: self.withdraw_early,
             PAY_EARLY_WITHDRAWAL_KIND: self.pay_early_withdrawal,
             transfers.CARRY_OUT_KIND: self.carry_out_transfer,
@@ -166,6 +168,21 @@ class InvestmentJobs:
             except ApplicationError as error:
                 raise PermanentJobError(code=f"correction_{error.code}") from error
             return {"status": done.status.value, "error_code": done.failure_code}
+
+        await context.apply(effect)
+
+    async def carry_out_booking(self, job: ClaimedJob, context: JobContext) -> None:
+        """Save the investment two members of staff booked. A refusal is recorded on it."""
+        booking_id = job.payload.get("booking_id")
+        if not isinstance(booking_id, str):
+            raise PermanentJobError(code="booking_id_missing")
+
+        async def effect(session: AsyncSession) -> Mapping[str, object]:
+            try:
+                done = await bookings.carry_out_booking(session, booking_id, self._clock)
+            except ApplicationError as error:
+                raise PermanentJobError(code=f"booking_{error.code}") from error
+            return {"status": done.status, "error_code": done.failure_code}
 
         await context.apply(effect)
 
