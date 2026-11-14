@@ -48,6 +48,7 @@ json.dump({
     "deploy_ssh_public_key": os.environ.get("DEPLOY_SSH_PUBLIC_KEY", "").strip(),
     "ssh_source_addresses": items("SSH_SOURCE_ADDRESSES"),
     "admin_access_emails": items("ADMIN_ACCESS_EMAILS"),
+    "admin_office_networks": items("ADMIN_OFFICE_NETWORKS"),
     "alert_emails": items("ALERT_EMAILS"),
     "client_app_public": os.environ.get("CLIENT_APP_PUBLIC", "") == "true",
 }, __import__("sys").stdout)

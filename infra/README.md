@@ -124,6 +124,7 @@ Repository variables under **Settings → Secrets and variables → Actions → 
 | `TERRAFORM_STATE_BUCKET` | The state bucket's name |
 | `SSH_SOURCE_ADDRESSES` | Your own addresses, comma separated, such as `203.0.113.10` |
 | `ADMIN_ACCESS_EMAILS` | Staff emails allowed into the back office, comma separated, such as `a@finvestug.com,b@finvestug.com`. Required for production. |
+| `ADMIN_OFFICE_NETWORKS` | Optional. Office addresses as CIDR ranges, comma separated, such as `203.0.113.10/32`. When set, Cloudflare Access lets staff into the back office only from these networks. It is a second fence: the console's own office networks setting (Settings, Staff security, two people) is the real check, and it also covers the staff API, which this does not. Keep this list the same as the Settings list or wider, or a change made in Settings is undone at the edge. Run Provision `production` after changing it. |
 | `ALERT_EMAILS` | Who gets alerts, comma separated like `ADMIN_ACCESS_EMAILS`. Optional, but set two people before launch. |
 | `CLIENT_APP_PUBLIC` | Leave unset until switch day. Until then the production client app host lets in only `ADMIN_ACCESS_EMAILS`, through Cloudflare Access, while the API stays public. On switch day ([docs/launch.md](../docs/launch.md)) set it to `true` and run Provision `production` (plan, then apply) to lift Access from the app host. The back office keeps it. |
 
