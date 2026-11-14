@@ -191,6 +191,14 @@ async def test_a_client_who_cannot_be_carried_over_is_noted_and_the_rest_go_on(
     )
     assert (again.carried, again.problems) == (1, 1)
 
+    # The job finishes, and keeps the sealed sheets: they are the only copy of the noted client.
+    assert await worker(worker_database).run_once() == 1
+    [job] = await rows(
+        migrator_database, "SELECT status FROM jobs WHERE kind = 'migration.carry_over'"
+    )
+    assert job.status == "succeeded"
+    assert len(await rows(migrator_database, "SELECT switch_id FROM migration_switch_files")) == 1
+
 
 async def test_only_the_worker_notes_a_client_it_could_not_carry_over(
     console: Console, app_database: Database

@@ -1,7 +1,9 @@
 """The worker's side of the switch: carry every client of an approved switch over.
 
 No handler here calls a provider. The carry-over works in one transaction per client, each
-checking the job's lease first, and completes the job at the end by removing the sealed sheets.
+checking the job's lease first, and completes the job at the end. The sealed sheets are removed
+then only if every client was carried over: a client noted as not carried over is still only in
+them.
 A run that stops part way is run again and carries on from the first client not yet done.
 """
 
@@ -55,7 +57,9 @@ class MigrationJobs:
             )
 
         async def done(session: AsyncSession) -> Mapping[str, object]:
-            await carry_over.remove_sheets(session, switch_id)
+            # A noted client is still only in the sheets: they stay until every client is done.
+            if result.problems == 0:
+                await carry_over.remove_sheets(session, switch_id)
             return {"carried": result.carried, "problems": result.problems}
 
         await context.apply(done)

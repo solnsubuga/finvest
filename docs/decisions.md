@@ -139,6 +139,7 @@ A running log. Add a row when a decision is made, and move an open question up w
 
 | Question | Who answers |
 | --- | --- |
+| Migration: a client the switch's worker could not carry over is noted in `migration_carry_problems`, and the sealed sheets are kept for them. There is no route yet to retry or resolve a noted client with two members of staff. It must be built and on main before the real switch, along with whether a retry reuses the noted row or adds a resolution. | Migration thread |
 | How long are Resend's delivery events (`notification_email_events`: hashed recipients, delivery state, times) kept? Built: kept for good, as the ledger is, until the regulator's period is confirmed. Recommended by the notifications thread: a daily worker job deletes events older than 13 months, but always keeps every complaint (the rule that a complained address is never lifted reads them) and the event behind each suppression still in force. Each message's own delivery state stays in `notification_messages`. | Owner |
 | Push alerts: Expo, and through it Apple and Google, become processors of what a push says. Is that provider choice acceptable? Built: Expo's push service, off until `FINVEST_PUSH_BACKEND` is set. | Owner |
 | Client locks: should one member of staff be able to lock an account at once in an emergency (a stolen phone, fraud in progress), with a second person confirming afterwards? Built: two people before the lock takes effect. Should the client be told their account was locked, and how? Built: no message. | Owner |
