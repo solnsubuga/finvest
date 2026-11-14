@@ -251,6 +251,11 @@ def prepare(output: Path, env: Mapping[str, str]) -> None:
         "FINVEST_EMAIL_RESEND_API_KEY",
         # Tags each message so the router sends its events back to this environment.
         "FINVEST_EMAIL_FIDIBA_ENVIRONMENT",
+        # SMS goes out from the worker only (backend app/infrastructure/sms).
+        "FINVEST_SMS_BACKEND",
+        "FINVEST_SMS_IOTEC_CLIENT_ID",
+        "FINVEST_SMS_IOTEC_API_KEY",
+        "FINVEST_SMS_IOTEC_BASE_URL",
     ):
         if optional(env, name):
             worker[name] = optional(env, name)

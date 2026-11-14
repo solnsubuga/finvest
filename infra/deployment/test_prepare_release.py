@@ -191,6 +191,21 @@ class PrepareRelease(unittest.TestCase):
         for service in ("scheduler", "migrate"):
             self.assertNotIn("FINVEST_EMAIL_HASH_KEY", read_env(self.out / "runtime" / f"{service}.env"))
 
+    def test_sms_settings_reach_the_worker_only(self):
+        sms = {
+            "FINVEST_SMS_BACKEND": "iotec",
+            "FINVEST_SMS_IOTEC_CLIENT_ID": "client",
+            "FINVEST_SMS_IOTEC_API_KEY": "k" * 32,
+            "FINVEST_SMS_IOTEC_BASE_URL": "https://messaging-api.iotec.io",
+        }
+        pr.prepare(self.out, settings(**sms))
+        worker = read_env(self.out / "runtime" / "worker.env")
+        for name, value in sms.items():
+            self.assertEqual(worker[name], value)
+        for service in ("api", "scheduler", "migrate"):
+            found = read_env(self.out / "runtime" / f"{service}.env")
+            self.assertFalse([name for name in sms if name in found])
+
     def test_identity_data_key_reaches_the_api_and_worker_only(self):
         pr.prepare(self.out, settings(FINVEST_IDENTITY_DATA_KEY="d" * 43))
         for service in ("api", "worker"):
