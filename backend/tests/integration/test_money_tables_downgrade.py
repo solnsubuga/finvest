@@ -1211,6 +1211,15 @@ ROWS = {
         "COMMIT",
         "refusing to drop product changes",
     ),
+    "0334_investment_bookings": (
+        "BEGIN; SELECT set_config('finvest.actor_kind', 'staff', true); "
+        "SELECT set_config('finvest.actor_id', '-Nabc0000000000000S1', true); "
+        "INSERT INTO investment_bookings (id, client_id, product_id, currency, principal_minor, "
+        "at_maturity, reason, proposed_by, proposed_at) VALUES ('-Nabc0000000000000A1', "
+        "'-Nabc0000000000000B1', 'FvProduct1TREA91_001', 'UGX', 1000000, 'roll_over', "
+        "'The client called the office', '-Nabc0000000000000S1', now()); COMMIT",
+        "refusing to drop the record of investments staff booked",
+    ),
 }
 
 
