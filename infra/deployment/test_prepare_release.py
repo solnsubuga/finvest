@@ -176,12 +176,10 @@ class PrepareRelease(unittest.TestCase):
         for service in ("worker", "scheduler", "migrate"):
             self.assertNotIn("RESEND_HOOK_SECRET", read_env(self.out / "runtime" / f"{service}.env"))
 
-    def test_fidiba_environment_tag_reaches_the_worker_only(self):
+    def test_fidiba_environment_tag_is_no_longer_passed(self):
+        # Finvest uses its own Resend account, so there is no router tag to send.
         pr.prepare(self.out, settings(FINVEST_EMAIL_FIDIBA_ENVIRONMENT="app_finvest_prod"))
-        self.assertEqual(
-            read_env(self.out / "runtime" / "worker.env")["FINVEST_EMAIL_FIDIBA_ENVIRONMENT"], "app_finvest_prod"
-        )
-        for service in ("api", "scheduler", "migrate"):
+        for service in ("api", "worker", "scheduler", "migrate"):
             self.assertNotIn("FINVEST_EMAIL_FIDIBA_ENVIRONMENT", read_env(self.out / "runtime" / f"{service}.env"))
 
     def test_email_hash_key_reaches_the_api_and_worker_only(self):
