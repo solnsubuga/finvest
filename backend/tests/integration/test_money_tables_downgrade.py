@@ -9,7 +9,7 @@ changes, Finvest's own money in the buffer, the payments of tax to URA, the paym
 the right client, next of kin, the answers to the investing questions, the requests to close an
 account, the journals sent to the accounting system, who set the bank account clients pay
 into, why a payout send waited, the account code maps, the deposits taken back as mistakes,
-what clients owe for them or the runs staff asked for again."""
+what clients owe for them, the runs staff asked for again or the report schedules."""
 
 import os
 from collections.abc import Iterator
@@ -955,6 +955,15 @@ ROWS = {
         "UPDATE payout_send_attempts SET outcome = 'deferred', finished_at = now(), "
         "deferred_for = 'wallet_short' WHERE payout_id = '-Nabc0000000000000A1'; COMMIT",
         "refusing to drop why payout sends were deferred",
+    ),
+    "0320_report_schedules": (
+        "BEGIN; SELECT set_config('finvest.actor_kind', 'staff', true); "
+        "SELECT set_config('finvest.actor_id', '-Nabc0000000000000S1', true); "
+        "INSERT INTO report_schedules (id, report_key, frequency, currency, recipients, reason, "
+        "status, proposed_by, proposed_at) VALUES ('-Nabc0000000000000A1', 'daily_position', "
+        "'daily', 'UGX', ARRAY['-Nabc0000000000000S2']::push_id[], 'Test', 'proposed', "
+        "'-Nabc0000000000000S1', now()); COMMIT",
+        "refusing to drop report schedules",
     ),
     "0290_finance_code_maps": (
         "BEGIN; SELECT set_config('finvest.actor_kind', 'staff', true); "
