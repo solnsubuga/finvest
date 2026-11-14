@@ -46,7 +46,7 @@ export const AskBody = z.object({
 });
 export type AskBody = z.infer<typeof AskBody>;
 
-export const AtMaturity = z.enum(["roll_over", "pay_out", "pay_interest"]);
+export const AtMaturity = z.enum(["roll_over", "pay_out", "pay_interest", "interest_to_goal"]);
 export type AtMaturity = z.infer<typeof AtMaturity>;
 
 export const AuthenticatorSetupView = z.object({
@@ -302,6 +302,9 @@ export const ClientInvestmentOut = z.object({
   days_earned: z.number().int(),
   id: z.string(),
   interest_at_maturity_minor: z.number().int().nullable(),
+  interest_from_investment_id: z.string().nullable().optional(),
+  interest_goal_id: z.string().nullable().optional(),
+  interest_goal_name: z.string().nullable().optional(),
   interest_so_far_minor: z.number().int(),
   interest_today_minor: z.number().int(),
   maturity_date: z.string().nullable(),
@@ -574,6 +577,14 @@ export type GoalDetails = z.infer<typeof GoalDetails>;
 export const GoalStatus = z.enum(["active", "closed"]);
 export type GoalStatus = z.infer<typeof GoalStatus>;
 
+export const InterestComingView = z.object({
+  interest_minor: z.number().int().nullable(),
+  investment_id: z.string(),
+  maturity_date: z.string().nullable(),
+  product_name: z.string(),
+});
+export type InterestComingView = z.infer<typeof InterestComingView>;
+
 export const Standing = z.enum(["reached", "on_track", "behind", "no_date"]);
 export type Standing = z.infer<typeof Standing>;
 
@@ -608,6 +619,8 @@ export type SavingRuleView = z.infer<typeof SavingRuleView>;
 export const SavingView = z.object({
   amount_minor: z.number().int(),
   at_maturity: AtMaturity.nullable(),
+  interest_from_investment_id: z.string().nullable().optional(),
+  interest_from_product_name: z.string().nullable().optional(),
   interest_minor: z.number().int(),
   investment_id: z.string(),
   maturity_date: z.string().nullable(),
@@ -643,6 +656,7 @@ export const GoalView = z.object({
   created_at: z.string(),
   currency: Currency,
   goal_id: z.string(),
+  interest_coming: z.array(InterestComingView).optional(),
   locked_until: z.string().nullable().optional(),
   name: z.string(),
   payday: z.number().int().nullable(),
@@ -868,6 +882,7 @@ export type MarkRead = z.infer<typeof MarkRead>;
 export const MaturityChoice = z.object({
   at_maturity: AtMaturity,
   destination_id: z.string().nullable().optional(),
+  goal_id: z.string().nullable().optional(),
 });
 export type MaturityChoice = z.infer<typeof MaturityChoice>;
 

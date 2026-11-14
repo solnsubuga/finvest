@@ -59,10 +59,16 @@ class AtMaturity(StrEnum):
     PAY_OUT = "pay_out"
     # Keep what was put in invested for another term, and pay the interest out.
     PAY_INTEREST = "pay_interest"
+    # Keep what was put in invested for another term, and save the interest towards one of
+    # the client's goals, as a new saving that starts at once.
+    INTEREST_TO_GOAL = "interest_to_goal"
 
 
 # The choices that send money to a payout destination, and so name one.
 PAYS_OUT = frozenset({AtMaturity.PAY_OUT, AtMaturity.PAY_INTEREST})
+# The choices a client makes on a running investment only, never when they first invest: the
+# goal is chosen from the investment's own screen.
+CHOSEN_LATER = frozenset({AtMaturity.INTEREST_TO_GOAL})
 
 
 class StartRefusal(StrEnum):
@@ -141,6 +147,9 @@ class MaturityStep(StrEnum):
     PAY_OUT = "pay_out"
     # The principal rolls over into a new term and the interest goes to payouts.
     ROLL_OVER_PAY_INTEREST = "roll_over_pay_interest"
+    # The principal rolls over into a new term and the interest starts a new saving in the
+    # goal the client chose.
+    ROLL_OVER_INTEREST_TO_GOAL = "roll_over_interest_to_goal"
     # Hand the money to payouts and wait for the client: there is nowhere to send it yet.
     HOLD = "hold"
 
@@ -152,11 +161,23 @@ class HoldReason(StrEnum):
     PRODUCT_NOT_OPEN = "product_not_open"
 
 
+class GoalMiss(StrEnum):
+    """Why interest the client chose to save to a goal rolled over with the principal instead."""
+
+    # The goal was closed before the term ended.
+    GOAL_CLOSED = "goal_closed"
+    # The product the goal saves into no longer takes new money.
+    GOAL_PRODUCT_NOT_OPEN = "goal_product_not_open"
+
+
 @dataclass(frozen=True, slots=True)
 class MaturityPlan:
     step: MaturityStep
     # For HOLD, why all of it waits. For ROLL_OVER_PAY_INTEREST, why the interest waits.
     hold_reason: HoldReason | None = None
+    # For a ROLL_OVER that the client wanted as ROLL_OVER_INTEREST_TO_GOAL: why the interest
+    # stayed with the principal.
+    goal_miss: GoalMiss | None = None
 
 
 def can_withdraw_early(
@@ -192,7 +213,11 @@ def is_due_to_mature(status: InvestmentStatus, maturity: date | None, run_date: 
 
 
 def plan_maturity(
-    choice: AtMaturity | None, *, has_destination: bool, product_open: bool
+    choice: AtMaturity | None,
+    *,
+    has_destination: bool,
+    product_open: bool,
+    goal_miss: GoalMiss | None = None,
 ) -> MaturityPlan:
     """What the maturity run does with a matured investment.
 
@@ -205,6 +230,16 @@ def plan_maturity(
         if has_destination:
             return MaturityPlan(MaturityStep.PAY_OUT)
         return MaturityPlan(MaturityStep.HOLD, HoldReason.NO_DESTINATION)
+    if choice is AtMaturity.INTEREST_TO_GOAL:
+        # The principal can only stay invested if the product still takes money. If it does
+        # not, all of it waits, as for paying the interest out. If the goal cannot take the
+        # interest, the interest rolls over with the principal: it is never sent anywhere the
+        # client did not choose, and never left waiting when it can keep earning.
+        if not product_open:
+            return MaturityPlan(MaturityStep.HOLD, HoldReason.PRODUCT_NOT_OPEN)
+        if goal_miss is not None:
+            return MaturityPlan(MaturityStep.ROLL_OVER, goal_miss=goal_miss)
+        return MaturityPlan(MaturityStep.ROLL_OVER_INTEREST_TO_GOAL)
     if choice is AtMaturity.PAY_INTEREST:
         # The principal can only stay invested if the product still takes money. If it does
         # not, all of it waits, as a rollover would: nothing is half done on a guess.

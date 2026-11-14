@@ -1,7 +1,7 @@
 """Add the Treasury bill auction calendar, so the desk shows each product's next auction.
 
 Revision ID: 0088_dealing_auctions
-Revises: 0335_note_reissues
+Revises: 0401_goal_interest_savings
 
 The Bank of Uganda publishes the dates of its Treasury bill auctions. A member of staff with
 `dealing_orders.change` enters each date for a product and can cancel one, with a reason, if the
@@ -21,7 +21,7 @@ from collections.abc import Sequence
 from alembic import op
 
 revision: str = "0088_dealing_auctions"
-down_revision: str | None = "0335_note_reissues"
+down_revision: str | None = "0401_goal_interest_savings"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 

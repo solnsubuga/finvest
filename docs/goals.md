@@ -90,6 +90,16 @@ A saving that rolls over at maturity becomes a new investment for the proceeds, 
 
 A closed goal is not followed: its investments keep rolling over as the client's own. Following the same rollover again changes nothing.
 
+## Interest from other investments
+
+A client can choose, on any running or unpaid fixed-term investment, to save its interest to one of their open goals when it matures ([investing.md](investing.md#maturity)). What they put in starts another term, and the interest starts a new investment at once in the goal's product, with nothing to pay. The product's minimum does not apply to it, because the money is already invested (the owner's decision, 2026-11-14). The choice stays for every term until the client changes it.
+
+- The investments module reads the goal through `goals/reads.py`, which imports nothing of goals' own, so there is no import cycle. It never writes to goals' tables.
+- The worker records the new investment in `goal_savings` with `interest_from_investment_id`, the investment whose interest it is (consumer `goals.link_interest_saving`, migration 0401). The database lets only the system record one, and only for the investment that interest started, of the same client, for the goal that investment chose. One maturity's interest is saved once.
+- A locked goal locks the new saving with it, in the same transaction as the maturity.
+- If the goal was closed before the maturity, the interest rolls over with the principal and the client is told. If it closes between the maturity and the worker linking the saving, the saving carries on as the client's own investment, as a closed goal's savings do.
+- The goal's screen shows each investment whose interest is coming (`interest_coming` on `GET /client/goals/{id}`), and each saving made from interest carries `interest_from_investment_id` and `interest_from_product_name`. When the saving rolls over, `goals.follow_rollover` follows it like any other.
+
 ## Group goals
 
 One target that several clients save towards together, such as a family buying land. Decided for now by Solo (2026-11-13): a shared target, with each member saving into their own investments. Nothing is pooled, nothing needs an approval, and every member can leave with their own money. It is ordinary investing with a shared progress bar, so it stays clear of the open question of whether a pooled group is a collective investment scheme. The code is `groups.py` and `domain/groups.py`, and the database side is migration 0112.

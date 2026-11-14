@@ -161,6 +161,20 @@ class SavingView(Contract):
     pay_by: datetime
     start_date: date | None
     maturity_date: date | None
+    # Started from another investment's interest when it matured: that investment and its
+    # product's name. Nothing was paid for it.
+    interest_from_investment_id: PushId | None = None
+    interest_from_product_name: str | None = None
+
+
+class InterestComingView(Contract):
+    """One of the client's investments that will save its interest to the goal when it
+    matures. Figures after tax, as quoted today."""
+
+    investment_id: PushId
+    product_name: str
+    maturity_date: date | None
+    interest_minor: int | None
 
 
 class GoalView(Contract):
@@ -184,6 +198,9 @@ class GoalView(Contract):
     # null when it is not locked.
     locked_until: date | None = None
     unlock_requested_at: datetime | None = None
+    # The client's investments that will save their interest here when they mature, soonest
+    # first.
+    interest_coming: list[InterestComingView] = Field(default_factory=list)
 
 
 class Payday(Contract):
@@ -203,6 +220,8 @@ class StaffSavingView(Contract):
     accrued_net_minor: int
     start_date: date | None
     maturity_date: date | None
+    # Started from another investment's interest when it matured: that investment.
+    interest_from_investment_id: PushId | None = None
 
 
 class StaffGoalView(Contract):
@@ -257,7 +276,9 @@ def _progress_view(progress: Progress) -> ProgressView:
     )
 
 
-def _saving_view(saving: investments.ClientInvestment) -> SavingView:
+def _saving_view(
+    saving: investments.ClientInvestment, from_products: dict[str, str] | None = None
+) -> SavingView:
     return SavingView(
         investment_id=saving.id,
         product_code=saving.product_code,
@@ -271,6 +292,18 @@ def _saving_view(saving: investments.ClientInvestment) -> SavingView:
         pay_by=saving.pay_by,
         start_date=saving.start_date,
         maturity_date=saving.maturity_date,
+        interest_from_investment_id=saving.interest_from_id,
+        interest_from_product_name=(from_products or {}).get(saving.id),
+    )
+
+
+def _coming_view(investment: investments.ClientInvestment) -> InterestComingView:
+    returns = investment.at_maturity_returns
+    return InterestComingView(
+        investment_id=investment.id,
+        product_name=investment.product_name,
+        maturity_date=investment.maturity_date,
+        interest_minor=None if returns is None else returns.interest.minor,
     )
 
 
@@ -287,11 +320,12 @@ def _goal_view(goal: service.ClientGoal) -> GoalView:
         created_at=goal.created_at,
         progress=_progress_view(goal.progress),
         plan=None if goal.plan is None else _plan_view(goal.plan),
-        savings=[_saving_view(s) for s in goal.savings],
+        savings=[_saving_view(s, goal.interest_from_products) for s in goal.savings],
         saving_rule=None if goal.saving_rule is None else _rule_view(goal.saving_rule),
         payday=goal.payday,
         locked_until=goal.locked_until,
         unlock_requested_at=goal.unlock_requested_at,
+        interest_coming=[_coming_view(i) for i in goal.interest_coming],
     )
 
 
@@ -557,6 +591,9 @@ async def staff_get_goal(
                 accrued_net_minor=s.accrued_net.minor,
                 start_date=s.start_date,
                 maturity_date=s.maturity_date,
+                interest_from_investment_id=s.source_id
+                if s.source_type == investments.GOAL_INTEREST_SOURCE
+                else None,
             )
             for s in found.savings
         ],

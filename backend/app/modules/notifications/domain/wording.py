@@ -208,6 +208,19 @@ DEFAULTS: dict[str, Wording] = {
         "mature, and you choose what happens then in the app.",
         "Finvest: well done, {goal} has reached its target. See it in the app.",
     ),
+    "goal_interest_saved": Wording(
+        "Interest saved to your goal",
+        "Your {product} matured. What you put in started another term, and its interest is "
+        "now a new saving towards {goal}. See it in the app.",
+        "Finvest: the interest from your {product} is now saving towards {goal}.",
+    ),
+    "goal_interest_not_saved": Wording(
+        "Interest kept invested",
+        "Your {product} matured, but its interest could not be saved to {goal}, so all of it "
+        "started another term instead. See why in the app.",
+        "Finvest: the interest from your {product} could not go to {goal}, so all of it "
+        "started another term.",
+    ),
     "autoinvest_run_retrying": Wording(
         "Automatic investment not paid yet",
         "We could not collect your automatic investment due on {date}. We will send the "

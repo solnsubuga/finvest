@@ -272,4 +272,4 @@ The audit event for a recorded result carries its figures, so a result later rej
 
 ## Not built yet
 
-The custodian statement comparison. The console shows the allocation report under the buffer section on the dealing desk.
+The custodian statement comparison is now in reconciliation ([reconciliation.md](reconciliation.md#custodian)); `matches_custodian` on the desk is not yet filled from it. The console shows the allocation report under the buffer section on the dealing desk.

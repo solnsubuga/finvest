@@ -20,6 +20,10 @@ dependencies = [
   "fpdf2>=2.8,<3",
   "python-multipart>=0.0.33",
   "pypdf>=7.1,<8",
+  "anthropic>=2.8,<3",
+  "openpyxl>=3.1,<4",
+  "openai>=2,<3",
+  "google-genai>=1.40,<2",
 ]
 
 [dependency-groups]
@@ -30,6 +34,7 @@ dev = [
   "ruff>=0.8",
   "import-linter>=2.1",
   "pip-audit>=2.9",
+  "types-openpyxl>=3.1",
 ]
 
 [tool.uv]

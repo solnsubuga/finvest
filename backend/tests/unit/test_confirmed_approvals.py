@@ -52,6 +52,8 @@ DECISIONS = {
     "POST /staff/payout-returns/{return_id}/approve",
     "POST /staff/payout-returns/{return_id}/decline",
     "POST /staff/payouts/{payout_id}/decline",
+    "POST /staff/reconciliation/custodian-checks/{check_id}/send-back",
+    "POST /staff/reconciliation/custodian-checks/{check_id}/sign-off",
     "POST /staff/reconciliation/days/{day}/approve",
     "POST /staff/reconciliation/pot-transfers/{transfer_id}/approve",
     "POST /staff/reconciliation/pot-transfers/{transfer_id}/decline",
