@@ -19,15 +19,10 @@ const PRODUCTS = [
   { code: "TREA-182", name: "182 Day Treasury Bill" },
 ];
 
-function renderCalendar(
-  api: AuctionsApi = createStubAuctionsApi(
-    { name: "Ada" },
-    "sample",
-    () => TODAY,
-    0,
-  ),
-  onChanged = vi.fn(),
-) {
+const stub = (kind: "sample" | "empty" = "sample") =>
+  createStubAuctionsApi({ name: "Ada" }, kind, () => TODAY, 0);
+
+function renderCalendar(api: AuctionsApi = stub(), onChanged = vi.fn()) {
   let keys = 0;
   render(
     <AuctionSection
@@ -43,27 +38,42 @@ function renderCalendar(
 
 const coming = () =>
   screen.findByRole("region", { name: "Auction dates from today on" });
+const row = (table: HTMLElement, day: string, bill: string) =>
+  within(table)
+    .getAllByRole("listitem")
+    .find(
+      (r) => r.textContent?.includes(day) && r.textContent.includes(bill),
+    ) as HTMLElement;
 
 describe("auction calendar", () => {
-  it("lists the dates from today on, with a cancelled one and who cancelled it", async () => {
+  it("lists the dates from today on, with what waits for a second person", async () => {
     renderCalendar();
     const table = await coming();
-    const rows = within(table).getAllByRole("row").slice(1);
-    expect(rows).toHaveLength(5);
-    const moved = within(table).getByText(/Cancelled by Grace/);
-    expect(moved).toHaveTextContent(
-      "The Bank moved it to Wednesday 18 November",
-    );
+    expect(within(table).getAllByRole("listitem")).toHaveLength(6);
     expect(
-      within(rows[1] as HTMLElement).getByRole("rowheader"),
-    ).toHaveTextContent("Wed 18 Nov");
+      within(row(table, "16 Dec 2026", "91 Day")).getByText(
+        "Waiting for a second person",
+      ),
+    ).toBeInTheDocument();
+    const moving = row(table, "2 Dec 2026", "91 Day");
+    expect(
+      within(moving).getByText("Cancellation waiting for a second person"),
+    ).toBeInTheDocument();
+    expect(
+      within(moving).getByText(
+        /The Bank moved it to Thursday 3 December. Asked by Grace/,
+      ),
+    ).toBeInTheDocument();
+    expect(
+      within(row(table, "16 Nov 2026", "91 Day")).getByText("Cancelled"),
+    ).toBeInTheDocument();
     expect(screen.getByText("Past month (2)")).toBeInTheDocument();
   });
 
-  it("enters a date and tells the desk", async () => {
+  it("proposes a date, which waits for someone else and can be withdrawn", async () => {
     const { user, onChanged } = renderCalendar();
     await coming();
-    const form = screen.getByRole("form", { name: "Enter an auction date" });
+    const form = screen.getByRole("form", { name: "Propose an auction date" });
     await user.selectOptions(
       within(form).getByLabelText("Treasury bill"),
       "TREA-182",
@@ -73,59 +83,111 @@ describe("auction calendar", () => {
       "2026-12-16",
     );
     await user.click(
-      within(form).getByRole("button", { name: "Add the date" }),
+      within(form).getByRole("button", { name: "Propose the date" }),
     );
-    const table = await coming();
-    expect(await within(table).findByText("Wed 16 Dec")).toBeInTheDocument();
+    const withdraw = await screen.findByRole("button", {
+      name: "Withdraw the 182 Day Treasury Bill auction on 16 Dec 2026",
+    });
+    expect(
+      screen.queryByRole("button", {
+        name: "Approve the 182 Day Treasury Bill auction on 16 Dec 2026",
+      }),
+    ).not.toBeInTheDocument();
     expect(onChanged).toHaveBeenCalledOnce();
+    await user.click(withdraw);
+    expect(
+      await within(row(await coming(), "16 Dec 2026", "182 Day")).findByText(
+        "Withdrawn",
+      ),
+    ).toBeInTheDocument();
   });
 
-  it("refuses a past day before sending, and a day already entered after", async () => {
-    const api = createStubAuctionsApi(
-      { name: "Ada" },
-      "sample",
-      () => TODAY,
-      0,
-    );
-    const add = vi.spyOn(api, "add");
+  it("refuses a past day before sending, and a day already in the calendar after", async () => {
+    const api = stub();
+    const propose = vi.spyOn(api, "propose");
     const { user } = renderCalendar(api);
     await coming();
-    const form = screen.getByRole("form", { name: "Enter an auction date" });
+    const form = screen.getByRole("form", { name: "Propose an auction date" });
     const day = within(form).getByLabelText("Day of the auction");
     await user.type(day, "2026-11-13");
     await user.click(
-      within(form).getByRole("button", { name: "Add the date" }),
+      within(form).getByRole("button", { name: "Propose the date" }),
     );
     expect(
       within(form).getByText(
-        "That day has passed. Enter today or a later day.",
+        "That day has passed. Propose today or a later day.",
       ),
     ).toBeInTheDocument();
-    expect(add).not.toHaveBeenCalled();
+    expect(propose).not.toHaveBeenCalled();
 
     await user.clear(day);
     await user.type(day, "2026-11-18");
     await user.click(
-      within(form).getByRole("button", { name: "Add the date" }),
+      within(form).getByRole("button", { name: "Propose the date" }),
     );
     expect(await within(form).findByRole("alert")).toHaveTextContent(
-      "That auction is already in the calendar for this bill.",
+      "That auction is already in the calendar for this bill",
     );
   });
 
-  it("cancels a date only with a reason", async () => {
+  it("approves a date someone else proposed", async () => {
     const { user, onChanged } = renderCalendar();
-    const table = await coming();
+    await coming();
     await user.click(
-      within(table).getByRole("button", {
-        name: "Cancel date for 182 Day Treasury Bill on 2 Dec 2026",
+      screen.getByRole("button", {
+        name: "Approve the 91 Day Treasury Bill auction on 16 Dec 2026",
+      }),
+    );
+    const approved = row(await coming(), "16 Dec 2026", "91 Day");
+    expect(await within(approved).findByText("Standing")).toBeInTheDocument();
+    expect(within(approved).getByText("Approved by Ada")).toBeInTheDocument();
+    expect(onChanged).toHaveBeenCalledOnce();
+  });
+
+  it("declines a cancellation only with a note, and the date stands", async () => {
+    const { user } = renderCalendar();
+    await coming();
+    await user.click(
+      screen.getByRole("button", {
+        name: "Decline cancelling the 91 Day Treasury Bill auction on 2 Dec 2026",
+      }),
+    );
+    const form = screen.getByRole("form", {
+      name: "Decline cancelling the 91 Day Treasury Bill auction on 2 Dec 2026",
+    });
+    await user.click(within(form).getByRole("button", { name: "Decline it" }));
+    expect(
+      within(form).getByText(/Say why you are declining it/),
+    ).toBeInTheDocument();
+    await user.type(
+      within(form).getByLabelText("Why are you declining it?"),
+      "The Bank's notice still says 2 December",
+    );
+    await user.click(within(form).getByRole("button", { name: "Decline it" }));
+    const kept = row(await coming(), "2 Dec 2026", "91 Day");
+    expect(
+      await within(kept).findByText(
+        /Cancelling it was declined: The Bank's notice still says 2 December/,
+      ),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole("form", { name: /Decline cancelling/ }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("proposes cancelling a standing date with a reason, which someone else approves", async () => {
+    const { user } = renderCalendar();
+    await coming();
+    await user.click(
+      screen.getByRole("button", {
+        name: "Cancel date for the 182 Day Treasury Bill auction on 2 Dec 2026",
       }),
     );
     const form = screen.getByRole("form", {
       name: "Cancel the 182 Day Treasury Bill auction on 2 Dec 2026",
     });
     await user.click(
-      within(form).getByRole("button", { name: "Cancel the date" }),
+      within(form).getByRole("button", { name: "Propose cancelling it" }),
     );
     expect(
       within(form).getByText(/Say why the date is cancelled/),
@@ -135,50 +197,57 @@ describe("auction calendar", () => {
       "The Bank moved it to 3 December",
     );
     await user.click(
-      within(form).getByRole("button", { name: "Cancel the date" }),
+      within(form).getByRole("button", { name: "Propose cancelling it" }),
     );
+    const moving = row(await coming(), "2 Dec 2026", "182 Day");
     expect(
-      await within(table).findByText(/The Bank moved it to 3 December/),
+      await within(moving).findByText(
+        "Cancellation waiting for a second person",
+      ),
     ).toBeInTheDocument();
     expect(
-      within(table).queryByRole("button", {
-        name: "Cancel date for 182 Day Treasury Bill on 2 Dec 2026",
+      within(moving).getByRole("button", {
+        name: "Withdraw cancelling the 182 Day Treasury Bill auction on 2 Dec 2026",
       }),
+    ).toBeInTheDocument();
+    expect(
+      within(moving).queryByRole("button", { name: /Approve cancelling/ }),
     ).not.toBeInTheDocument();
-    expect(onChanged).toHaveBeenCalledOnce();
   });
 
   it("shows a reader the dates with no way to change them", async () => {
-    const api = createStubAuctionsApi(
-      { name: "Ada" },
-      "sample",
-      () => TODAY,
-      0,
-    );
+    const api = stub();
     const reader: AuctionsApi = {
       ...api,
-      getCalendar: async () => ({
-        ...(await api.getCalendar()),
-        mayChange: false,
-      }),
+      getCalendar: async () => {
+        const calendar = await api.getCalendar();
+        return {
+          auctions: calendar.auctions.map((a) => ({
+            ...a,
+            allowed: [],
+            cancellation: a.cancellation && { ...a.cancellation, allowed: [] },
+          })),
+          mayChange: false,
+        };
+      },
     };
     renderCalendar(reader);
     const table = await coming();
     expect(within(table).queryByRole("button")).not.toBeInTheDocument();
     expect(
-      screen.queryByRole("form", { name: "Enter an auction date" }),
+      screen.queryByRole("form", { name: "Propose an auction date" }),
     ).not.toBeInTheDocument();
   });
 
-  it("says when nothing is entered", async () => {
-    renderCalendar(
-      createStubAuctionsApi({ name: "Ada" }, "empty", () => TODAY, 0),
-    );
+  it("says when nothing is in the calendar", async () => {
+    renderCalendar(stub("empty"));
     expect(
-      await screen.findByText(/No auction dates are entered from today on/),
+      await screen.findByText(
+        /No auction dates are in the calendar from today on/,
+      ),
     ).toBeInTheDocument();
     expect(
-      screen.getByRole("form", { name: "Enter an auction date" }),
+      screen.getByRole("form", { name: "Propose an auction date" }),
     ).toBeInTheDocument();
   });
 
@@ -200,64 +269,103 @@ describe("auction calendar over the API", () => {
       {
         id: "-Nauction1",
         product_code: "TREA-91",
-        auction_date: "2026-11-18",
-        added_by: "-Nstaffada",
-        added_at: "2026-11-10T09:03:00Z",
-        cancelled_by: null,
-        cancelled_at: null,
-        cancel_reason: null,
+        auction_date: "2026-12-02",
+        state: "cancelling",
+        proposed_by: "-Nstaffada",
+        proposed_at: "2026-11-10T09:03:00Z",
+        decided_by: "-Nstaffben",
+        decided_at: "2026-11-10T10:00:00Z",
+        decision_note: null,
+        cancellation: {
+          id: "-Ncancel1",
+          reason: "Moved",
+          status: "proposed",
+          proposed_by: "-Nstaffben",
+          proposed_at: "2026-11-13T14:20:00Z",
+          decided_by: null,
+          decided_at: null,
+          decision_note: null,
+          allowed: ["approve", "decline"],
+        },
+        allowed: [],
       },
     ],
     may_change: true,
   };
-  const names: Directory = {
-    staffName: (id) => Promise.resolve(id === "-Nstaffada" ? "Ada" : null),
-  } as Directory;
-
-  it("reads the calendar and names who entered each date", async () => {
+  const names = {
+    staffName: (id: string) =>
+      Promise.resolve(id === "-Nstaffada" ? "Ada" : null),
+  } as unknown as Directory;
+  const api = () => {
     const request = vi.fn().mockResolvedValue(json);
-    const api = createHttpAuctionsApi(
-      { request, download: vi.fn() } as unknown as Http,
-      names,
-    );
-    const calendar = await api.getCalendar();
+    return {
+      request,
+      auctions: createHttpAuctionsApi(
+        { request, download: vi.fn() } as unknown as Http,
+        names,
+      ),
+    };
+  };
+
+  it("reads the calendar and names the staff the directory knows", async () => {
+    const { request, auctions } = api();
+    const calendar = await auctions.getCalendar();
     expect(request).toHaveBeenCalledWith("GET", "/staff/dealing/auctions");
-    expect(calendar).toEqual({
-      auctions: [
-        {
-          id: "-Nauction1",
-          productCode: "TREA-91",
-          auctionDate: "2026-11-18",
-          addedBy: "Ada",
-          addedAt: "2026-11-10T09:03:00Z",
-          cancelledBy: null,
-          cancelledAt: null,
-          cancelReason: null,
-        },
-      ],
-      mayChange: true,
+    expect(calendar.mayChange).toBe(true);
+    expect(calendar.auctions[0]).toMatchObject({
+      id: "-Nauction1",
+      productCode: "TREA-91",
+      auctionDate: "2026-12-02",
+      state: "cancelling",
+      proposedBy: "Ada",
+      decidedBy: "-Nstaffben",
+      cancellation: {
+        id: "-Ncancel1",
+        reason: "Moved",
+        status: "proposed",
+        proposedBy: "-Nstaffben",
+        allowed: ["approve", "decline"],
+      },
+      allowed: [],
     });
   });
 
-  it("sends each command with its key", async () => {
-    const request = vi.fn().mockResolvedValue(json);
-    const api = createHttpAuctionsApi(
-      { request, download: vi.fn() } as unknown as Http,
-      names,
-    );
-    await api.add("k-1", "TREA-91", "2026-12-02");
-    expect(request).toHaveBeenCalledWith(
+  it("sends each command to its route with its key", async () => {
+    const { request, auctions } = api();
+    await auctions.propose("k-1", "TREA-91", "2026-12-16");
+    expect(request).toHaveBeenLastCalledWith(
       "POST",
       "/staff/dealing/auctions",
-      { product_code: "TREA-91", auction_date: "2026-12-02" },
+      { product_code: "TREA-91", auction_date: "2026-12-16" },
       { idempotencyKey: "k-1" },
     );
-    await api.cancel("k-2", "-Nauction1", "Moved");
-    expect(request).toHaveBeenCalledWith(
+    await auctions.proposeCancel("k-2", "-Nauction1", "Moved");
+    expect(request).toHaveBeenLastCalledWith(
       "POST",
       "/staff/dealing/auctions/-Nauction1/cancel",
       { reason: "Moved" },
       { idempotencyKey: "k-2" },
+    );
+    await auctions.approve("k-3", "-Ncancel1");
+    expect(request).toHaveBeenLastCalledWith(
+      "POST",
+      "/staff/dealing/auctions/changes/-Ncancel1/approve",
+      undefined,
+      { idempotencyKey: "k-3" },
+    );
+    await auctions.decline("k-4", "-Ncancel1", "Not moved");
+    expect(request).toHaveBeenLastCalledWith(
+      "POST",
+      "/staff/dealing/auctions/changes/-Ncancel1/decline",
+      { note: "Not moved" },
+      { idempotencyKey: "k-4" },
+    );
+    await auctions.withdraw("k-5", "-Ncancel1");
+    expect(request).toHaveBeenLastCalledWith(
+      "POST",
+      "/staff/dealing/auctions/changes/-Ncancel1/withdraw",
+      undefined,
+      { idempotencyKey: "k-5" },
     );
   });
 
@@ -273,6 +381,9 @@ describe("auction calendar over the API", () => {
         refused(422, "validation_failed", "auction_already_entered"),
       ).code,
     ).toBe("auction_already_entered");
+    expect(
+      toAuctionError(refused(422, "validation_failed", "note_required")).code,
+    ).toBe("note_required");
     expect(
       toAuctionError(refused(422, "validation_failed", "something_else")).code,
     ).toBe("invalid");

@@ -32,6 +32,8 @@ export const KIND_INFO: Record<Kind, KindInfo> = {
   // The subject is "UGX from 2026-12-01", or "UGX paid in" or "UGX taken out".
   buffer_rules: { label: "Buffer rules change", path: at("/dealing-desk") },
   buffer_capital: { label: "Finvest's money in the buffer", path: at("/dealing-desk") },
+  // The subject is "TREA-91 on 2026-11-18", or "Cancel TREA-91 on 2026-11-18".
+  auction_date: { label: "Auction date", path: at("/dealing-desk") },
   rate_change: { label: "Rate change", path: at("/rates") },
   // The subject is the product code, or a new product's code. Every change waits on Products.
   product_change: { label: "Product change", path: at("/products") },

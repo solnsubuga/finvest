@@ -4,6 +4,7 @@ import {
   useRef,
   useState,
   type FormEvent,
+  type ReactNode,
 } from "react";
 import { Button } from "@/components/ui/button.tsx";
 import { Input } from "@/components/ui/input.tsx";
@@ -27,6 +28,9 @@ export interface AuctionProduct {
   name: string;
 }
 
+/** A form that asks for words before a step: why a date is cancelled, or why a change is declined. */
+type Asking = { kind: "cancel" | "decline"; id: string; title: string };
+
 interface AuctionSectionProps {
   api: AuctionsApi;
   /** The Treasury bills on offer, the only products bought at auction. */
@@ -34,11 +38,13 @@ interface AuctionSectionProps {
   /** The Kampala business day, as a calendar date. */
   today: string;
   newKey?: () => string;
-  /** Called after a date is entered or cancelled, so the desk can show the new next auction. */
+  /** Called after a change is proposed or decided, so the desk can show the new next auction. */
   onChanged?: () => void;
 }
 
-/** The Bank of Uganda's Treasury bill auction dates, as staff entered them. */
+const ADD = "add";
+
+/** The Bank of Uganda's Treasury bill auction dates, each change proposed by one person and approved by another. */
 export function AuctionSection({
   api,
   products,
@@ -51,7 +57,7 @@ export function AuctionSection({
   const [failed, setFailed] = useState<{ on: string; message: string } | null>(
     null,
   );
-  const [cancelling, setCancelling] = useState<string | null>(null);
+  const [asking, setAsking] = useState<Asking | null>(null);
   // A press again of the same command carries the same key, so a first try that reached Finvest is not applied twice.
   const pending = useRef<{ request: string; key: string } | null>(null);
 
@@ -80,6 +86,11 @@ export function AuctionSection({
     const key = newKey();
     pending.current = { request, key };
     return key;
+  }
+
+  function forget() {
+    pending.current = null;
+    setFailed(null);
   }
 
   async function run(
@@ -162,52 +173,82 @@ export function AuctionSection({
   const { calendar } = load;
   const name = (code: string) =>
     products.find((p) => p.code === code)?.name ?? code;
-  const coming = calendar.auctions.filter((a) => a.auctionDate >= today);
-  const past = calendar.auctions.filter((a) => a.auctionDate < today);
+  // Anything still waiting for a decision stays in view, even once its day has passed.
+  const open = (a: Auction) =>
+    a.auctionDate >= today ||
+    a.state === "waiting" ||
+    a.cancellation?.status === "proposed";
+  const coming = calendar.auctions.filter(open);
+  const past = calendar.auctions.filter((a) => !open(a));
+
+  function act(id: string, step: "approve" | "withdraw") {
+    setAsking(null);
+    void run(id, { id, step }, (key) =>
+      step === "approve" ? api.approve(key, id) : api.withdraw(key, id),
+    );
+  }
+
+  function ask(kind: Asking["kind"], id: string, title: string) {
+    forget();
+    setAsking({ kind, id, title });
+  }
 
   return (
     <section aria-labelledby="auction-heading" className="flex flex-col gap-4">
       <div>
         {heading}
         <p className="m-0 text-md leading-normal text-muted">
-          The Treasury bill auctions the Bank of Uganda publishes. The desk
-          shows each bill&apos;s next date. If the Bank moves one, cancel it
-          with the reason and enter the new day.
+          The Treasury bill auctions the Bank of Uganda publishes. One person
+          proposes each date, and a different person approves it before the desk
+          counts it. If the Bank moves one, propose cancelling it with the
+          reason, and propose the new day.
         </p>
       </div>
       <div className="flex flex-wrap items-start gap-5">
         <div className="flex min-w-0 flex-[3_1_480px] flex-col gap-4">
           {coming.length === 0 ? (
             <p className="m-0 rounded-xl border border-border bg-surface p-5 text-md leading-normal">
-              No auction dates are entered from today on. Until one is, the desk
-              shows &quot;Not set&quot; for each bill&apos;s next auction.
+              No auction dates are in the calendar from today on. Until one is
+              approved, the desk shows &quot;Not set&quot; for each bill&apos;s
+              next auction.
             </p>
           ) : (
             <DateTable
               label="Auction dates from today on"
               auctions={coming}
               name={name}
-              canCancel={calendar.mayChange}
-              cancelling={cancelling}
               busy={busy}
-              error={failed && failed.on !== "add" ? failed : null}
-              onOpen={(id) => {
-                setCancelling(id);
-                setFailed(null);
-                pending.current = null;
-              }}
-              onClose={() => {
-                setCancelling(null);
-                setFailed(null);
-                pending.current = null;
-              }}
-              onCancel={(id, reason) =>
-                void run(id, { id, reason }, (key) =>
-                  api.cancel(key, id, reason),
-                ).then((done) => done && setCancelling(null))
-              }
+              onAct={act}
+              onAsk={ask}
             />
           )}
+          {asking ? (
+            <ReasonForm
+              key={`${asking.kind}:${asking.id}`}
+              asking={asking}
+              busy={busy === asking.id}
+              error={failed?.on === asking.id ? failed.message : null}
+              onClose={() => {
+                setAsking(null);
+                forget();
+              }}
+              onSubmit={(words) =>
+                void run(asking.id, { ...asking, words }, (key) =>
+                  asking.kind === "cancel"
+                    ? api.proposeCancel(key, asking.id, words)
+                    : api.decline(key, asking.id, words),
+                ).then((done) => done && setAsking(null))
+              }
+            />
+          ) : null}
+          {failed && failed.on !== ADD && failed.on !== asking?.id ? (
+            <p
+              role="alert"
+              className="m-0 rounded-md bg-danger-surface px-3 py-2 text-sm font-bold text-danger"
+            >
+              {failed.message}
+            </p>
+          ) : null}
           {past.length > 0 ? (
             <details className="rounded-xl border border-border bg-surface p-5">
               <summary className="cursor-pointer text-md font-bold">
@@ -218,28 +259,25 @@ export function AuctionSection({
                   label="Auction dates in the past month"
                   auctions={past}
                   name={name}
-                  canCancel={false}
-                  cancelling={null}
                   busy={null}
-                  error={null}
                 />
               </div>
             </details>
           ) : null}
         </div>
         {calendar.mayChange ? (
-          <AddForm
+          <ProposeForm
             products={products}
             today={today}
-            busy={busy === "add"}
-            error={failed?.on === "add" ? failed.message : null}
+            busy={busy === ADD}
+            error={failed?.on === ADD ? failed.message : null}
             onChange={() => {
               pending.current = null;
-              setFailed((last) => (last?.on === "add" ? null : last));
+              setFailed((last) => (last?.on === ADD ? null : last));
             }}
             onSubmit={(productCode, auctionDate) =>
-              run("add", { productCode, auctionDate }, (key) =>
-                api.add(key, productCode, auctionDate),
+              run(ADD, { productCode, auctionDate }, (key) =>
+                api.propose(key, productCode, auctionDate),
               )
             }
           />
@@ -253,184 +291,272 @@ interface DateTableProps {
   label: string;
   auctions: readonly Auction[];
   name: (code: string) => string;
-  canCancel: boolean;
-  cancelling: string | null;
   busy: string | null;
-  error: { on: string; message: string } | null;
-  onOpen?: (id: string) => void;
-  onClose?: () => void;
-  onCancel?: (id: string, reason: string) => void;
+  onAct?: (changeId: string, step: "approve" | "withdraw") => void;
+  onAsk?: (kind: Asking["kind"], changeId: string, title: string) => void;
 }
 
 function DateTable({
   label,
   auctions,
   name,
-  canCancel,
-  cancelling,
   busy,
-  error,
-  onOpen,
-  onClose,
-  onCancel,
+  onAct,
+  onAsk,
 }: DateTableProps) {
-  const columns = ["Day", "Bill", "Status", "Entered by"];
-  // The cancel form sits under the table, so it has the full width on a phone.
-  const open = canCancel
-    ? auctions.find((a) => a.id === cancelling)
-    : undefined;
+  const actions = onAct !== undefined;
+  // A list of cards rather than a table, so each date's buttons stay in reach on a phone.
   return (
-    <div className="flex flex-col gap-3">
-      <div
-        className="relative overflow-x-auto rounded-xl border border-border bg-surface"
-        tabIndex={0}
-        role="region"
-        aria-label={label}
-      >
-        <table className="w-full min-w-[560px] border-collapse text-sm">
-          <caption className="sr-only">{label}, earliest first</caption>
-          <thead>
-            <tr className="text-left text-xs text-muted">
-              {columns.map((column) => (
-                <th key={column} scope="col" className="px-3 py-2 font-bold">
-                  {column}
-                </th>
-              ))}
-              {canCancel ? (
-                <th scope="col" className="px-3 py-2">
-                  <span className="sr-only">Actions</span>
-                </th>
-              ) : null}
-            </tr>
-          </thead>
-          <tbody>
-            {auctions.flatMap((auction) => {
-              const standing = auction.cancelledBy === null;
-              const rows = [
-                <tr
-                  key={auction.id}
-                  className="border-t border-divider align-top"
-                >
-                  <th
-                    scope="row"
-                    className={`px-3 py-3 text-left font-bold whitespace-nowrap ${standing ? "" : "text-muted line-through"}`}
+    <div
+      role="region"
+      aria-label={label}
+      className="rounded-xl border border-border bg-surface"
+    >
+      <ul aria-label={`${label}, earliest first`} className="m-0 list-none p-0">
+        {auctions.map((auction) => {
+          const gone =
+            auction.state === "cancelled" ||
+            auction.state === "declined" ||
+            auction.state === "withdrawn";
+          return (
+            <li
+              key={auction.id}
+              className="flex flex-col gap-3 border-t border-divider px-4 py-3 text-sm first:border-t-0 sm:flex-row sm:items-start sm:justify-between"
+            >
+              <div className="flex min-w-0 flex-col gap-1">
+                <div className="flex flex-wrap gap-x-2">
+                  <span
+                    className={`font-bold whitespace-nowrap ${gone ? "text-muted line-through" : ""}`}
                   >
-                    <span title={formatDay(auction.auctionDate)}>
+                    <span aria-hidden="true">
                       {formatAuctionDay(auction.auctionDate)}
                     </span>
                     <span className="sr-only">
-                      , {formatDay(auction.auctionDate)}
+                      {formatDay(auction.auctionDate)}
                     </span>
-                  </th>
-                  <td className="px-3 py-3 whitespace-nowrap">
+                  </span>
+                  <span className="whitespace-nowrap">
                     {name(auction.productCode)}
-                  </td>
-                  <td className="px-3 py-3">
-                    {standing ? (
-                      "Standing"
-                    ) : (
-                      <span className="text-muted">
-                        Cancelled by {auction.cancelledBy}
-                        {auction.cancelledAt
-                          ? `, ${formatWhen(auction.cancelledAt)}`
-                          : ""}
-                        . {auction.cancelReason}
-                      </span>
-                    )}
-                  </td>
-                  <td className="px-3 py-3 whitespace-nowrap">
-                    {auction.addedBy}
-                    <span className="sr-only">, </span>
-                    <span className="block text-xs text-muted">
-                      {formatWhen(auction.addedAt)}
-                    </span>
-                  </td>
-                  {canCancel ? (
-                    <td className="px-3 py-3 text-right">
-                      {standing && cancelling !== auction.id ? (
-                        <Button
-                          variant="secondary"
-                          className="whitespace-nowrap"
-                          disabled={busy !== null}
-                          aria-label={`Cancel date for ${name(auction.productCode)} on ${formatDay(auction.auctionDate)}`}
-                          onClick={() => onOpen?.(auction.id)}
-                        >
-                          Cancel date
-                        </Button>
-                      ) : null}
-                    </td>
-                  ) : null}
-                </tr>,
-              ];
-              return rows;
-            })}
-          </tbody>
-        </table>
-      </div>
-      {open ? (
-        <CancelForm
-          key={open.id}
-          auction={open}
-          name={name(open.productCode)}
-          busy={busy === open.id}
-          error={error?.on === open.id ? error.message : null}
-          onClose={() => onClose?.()}
-          onSubmit={(reason) => onCancel?.(open.id, reason)}
-        />
-      ) : null}
-      {error && error.on !== cancelling ? (
-        <p role="alert" className="m-0 text-sm font-bold text-danger">
-          {error.message}
-        </p>
-      ) : null}
+                  </span>
+                </div>
+                <div>
+                  <Status auction={auction} />
+                </div>
+                <div className="text-xs text-muted">
+                  Proposed by {auction.proposedBy},{" "}
+                  {formatWhen(auction.proposedAt)}
+                </div>
+              </div>
+              {actions ? (
+                <div className="flex shrink-0 flex-wrap gap-2 sm:justify-end">
+                  <Steps
+                    auction={auction}
+                    what={`the ${name(auction.productCode)} auction on ${formatDay(auction.auctionDate)}`}
+                    busy={busy}
+                    onAct={onAct}
+                    onAsk={onAsk}
+                  />
+                </div>
+              ) : null}
+            </li>
+          );
+        })}
+      </ul>
     </div>
   );
 }
 
-function CancelForm(props: {
+/** The buttons for the steps the reader may take on a date and on its cancellation. */
+function Steps(props: {
   auction: Auction;
-  name: string;
+  what: string;
+  busy: string | null;
+  onAct: DateTableProps["onAct"];
+  onAsk: DateTableProps["onAsk"];
+}) {
+  const { auction, what, busy, onAct, onAsk } = props;
+  const disabled = busy !== null;
+  const cancellation = auction.cancellation;
+  const button = (
+    key: string,
+    text: string,
+    label: string,
+    primary: boolean,
+    onClick: () => void,
+  ) => (
+    <Button
+      key={key}
+      variant={primary ? undefined : "secondary"}
+      className="whitespace-nowrap"
+      disabled={disabled}
+      aria-label={label}
+      onClick={onClick}
+    >
+      {text}
+    </Button>
+  );
+  const shown: ReactNode[] = [];
+  for (const step of auction.allowed) {
+    if (step === "approve")
+      shown.push(
+        button("approve", "Approve", `Approve ${what}`, true, () =>
+          onAct?.(auction.id, "approve"),
+        ),
+      );
+    if (step === "decline")
+      shown.push(
+        button("decline", "Decline", `Decline ${what}`, false, () =>
+          onAsk?.("decline", auction.id, `Decline ${what}`),
+        ),
+      );
+    if (step === "withdraw")
+      shown.push(
+        button("withdraw", "Withdraw", `Withdraw ${what}`, false, () =>
+          onAct?.(auction.id, "withdraw"),
+        ),
+      );
+    if (step === "cancel")
+      shown.push(
+        button("cancel", "Cancel date", `Cancel date for ${what}`, false, () =>
+          onAsk?.("cancel", auction.id, `Cancel ${what}`),
+        ),
+      );
+  }
+  if (cancellation) {
+    for (const step of cancellation.allowed) {
+      if (step === "approve")
+        shown.push(
+          button(
+            "c-approve",
+            "Approve cancellation",
+            `Approve cancelling ${what}`,
+            true,
+            () => onAct?.(cancellation.id, "approve"),
+          ),
+        );
+      if (step === "decline")
+        shown.push(
+          button(
+            "c-decline",
+            "Decline",
+            `Decline cancelling ${what}`,
+            false,
+            () =>
+              onAsk?.("decline", cancellation.id, `Decline cancelling ${what}`),
+          ),
+        );
+      if (step === "withdraw")
+        shown.push(
+          button(
+            "c-withdraw",
+            "Withdraw cancellation",
+            `Withdraw cancelling ${what}`,
+            false,
+            () => onAct?.(cancellation.id, "withdraw"),
+          ),
+        );
+    }
+  }
+  return <>{shown}</>;
+}
+
+function Status({ auction }: { auction: Auction }) {
+  const c = auction.cancellation;
+  const line = (main: ReactNode, detail?: string) => (
+    <>
+      <span className="font-bold">{main}</span>
+      {detail ? (
+        <span className="block text-xs text-muted">{detail}</span>
+      ) : null}
+    </>
+  );
+  const waiting = (text: string) => (
+    <span className="text-warning-text">{text}</span>
+  );
+  switch (auction.state) {
+    case "waiting":
+      return line(waiting("Waiting for a second person"));
+    case "standing":
+      return line(
+        "Standing",
+        c?.status === "declined"
+          ? `Approved by ${auction.decidedBy}. Cancelling it was declined: ${c.decisionNote}`
+          : `Approved by ${auction.decidedBy}`,
+      );
+    case "cancelling":
+      return line(
+        waiting("Cancellation waiting for a second person"),
+        `${c?.reason}. Asked by ${c?.proposedBy}`,
+      );
+    case "cancelled":
+      return line(
+        "Cancelled",
+        `${c?.reason}. Asked by ${c?.proposedBy}, approved by ${c?.decidedBy}`,
+      );
+    case "declined":
+      return line(
+        "Declined",
+        `By ${auction.decidedBy}: ${auction.decisionNote}`,
+      );
+    case "withdrawn":
+      return line("Withdrawn", `By ${auction.decidedBy}`);
+  }
+}
+
+function ReasonForm(props: {
+  asking: Asking;
   busy: boolean;
   error: string | null;
   onClose: () => void;
-  onSubmit: (reason: string) => void;
+  onSubmit: (words: string) => void;
 }) {
-  const { auction, name, busy, error, onClose, onSubmit } = props;
-  const [reason, setReason] = useState("");
+  const { asking, busy, error, onClose, onSubmit } = props;
+  const [words, setWords] = useState("");
   const [typed, setTyped] = useState<string | null>(null);
-  const id = `cancel-${auction.id}`;
+  const id = `${asking.kind}-${asking.id}`;
+  const cancelling = asking.kind === "cancel";
   function submit(event: FormEvent) {
     event.preventDefault();
-    if (!reason.trim()) {
-      setTyped(auctionErrorMessage(new AuctionError("reason_required")));
+    if (!words.trim()) {
+      setTyped(
+        auctionErrorMessage(
+          new AuctionError(cancelling ? "reason_required" : "note_required"),
+        ),
+      );
       return;
     }
     setTyped(null);
-    onSubmit(reason.trim());
+    onSubmit(words.trim());
   }
   return (
     <form
       noValidate
       aria-labelledby={`${id}-title`}
       onSubmit={submit}
-      className="flex flex-col gap-3 rounded-lg border-2 border-black bg-surface p-4 whitespace-normal"
+      className="flex flex-col gap-3 rounded-xl border-2 border-black bg-surface p-[19px]"
     >
-      <h3 id={`${id}-title`} className="m-0 text-md font-extrabold">
-        Cancel the {name} auction on {formatDay(auction.auctionDate)}
+      <h3 id={`${id}-title`} className="m-0 text-[17px] font-extrabold">
+        {asking.title}
       </h3>
       <Field
-        id={`${id}-reason`}
-        label="Why is it cancelled?"
+        id={`${id}-words`}
+        label={
+          cancelling ? "Why is it cancelled?" : "Why are you declining it?"
+        }
         error={typed ?? undefined}
-        hint="Kept with the date in the calendar and the audit trail."
+        hint={
+          cancelling
+            ? "A different person approves the cancellation. Until then the date still counts."
+            : "The person who proposed it sees this."
+        }
       >
         {(control) => (
           <Input
             {...control}
             className={FIELD}
             maxLength={500}
-            value={reason}
-            onChange={(e) => setReason(e.target.value)}
+            value={words}
+            onChange={(e) => setWords(e.target.value)}
           />
         )}
       </Field>
@@ -444,7 +570,7 @@ function CancelForm(props: {
       ) : null}
       <div className="flex flex-wrap gap-2">
         <Button type="submit" disabled={busy}>
-          Cancel the date
+          {cancelling ? "Propose cancelling it" : "Decline it"}
         </Button>
         <Button variant="secondary" disabled={busy} onClick={onClose}>
           Keep it
@@ -454,7 +580,7 @@ function CancelForm(props: {
   );
 }
 
-interface AddFormProps {
+interface ProposeFormProps {
   products: readonly AuctionProduct[];
   today: string;
   busy: boolean;
@@ -463,14 +589,14 @@ interface AddFormProps {
   onSubmit: (productCode: string, auctionDate: string) => Promise<boolean>;
 }
 
-function AddForm({
+function ProposeForm({
   products,
   today,
   busy,
   error,
   onChange,
   onSubmit,
-}: AddFormProps) {
+}: ProposeFormProps) {
   const [productCode, setProductCode] = useState(products[0]?.code ?? "");
   const [auctionDate, setAuctionDate] = useState("");
   const [typed, setTyped] = useState<string | null>(null);
@@ -493,12 +619,12 @@ function AddForm({
   return (
     <form
       noValidate
-      aria-labelledby="add-auction"
+      aria-labelledby="propose-auction"
       onSubmit={(event) => void submit(event)}
       className="flex min-w-0 flex-[2_1_300px] flex-col gap-3 rounded-xl border border-border bg-surface p-5"
     >
-      <h3 id="add-auction" className="m-0 text-[17px] font-extrabold">
-        Enter an auction date
+      <h3 id="propose-auction" className="m-0 text-[17px] font-extrabold">
+        Propose an auction date
       </h3>
       <Field id="auction-product" label="Treasury bill">
         {(control) => (
@@ -523,7 +649,7 @@ function AddForm({
         id="auction-date"
         label="Day of the auction"
         error={typed ?? undefined}
-        hint="As the Bank of Uganda published it."
+        hint="As the Bank of Uganda published it. A different person approves it."
       >
         {(control) => (
           <Input
@@ -549,7 +675,7 @@ function AddForm({
       ) : null}
       <div>
         <Button type="submit" disabled={busy}>
-          Add the date
+          Propose the date
         </Button>
       </div>
     </form>

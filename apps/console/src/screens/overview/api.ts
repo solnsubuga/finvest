@@ -17,6 +17,7 @@ export const KINDS = [
   "dealing_result",
   "buffer_rules",
   "buffer_capital",
+  "auction_date",
   "rate_change",
   "product_change",
   "migration_totals",
