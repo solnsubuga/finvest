@@ -244,7 +244,7 @@ function items(overview: Overview): Item[] {
   const investments = overview.differences.map((item) => ({
     key: item.key,
     title: item.legacyInvestmentRef,
-    where: `row ${item.row}`,
+    where: item.row === null ? null : `row ${item.row}`,
     summary: differenceSummary(item),
     signedOff: item.signedOff,
   }));
