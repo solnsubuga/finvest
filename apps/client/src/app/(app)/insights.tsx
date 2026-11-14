@@ -8,6 +8,7 @@ import { Card, Notice } from "@/components/Blocks";
 import { Button } from "@/components/Button";
 import { LinkCard } from "@/components/LinkCard";
 import { Eyebrow, Txt } from "@/components/Txt";
+import { useDataSaving } from "@/dataSaving/DataSavingProvider";
 import { barUnit, daysUntil, earnedBars, monthLong } from "@/insights/chart";
 import { useInsights } from "@/insights/InsightsProvider";
 import { Currency, Insights as InsightsData, Upcoming } from "@/insights/types";
@@ -32,6 +33,7 @@ export default function Insights() {
   const client = useInsights();
   const router = useRouter();
   const wide = useIsWide();
+  const { light } = useDataSaving();
   const [state, setState] = useState<State>({ status: "loading" });
   const [currency, setCurrency] = useState<Currency>("UGX");
   // Shillings until the investments say otherwise. If they cannot be read, the switch
@@ -165,33 +167,35 @@ export default function Insights() {
             {formatMoney(current.earned)}
           </Txt>
         </View>
-        <View
-          style={styles.bars}
-          accessibilityRole="image"
-          accessibilityLabel={barsLabel(insights)}
-        >
-          {earnedBars(insights.months, BAR_HEIGHT).map((bar) => (
-            <View key={bar.month} style={styles.barColumn}>
-              <Txt size={11} weight="bold">
-                {bar.value}
-              </Txt>
-              <View
-                style={[
-                  styles.bar,
-                  {
-                    height: bar.height,
-                    backgroundColor: bar.current ? colors.lime : colors.black,
-                  },
-                ]}
-              />
-              <Txt size={12} color={colors.muted}>
-                {bar.label}
-              </Txt>
-            </View>
-          ))}
-        </View>
+        {light ? (
+          <MonthList insights={insights} />
+        ) : (
+          <View style={styles.bars} accessibilityRole="image" accessibilityLabel={barsLabel(insights)}>
+            {earnedBars(insights.months, BAR_HEIGHT).map((bar) => (
+              <View key={bar.month} style={styles.barColumn}>
+                <Txt size={11} weight="bold">
+                  {bar.value}
+                </Txt>
+                <View
+                  style={[
+                    styles.bar,
+                    {
+                      height: bar.height,
+                      backgroundColor: bar.current ? colors.lime : colors.black,
+                    },
+                  ]}
+                />
+                <Txt size={12} color={colors.muted}>
+                  {bar.label}
+                </Txt>
+              </View>
+            ))}
+          </View>
+        )}
         <Txt size={12} color={colors.muted}>
-          {`${barUnit[insights.currency]}, after tax. ${monthLong(current.month)} is part way through.`}
+          {light
+            ? `After tax. ${monthLong(current.month)} is part way through.`
+            : `${barUnit[insights.currency]}, after tax. ${monthLong(current.month)} is part way through.`}
         </Txt>
       </View>
     </Card>
@@ -324,6 +328,24 @@ function CurrencySwitch({
   );
 }
 
+/** Light mode: the same months as plain rows, newest first, in place of the bars. */
+function MonthList({ insights }: { insights: InsightsData }) {
+  return (
+    <View testID="insights-months">
+      {[...insights.months].reverse().map((month, index) => (
+        <View key={month.month} style={[styles.monthRow, index > 0 && styles.monthDivider]}>
+          <Txt size={fontSizes.sm} color={colors.muted} style={{ flex: 1 }}>
+            {monthLong(month.month)}
+          </Txt>
+          <Txt size={fontSizes.sm} weight="bold">
+            {formatMoney(month.earned)}
+          </Txt>
+        </View>
+      ))}
+    </View>
+  );
+}
+
 function barsLabel(insights: InsightsData): string {
   return insights.months
     .map((month) => `${monthLong(month.month)}: ${formatMoney(month.earned)}`)
@@ -393,6 +415,8 @@ function UpcomingRow({ item, first }: { item: Upcoming; first: boolean }) {
 }
 
 const styles = StyleSheet.create({
+  monthRow: { flexDirection: "row", alignItems: "center", gap: 12, paddingVertical: 10 },
+  monthDivider: { borderTopWidth: 1, borderTopColor: colors.divider },
   bars: {
     flexDirection: "row",
     alignItems: "flex-end",

@@ -11,7 +11,12 @@ jest.mock("@/autoinvest/schedule", () => ({
   kampalaToday: () => "2026-11-13",
 }));
 
-jest.mock("@/documents/poll", () => ({ STATEMENT_POLL_MS: 5, STATEMENT_POLL_LIMIT: 30 }));
+jest.mock("@/documents/poll", () => ({
+  STATEMENT_POLL_MS: 5,
+  STATEMENT_POLL_LIMIT: 30,
+  LIGHT_STATEMENT_POLL_MS: 5,
+  LIGHT_STATEMENT_POLL_LIMIT: 30,
+}));
 
 jest.mock("expo-crypto", () => ({
   randomUUID: () => jest.requireActual("node:crypto").randomUUID(),

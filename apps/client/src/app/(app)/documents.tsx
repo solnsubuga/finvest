@@ -7,6 +7,8 @@ import { Card, Notice } from "@/components/Blocks";
 import { Button } from "@/components/Button";
 import { Icon } from "@/components/Icon";
 import { Eyebrow, Txt } from "@/components/Txt";
+import { useDataSaving } from "@/dataSaving/DataSavingProvider";
+import { HELD_COPY, useDownloadGate } from "@/dataSaving/useDownloadGate";
 import { useDocuments } from "@/documents/DocumentsProvider";
 import {
   isEndNote,
@@ -23,7 +25,12 @@ import {
   receiptReference,
   taxYearLabel,
 } from "@/documents/periods";
-import { STATEMENT_POLL_LIMIT, STATEMENT_POLL_MS } from "@/documents/poll";
+import {
+  LIGHT_STATEMENT_POLL_LIMIT,
+  LIGHT_STATEMENT_POLL_MS,
+  STATEMENT_POLL_LIMIT,
+  STATEMENT_POLL_MS,
+} from "@/documents/poll";
 import { DocumentItem, DocumentsError } from "@/documents/types";
 import { formatDateTime } from "@/payments/format";
 import { newIdempotencyKey } from "@/payments/idempotency";
@@ -59,6 +66,7 @@ export default function Documents() {
   const wide = useIsWide();
   const [list, setList] = useState<ListState>({ status: "loading" });
   const [request, setRequest] = useState<Request>({ step: "form" });
+  const { light } = useDataSaving();
 
   const fetchList = useCallback(
     () =>
@@ -82,6 +90,8 @@ export default function Documents() {
     let live = true;
     let reads = 0;
     let timer: ReturnType<typeof setTimeout> | undefined;
+    const pace = light ? LIGHT_STATEMENT_POLL_MS : STATEMENT_POLL_MS;
+    const limit = light ? LIGHT_STATEMENT_POLL_LIMIT : STATEMENT_POLL_LIMIT;
     const tick = async () => {
       reads += 1;
       try {
@@ -100,20 +110,20 @@ export default function Documents() {
       if (!live) {
         return;
       }
-      if (reads >= STATEMENT_POLL_LIMIT) {
+      if (reads >= limit) {
         setRequest((current) =>
           current.step === "making" ? { step: "slow", document: current.document } : current,
         );
         return;
       }
-      timer = setTimeout(() => void tick(), STATEMENT_POLL_MS);
+      timer = setTimeout(() => void tick(), pace);
     };
-    timer = setTimeout(() => void tick(), STATEMENT_POLL_MS);
+    timer = setTimeout(() => void tick(), pace);
     return () => {
       live = false;
       clearTimeout(timer);
     };
-  }, [client, following, fetchList]);
+  }, [client, following, fetchList, light]);
 
   const asked = (document: DocumentItem) => {
     setRequest(
@@ -441,7 +451,7 @@ function DownloadButton({ document }: { document: DocumentItem }) {
   return (
     <View style={{ gap: 8 }}>
       <Button
-        label={state === "done" ? "Downloaded" : "Download PDF"}
+        label={state === "done" ? "Downloaded" : state === "held" ? "Download on mobile data" : "Download PDF"}
         variant="lime"
         loading={state === "busy"}
         onPress={download}
@@ -451,22 +461,35 @@ function DownloadButton({ document }: { document: DocumentItem }) {
         <Txt size={fontSizes.sm} weight="semibold" color={ON_BLACK_DANGER} accessibilityRole="alert">
           The download did not finish. Try again.
         </Txt>
+      ) : state === "held" ? (
+        <Txt size={fontSizes.sm} weight="semibold" color={colors.white} accessibilityRole="alert" testID="statement-held">
+          {HELD_COPY}
+        </Txt>
       ) : null}
     </View>
   );
 }
 
-type DownloadState = "idle" | "busy" | "done" | "failed";
+/** "held": the client chose Wi-Fi only and is on mobile data. The next tap downloads anyway. */
+type DownloadState = "idle" | "busy" | "held" | "done" | "failed";
 
 function useDownload(document: DocumentItem) {
   const client = useDocuments();
+  const shouldHold = useDownloadGate();
   const [state, setState] = useState<DownloadState>("idle");
   const download = () => {
+    const anyway = state === "held";
     setState("busy");
-    client.download(document).then(
-      () => setState("done"),
-      () => setState("failed"),
-    );
+    void (async () => {
+      if (!anyway && (await shouldHold())) {
+        setState("held");
+        return;
+      }
+      await client.download(document).then(
+        () => setState("done"),
+        () => setState("failed"),
+      );
+    })();
   };
   return { download, state };
 }
@@ -603,8 +626,12 @@ function DocumentRow({ document, first }: { document: DocumentItem; first: boole
         <Txt size={fontSizes.lg} weight="bold">
           {title}
         </Txt>
-        <Txt size={fontSizes.sm} color={state === "failed" ? colors.danger : colors.muted}>
-          {state === "failed" ? "The download did not finish. Try again." : subtitle}
+        <Txt
+          size={fontSizes.sm}
+          color={state === "failed" ? colors.danger : state === "held" ? colors.warningText : colors.muted}
+          accessibilityLiveRegion="polite"
+        >
+          {state === "failed" ? "The download did not finish. Try again." : state === "held" ? HELD_COPY : subtitle}
         </Txt>
       </View>
       {document.status === "ready" ? (
@@ -612,7 +639,7 @@ function DocumentRow({ document, first }: { document: DocumentItem; first: boole
           onPress={download}
           disabled={state === "busy"}
           accessibilityRole="button"
-          accessibilityLabel={`Download ${title}`}
+          accessibilityLabel={state === "held" ? `Download ${title} on mobile data` : `Download ${title}`}
           style={({ pressed }) => [styles.roundButton, pressed && { opacity: 0.7 }]}
           testID={`download-${document.id}`}
         >
