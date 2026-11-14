@@ -1,5 +1,6 @@
 import { demoClosing } from "@/demo/closing";
 import { addDemoPayable, demoPaidAt } from "@/demo/payables";
+import { DEMO_GOAL_NAMES, demoInterestComing } from "@/demo/interestToGoal";
 
 import {
   Amount,
@@ -102,6 +103,8 @@ type Stored = {
   atMaturity: Investment["atMaturity"];
   /** The account chosen to be paid at maturity. */
   destinationId: string | null;
+  /** The goal chosen to take the interest at maturity. */
+  interestGoal?: { id: string; name: string } | null;
   /** Set once a matured investment's money was sent. */
   payoutId: string | null;
   createdAtMs: number;
@@ -317,6 +320,7 @@ export function createStubInvestingClient(options: StubOptions = {}): InvestingC
       termDays: product.termDays,
       atMaturity: entry.atMaturity,
       payoutDestinationId: entry.atMaturity === "pay_out" || entry.atMaturity === "pay_interest" ? entry.destinationId : null,
+      interestGoal: entry.atMaturity === "interest_to_goal" ? (entry.interestGoal ?? null) : null,
       canChangeMaturity: product.termDays !== null && (status === "awaiting_payment" || (status === "active" && maturity !== null && today < addDays(maturity, -1))),
       payBy: new Date(entry.createdAtMs + PAY_WINDOW_MS).toISOString(),
       startDate: start,
@@ -571,6 +575,26 @@ export function createStubInvestingClient(options: StubOptions = {}): InvestingC
         }
       } else if (choice.destinationId !== null) {
         throw new InvestingError("invalid");
+      }
+      demoInterestComing.delete(entry.id);
+      if (choice.atMaturity === "interest_to_goal") {
+        const goal = DEMO_GOAL_NAMES[choice.goalId ?? ""];
+        if (!goal) {
+          throw new InvestingError("invalid");
+        }
+        entry.interestGoal = { id: choice.goalId as string, name: goal };
+        const shown = view(entry);
+        if (shown.maturityDate && shown.interestAtMaturity) {
+          demoInterestComing.set(entry.id, {
+            goalId: choice.goalId as string,
+            investmentId: entry.id,
+            productName: entry.product.name,
+            on: shown.maturityDate,
+            amount: shown.interestAtMaturity,
+          });
+        }
+      } else {
+        entry.interestGoal = null;
       }
       entry.atMaturity = choice.atMaturity;
       entry.destinationId = choice.destinationId;

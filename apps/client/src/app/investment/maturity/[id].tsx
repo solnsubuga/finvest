@@ -9,8 +9,11 @@ import { Screen } from "@/components/Screen";
 import { Eyebrow, Title, Txt } from "@/components/Txt";
 import { AccountPicker, firstChoosable, NoAccount } from "@/investing/AccountPicker";
 import { atMaturityDetail, atMaturityLabel, formatAmount, formatDay } from "@/investing/format";
+import { useGoals } from "@/goals/GoalsProvider";
+import { Goal } from "@/goals/types";
 import { useInvesting } from "@/investing/InvestingProvider";
 import { Failed } from "@/investing/Parts";
+import { formatMoney } from "@/payments/format";
 import { AtMaturity, describeInvestingError, Investment, InvestingError, PayoutAccount } from "@/investing/types";
 import { useLoaded } from "@/investing/useLoaded";
 import { Loading } from "@/payments/Parts";
@@ -18,22 +21,38 @@ import { colors, fontSizes, radii } from "@/theme";
 
 /**
  * Change what happens when the term ends: roll everything into a new term, pay it out to one
- * of the client's approved accounts, or keep the principal invested and pay the interest there. Allowed up to the day before maturity. Saving the
- * same choice twice is harmless, so it needs no idempotency key.
+ * of the client's approved accounts, keep the principal invested and pay the interest there,
+ * or keep the principal invested and save the interest towards one of the client's goals.
+ * Allowed up to the day before maturity. Saving the same choice twice is harmless, so it
+ * needs no idempotency key.
  */
 export default function MaturityChoiceScreen() {
   const router = useRouter();
   const { id } = useLocalSearchParams<{ id: string }>();
   const client = useInvesting();
+  const goalsClient = useGoals();
   const [loaded, retry] = useLoaded(
-    useCallback(async (): Promise<{ investment: Investment; accounts: PayoutAccount[] }> => {
-      const [investment, accounts] = await Promise.all([client.getInvestment(id), client.listPayoutAccounts()]);
-      return { investment, accounts };
-    }, [client, id]),
+    useCallback(async (): Promise<{ investment: Investment; accounts: PayoutAccount[]; goals: Goal[] }> => {
+      const [investment, accounts, goals] = await Promise.all([
+        client.getInvestment(id),
+        client.listPayoutAccounts(),
+        goalsClient.listGoals(),
+      ]);
+      // Open goals in the same currency. Not the goal this investment already saves towards:
+      // rolling over keeps its interest there.
+      const usable = goals.filter(
+        (goal) =>
+          goal.status === "active" &&
+          goal.target.currency === investment.amount.currency &&
+          !goal.savings.some((saving) => saving.investmentId === investment.id),
+      );
+      return { investment, accounts, goals: usable };
+    }, [client, goalsClient, id]),
   );
   // Null until the client picks: until then the screen shows what is saved now.
   const [pickedChoice, setChoice] = useState<AtMaturity | null>(null);
   const [pickedDestination, setDestinationId] = useState<string | null>(null);
+  const [pickedGoal, setGoalId] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -43,9 +62,14 @@ export default function MaturityChoiceScreen() {
     ? ready.investment.payoutDestinationId
     : null;
   const destinationId = pickedDestination ?? saved ?? (ready ? firstChoosable(ready.accounts, true) : null);
+  const toGoal = choice === "interest_to_goal";
+  const goalId = pickedGoal ?? ready?.investment.interestGoal?.id ?? ready?.goals[0]?.id ?? null;
+  const paid = choice === "pay_out" || choice === "pay_interest";
   const canSave =
-    ready !== null && ready.investment.canChangeMaturity && (choice === "roll_over" || destinationId !== null);
-  const paid = choice !== "roll_over";
+    ready !== null &&
+    ready.investment.canChangeMaturity &&
+    (choice === "roll_over" || (paid && destinationId !== null) || (toGoal && goalId !== null));
+  const goal = ready?.goals.find((candidate) => candidate.id === goalId) ?? null;
 
   const save = async () => {
     if (!canSave) return;
@@ -56,6 +80,7 @@ export default function MaturityChoiceScreen() {
         investmentId: id,
         atMaturity: choice,
         destinationId: paid ? destinationId : null,
+        goalId: toGoal ? goalId : null,
       });
       router.replace(`/investment/${id}`);
     } catch (caught) {
@@ -92,7 +117,7 @@ export default function MaturityChoiceScreen() {
               : `${loaded.value.investment.productName}. You can change this until the day before it matures.`}
           </Txt>
           <View style={{ gap: 8 }} accessibilityRole="radiogroup">
-            {(["roll_over", "pay_out", "pay_interest"] as const).map((option) => {
+            {(["roll_over", "pay_out", "pay_interest", "interest_to_goal"] as const).map((option) => {
               const on = option === choice;
               return (
                 <Pressable
@@ -122,6 +147,52 @@ export default function MaturityChoiceScreen() {
               ) : (
                 <AccountPicker accounts={loaded.value.accounts} chosen={destinationId} onChoose={setDestinationId} allowWaiting />
               )}
+            </View>
+          ) : null}
+          {toGoal ? (
+            <View style={{ gap: 8 }}>
+              <Eyebrow>Save the interest to</Eyebrow>
+              {loaded.value.goals.length === 0 ? (
+                <View style={{ gap: 12 }} testID="maturity-no-goal">
+                  <Notice tone="neutral">
+                    {`You have no open goals in ${loaded.value.investment.amount.currency} to save the interest to. Set one up, then come back to choose it.`}
+                  </Notice>
+                  <Button label="Set up a goal" variant="secondary" onPress={() => router.push("/goals/new")} testID="maturity-new-goal" />
+                </View>
+              ) : (
+                <View style={{ gap: 8 }} accessibilityRole="radiogroup">
+                  {loaded.value.goals.map((candidate) => {
+                    const on = candidate.id === goalId;
+                    return (
+                      <Pressable
+                        key={candidate.id}
+                        accessibilityRole="radio"
+                        aria-checked={on}
+                        onPress={() => setGoalId(candidate.id)}
+                        style={[styles.option, on && styles.selected]}
+                        testID={`maturity-goal-${candidate.id}`}
+                      >
+                        <View style={[styles.radio, on && styles.radioOn]} />
+                        <View style={{ flex: 1, gap: 2 }}>
+                          <Txt weight="bold">{candidate.name}</Txt>
+                          <Txt size={fontSizes.sm} color={colors.muted}>
+                            {`${formatMoney(candidate.progress.value)} of ${formatMoney(candidate.target).replace("UGX ", "")}${
+                              candidate.lockedUntil ? `. Locked until ${formatDay(candidate.lockedUntil)}` : ""
+                            }`}
+                          </Txt>
+                        </View>
+                      </Pressable>
+                    );
+                  })}
+                </View>
+              )}
+              {goal && loaded.value.investment.interestAtMaturity && loaded.value.investment.maturityDate ? (
+                <Notice tone="neutral">
+                  {`On ${formatDay(loaded.value.investment.maturityDate)}, ${formatAmount(loaded.value.investment.amount)} starts another term here, and about ${formatAmount(loaded.value.investment.interestAtMaturity)} of interest starts a new saving in ${goal.name}, straight away and with nothing to pay.${
+                    goal.lockedUntil ? " It is locked with the goal." : ""
+                  } If the goal is closed by then, all of it rolls over here instead.`}
+                </Notice>
+              ) : null}
             </View>
           ) : null}
           {error ? <Notice tone="danger">{error}</Notice> : null}
