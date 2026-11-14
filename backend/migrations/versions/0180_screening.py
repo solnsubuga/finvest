@@ -1,7 +1,7 @@
 """Sanctions and politically exposed person screening, and compliance cases.
 
 Revision ID: 0180_screening
-Revises: 0076_migration_carry_resolutions
+Revises: 0250_finance_journal_exports
 
 * `screening_runs` holds every screen of a client against the provider's lists: why it was
   asked for, and what came back. A run starts pending and is finished once, by the worker.
@@ -23,7 +23,7 @@ from collections.abc import Sequence
 from alembic import op
 
 revision: str = "0180_screening"
-down_revision: str | None = "0076_migration_carry_resolutions"
+down_revision: str | None = "0250_finance_journal_exports"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 

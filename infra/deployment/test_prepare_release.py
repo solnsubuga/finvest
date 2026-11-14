@@ -176,12 +176,10 @@ class PrepareRelease(unittest.TestCase):
         for service in ("worker", "scheduler", "migrate"):
             self.assertNotIn("RESEND_HOOK_SECRET", read_env(self.out / "runtime" / f"{service}.env"))
 
-    def test_fidiba_environment_tag_reaches_the_worker_only(self):
+    def test_fidiba_environment_tag_is_no_longer_passed(self):
+        # Finvest uses its own Resend account, so there is no router tag to send.
         pr.prepare(self.out, settings(FINVEST_EMAIL_FIDIBA_ENVIRONMENT="app_finvest_prod"))
-        self.assertEqual(
-            read_env(self.out / "runtime" / "worker.env")["FINVEST_EMAIL_FIDIBA_ENVIRONMENT"], "app_finvest_prod"
-        )
-        for service in ("api", "scheduler", "migrate"):
+        for service in ("api", "worker", "scheduler", "migrate"):
             self.assertNotIn("FINVEST_EMAIL_FIDIBA_ENVIRONMENT", read_env(self.out / "runtime" / f"{service}.env"))
 
     def test_email_hash_key_reaches_the_api_and_worker_only(self):
@@ -221,7 +219,8 @@ class PrepareRelease(unittest.TestCase):
             "FINVEST_IOTEC_VERIFY_BASE_URL": "https://verify-api.iotec.io",
         }
         api_only = {"FINVEST_IOTEC_CALLBACK_TOKEN": "c" * 43}
-        pr.prepare(self.out, settings(**everywhere, **api_and_worker, **api_only))
+        worker_only = {"FINVEST_PAYOUT_NAME_PROVIDER": "iotec"}
+        pr.prepare(self.out, settings(**everywhere, **api_and_worker, **api_only, **worker_only))
         files = {s: read_env(self.out / "runtime" / f"{s}.env") for s in ("api", "worker", "scheduler", "migrate")}
         for name, value in everywhere.items():
             for service in ("api", "worker", "scheduler"):
@@ -233,6 +232,9 @@ class PrepareRelease(unittest.TestCase):
         self.assertEqual(files["api"]["FINVEST_IOTEC_CALLBACK_TOKEN"], "c" * 43)
         for service in ("worker", "scheduler"):
             self.assertNotIn("FINVEST_IOTEC_CALLBACK_TOKEN", files[service])
+        self.assertEqual(files["worker"]["FINVEST_PAYOUT_NAME_PROVIDER"], "iotec")
+        for service in ("api", "scheduler"):
+            self.assertNotIn("FINVEST_PAYOUT_NAME_PROVIDER", files[service])
         self.assertFalse([name for name in files["migrate"] if "IOTEC" in name or "PROVIDER" in name])
 
     def test_iotec_settings_are_left_out_when_unset(self):

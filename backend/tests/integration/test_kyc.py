@@ -20,7 +20,15 @@ from app.shared.actors import SYSTEM, Actor
 from app.shared.errors import ApplicationError
 from app.shared.push_ids import push_id
 from tests.support.clock import AsyncBarrier, FakeClock
-from tests.support.kyc import SEALER, FakeProvider, add_photos, all_passed, details, ready_draft
+from tests.support.kyc import (
+    SEALER,
+    FakeProvider,
+    add_photos,
+    all_passed,
+    details,
+    live_selfie,
+    ready_draft,
+)
 from tests.support.ledger import client as new_client
 from tests.support.ledger import staff as new_staff
 
@@ -47,11 +55,17 @@ async def in_review(
     return client, view.id
 
 
-async def submitted(database: Database, clock: FakeClock, **draft: str) -> tuple[Actor, str]:
-    """A client whose check waits for the provider."""
+async def submitted(
+    database: Database, clock: FakeClock, *, live: Database | None = None, **draft: str
+) -> tuple[Actor, str]:
+    """A client whose check waits for the provider. With `live` (the worker's database), the
+    selfie was taken with a liveness check that passed."""
     client = new_client()
     async with database.actor_transaction(client) as session:
         await ready_draft(session, client, clock, **draft)  # type: ignore[arg-type]
+    if live is not None:
+        await live_selfie(database, live, client, clock)
+    async with database.actor_transaction(client) as session:
         view = await kyc.submit(session, SEALER, client, FakeProvider(), clock)
     assert view.status is CheckStatus.SUBMITTED
     return client, view.id
@@ -239,7 +253,7 @@ async def test_a_staff_decision_needs_a_reason(
 async def test_the_worker_approves_a_clean_result_when_that_is_switched_on(
     app_database: Database, worker_database: Database, fake_clock: FakeClock
 ) -> None:
-    client, check_id = await submitted(app_database, fake_clock)
+    client, check_id = await submitted(app_database, fake_clock, live=worker_database)
     async with worker_database.actor_transaction(SYSTEM) as session:
         view = await kyc.record_provider_result(
             session,
@@ -265,7 +279,7 @@ async def test_the_worker_approves_a_clean_result_when_that_is_switched_on(
 async def test_a_clean_result_goes_to_a_person_unless_approval_is_switched_on(
     app_database: Database, worker_database: Database, fake_clock: FakeClock
 ) -> None:
-    client, check_id = await submitted(app_database, fake_clock)
+    client, check_id = await submitted(app_database, fake_clock, live=worker_database)
     async with worker_database.actor_transaction(SYSTEM) as session:
         view = await kyc.record_provider_result(
             session, SEALER, check_id, 1, "fake-reference", all_passed(), fake_clock
@@ -286,7 +300,7 @@ async def test_a_document_that_expired_while_waiting_is_not_approved(
     app_database: Database, worker_database: Database, fake_clock: FakeClock
 ) -> None:
     _, waiting = await in_review(app_database, fake_clock)
-    _, automatic = await submitted(app_database, fake_clock)
+    _, automatic = await submitted(app_database, fake_clock, live=worker_database)
     # The sample document expires on 18 September 2030.
     fake_clock.current = datetime(2030, 9, 19, tzinfo=UTC)
     staff = new_staff()
@@ -328,7 +342,8 @@ async def test_a_failed_automatic_check_goes_to_a_person_and_never_rejects(
             session, SEALER, check_id, 1, "ref-2", outcomes, fake_clock
         )
     assert view.status is CheckStatus.NEEDS_REVIEW
-    assert view.review_flags == ("selfie_match_unsure", "screening_fail")
+    # The selfie was a camera photo, so liveness shows as not run.
+    assert view.review_flags == ("selfie_match_unsure", "screening_fail", "liveness_not_run")
     assert view.automatic_checks == outcomes
     assert view.account_number is None
     assert (await actions(app_database, check_id))[-1] == "kyc.check.sent_to_review"
@@ -337,7 +352,7 @@ async def test_a_failed_automatic_check_goes_to_a_person_and_never_rejects(
 async def test_a_late_provider_answer_changes_nothing(
     app_database: Database, worker_database: Database, fake_clock: FakeClock
 ) -> None:
-    _, check_id = await submitted(app_database, fake_clock)
+    _, check_id = await submitted(app_database, fake_clock, live=worker_database)
     async with worker_database.actor_transaction(SYSTEM) as session:
         stale = await kyc.record_provider_result(
             session, SEALER, check_id, 7, "old", all_passed(), fake_clock, automatic_approval=True
@@ -492,7 +507,9 @@ async def test_an_identity_document_opens_only_one_account(
     number = details().document_number
     _, first = await in_review(app_database, fake_clock, document_number=number)
     _, second = await in_review(app_database, fake_clock, document_number=number)
-    _, third = await submitted(app_database, fake_clock, document_number=number)
+    _, third = await submitted(
+        app_database, fake_clock, live=worker_database, document_number=number
+    )
     staff = new_staff()
     async with app_database.actor_transaction(staff) as session:
         await kyc.approve(session, SEALER, staff, first, "Checked", fake_clock)

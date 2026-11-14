@@ -1,9 +1,17 @@
 import { Platform } from "react-native";
-import type { ClientCheck, Upload } from "@finvest/api-client/client";
+import type { ClientCheck, LivenessAttempt as ApiAttempt, Upload } from "@finvest/api-client/client";
 
 import { api, ApiError } from "@/api/http";
 
-import { DetailField, IdentityCheck, IdentityClient, IdentityError, PhotoFile, PhotoKind } from "./types";
+import {
+  DetailField,
+  IdentityCheck,
+  IdentityClient,
+  IdentityError,
+  LivenessAttempt,
+  PhotoFile,
+  PhotoKind,
+} from "./types";
 
 /**
  * The ID check screens' contract, answered by the real API (`/client/identity-check`,
@@ -41,6 +49,7 @@ export function toCheck(view: ClientCheck): IdentityCheck {
       : null,
     detailsConfirmed: view.details_confirmed,
     photos: view.photos.map((photo) => photo.kind),
+    liveSelfie: view.photos.some((photo) => photo.kind === "selfie" && photo.live === true),
     missing: view.missing,
     retakePhotos: view.retake_photos,
     clientMessage: view.client_message,
@@ -49,7 +58,18 @@ export function toCheck(view: ClientCheck): IdentityCheck {
   };
 }
 
-type Action = "read" | "document" | "photo" | "details" | "submit";
+export function toAttempt(attempt: ApiAttempt): LivenessAttempt {
+  return {
+    id: attempt.id,
+    status: attempt.status,
+    url: attempt.url,
+    failureCode: attempt.failure_code,
+    photoUsed: attempt.photo_used,
+    expiresAt: attempt.expires_at,
+  };
+}
+
+type Action = "read" | "document" | "photo" | "details" | "submit" | "liveness";
 
 export function toIdentityError(error: unknown, action: Action): IdentityError {
   if (error instanceof IdentityError) return error;
@@ -67,6 +87,10 @@ export function toIdentityError(error: unknown, action: Action): IdentityError {
       if (action === "photo") {
         const notPart = error.fields.some((problem) => problem.code === "photo_not_part_of_document");
         return new IdentityError(notPart ? "photo_not_needed" : "photo_not_accepted");
+      }
+      if (action === "liveness") {
+        const usedUp = error.fields.some((problem) => problem.code === "too_many_attempts");
+        return new IdentityError(usedUp ? "liveness_used_up" : "unavailable");
       }
       if (action === "submit") {
         return new IdentityError("incomplete", { missing: error.fields.map((problem) => problem.field) });
@@ -159,6 +183,28 @@ export function createApiIdentityClient(): IdentityClient {
         return toCheck(await api("POST /client/identity-check/submit", {}));
       } catch (error) {
         throw toIdentityError(error, "submit");
+      }
+    },
+
+    async getLiveness() {
+      try {
+        const state = await api("GET /client/identity-check/liveness", {});
+        return {
+          available: state.available,
+          problem: state.problem,
+          attemptsLeft: state.attempts_left,
+          latest: state.latest ? toAttempt(state.latest) : null,
+        };
+      } catch (error) {
+        throw toIdentityError(error, "read");
+      }
+    },
+
+    async startLiveness() {
+      try {
+        return toAttempt(await api("POST /client/identity-check/liveness", {}));
+      } catch (error) {
+        throw toIdentityError(error, "liveness");
       }
     },
   };

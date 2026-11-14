@@ -24,7 +24,8 @@ function loadStub(): StubModule | null {
 /** Chooses what the ID check screens talk to: the demo when it is switched on, otherwise the API. */
 export function resolveIdentityClient(phone: string | null, stub: StubModule | null = loadStub()): IdentityClient {
   if (stub) {
-    return stub.createStubIdentityClient({ seeded: phone === SEEDED_DEMO_PHONE });
+    // The demo offers a live selfie check, as the API does once a liveness provider is set.
+    return stub.createStubIdentityClient({ seeded: phone === SEEDED_DEMO_PHONE, liveness: true });
   }
   return createApiIdentityClient();
 }

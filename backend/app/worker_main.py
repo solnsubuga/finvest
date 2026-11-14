@@ -27,6 +27,7 @@ from app.modules.goals.jobs import GoalJobs
 from app.modules.identity.service import client_contact
 from app.modules.investments.jobs import InvestmentJobs
 from app.modules.kyc.jobs import ProviderJobs, sweep_unanswered
+from app.modules.kyc.liveness_jobs import LivenessJobs
 from app.modules.kyc.service import SWEEP_UNANSWERED
 from app.modules.kyc.settings import KycSettings
 from app.modules.migration.jobs import MigrationJobs
@@ -87,16 +88,21 @@ def handlers(
         )
     if identity.identity_provider != "manual":
         # The manual provider sends every client to a person and queues no provider jobs.
+        storage = StorageSettings().storage()
         kinds.update(
             ProviderJobs(
                 database,
                 identity.sealer(),
                 # The provider reads the photos it sends from private storage.
-                identity.provider(StorageSettings().storage()),
+                identity.provider(storage),
                 clock,
                 automatic_approval=identity.identity_automatic_approval,
             ).handlers()
         )
+        live = identity.liveness()
+        if live is not None:
+            # The face a liveness check captured is stored as the check's selfie.
+            kinds.update(LivenessJobs(database, identity.sealer(), live, storage, clock).handlers())
     screening = ScreeningSettings().provider()
     if screening is not None and identity.identity_data_key is None:
         # The date of birth a screen sends is sealed with the identity data key.

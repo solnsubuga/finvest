@@ -240,7 +240,7 @@ describe("identity checks screen", () => {
         getCheck: async (id) => ({
           ...(await stub.getCheck(id)),
           reviewFlags: [flag],
-          photos: [{ kind: "selfie", url: "https://files.test/selfie" }],
+          photos: [{ kind: "selfie", url: "https://files.test/selfie", live: false }],
         }),
       };
       const router = createMemoryRouter([{ path: "/identity-checks", element: <IdentityChecksScreen api={api} /> }], {
@@ -250,6 +250,33 @@ describe("identity checks screen", () => {
       const review = await openCheck("David Mugisha");
       expect(within(review).getByText(words)).toBeInTheDocument();
       expect(within(review).getByRole("img", { name: "Selfie" })).toHaveAttribute("referrerpolicy", "no-referrer");
+      unmount();
+    }
+  });
+
+  it("shows which selfie was taken live", async () => {
+    renderScreen();
+    const review = await openCheck("David Mugisha");
+    expect(within(review).getByText("Taken live")).toBeInTheDocument();
+    expect(within(review).getByText("Selfie taken live")).toBeInTheDocument();
+    expect(within(review).getByText("Live")).toBeInTheDocument();
+  });
+
+  it("names the liveness flags", async () => {
+    const stub = createStubKycApi(0);
+    for (const [flag, words] of [
+      ["liveness_not_run", "Selfie not taken live"],
+      ["liveness_fail", "Live check failed, camera selfie sent"],
+    ] as const) {
+      const api: KycApi = {
+        ...stub,
+        getCheck: async (id) => ({ ...(await stub.getCheck(id)), reviewFlags: [flag] }),
+      };
+      const router = createMemoryRouter([{ path: "/identity-checks", element: <IdentityChecksScreen api={api} /> }], {
+        initialEntries: ["/identity-checks"],
+      });
+      const { unmount } = render(<RouterProvider router={router} />);
+      expect(within(await openCheck("David Mugisha")).getByText(words)).toBeInTheDocument();
       unmount();
     }
   });

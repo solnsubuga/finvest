@@ -11,6 +11,7 @@ function draft(overrides: Partial<IdentityCheck> = {}): IdentityCheck {
     details: null,
     detailsConfirmed: false,
     photos: [],
+    liveSelfie: false,
     missing: ["front", "back", "details", "selfie"],
     retakePhotos: [],
     clientMessage: null,

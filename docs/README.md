@@ -17,10 +17,13 @@
 | [goals.md](goals.md) | Goals as targets attached to investments, the monthly plan and how a goal's progress is labelled |
 | [notifications.md](notifications.md) | How a module tells a client something, the event catalogue, channels, and how staff change the words |
 | [tax.md](tax.md) | Withholding tax on interest: the monthly return for URA and its file, paying URA by two people, and the figures on a client's yearly certificate |
+| [finance.md](finance.md) | The Finance screen's books by account code, Finvest's own income and costs, and the daily journal for the accounting system |
 | [documents.md](documents.md) | Statements and receipts: what they show, how the figures are checked, and the emails that carry them |
 | [support.md](support.md) | Help chat between clients and staff, and the complaints register: routes, rules and who sees what |
 | [automatic-investing.md](automatic-investing.md) | Plans that invest the same amount on a schedule, the daily run that asks for each payment, and what the database enforces |
 | [insights.md](insights.md) | What a client invested, earned and was paid each month, what comes next, and where each figure is read from in the ledger |
+| [client-profile.md](client-profile.md) | Next of kin and their shares, the investing questions and the profile they give |
+| [account-closure.md](account-closure.md) | Closing an account at the client's request: what must be clear first, the two staff steps and what the database enforces |
 | [client-accounts.md](client-accounts.md) | Finding a client in the console, the client page, and locking or unlocking an account with two people |
 | [console-admin.md](console-admin.md) | The team and its two-admin changes, the approvals inbox, the audit trail viewer, email suppressions and client account support |
 | [account-numbers.md](account-numbers.md) | Format, generation and lifetime of client account numbers |

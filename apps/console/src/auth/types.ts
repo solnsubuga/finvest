@@ -79,6 +79,7 @@ export const ACTION_PERMISSIONS = [
   "audit.view",
   // Locking or unlocking a client's account, with a second person.
   "clients.lock",
+  "clients.close",
   // Lifting an email suppression, with a second person.
   "email_suppressions.lift",
   // Preparing, approving, sending back or withdrawing a dealing order, and recording, confirming or rejecting its result.

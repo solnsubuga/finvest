@@ -47,6 +47,8 @@ Four screens were still the placeholder page. The Review Queue is connected to `
 | --- | --- | --- |
 | Money Movement | Payouts that are held up or stranded, and deposits under way | `GET /staff/payouts/held-up`; stranded payouts in PR #263 (payouts thread) |
 | ~~Maturities~~ | ~~The daily maturity run and its exceptions~~ Closed by the Maturities screen PR. | `GET /staff/maturities` |
+| ~~Finance~~ | ~~Day close, fee income, withholding tax owed and the accounting export~~ Built: income and costs, the books by code and the daily journal export ([finance.md](finance.md)). The ioTec collection charge is not booked yet. | `GET /staff/finance`, `GET /staff/finance/journal.csv` |
+| Compliance | Screening results and monitoring alerts | Nothing built (see below) |
 | Finance | Day close, fee income, withholding tax owed and the accounting export | Reconciliation routes below; tax in the tax certificates thread |
 | Compliance | Screening results and monitoring alerts | `/staff/compliance` routes ([screening.md](screening.md)); screen being built by the screening thread |
 
@@ -63,6 +65,7 @@ Four screens were still the placeholder page. The Review Queue is connected to `
 | **Deposits credited to the wrong client.** | | Running thread "Fix deposits credited to the wrong client" |
 | **Tax certificates and URA withholding reports.** | | Running thread "Build tax certificates and URA reports" |
 | **Sending push, SMS and email.** | | Notifications thread |
+| ~~**Next of kin and the suitability questions.** Not built.~~ Backend closed by the next of kin and investing questions PR ([client-profile.md](client-profile.md)). | ~~Listed on the roadmap and "usually asked for by the regulator".~~ | Client profile thread |
 | **Anti-money-laundering.** ioTec Verify's AML screening runs once at hand-in (once `FINVEST_IDENTITY_PROVIDER=iotec`). The provider-neutral screening module, with a 30 day rescreen and two-person cases, is built ([screening.md](screening.md)) but runs with no provider until the Sigma360 account exists. Payouts wait for a clear screen, and transaction monitoring rules open cases for staff. No Financial Intelligence Authority report is generated: staff file it on the FIA's system. | Listed on the roadmap's back office checklist and likely a licence condition. | Screening thread |
 | **Next of kin and the suitability questions.** Not built. | Listed on the roadmap and "usually asked for by the regulator". | None |
 | **The real device checks** in [launch.md](launch.md) have not been run. | A launch condition. | Engineering, once Android and iPhone builds exist |

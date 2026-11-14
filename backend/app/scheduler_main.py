@@ -21,7 +21,7 @@ from app.infrastructure.process import keep_heartbeat, stop_on_signals
 from app.infrastructure.settings import Settings
 from app.modules.dealing.jobs import ALLOCATE_KIND, MATURITIES_KIND, RELEASE_KIND
 from app.modules.documents.service import MONTHLY_KIND
-from app.modules.goals.jobs import REFRESH_GROUPS_KIND
+from app.modules.goals.jobs import REFRESH_GROUPS_KIND, SEND_REMINDERS_KIND
 from app.modules.investments.jobs import ACCRUE_KIND, CANCEL_UNPAID_KIND, MATURE_KIND
 from app.modules.kyc.service import SWEEP_UNANSWERED
 from app.modules.notifications.keyed_backfill import KEY_HASHES
@@ -102,6 +102,14 @@ def schedules() -> list[Schedule]:
             trigger=CronTrigger(hour=1, minute=30, timezone=KAMPALA),
             kind=REFRESH_GROUPS_KIND,
             max_age=timedelta(days=1),
+        ),
+        # Goal savings due in the next three days, and goals reached overnight, in the morning
+        # so no text arrives at night. A missed day is caught up the next morning.
+        Schedule(
+            name="goals.send_reminders",
+            trigger=CronTrigger(hour=8, minute=0, timezone=KAMPALA),
+            kind=SEND_REMINDERS_KIND,
+            max_age=timedelta(hours=10),
         ),
         # Last month's statement for every client. It runs every morning and asks for a month
         # only once the ledger is closed through its last day; each client is asked once.
