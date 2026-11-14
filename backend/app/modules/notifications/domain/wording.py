@@ -258,13 +258,13 @@ DEFAULTS: dict[str, Wording] = {
     ),
     "payout_destination_approved": Wording(
         "Payout account approved",
-        "{destination} is approved. You can withdraw to it after the 24 hour wait.",
-        "Finvest: {destination} is approved for withdrawals after the 24 hour wait.",
+        "We approved {destination}. You can withdraw to it after the 24 hour wait.",
+        "Finvest: we approved {destination} for withdrawals after the 24 hour wait.",
     ),
     "payout_destination_refused": Wording(
         "Payout account not approved",
-        "We could not approve {destination}. A payout account must be in your own name.",
-        "Finvest: we could not approve {destination}. A payout account must be in your own name.",
+        "We could not approve {destination}. See why in the app.",
+        "Finvest: we could not approve {destination} for withdrawals. See why in the app.",
     ),
     "statement_ready": Wording(
         "{period} statement is ready",

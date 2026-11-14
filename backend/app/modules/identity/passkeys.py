@@ -45,7 +45,7 @@ from webauthn.helpers.structs import (
 from app.infrastructure.database import Database
 from app.infrastructure.settings import Settings
 from app.infrastructure.throttling import reserve_attempts, throttle_key
-from app.modules.identity import trail
+from app.modules.identity import notices, trail
 from app.modules.identity.domain.passwords import password_problem
 from app.modules.identity.domain.permissions import Role
 from app.modules.identity.domain.sessions import (
@@ -296,6 +296,10 @@ class PasskeyService:
             resource_type="passkey",
             resource_id=row["id"],
         )
+        if row["kind"] == "client":
+            await notices.second_step_changed(
+                session, row["actor"], "passkey_added", row["id"], now
+            )
         logger.info("passkey_added", kind=row["kind"])
         return PasskeyView(row["id"], name, now, None)
 
@@ -488,6 +492,9 @@ class PasskeyService:
                     "identity.passkey.removed",
                     resource_type="passkey",
                     resource_id=passkey_id,
+                )
+                await notices.second_step_changed(
+                    session, client.client_id, "passkey_removed", passkey_id, self.clock.now()
                 )
         if not removed:
             raise ApplicationError("not_found")

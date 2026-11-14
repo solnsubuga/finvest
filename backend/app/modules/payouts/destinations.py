@@ -23,6 +23,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.modules.audit import service as audit
 from app.modules.audit.domain.events import AuditActor, AuditEvent
 from app.modules.kyc import service as kyc
+from app.modules.notifications import contract as notifications
 from app.modules.payouts.domain import destinations as rules
 from app.modules.payouts.domain.banks import find_bank
 from app.modules.payouts.domain.destinations import (
@@ -36,6 +37,7 @@ from app.modules.payouts.domain.destinations import (
     ProofKind,
     RejectionReason,
 )
+from app.modules.payouts.domain.sending import bank_label, destination_label
 from app.shared.actors import Actor
 from app.shared.clock import Clock
 from app.shared.errors import ApplicationError, FieldProblem
@@ -361,6 +363,7 @@ async def refuse_by_network(
         ),
         details={"rejection_reason": rejection.value},
     )
+    await _tell_client(session, view, "payout_destination_refused", lookup_id, clock)
     return await get_destination(session, destination_id)
 
 
@@ -404,6 +407,7 @@ async def approve(
             "checked_by": view.checked_by,
         },
     )
+    await _tell_client(session, view, "payout_destination_approved", view.proof_document_id, clock)
     return await get_destination(session, destination_id)
 
 
@@ -431,6 +435,7 @@ async def reject(
         reason=reason,
         details={"rejection_reason": rejection.value},
     )
+    await _tell_client(session, view, "payout_destination_refused", view.proof_document_id, clock)
     return await get_destination(session, destination_id)
 
 
@@ -582,6 +587,32 @@ async def _save(
             "rejection_reason": after.rejection_reason,
             "now": clock.now(),
         },
+    )
+
+
+def account_label(view: DestinationView) -> str:
+    """How a client's messages name a payout account: its bank or network, never the number."""
+    if view.kind is DestinationKind.BANK:
+        return bank_label(view.bank_code)
+    label = destination_label(view.network or "")
+    return label if label.startswith("your ") else f"your {label} number"
+
+
+async def _tell_client(
+    session: AsyncSession, view: DestinationView, event_name: str, proof: str | None, clock: Clock
+) -> None:
+    """In the transaction of the decision, so the client hears once and only if it holds.
+
+    Keyed by the proof decided on: a bank account refused and proved again is told again.
+    """
+    await notifications.notify(
+        session,
+        event_name=event_name,
+        client_id=view.client_id,
+        idempotency_key=f"{view.id}:{proof or ''}",
+        variables={"destination": account_label(view)},
+        link=notifications.Link("payout_destination", view.id),
+        now=clock.now(),
     )
 
 

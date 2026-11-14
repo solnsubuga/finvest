@@ -309,6 +309,20 @@ async def test_a_number_in_another_name_or_none_is_refused_for_good(
     assert view.checked_by is None and view.proof_name == kept_name
     seen = await client_view(api, destination_id)
     assert seen["status"] == "rejected" and seen["rejection_reason"] == reason
+    # The client is told, with the network and never the number.
+    async with worker_database.actor_transaction(SYSTEM) as session:
+        told = (
+            await session.execute(
+                text(
+                    "SELECT body, sms, link_kind FROM notifications WHERE link_id = :id "
+                    "AND event = 'payout_destination_refused'"
+                ),
+                {"id": destination_id},
+            )
+        ).one()
+    assert told.link_kind == "payout_destination"
+    assert told.body.startswith("We could not approve your ")
+    assert told.body.endswith(" number. See why in the app.")
 
     # Nobody can take it further: not staff, not the client.
     checker = Actor("staff", push_id())

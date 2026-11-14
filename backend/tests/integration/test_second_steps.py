@@ -964,3 +964,44 @@ async def test_confirming_needs_a_signed_in_member_of_staff_on_the_console(api: 
         headers={"Origin": "https://evil.example"},
     )
     assert (elsewhere.status_code, code(elsewhere)) == (403, "forbidden")
+
+
+async def security_notices(api: Api, actor_id: str) -> list[str]:
+    """The security notices a client was told, oldest first."""
+    async with api.database.actor_transaction(Actor("client", actor_id)) as session:
+        rows = await session.execute(
+            text(
+                "SELECT body FROM notifications WHERE client_id = :id AND category = 'security' "
+                "ORDER BY created_at, id"
+            ),
+            {"id": actor_id},
+        )
+        return [row.body for row in rows]
+
+
+async def test_a_client_is_told_each_change_to_their_second_steps(api: Api) -> None:
+    _, client_id, token = await a_signed_in_client(api)
+    bearer = {"Authorization": f"Bearer {token}"}
+    added = await add_passkey(api, token, Device(CLIENT_SITE, CLIENT_ORIGIN))
+    await api.http.delete(f"/client/passkeys/{added.json()['id']}", headers=bearer)
+    await add_app(api, token)
+    await api.http.delete("/client/authenticator", headers=bearer)
+    tail = ". If this was not you, contact us straight away."
+    assert await security_notices(api, client_id) == [
+        "A passkey was added to your account" + tail,
+        "A passkey was removed from your account" + tail,
+        "An authenticator app was set up for your account" + tail,
+        "The authenticator app was removed from your account" + tail,
+    ]
+
+
+async def test_staff_second_steps_tell_no_client(api: Api) -> None:
+    _, staff_id, token = await invited(api)
+    enrolled = await enrol_with_passkey(api, token, Device(STAFF_SITE, STAFF_ORIGIN))
+    assert enrolled.status_code == 200, enrolled.text
+    # Staff have no inbox: nothing is written under their ID.
+    async with api.database.actor_transaction(Actor("staff", staff_id)) as session:
+        told = await session.scalar(
+            text("SELECT count(*) FROM notifications WHERE client_id = :id"), {"id": staff_id}
+        )
+    assert told == 0
