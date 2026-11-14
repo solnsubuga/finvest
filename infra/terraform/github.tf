@@ -5,7 +5,7 @@ locals {
   # The GitHub environments are named prod and dev.
   github_environment = var.environment == "production" ? "prod" : "dev"
 
-  github_variables = {
+  github_variables = merge({
     SITE_DOMAINS = join(",", var.site_domains)
     APP_DOMAIN   = var.app_domain
     ADMIN_DOMAIN = var.admin_domain
@@ -20,7 +20,11 @@ locals {
     FINVEST_OBJECT_STORAGE_BUCKET   = digitalocean_spaces_bucket.documents.name
     FINVEST_OBJECT_STORAGE_ENDPOINT = "https://${var.region}.digitaloceanspaces.com"
     FINVEST_OBJECT_STORAGE_REGION   = var.region
-  }
+    }, length(cloudflare_zero_trust_list.staff_emails) == 0 ? {} : {
+    # The worker keeps this Cloudflare list in step with console Team changes.
+    FINVEST_CLOUDFLARE_ACCOUNT_ID    = data.cloudflare_zone.this.account.id
+    FINVEST_CLOUDFLARE_STAFF_LIST_ID = cloudflare_zero_trust_list.staff_emails[0].id
+  })
 
   # Keys are fixed so for_each is known at plan time; only the values are secret.
   github_secret_names = toset([
