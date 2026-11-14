@@ -151,6 +151,7 @@ def create_app(
     app.state.settings = settings
     app.state.database = database
     app.state.clock = clock
+    app.state.operations_cache = health.OperationsCache()
     app.state.email_hash_key = email_hash_key
     app.state.storage = storage
     app.state.iotec_wallet = iotec_wallet

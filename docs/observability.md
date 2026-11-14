@@ -37,6 +37,8 @@ All three are public, so their body is only `{"status": "ok"}` or the error enve
 | `jobs_failed` | Jobs that failed in the last 24 hours, including uncertain provider outcomes | A payment, payout or check needs a person |
 | `schedules_late` | A recurring run more than 10 minutes past its fire time | The scheduler is down or has lost its lease |
 
+Each API process keeps one reading for 15 seconds and answers every call in that window from it (`OPERATIONS_CACHE_FOR`), so a caller cannot load the database by calling the public route often. A check that could not run is never kept. A count that goes up shows within 15 seconds, well inside the uptime checker's interval.
+
 A failed job keeps the check red for 24 hours. That is on purpose: a failed money job is never retried by itself, and somebody has to look at it.
 
 ## Alerts
