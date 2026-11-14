@@ -393,6 +393,33 @@ async def test_the_picker_routes_answer_staff(
     assert [each["id"] for each in offered.json()] == [line]
 
 
+async def test_a_return_shows_its_line_however_many_lines_share_its_amount(
+    world: World, app_database: Database
+) -> None:
+    amount = 1_234_999
+    payout = await paid_by_phone(world, amount)
+    # More lines of the same amount than a statement search gives back, all before the real one.
+    noise = tuple((f"same{n}", amount) for n in range(statements.MAX_FOUND + 1))
+    await MTN.statement(app_database, noise)
+    line = await MTN.statement(app_database, (("real", amount),))
+    proposed = await propose(app_database, payout.id, line, staff())
+    async with app_database.actor_transaction(staff()) as session:
+        searched = await statements.find_statement_lines(
+            session,
+            source=StatementSource.IOTEC,
+            date_from=date.today() - timedelta(days=1),
+            date_to=date.today() + timedelta(days=400),
+            amount=ugx(amount),
+        )
+        shown = await returns.details(session, proposed)
+        unknown = await statements.get_statement_line(session, push_id())
+    assert unknown is None
+    # A search by amount stops short of it; the return still shows it, found by its ID.
+    assert line not in [each.id for each in searched]
+    assert shown.line is not None
+    assert shown.line.id == line
+
+
 async def test_a_waiting_return_carries_what_the_second_person_checks(
     world: World, test_database: TestDatabase, app_database: Database
 ) -> None:

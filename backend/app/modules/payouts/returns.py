@@ -117,7 +117,8 @@ class ReturnDetails:
     network: str | None
     masked_account: str
     holder_name: str
-    # None only if the line has left the statement search window.
+    # None only if the line is not on the pot the payout was paid from, which the database's
+    # evidence check never lets a return name.
     line: StatementLineView | None
 
 
@@ -416,23 +417,13 @@ async def details(session: AsyncSession, returned: ReturnView) -> ReturnDetails:
     destination = await destinations.get_destination(session, payout.destination_id)
     bank = find_bank(destination.bank_code or "")
     source, pot = _pot(payout, destination.network)
-    # The line came in within the return window of the payout being paid, so it lies within
-    # that window either side of the day the return was proposed.
-    proposed_on = business_date(returned.proposed_at)
-    found = await statements.find_statement_lines(
-        session,
-        source=source,
-        date_from=proposed_on - RETURN_WINDOW,
-        date_to=proposed_on + RETURN_WINDOW,
-        amount=payout.amount,
-    )
-    line = next(
-        (
-            each
-            for each in found
-            if each.id == returned.statement_line_id and each.account_reference == pot
-        ),
-        None,
+    # Looked up by its ID, never searched for again: a common amount on a busy pot could push
+    # it out of a search. The pot is checked again so a line from elsewhere is never shown.
+    found = await statements.get_statement_line(session, returned.statement_line_id)
+    line = (
+        found
+        if found is not None and found.source is source and found.account_reference == pot
+        else None
     )
     return ReturnDetails(
         payout=payout,
