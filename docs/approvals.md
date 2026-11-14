@@ -48,6 +48,7 @@ The inbox only reads. Deciding happens on the owning module's own route, which c
 | `statement_layout_change` | the same, for `statement_layouts` | `settings.view` | `statement_layouts.change` |
 | `withdrawal_limits_change` | payouts `limit_changes.waiting`. The subject is the start day, never the amounts | `settings.view` | `withdrawal_limits.change` |
 | `report_schedule` | reports `schedules.waiting`, a schedule proposed, shown only for a report the reader may download. The subject is the report key and how often, never who it goes to. | `reports.view` | `reports.view` |
+| `month_close` | finance `month_close.waiting`, a month proposed for closing. The subject is the month. | `finance.view` | `finance.view` |
 | `payout_resolution` | payouts `resolutions.waiting` | `reconciliation.view` | `reconciliation.change` |
 | `deposit_reassignment` | payments `reassignments.proposals_awaiting_approval`. The subject is the deposit's ID. | `reconciliation.view` | `deposit_reassignments.change` |
 | `payout_account` | payouts `destinations.checks_awaiting_approval`: a check recorded, not yet approved | `review_queue.view` | `payout_accounts.change` |

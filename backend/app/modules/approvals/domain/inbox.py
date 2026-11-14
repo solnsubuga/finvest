@@ -56,6 +56,7 @@ Kind = Literal[
     "statement_layout_change",
     "withdrawal_limits_change",
     "report_schedule",
+    "month_close",
 ]
 
 
@@ -133,6 +134,8 @@ SOURCES: dict[Kind, Source] = {
     # A report emailed on a schedule, on Reports. Only shown for a report the reader may
     # download, and approving needs that too.
     "report_schedule": Source("reports.view", "reports.view"),
+    # Finance signing a month off, on the Finance screen.
+    "month_close": Source("finance.view", "finance.view"),
 }
 
 
