@@ -162,6 +162,7 @@ A running log. Add a row when a decision is made, and move an open question up w
 | Investing: confirm the minimums. The canvas shows $500 for the dollar product in one place and $100 in another. Built: $500. | Owner |
 | Investing: if the tax rate changes by law during a term, should running investments change with it? Built: no, terms are fixed at the start. | Owner, counsel |
 | Investing and payments: how is a deposit credited to the wrong client moved to the right one? Built: an unwind puts the money back as waiting to start for the client it was credited to, and payments reverses the credit. No command moves it to another client yet. | Owner |
+| Investing and dealing: should a staff refund be held to the buffer rules an early withdrawal is (the buffer up to its per-withdrawal limit, anything larger waiting for a sale)? Built: no, a refund is paid from trust cash before any bills bought for it are sold. | Owner |
 | Investing: is the tax fraction rounded down in the client's favour acceptable to URA, or must tax round up? | Owner, counsel |
 | Dealing: confirm the buffer rules (built: target UGX 150m, floor UGX 100m, up to UGX 5m from the buffer, 2 working days for a sale), and who funds the buffer at the start. | Owner |
 | Dealing: who are the custodian and the primary dealer, and what is the smallest step a bid accepts? The canvas leaves the dealer blank. The lot size is a setting until this is known. | Owner |

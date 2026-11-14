@@ -249,7 +249,7 @@ The database fences each step (migration 0064). Only the client asks, once, whil
 
 ## Undoing a mistake
 
-Two staff commands correct money that went the wrong way. Both are maker and checker: one person proposes with a reason, and a different person approves, sends back with a note, or the proposer withdraws it. The code is `backend/app/modules/investments/corrections.py`, and the table is `investment_corrections` (migration 0066). Proposing and deciding need `investment_corrections.change`, held by admin and finance for now. Each one shows in the approvals inbox as `investment_correction`.
+Two staff commands correct money that went the wrong way. Both are maker and checker: one person proposes with a reason, and a different person approves, sends back with a note, or the proposer withdraws it. The code is `backend/app/modules/investments/corrections.py`, and the table is `investment_corrections` (migration 0066). Proposing and deciding need `investment_corrections.change`, held by admin and finance for now. Each one shows in the approvals inbox as `investment_correction`, and the console proposes and decides them on the Investments page.
 
 - **Unwind.** For a running investment that should never have started, for example a deposit credited to the wrong client. The amount is the principal. It is refused if the client asked to withdraw it early, and for an investment carried over from Finvest 1.0 (`carried_over` on `investment_id`), which was never paid for here: a migration mistake is put right by the migration. Nothing leaves a running investment except through maturity or a withdrawal, so no interest has been paid out.
 - **Refund.** For money waiting in `client.awaiting_start` for an investment that was cancelled or unwound. It names one of the client's approved payout destinations past its first day's safety wait, checked against the payouts limits as an early withdrawal is. The amount is the whole balance waiting at the proposal.
@@ -271,4 +271,4 @@ Audit events on resource `investment_correction`: `investments.correction.propos
 
 ## Not built yet
 
-Editing a product, the console screens for unwinds and refunds, the monthly coupon for open terms, and the early withdrawal screen in the client app. The dealing desk is its own module: see [dealing-desk.md](dealing-desk.md).
+Editing a product, the monthly coupon for open terms, and the early withdrawal screen in the client app. The dealing desk is its own module: see [dealing-desk.md](dealing-desk.md).

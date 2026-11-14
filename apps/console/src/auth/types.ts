@@ -64,6 +64,8 @@ export const ACTION_PERMISSIONS = [
   "payout_accounts.change",
   // Proposing a rate change, approving or sending back someone else's, and withdrawing your own.
   "rates.change",
+  // Proposing an unwind or a refund of an investment, approving or sending back someone else's, and withdrawing your own.
+  "investment_corrections.change",
   // Inviting staff, changing a role, deactivating or reactivating, resetting sign-in. Two admins.
   "team.change",
   // Reading the audit trail and exporting it.
