@@ -1237,6 +1237,14 @@ ROWS = {
         "'The client called the office', '-Nabc0000000000000S1', now()); COMMIT",
         "refusing to drop the record of investments staff booked",
     ),
+    "0335_note_reissues": (
+        "BEGIN; SELECT set_config('finvest.actor_kind', 'staff', true); "
+        "SELECT set_config('finvest.actor_id', '-Nabc0000000000000S1', true); "
+        "INSERT INTO note_reissues (id, issued_from, issued_to, reason, proposed_by, "
+        "proposed_at) VALUES ('-Nabc0000000000000R1', current_date - 1, current_date - 1, "
+        "'The emails failed that day', '-Nabc0000000000000S1', now()); COMMIT",
+        "refusing to drop the record of notes staff sent again",
+    ),
 }
 
 
