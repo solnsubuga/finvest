@@ -67,6 +67,7 @@ from app.modules.payments.wiring import collections_provider
 from app.modules.payouts import api as payouts_api
 from app.modules.payouts import staff_api as payouts_staff_api
 from app.modules.payouts import staff_held_api, staff_payouts_api
+from app.modules.reconciliation import api as reconciliation_api
 from app.modules.support import api as support_api
 from app.shared.clock import Clock, SystemClock
 from app.shared.errors import ErrorEnvelope
@@ -183,6 +184,7 @@ def create_app(
         *payouts_staff_api.routers,
         *staff_payouts_api.routers,
         *staff_held_api.routers,
+        *reconciliation_api.routers,
     ):
         app.include_router(router)
     app.include_router(payments_api.create_router(collections))

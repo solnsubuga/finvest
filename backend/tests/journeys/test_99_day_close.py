@@ -13,14 +13,10 @@ from app.infrastructure.database import Database
 from app.modules.dealing import holdings
 from app.modules.ledger import closing as ledger_closing
 from app.modules.ledger.domain.errors import DayNotEnded
-from app.modules.reconciliation import day_close, statements
-from app.modules.reconciliation.domain.day_close import CloseError, CloseStatus
+from app.modules.reconciliation import day_close
 from app.modules.reconciliation.domain.pots import CASH_POTS
 from app.modules.reconciliation.domain.statements import (
     Direction,
-    Statement,
-    StatementLine,
-    StatementSource,
 )
 from app.shared.business_day import KAMPALA
 from tests.journeys import gaps
@@ -31,6 +27,7 @@ from tests.support.journey import Collected, Person, World
 pytestmark = [pytest.mark.journey, pytest.mark.closes_a_day]
 
 IOTEC_POTS = ("mtn", "airtel")
+HEADER = "Date,Details,Reference,In,Out\n"
 
 
 def morning_after(day: date) -> datetime:
@@ -45,36 +42,27 @@ async def import_iotec(
     collections: list[Collected],
     opening: int,
 ) -> int:
-    """ioTec's wallet statement for one network and day. Returns its closing balance."""
-    lines = tuple(
-        StatementLine(
-            value_date=day,
-            direction=Direction.IN,
-            amount=ugx(collection.minor),
-            # ioTec reports each collection under the request ID it was sent with.
-            reference=collection.request_id,
-            narrative="Collection",
-            fingerprint=statements.file_digest(collection.reference.encode()),
-        )
+    """ioTec's wallet statement for one network and day, uploaded through the console's route.
+    Returns its closing balance."""
+    # ioTec reports each collection under the request ID it was sent with.
+    rows = "".join(
+        f"{day.isoformat()},Collection,{collection.request_id},{collection.minor},\n"
         for collection in collections
     )
     closing = opening + sum(collection.minor for collection in collections)
-    statement = Statement(
-        source=StatementSource.IOTEC,
-        account_reference=network,
-        statement_date=day,
-        opening_balance=ugx(opening),
-        closing_balance=ugx(closing),
-        lines=lines,
+    uploaded = await importer.http.post(
+        "/staff/reconciliation/statements",
+        data={
+            "source": "iotec",
+            "account_reference": network,
+            "statement_date": day.isoformat(),
+            "opening_balance": str(opening),
+            "closing_balance": str(closing),
+            "format": "standard",
+        },
+        files={"file": (f"{network}-{day}.csv", (HEADER + rows).encode(), "text/csv")},
     )
-    async with world.api_database.actor_transaction(importer.actor) as session:
-        await statements.import_statement(
-            session,
-            importer.actor,
-            statement,
-            statements.file_digest(f"{network}{day}".encode()),
-            world.clock,
-        )
+    assert uploaded.status_code == 201, uploaded.text
     return closing
 
 
@@ -128,28 +116,35 @@ async def test_each_day_ties_to_its_statements_and_is_closed_by_two_people(
         for network in IOTEC_POTS:
             wallet[network] = await import_iotec(world, importer, network, day, [], wallet[network])
 
+    signers: list[str] = [preparer.id, approver.id]
     for day in days:
         world.clock.current = max(world.clock.current, morning_after(day))
-        async with world.api_database.actor_transaction(preparer.actor) as session:
-            prepared = await day_close.prepare(session, preparer.actor, day, world.clock)
-        positions = {p.account_reference: p for p in prepared.positions}
-        assert all(p.unexplained == ugx(0) for p in positions.values()), positions
+        # Each morning's two people sign in that morning, through the console's routes.
+        opener, closer = await world.staff("finance"), await world.staff("finance")
+        signers += [opener.id, closer.id]
+        base = f"/staff/reconciliation/days/{day.isoformat()}"
+        signed = await opener.http.post(f"{base}/prepare")
+        assert signed.status_code == 200, signed.text
+        figures = (await opener.http.get(base)).json()
+        assert figures["close"]["status"] == "prepared", figures
         # A transfer is on the statement the day it arrived and in the books the day staff
         # confirmed it, so until then it stands open, and accounted for.
-        with pytest.raises(CloseError):
-            async with world.api_database.actor_transaction(preparer.actor) as session:
-                await day_close.approve(session, preparer.actor, day, world.clock)
-        async with world.api_database.actor_transaction(approver.actor) as session:
-            closed = await day_close.approve(session, approver.actor, day, world.clock)
-        assert closed.status is CloseStatus.CLOSED
+        assert all(p["unexplained"]["minor"] == 0 for p in figures["positions"]), figures
+        own = await opener.http.post(f"{base}/approve")
+        assert own.json()["error"]["fields"][0]["code"] == "close_needs_second_person", own.text
+        closed = await closer.http.post(f"{base}/approve")
+        assert closed.status_code == 200, closed.text
+        assert closed.json()["status"] == "closed"
 
     async with world.api_database.actor_transaction(approver.actor) as session:
         assert await ledger_closing.closed_through(session) == days[-1]
-    trail = await audit_for(migrator_database, [preparer.id, approver.id])
+    trail = await audit_for(migrator_database, signers)
     assert missing(trail, "reconciliation.day_close_prepared", "reconciliation.day_closed") == []
 
     # Today: every mobile money collection the journeys made, as ioTec's statement shows it.
     world.clock.current = morning_after(now)
+    # A day or more has passed since the morning's sign-in, so the importer signs in again.
+    importer = await world.staff("operations")
     for network in IOTEC_POTS:
         mine = [c for c in collected.values() if c.confirmed_at.astimezone(KAMPALA).date() == now]
         await import_iotec(
