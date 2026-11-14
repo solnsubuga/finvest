@@ -56,6 +56,8 @@ class KycSettings(BaseSettings):
                     "ioTec Verify needs FINVEST_IOTEC_VERIFY_CLIENT_ID and "
                     "FINVEST_IOTEC_VERIFY_API_KEY"
                 )
+            if not self.iotec_verify_base_url.startswith("https://"):
+                raise ValueError("FINVEST_IOTEC_VERIFY_BASE_URL must use https")
             if self.identity_automatic_approval:
                 # Its face match compares two photos and does not prove a live person, so a
                 # clean result is not enough to approve with no person involved.

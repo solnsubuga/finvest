@@ -14,6 +14,7 @@ client goes to a person. Nothing here is logged, and no error quotes what ioTec 
 because its answers carry the client's details.
 """
 
+import asyncio
 import re
 from collections.abc import Mapping
 from dataclasses import dataclass
@@ -83,15 +84,20 @@ class IotecVerifyProvider:
         base_url: str = BASE_URL,
         timeout: float = 30.0,
         client: httpx.AsyncClient | None = None,
+        retry_pause: float = 1.0,
     ) -> None:
         if not client_id or not api_key.get_secret_value():
             raise ValueError("ioTec Verify needs a client ID and an API key")
+        if not base_url.startswith("https://"):
+            # The key and the client's details travel in every request.
+            raise ValueError("ioTec Verify is only reached over https")
         self._client_id = client_id
         self._api_key = api_key
         self._storage = storage
         self._base_url = base_url.rstrip("/")
         self._timeout = timeout
         self._client = client
+        self._retry_pause = retry_pause
 
     # Sending ---------------------------------------------------------------------------------
 
@@ -193,6 +199,22 @@ class IotecVerifyProvider:
         json: Mapping[str, object] | None = None,
         data: Mapping[str, str] | None = None,
         files: Mapping[str, tuple[str, bytes, str]] | None = None,
+    ) -> _Attempt:
+        attempt = await self._post_once(path, json=json, data=data, files=files)
+        if attempt.sent is _Sent.NOT_RECEIVED:
+            # Certainly never arrived, so one more try is safe. Without it a dropped connection
+            # would leave a check, such as the screening, out of the submission.
+            await asyncio.sleep(self._retry_pause)
+            attempt = await self._post_once(path, json=json, data=data, files=files)
+        return attempt
+
+    async def _post_once(
+        self,
+        path: str,
+        *,
+        json: Mapping[str, object] | None,
+        data: Mapping[str, str] | None,
+        files: Mapping[str, tuple[str, bytes, str]] | None,
     ) -> _Attempt:
         try:
             response = await self._request("POST", path, json=json, data=data, files=files)
@@ -306,9 +328,14 @@ def _face_outcome(answer: Mapping[str, object]) -> CheckOutcome | None:
         return None
     confidence = answer.get("confidence")
     score = None
-    if isinstance(confidence, int | float) and not isinstance(confidence, bool):
-        # A confidence from 0.0 to 1.0, shown to staff as a whole percentage.
-        score = min(100, max(0, round(confidence * 100)))
+    if (
+        isinstance(confidence, int | float)
+        and not isinstance(confidence, bool)
+        and 0 <= confidence <= 1
+    ):
+        # A confidence from 0.0 to 1.0, shown to staff as a whole percentage. Anything else
+        # is not understood, so it has no score and cannot pass.
+        score = round(confidence * 100)
     identical = answer.get("isIdentical") is True
     verdict = (
         Verdict.PASS
