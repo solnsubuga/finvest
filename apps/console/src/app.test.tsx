@@ -163,7 +163,8 @@ describe("console shell", () => {
     const links = within(nav)
       .getAllByRole("link")
       .map((link) => link.textContent);
-    expect(links).toEqual(["Overview", "Support and Messages", "Complaints", "Clients"]);
+    // Every role also has its own devices, under the name at the foot of the menu.
+    expect(links).toEqual(["Overview", "Support and Messages", "Complaints", "Clients", "Your devices"]);
     expect(within(nav).queryByText("Control")).not.toBeInTheDocument();
   });
 
