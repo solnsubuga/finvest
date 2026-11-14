@@ -27,7 +27,7 @@ from datetime import datetime
 from enum import StrEnum
 from typing import Any, Literal
 
-from sqlalchemy import Row, text
+from sqlalchemy import Row, bindparam, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.infrastructure.idempotency import Receipt, run_once
@@ -150,6 +150,14 @@ _WAITING_PAYOUTS = text(
     "JOIN payout_bank_batches b ON b.id = i.batch_id WHERE i.payout_id = p.id "
     "AND b.status IN ('prepared', 'approved')) ORDER BY p.created_at, p.id LIMIT :limit"
 )
+# The same test as the waiting list, asked only of the payouts chosen, so a batch can take a
+# payout from beyond the first page of the list.
+_FREE_AMONG = text(
+    "SELECT p.id FROM payouts p WHERE p.id IN :ids AND p.status = 'queued' AND p.kind = 'bank' "
+    "AND p.currency = :currency AND NOT EXISTS (SELECT FROM payout_bank_batch_items i "
+    "JOIN payout_bank_batches b ON b.id = i.batch_id WHERE i.payout_id = p.id "
+    "AND b.status IN ('prepared', 'approved'))"
+).bindparams(bindparam("ids", expanding=True))
 _INSERT_BATCH = text(
     "INSERT INTO payout_bank_batches (id, currency, reason, status, prepared_by, prepared_at) "
     "VALUES (:id, :currency, :reason, 'prepared', :prepared_by, :now)"
@@ -261,7 +269,8 @@ async def prepare_batch(
                 "now": clock.now(),
             },
         )
-        free = {each.id for each in await waiting_payouts(session, currency)}
+        rows = await session.execute(_FREE_AMONG, {"ids": chosen, "currency": currency.value})
+        free = {row.id for row in rows.all()}
         for payout_id in chosen:
             if payout_id not in free:
                 # Not a queued bank payout in this currency, or already in another batch. The
@@ -741,16 +750,22 @@ def _settlement_view(row: Row[Any]) -> SettlementView:
 
 
 def _amount(money: Money) -> str:
-    """The amount as the bank's file wants it: whole units, no separators. UGX has no cents."""
-    if money.currency is Currency.UGX:
+    """The amount as the bank's file wants it: major units, no separators, as many decimal
+    places as the currency has (none for UGX)."""
+    digits = money.currency.minor_digits
+    if digits == 0:
         return str(money.minor)
-    whole, cents = divmod(money.minor, 100)
-    return f"{whole}.{cents:02d}"
+    whole, part = divmod(money.minor, 10**digits)
+    return f"{whole}.{part:0{digits}d}"
 
 
 def _cell(value: str) -> str:
     """A name as a CSV cell that a spreadsheet will not run as a formula."""
-    return "'" + value if value[:1] in ("=", "+", "-", "@") else value
+    return "'" + value if value[:1] in _FORMULA_STARTS else value
+
+
+# Spreadsheets read a cell starting with any of these as a formula.
+_FORMULA_STARTS = ("=", "+", "-", "@", "\t", "\r")
 
 
 async def _audit(

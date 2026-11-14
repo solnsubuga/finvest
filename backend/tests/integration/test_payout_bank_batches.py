@@ -493,3 +493,17 @@ async def test_two_batches_cannot_take_the_same_payout_at_once(
     assert len(made) == 1
     assert len(failed) == 1
     assert isinstance(failed[0], BankPayoutRefused | DBAPIError)
+
+
+async def test_a_batch_can_take_a_payout_beyond_the_first_page_waiting(
+    app_database: Database, worker_database: Database
+) -> None:
+    # More are waiting than one page of the list shows; the newest still goes in a batch.
+    many = bank_payouts.MAX_BATCH + 1
+    world = await World(app_database, worker_database, now()).build(many * 1_000, mobile=False)
+    newest = [await queued(world, 1_000) for _ in range(many)][-1]
+    async with app_database.actor_transaction(staff()) as session:
+        page = await bank_payouts.waiting_payouts(session, Currency.UGX)
+    assert newest.id not in {each.id for each in page}
+    batch = await prepare(app_database, [newest.id])
+    assert batch.payout_ids == (newest.id,)
