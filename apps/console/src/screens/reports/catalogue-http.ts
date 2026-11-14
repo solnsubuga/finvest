@@ -1,50 +1,15 @@
+import type { CatalogueOut, ProposeScheduleIn, ScheduleOut, SchedulesOut, DecideScheduleIn } from "@finvest/api-client/staff";
 import type { Http } from "@/api/http.ts";
 import {
   reportFilename,
   toReportsError,
   type Catalogue,
-  type Currency,
-  type Frequency,
-  type PeriodKind,
   type ReportKey,
   type ReportsApi,
   type Schedule,
-  type ScheduleStatus,
 } from "./catalogue.ts";
 
-interface ReportJson {
-  key: ReportKey;
-  name: string;
-  about: string;
-  period: PeriodKind;
-  by_currency: boolean;
-  date_from: string;
-  date_to: string;
-}
-
-interface ScheduleJson {
-  id: string;
-  report_key: ReportKey;
-  report_name: string;
-  frequency: Frequency;
-  currency: Currency | null;
-  recipients: string[];
-  recipient_names: string[];
-  reason: string;
-  status: ScheduleStatus;
-  proposed_by: string;
-  proposed_by_name: string | null;
-  proposed_at: string;
-  decided_by: string | null;
-  decided_at: string | null;
-  decision_reason: string | null;
-  stopped_by: string | null;
-  stopped_at: string | null;
-  last_sent_at: string | null;
-  yours: boolean;
-}
-
-export function toSchedule(json: ScheduleJson): Schedule {
+export function toSchedule(json: ScheduleOut): Schedule {
   return {
     id: json.id,
     reportKey: json.report_key,
@@ -81,7 +46,7 @@ export function createHttpReportsApi(http: Http): ReportsApi {
   return {
     catalogue: () =>
       guarded(async () => {
-        const found = await http.request<{ today: string; reports: ReportJson[] }>("GET", "/staff/reports");
+        const found = await http.request<CatalogueOut>("GET", "/staff/reports");
         const catalogue: Catalogue = {
           today: found.today,
           reports: found.reports.map((report) => ({
@@ -105,17 +70,13 @@ export function createHttpReportsApi(http: Http): ReportsApi {
       }),
     schedules: () =>
       guarded(async () => {
-        const found = await http.request<{
-          schedules: ScheduleJson[];
-          frequencies: Partial<Record<ReportKey, Frequency[]>>;
-          people: { id: string; name: string; reports: ReportKey[] }[];
-        }>("GET", "/staff/report-schedules");
+        const found = await http.request<SchedulesOut>("GET", "/staff/report-schedules");
         return { schedules: found.schedules.map(toSchedule), frequencies: found.frequencies, people: found.people };
       }),
     propose: (proposal, idempotencyKey) =>
       guarded(async () =>
         toSchedule(
-          await http.request<ScheduleJson>(
+          await http.request<ScheduleOut>(
             "POST",
             "/staff/report-schedules",
             {
@@ -124,7 +85,7 @@ export function createHttpReportsApi(http: Http): ReportsApi {
               currency: proposal.currency,
               recipients: proposal.recipients,
               reason: proposal.reason,
-            },
+            } satisfies ProposeScheduleIn,
             { idempotencyKey },
           ),
         ),
@@ -132,10 +93,10 @@ export function createHttpReportsApi(http: Http): ReportsApi {
     decide: (id, decision, reason, idempotencyKey) =>
       guarded(async () =>
         toSchedule(
-          await http.request<ScheduleJson>(
+          await http.request<ScheduleOut>(
             "POST",
             `/staff/report-schedules/${encodeURIComponent(id)}/${decision}`,
-            { reason },
+            { reason } satisfies DecideScheduleIn,
             decision === "approve" ? { idempotencyKey } : undefined,
           ),
         ),
