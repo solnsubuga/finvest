@@ -29,6 +29,4 @@ The route opens the client's own transaction, so the ledger's row policies show 
 
 Each item of `upcoming` has `kind`, `on`, `amount_minor`, and whichever of `investment_id`, `plan_id`, `goal_id`, `product_name`, `goal_name` and `at_maturity` its kind has; the rest are `null`. A goal's name is the client's own words.
 
-## Not built yet
-
-The client app shows only maturities under "Coming up" until its screen shows the other kinds.
+The client app's "Coming up" list shows every kind. A maturity opens the investment, an automatic run opens its plan, and a goal's saving or date opens the goal. The "next investment matures" callout above it is about the soonest maturity only.

@@ -10,7 +10,8 @@ import { LinkCard } from "@/components/LinkCard";
 import { Eyebrow, Txt } from "@/components/Txt";
 import { barUnit, daysUntil, earnedBars, monthLong } from "@/insights/chart";
 import { useInsights } from "@/insights/InsightsProvider";
-import { Currency, Insights as InsightsData, Upcoming } from "@/insights/types";
+import { Currency, Insights as InsightsData, Upcoming, UpcomingMaturity, upcomingKey } from "@/insights/types";
+import { upcomingHref, upcomingWords } from "@/insights/upcoming";
 import { formatMoney } from "@/payments/format";
 import { Loading } from "@/payments/Parts";
 import { colors, fontSizes, radii } from "@/theme";
@@ -151,7 +152,9 @@ export default function Insights() {
   if (!current) {
     return null;
   }
-  const next = insights.upcoming[0];
+  const next = insights.upcoming.find(
+    (item): item is UpcomingMaturity => item.kind === "maturity",
+  );
   const today = kampalaToday();
 
   const chart = (
@@ -234,7 +237,12 @@ export default function Insights() {
         <Eyebrow>Coming up</Eyebrow>
         <Card padded={false}>
           {insights.upcoming.map((item, index) => (
-            <UpcomingRow key={item.investmentId} item={item} first={index === 0} />
+            <UpcomingRow
+              key={upcomingKey(item)}
+              item={item}
+              first={index === 0}
+              onPress={() => router.push(upcomingHref(item))}
+            />
           ))}
         </Card>
       </View>
@@ -358,11 +366,27 @@ function Row({ label, value, first }: { label: string; value: string; first?: bo
   );
 }
 
-function UpcomingRow({ item, first }: { item: Upcoming; first: boolean }) {
+function UpcomingRow({
+  item,
+  first,
+  onPress,
+}: {
+  item: Upcoming;
+  first: boolean;
+  onPress: () => void;
+}) {
   const day = item.on.slice(8, 10).replace(/^0/, "");
   const month = formatLongDay(item.on).split(" ")[1];
+  const words = upcomingWords(item);
+  const amount = formatMoney(item.amount);
   return (
-    <View style={[styles.row, !first && styles.divider]} accessible>
+    <Pressable
+      style={[styles.row, !first && styles.divider]}
+      accessibilityRole="link"
+      accessibilityLabel={`${formatLongDay(item.on)}. ${words.title}. ${words.detail}. ${amount}`}
+      onPress={onPress}
+      testID={`insights-upcoming-${upcomingKey(item)}`}
+    >
       <View style={styles.date}>
         <Txt size={18} weight="extrabold" lineHeight={22}>
           {day}
@@ -373,18 +397,16 @@ function UpcomingRow({ item, first }: { item: Upcoming; first: boolean }) {
       </View>
       <View style={{ flex: 1 }}>
         <Txt size={14} weight="bold">
-          {`${item.productName} matures`}
+          {words.title}
         </Txt>
         <Txt size={12} color={colors.muted}>
-          {item.atMaturity === "pay_out"
-            ? "Pays out to your account"
-            : "Rolls over and keeps earning"}
+          {words.detail}
         </Txt>
       </View>
       <Txt size={14} weight="bold">
-        {formatMoney(item.amount)}
+        {amount}
       </Txt>
-    </View>
+    </Pressable>
   );
 }
 
