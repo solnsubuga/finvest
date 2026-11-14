@@ -9,6 +9,8 @@ import { Title, Txt } from "@/components/Txt";
 import { colors, fontSizes } from "@/theme";
 
 import { useIdentity } from "./IdentityProvider";
+import { RegulaRun } from "./regula/RegulaRun";
+import { regulaTag, regulaTroubleCopy, type RegulaOutcome } from "./regula/types";
 import { describeIdentityError, IdentityCheck, IdentityError, LivenessState } from "./types";
 
 /** How often an open live check is read while the client is on the page. */
@@ -24,6 +26,11 @@ type Props = {
   onCamera: () => void;
   /** The live capture is now the selfie. `updated` is the check read again. */
   onDone: (updated: IdentityCheck) => Promise<void>;
+  /**
+   * The check is Regula's, run in the app (docs/identity-checks.md#regula-liveness), and the
+   * guided selfie's head turns come after it. The copy says so before a check is started.
+   */
+  regula?: boolean;
 };
 
 const tips = ["Good light on your face", "Look at the camera", "No hat or glasses"];
@@ -33,7 +40,7 @@ const tips = ["Good light on your face", "Look at the camera", "No hat or glasse
  * The page proves a live person is in front of the camera, and what it captures becomes the
  * selfie. A camera photo stays possible, and staff see that it was not live.
  */
-export function LiveSelfie({ check, top, frame, onCamera, onDone }: Props) {
+export function LiveSelfie({ check, top, frame, onCamera, onDone, regula = false }: Props) {
   const { client } = useIdentity();
   const [state, setState] = useState<LivenessState | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -43,6 +50,12 @@ export function LiveSelfie({ check, top, frame, onCamera, onDone }: Props) {
   // Counts failed reads while a check waits, so the next read is still scheduled.
   const [failedReads, setFailedReads] = useState(0);
   const finishing = useRef(false);
+  // Regula's liveness: the attempt whose session runs now, the attempts already run once (so a
+  // closed session is not opened again by itself), and the attempt whose transaction was sent.
+  const [running, setRunning] = useState<string | null>(null);
+  const ran = useRef(new Set<string>());
+  const [reported, setReported] = useState<string | null>(null);
+  const [unsent, setUnsent] = useState<{ attempt: string; transaction: string } | null>(null);
 
   const read = useCallback(async () => {
     try {
@@ -58,6 +71,52 @@ export function LiveSelfie({ check, top, frame, onCamera, onDone }: Props) {
 
   const latest = state?.latest ?? null;
   const waiting = latest?.status === "starting" || latest?.status === "open";
+  const tag = latest?.status === "open" ? regulaTag(latest.url) : null;
+  const openId = latest?.status === "open" ? latest.id : null;
+
+  // Regula's session opens by itself once its attempt is open, once per attempt.
+  useEffect(() => {
+    if (!tag || !openId || ran.current.has(openId) || reported === openId) return;
+    ran.current.add(openId);
+    setRunning(openId);
+  }, [tag, openId, reported]);
+
+  const report = useCallback(
+    async (attempt: string, transaction: string) => {
+      setBusy(true);
+      setError(null);
+      try {
+        await client.reportLivenessTransaction(attempt, transaction);
+        setUnsent(null);
+        setReported(attempt);
+      } catch (caught) {
+        if (caught instanceof IdentityError && caught.code === "liveness_ended") {
+          setUnsent(null);
+          await read();
+        } else {
+          setUnsent({ attempt, transaction });
+        }
+        setError(describeIdentityError(caught));
+      } finally {
+        setBusy(false);
+      }
+    },
+    [client, read],
+  );
+
+  const ended = useCallback(
+    (outcome: RegulaOutcome) => {
+      const attempt = running;
+      setRunning(null);
+      if (!attempt) return;
+      if (outcome.kind === "done") {
+        void report(attempt, outcome.transactionId);
+        return;
+      }
+      setError(outcome.kind === "trouble" ? regulaTroubleCopy[outcome.reason] : null);
+    },
+    [running, report],
+  );
 
   // Read on arrival, then again every LIVENESS_POLL_MS while a check waits.
   useEffect(() => {
@@ -100,6 +159,7 @@ export function LiveSelfie({ check, top, frame, onCamera, onDone }: Props) {
     setBusy(true);
     setError(null);
     setOpened(false);
+    setUnsent(null);
     try {
       await client.startLiveness();
       await read();
@@ -157,7 +217,13 @@ export function LiveSelfie({ check, top, frame, onCamera, onDone }: Props) {
   }
 
   const usedUp = state.problem === "too_many_attempts";
-  const cameraLink = <TextLink label="Take a photo instead" onPress={onCamera} testID="live-camera" />;
+  const cameraLink = (
+    <TextLink
+      label={regula ? "Take a selfie with the camera instead" : "Take a photo instead"}
+      onPress={onCamera}
+      testID="live-camera"
+    />
+  );
 
   if (latest?.status === "passed") {
     return (
@@ -165,7 +231,7 @@ export function LiveSelfie({ check, top, frame, onCamera, onDone }: Props) {
         signedIn
         footer={
           <Button
-            label={retake ? "Send my new selfie" : "Hand in my ID check"}
+            label={regula ? "Next: head turns" : retake ? "Send my new selfie" : "Hand in my ID check"}
             onPress={() => void finish()}
             loading={busy}
             testID="live-continue"
@@ -176,7 +242,9 @@ export function LiveSelfie({ check, top, frame, onCamera, onDone }: Props) {
         <View style={{ marginTop: 28, gap: 8 }}>
           <Title>Live selfie done</Title>
           <Txt color={colors.muted}>
-            The check saw a live person. What it captured is now your selfie, and we match it to your ID.
+            {regula
+              ? "The check saw a live person. What it captured is now your selfie. Next come four quick head turns."
+              : "The check saw a live person. What it captured is now your selfie, and we match it to your ID."}
           </Txt>
         </View>
         <View style={{ marginTop: 20, gap: 14 }}>
@@ -203,6 +271,66 @@ export function LiveSelfie({ check, top, frame, onCamera, onDone }: Props) {
         <View style={styles.waiting} testID="live-starting">
           <ActivityIndicator accessibilityLabel="Getting your live check ready" color={colors.black} />
         </View>
+      </Screen>
+    );
+  }
+
+  if (latest?.status === "open" && tag) {
+    const attempt = latest.id;
+    if (running === attempt) {
+      return (
+        <Screen signedIn>
+          {top}
+          <View style={styles.regula}>
+            <RegulaRun tag={tag} onEnd={ended} />
+          </View>
+        </Screen>
+      );
+    }
+    if (reported === attempt) {
+      return (
+        <Screen signedIn footer={cameraLink}>
+          {top}
+          <View style={{ marginTop: 28, gap: 8 }}>
+            <Title>Checking your live selfie</Title>
+            <Txt color={colors.muted}>This takes a few seconds. Stay on this screen.</Txt>
+          </View>
+          <View style={styles.waiting} testID="live-checking">
+            <ActivityIndicator accessibilityLabel="Checking your live selfie" color={colors.black} />
+          </View>
+        </Screen>
+      );
+    }
+    // The session was closed, could not run, or its transaction could not be sent.
+    return (
+      <Screen
+        signedIn
+        footer={
+          <>
+            {unsent ? (
+              <Button
+                label="Send it again"
+                onPress={() => void report(unsent.attempt, unsent.transaction)}
+                loading={busy}
+                testID="live-resend"
+              />
+            ) : (
+              <Button label="Open the live selfie" onPress={() => setRunning(attempt)} testID="live-open" />
+            )}
+            {cameraLink}
+          </>
+        }
+      >
+        {top}
+        <View style={{ marginTop: 28, gap: 8 }}>
+          <Title>{unsent ? "We could not send your live selfie" : "Your live selfie did not finish"}</Title>
+          <Txt color={colors.muted}>
+            {unsent
+              ? "It is done, but it did not reach us. Check your internet, then send it again."
+              : "Open it again when you are ready. Hold your phone at eye level, with your whole face in view."}
+          </Txt>
+        </View>
+        <View style={{ marginTop: 20, gap: 14 }}>{errorNotice}</View>
       </Screen>
     );
   }
@@ -270,7 +398,9 @@ export function LiveSelfie({ check, top, frame, onCamera, onDone }: Props) {
     : unfinished
       ? "Your live check did not finish"
       : "Take a live selfie";
-  const lead = failed
+  const lead = regula && !failed && !unfinished
+    ? "A short check by Regula, our identity partner, right here in Finvest. You look at the camera and move as it asks, so we know a real person is in front of it. Then come four quick head turns."
+    : failed
     ? "It happens in poor light or when the face is partly hidden. Try again facing a window, with your whole face in view."
     : unfinished
       ? "It ran out of time or could not start. Start a new one, it only takes a minute."
@@ -285,7 +415,7 @@ export function LiveSelfie({ check, top, frame, onCamera, onDone }: Props) {
         ) : (
           <>
             <Button
-              label={failed || unfinished ? "Try again" : "Start live check"}
+              label={failed || unfinished ? "Try again" : regula ? "Start the live selfie" : "Start live check"}
               onPress={() => void start()}
               loading={busy}
               testID="live-start"
@@ -317,7 +447,8 @@ export function LiveSelfie({ check, top, frame, onCamera, onDone }: Props) {
           ))}
         </View>
         <Txt size={fontSizes.xs} color={colors.muted}>
-          ioTec takes the picture and gets no name or number from us. Finvest uses it only to confirm it is you.
+          {regula ? "Regula" : "ioTec"} takes the picture and gets no name or number from us. Finvest uses it only to
+          confirm it is you.
         </Txt>
         {errorNotice}
       </View>
@@ -341,6 +472,7 @@ function Step({ n, children }: { n: number; children: string }) {
 }
 
 const styles = StyleSheet.create({
+  regula: { marginTop: 16, height: 560, borderRadius: 18, overflow: "hidden" },
   waiting: {
     marginTop: 20,
     paddingVertical: 28,

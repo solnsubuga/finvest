@@ -275,3 +275,44 @@ describe("the live selfie through the real API", () => {
     await expect(createApiIdentityClient().getCheck()).resolves.toMatchObject({ liveSelfie: true });
   });
 });
+
+describe("Regula's liveness through the real API", () => {
+  const TRANSACTION = "0f6c2b1e-5a4d-4c3b-9a2f-1e0d9c8b7a65";
+  const attempt = {
+    id: ID,
+    status: "open",
+    url: `regula-liveness:${ID}`,
+    failure_code: null,
+    photo_used: false,
+    expires_at: "2026-11-14T09:30:00Z",
+  };
+
+  it("reports the session's transaction for the attempt", async () => {
+    const seen = serve(200, attempt);
+    await expect(createApiIdentityClient().reportLivenessTransaction(ID, TRANSACTION)).resolves.toMatchObject({
+      id: ID,
+      status: "open",
+      url: `regula-liveness:${ID}`,
+    });
+    expect(seen[0]).toMatchObject({
+      method: "POST",
+      path: `/client/identity-check/liveness/${ID}/transaction`,
+      body: { transaction_id: TRANSACTION },
+    });
+  });
+
+  it("says the live check ended when the attempt is gone or took another session", async () => {
+    serve(409, refusal("conflict"));
+    await expect(createApiIdentityClient().reportLivenessTransaction(ID, TRANSACTION)).rejects.toMatchObject({
+      code: "liveness_ended",
+    });
+    serve(404, refusal("not_found"));
+    await expect(createApiIdentityClient().reportLivenessTransaction(ID, TRANSACTION)).rejects.toMatchObject({
+      code: "liveness_ended",
+    });
+    serve(503, refusal("unavailable"));
+    await expect(createApiIdentityClient().reportLivenessTransaction(ID, TRANSACTION)).rejects.toMatchObject({
+      code: "unavailable",
+    });
+  });
+});

@@ -103,6 +103,43 @@ describe("the demo's live selfie", () => {
   });
 });
 
+describe("the demo's Regula liveness", () => {
+  const TRANSACTION = "0f6c2b1e-5a4d-4c3b-9a2f-1e0d9c8b7a65";
+
+  it("hands out a Regula tag and answers only once the session is reported", async () => {
+    const client = createStubIdentityClient({ delayMs: 0, liveness: true, regula: true, guided: true, now: NOW });
+    await client.chooseDocument("national_id", "UG");
+    const started = await client.startLiveness();
+    let state = await client.getLiveness();
+    expect(state.latest).toMatchObject({ status: "open", url: `regula-liveness:${started.id}` });
+    for (let read = 0; read < 4; read++) state = await client.getLiveness();
+    expect(state.latest).toMatchObject({ status: "open" });
+
+    await client.reportLivenessTransaction(started.id, TRANSACTION);
+    // The same session again is harmless; another one is refused.
+    await client.reportLivenessTransaction(started.id, TRANSACTION);
+    await expect(client.reportLivenessTransaction(started.id, "1f6c2b1e-5a4d-4c3b-9a2f-1e0d9c8b7a65")).rejects.toMatchObject({
+      code: "liveness_ended",
+    });
+    for (let read = 0; read < 3 && state.latest?.status === "open"; read++) state = await client.getLiveness();
+    expect(state.latest).toMatchObject({ status: "passed", photoUsed: true });
+    await expect(client.reportLivenessTransaction(started.id, TRANSACTION)).rejects.toMatchObject({ code: "liveness_ended" });
+  });
+
+  it("refuses a session for an attempt that is not open, or that is not a transaction", async () => {
+    const client = createStubIdentityClient({ delayMs: 0, liveness: true, regula: true, now: NOW });
+    await client.chooseDocument("national_id", "UG");
+    await expect(client.reportLivenessTransaction("demo-liveness-0", TRANSACTION)).rejects.toMatchObject({
+      code: "liveness_ended",
+    });
+    const started = await client.startLiveness();
+    await client.getLiveness();
+    await expect(client.reportLivenessTransaction(started.id, "not-a-transaction")).rejects.toMatchObject({
+      code: "unavailable",
+    });
+  });
+});
+
 describe("the demo's guided selfie", () => {
   async function upToTheTurns() {
     const client = createStubIdentityClient({ delayMs: 0, now: NOW, guided: true });

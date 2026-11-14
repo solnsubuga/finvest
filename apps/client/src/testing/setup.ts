@@ -7,3 +7,7 @@ jest.mock("@/auth/pin", () => {
 
 // Tests have no camera or face detector. `faceCamera` in fakeGuideCamera says what it sees.
 jest.mock("@/identity/camera/GuideCamera", () => jest.requireActual("@/testing/fakeGuideCamera"));
+
+// Tests have no Regula service either. `regulaSession` in fakeRegula ends a session.
+jest.mock("@/identity/regula/RegulaLiveness", () => jest.requireActual("@/testing/fakeRegula"));
+process.env.EXPO_PUBLIC_REGULA_FACE_URL = "https://face.regula.test";

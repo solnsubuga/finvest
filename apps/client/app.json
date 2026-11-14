@@ -21,8 +21,11 @@
       },
       "predictiveBackGestureEnabled": false,
       "permissions": [
-        "android.permission.CAMERA"
-      ]
+        "android.permission.CAMERA",
+        "android.permission.USE_BIOMETRIC",
+        "android.permission.USE_FINGERPRINT"
+      ],
+      "package": "com.anonymous.finvestclient"
     },
     "web": {
       "bundler": "metro",
@@ -44,6 +47,19 @@
         "expo-local-authentication",
         {
           "faceIDPermission": "Finvest uses Face ID to open the app on this phone instead of your PIN."
+        }
+      ],
+      "@regulaforensics/face-sdk",
+      [
+        "expo-build-properties",
+        {
+          "android": {
+            "extraMavenRepos": [
+              {
+                "url": "https://maven.regulaforensics.com/RegulaDocumentReader"
+              }
+            ]
+          }
         }
       ]
     ],

@@ -129,6 +129,8 @@ export type IdentityErrorCode =
   | "incomplete"
   /** Every live check for this ID check has been used. A camera selfie is still possible. */
   | "liveness_used_up"
+  /** The live check ended, or already has another session, so a new one must be started. */
+  | "liveness_ended"
   | "offline"
   | "unavailable";
 
@@ -174,6 +176,11 @@ export type IdentityClient = {
   getLiveness(): Promise<LivenessState>;
   /** Starts a live check of the selfie. Any check still waiting is replaced. */
   startLiveness(): Promise<LivenessAttempt>;
+  /**
+   * Reports the session Regula's liveness ran in the app for an open check, once
+   * (docs/identity-checks.md#regula-liveness). The API reads the result from Regula itself.
+   */
+  reportLivenessTransaction(attemptId: string, transactionId: string): Promise<LivenessAttempt>;
 };
 
 const errorCopy: Record<IdentityErrorCode, string> = {
@@ -185,6 +192,7 @@ const errorCopy: Record<IdentityErrorCode, string> = {
   invalid_details: "Some details are not right. Check the fields marked in red.",
   incomplete: "Something is still missing. Check each step and try again.",
   liveness_used_up: "You have used every live check for this ID. Take a selfie with your camera instead.",
+  liveness_ended: "That live selfie has ended. Start a new one.",
   offline: "You seem to be offline. Check your connection and try again.",
   unavailable: "ID checks are not available right now. Try again in a moment.",
 };

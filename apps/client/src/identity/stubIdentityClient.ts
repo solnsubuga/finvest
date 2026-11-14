@@ -1,3 +1,4 @@
+import { REGULA_PAGE, TRANSACTION_ID } from "./regula/types";
 import { kampalaToday } from "./photo";
 import { POSES, Pose } from "./poses";
 import {
@@ -46,10 +47,15 @@ type StubOptions = {
   liveness?: boolean;
   /** The guided selfie, as the API has with Regula: a frame for each pose after the selfie. */
   guided?: boolean;
+  /**
+   * Live checks run Regula's liveness in the app, as with Regula: an open check's page is
+   * `regula-liveness:<tag>`, and it waits for the session's transaction before it is answered.
+   */
+  regula?: boolean;
 };
 
 /** The demo's live check. It moves on by itself as it is read, as the worker would. */
-type StoredAttempt = LivenessAttempt & { readsLeft: number };
+type StoredAttempt = LivenessAttempt & { readsLeft: number; transactionId: string | null };
 
 /** Live checks per ID check, as in the backend's MAX_ATTEMPTS. */
 export const DEMO_LIVENESS_ATTEMPTS = 10;
@@ -161,6 +167,7 @@ export function createStubIdentityClient({
   now = Date.now,
   liveness = false,
   guided = false,
+  regula = false,
 }: StubOptions = {}): IdentityClient {
   let check: Stored | null = seeded ? seededCheck() : null;
   const attempts: StoredAttempt[] = [];
@@ -173,10 +180,12 @@ export function createStubIdentityClient({
   function advance(attempt: StoredAttempt): void {
     if (attempt.status === "starting") {
       attempt.status = "open";
-      attempt.url = DEMO_LIVENESS_PAGE;
+      attempt.url = regula ? `${REGULA_PAGE}${attempt.id}` : DEMO_LIVENESS_PAGE;
       return;
     }
     if (attempt.status !== "open") return;
+    // Regula's session runs in the app: nothing to answer until it is reported.
+    if (regula && !attempt.transactionId) return;
     if (attempt.readsLeft > 0) {
       attempt.readsLeft -= 1;
       return;
@@ -200,7 +209,7 @@ export function createStubIdentityClient({
   }
 
   function attemptView(attempt: StoredAttempt): LivenessAttempt {
-    const { readsLeft: _reads, ...rest } = attempt;
+    const { readsLeft: _reads, transactionId: _transaction, ...rest } = attempt;
     return { ...rest };
   }
 
@@ -381,8 +390,19 @@ export function createStubIdentityClient({
         photoUsed: false,
         expiresAt: new Date(now() + 30 * 60 * 1000).toISOString(),
         readsLeft: READS_UNTIL_ANSWER,
+        transactionId: null,
       };
       attempts.push(attempt);
+      return attemptView(attempt);
+    },
+
+    async reportLivenessTransaction(attemptId, transactionId) {
+      await pause();
+      const attempt = attempts.find((each) => each.id === attemptId);
+      if (!regula || !attempt || attempt.status !== "open") throw new IdentityError("liveness_ended");
+      if (!TRANSACTION_ID.test(transactionId)) throw new IdentityError("unavailable");
+      if (attempt.transactionId && attempt.transactionId !== transactionId) throw new IdentityError("liveness_ended");
+      attempt.transactionId = transactionId;
       return attemptView(attempt);
     },
   };
