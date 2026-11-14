@@ -9,7 +9,9 @@ import { Icon } from "@/components/Icon";
 import { Eyebrow, Txt } from "@/components/Txt";
 import { useDocuments } from "@/documents/DocumentsProvider";
 import {
+  isEndNote,
   monthLabel,
+  noteReference,
   parseDay,
   periodLabel,
   periodProblem,
@@ -476,6 +478,7 @@ function DocumentLists({ items }: { items: DocumentItem[] }) {
   const certificates = items.filter(
     (item) => item.kind === "tax_certificate" && item.status === "ready",
   );
+  const notes = items.filter((item) => item.kind === "investment_note" && item.status === "ready");
 
   return (
     <View style={{ gap: 20 }}>
@@ -502,6 +505,11 @@ function DocumentLists({ items }: { items: DocumentItem[] }) {
       {certificates.length > 0 ? (
         <Section title="Tax certificates">
           <Rows items={certificates} />
+        </Section>
+      ) : null}
+      {notes.length > 0 ? (
+        <Section title="Investment notes">
+          <Rows items={notes} />
         </Section>
       ) : null}
       <Section title="Receipts">
@@ -544,6 +552,13 @@ function rowText(document: DocumentItem): { title: string; subtitle: string } {
     return {
       title: reference ? `Receipt ${reference}` : "Receipt",
       subtitle: `Payment confirmed on ${formatDateTime(document.requestedAt)}`,
+    };
+  }
+  if (document.kind === "investment_note") {
+    const reference = noteReference(document);
+    return {
+      title: reference ? `Investment note ${reference}` : "Investment note",
+      subtitle: `${isEndNote(document) ? "Investment ended" : "Investment started"}. Note made on ${formatDateTime(document.finishedAt ?? document.requestedAt)}`,
     };
   }
   if (document.kind === "tax_certificate" && document.dateFrom && document.dateTo) {

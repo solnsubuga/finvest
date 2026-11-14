@@ -56,6 +56,8 @@ export const ACTION_PERMISSIONS = [
   "complaints.close",
   // Proposing or deciding a change to the words of a client message.
   "wordings.change",
+  // Proposing or deciding which accounting system account each ledger code is posted to.
+  "account_codes.change",
   // Proposing or deciding an announcement to every active client. Apart from wordings, so fewer people can do it.
   "announcements.send",
   // Proposing or deciding the bank account clients pay into by transfer, on Settings. Approving always takes a second person.

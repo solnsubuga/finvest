@@ -51,6 +51,13 @@ async def world(
 ) -> World:
     built = await World(api.database, worker_database, api.clock).build(funds, mobile=False)
     setup.subjects[built.client_id] = SUBJECT
+    # With a provider on, handing in the identity check asked for a screen. Building the world
+    # moves the clock past the new destination's day, so that screen's job is already too old
+    # to run: let the worker give it up, and a day pass, so each test starts from a client
+    # whose next payout needs a screen of its own.
+    async with worker_database.actor_transaction(SYSTEM) as session:
+        await screening.give_up_on_stale(session, api.clock.now())
+    api.clock.advance(hours=25)
     return built
 
 
@@ -74,8 +81,10 @@ async def status_of(database: Database, payout_id: str) -> PayoutStatus:
 
 
 async def runs_for(database: Database, client_id: str) -> list[screening.Run]:
+    """The screens asked for after the client's identity check was handed in."""
     async with database.actor_transaction(SYSTEM) as session:
-        return await screening.runs_for_client(session, client_id)
+        runs = await screening.runs_for_client(session, client_id)
+    return [run for run in runs if run.reason is not Reason.ONBOARDING]
 
 
 async def send_jobs(database: Database, payout_id: str) -> int:

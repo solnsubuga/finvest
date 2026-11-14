@@ -1,7 +1,7 @@
 """Reports emailed to staff on a schedule, each schedule approved by a second person.
 
 Revision ID: 0320_report_schedules
-Revises: 0270_payout_wallet_short
+Revises: 0183_monitoring_transfers
 
 * `report_schedules`: one person proposes a report, how often, its currency and the members of
   staff it goes to. A different person approves it, which starts it, or declines it. The
@@ -22,7 +22,7 @@ from collections.abc import Sequence
 from alembic import op
 
 revision: str = "0320_report_schedules"
-down_revision: str | None = "0270_payout_wallet_short"
+down_revision: str | None = "0183_monitoring_transfers"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 

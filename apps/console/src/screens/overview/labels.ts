@@ -13,6 +13,7 @@ export const KIND_INFO: Record<Kind, KindInfo> = {
   announcement: { label: "Announcement to clients", path: at("/settings") },
   // The subject is the currency, such as "UGX". The details are shown on Settings.
   bank_account_change: { label: "Bank account clients pay into", path: at("/settings") },
+  account_code_map: { label: "Accounting system codes", path: at("/settings") },
   report_schedule: { label: "Scheduled report", path: at("/reports") },
   month_close: { label: "Close the month", path: at("/finance") },
   ledger_correction: { label: "Ledger correction", path: at("/finance") },
@@ -46,6 +47,11 @@ export const KIND_INFO: Record<Kind, KindInfo> = {
     label: "Large payout to release",
     path: (item) => `/review-queue?tab=held&payout=${encodeURIComponent(item.subject)}`,
   },
+  // A company or group application checked by one person, waiting for a second to open it.
+  organisation: {
+    label: "Company or group account to open",
+    path: (item) => `/review-queue?tab=organisations&organisation=${encodeURIComponent(item.id)}`,
+  },
 };
 
 const SUBJECT_WORDS: Record<string, string> = {
@@ -56,6 +62,8 @@ const SUBJECT_WORDS: Record<string, string> = {
   reset_sign_in: "Reset sign-in",
   mobile_money: "Mobile money",
   bank: "Bank account",
+  company: "Company",
+  group: "Group or SACCO",
 };
 
 /** The subject in words where it is a code, such as `change_role` or `lock -N…`. */

@@ -182,7 +182,7 @@ class InvestmentJobs:
         carries on with the rest.
         """
         run_date = _run_date(job.payload)
-        posted = failed = 0
+        posted = failed = failing = 0
         after = ""
         async with context.kept_alive():
             while True:
@@ -190,15 +190,25 @@ class InvestmentJobs:
                     await job_queue.lock_fenced(session, job)
                     try:
                         batch = await accrual.accrue_batch(
-                            session, run_date, self._clock, after=after
+                            session, run_date, self._clock, after=after, failing=failing
                         )
                     except ApplicationError as error:
                         raise PermanentJobError(code=f"interest_run_{error.code}") from error
+                    except accrual.RunFailing:
+                        # Leaving the block rolls this batch back. The job fails, which
+                        # /health/operations raises, and the investments stay due.
+                        logger.error(
+                            "interest_run_stopped",
+                            run_date=run_date.isoformat(),
+                            error_code="interest_run_failing",
+                        )
+                        raise PermanentJobError(code="interest_run_failing") from None
                 if batch.last_id is None:
                     break
                 after = batch.last_id
                 posted += batch.posted
                 failed += batch.failed
+                failing = batch.failing
 
         async def effect(session: AsyncSession) -> Mapping[str, object]:
             behind = await accrual.finish_run(session, run_date, self._clock)

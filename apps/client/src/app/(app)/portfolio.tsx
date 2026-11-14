@@ -5,6 +5,7 @@ import { useRouter } from "expo-router";
 import { AppPage } from "@/components/AppPage";
 import { Notice } from "@/components/Blocks";
 import { Button } from "@/components/Button";
+import { LinkCard } from "@/components/LinkCard";
 import { useInvesting } from "@/investing/InvestingProvider";
 import { Failed, InvestmentCard } from "@/investing/Parts";
 import { useLoaded } from "@/investing/useLoaded";
@@ -36,6 +37,13 @@ export default function Portfolio() {
               onPress={() => router.push(`/investment/${investment.id}`)}
             />
           ))}
+          <LinkCard
+            icon="send"
+            title="Sent and received"
+            description="Investments you sent to other clients, and those sent to you"
+            onPress={() => router.push("/transfers")}
+            testID="open-transfers"
+          />
         </View>
       )}
     </AppPage>

@@ -508,6 +508,28 @@ async def day_totals(
     ]
 
 
+@dataclass(frozen=True, slots=True)
+class LedgerCode:
+    """One account code the ledger has opened an account under, in any currency."""
+
+    code: str
+    kind: str
+    name: str
+
+
+_SELECT_CODES = text(
+    "SELECT code, min(kind) AS kind, min(name) AS name FROM ledger_accounts "
+    "GROUP BY code ORDER BY code"
+)
+
+
+async def codes(session: AsyncSession) -> list[LedgerCode]:
+    """Every account code in the ledger, in code order, for naming them in an accounting
+    system. A client's accounts share their code, so the list names no client."""
+    rows = await session.execute(_SELECT_CODES)
+    return [LedgerCode(code=row.code, kind=row.kind, name=row.name) for row in rows.all()]
+
+
 # Figures for the console's Overview ------------------------------------------------------------
 
 

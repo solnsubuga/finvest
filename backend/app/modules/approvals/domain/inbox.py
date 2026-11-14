@@ -31,6 +31,7 @@ Kind = Literal[
     "announcement",
     "payout_account",
     "investment_correction",
+    "investment_run",
     "payout_resolution",
     "tax_remittance",
     "deposit_reassignment",
@@ -40,6 +41,9 @@ Kind = Literal[
     "account_closure",
     "compliance_case",
     "bank_account_change",
+    "account_code_map",
+    "deposit_reversal",
+    "deposit_receivable",
     "report_schedule",
     "month_close",
 ]
@@ -79,6 +83,8 @@ SOURCES: dict[Kind, Source] = {
     "payout_resolution": Source("reconciliation.view", "reconciliation.change"),
     "payout_account": Source("review_queue.view", "payout_accounts.change"),
     "investment_correction": Source("investments.view", "investment_corrections.change"),
+    # Running a day's interest again, or today's maturities, decided as corrections are.
+    "investment_run": Source("investments.view", "investment_corrections.change"),
     "tax_remittance": Source("finance.view", "tax_remittances.change"),
     "deposit_reassignment": Source("reconciliation.view", "deposit_reassignments.change"),
     # Releasing a payout held because it is large, decided where it is held: the review queue.
@@ -93,6 +99,12 @@ SOURCES: dict[Kind, Source] = {
     "compliance_case": Source("compliance.view", "compliance_cases.change"),
     # The bank account clients pay into by transfer, on Settings.
     "bank_account_change": Source("settings.view", "bank_accounts.change"),
+    # Which accounting system account each ledger code is posted to, changed in Settings.
+    "account_code_map": Source("settings.view", "account_codes.change"),
+    # Taking back a payment credited by mistake, decided as reassignments are.
+    "deposit_reversal": Source("reconciliation.view", "deposit_reassignments.change"),
+    # Recording, recovering or writing off what a client owes for a mistaken payment.
+    "deposit_receivable": Source("reconciliation.view", "deposit_reassignments.change"),
     # A report emailed on a schedule, on Reports. Only shown for a report the reader may
     # download, and approving needs that too.
     "report_schedule": Source("reports.view", "reports.view"),

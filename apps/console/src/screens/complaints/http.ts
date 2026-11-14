@@ -61,6 +61,14 @@ interface DetailJson {
     proposed_by: string;
     proposed_at: string;
   } | null;
+  last_rejected: {
+    outcome: Outcome;
+    resolution: string;
+    client_accepted: boolean;
+    decided_by: string;
+    decided_at: string;
+    reason: string;
+  } | null;
 }
 
 interface RegisterJson {
@@ -101,7 +109,18 @@ export function toComplaint(json: ComplaintJson): Complaint {
 
 export function toDetail(json: DetailJson): ComplaintDetail {
   const pending = json.pending_outcome;
+  const rejected = json.last_rejected;
   return {
+    lastRejected: rejected
+      ? {
+          outcome: rejected.outcome,
+          resolution: rejected.resolution,
+          clientAccepted: rejected.client_accepted,
+          decidedBy: rejected.decided_by,
+          decidedAt: rejected.decided_at,
+          reason: rejected.reason,
+        }
+      : null,
     complaint: toComplaint(json.complaint),
     history: json.history.map((item) => ({
       id: item.id,
