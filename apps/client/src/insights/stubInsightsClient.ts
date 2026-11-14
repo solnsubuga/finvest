@@ -7,7 +7,8 @@ import { Currency, Insights, InsightsClient, InsightsError } from "./types";
  * The two demo accounts have a few months of history, with figures from the
  * design canvas. An account made by signing up has none yet, which shows the
  * empty state. A number ending in 99 cannot reach the service. The demo holds no
- * dollars, so its dollar figures are all zero.
+ * dollars, so its dollar figures are all zero. Its coming up list names the demo goal and
+ * automatic plan the goals and automatic investing stand-ins hold.
  */
 
 const SEEDED = new Set(["+256772123456", "+256701000200"]);
@@ -71,6 +72,32 @@ export function createStubInsightsClient(
         upcoming: seeded
           ? [
               {
+                kind: "goal_saving",
+                on: addDays(now(), 6),
+                planId: "demo-plan-goal",
+                productName: "91 Day Treasury Bill",
+                goalId: "demo-goal-1",
+                goalName: "School fees, Term 1",
+                amount: ugx(150_000),
+              },
+              {
+                kind: "autoinvest_run",
+                on: addDays(now(), 13),
+                planId: `demo-plan-${phone.slice(-3)}`,
+                productName: "91 Day Treasury Bill",
+                goalId: null,
+                goalName: null,
+                amount: ugx(250_000),
+              },
+              {
+                kind: "goal_date",
+                on: addDays(now(), 49),
+                goalId: "demo-goal-1",
+                goalName: "School fees, Term 1",
+                amount: ugx(2_000_000),
+              },
+              {
+                kind: "maturity",
                 on: addDays(now(), 57),
                 investmentId: "demo-investment-1",
                 productName: "91 Day Treasury Bill",
@@ -78,6 +105,7 @@ export function createStubInsightsClient(
                 amount: ugx(5_132_449),
               },
               {
+                kind: "maturity",
                 on: addDays(now(), 62),
                 investmentId: "demo-investment-2",
                 productName: "182 Day Treasury Bill",
