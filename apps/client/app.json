@@ -21,11 +21,8 @@
       },
       "predictiveBackGestureEnabled": false,
       "permissions": [
-        "android.permission.CAMERA",
-        "android.permission.USE_BIOMETRIC",
-        "android.permission.USE_FINGERPRINT"
-      ],
-      "package": "com.anonymous.finvestclient"
+        "android.permission.CAMERA"
+      ]
     },
     "web": {
       "bundler": "metro",
