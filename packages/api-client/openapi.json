@@ -10893,6 +10893,129 @@
         "title": "ReceiptView",
         "type": "object"
       },
+      "RecoveryAsk": {
+        "additionalProperties": false,
+        "description": "The number on the account, a number to call now, and what happened. No free text.",
+        "properties": {
+          "contact_phone": {
+            "maxLength": 32,
+            "minLength": 1,
+            "title": "Contact Phone",
+            "type": "string"
+          },
+          "phone": {
+            "maxLength": 32,
+            "minLength": 1,
+            "title": "Phone",
+            "type": "string"
+          },
+          "reason": {
+            "enum": [
+              "lost_phone",
+              "new_number",
+              "no_codes",
+              "other"
+            ],
+            "title": "Reason",
+            "type": "string"
+          }
+        },
+        "required": [
+          "phone",
+          "contact_phone",
+          "reason"
+        ],
+        "title": "RecoveryAsk",
+        "type": "object"
+      },
+      "RecoveryClose": {
+        "additionalProperties": false,
+        "properties": {
+          "outcome": {
+            "enum": [
+              "number_changed",
+              "helped",
+              "not_the_client"
+            ],
+            "title": "Outcome",
+            "type": "string"
+          }
+        },
+        "required": [
+          "outcome"
+        ],
+        "title": "RecoveryClose",
+        "type": "object"
+      },
+      "RecoveryList": {
+        "additionalProperties": false,
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/RecoveryView"
+            },
+            "title": "Items",
+            "type": "array"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "title": "RecoveryList",
+        "type": "object"
+      },
+      "RecoveryView": {
+        "additionalProperties": false,
+        "properties": {
+          "account_phone": {
+            "title": "Account Phone",
+            "type": "string"
+          },
+          "client_id": {
+            "maxLength": 20,
+            "minLength": 20,
+            "pattern": "^[-0-9A-Z_a-z]{20}$",
+            "title": "Client Id",
+            "type": "string"
+          },
+          "contact_phone": {
+            "title": "Contact Phone",
+            "type": "string"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "id": {
+            "maxLength": 20,
+            "minLength": 20,
+            "pattern": "^[-0-9A-Z_a-z]{20}$",
+            "title": "Id",
+            "type": "string"
+          },
+          "reason": {
+            "enum": [
+              "lost_phone",
+              "new_number",
+              "no_codes",
+              "other"
+            ],
+            "title": "Reason",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "client_id",
+          "account_phone",
+          "contact_phone",
+          "reason",
+          "created_at"
+        ],
+        "title": "RecoveryView",
+        "type": "object"
+      },
       "Refusal": {
         "additionalProperties": false,
         "properties": {
@@ -26734,6 +26857,76 @@
         "summary": "Remove Push Device",
         "tags": [
           "client notifications"
+        ]
+      }
+    },
+    "/client/recovery-requests": {
+      "post": {
+        "description": "Ask Finvest to call back. The same answer whether or not the number has an account.",
+        "operationId": "ask_for_recovery_client_recovery_requests_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RecoveryAsk"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          }
+        },
+        "summary": "Ask For Recovery",
+        "tags": [
+          "client sign-in"
         ]
       }
     },
@@ -45007,6 +45200,147 @@
         "summary": "Import Statement",
         "tags": [
           "staff reconciliation"
+        ]
+      }
+    },
+    "/staff/recovery-requests": {
+      "get": {
+        "description": "Requests for a real account that nobody has closed yet, oldest first.",
+        "operationId": "open_recovery_requests_staff_recovery_requests_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RecoveryList"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          }
+        },
+        "summary": "Open Recovery Requests",
+        "tags": [
+          "client numbers"
+        ]
+      }
+    },
+    "/staff/recovery-requests/{request_id}/close": {
+      "post": {
+        "description": "Close a request once the person was called back. The number changes separately.",
+        "operationId": "close_recovery_request_staff_recovery_requests__request_id__close_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "request_id",
+            "required": true,
+            "schema": {
+              "maxLength": 20,
+              "minLength": 20,
+              "pattern": "^[-0-9A-Z_a-z]{20}$",
+              "title": "Request Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RecoveryClose"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          }
+        },
+        "summary": "Close Recovery Request",
+        "tags": [
+          "client numbers"
         ]
       }
     },
