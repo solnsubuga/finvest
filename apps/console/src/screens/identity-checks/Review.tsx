@@ -2,7 +2,7 @@ import { useEffect, useId, useRef, useState, type FormEvent, type ReactNode } fr
 import { Button } from "@/components/ui/button.tsx";
 import { Input } from "@/components/ui/input.tsx";
 import { Label } from "@/components/ui/label.tsx";
-import { cn } from "@/lib.ts";
+import { cn, shownName } from "@/lib.ts";
 import type { CheckDetail, Decision, PhotoKind } from "./api.ts";
 import {
   CHECK_LABELS,
@@ -72,7 +72,7 @@ function problems(input: DecisionInput): FieldErrors {
 const NOT_GIVEN = "Not given yet";
 
 export function Review({ check, busy, error, onDecide, onShowNumber, canDecide = true }: ReviewProps) {
-  const fullName = check.surname && check.givenNames ? `${check.surname} ${check.givenNames}` : null;
+  const fullName = check.surname && check.givenNames ? shownName(check.surname, check.givenNames) : null;
   const flag = flagLabel(check.reviewFlags);
   // The whole number, once asked for. It is kept only while this check is open.
   const [number, setNumber] = useState<{ state: "hidden" | "loading" | "failed" } | { state: "shown"; value: string }>({ state: "hidden" });
@@ -133,7 +133,9 @@ export function Review({ check, busy, error, onDecide, onShowNumber, canDecide =
       <div className="flex flex-wrap gap-5">
         <Section title="Read from the ID">
           <dl className="m-0">
-            <Row name="Full name" value={fullName ?? NOT_GIVEN} />
+            {/* As printed on the document, to compare with the photo. The heading shows the name. */}
+            <Row name="Given names" value={check.givenNames ?? NOT_GIVEN} />
+            <Row name="Surname" value={check.surname ?? NOT_GIVEN} />
             <Row
               name="ID number"
               value={
