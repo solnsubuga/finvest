@@ -1,4 +1,4 @@
-import { render, screen, within } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 import { createStubDirectory } from "@/directory/stub.ts";
@@ -53,7 +53,8 @@ describe("bank payouts", () => {
     const rows = within(table).getAllByRole("row").slice(1);
     expect(rows.map((row) => within(row).getByRole("rowheader").textContent)).toEqual(["UGX 3,000,000", "UGX 2,000,000"]);
     expect(rows[0]).toHaveTextContent(/••••\s\d{4}/);
-    expect(await within(rows[0]!).findAllByText("Kira Road Savings Group")).toHaveLength(2);
+    // The holder name is on the payout; the client name arrives when the directory answers.
+    await waitFor(() => expect(within(rows[0]!).getAllByText("Kira Road Savings Group")).toHaveLength(2));
     // An approved batch's payouts are in its file, not on the card.
     const approved = screen.getByRole("article", { name: "Batch of UGX 7,350,000" });
     expect(within(approved).queryByRole("table")).not.toBeInTheDocument();
