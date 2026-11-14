@@ -10,6 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.modules.approvals.domain.inbox import InboxItem, Kind, Waiting, inbox, visible_kinds
 from app.modules.closures import service as closures
+from app.modules.console import actions as client_actions
 from app.modules.dealing import buffer, capital
 from app.modules.dealing import orders as dealing
 from app.modules.dealing.domain.capital import Direction
@@ -59,6 +60,8 @@ async def waiting_for(session: AsyncSession, staff: StaffSession, now: datetime)
         found += await _team_changes(session)
     if "client_lock" in kinds:
         found += await _client_locks(session)
+    if kinds & set(_CLIENT_ACTIONS.values()):
+        found += [item for item in await _client_actions(session) if item.kind in kinds]
     if "suppression_lift" in kinds:
         found += await _suppression_lifts(session)
     if "complaint_outcome" in kinds:
@@ -262,6 +265,21 @@ async def _client_locks(session: AsyncSession) -> list[Waiting]:
     return [
         Waiting("client_lock", c.id, f"{c.kind} {c.client_id}", c.proposed_by, c.proposed_at)
         for c in await client_locks.open_locks(session)
+    ]
+
+
+# Each kind of action for a client is its own inbox kind, so each is decided with its own
+# permission.
+_CLIENT_ACTIONS: dict[client_actions.Kind, Kind] = {
+    "pin_reset": "client_pin_reset",
+}
+
+
+async def _client_actions(session: AsyncSession) -> list[Waiting]:
+    # The subject is the client's ID, as for a lock.
+    return [
+        Waiting(_CLIENT_ACTIONS[a.kind], a.id, a.client_id, a.proposed_by, a.proposed_at)
+        for a in await client_actions.waiting(session)
     ]
 
 

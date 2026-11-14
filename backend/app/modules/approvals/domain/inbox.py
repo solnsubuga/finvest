@@ -40,6 +40,7 @@ Kind = Literal[
     "account_closure",
     "compliance_case",
     "bank_account_change",
+    "client_pin_reset",
 ]
 
 
@@ -91,6 +92,8 @@ SOURCES: dict[Kind, Source] = {
     "compliance_case": Source("compliance.view", "compliance_cases.change"),
     # The bank account clients pay into by transfer, on Settings.
     "bank_account_change": Source("settings.view", "bank_accounts.change"),
+    # Acting for a client from their page (console `actions`), one kind per permission.
+    "client_pin_reset": Source("clients.view", "client_pins.reset"),
 }
 
 

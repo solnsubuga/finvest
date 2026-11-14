@@ -24,6 +24,7 @@ def test_admin_sees_every_kind_and_support_sees_what_touches_clients() -> None:
         "account_closure",
         "suppression_lift",
         "complaint_outcome",
+        "client_pin_reset",
     }
 
 

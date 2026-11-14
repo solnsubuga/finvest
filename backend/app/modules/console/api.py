@@ -11,7 +11,7 @@ from fastapi import APIRouter, Depends, Query, Request
 from pydantic import Field
 
 from app.infrastructure.database import Database
-from app.modules.console import clients
+from app.modules.console import actions_api, clients
 from app.modules.identity import client_locks
 from app.modules.identity.api import require_confirmed, require_permission
 from app.modules.identity.service import StaffSession
@@ -27,7 +27,7 @@ _REFUSALS: dict[int | str, dict[str, object]] = {
     409: {"model": ErrorEnvelope},
 }
 router = APIRouter(prefix="/staff/clients", tags=["staff clients"], responses=_REFUSALS)
-routers = [router]
+routers = [router, actions_api.router]
 
 ClientViewer = Annotated[StaffSession, Depends(require_permission("clients.view"))]
 ClientLocker = Annotated[StaffSession, Depends(require_permission("clients.lock"))]

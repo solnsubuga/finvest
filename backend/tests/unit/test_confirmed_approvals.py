@@ -57,6 +57,7 @@ DECISIONS = {
     "POST /staff/rate-proposals/{proposal_id}/approve",
     "POST /staff/investment-corrections/{correction_id}/approve",
     "POST /staff/clients/locks/{lock_id}/decision",
+    "POST /staff/clients/actions/{action_id}/decision",
     "POST /staff/dealing/orders/{order_id}/approve",
     "POST /staff/dealing/orders/{order_id}/confirm-result",
     "POST /staff/dealing/buffer/rules/{proposal_id}/approve",

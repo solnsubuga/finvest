@@ -124,6 +124,12 @@ Permission = Literal[
     # sending one back or rejecting it. Approving always takes a second person. Not a screen:
     # applications are in the review queue.
     "organisations.review",
+    # Writing a staff note on a client's page. Notes are kept as written and only staff read
+    # them. Seeing them is `clients.view`. One person: a note changes nothing. Not a screen.
+    "client_notes.write",
+    # Proposing or deciding to reset a client's app PIN, which signs the phone app out so the
+    # client logs in again and chooses a new one. Always takes a second person. Not a screen.
+    "client_pins.reset",
 ]
 PERMISSIONS: tuple[Permission, ...] = get_args(Permission)
 
@@ -162,6 +168,8 @@ ROLE_PERMISSIONS: dict[Role, frozenset[Permission]] = {
             "organisations.review",
             "migration.import",
             "client_phones.change",
+            "client_notes.write",
+            "client_pins.reset",
         }
     ),
     "finance": frozenset(
@@ -190,6 +198,7 @@ ROLE_PERMISSIONS: dict[Role, frozenset[Permission]] = {
             "migration.view",
             "migration.sign_off",
             "investment_corrections.change",
+            "client_notes.write",
             # The trust account clients pay into is finance's to keep right. Settings is where
             # it is set, so finance can open Settings, read only apart from that account.
             "settings.view",
@@ -215,6 +224,8 @@ ROLE_PERMISSIONS: dict[Role, frozenset[Permission]] = {
             "payout_accounts.change",
             "investment_transfers.change",
             "organisations.review",
+            "client_notes.write",
+            "client_pins.reset",
         }
     ),
     # Support answers clients and logs and works complaints. Closing one is for operations and
@@ -228,6 +239,8 @@ ROLE_PERMISSIONS: dict[Role, frozenset[Permission]] = {
             "complaints.manage",
             "clients.view",
             "email_suppressions.lift",
+            "client_notes.write",
+            "client_pins.reset",
         }
     ),
 }

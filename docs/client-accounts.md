@@ -14,7 +14,27 @@ The page is put together by `backend/app/modules/console`, which owns no tables.
 | `POST /staff/clients/{id}/locks` | `clients.lock` | Propose `lock` or `unlock`, with a reason. |
 | `POST /staff/clients/locks/{id}/decision` | `clients.lock` | `approved` or `rejected` by someone else, or `withdrawn` by the proposer, with a reason. |
 
+| `GET /staff/clients/{id}/notes` | `clients.view` | The client's staff notes, newest first (the latest 100), and whether the reader may write one. |
+| `POST /staff/clients/{id}/notes` | `client_notes.write` | Keep a note of up to 1,000 characters. |
+| `GET /staff/clients/{id}/actions` | `clients.view` | Every action proposed for the client, newest first, and the kinds the reader may propose or decide (`allowed`). |
+| `POST /staff/clients/{id}/actions` | The kind's permission | Propose an action, with a reason. `409` if one of that kind is already waiting for the client, or the account is not active (`not_active`, `closed`). |
+| `POST /staff/clients/actions/{id}/decision` | The kind's permission, and a fresh second step | `approved` or `rejected` by someone else, or `withdrawn` by the proposer, with a reason. Approving applies it at once. |
+
 `clients.lock` is held by admin, operations and compliance.
+
+## Staff notes
+
+A note is what one member of staff writes about a client for the others, such as "Called about a failed payout, resent it". It is written by one person under their own name and kept as written: nothing edits or deletes one, and a mistake is put right by a later note. It moves nothing and changes nothing about the client, so it is not a two-person step. Only staff read notes. A client never sees them, and they are not in the client's data export. The audit trail records that a note was written (`console.client.note_written`), never its words. `client_notes.write` is held by every role. The table is `console_client_notes` (migration 0350): the API may only read and insert, and the row policy accepts a note only under the acting member of staff's own name.
+
+## Acting for a client
+
+Staff act for a client from their page with two people: one proposes with a reason, a different one approves or rejects, and the proposer may withdraw. Approving applies the action in the same transaction, through the module that owns what it changes, so nothing is ever approved and not yet done. Each kind is decided with its own permission and has its own kind in the approvals inbox. Staff act only for an active account: a locked account is unlocked first.
+
+| Kind | Permission, held by | Inbox kind | What approving does |
+| --- | --- | --- | --- |
+| `pin_reset` | `client_pins.reset`: admin, operations, compliance, support | `client_pin_reset` | Ends every phone app session the client holds. A PIN belongs to one phone app session (see [decisions.md](decisions.md)), so the PIN goes with it: the client logs in again with their password and a second step and chooses a new one, as after forgetting it. A browser session has no PIN and is left alone. The client is told by SMS and, if their email is proved, by email (template `app_signed_out`, fixed in code like the other security notices). |
+
+The proposals are `console_client_actions` (migration 0351). PostgreSQL enforces the two people (`ck_console_client_actions_two_people`), lets only the decision columns change and only once, allows one open proposal of each kind per client, and records the approving transaction in `decided_in`, so a module that applies an action can check it was approved in that same transaction. `console.client.<kind>_proposed` and `console.client.<kind>_<decision>` are audit events with their reasons.
 
 ## Locking
 
