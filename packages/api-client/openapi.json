@@ -188,6 +188,30 @@
         "title": "AnnouncementList",
         "type": "object"
       },
+      "AnnouncementReach": {
+        "additionalProperties": false,
+        "properties": {
+          "clients": {
+            "title": "Clients",
+            "type": "integer"
+          },
+          "email": {
+            "title": "Email",
+            "type": "integer"
+          },
+          "sms": {
+            "title": "Sms",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "clients",
+          "sms",
+          "email"
+        ],
+        "title": "AnnouncementReach",
+        "type": "object"
+      },
       "AnnouncementView": {
         "additionalProperties": false,
         "properties": {
@@ -30146,6 +30170,58 @@
           }
         },
         "summary": "Propose Announcement",
+        "tags": [
+          "staff message wordings"
+        ]
+      }
+    },
+    "/staff/announcements/reach": {
+      "get": {
+        "description": "How many clients an announcement approved now reaches, and how many by SMS and email.",
+        "operationId": "announcement_reach_staff_announcements_reach_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AnnouncementReach"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          }
+        },
+        "summary": "Announcement Reach",
         "tags": [
           "staff message wordings"
         ]

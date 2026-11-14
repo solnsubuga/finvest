@@ -153,6 +153,13 @@ describe("announcements over HTTP", () => {
     expect(decided).toMatchObject({ status: "rejected", decisionReason: "Not now" });
   });
 
+  it("reads the reach", async () => {
+    const fetch = vi.fn<typeof globalThis.fetch>(() => reply(200, { clients: 1284, sms: 96, email: 310 }));
+    const api = createHttpAnnouncementsApi(createHttp("https://api.test", fetch));
+    expect(await api.reach()).toEqual({ clients: 1284, sms: 96, email: 310 });
+    expect(fetch.mock.calls[0]?.[0]).toBe("https://api.test/staff/announcements/reach");
+  });
+
   it("turns refusals into the screen's errors", async () => {
     const invalid = vi.fn<typeof globalThis.fetch>(() =>
       refusal(422, "validation_failed", [{ field_path: ["message"], code: "outside_link" }]),

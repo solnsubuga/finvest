@@ -92,6 +92,13 @@ export const AnnouncementList = z.object({
 });
 export type AnnouncementList = z.infer<typeof AnnouncementList>;
 
+export const AnnouncementReach = z.object({
+  clients: z.number().int(),
+  email: z.number().int(),
+  sms: z.number().int(),
+});
+export type AnnouncementReach = z.infer<typeof AnnouncementReach>;
+
 export const Profile = z.enum(["careful", "balanced", "long_term"]);
 export type Profile = z.infer<typeof Profile>;
 
@@ -2693,6 +2700,17 @@ export const operations = {
     idempotent: false,
     status: 201,
     response: AnnouncementView,
+  },
+  "GET /staff/announcements/reach": {
+    method: "GET",
+    path: "/staff/announcements/reach",
+    params: z.object({}),
+    query: z.object({}),
+    body: null,
+    bodyKind: null,
+    idempotent: false,
+    status: 200,
+    response: AnnouncementReach,
   },
   "POST /staff/announcements/{announcement_id}/decision": {
     method: "POST",

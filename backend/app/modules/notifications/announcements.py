@@ -28,8 +28,10 @@ from app.infrastructure.jobs import (
 )
 from app.modules.audit import service as audit
 from app.modules.audit.domain.events import AuditActor, AuditEvent
-from app.modules.identity.service import active_client_ids
+from app.modules.identity.service import active_client_ids, count_active_clients
 from app.modules.notifications import service
+from app.modules.notifications.domain.events import Category, Channel
+from app.modules.notifications.domain.preferences import DEFAULTS
 from app.modules.notifications.domain.wording import InvalidWording, check_announcement
 from app.modules.notifications.inbox import notify
 from app.shared.actors import Actor
@@ -90,6 +92,44 @@ _DECIDE = text(
     "decided_at = :now, decision_reason = :reason WHERE id = :id"
 )
 _APPROVED = text("SELECT title, message FROM notification_announcements WHERE id = :id")
+
+
+@dataclass(frozen=True, slots=True)
+class Reach:
+    """Who an announcement approved now would reach, so the approver knows before sending."""
+
+    # Active clients. Every one gets it in the app, and by push if they have the app.
+    clients: int
+    # Of those, how many also get it by SMS and by email, as their choices for news say.
+    sms: int
+    email: int
+
+
+# Clients who saved a choice for news, with whether it includes the channel.
+_NEWS_CHOICES = text(
+    "SELECT client_id, CAST(:channel AS text) = ANY(channels) AS chosen "
+    "FROM notification_preferences WHERE category = :category"
+)
+
+
+async def reach(session: AsyncSession) -> Reach:
+    """How many clients an announcement approved now would go to, and by SMS and email."""
+    clients = await count_active_clients(session)
+
+    async def by(channel: Channel) -> int:
+        rows = (
+            await session.execute(
+                _NEWS_CHOICES, {"channel": channel.value, "category": Category.NEWS.value}
+            )
+        ).all()
+        if channel in DEFAULTS[Category.NEWS]:
+            # Everyone, less those who switched it off.
+            off = [row.client_id for row in rows if not row.chosen]
+            return clients - (await count_active_clients(session, off) if off else 0)
+        on = [row.client_id for row in rows if row.chosen]
+        return await count_active_clients(session, on) if on else 0
+
+    return Reach(clients=clients, sms=await by(Channel.SMS), email=await by(Channel.EMAIL))
 
 
 async def list_announcements(session: AsyncSession) -> list[Announcement]:

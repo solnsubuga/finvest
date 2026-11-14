@@ -18,8 +18,9 @@ from app.modules.identity.api import COOKIES
 from app.modules.identity.domain.permissions import ROLE_PERMISSIONS
 from app.modules.identity.hashing import PasswordHasher
 from app.modules.identity.service import IdentityService
-from app.modules.notifications import announcements
+from app.modules.notifications import announcements, preferences
 from app.modules.notifications.announcements import AnnouncementJobs
+from app.modules.notifications.domain.events import Category, Channel
 from app.shared.actors import SYSTEM, Actor
 from app.shared.errors import ApplicationError
 from app.shared.push_ids import push_id
@@ -417,3 +418,55 @@ async def test_changing_wordings_is_not_enough_to_send_an_announcement(
     assert (await api.http.post("/staff/announcements", json=body)).status_code == 403
     decision = f"/staff/announcements/{created['id']}/decision"
     assert (await api.http.post(decision, json={"decision": "approved"})).status_code == 403
+
+
+# Reach -------------------------------------------------------------------------------------------
+
+
+async def choose_news(app_database: Database, client_id: str, *channels: Channel) -> None:
+    client = Actor("client", client_id)
+    async with app_database.actor_transaction(client) as session:
+        await preferences.save(
+            session, client, {Category.NEWS: frozenset(channels)}, FakeClock().now()
+        )
+
+
+async def reach_now(app_database: Database) -> announcements.Reach:
+    async with app_database.actor_transaction(new_staff()) as session:
+        return await announcements.reach(session)
+
+
+async def test_the_reach_counts_active_clients_and_their_choices_for_news(
+    app_database: Database, migrator_database: Database, identity: IdentityService
+) -> None:
+    before = await reach_now(app_database)
+    # News goes by push only unless a client chooses more.
+    await active_client(identity)
+    texted = await active_client(identity)
+    await choose_news(app_database, texted, Channel.PUSH, Channel.SMS, Channel.EMAIL)
+    emailed = await active_client(identity)
+    await choose_news(app_database, emailed, Channel.EMAIL)
+    locked = await active_client(identity)
+    await choose_news(app_database, locked, Channel.SMS)
+    guard = "TRIGGER tr_identity_clients_status_guard"
+    async with migrator_database.transaction() as session:
+        await session.execute(text(f"ALTER TABLE identity_clients DISABLE {guard}"))
+        await session.execute(
+            text("UPDATE identity_clients SET status = 'locked' WHERE id = :id"), {"id": locked}
+        )
+        await session.execute(text(f"ALTER TABLE identity_clients ENABLE {guard}"))
+
+    after = await reach_now(app_database)
+
+    # A locked client is not told, so their choice of SMS counts for nothing.
+    assert (after.clients - before.clients, after.sms - before.sms) == (3, 1)
+    assert after.email - before.email == 2
+
+
+async def test_staff_who_see_settings_see_the_reach(api: Api) -> None:
+    await api.staff("support")
+    assert (await api.http.get("/staff/announcements/reach")).status_code == 403
+    await api.staff()
+    response = await api.http.get("/staff/announcements/reach")
+    assert response.status_code == 200
+    assert set(response.json()) == {"clients", "sms", "email"}

@@ -5,6 +5,7 @@ import { cn } from "@/lib.ts";
 import {
   ANNOUNCEMENT_LIMITS,
   AnnouncementsError,
+  type AnnouncementReach,
   announcementProblemText,
   announcementsErrorMessage,
   checkAnnouncement,
@@ -42,6 +43,8 @@ export function AnnouncementsSection({ api, directory, canChange }: Announcement
   const [failed, setFailed] = useState<{ on: string; message: string; problems: readonly AnnouncementProblem[] } | null>(null);
   const [names, setNames] = useState<Record<string, string | null>>({});
   const asked = useRef(new Set<string>());
+  // Who approving would reach. Null while unknown or if it could not be read.
+  const [reach, setReach] = useState<AnnouncementReach | null>(null);
 
   const fetchList = useCallback(
     (): Promise<Load> =>
@@ -61,6 +64,19 @@ export function AnnouncementsSection({ api, directory, canChange }: Announcement
       ),
     [api, directory],
   );
+
+  const someoneWaits = load.state === "ready" && load.items.some((item) => item.status === "proposed" && !item.yours);
+  useEffect(() => {
+    if (!canChange || !someoneWaits) return;
+    let current = true;
+    api.reach().then(
+      (found) => current && setReach(found),
+      () => current && setReach(null),
+    );
+    return () => {
+      current = false;
+    };
+  }, [api, canChange, someoneWaits]);
 
   useEffect(() => {
     let current = true;
@@ -178,6 +194,7 @@ export function AnnouncementsSection({ api, directory, canChange }: Announcement
                 item={item}
                 canChange={canChange}
                 staffName={staffName}
+                reach={reach}
                 busy={busy}
                 error={failed?.on === item.id ? failed.message : null}
                 onDecide={(decision, reason) => run(item.id, () => api.decide(item.id, decision, reason))}
@@ -284,12 +301,13 @@ interface AnnouncementCardProps {
   item: Announcement;
   canChange: boolean;
   staffName: (staffId: string) => string;
+  reach: AnnouncementReach | null;
   busy: boolean;
   error: string | null;
   onDecide: (decision: AnnouncementDecision, reason: string | null) => Promise<boolean>;
 }
 
-function AnnouncementCard({ item, canChange, staffName, busy, error, onDecide }: AnnouncementCardProps) {
+function AnnouncementCard({ item, canChange, staffName, reach, busy, error, onDecide }: AnnouncementCardProps) {
   const [rejecting, setRejecting] = useState(false);
   const [note, setNote] = useState("");
   const [tried, setTried] = useState(false);
@@ -342,7 +360,7 @@ function AnnouncementCard({ item, canChange, staffName, busy, error, onDecide }:
       ) : null}
       {waiting && canChange && !item.yours && !rejecting ? (
         <div className="flex flex-col gap-2">
-          <p className="m-0 text-sm text-muted">Approving sends it to every active client straight away. It cannot be called back.</p>
+          <p className="m-0 text-sm text-muted">{reachSentence(reach)} It cannot be called back.</p>
           <div className="flex gap-2">
             <Button disabled={busy} onClick={() => void onDecide("approved", null)}>
               {busy ? "Saving" : "Approve and send"}
@@ -389,4 +407,17 @@ function AnnouncementCard({ item, canChange, staffName, busy, error, onDecide }:
       ) : null}
     </article>
   );
+}
+
+const count = (value: number) => value.toLocaleString("en-GB");
+
+/** What approving does, with who it reaches once that is known. */
+export function reachSentence(reach: AnnouncementReach | null): string {
+  if (!reach) return "Approving sends it to every active client straight away.";
+  const clients = reach.clients === 1 ? "1 active client" : `${count(reach.clients)} active clients`;
+  const extra =
+    reach.sms === 0 && reach.email === 0
+      ? "None of them chose SMS or email for news."
+      : `${count(reach.sms)} of them also get it by SMS and ${count(reach.email)} by email, as they chose for news.`;
+  return `Approving sends it straight away to ${clients}, in the app and by push. ${extra}`;
 }

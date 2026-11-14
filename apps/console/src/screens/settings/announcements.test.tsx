@@ -2,8 +2,8 @@ import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it } from "vitest";
 import { createStubDirectory } from "@/directory/stub.ts";
-import { AnnouncementsSection } from "./Announcements.tsx";
-import { checkAnnouncement, notConnectedAnnouncementsApi, type AnnouncementsApi } from "./announcements.ts";
+import { AnnouncementsSection, reachSentence } from "./Announcements.tsx";
+import { AnnouncementsError, checkAnnouncement, notConnectedAnnouncementsApi, type AnnouncementsApi } from "./announcements.ts";
 import { createStubAnnouncementsApi } from "./announcementsStub.ts";
 
 const ME = { id: "sample-me", name: "Amina Kintu" };
@@ -18,6 +18,14 @@ function renderSection({
 }
 
 const card = (name: string) => screen.findByRole("article", { name });
+
+describe("reachSentence", () => {
+  it("names one client and says when nobody chose SMS or email", () => {
+    expect(reachSentence({ clients: 1, sms: 0, email: 0 })).toBe(
+      "Approving sends it straight away to 1 active client, in the app and by push. None of them chose SMS or email for news.",
+    );
+  });
+});
 
 describe("settings: announcements", () => {
   it("lists the latest first, with the one waiting for a second person", async () => {
@@ -38,7 +46,9 @@ describe("settings: announcements", () => {
   it("approves someone else's announcement, which sends it", async () => {
     const { user } = renderSection();
     const waiting = await card("Office closed on Monday");
-    expect(waiting).toHaveTextContent("It cannot be called back.");
+    expect(waiting).toHaveTextContent(
+      "Approving sends it straight away to 1,284 active clients, in the app and by push. 96 of them also get it by SMS and 310 by email, as they chose for news. It cannot be called back.",
+    );
     await user.click(within(waiting).getByRole("button", { name: "Approve and send" }));
     await waitFor(async () => expect(await card("Office closed on Monday")).toHaveTextContent("Sent to 1,284 clients"));
     expect(await card("Office closed on Monday")).toHaveTextContent("Approved by Amina Kintu, 13 Nov, 12:00");
@@ -85,6 +95,13 @@ describe("settings: announcements", () => {
     expect(within(mine).queryByRole("button", { name: "Approve and send" })).not.toBeInTheDocument();
     await user.click(within(mine).getByRole("button", { name: "Withdraw it" }));
     await waitFor(async () => expect(await card("App update")).toHaveTextContent("Withdrawn by you, 13 Nov, 12:00"));
+  });
+
+  it("says only that it goes to every active client when the counts cannot be read", async () => {
+    const stub = createStubAnnouncementsApi(ME, () => NOW);
+    renderSection({ api: { ...stub, reach: () => Promise.reject(new AnnouncementsError("unavailable")) } });
+    const waiting = await card("Office closed on Monday");
+    expect(waiting).toHaveTextContent("Approving sends it to every active client straight away. It cannot be called back.");
   });
 
   it("shows a role that cannot send announcements who approves", async () => {
