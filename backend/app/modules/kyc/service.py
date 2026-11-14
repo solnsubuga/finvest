@@ -796,6 +796,17 @@ async def review_queue(session: AsyncSession, *, limit: int = DEFAULT_PAGE_SIZE)
     ]
 
 
+_STATUS_COUNTS = text("SELECT status, count(*) AS checks FROM kyc_checks GROUP BY status")
+
+
+async def status_counts(session: AsyncSession) -> dict[CheckStatus, int]:
+    """How many clients' checks are in each status now, every status listed. Staff only."""
+    found = dict.fromkeys(CheckStatus, 0)
+    for row in (await session.execute(_STATUS_COUNTS)).all():
+        found[CheckStatus(row.status)] = int(row.checks)
+    return found
+
+
 async def check_for_staff(session: AsyncSession, sealer: Sealer, check_id: str) -> CheckView:
     return await _view_by_id(session, sealer, check_id)
 
