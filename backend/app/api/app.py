@@ -67,6 +67,7 @@ from app.modules.kyc import face_confirmations_api
 from app.modules.kyc import profile_api as kyc_profile_api
 from app.modules.kyc.domain.face_confirmations import FaceMatcher
 from app.modules.kyc.domain.liveness import LivenessProvider
+from app.modules.kyc.domain.poses import FaceQuality
 from app.modules.kyc.domain.provider import IdentityProvider
 from app.modules.kyc.settings import KycSettings
 from app.modules.migration import api as migration_api
@@ -128,6 +129,7 @@ def create_app(
     identity_provider: IdentityProvider | None = None,
     identity_liveness: LivenessProvider | None = None,
     face_matcher: FaceMatcher | None = None,
+    face_quality: FaceQuality | None = None,
     email_hash: EmailHashSettings | None = None,
     iotec_wallet: WalletBalances | None = None,
     payout_names: bool | None = None,
@@ -149,6 +151,7 @@ def create_app(
         # A provider passed in (a test's) comes without liveness unless one is passed too.
         identity_liveness = identity_liveness or identity_checks.liveness()
         face_matcher = face_matcher or identity_checks.face_matcher(storage)
+        face_quality = face_quality or identity_checks.face_quality()
 
     @asynccontextmanager
     async def lifespan(_: FastAPI) -> AsyncIterator[None]:
@@ -289,7 +292,7 @@ def create_app(
     for router in (*investments_api.routers, *investment_transfers_api.routers):
         app.include_router(router)
     for router in kyc_api.create_routers(
-        identity_sealer, identity_provider, storage, identity_liveness
+        identity_sealer, identity_provider, storage, identity_liveness, face_quality
     ):
         app.include_router(router)
     # A live selfie confirms a password or number change only with both providers and the key.

@@ -2009,6 +2009,21 @@
         "title": "Body_add_photo_client_identity_check_photos__kind__put",
         "type": "object"
       },
+      "Body_add_pose_frame_client_identity_check_poses__pose__put": {
+        "properties": {
+          "photo": {
+            "contentMediaType": "application/octet-stream",
+            "description": "JPEG, PNG or WebP, at most 10 MiB",
+            "title": "Photo",
+            "type": "string"
+          }
+        },
+        "required": [
+          "photo"
+        ],
+        "title": "Body_add_pose_frame_client_identity_check_poses__pose__put",
+        "type": "object"
+      },
       "Body_import_statement_staff_reconciliation_statements_post": {
         "properties": {
           "account_reference": {
@@ -3804,6 +3819,11 @@
           "document_type": {
             "$ref": "#/components/schemas/DocumentType"
           },
+          "guided_selfie": {
+            "default": false,
+            "title": "Guided Selfie",
+            "type": "boolean"
+          },
           "id": {
             "maxLength": 20,
             "minLength": 20,
@@ -3823,6 +3843,13 @@
               "$ref": "#/components/schemas/ClientPhoto"
             },
             "title": "Photos",
+            "type": "array"
+          },
+          "poses": {
+            "items": {
+              "$ref": "#/components/schemas/Pose"
+            },
+            "title": "Poses",
             "type": "array"
           },
           "retake_photos": {
@@ -14104,6 +14131,13 @@
             },
             "title": "Photos",
             "type": "array"
+          },
+          "poses": {
+            "items": {
+              "$ref": "#/components/schemas/PoseLink"
+            },
+            "title": "Poses",
+            "type": "array"
           }
         },
         "required": [
@@ -14479,6 +14513,52 @@
           "next_maturity"
         ],
         "title": "PortfolioView",
+        "type": "object"
+      },
+      "Pose": {
+        "enum": [
+          "left",
+          "right",
+          "up",
+          "down"
+        ],
+        "title": "Pose",
+        "type": "string"
+      },
+      "PoseLink": {
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "maxLength": 20,
+            "minLength": 20,
+            "pattern": "^[-0-9A-Z_a-z]{20}$",
+            "title": "Id",
+            "type": "string"
+          },
+          "pitch": {
+            "title": "Pitch",
+            "type": "integer"
+          },
+          "pose": {
+            "$ref": "#/components/schemas/Pose"
+          },
+          "url": {
+            "title": "Url",
+            "type": "string"
+          },
+          "yaw": {
+            "title": "Yaw",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "pose",
+          "yaw",
+          "pitch",
+          "url"
+        ],
+        "title": "PoseLink",
         "type": "object"
       },
       "PotIn": {
@@ -34189,6 +34269,108 @@
           }
         },
         "summary": "Add Photo",
+        "tags": [
+          "identity checks"
+        ]
+      }
+    },
+    "/client/identity-check/poses/{pose}": {
+      "put": {
+        "description": "Send one frame of the guided selfie as `multipart/form-data`, after the selfie.\n\nIt is kept only if the face quality service finds one face, big enough, centred, sharp,\nwell lit, with no glare, eyes open and the head turned the asked way. Otherwise it\nanswers `validation_failed` with one problem per reason (`frame`: `turn_more`,\n`too_dark`, `wrong_way`...), and the client takes it again.",
+        "operationId": "add_pose_frame_client_identity_check_poses__pose__put",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "pose",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/Pose"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_add_pose_frame_client_identity_check_poses__pose__put"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ClientCheck"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Take the frame again"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "summary": "Add Pose Frame",
         "tags": [
           "identity checks"
         ]

@@ -2372,9 +2372,22 @@ export const PhotoLink = z.object({
 });
 export type PhotoLink = z.infer<typeof PhotoLink>;
 
+export const Pose = z.enum(["left", "right", "up", "down"]);
+export type Pose = z.infer<typeof Pose>;
+
+export const PoseLink = z.object({
+  id: z.string(),
+  pitch: z.number().int(),
+  pose: Pose,
+  url: z.string(),
+  yaw: z.number().int(),
+});
+export type PoseLink = z.infer<typeof PoseLink>;
+
 export const PhotoLinks = z.object({
   expires_at: z.string(),
   photos: z.array(PhotoLink),
+  poses: z.array(PoseLink).optional(),
 });
 export type PhotoLinks = z.infer<typeof PhotoLinks>;
 
