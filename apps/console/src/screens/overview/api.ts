@@ -48,6 +48,7 @@ export const KINDS = [
   "client_limits",
   "client_statement",
   "client_withdrawal",
+  "report_schedule",
 ] as const;
 
 export type Kind = (typeof KINDS)[number];

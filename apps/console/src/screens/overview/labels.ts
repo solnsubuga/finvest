@@ -21,6 +21,7 @@ export const KIND_INFO: Record<Kind, KindInfo> = {
   statement_layout_change: { label: "Statement import layouts", path: at("/settings") },
   // The subject is the day the new limits start.
   withdrawal_limits_change: { label: "Withdrawal limits", path: at("/settings") },
+  report_schedule: { label: "Scheduled report", path: at("/reports") },
   ledger_correction: { label: "Ledger correction", path: at("/finance") },
   pot_transfer: { label: "Transfer between pots", path: at("/reconciliation") },
   bank_transfer_match: { label: "Bank transfer match", path: at("/reconciliation") },

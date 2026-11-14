@@ -35,6 +35,8 @@ from app.modules.payouts import destinations, limit_changes, resolutions, review
 from app.modules.platform_settings import service as platform_settings
 from app.modules.platform_settings.domain.catalogue import SECTIONS, Section
 from app.modules.reconciliation import day_close, transfers
+from app.modules.reports import schedules as report_schedules
+from app.modules.reports.domain.catalogue import REPORTS, may_download
 from app.modules.screening import service as screening
 from app.modules.support import complaints
 from app.modules.tax import service as tax
@@ -124,6 +126,8 @@ async def waiting_for(session: AsyncSession, staff: StaffSession, now: datetime)
         )
     if kinds & set(_SETTING_KINDS.values()):
         found += await _settings(session, kinds)
+    if "report_schedule" in kinds:
+        found += await _report_schedules(session, staff)
     return inbox(found, staff.staff_id, staff.permissions)
 
 
@@ -496,4 +500,19 @@ async def _code_maps(session: AsyncSession) -> list[Waiting]:
     return [
         Waiting("account_code_map", m.id, m.system.value, m.proposed_by, m.proposed_at)
         for m in await code_maps.waiting(session)
+    ]
+
+
+async def _report_schedules(session: AsyncSession, staff: StaffSession) -> list[Waiting]:
+    # The subject is the report and how often, never who it goes to.
+    return [
+        Waiting(
+            "report_schedule",
+            s.id,
+            f"{s.report_key} {s.frequency}",
+            s.proposed_by,
+            s.proposed_at,
+        )
+        for s in await report_schedules.waiting(session)
+        if may_download(REPORTS[s.report_key], staff.permissions)
     ]
