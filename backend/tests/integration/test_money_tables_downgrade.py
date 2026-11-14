@@ -1031,6 +1031,14 @@ ROWS = {
         "'-Nabc0000000000000S1', now())",
         "refusing to drop the record of mistaken deposit receivables",
     ),
+    "0340_platform_settings": (
+        # The guard admits only staff proposing in their own name.
+        "ALTER TABLE platform_settings DISABLE TRIGGER platform_settings_guard; "
+        "INSERT INTO platform_settings (id, key, value, reason, proposed_by, proposed_at) "
+        "VALUES ('-Nabc0000000000000A1', 'staff_idle_minutes', '15', 'Shorter sessions', "
+        "'-Nabc0000000000000S1', now())",
+        "refusing to drop platform settings that hold records",
+    ),
     "0224_identity_recovery_asks": (
         "INSERT INTO identity_clients (id, phone, status, created_at) VALUES "
         "('-Nabc0000000000000B1', '+256772123456', 'unclaimed', now()); "

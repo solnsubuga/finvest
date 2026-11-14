@@ -48,6 +48,10 @@ Kind = Literal[
     "client_limits",
     "client_statement",
     "client_withdrawal",
+    "payment_channels_change",
+    "calendar_change",
+    "staff_security_change",
+    "statement_layout_change",
 ]
 
 
@@ -112,6 +116,11 @@ SOURCES: dict[Kind, Source] = {
     "client_limits": Source("clients.view", "client_limits.change"),
     "client_statement": Source("clients.view", "client_statements.send"),
     "client_withdrawal": Source("clients.view", "client_withdrawals.start"),
+    # The platform's other settings, on Settings, one kind per section of the screen.
+    "payment_channels_change": Source("settings.view", "payment_channels.change"),
+    "calendar_change": Source("settings.view", "calendar.change"),
+    "staff_security_change": Source("settings.view", "staff_security.change"),
+    "statement_layout_change": Source("settings.view", "statement_layouts.change"),
 }
 
 
