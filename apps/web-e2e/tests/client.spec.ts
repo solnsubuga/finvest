@@ -169,6 +169,33 @@ test("the app locks in the background and opens with the PIN, after a wrong one"
   await expect(page.getByTestId("home")).toBeVisible();
 });
 
+test("a client turns on fingerprint or face unlock, and the locked app opens with it", async ({ page }) => {
+  await page.clock.install();
+  await logIn(page);
+  await id(page, "use-passkey").click();
+  await createPin(page);
+  await expect(page.getByTestId("home")).toBeVisible();
+
+  // In the app, so the demo keeps its session: a fresh page load would start it again.
+  await page.evaluate(() => {
+    window.history.pushState({}, "", "/security");
+    window.dispatchEvent(new PopStateEvent("popstate"));
+  });
+  await id(page, "open-fingerprint").click();
+  await id(page, "fingerprint-on").click();
+  await expect(page.getByText("Enter your PIN to turn on fingerprint or face unlock")).toBeVisible();
+  await typePin(page, DEMO_PIN);
+  await expect(page.getByText("Fingerprint or face unlock is on")).toBeVisible();
+  await id(page, "done").click();
+  await expect(page.getByLabel("Fingerprint or face unlock: on")).toBeVisible();
+
+  await leaveForSixMinutes(page);
+  // The demo's fingerprint answers after a moment; meanwhile the lock screen offers the button.
+  await expect(id(page, "unlock-biometric")).toBeVisible();
+  await page.clock.runFor(2000);
+  await expect(page.getByText("Enter your PIN to open the app on this phone")).toHaveCount(0);
+});
+
 test("five wrong PINs sign the phone out, and the client logs in again", async ({ page }) => {
   await page.clock.install();
   await logIn(page);
