@@ -36,8 +36,8 @@ export function kampalaStamp(iso: string): string {
 
 /** A CSV field, quoted when it holds a comma, a quote or a line break. */
 function field(value: string): string {
-  // A leading =, +, - or @ would be read as a formula by a spreadsheet, so it is made plain text.
-  const safe = /^[=+\-@]/.test(value) ? `'${value}` : value;
+  // A leading =, +, -, @, tab or carriage return would be read as a formula by a spreadsheet, so it is made plain text.
+  const safe = /^[=+\-@\t\r]/.test(value) ? `'${value}` : value;
   return /[",\n\r]/.test(safe) ? `"${safe.replace(/"/g, '""')}"` : safe;
 }
 

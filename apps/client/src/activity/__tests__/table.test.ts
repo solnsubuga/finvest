@@ -56,6 +56,13 @@ describe("toCsv", () => {
     ]);
   });
 
+  it("also makes a field plain text when it starts with a tab or a carriage return", () => {
+    const tab = toCsv([item({ detail: "\t=1+1" })]).split("\r\n")[1];
+    expect(tab).toContain(",'\t=1+1,");
+    const cr = toCsv([item({ detail: "\r=1+1" })]).split("\r\n").slice(1).join("\r\n");
+    expect(cr).toContain(',"\'\r=1+1",');
+  });
+
   it("quotes commas and quotes, and keeps a spreadsheet from reading a field as a formula", () => {
     const line = toCsv([item({ title: 'A "big", one', detail: "=HYPERLINK(1)" })]).split("\r\n")[1];
     expect(line).toBe('2026-11-13 15:32,"A ""big"", one",\'=HYPERLINK(1),From you,1000000,UGX,Paid');
