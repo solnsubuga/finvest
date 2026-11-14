@@ -23,6 +23,7 @@ export const KINDS = [
   "phone_change",
   "team_change",
   "client_lock",
+  "account_closure",
   "suppression_lift",
   "complaint_outcome",
   "announcement",
