@@ -15,6 +15,7 @@ from app.modules.dealing import buffer, capital
 from app.modules.dealing import orders as dealing
 from app.modules.dealing.domain.capital import Direction
 from app.modules.dealing.domain.orders import OrderStatus
+from app.modules.documents import reissues as note_reissues
 from app.modules.finance import code_maps, month_close
 from app.modules.identity import client_locks, phone_changes, team
 from app.modules.identity.service import StaffSession
@@ -87,6 +88,8 @@ async def waiting_for(session: AsyncSession, staff: StaffSession, now: datetime)
         found += await _investment_corrections(session, staff)
     if "investment_run" in kinds:
         found += await _investment_runs(session, staff)
+    if "note_reissue" in kinds:
+        found += await _note_reissues(session, staff)
     if "investment_booking" in kinds:
         found += await _investment_bookings(session, staff)
     if "payout_resolution" in kinds:
@@ -281,6 +284,29 @@ async def _investment_corrections(session: AsyncSession, staff: StaffSession) ->
         Waiting("investment_correction", c.id, c.kind.value, c.proposed_by, c.proposed_at)
         for c in await investments.list_corrections(
             session, staff.actor, status=investments.CorrectionStatus.PROPOSED, limit=200
+        )
+    ]
+
+
+async def _note_reissues(session: AsyncSession, staff: StaffSession) -> list[Waiting]:
+    # The subject is the first and last day of notes, such as "2026-11-01 2026-11-13", and the
+    # client's ID after them when the request is for one client.
+    return [
+        Waiting(
+            "note_reissue",
+            r.id,
+            " ".join(
+                [
+                    r.issued_from.isoformat(),
+                    r.issued_to.isoformat(),
+                    *([r.client_id] if r.client_id else []),
+                ]
+            ),
+            r.proposed_by,
+            r.proposed_at,
+        )
+        for r in await note_reissues.list_reissues(
+            session, staff.actor, status="proposed", limit=200
         )
     ]
 

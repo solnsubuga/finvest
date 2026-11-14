@@ -29,6 +29,9 @@ BUILD_KIND = "documents.build"
 EMAIL_KIND = "documents.email"
 MONTHLY_KIND = "documents.monthly_run"
 EXPIRE_EMAILS_KIND = "documents.expire_emails"
+# A note emailed again, and the run that finds the notes a reissue covers (`reissues.py`).
+EMAIL_COPY_KIND = "documents.email_copy"
+REISSUE_KIND = "documents.reissue_notes"
 # A client may ask for this many statements a day. Each one reads their whole history.
 REQUESTS_PER_DAY = 10
 MAX_PAGE_SIZE = 100
