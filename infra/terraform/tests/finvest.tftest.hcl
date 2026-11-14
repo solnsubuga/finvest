@@ -179,3 +179,22 @@ run "no_ssh_rule_without_ssh_addresses" {
     error_message = "With no SSH addresses and no Provision run, nothing may reach SSH."
   }
 }
+
+run "roles_are_set_up_in_the_app_database" {
+  command = plan
+  variables {
+    environment = "staging"
+  }
+  override_resource {
+    target          = digitalocean_database_cluster.postgres
+    override_during = plan
+    values = {
+      database    = "defaultdb"
+      private_uri = "postgresql://doadmin:secret@private-db.example:25060/defaultdb?sslmode=require"
+    }
+  }
+  assert {
+    condition     = nonsensitive(output.database_admin_uri) == "postgresql://doadmin:secret@private-db.example:25060/finvest?sslmode=require"
+    error_message = "Provision must create the roles and hand over schema public in the finvest database, not defaultdb."
+  }
+}
