@@ -53,6 +53,7 @@ def a_token() -> str:
 class Contact:
     phone: str | None
     email: str | None
+    claimed: bool = True
 
 
 @dataclass
@@ -264,6 +265,28 @@ async def test_nothing_is_queued_where_the_client_cannot_be_reached(
     assert await messages(rig.database, told) == {}
     # The notification is still in the app, and the fan-out finished.
     assert await jobs_of(rig.database, "notifications.fan_out", f"fan-out:{told}") == ["succeeded"]
+
+
+async def test_an_account_carried_over_and_not_claimed_gets_no_sms_or_email(
+    rig: Rig, app_database: Database
+) -> None:
+    client, _ = await a_client(rig, app_database, token=False)
+    assert client.id is not None
+    rig.book.known[client.id].claimed = False
+    for event in ("payment_confirmed", "password_changed"):
+        told = await tell(app_database, client, rig.clock, event)
+        await rig.drain()
+        assert await messages(rig.database, told) == {}
+        assert await jobs_of(rig.database, "notifications.fan_out", f"fan-out:{told}") == [
+            "succeeded"
+        ]
+    assert (rig.sms.sent, rig.email.sent) == ([], [])
+
+    # Once claimed, the same client is told as usual.
+    rig.book.known[client.id].claimed = True
+    told = await tell(app_database, client, rig.clock)
+    await rig.drain()
+    assert await messages(rig.database, told) == {"sms": "sent"}
 
 
 async def suppress(app_database: Database, worker_database: Database, address: str) -> None:
