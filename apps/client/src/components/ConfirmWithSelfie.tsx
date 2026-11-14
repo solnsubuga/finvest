@@ -210,7 +210,7 @@ export function ConfirmWithSelfie({ onConfirmed, onCancel, otherwise }: Props) {
           </View>
         ) : (
           <Button
-            label={ended ? "Try again" : "Take a live selfie"}
+            label={ended ? "Try again" : "Start the live selfie"}
             height={52}
             loading={busy}
             onPress={() => void start()}
