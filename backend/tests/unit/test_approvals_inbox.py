@@ -98,9 +98,13 @@ def test_a_payout_release_is_decided_by_those_who_check_payout_accounts() -> Non
 
 
 def test_items_the_reader_cannot_see_are_left_out() -> None:
-    items = [waiting("wording_change"), waiting("dealing_order")]
+    items = [waiting("wording_change"), waiting("dealing_order", id="y")]
     assert inbox(items, "me", permissions_for("compliance")) == []
-    assert [i.kind for i in inbox(items, "me", permissions_for("finance"))] == ["dealing_order"]
+    assert inbox(items, "me", permissions_for("support")) == []
+    assert [i.kind for i in inbox(items, "me", permissions_for("finance"))] == [
+        "dealing_order",
+        "wording_change",
+    ]
 
 
 def test_oldest_first_then_by_kind_and_id() -> None:
@@ -133,4 +137,15 @@ def test_a_deposit_reassignment_is_decided_by_operations_and_finance_only() -> N
     for other in others:
         assert inbox([waiting("deposit_reassignment")], "me", permissions_for(other)) == []
     [mine] = inbox([waiting("deposit_reassignment", proposer="me")], "me", permissions_for("admin"))
+    assert (mine.yours, mine.can_decide) == (True, False)
+
+
+def test_a_bank_account_change_is_decided_by_finance_or_admin_and_never_its_proposer() -> None:
+    for role in ("admin", "finance"):
+        [item] = inbox([waiting("bank_account_change")], "me", permissions_for(role))
+        assert item.can_decide is True
+    others: tuple[Role, ...] = ("operations", "compliance", "support")
+    for role in others:
+        assert inbox([waiting("bank_account_change")], "me", permissions_for(role)) == []
+    [mine] = inbox([waiting("bank_account_change", proposer="me")], "me", permissions_for("admin"))
     assert (mine.yours, mine.can_decide) == (True, False)

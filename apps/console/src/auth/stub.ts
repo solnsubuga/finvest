@@ -77,6 +77,9 @@ export const STUB_ROLE_PERMISSIONS: Record<Role, readonly Permission[]> = {
     "bank_transfers.change",
     "deposit_reassignments.change",
     "bank_payouts.change",
+    // The trust account clients pay into is finance's to keep right, on Settings.
+    "settings.view",
+    "bank_accounts.change",
   ],
   compliance: [
     "overview.view",
