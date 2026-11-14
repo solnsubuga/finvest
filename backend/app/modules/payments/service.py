@@ -25,6 +25,7 @@ from app.infrastructure.idempotency import Receipt, run_once
 from app.infrastructure.jobs import JobRequest, enqueue, publish
 from app.modules.audit import service as audit
 from app.modules.audit.domain.events import AuditActor, AuditEvent
+from app.modules.closures.pending import refuse_if_closing
 from app.modules.documents.events import RECEIPT_ON_DEPOSIT
 from app.modules.investments.events import START_ON_DEPOSIT
 from app.modules.ledger import service as ledger
@@ -289,6 +290,8 @@ async def insert_deposit(session: AsyncSession, values: dict[str, object]) -> No
         row = (await session.execute(_SELECT_LIVE, {"purpose_id": values["purpose_id"]})).first()
         return DepositExists(row.id, DepositStatus(row.status)) if row else None
 
+    # No money comes in while two people check the account is clear to close, whichever way.
+    await refuse_if_closing(session, str(values["client_id"]))
     if values["purpose_type"] == Purpose.INVESTMENT.value:
         existing = await live_deposit()
         if existing:

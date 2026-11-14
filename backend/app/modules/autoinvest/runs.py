@@ -21,6 +21,7 @@ from app.modules.autoinvest.domain.plans import (
     due_run,
     may_prompt_at,
 )
+from app.modules.closures.pending import closing
 from app.shared.business_day import business_date
 from app.shared.clock import Clock
 from app.shared.push_ids import push_id
@@ -46,7 +47,8 @@ _ADVANCE = text(
     "UPDATE autoinvest_plans SET next_run_on = :next_run_on, updated_at = :now WHERE id = :id"
 )
 _RETRIES = text(
-    "SELECT r.id, r.plan_id, r.retry_on, p.status AS plan_status FROM autoinvest_runs r "
+    "SELECT r.id, r.plan_id, r.client_id, r.retry_on, p.status AS plan_status "
+    "FROM autoinvest_runs r "
     "JOIN autoinvest_plans p ON p.id = r.plan_id "
     "WHERE r.status = 'failed' AND r.retry_on <= :today ORDER BY r.retry_on, r.id "
     "LIMIT :limit FOR UPDATE OF r SKIP LOCKED"
@@ -88,7 +90,12 @@ async def open_due_runs(session: AsyncSession, clock: Clock, *, limit: int = BAT
         if decision.missed is not None:
             missed += await _insert(session, plan, decision.missed, RunStatus.MISSED, "late", now)
         if decision.collect is not None:
-            if (await session.execute(_HAS_OPEN, {"plan_id": plan.id})).scalar_one():
+            if await closing(session, plan.client_id):
+                # The client asked to close their account: nothing more is collected.
+                missed += await _insert(
+                    session, plan, decision.collect, RunStatus.MISSED, "closing_account", now
+                )
+            elif (await session.execute(_HAS_OPEN, {"plan_id": plan.id})).scalar_one():
                 missed += await _insert(
                     session, plan, decision.collect, RunStatus.MISSED, "previous_run_open", now
                 )
@@ -105,6 +112,8 @@ async def open_due_runs(session: AsyncSession, clock: Clock, *, limit: int = BAT
             code = "plan_not_active"
         elif today - run.retry_on > LATE_TOLERANCE:
             code = "late"
+        elif await closing(session, run.client_id):
+            code = "closing_account"
         elif (await session.execute(_HAS_OPEN, {"plan_id": run.plan_id})).scalar_one():
             code = "previous_run_open"
         await session.execute(
