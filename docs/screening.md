@@ -1,6 +1,6 @@
 # Screening and compliance cases
 
-Sanctions and politically exposed person (PEP) screening, and the compliance cases staff close with two people. The code is `backend/app/modules/screening`, the tables are migration `0180_screening`, and the console reads it on the Compliance screen.
+Sanctions and politically exposed person (PEP) screening, transaction monitoring, and the compliance cases staff close with two people. The code is `backend/app/modules/screening`, the tables are migrations `0180_screening` to `0182_transaction_monitoring`, and the console reads it on the Compliance screen.
 
 ## In short
 
@@ -9,6 +9,8 @@ Sanctions and politically exposed person (PEP) screening, and the compliance cas
 - The provider is behind a port, so it can be swapped. The owner chose Sigma360. Until its account exists, no provider is set up and every screen is recorded as **not run**; the Compliance screen says screening is off.
 - A screen that finds a listed entity that may be the client opens a **case**. Two members of staff close it: one proposes the outcome, a different one approves it.
 - An entity already on a case for the client (still open, ruled out, accepted as a PEP, or confirmed as sanctioned) is recognised the next time and opens no new case.
+- An entity staff already ruled out for a client, or accepted as a PEP, is recognised the next time and opens no new case.
+- Every confirmed deposit and every payout is checked against monitoring rules, and a rule that fires opens a case the same way.
 - Clients never see any of this. Telling a client they matched a list could tip them off.
 
 ## The provider port
@@ -96,9 +98,36 @@ With no screening provider set up there is no screen to wait for, so `screen` co
 
 What the database enforces: `screening_payout_clearance(client, at)` holds the rule. A payout is never created held or queued for a client who is blocked, has an open screening case or is being screened. Only the worker moves a payout out of `screening` to queued or held, and only under the same condition. Staff may move it only to cancelled, in their own name. A client may ask the function only about themselves.
 
+## Transaction monitoring
+
+Migration `0182_transaction_monitoring`. The rules are `domain/monitoring.py`: pure, whole numbers only, and in Uganda shillings. Dollar transactions are recorded but no rule reads them, while the dollar product is paused.
+
+`monitoring_transactions` is screening's own record of each confirmed deposit and each payout asked for: the client, the amount, and when. The rules read a client's earlier ones from it, so screening never reads another module's tables for history.
+
+| What | How it arrives | When it counts from |
+| --- | --- | --- |
+| A deposit | Screening consumes `payments.deposit_confirmed` (`screening.monitor_deposit`) and reads the deposit from payments | When it was confirmed |
+| A payout | Payouts calls `contract.watch_payout` when a payout is created, which queues `screening.monitor_payout`; the worker reads the payout from payouts | When it was asked for |
+
+Each job carries only an ID. A transaction is recorded once, whatever the job does twice, and one client's transactions are recorded one at a time, so two deposits confirmed together see each other.
+
+| Rule | Code | Fires when | Raised once per |
+| --- | --- | --- | --- |
+| Large deposit | `large_deposit` | One deposit of UGX 20,000,000 or more | Deposit |
+| Split deposits | `split_deposits` | Deposits each under UGX 20,000,000 that together reach it within 7 days. Raised by the deposit that crosses it. | Client and week |
+| Many deposits | `many_deposits` | The 5th deposit within 24 hours | Client and day |
+| Unusual deposit | `unusual_deposit` | A deposit of UGX 5,000,000 or more that is at least 5 times the client's median deposit over the last 180 days, once they have 3 earlier deposits in that time | Deposit |
+| Quick withdrawal | `quick_withdrawal` | A payout of at least half of what came in during the last 7 days, when that was UGX 5,000,000 or more | Payout |
+
+All thresholds are decided for now ([decisions.md](decisions.md)). UGX 20,000,000 follows the Financial Intelligence Authority's large cash transaction threshold, to confirm with counsel. The median, not the mean, is the usual deposit, so one big deposit does not hide the next.
+
+A rule that fires opens a `monitoring` case with the rule as its code and what the rule saw (transaction IDs and figures) as its detail. Staff close it with two people as `no_concern` or `report_to_fia`. A monitoring case does not hold payouts: a large payout already goes to staff review, and holding money on a rule's guess would tip a client off as surely as telling them.
+
+Known limits: a deposit moved to the right client by a reassignment stays in the first client's record too, and a deposit recorded out of order (confirmed earlier but processed later) is not counted by the one recorded before it.
+
 ## Cases
 
-`compliance_cases`. Only the worker opens a case: a screen with new matches, or (from the monitoring PR) a transaction monitoring rule. A case is closed by two people, from the owner's standing maker and checker rule:
+`compliance_cases`. Only the worker opens a case: a screen with new matches, or a transaction monitoring rule. A case is closed by two people, from the owner's standing maker and checker rule:
 
 1. A member of staff with `compliance_cases.change` proposes an outcome with a reason.
 2. A different member of staff approves it, with their second step from the last few minutes, and the case closes with that outcome in the same transaction. Or they send it back with a note, and the case stays open for a new proposal.
@@ -107,7 +136,7 @@ What the database enforces: `screening_payout_clearance(client, at)` holds the r
 | Source | Outcomes |
 | --- | --- |
 | Screening | `not_a_match`: the listed entity is someone else. `pep_accepted`: the client is a PEP (or family or close associate) and stays a client, with the enhanced due diligence done written in the reason. `sanctioned`: the client is on a sanctions list. Payouts stay held and a report is owed to the Financial Intelligence Authority. |
-| Monitoring | `no_concern`, or `report_to_fia`: a suspicious transaction report is owed to the Financial Intelligence Authority. |
+| Monitoring | `no_concern`: looked into and nothing to report. `report_to_fia`: a suspicious transaction report is owed to the Financial Intelligence Authority. |
 
 A case tells later screens that its entities are already dealt with for this client, whether it is still open or closed as `not_a_match`, `pep_accepted` or `sanctioned`, so finding them again opens no new case. A `sanctioned` client stays `confirmed_match`.
 

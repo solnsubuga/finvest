@@ -80,6 +80,8 @@ A new version is inserted by the staff member who approves it, names a different
 
 An amount over the mobile money limit is refused with a code that tells the app to offer a bank account instead. Daily limits count every payout of the day that was not cancelled and did not fail. Amounts are never converted: a payout in another currency than the limits is refused.
 
+Every payout created is also read by screening's transaction monitoring (`screening.contract.watch_payout`, [screening.md](screening.md#transaction-monitoring)). A monitoring case does not hold the payout.
+
 ## The life of a payout
 
 The money leaves the client's holding when the payout is created and sits in a "payout in flight" ledger account for that client until the provider's answer is known.

@@ -45,6 +45,7 @@ from app.modules.payouts.jobs import PayoutJobs, release_screened
 from app.modules.payouts.wiring import disbursements_provider
 from app.modules.screening.domain.provider import ScreeningSubject
 from app.modules.screening.jobs import ScreeningJobs
+from app.modules.screening.monitor_jobs import MonitoringJobs
 from app.modules.screening.settings import ScreeningSettings
 from app.modules.screening.wiring import approved_clients, subjects_from_identity_checks
 from app.shared.clock import Clock, SystemClock
@@ -119,6 +120,7 @@ def handlers(
         ).handlers()
     )
     kinds.update(release_screened(database, clock))
+    kinds.update(MonitoringJobs(database, clock).handlers())
     # Bank transfers are settled from a staff review and call no provider, so they run even
     # where mobile money is turned off.
     kinds.update(BankTransferJobs(database, clock).handlers())
