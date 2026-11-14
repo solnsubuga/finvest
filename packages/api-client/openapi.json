@@ -17163,6 +17163,21 @@
             ],
             "title": "Message"
           },
+          "purpose": {
+            "$ref": "#/components/schemas/TransferPurpose"
+          },
+          "purpose_note": {
+            "anyOf": [
+              {
+                "maxLength": 140,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Purpose Note"
+          },
           "to_account_number": {
             "maxLength": 16,
             "minLength": 10,
@@ -17178,7 +17193,8 @@
         "required": [
           "to_account_number",
           "amount_minor",
-          "currency"
+          "currency",
+          "purpose"
         ],
         "title": "SendRequest",
         "type": "object"
@@ -20572,6 +20588,27 @@
             ],
             "title": "Message"
           },
+          "purpose": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/TransferPurpose"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "purpose_note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Purpose Note"
+          },
           "received_investment_id": {
             "anyOf": [
               {
@@ -20706,6 +20743,8 @@
           "currency",
           "whole",
           "message",
+          "purpose",
+          "purpose_note",
           "status",
           "held",
           "held_for",
@@ -22127,6 +22166,18 @@
         ],
         "title": "TransferOut",
         "type": "object"
+      },
+      "TransferPurpose": {
+        "description": "Why the sender sends it, picked from a short list, kept for anti money laundering.",
+        "enum": [
+          "family_support",
+          "gift",
+          "loan_repayment",
+          "business",
+          "other"
+        ],
+        "title": "TransferPurpose",
+        "type": "string"
       },
       "TransferStatus": {
         "enum": [
@@ -30327,7 +30378,7 @@
     },
     "/client/investments/{investment_id}/send": {
       "post": {
-        "description": "Send part or all of a running investment to another client. Nothing is cashed out.\n\n422 on `amount_minor` with `below_product_minimum`, `more_than_investment_value`,\n`remainder_below_product_minimum`, `currency_not_the_investments` or `matures_today`; on\n`to` with `no_such_client` or `to_yourself`. 409 when the investment is not running, an\nearly withdrawal was asked for, or a transfer of it is already open. 403 with\n`restricted_after_code_sign_in` for a day after signing in with a code or a password reset.",
+        "description": "Send part or all of a running investment to another client. Nothing is cashed out.\n\n422 on `amount_minor` with `below_product_minimum`, `more_than_investment_value`,\n`remainder_below_product_minimum`, `currency_not_the_investments` or `matures_today`; on\n`to` with `no_such_client` or `to_yourself`; on `purpose_note` with `required` (for\n`other`), `only_for_other` or `too_long`. 409 when the investment is not running, an early\nwithdrawal was asked for, or a transfer of it is already open. 403 with\n`restricted_after_code_sign_in` for a day after signing in with a code or a password reset.",
         "operationId": "send_investment_client_investments__investment_id__send_post",
         "parameters": [
           {

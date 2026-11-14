@@ -821,6 +821,23 @@ ROWS = {
         "ALTER TABLE investments ENABLE TRIGGER USER; COMMIT",
         "refusing to drop the record of investment transfers",
     ),
+    "0243_transfer_purposes": (
+        "BEGIN; ALTER TABLE investments DISABLE TRIGGER USER; "
+        "ALTER TABLE investment_transfers DISABLE TRIGGER USER; "
+        "INSERT INTO investments (id, client_id, product_id, currency, principal_minor, "
+        "annual_rate_bps, tax_bps, term_days, at_maturity, created_at, pay_by, updated_at) "
+        "VALUES ('-Nabc0000000000000A1', '-Nabc0000000000000B1', 'FvProduct1TREA91_001', "
+        "'UGX', 1000000, 1250, 1500, 91, 'roll_over', now(), now() + interval '72 hours', "
+        "now()); "
+        "INSERT INTO investment_transfers (id, investment_id, sender_client_id, "
+        "recipient_client_id, sender_name, recipient_name, currency, amount_minor, whole, "
+        "purpose, status, held, requested_at) VALUES ('-Nabc0000000000000T1', "
+        "'-Nabc0000000000000A1', '-Nabc0000000000000B1', '-Nabc0000000000000B2', 'Amara N.', "
+        "'Brian K.', 'UGX', 500000, false, 'gift', 'waiting', false, now()); "
+        "ALTER TABLE investment_transfers ENABLE TRIGGER USER; "
+        "ALTER TABLE investments ENABLE TRIGGER USER; COMMIT",
+        "refusing to drop why investments were sent",
+    ),
     "0242_organisations": (
         "BEGIN; ALTER TABLE organisations DISABLE TRIGGER USER; "
         "INSERT INTO organisations (id, kind, name, applicant_id, approvals_needed, created_at) "

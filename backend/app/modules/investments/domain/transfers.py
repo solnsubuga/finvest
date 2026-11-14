@@ -35,6 +35,19 @@ from app.shared.money import Money
 
 # The longest message a sender may add for the recipient.
 MAX_MESSAGE_LENGTH = 140
+# The longest few words a sender gives when the reason is `other`.
+MAX_PURPOSE_NOTE_LENGTH = 140
+
+
+class TransferPurpose(StrEnum):
+    """Why the sender sends it, picked from a short list, kept for anti money laundering."""
+
+    FAMILY_SUPPORT = "family_support"
+    GIFT = "gift"
+    LOAN_REPAYMENT = "loan_repayment"
+    BUSINESS = "business"
+    # With a few words of the sender's own.
+    OTHER = "other"
 
 
 class TransferStatus(StrEnum):
