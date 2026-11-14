@@ -136,7 +136,9 @@ export function createApiAuthClient(): AuthClient {
       }),
 
     completeSignup: (ticket, password) =>
-      wrap(async () => signedIn(await api("POST /client/signup/complete", { body: { ticket, password } }))),
+      wrap(async () =>
+        signedIn(await api("POST /client/signup/complete", { body: { ticket, password, accepted_terms: true } })),
+      ),
 
     startLogin: (identifier, password) =>
       wrap(async () => {
@@ -293,7 +295,8 @@ export function createApiAuthClient(): AuthClient {
       wrap(async () =>
         signedIn(
           await api("POST /client/claim/complete", {
-            body: { token, challenge_id: challengeId, code, password },
+            // The screen sends this only once the client ticked the terms box.
+            body: { token, challenge_id: challengeId, code, password, accepted_terms: true },
           }),
         ),
       ),

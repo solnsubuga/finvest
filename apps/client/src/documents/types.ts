@@ -71,8 +71,29 @@ export class DocumentsError extends Error {
   }
 }
 
+/**
+ * A version of the terms or the privacy notice the client agreed to, from
+ * `GET /client/terms-acceptances` (backend/app/modules/identity/terms_api.py).
+ * The website keeps each version's PDF at /legal/<document>-<version>.pdf.
+ */
+export type Agreement = {
+  document: "terms" | "privacy";
+  /** YYYY-MM-DD, the day that wording took effect. */
+  version: string;
+  /** ISO time. */
+  acceptedAt: string;
+  via: "signup" | "claim";
+};
+
+/** Where the website keeps the PDF of the version the client agreed to. */
+export function agreementUrl(agreement: Agreement, site = "https://finvestug.com"): string {
+  return `${site}/legal/${agreement.document}-${agreement.version}.pdf`;
+}
+
 export interface DocumentsClient {
   listDocuments(): Promise<DocumentItem[]>;
+  /** The terms and privacy notice versions the client agreed to, newest first. */
+  listAgreements(): Promise<Agreement[]>;
   getDocument(id: string): Promise<DocumentItem>;
   /** Answers with a `pending` statement. The same key asks only once. */
   requestStatement(

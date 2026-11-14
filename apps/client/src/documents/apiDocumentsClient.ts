@@ -3,7 +3,7 @@ import type { DocumentItem as ApiDocument } from "@finvest/api-client/client";
 import { api, ApiError } from "@/api/http";
 
 import { savePdf } from "./savePdf";
-import { DocumentItem, DocumentsClient, DocumentsError, PeriodProblem } from "./types";
+import { Agreement, DocumentItem, DocumentsClient, DocumentsError, PeriodProblem } from "./types";
 
 /**
  * The Documents screen's contract, answered by the real API
@@ -66,6 +66,17 @@ export function createApiDocumentsClient(): DocumentsClient {
   return {
     listDocuments: () =>
       wrap(async () => (await api("GET /client/documents", { query: { limit: 100 } })).items.map(fromApi)),
+    listAgreements: () =>
+      wrap(async () =>
+        (await api("GET /client/terms-acceptances", {})).items.map(
+          (item): Agreement => ({
+            document: item.document,
+            version: item.version,
+            acceptedAt: item.accepted_at,
+            via: item.via,
+          }),
+        ),
+      ),
     getDocument: (id) =>
       wrap(async () => fromApi(await api("GET /client/documents/{document_id}", { params: { document_id: id } }))),
     requestStatement: (dateFrom, dateTo, idempotencyKey) =>

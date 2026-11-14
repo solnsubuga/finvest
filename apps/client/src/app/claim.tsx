@@ -12,6 +12,7 @@ import { CODE_LENGTH, CodeInput } from "@/components/CodeInput";
 import { PasswordField } from "@/components/Field";
 import { Logo } from "@/components/Logo";
 import { Screen } from "@/components/Screen";
+import { TermsAgreement } from "@/components/TermsAgreement";
 import { Eyebrow, Title, Txt } from "@/components/Txt";
 import { colors, fontSizes } from "@/theme";
 
@@ -103,6 +104,8 @@ function Finish({
   const [codeWrong, setCodeWrong] = useState(false);
   const [resending, setResending] = useState(false);
   const [resent, setResent] = useState(false);
+  const [agreed, setAgreed] = useState(false);
+  const [tried, setTried] = useState(false);
 
   // The number on file is not shown before the code proves who is holding the phone, so the
   // password is not checked against it here. The server checks it.
@@ -126,6 +129,10 @@ function Finish({
   };
 
   const submit = async () => {
+    setTried(true);
+    if (!agreed) {
+      return;
+    }
     setBusy(true);
     setError(null);
     setCodeWrong(false);
@@ -201,6 +208,7 @@ function Finish({
             <CheckRow met={checks.matches}>Matches in both boxes</CheckRow>
           </View>
         </Card>
+        <TermsAgreement agreed={agreed} onChange={setAgreed} invalid={tried && !agreed} adultLine={false} />
         <Txt size={fontSizes.sm} color={colors.muted}>
           We never ask for your password or this code by phone, SMS or WhatsApp. If someone does, do not share it.
         </Txt>

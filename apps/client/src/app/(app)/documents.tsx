@@ -1,5 +1,5 @@
 import { ComponentRef, ReactNode, Ref, useCallback, useEffect, useRef, useState } from "react";
-import { ActivityIndicator, Pressable, StyleSheet, TextInput, View } from "react-native";
+import { ActivityIndicator, Linking, Pressable, StyleSheet, TextInput, View } from "react-native";
 
 import { formatLongDay, kampalaToday } from "@/autoinvest/schedule";
 import { AppPage } from "@/components/AppPage";
@@ -28,7 +28,7 @@ import {
   STATEMENT_POLL_LIMIT,
   STATEMENT_POLL_MS,
 } from "@/documents/poll";
-import { DocumentItem, DocumentsError } from "@/documents/types";
+import { Agreement, agreementUrl, DocumentItem, DocumentsError } from "@/documents/types";
 import { formatDateTime } from "@/payments/format";
 import { newIdempotencyKey } from "@/payments/idempotency";
 import { Loading } from "@/payments/Parts";
@@ -43,6 +43,9 @@ type ListState =
   | { status: "loading" }
   | { status: "error" }
   | { status: "ready"; items: DocumentItem[] };
+
+/** The terms and privacy notice the client agreed to. Loaded apart, so a failure hides only them. */
+type AgreementsState = { status: "loading" } | { status: "error" } | { status: "ready"; items: Agreement[] };
 
 /** The black card: asking for a statement, then following it until it is ready. */
 type Request =
@@ -62,8 +65,20 @@ export default function Documents() {
   const client = useDocuments();
   const wide = useIsWide();
   const [list, setList] = useState<ListState>({ status: "loading" });
+  const [agreements, setAgreements] = useState<AgreementsState>({ status: "loading" });
   const [request, setRequest] = useState<Request>({ step: "form" });
   const { light } = useDataSaving();
+
+  useEffect(() => {
+    let live = true;
+    client.listAgreements().then(
+      (items) => live && setAgreements({ status: "ready", items }),
+      () => live && setAgreements({ status: "error" }),
+    );
+    return () => {
+      live = false;
+    };
+  }, [client]);
 
   const fetchList = useCallback(
     () =>
@@ -159,7 +174,7 @@ export default function Documents() {
         />
       </View>
     ) : (
-      <DocumentLists items={list.items} />
+      <DocumentLists items={list.items} agreements={agreements} />
     );
 
   if (wide) {
@@ -491,7 +506,7 @@ function useDownload(document: DocumentItem) {
   return { download, state };
 }
 
-function DocumentLists({ items }: { items: DocumentItem[] }) {
+function DocumentLists({ items, agreements }: { items: DocumentItem[]; agreements: AgreementsState }) {
   const requested = items.filter((item) => item.kind === "requested_statement");
   const monthly = items.filter((item) => item.kind === "monthly_statement" && item.status === "ready");
   const receipts = items.filter((item) => item.kind === "receipt" && item.status === "ready");
@@ -543,6 +558,75 @@ function DocumentLists({ items }: { items: DocumentItem[] }) {
           </Card>
         )}
       </Section>
+      <Agreements state={agreements} />
+    </View>
+  );
+}
+
+const AGREEMENT_TITLES: Record<Agreement["document"], string> = {
+  terms: "Terms and conditions",
+  privacy: "Privacy notice",
+};
+
+/** "Terms you accepted": the version of each the client agreed to, each opening its PDF on the website. */
+function Agreements({ state }: { state: AgreementsState }) {
+  if (state.status === "loading" || (state.status === "ready" && state.items.length === 0)) {
+    return null;
+  }
+  if (state.status === "error") {
+    return (
+      <Section title="Terms you accepted">
+        <Card>
+          <Txt size={fontSizes.md} color={colors.muted} testID="agreements-error">
+            We could not load the terms you accepted. Come back to Documents later to try again.
+          </Txt>
+        </Card>
+      </Section>
+    );
+  }
+  return (
+    <Section title="Terms you accepted">
+      <Card padded={false}>
+        {state.items.map((agreement, index) => (
+          <AgreementRow key={`${agreement.document}-${agreement.version}`} agreement={agreement} first={index === 0} />
+        ))}
+      </Card>
+    </Section>
+  );
+}
+
+function AgreementRow({ agreement, first }: { agreement: Agreement; first: boolean }) {
+  const [failed, setFailed] = useState(false);
+  const title = AGREEMENT_TITLES[agreement.document];
+  const how = agreement.via === "claim" ? "when you moved to the new Finvest" : "when you signed up";
+  const subtitle = `Version of ${formatLongDay(agreement.version)}. You agreed on ${formatDateTime(agreement.acceptedAt)}, ${how}.`;
+  return (
+    <View style={[styles.row, !first && styles.rowDivider]} testID={`agreement-${agreement.document}`}>
+      <View style={styles.pdfTile}>
+        <Txt size={fontSizes.xs} weight="extrabold">
+          PDF
+        </Txt>
+      </View>
+      <View style={{ flex: 1, gap: 2 }}>
+        <Txt size={fontSizes.lg} weight="bold">
+          {title}
+        </Txt>
+        <Txt size={fontSizes.sm} color={failed ? colors.danger : colors.muted} accessibilityLiveRegion="polite">
+          {failed ? "We could not open it. Try again, or find it at finvestug.com/legal." : subtitle}
+        </Txt>
+      </View>
+      <Pressable
+        onPress={() => {
+          setFailed(false);
+          Linking.openURL(agreementUrl(agreement)).catch(() => setFailed(true));
+        }}
+        accessibilityRole="link"
+        accessibilityLabel={`Open the ${title.toLowerCase()} you accepted`}
+        style={({ pressed }) => [styles.roundButton, pressed && { opacity: 0.7 }]}
+        testID={`open-agreement-${agreement.document}`}
+      >
+        <Icon name="download" size={20} />
+      </Pressable>
     </View>
   );
 }

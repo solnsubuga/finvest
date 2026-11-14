@@ -6,7 +6,7 @@
 
 import { colors } from "@finvest/tokens";
 import { PDFDocument, type PDFFont, type PDFPage, rgb, StandardFonts } from "pdf-lib";
-import { layoutOnlyNotice, type LegalDocument } from "../data/legal.ts";
+import { layoutOnlyNotice, type LegalDocument, versionLabel } from "../data/legal.ts";
 
 // A4 in points.
 const PAGE_WIDTH = 595.28;
@@ -103,6 +103,10 @@ export async function legalPdf(document: LegalDocument, address: string): Promis
   lines("LEGAL", bold, 9, colors.muted, 14);
   y -= 4;
   lines(document.title, bold, 24, colors.ink, 30);
+  if (document.version) {
+    y -= 2;
+    lines(`Version of ${versionLabel(document.version)}`, regular, 11, colors.muted, 16);
+  }
   y -= 16;
 
   // The notice that the wording is still to come, in the same warm box as on the page.

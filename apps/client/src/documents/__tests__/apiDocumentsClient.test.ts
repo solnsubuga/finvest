@@ -68,6 +68,16 @@ it("lists documents and reads one", async () => {
   expect(calls[0]!.url).toMatch(new RegExp(`/client/documents/${ID}$`));
 });
 
+it("lists the terms the client agreed to", async () => {
+  const calls = answer(200, {
+    items: [{ document: "terms", version: "2026-11-14", accepted_at: "2026-11-14T09:00:00Z", via: "claim" }],
+  });
+  expect(await createApiDocumentsClient().listAgreements()).toEqual([
+    { document: "terms", version: "2026-11-14", acceptedAt: "2026-11-14T09:00:00Z", via: "claim" },
+  ]);
+  expect(calls[0]!.url).toMatch(/\/client\/terms-acceptances$/);
+});
+
 it("turns a refused period into the field's reason", async () => {
   answer(422, {
     request_id: "AAAAAAAAAAAAAAAAAAAA",

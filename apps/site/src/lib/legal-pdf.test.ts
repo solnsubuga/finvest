@@ -1,6 +1,6 @@
 import { PDFDocument, StandardFonts } from "pdf-lib";
 import { describe, expect, it } from "vitest";
-import { legalDocuments, type LegalDocument } from "../data/legal.ts";
+import { legalDocuments, type LegalDocument, versionLabel } from "../data/legal.ts";
 import { legalPdf, wrap } from "./legal-pdf.ts";
 
 describe("legal PDFs", () => {
@@ -43,5 +43,20 @@ describe("legal PDFs", () => {
     expect(lines.length).toBeGreaterThan(1);
     expect(lines.join(" ")).toBe(text);
     for (const line of lines) expect(font.widthOfTextAtSize(line, 11)).toBeLessThanOrEqual(120);
+  });
+});
+
+describe("versions", () => {
+  it("gives the documents a client agrees to a version, and only those", () => {
+    const versioned = legalDocuments.filter((document) => document.version).map((document) => document.slug);
+    expect(versioned).toEqual(["terms", "privacy"]);
+    for (const document of legalDocuments) {
+      if (document.version) expect(document.version).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+    }
+  });
+
+  it("names a version by its day", () => {
+    expect(versionLabel("2026-11-14")).toBe("14 November 2026");
+    expect(versionLabel("2027-01-03")).toBe("3 January 2027");
   });
 });
