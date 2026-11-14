@@ -1,8 +1,10 @@
 import dataclasses
 import re
 from datetime import date, datetime
+from io import BytesIO
 
 import pytest
+from pypdf import PdfReader
 
 from app.modules.documents.domain.emails import (
     receipt_email,
@@ -333,3 +335,16 @@ def test_every_document_email_says_the_pdf_opens_with_the_date_of_birth() -> Non
             assert "Password protected" in body or "password protected" in body
         # The client's own date of birth is never written in the email.
         assert "1994" not in mail.text
+
+
+def test_a_statement_with_a_check_code_says_where_to_check_it() -> None:
+    plain = statement()
+    coded = dataclasses.replace(plain, check_code="K7Q29XMA4TPD")
+    text = " ".join(page.extract_text() for page in PdfReader(BytesIO(statement_pdf(coded))).pages)
+    assert "K7Q2-9XMA-4TPD" in text
+    assert "finvestug.com/check" in text
+    older = " ".join(page.extract_text() for page in PdfReader(BytesIO(statement_pdf(plain))).pages)
+    assert "finvestug.com/check" not in older
+    assert f"contact Finvest and quote {plain.reference}" in older.replace("\n", " ")
+    with pytest.raises(ValueError):
+        dataclasses.replace(plain, check_code="k7q2-9xma-4tpd")

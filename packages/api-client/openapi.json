@@ -3701,6 +3701,78 @@
         "title": "CheckStatus",
         "type": "string"
       },
+      "CheckedAmount": {
+        "additionalProperties": false,
+        "properties": {
+          "currency": {
+            "enum": [
+              "UGX",
+              "USD"
+            ],
+            "title": "Currency",
+            "type": "string"
+          },
+          "minor": {
+            "title": "Minor",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "minor",
+          "currency"
+        ],
+        "title": "CheckedAmount",
+        "type": "object"
+      },
+      "CheckedStatement": {
+        "additionalProperties": false,
+        "properties": {
+          "account_ending": {
+            "title": "Account Ending",
+            "type": "string"
+          },
+          "closing": {
+            "items": {
+              "$ref": "#/components/schemas/CheckedAmount"
+            },
+            "title": "Closing",
+            "type": "array"
+          },
+          "issued_at": {
+            "format": "date-time",
+            "title": "Issued At",
+            "type": "string"
+          },
+          "kind": {
+            "enum": [
+              "monthly",
+              "requested"
+            ],
+            "title": "Kind",
+            "type": "string"
+          },
+          "period_end": {
+            "format": "date",
+            "title": "Period End",
+            "type": "string"
+          },
+          "period_start": {
+            "format": "date",
+            "title": "Period Start",
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind",
+          "period_start",
+          "period_end",
+          "issued_at",
+          "account_ending",
+          "closing"
+        ],
+        "title": "CheckedStatement",
+        "type": "object"
+      },
       "ChecksOut": {
         "additionalProperties": false,
         "properties": {
@@ -25003,6 +25075,46 @@
         "title": "StandingView",
         "type": "object"
       },
+      "StatementCheckOut": {
+        "additionalProperties": false,
+        "properties": {
+          "result": {
+            "enum": [
+              "genuine",
+              "not_found",
+              "too_many_tries"
+            ],
+            "title": "Result",
+            "type": "string"
+          },
+          "retry_after_seconds": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Retry After Seconds"
+          },
+          "statement": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CheckedStatement"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "result"
+        ],
+        "title": "StatementCheckOut",
+        "type": "object"
+      },
       "StatementFormatOut": {
         "additionalProperties": false,
         "properties": {
@@ -43482,6 +43594,49 @@
         "summary": "Public Quote",
         "tags": [
           "public investing"
+        ]
+      }
+    },
+    "/public/statement-checks/{code}": {
+      "get": {
+        "description": "Whether Finvest issued a statement with this check code, for finvestug.com/check.\n\nAlways answers 200, so the website can read every outcome from the browser. Needs no\nsign-in and sets no cookie. Each caller may try a few codes in a while.",
+        "operationId": "check_statement_public_statement_checks__code__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "code",
+            "required": true,
+            "schema": {
+              "title": "Code",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StatementCheckOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          }
+        },
+        "summary": "Check Statement",
+        "tags": [
+          "public documents"
         ]
       }
     },

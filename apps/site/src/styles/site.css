@@ -2377,3 +2377,86 @@ a:hover {
 .lead + .h2 {
   margin-top: var(--fv-space-8);
 }
+
+/* Check a statement (pages/check.astro). */
+.check {
+  display: grid;
+  gap: var(--fv-space-5);
+  align-items: start;
+}
+
+@media (min-width: 900px) {
+  .check {
+    grid-template-columns: minmax(0, 5fr) minmax(0, 7fr);
+    gap: var(--fv-space-6);
+  }
+}
+
+.check > * {
+  min-width: 0;
+}
+
+.check__code input {
+  width: 100%;
+  font-size: 24px;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+}
+
+.check__code input::placeholder {
+  color: var(--fv-color-border-strong);
+}
+
+.check__help {
+  margin: var(--fv-space-3) 0 var(--fv-space-4);
+  font-size: var(--fv-font-size-sm);
+  line-height: 1.5;
+  color: var(--fv-color-muted);
+}
+
+.check__result .panel__title {
+  overflow-wrap: anywhere;
+}
+
+.check__result [data-check-code] {
+  white-space: nowrap;
+}
+
+.check__result--genuine {
+  border: 2px solid var(--fv-color-black);
+}
+
+.check__result--genuine .eyebrow {
+  display: inline-block;
+  padding: 2px 10px;
+  border-radius: 999px;
+  background: var(--fv-color-lime);
+  color: var(--fv-color-ink);
+}
+
+.check__result--refused {
+  border-color: var(--fv-color-danger);
+  background: var(--fv-color-danger-surface);
+}
+
+.check__result--refused .eyebrow {
+  color: var(--fv-color-danger);
+}
+
+.check__facts {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: var(--fv-space-3) var(--fv-space-4);
+  margin: var(--fv-space-5) 0 0;
+}
+
+.check__facts dt {
+  font-size: var(--fv-font-size-sm);
+  color: var(--fv-color-muted);
+}
+
+.check__facts dd {
+  margin: 0;
+  font-weight: var(--fv-font-weight-bold);
+  text-align: right;
+}

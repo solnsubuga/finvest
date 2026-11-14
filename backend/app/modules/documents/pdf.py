@@ -14,6 +14,7 @@ from fpdf import FPDF
 from fpdf.enums import XPos, YPos
 
 from app.modules.documents.domain import formatting
+from app.modules.documents.domain.checks import shown as shown_code
 from app.modules.documents.domain.investment_notes import EndedNote, Ending, InvestmentNote
 from app.modules.documents.domain.receipts import Receipt
 from app.modules.documents.domain.statements import (
@@ -26,6 +27,8 @@ from app.shared.money import Money
 
 FONTS = Path(__file__).parent / "fonts"
 FAMILY = "Jakarta"
+# Where a bank or embassy checks a statement's code. Printed on every statement with one.
+CHECK_PAGE = "finvestug.com/check"
 
 # Brand colours from packages/tokens.
 BLACK = (13, 13, 13)
@@ -286,6 +289,11 @@ def statement_pdf(statement: Statement) -> bytes:
         [
             _Fact("Prepared for", statement.client_name),
             _Fact("Account number", formatting.account_number(statement.account_number)),
+            *(
+                [_Fact("Check code", shown_code(statement.check_code))]
+                if statement.check_code is not None
+                else []
+            ),
         ],
         [
             _Fact(
@@ -371,8 +379,14 @@ def statement_pdf(statement: Statement) -> bytes:
             if earned_lines
             else ""
         )
-        + "This statement is issued by Finvest from its own books. To check that it is genuine, "
-        f"contact Finvest and quote {statement.reference}.",
+        + "This statement is issued by Finvest from its own books. "
+        + (
+            f"To check that it is genuine, go to {CHECK_PAGE} and enter the check code "
+            f"{shown_code(statement.check_code)}, or contact Finvest and quote "
+            f"{statement.reference}."
+            if statement.check_code is not None
+            else f"To check that it is genuine, contact Finvest and quote {statement.reference}."
+        ),
     )
     return bytes(pdf.output())
 

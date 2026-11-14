@@ -24,3 +24,6 @@ export const quoteEndpoint = `${apiUrl}/public/quote`;
 export const indexable = import.meta.env.PUBLIC_INDEXABLE === "true";
 
 export const supportEmail = "support@finvestug.com";
+
+/** Where the statement check page asks whether a code is on a statement Finvest issued. */
+export const statementCheckEndpoint = `${apiUrl}/public/statement-checks`;

@@ -1,0 +1,78 @@
+---
+import PageTitle from "../components/PageTitle.astro";
+import { statementCheckEndpoint, supportEmail } from "../config.ts";
+import Base from "../layouts/Base.astro";
+---
+
+<Base
+  title="Check a statement"
+  description="Banks, embassies and anyone else handed a Finvest statement can check it is genuine by entering the check code printed on it."
+>
+  <PageTitle
+    eyebrow="Check a statement"
+    title="Is this Finvest statement genuine?"
+    lead="Every statement Finvest issues carries a check code beside the account number. Enter it here to see what our records say the statement shows."
+  />
+
+  <section class="band" data-check-page>
+    <div class="wrap check">
+      <form class="calc check__form" data-check data-check-url={statementCheckEndpoint} novalidate>
+        <label class="calc__label" for="check-code">Check code</label>
+        <div class="calc__amount check__code">
+          <input
+            id="check-code"
+            name="code"
+            autocomplete="off"
+            autocapitalize="characters"
+            spellcheck="false"
+            placeholder="K7Q2-9XMA-4TPD"
+            maxlength="20"
+            aria-describedby="check-error check-help"
+          />
+        </div>
+        <p class="calc__error" id="check-error" role="alert" data-check-error hidden></p>
+        <p class="check__help" id="check-help">
+          Twelve letters and numbers, printed under the account number and again at the end of
+          the statement.
+        </p>
+        <button class="button button--large" type="submit">Check</button>
+        <noscript>
+          <p class="check__help">
+            Checking needs JavaScript. You can also email {supportEmail} with the check code and
+            the statement reference.
+          </p>
+        </noscript>
+      </form>
+
+      <div class="check__answer" aria-live="polite">
+        <div class="panel check__result check__result--genuine" data-check-genuine hidden>
+          <p class="eyebrow">Genuine</p>
+          <h2 class="panel__title">Finvest issued a statement with code <span data-check-code></span>.</h2>
+          <p>Compare these with the statement you were given. If any of them differ, the statement has been changed.</p>
+          <dl class="check__facts" data-check-facts></dl>
+        </div>
+        <div class="panel check__result check__result--refused" data-check-not-found hidden>
+          <p class="eyebrow">Not found</p>
+          <h2 class="panel__title">No Finvest statement has code <span data-check-code></span>.</h2>
+          <p>
+            Check the code was typed as printed. If it was, do not rely on the statement, and tell
+            us at {supportEmail}.
+          </p>
+        </div>
+        <div class="panel check__result" data-check-too-many hidden>
+          <h2 class="panel__title">Too many codes tried just now.</h2>
+          <p>Wait a few minutes and try again.</p>
+        </div>
+        <div class="panel check__result" data-check-unavailable hidden>
+          <h2 class="panel__title">We could not check just now.</h2>
+          <p>Try again in a moment, or email {supportEmail} with the check code.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+</Base>
+
+<script>
+  import { startChecks } from "../scripts/check.ts";
+  startChecks();
+</script>
