@@ -73,3 +73,29 @@ async def test_a_client_cannot_read_someone_elses(
     intruder = new_client()
     async with app_database.actor_transaction(intruder) as session:
         assert await kyc.screening_subject(session, SEALER, client.id or "") is None
+
+
+async def test_the_sweep_pages_through_approved_clients_only(
+    app_database: Database, worker_database: Database, fake_clock: FakeClock
+) -> None:
+    approved = []
+    for _ in range(3):
+        client, check_id = await handed_in(app_database, fake_clock)
+        staff = new_staff()
+        async with app_database.actor_transaction(staff) as session:
+            await kyc.approve(session, SEALER, staff, check_id, "Documents match", fake_clock)
+        approved.append(client.id)
+    waiting, _ = await handed_in(app_database, fake_clock)
+    seen: list[str] = []
+    after = None
+    async with worker_database.actor_transaction(SYSTEM) as session:
+        while page := await kyc.approved_client_ids(session, after=after, limit=2):
+            assert len(page) <= 2 and page == sorted(page)
+            seen += page
+            after = page[-1]
+        with pytest.raises(ValueError):
+            await kyc.approved_client_ids(session, after=None, limit=0)
+    # Other tests share the database, so only these clients are looked at.
+    assert set(approved) <= set(seen)
+    assert waiting.id not in seen
+    assert seen == sorted(set(seen))

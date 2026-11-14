@@ -91,6 +91,8 @@ The document number, date of birth and TIN are encrypted before they are saved (
 
 `screening_subject(session, sealer, client_id)` gives the screening module who to screen: the names, date of birth, document type and issuing country on a check that has been handed in or approved, and never the ID number. It returns nothing for a draft or a rejected check. While staff have sent a check back for photos, it gives the details as they stand. Nationality is not recorded. The issuing country is the nationality for a passport, but for a national ID it only shows the client lives in Uganda. Only the worker and staff can read it, because a client cannot read another client's check.
 
+`approved_client_ids(session, after=, limit=)` pages through approved clients, carried-over ones included, ordered by client id. It is for the screening module's rescreening sweep, in a worker transaction.
+
 ## What the database enforces
 
 - The transition table above is repeated in a trigger. A client's transaction cannot approve or reject, and cannot change a check that is with staff. The system's transitions also need the worker's database role, so the API cannot approve by naming itself the system.
