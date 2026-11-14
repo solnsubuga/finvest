@@ -1313,6 +1313,18 @@ export const StatementRequest = z.object({
 });
 export type StatementRequest = z.infer<typeof StatementRequest>;
 
+export const UnlockKeyBody = z.object({
+  key: z.string(),
+});
+export type UnlockKeyBody = z.infer<typeof UnlockKeyBody>;
+
+export const UnlockKeyTurnedOn = z.object({
+  enabled: z.boolean(),
+  key: z.string().nullable(),
+  tries_left: z.number().int(),
+});
+export type UnlockKeyTurnedOn = z.infer<typeof UnlockKeyTurnedOn>;
+
 export const Unread = z.object({
   unread: z.number().int(),
 });
@@ -2729,6 +2741,39 @@ export const operations = {
     params: z.object({}),
     query: z.object({}),
     body: PinBody,
+    bodyKind: "json",
+    idempotent: false,
+    status: 200,
+    response: PinChecked,
+  },
+  "PUT /client/pin/unlock-key": {
+    method: "PUT",
+    path: "/client/pin/unlock-key",
+    params: z.object({}),
+    query: z.object({}),
+    body: PinBody,
+    bodyKind: "json",
+    idempotent: false,
+    status: 200,
+    response: UnlockKeyTurnedOn,
+  },
+  "DELETE /client/pin/unlock-key": {
+    method: "DELETE",
+    path: "/client/pin/unlock-key",
+    params: z.object({}),
+    query: z.object({}),
+    body: null,
+    bodyKind: null,
+    idempotent: false,
+    status: 204,
+    response: null,
+  },
+  "POST /client/pin/unlock-with-key": {
+    method: "POST",
+    path: "/client/pin/unlock-with-key",
+    params: z.object({}),
+    query: z.object({}),
+    body: UnlockKeyBody,
     bodyKind: "json",
     idempotent: false,
     status: 200,
