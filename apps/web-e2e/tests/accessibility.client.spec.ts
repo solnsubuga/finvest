@@ -143,6 +143,27 @@ test("the PIN lock, its reset and the sign out after wrong PINs meet WCAG 2.1 AA
   expect(await violations(page), "signed out").toEqual([]);
 });
 
+test("confirming a new payout account with the PIN meets WCAG 2.1 AA", async ({ page }) => {
+  await page.goto("/");
+  await page.getByText("Log in", { exact: true }).first().click();
+  await page.getByTestId("phone-input").fill(DEMO_PHONE);
+  await page.getByTestId("password-input").fill(DEMO_PASSWORD);
+  await page.getByTestId("login-submit").click();
+  await page.getByTestId("use-passkey").click();
+  await typePin(page, DEMO_PIN);
+  await typePin(page, DEMO_PIN);
+  await expect(page.getByText("Welcome, Amara")).toBeVisible();
+  await visit(page, "/payouts/add");
+  await page.getByTestId("phone-input").fill("701 555 012");
+  await page.getByTestId("holder-name-input").fill("Amara Nakato");
+  await page.getByTestId("payout-account-save").click();
+  await expect(page.getByText("Enter your PIN to add this payout account")).toBeVisible();
+  expect(await violations(page), "confirm with your PIN").toEqual([]);
+  await typePin(page, "90817");
+  await expect(page.getByText(/4 tries left/)).toBeVisible();
+  expect(await violations(page), "wrong PIN when confirming").toEqual([]);
+});
+
 test("the PIN and passkey offer at the end of sign up meet WCAG 2.1 AA", async ({ page }) => {
   await page.goto("/");
   await page.getByText("Create an account").click();

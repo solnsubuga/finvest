@@ -120,6 +120,12 @@ test("a client adds a mobile money number to be paid to, and enters the texted c
   await id(page, "holder-name-input").fill("Amara Nakato");
   await id(page, "payout-account-save").click();
 
+  // On a phone with a PIN (and in the demo), adding a payout account is confirmed with it.
+  await expect(page.getByText("Enter your PIN to add this payout account")).toBeVisible();
+  await typePin(page, "90817");
+  await expect(page.getByText("That PIN is not right. 4 tries left before this phone is signed out.")).toBeVisible();
+  await typePin(page, DEMO_PIN);
+
   await expect(page.getByText(/We texted a code to \+256 70• ••• 012/)).toBeVisible();
   await id(page, "code-input").fill("000000");
   await id(page, "payout-code-submit").click();
