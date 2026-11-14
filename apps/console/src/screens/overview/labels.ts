@@ -31,6 +31,11 @@ export const KIND_INFO: Record<Kind, KindInfo> = {
   client_lock: { label: "Client lock", path: (item) => `/clients?client=${encodeURIComponent(item.subject.split(" ").pop() ?? "")}` },
   // The subject is the client's ID.
   account_closure: { label: "Account closure", path: (item) => `/clients?client=${encodeURIComponent(item.subject)}` },
+  // Acting for a client from their page. The subject is the client's ID.
+  client_pin_reset: { label: "Client's app PIN reset", path: (item) => `/clients?client=${encodeURIComponent(item.subject)}` },
+  client_limits: { label: "Client's own withdrawal limits", path: (item) => `/clients?client=${encodeURIComponent(item.subject)}` },
+  client_statement: { label: "Statement to send a client", path: (item) => `/clients?client=${encodeURIComponent(item.subject)}` },
+  client_withdrawal: { label: "Withdrawal a client asked for", path: (item) => `/clients?client=${encodeURIComponent(item.subject)}` },
   suppression_lift: { label: "Email suppression lift", path: at("/clients") },
   complaint_outcome: { label: "Complaint outcome", path: at("/complaints") },
   payout_account: { label: "Payout account check", path: at("/review-queue") },

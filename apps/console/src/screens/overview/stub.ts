@@ -34,6 +34,10 @@ const SOURCES: Record<Kind, { view: Permission; decide: Permission }> = {
   payout_release: { view: "review_queue.view", decide: "payout_accounts.change" },
   bank_account_change: { view: "settings.view", decide: "bank_accounts.change" },
   organisation: { view: "review_queue.view", decide: "organisations.review" },
+  client_pin_reset: { view: "clients.view", decide: "client_pins.reset" },
+  client_limits: { view: "clients.view", decide: "client_limits.change" },
+  client_statement: { view: "clients.view", decide: "client_statements.send" },
+  client_withdrawal: { view: "clients.view", decide: "client_withdrawals.start" },
 };
 
 interface Reader {

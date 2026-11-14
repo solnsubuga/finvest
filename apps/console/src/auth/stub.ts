@@ -54,6 +54,11 @@ export const STUB_ROLE_PERMISSIONS: Record<Role, readonly Permission[]> = {
     "organisations.review",
     "identity_checks.review",
     "client_phones.change",
+    "client_notes.write",
+    "client_pins.reset",
+    "client_limits.change",
+    "client_statements.send",
+    "client_withdrawals.start",
   ],
   finance: [
     "overview.view",
@@ -83,6 +88,8 @@ export const STUB_ROLE_PERMISSIONS: Record<Role, readonly Permission[]> = {
     // The trust account clients pay into is finance's to keep right, on Settings.
     "settings.view",
     "bank_accounts.change",
+    "client_notes.write",
+    "client_limits.change",
   ],
   compliance: [
     "overview.view",
@@ -102,9 +109,24 @@ export const STUB_ROLE_PERMISSIONS: Record<Role, readonly Permission[]> = {
     "organisations.review",
     "identity_checks.review",
     "compliance_cases.change",
+    "client_notes.write",
+    "client_pins.reset",
+    "client_limits.change",
+    "client_statements.send",
   ],
   // Support works complaints but does not close them, as the backend's table says.
-  support: ["overview.view", "support.view", "complaints.view", "clients.view", "support.reply", "complaints.manage", "email_suppressions.lift"],
+  support: [
+    "overview.view",
+    "support.view",
+    "complaints.view",
+    "clients.view",
+    "support.reply",
+    "complaints.manage",
+    "email_suppressions.lift",
+    "client_notes.write",
+    "client_pins.reset",
+    "client_statements.send",
+  ],
 };
 
 interface StubStaff {
