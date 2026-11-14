@@ -210,6 +210,13 @@ export function createApiAuthClient(): AuthClient {
         await api("POST /client/authenticator", { body: { code } });
       }),
 
+    requestRecovery: ({ phone, contactPhone, reason }) =>
+      wrap(async () => {
+        await api("POST /client/recovery-requests", {
+          body: { phone, contact_phone: contactPhone, reason },
+        });
+      }),
+
     startPasswordReset: (phone) =>
       wrap(async () => {
         const result = await api("POST /client/password/reset/start", { body: { phone } });

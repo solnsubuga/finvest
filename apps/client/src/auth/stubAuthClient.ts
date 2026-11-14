@@ -174,6 +174,7 @@ export function createStubAuthClient(options: StubOptions = {}): AuthClient {
   const emailLinks = new Map<string, string>();
   /** Reset challenges and the number each was for. A number with no account gets one too. */
   const resets = new Map<string, string>();
+  const recoveryAsks = new Map<string, number>();
   /** A set-up that was started and not yet confirmed, for this session only. */
   let pendingAuthenticatorAt: number | null = null;
   let signedInAt = 0;
@@ -424,6 +425,16 @@ export function createStubAuthClient(options: StubOptions = {}): AuthClient {
       }
       pendingAuthenticatorAt = null;
       account.hasAuthenticator = true;
+    },
+
+    async requestRecovery({ phone }): Promise<void> {
+      await wait();
+      // As on the server: two asks for one number every fifteen minutes.
+      const asked = (recoveryAsks.get(phone) ?? 0) + 1;
+      if (asked > 2) {
+        throw new AuthError("rate_limited");
+      }
+      recoveryAsks.set(phone, asked);
     },
 
     async startPasswordReset(phone): Promise<PasswordReset> {

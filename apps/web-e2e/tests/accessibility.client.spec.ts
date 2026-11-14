@@ -73,6 +73,19 @@ test("the screens before sign-in meet WCAG 2.1 AA", async ({ page }) => {
   await page.getByText("Log in", { exact: true }).first().click();
   await expect(page.getByTestId("phone-input")).toBeVisible();
   expect(await violations(page), "log in").toEqual([]);
+  await page.getByText("I changed my number or cannot get in").click();
+  await expect(page.getByTestId("recover-phone")).toBeVisible();
+  expect(await violations(page), "get back into your account").toEqual([]);
+  await page.getByTestId("recover-phone").click();
+  const submit = page.getByTestId("call-back-submit").filter({ visible: true });
+  await submit.click();
+  await expect(page.getByText("Enter a number we can call you on now.")).toBeVisible();
+  expect(await violations(page), "ask us to call you").toEqual([]);
+  await page.getByTestId("account-phone-input").filter({ visible: true }).fill(DEMO_PHONE);
+  await page.getByTestId("contact-phone-input").filter({ visible: true }).fill("701555013");
+  await submit.click();
+  await expect(page.getByText("We will call you").last()).toBeVisible();
+  expect(await violations(page), "we will call you").toEqual([]);
 });
 
 test("every main screen after sign-in meets WCAG 2.1 AA", async ({ page }) => {
