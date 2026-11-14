@@ -1,7 +1,9 @@
+import { useCallback, useState } from "react";
 import { ActivityIndicator, Pressable, StyleSheet, View } from "react-native";
-import { Href, Stack, useRouter } from "expo-router";
+import { Href, Stack, useFocusEffect, useRouter } from "expo-router";
 
 import { useAuth } from "@/auth/AuthProvider";
+import { biometricOnThisPhone, unlockKeyKept } from "@/auth/biometric";
 import { maskE164 } from "@/auth/phone";
 import { SecondStep } from "@/auth/types";
 import { useSecondSteps } from "@/auth/useSecondSteps";
@@ -67,8 +69,9 @@ function rowsFor(maskedPhone: string): Row[] {
  */
 export default function Security() {
   const router = useRouter();
-  const { session } = useAuth();
+  const { session, pinApplies } = useAuth();
   const steps = useSecondSteps();
+  const unlock = useBiometricUnlock(pinApplies && Boolean(session?.pinSet));
 
   if (!session) {
     return null;
@@ -166,6 +169,47 @@ export default function Security() {
             })}
           </Card>
 
+          {unlock ? (
+            <Card padded={false}>
+              <Pressable
+                accessibilityRole="link"
+                accessibilityLabel={`Fingerprint or face unlock: ${unlock.on ? "on" : "off"}`}
+                onPress={() => router.push("/security/fingerprint")}
+                style={({ pressed }) => [styles.row, pressed && { opacity: 0.7 }]}
+                testID="open-fingerprint"
+              >
+                <View style={[styles.rowIcon, unlock.on && { backgroundColor: colors.black }]}>
+                  <Icon name="fingerprint" size={18} color={unlock.on ? colors.lime : colors.black} />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Txt weight="bold">Unlock with fingerprint or face</Txt>
+                  <Txt size={fontSizes.sm} color={colors.muted}>
+                    {unlock.on
+                      ? "Opens the app on this phone instead of your PIN."
+                      : "Open the app on this phone without typing your PIN."}
+                  </Txt>
+                </View>
+                {unlock.on ? (
+                  <View style={styles.add}>
+                    <View style={styles.on}>
+                      <Txt size={12} weight="bold">
+                        On
+                      </Txt>
+                    </View>
+                    <Icon name="chevron" size={16} strokeWidth={2.2} />
+                  </View>
+                ) : (
+                  <View style={styles.add}>
+                    <Txt size={fontSizes.sm} weight="bold">
+                      Turn on
+                    </Txt>
+                    <Icon name="chevron" size={16} strokeWidth={2.2} />
+                  </View>
+                )}
+              </Pressable>
+            </Card>
+          ) : null}
+
           <Card padded={false}>
             <Pressable
               accessibilityRole="link"
@@ -202,6 +246,28 @@ export default function Security() {
       ) : null}
     </Screen>
   );
+}
+
+/**
+ * Whether this phone can unlock with a fingerprint or face, and whether it does now. Null when it
+ * cannot: a browser, a phone with none set up, or a session with no PIN.
+ */
+function useBiometricUnlock(applies: boolean): { on: boolean } | null {
+  const [state, setState] = useState<{ on: boolean } | null>(null);
+  useFocusEffect(
+    useCallback(() => {
+      let live = true;
+      void (async () => {
+        const can = applies && (await biometricOnThisPhone());
+        const on = can && (await unlockKeyKept());
+        if (live) setState(can ? { on } : null);
+      })();
+      return () => {
+        live = false;
+      };
+    }, [applies]),
+  );
+  return state;
 }
 
 const styles = StyleSheet.create({

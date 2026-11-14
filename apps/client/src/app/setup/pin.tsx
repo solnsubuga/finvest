@@ -3,6 +3,7 @@ import { StyleSheet, View } from "react-native";
 import { Redirect, Stack, useRouter } from "expo-router";
 
 import { useAuth } from "@/auth/AuthProvider";
+import { forgetUnlockKey } from "@/auth/biometric";
 import { PIN_LENGTH, pinProblem } from "@/auth/pin";
 import { signupSteps, stepOf } from "@/auth/signupSteps";
 import { AuthError, describeAuthError } from "@/auth/types";
@@ -40,6 +41,8 @@ export default function CreatePin() {
     setBusy(true);
     try {
       await client.setPin(chosen);
+      // A new PIN starts without fingerprint or face unlock, as the server forgets the key.
+      await forgetUnlockKey();
       setSession({ ...session, pinSet: true });
       if (offerPasskey) {
         router.replace("/setup/passkey");

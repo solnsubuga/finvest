@@ -36,6 +36,13 @@ const paths = {
   calendar: ["M4 6h16v14H4zM4 10h16M8 3v4M16 3v4"],
   // A shield with a tick: the identity check.
   shield: ["M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6z", "M8.5 12l2.5 2.5 4.5-5"],
+  // Ridges of a fingertip: unlocking with a fingerprint or face.
+  fingerprint: [
+    "M5.5 8.5A7.5 7.5 0 0119 10",
+    "M8 19.5c1-1.8 1.5-3.8 1.5-6.5a2.5 2.5 0 015 0c0 2-.3 3.8-.9 5.5",
+    "M5 15c.6-1.2.9-2.4.9-3.8a6.1 6.1 0 0112.2 0c0 1.6-.1 3.1-.5 4.6",
+    "M12 13c0 3-.8 5.6-2.2 8",
+  ],
 } as const;
 
 export type IconName = keyof typeof paths;
