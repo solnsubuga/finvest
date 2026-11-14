@@ -191,11 +191,14 @@ _MATCHES = text(
     "WHERE run_id = :run_id ORDER BY position"
 )
 # Entities staff already decided for this client: not this person, or an accepted PEP.
+# Entities already on a case for this client: ruled out or accepted, confirmed as sanctioned,
+# or still open. Finding one again opens no new case: an open case already holds the client,
+# and a confirmed match holds them for good.
 _KNOWN = text(
     "SELECT DISTINCT m.entity_id FROM screening_matches m "
     "JOIN compliance_cases c ON c.run_id = m.run_id "
-    "WHERE c.client_id = :client_id AND c.status = 'closed' "
-    "AND c.outcome = ANY(CAST(:settled AS text[]))"
+    "WHERE c.client_id = :client_id AND m.known = false AND (c.status = 'open' "
+    "OR c.outcome = ANY(CAST(:settled AS text[])) OR c.outcome = 'sanctioned')"
 )
 _STALE = text(
     "SELECT id FROM screening_runs WHERE status = 'pending' AND requested_at < :before "

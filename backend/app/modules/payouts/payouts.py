@@ -131,6 +131,11 @@ _WAITING_FOR_CLIENT = text(
     f"SELECT {_COLUMNS} FROM payouts WHERE client_id = :client_id "  # noqa: S608
     "AND status = 'screening' ORDER BY created_at, id FOR UPDATE"
 )
+# Clients with a payout waiting for screening, those waiting longest first.
+_CLIENTS_WAITING = text(
+    "SELECT client_id, min(created_at) AS since, count(*) AS payouts FROM payouts "
+    "WHERE status = 'screening' GROUP BY client_id ORDER BY since, client_id LIMIT :limit"
+)
 _WAITING_SCREENING = text(
     f"SELECT {_COLUMNS} FROM payouts WHERE status = 'screening' "  # noqa: S608
     "ORDER BY created_at, id LIMIT :limit"
@@ -526,6 +531,52 @@ async def release_screened(session: AsyncSession, client_id: str, clock: Clock) 
         )
         moved.append(payout.id)
     return moved
+
+
+# The worker tries again for each payout waiting for screening this often, so one whose screen
+# could not run (the provider refused, or never answered) is screened afresh once that screen
+# is a day old, with no person involved.
+RETRY_SCREENING_KIND = "payouts.retry_screening"
+# A payout waiting for screening this long is logged for whoever watches the logs. Staff see
+# it on the Compliance screen.
+LONG_SCREENING_WAIT = timedelta(hours=24)
+
+
+@dataclass(frozen=True, slots=True)
+class ScreeningRetry:
+    clients: int
+    released: int
+    # Payout IDs waiting longer than LONG_SCREENING_WAIT and still not released.
+    still_waiting_long: tuple[str, ...]
+
+
+async def retry_screening(
+    session: AsyncSession, clock: Clock, *, limit: int = 500
+) -> ScreeningRetry:
+    """Try `release_screened` again for each client with a payout waiting for screening.
+
+    A screen that could not run is not tried again by itself: the clearance stays `wait` until
+    that screen is a day old, then becomes `screen`, and this asks for a fresh one.
+    """
+    now = clock.now()
+    waiting = (await session.execute(_CLIENTS_WAITING, {"limit": max(1, min(limit, 1000))})).all()
+    released = 0
+    long: list[str] = []
+    for row in waiting:
+        moved = await release_screened(session, row.client_id, clock)
+        released += len(moved)
+        if not moved and now - row.since > LONG_SCREENING_WAIT:
+            long.extend(
+                payout.id
+                for payout in [
+                    _view(found)
+                    for found in await session.execute(
+                        _WAITING_FOR_CLIENT, {"client_id": row.client_id}
+                    )
+                ]
+                if now - payout.created_at > LONG_SCREENING_WAIT
+            )
+    return ScreeningRetry(len(waiting), released, tuple(long))
 
 
 async def waiting_for_screening(session: AsyncSession, *, limit: int = 100) -> list[PayoutView]:
