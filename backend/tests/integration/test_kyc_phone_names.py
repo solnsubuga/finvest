@@ -300,7 +300,9 @@ async def test_a_different_name_blocks_approval_until_the_client_is_on_their_own
     ]
 
     # The client moves to a number in their own name (two staff do this in the console).
-    new_phone = "+2567" + (await phone_of(api, client))[-8:-1] + "9"
+    old_phone = await phone_of(api, client)
+    # Another last digit, so the number really changes.
+    new_phone = "+2567" + old_phone[-8:-1] + ("0" if old_phone.endswith("9") else "9")
     async with migrator_database.transaction() as session:
         await session.execute(
             text("UPDATE identity_clients SET phone = :phone WHERE id = :id"),
