@@ -138,7 +138,8 @@ async function photograph(page: Page, name: string) {
   await shown(page, "photo-use").click();
 }
 
-test("a new client hands in their ID, details and a selfie for checking", async ({ page }) => {
+/** Signs in an account with no ID check yet and fills in every step before the selfie. */
+async function upToTheSelfie(page: Page) {
   // An account with no ID check yet, signed in with an authenticator code.
   await logIn(page, "701000200");
   await id(page, "use-authenticator").click();
@@ -162,9 +163,36 @@ test("a new client hands in their ID, details and a selfie for checking", async 
   await shown(page, "details-save").click();
 
   await expect(page.getByText("5 of 5")).toBeVisible();
-  await photograph(page, "selfie.png");
+}
+
+test("a new client hands in their ID, details and a live selfie for checking", async ({ page }) => {
+  await upToTheSelfie(page);
+
+  // The selfie is a live check on the partner's page. The demo page is a stand-in, so its
+  // tab is closed again, and the demo check passes after a couple of reads.
+  await expect(shown(page, "live-start")).toBeVisible();
+  await shown(page, "live-start").click();
+  await expect(page.getByText("Your live check is ready").filter({ visible: true })).toBeVisible();
+  const popup = page.waitForEvent("popup");
+  await shown(page, "live-open").click();
+  await (await popup).close();
+  await expect(page.getByText("Finish the check, then come back").filter({ visible: true })).toBeVisible();
+  await expect(async () => {
+    await shown(page, "live-finished").click();
+    await expect(page.getByText("Live selfie done").filter({ visible: true })).toBeVisible({ timeout: 2000 });
+  }).toPass({ timeout: 20_000 });
+  await shown(page, "live-continue").click();
 
   await expect(page.getByText("Thanks, Peter. We are checking now.")).toBeVisible();
   await shown(page, "id-check-home").click();
   await expect(page.getByText("We are checking your ID")).toBeVisible();
+});
+
+test("a client who cannot take the live check hands in a camera selfie instead", async ({ page }) => {
+  await upToTheSelfie(page);
+
+  await shown(page, "live-camera").click();
+  await photograph(page, "selfie.png");
+
+  await expect(page.getByText("Thanks, Peter. We are checking now.")).toBeVisible();
 });
