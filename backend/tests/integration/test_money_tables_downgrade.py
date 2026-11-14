@@ -889,6 +889,11 @@ ROWS = {
         "VALUES ('-Nabc0000000000000B1', 0, now())",
         "refusing to drop next of kin",
     ),
+    "0234_kyc_next_of_kin_contacts": (
+        "INSERT INTO kyc_next_of_kin_lists (client_id, people, updated_at) "
+        "VALUES ('-Nabc0000000000000B1', 0, now())",
+        "refusing to put shares back on next of kin",
+    ),
     "0231_kyc_risk_answers": (
         "INSERT INTO kyc_risk_answers (id, client_id, answers, score, profile, answered_at) "
         "VALUES ('-Nabc0000000000000A1', '-Nabc0000000000000B1', '{}', 0, 'careful', now())",
