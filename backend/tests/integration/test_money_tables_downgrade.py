@@ -1181,6 +1181,17 @@ ROWS = {
         "DATE '2099-01-01', now(), now()); COMMIT",
         "refusing to drop the locks clients set",
     ),
+    "0360_investment_product_changes": (
+        "BEGIN; SELECT set_config('finvest.actor_kind', 'staff', true); "
+        "SELECT set_config('finvest.actor_id', '-Nabc0000000000000S1', true); "
+        "INSERT INTO investment_product_changes (id, action, code, name, kind, currency, "
+        "term_days, minimum_minor, interest_paid, product_status, first_annual_rate_bps, "
+        "first_tax_bps, reason, proposed_by, proposed_at) VALUES ('-Nabc0000000000000A1', "
+        "'create', 'TREA-28', 'Treasury bill, 28 days', 'treasury_bill', 'UGX', 28, 100000, "
+        "'at_maturity', 'draft', 1000, 1500, 'A shorter bill', '-Nabc0000000000000S1', now()); "
+        "COMMIT",
+        "refusing to drop product changes",
+    ),
 }
 
 
