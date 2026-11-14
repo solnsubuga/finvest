@@ -3900,8 +3900,18 @@
       },
       "DifferenceView": {
         "additionalProperties": false,
-        "description": "Something that differs now. `figures` is exactly what a sign-off for it accepts.\n\n`sign_off` is the latest one for these figures. A rejected one stays until it is proposed\nagain, so its proposer can read why.",
+        "description": "Something that differs now. `figures` is exactly what a sign-off for it accepts.\n\n`row` is the investments sheet row, null for a total line or a trial run before rows were\nkept. `currency` is that of the figures, null for a count or a tax rate (basis points).\n\n`sign_off` is the latest one for these figures. A rejected one stays until it is proposed\nagain, so its proposer can read why.",
         "properties": {
+          "currency": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Currency"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "figures": {
             "items": {
               "type": "integer"
@@ -3912,6 +3922,17 @@
           "key": {
             "title": "Key",
             "type": "string"
+          },
+          "row": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Row"
           },
           "sign_off": {
             "anyOf": [
@@ -3927,6 +3948,8 @@
         "required": [
           "key",
           "figures",
+          "row",
+          "currency",
           "sign_off"
         ],
         "title": "DifferenceView",

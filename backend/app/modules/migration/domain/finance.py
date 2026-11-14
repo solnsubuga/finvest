@@ -124,6 +124,14 @@ class InterestDifference:
 
 
 @dataclass(frozen=True, slots=True)
+class DifferencePlace:
+    """The sheet row of a differing investment, and the currency its figures are in."""
+
+    row: int
+    currency: Currency | None
+
+
+@dataclass(frozen=True, slots=True)
 class TaxRateDifference:
     """A running investment whose tax on interest is not the product's rate."""
 
@@ -259,6 +267,21 @@ class InvestmentCheck:
         differing = {item.key: item.figures for item in self.interest_differences}
         differing.update({item.key: item.figures for item in self.tax_rate_differences})
         return differing
+
+    @property
+    def placed(self) -> dict[str, DifferencePlace]:
+        """Where each differing investment is in the sheet, and the currency of its figures.
+
+        A tax rate is in basis points, so it has no currency.
+        """
+        placed = {
+            item.key: DifferencePlace(item.row, item.old_interest.currency)
+            for item in self.interest_differences
+        }
+        placed.update(
+            {item.key: DifferencePlace(item.row, None) for item in self.tax_rate_differences}
+        )
+        return placed
 
 
 def check_investments(

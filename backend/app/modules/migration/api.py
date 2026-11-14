@@ -125,12 +125,17 @@ class TotalsView(Contract):
 class DifferenceView(Contract):
     """Something that differs now. `figures` is exactly what a sign-off for it accepts.
 
+    `row` is the investments sheet row, null for a total line or a trial run before rows were
+    kept. `currency` is that of the figures, null for a count or a tax rate (basis points).
+
     `sign_off` is the latest one for these figures. A rejected one stays until it is proposed
     again, so its proposer can read why.
     """
 
     key: str
     figures: list[int]
+    row: int | None
+    currency: Currency | None
     sign_off: SignOffView | None
 
 
@@ -272,6 +277,8 @@ def _claims(progress: Progress) -> ClaimProgressView | None:
 
 def _overview(view: service.Overview, progress: Progress, staff: StaffSession) -> OverviewView:
     trial = view.trial
+    placed = trial.placed if trial is not None else {}
+    line_currency = {line.key: line.currency for line in view.lines}
     return OverviewView(
         trials_run=view.trials_run,
         trial=None
@@ -310,6 +317,8 @@ def _overview(view: service.Overview, progress: Progress, staff: StaffSession) -
             DifferenceView(
                 key=key,
                 figures=list(figures),
+                row=placed[key].row if key in placed else None,
+                currency=placed[key].currency if key in placed else line_currency.get(key),
                 sign_off=_sign_off(view.sign_offs[key]) if key in view.sign_offs else None,
             )
             for key, figures in view.differing.items()
