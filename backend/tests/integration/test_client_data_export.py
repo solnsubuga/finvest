@@ -35,7 +35,6 @@ async def test_the_copy_holds_the_clients_details_and_records_the_download(api: 
                     "relationship": "spouse",
                     "phone": "0701555210",
                     "id_number": "CM90012345ABCD",
-                    "share_bps": 10000,
                 }
             ]
         },

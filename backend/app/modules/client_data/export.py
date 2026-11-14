@@ -91,7 +91,6 @@ async def client_copy(
                 "relationship": p.relationship.value,
                 "phone": p.phone,
                 "id_number": p.id_number,
-                "share_bps": p.share_bps,
             }
             for p in kin.people
         ],

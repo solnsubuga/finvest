@@ -2407,7 +2407,6 @@ export const StaffPersonView = z.object({
   id_number_masked: z.string(),
   phone: z.string(),
   relationship: Relationship,
-  share_bps: z.number().int(),
 });
 export type StaffPersonView = z.infer<typeof StaffPersonView>;
 

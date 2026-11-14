@@ -15,8 +15,6 @@ export interface Kin {
   relationship: Relationship;
   phone: string;
   idNumberMasked: string;
-  /** Basis points: 10,000 is the whole. */
-  shareBps: number;
 }
 
 export interface RiskAnswers {
@@ -74,13 +72,6 @@ export const ANSWER_LABELS: Record<string, { question: string; options: Record<s
   },
 };
 
-/** "60%", or "33.34%". Integer arithmetic only. */
-export function sharePercent(bps: number): string {
-  const whole = Math.floor(bps / 100);
-  const rest = bps % 100;
-  return rest === 0 ? `${whole}%` : `${whole}.${String(rest).padStart(2, "0").replace(/0$/, "")}%`;
-}
-
 export class ProfileError extends Error {
   constructor(readonly code: "not_found" | "not_connected" | "unavailable") {
     super(code);
@@ -89,7 +80,7 @@ export class ProfileError extends Error {
 }
 
 interface ProfileJson {
-  next_of_kin: { full_name: string; relationship: Relationship; phone: string; id_number_masked: string; share_bps: number }[] | null;
+  next_of_kin: { full_name: string; relationship: Relationship; phone: string; id_number_masked: string }[] | null;
   next_of_kin_updated_at: string | null;
   risk: { id: string; answers: Record<string, string>; profile: InvestingProfile; answered_at: string; due_again_at: string }[];
 }
@@ -97,7 +88,7 @@ interface ProfileJson {
 export function toProfile(json: ProfileJson): ClientProfile {
   return {
     nextOfKin:
-      json.next_of_kin?.map((p) => ({ fullName: p.full_name, relationship: p.relationship, phone: p.phone, idNumberMasked: p.id_number_masked, shareBps: p.share_bps })) ?? null,
+      json.next_of_kin?.map((p) => ({ fullName: p.full_name, relationship: p.relationship, phone: p.phone, idNumberMasked: p.id_number_masked })) ?? null,
     nextOfKinUpdatedAt: json.next_of_kin_updated_at,
     risk: json.risk.map((r) => ({ id: r.id, answers: r.answers, profile: r.profile, answeredAt: r.answered_at, dueAgainAt: r.due_again_at })),
   };
@@ -125,8 +116,8 @@ export function createStubProfileApi(now: () => number = Date.now): ProfileApi {
   const samples: Record<string, ClientProfile> = {
     "-NstubClient00000042": {
       nextOfKin: [
-        { fullName: "Joseph Nakato", relationship: "spouse", phone: "+256701555210", idNumberMasked: "CM••••••••12AB", shareBps: 6_000 },
-        { fullName: "Grace Nakato", relationship: "sibling", phone: "+256772310448", idNumberMasked: "CF••••••••77QK", shareBps: 4_000 },
+        { fullName: "Joseph Nakato", relationship: "spouse", phone: "+256701555210", idNumberMasked: "CM••••••••12AB" },
+        { fullName: "Grace Nakato", relationship: "sibling", phone: "+256772310448", idNumberMasked: "CF••••••••77QK" },
       ],
       nextOfKinUpdatedAt: ago(40),
       risk: [

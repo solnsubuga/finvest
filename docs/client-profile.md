@@ -4,15 +4,15 @@ What a client tells Finvest about themselves beyond the identity check: who to c
 
 ## Next of kin
 
-A client names up to five people. For each: their full name as on their ID, the relationship (`spouse`, `child`, `parent`, `sibling`, `other_relative`, `friend` or `other`), a mobile number and an ID number, and a share of what the client holds.
+A client names up to five people. For each: their full name as on their ID, the relationship (`spouse`, `child`, `parent`, `sibling`, `other_relative`, `friend` or `other`), a mobile number and an ID number. Next of kin are contacts only, with no share of what the client holds (the owner's decision, 2026-11-14).
 
-- **Shares are whole basis points.** 10,000 is 100%. The shares of everyone named add up to exactly 10,000, so there is never a fraction or a rounding question. A list may be empty, which removes everyone.
+- A list may be empty, which removes everyone.
 - **A save replaces the whole list.** The app sends every person each time. Nobody is named twice (by ID number), and a client cannot name their own mobile number.
-- **Sealed.** Name, mobile number and ID number are sealed with the identity data key (`app/infrastructure/sealing.py`), each bound to its row and column. The database and its backups hold no readable copy. Relationship and share are readable. Without `FINVEST_IDENTITY_DATA_KEY` the routes answer `unavailable`.
-- **What the database enforces** (migration `0230_kyc_next_of_kin`): a constraint trigger checks at commit that the shares add up to 10,000 or the list is empty, and that the list's own count matches. A save first locks the client's list row, so two saves from two devices run one after the other and never mix. A client reads and changes only their own list; staff read every list and change none; the worker sees nothing.
+- **Sealed.** Name, mobile number and ID number are sealed with the identity data key (`app/infrastructure/sealing.py`), each bound to its row and column. The database and its backups hold no readable copy. The relationship is readable. Without `FINVEST_IDENTITY_DATA_KEY` the routes answer `unavailable`.
+- **What the database enforces** (migrations `0230_kyc_next_of_kin` and `0234_kyc_next_of_kin_contacts`, which dropped the shares): a constraint trigger checks at commit that the list's own count matches the people in it. A save first locks the client's list row, so two saves from two devices run one after the other and never mix. A client reads and changes only their own list; staff read every list and change none; the worker sees nothing.
 - **On the record.** `kyc.next_of_kin.saved` records how many people were saved, never who. Staff opening a client's next of kin is recorded as `kyc.next_of_kin.viewed`, and staff see ID numbers masked.
 
-The shares say who Finvest would speak to first and in what proportion the client wishes their holdings to go. They are a record of the client's wishes, not a legal will, and paying anything out to a next of kin is a manual process for compliance with the documents the law requires.
+Naming someone gives them nothing the client holds. Paying anything out after a client dies is a manual process for compliance, with the documents the law requires.
 
 ## The investing questions
 
@@ -40,7 +40,7 @@ There are no wrong answers and the profile refuses nothing: it is used to sugges
 | Route | Who | Use |
 | --- | --- | --- |
 | `GET /client/next-of-kin` | Client | The people named, in order, with `updated_at` (null before the first save). |
-| `PUT /client/next-of-kin` | Client | Replace the whole list: `{"people": [{full_name, relationship, phone, id_number, share_bps}]}`. Every problem is reported at once, by `field_path` `["body", "people", index, field]`, or `["body", "people"]` with `shares_must_total_100` or `too_many`. |
+| `PUT /client/next-of-kin` | Client | Replace the whole list: `{"people": [{full_name, relationship, phone, id_number}]}`. Every problem is reported at once, by `field_path` `["body", "people", index, field]`, or `["body", "people"]` with `too_many`. A `share_bps` field is refused. |
 | `GET /client/risk-profile` | Client | The question and answer codes, the latest answers with their profile and `longest_term_days`, and `due`. |
 | `PUT /client/risk-profile` | Client | Answer every question: `{"answers": {"purpose": "...", ...}}`. |
 | `GET /staff/clients/{id}/profile` | `clients.view` | Next of kin with ID numbers masked (null without the data key), and every set of answers, newest first. |

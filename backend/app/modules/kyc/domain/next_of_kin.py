@@ -1,8 +1,8 @@
-"""Next of kin: the people Finvest contacts if it cannot reach a client, and their shares.
+"""Next of kin: the people Finvest contacts if it cannot reach a client.
 
 A client names one to five people. Each has a full name as on their ID, a relationship, a
-mobile number and an ID number, and a share of what the client holds, in basis points. The
-shares add up to exactly 10,000 (100%), so a share is a whole number and never a fraction.
+mobile number and an ID number. They are contacts only: the owner decided they carry no share
+of what the client holds.
 """
 
 import re
@@ -12,7 +12,6 @@ from enum import StrEnum
 from app.modules.identity.domain.accounts import InvalidIdentifier, normalize_phone
 
 MAX_PEOPLE = 5
-WHOLE = 10_000
 MAX_NAME = 100
 _ID_NUMBER = re.compile(r"[A-Z0-9]{5,32}")
 
@@ -33,7 +32,6 @@ class Person:
     relationship: Relationship
     phone: str
     id_number: str
-    share_bps: int
 
 
 @dataclass(frozen=True, slots=True)
@@ -58,14 +56,13 @@ def clean(person: Person) -> Person:
         relationship=person.relationship,
         phone=phone,
         id_number=re.sub(r"[\s-]", "", person.id_number).upper(),
-        share_bps=person.share_bps,
     )
 
 
 def problems(people: list[Person], client_phone: str | None = None) -> list[PersonProblem]:
     """Everything wrong with a cleaned list, so the client can fix it all at once.
 
-    An empty list is allowed: it removes everyone. Otherwise the shares add up to 100%.
+    An empty list is allowed: it removes everyone.
     """
     found: list[PersonProblem] = []
     if len(people) > MAX_PEOPLE:
@@ -88,10 +85,6 @@ def problems(people: list[Person], client_phone: str | None = None) -> list[Pers
         elif person.id_number in seen_ids:
             found.append(PersonProblem(index, "id_number", "named_twice"))
         seen_ids.add(person.id_number)
-        if not 1 <= person.share_bps <= WHOLE:
-            found.append(PersonProblem(index, "share_bps", "invalid_share"))
-    if people and sum(person.share_bps for person in people) != WHOLE:
-        found.append(PersonProblem(None, "share_bps", "shares_must_total_100"))
     return found
 
 
