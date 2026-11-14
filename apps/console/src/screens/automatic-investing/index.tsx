@@ -183,7 +183,7 @@ function Ready({
 
 function RunsTable({ runs }: { runs: readonly Run[] }) {
   return (
-    <div className="overflow-x-auto rounded-xl border border-border bg-surface">
+    <div className="overflow-x-auto rounded-xl border border-border bg-surface" tabIndex={0} role="region" aria-label="Automatic investing runs this week">
       <table className="w-full min-w-[720px] border-collapse text-md">
         <caption className="sr-only">Automatic investing runs this week</caption>
         <thead>

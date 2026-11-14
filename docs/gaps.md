@@ -72,6 +72,17 @@ Staff routes with no screen at all: `/staff/phone-changes` (three; the Clients s
 
 The backend reviewer keeps a list of follow-ups asked for in reviews (team memory "finvest-review-followups"). The ones that touch money before launch: the investing sweep must not cancel while a deposit is open; stop the interest run after repeated failures and show it to staff; an idempotency key on `prepare_order` and a second person to settle a dealing order; the payouts closer must not be the importer, enforced in the database; the second signature for a day close enforced in the database; caching `/health/operations`.
 
+## Accessibility
+
+A WCAG 2.1 AA pass over every main screen of the client app and the console on 14 November 2026, phone and wide, with axe in the browser tests (`apps/web-e2e/tests/accessibility.*.spec.ts`, which now fail on any violation) and by hand for keyboard focus and touch targets. Contrast passed everywhere. Fixed in the same pass: on the web, the client app's radios, switches, checkboxes and tabs never told a screen reader which one was chosen (React Native Web 0.21 ignores `accessibilityState` and `accessibilityValue`; they are now `aria-*` props), spinners and progress bars had no name, a busy button had no name, two text boxes hid their focus outline, some filter chips and date fields were under 44 points, and the console's wide tables could not be scrolled by keyboard. What is left:
+
+| Gap | Why it matters | Owner |
+| --- | --- | --- |
+| **Spoken names of whole cards.** An investment, payout, plan or notification card is one button whose spoken name is a summary ("91 Day Treasury Bill, Running, worth UGX 5,123,715") rather than every word shown on it. axe's "label in name" rule (WCAG 2.5.3) is switched off in the client test for this. A voice control user who says the card's title still reaches it, because each summary starts with the title. | Should be confirmed with a screen reader and voice control user before launch. | Client app |
+| **Real phones not checked.** axe runs on the web build only. TalkBack on Android and VoiceOver on iPhone have not been tried; the `aria-*` props used are the ones React Native maps on both. | Most clients use the phone apps. Add to the real device checks in [launch.md](launch.md). | Engineering, once builds exist |
+| **Console touch targets.** Some console controls are smaller than 44 by 44 on a phone: the identity check's "Show" link for the document number (33 by 18), tab chips (36 to 40 tall) and inline links in tables. WCAG 2.1 AA has no size rule and these are over the 24 point minimum of WCAG 2.2, except the "Show" link's height. | Staff use the console on a computer. | Console |
+| **Screen reader pass by a person.** No one has used either app end to end with a screen reader. axe cannot tell whether names and announcements make sense, or whether a change (a payment confirmed, an error) is announced. | The regulator may ask; clients with low vision use phones with screen readers. | Engineering |
+
 ## Built, but waiting on a provider
 
 Each of these is blocked on something only the owner can get, and is listed again in the next section.

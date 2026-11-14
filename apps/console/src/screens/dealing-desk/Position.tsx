@@ -50,7 +50,7 @@ function Figure({ name, value, note, warn = false }: { name: string; value: stri
 /** What clients are owed against the bills held, product by product. */
 export function PositionTable({ desk }: { desk: Desk }) {
   return (
-    <div className="overflow-x-auto rounded-xl border border-border bg-surface">
+    <div className="overflow-x-auto rounded-xl border border-border bg-surface" tabIndex={0} role="region" aria-label="Position by product">
       <table className="w-full min-w-[600px] border-collapse text-md">
         <caption className="sr-only">Position by product</caption>
         <thead>

@@ -34,7 +34,9 @@ export function GroupBar({ group, onDark = false }: { group: Group; onDark?: boo
       style={[styles.track, { backgroundColor: onDark ? colors.onBlackDivider : colors.border }]}
       accessibilityRole="progressbar"
       accessibilityLabel={`${group.percent}% of the group's target`}
-      accessibilityValue={{ min: 0, max: 100, now: group.percent }}
+      aria-valuemin={0}
+      aria-valuemax={100}
+      aria-valuenow={group.percent}
     >
       <View style={[styles.fill, { width: `${group.percent}%`, backgroundColor: onDark ? colors.lime : colors.black }]} />
     </View>

@@ -140,7 +140,7 @@ export default function GoalPlanScreen() {
                 <Pressable
                   key={String(option)}
                   accessibilityRole="radio"
-                  accessibilityState={{ checked: on }}
+                  aria-checked={on}
                   onPress={() => setHorizon(option)}
                   style={[styles.chip, on && styles.chipOn]}
                   testID={`horizon-${option}`}

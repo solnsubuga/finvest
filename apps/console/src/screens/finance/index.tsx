@@ -387,7 +387,7 @@ function MonthsTable({ months, thisMonth, canPay, open, onOpen, onPay }: MonthsT
           })}
         </ul>
       </section>
-      <div className="hidden overflow-x-auto rounded-xl border border-border bg-surface md:block">
+      <div className="hidden overflow-x-auto rounded-xl border border-border bg-surface md:block" tabIndex={0} role="region" aria-label="Withholding tax by month">
         <table className="w-full min-w-[860px] border-collapse text-md">
           <caption className="px-4 pt-4 text-left text-[17px] font-extrabold">Withholding tax by month</caption>
           <thead>
@@ -493,7 +493,7 @@ function MonthDetail({ detail, exporting, error, onExport, onClose }: MonthDetai
               This server cannot open tax numbers, so no TIN is shown. Ask the infrastructure team for the identity key.
             </p>
           ) : null}
-          <div className="overflow-x-auto">
+          <div className="overflow-x-auto" tabIndex={0} role="region" aria-label={`Clients with tax withheld in ${formatMonth(month)}`}>
             <table className="w-full min-w-[640px] border-collapse text-md">
               <caption className="sr-only">Clients with tax withheld in {formatMonth(month)}</caption>
               <thead>

@@ -97,7 +97,7 @@ export default function MaturityChoiceScreen() {
                 <Pressable
                   key={option}
                   accessibilityRole="radio"
-                  accessibilityState={{ checked: on }}
+                  aria-checked={on}
                   onPress={() => setChoice(option)}
                   style={[styles.option, on && styles.selected]}
                   testID={`maturity-${option}`}

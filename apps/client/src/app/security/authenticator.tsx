@@ -117,8 +117,8 @@ export default function SetUpAuthenticator() {
             />
           </View>
         ) : (
-          <View style={{ marginTop: 60 }} accessibilityLabel="Loading">
-            <ActivityIndicator color={colors.black} />
+          <View style={{ marginTop: 60 }}>
+            <ActivityIndicator accessibilityLabel="Loading" color={colors.black} />
           </View>
         )}
       </Screen>

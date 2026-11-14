@@ -105,8 +105,8 @@ export default function Devices() {
       </View>
 
       {state.status === "loading" ? (
-        <View style={{ marginTop: 40 }} accessibilityLabel="Loading">
-          <ActivityIndicator color={colors.black} />
+        <View style={{ marginTop: 40 }}>
+          <ActivityIndicator accessibilityLabel="Loading" color={colors.black} />
         </View>
       ) : null}
 
@@ -143,7 +143,7 @@ export default function Devices() {
                       now={now}
                       action={
                         busy === device.id ? (
-                          <ActivityIndicator color={colors.black} />
+                          <ActivityIndicator color={colors.black} accessibilityLabel="Signing out" />
                         ) : (
                           <TextLink
                             label="Sign out"

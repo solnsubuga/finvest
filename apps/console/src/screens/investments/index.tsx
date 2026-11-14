@@ -160,7 +160,7 @@ export function InvestmentsScreen({ api, directory = emptyDirectory, today = kam
           })}
         </div>
         {shown.length === 0 ? (
-          <section role="tabpanel" className="flex flex-col gap-2 rounded-xl border border-border bg-surface p-5">
+          <section role="tabpanel" tabIndex={0} aria-label="Investments" className="flex flex-col gap-2 rounded-xl border border-border bg-surface p-5">
             <h2 className="m-0 text-[17px] font-extrabold">{current?.empty}</h2>
             <p className="m-0 text-md leading-normal text-muted">Investments appear here once a client reviews and confirms one in the app.</p>
           </section>
@@ -183,7 +183,7 @@ interface InvestmentTableProps {
 function InvestmentTable({ investments, status, cards }: InvestmentTableProps) {
   const last = status === "awaiting_payment" ? "Pay by" : status === "matured" ? "What happened" : "At maturity";
   return (
-    <div role="tabpanel" className="overflow-x-auto rounded-xl border border-border bg-surface">
+    <div role="tabpanel" tabIndex={0} aria-label="Investments" className="overflow-x-auto rounded-xl border border-border bg-surface">
       <table className="w-full min-w-[720px] border-collapse text-md">
         <caption className="sr-only">Investments</caption>
         <thead>
@@ -311,7 +311,7 @@ function RunHistory({ runs }: { runs: readonly InterestRun[] }) {
       <h2 id="run-history" className="m-0 text-[17px] font-extrabold">
         Run history
       </h2>
-      <div className="overflow-x-auto rounded-xl border border-border bg-surface">
+      <div className="overflow-x-auto rounded-xl border border-border bg-surface" tabIndex={0} role="region" aria-label="Interest run history">
         <table className="w-full min-w-[720px] border-collapse text-md">
           <caption className="sr-only">Interest run history</caption>
           <thead>

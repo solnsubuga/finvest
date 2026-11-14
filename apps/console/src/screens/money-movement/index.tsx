@@ -232,7 +232,7 @@ const REFRESH: ReadonlySet<string> = new Set([
 
 function HeldUpTable({ items }: { items: readonly HeldUpPayout[] }) {
   return (
-    <div className="overflow-x-auto rounded-xl border border-border bg-surface">
+    <div className="overflow-x-auto rounded-xl border border-border bg-surface" tabIndex={0} role="region" aria-label="Payouts held up at ioTec">
       <table className="w-full min-w-[640px] border-collapse text-md">
         <caption className="sr-only">Payouts held up at ioTec, longest first</caption>
         <thead>
