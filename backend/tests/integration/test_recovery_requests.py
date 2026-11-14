@@ -26,7 +26,8 @@ PASSWORD = "copper-harbour-violin"
 CONSOLE = "https://admin.finvestug.com"
 APP = "https://app.finvestug.com"
 HASHER = PasswordHasher(memory_kib=19_456, time_cost=2)
-_numbers = itertools.count(780_000_000)
+# Its own range: test_goals_api.py counts up from 780_000_000 on the same shared database.
+_numbers = itertools.count(785_000_000)
 _addresses = itertools.count()
 
 
