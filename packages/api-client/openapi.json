@@ -3465,7 +3465,8 @@
             "enum": [
               "monthly_statement",
               "requested_statement",
-              "receipt"
+              "receipt",
+              "tax_certificate"
             ],
             "title": "Kind",
             "type": "string"

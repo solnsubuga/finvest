@@ -10,7 +10,12 @@
  * Figures are only ever in the PDF, after tax. The list carries none.
  */
 
-export type DocumentKind = "monthly_statement" | "requested_statement" | "receipt";
+/** `tax_certificate` covers Uganda's tax year, 1 July to 30 June, and shows the tax withheld. */
+export type DocumentKind =
+  | "monthly_statement"
+  | "requested_statement"
+  | "receipt"
+  | "tax_certificate";
 export type DocumentStatus = "pending" | "ready" | "failed";
 
 export type DocumentItem = {
@@ -34,7 +39,10 @@ export type DocumentItem = {
 };
 
 /** Why a statement could not be asked for, from the backend's field codes. */
-export type PeriodProblem = "period_backwards" | "period_in_future" | "period_too_long";
+export type PeriodProblem =
+  | "period_backwards"
+  | "period_in_future"
+  | "period_too_long";
 
 export class DocumentsError extends Error {
   constructor(
@@ -55,7 +63,11 @@ export interface DocumentsClient {
   listDocuments(): Promise<DocumentItem[]>;
   getDocument(id: string): Promise<DocumentItem>;
   /** Answers with a `pending` statement. The same key asks only once. */
-  requestStatement(dateFrom: string, dateTo: string, idempotencyKey: string): Promise<DocumentItem>;
+  requestStatement(
+    dateFrom: string,
+    dateTo: string,
+    idempotencyKey: string,
+  ): Promise<DocumentItem>;
   /** Saves or opens the PDF on this device. */
   download(document: DocumentItem): Promise<void>;
 }

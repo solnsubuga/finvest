@@ -301,7 +301,7 @@ export const DocumentItem = z.object({
   file_name: z.string().nullable(),
   finished_at: z.string().nullable(),
   id: z.string(),
-  kind: z.enum(["monthly_statement", "requested_statement", "receipt"]),
+  kind: z.enum(["monthly_statement", "requested_statement", "receipt", "tax_certificate"]),
   not_final_from: z.string().nullable(),
   requested_at: z.string(),
   status: z.enum(["pending", "ready", "failed"]),
