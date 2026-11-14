@@ -30,11 +30,20 @@ export const KINDS = [
   "account_code_map",
   "payout_account",
   "deposit_reassignment",
+  "deposit_reversal",
+  "deposit_receivable",
   "tax_remittance",
   "payout_resolution",
   "payout_release",
   "bank_account_change",
+  "payment_channels_change",
+  "calendar_change",
+  "staff_security_change",
+  "statement_layout_change",
+  "withdrawal_limits_change",
   "organisation",
+  "investment_correction",
+  "investment_run",
 ] as const;
 
 export type Kind = (typeof KINDS)[number];

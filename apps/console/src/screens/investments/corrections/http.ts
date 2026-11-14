@@ -124,7 +124,7 @@ export function createHttpCorrectionsApi(http: Http): CorrectionsApi {
           investment_id: correction.investmentId,
           reason: correction.reason,
           // Never sent for an unwind, which the backend refuses.
-          ...(correction.kind === "refund" ? { destination_id: correction.destinationId } : {}),
+          ...(correction.kind === "unwind" ? {} : { destination_id: correction.destinationId }),
         },
         false,
       ),
