@@ -14,7 +14,6 @@ export const PREFETCH_DELAY_MS = 1500;
 export function RoutePrefetch() {
   const { ready, light } = useDataSaving();
 
-
   useEffect(() => {
     if (!ready || light) {
       return;
