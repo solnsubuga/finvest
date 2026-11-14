@@ -109,7 +109,7 @@ function UsedBefore({ transfer }: { transfer: TransferDetail }) {
               : use.sameFile
                 ? "The same file"
                 : "The same transaction number"}{" "}
-            on payment <span className="font-bold tabular-nums">{use.paymentId}</span>
+            on payment <span className="font-bold whitespace-nowrap tabular-nums">{use.paymentId}</span>
             {use.clientId === transfer.clientId ? " by this client" : " by another client"}, told to us{" "}
             {formatMoment(use.submittedAt)}, {EARLIER_STATUS[use.status] ?? use.status}.
           </li>
