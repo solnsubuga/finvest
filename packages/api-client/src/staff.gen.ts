@@ -818,8 +818,10 @@ export const SignOffView = z.object({
 export type SignOffView = z.infer<typeof SignOffView>;
 
 export const DifferenceView = z.object({
+  currency: Currency.nullable(),
   figures: z.array(z.number().int()),
   key: z.string(),
+  row: z.number().int().nullable(),
   sign_off: SignOffView.nullable(),
 });
 export type DifferenceView = z.infer<typeof DifferenceView>;

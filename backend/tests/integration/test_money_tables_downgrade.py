@@ -595,6 +595,15 @@ ROWS = {
         "now(), now())",
         "refusing to drop migration claims",
     ),
+    "0073_migration_difference_places": (
+        "INSERT INTO migration_trials (id, as_of, clients_sha256, investments_sha256, "
+        "error_count, warning_count, problems, summary, new_totals, differing, "
+        "difference_places, ran_by, ran_at) VALUES ('-Nabc0000000000000A1', DATE '2026-11-13', "
+        "repeat('0', 64), repeat('0', 64), 0, 0, '[]', '{}', '{}', '{}', "
+        '\'{"investment:A": {"row": 2, "currency": "UGX"}}\', '
+        "'-Nabc0000000000000S1', now())",
+        "refusing to drop the sheet rows of migration differences",
+    ),
     "0152_client_locks": (
         "BEGIN; SELECT set_config('finvest.actor_kind', 'staff', true); "
         "SELECT set_config('finvest.actor_id', '-Nabc0000000000000S1', true); "
