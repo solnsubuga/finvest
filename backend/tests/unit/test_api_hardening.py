@@ -135,3 +135,13 @@ def test_only_the_receipt_upload_takes_a_large_body() -> None:
         hardening.body_limit("/client/investments/AbCdEfGhIjKlMnOpQrSt/payments/mobile-money")
         == hardening.DEFAULT_BODY_LIMIT
     )
+
+
+def test_identity_photos_and_pose_frames_take_a_photo_sized_body() -> None:
+    for path in (
+        "/client/identity-check/photos/selfie",
+        "/client/identity-check/poses/left",
+        "/client/identity-check/poses/down",
+    ):
+        assert hardening.body_limit(path) == 11 * 1024 * 1024, path
+    assert hardening.body_limit("/client/identity-check/submit") == hardening.DEFAULT_BODY_LIMIT
