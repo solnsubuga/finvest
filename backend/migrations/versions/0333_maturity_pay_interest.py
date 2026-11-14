@@ -16,21 +16,22 @@ is paid the interest each term until they change it.
 * The guard lets the worker start the rolled-over term with the same choice and destination
   as the term it came from, and nothing else.
 
-The guard is the one migration 0241 wrote, with those two changes made to its text. Each change
-is checked to apply exactly once, so a guard that has moved on refuses this migration rather
-than losing a rule. See docs/investing.md, "Maturity".
+The guard is the one in the database when this runs, with those two changes made to its text,
+so a change another migration made to it since 0241 (such as the staff withdrawal clause of
+0354) is kept. Each change is checked to apply exactly once, so a guard that has moved on
+refuses this migration rather than losing a rule, and the downgrade takes back only these two
+changes. See docs/investing.md, "Maturity".
 """
 
 from collections.abc import Sequence
 
 from alembic import op
+from sqlalchemy import text
 
 revision: str = "0333_maturity_pay_interest"
 down_revision: str | None = "0303_goal_locks"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
-
-GUARD_FROM = "0241_investment_transfers"
 
 # A rolled-over term starts unpaid like any other. Its one difference: with `pay_interest`
 # it keeps the destination of the term it came from.
@@ -94,24 +95,34 @@ OLD_MATURED = (
 )
 
 
-def _earlier_guard() -> str:
-    script = op.get_context().script
-    if script is None:
-        raise RuntimeError("the migration scripts are needed to build the guard")
-    guard: str = script.get_revision(GUARD_FROM).module.GUARD
-    return guard
+def _current_guard() -> str:
+    """The investments guard as the database has it now, ready to run again."""
+    definition = (
+        op.get_bind()
+        .execute(
+            text("SELECT pg_get_functiondef('public.finvest_investments_guard()'::regprocedure)")
+        )
+        .scalar_one()
+    )
+    return str(definition)
 
 
-def _replace_once(text: str, before: str, after: str) -> str:
-    if text.count(before) != 1:
+def _replace_once(guard: str, before: str, after: str) -> str:
+    if guard.count(before) != 1:
         raise RuntimeError("the investments guard is not the one this migration expects")
-    return text.replace(before, after)
+    return guard.replace(before, after)
 
 
 def guard() -> str:
-    """The investments guard of migration 0241, letting `pay_interest` through."""
-    text = _replace_once(_earlier_guard(), _INSERT_BEFORE, _INSERT_AFTER)
-    return _replace_once(text, _MATURED_BEFORE, _MATURED_AFTER)
+    """The investments guard now in the database, letting `pay_interest` through."""
+    current = _replace_once(_current_guard(), _INSERT_BEFORE, _INSERT_AFTER)
+    return _replace_once(current, _MATURED_BEFORE, _MATURED_AFTER)
+
+
+def earlier_guard() -> str:
+    """The investments guard now in the database, with this migration's two changes taken back."""
+    current = _replace_once(_current_guard(), _INSERT_AFTER, _INSERT_BEFORE)
+    return _replace_once(current, _MATURED_AFTER, _MATURED_BEFORE)
 
 
 def upgrade() -> None:
@@ -137,7 +148,7 @@ $$
 def downgrade() -> None:
     # A client's choice for their money is never thrown away by a downgrade.
     op.execute(EMPTY_GUARD)
-    op.execute(_earlier_guard())
+    op.execute(earlier_guard())
     for name in ("ck_investments_at_maturity", "ck_investments_destination"):
         op.execute(f"ALTER TABLE investments DROP CONSTRAINT {name}")
     op.execute("ALTER TABLE investments DROP CONSTRAINT ck_investments_matured")
