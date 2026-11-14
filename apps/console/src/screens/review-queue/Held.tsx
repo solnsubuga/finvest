@@ -36,7 +36,7 @@ interface HeldProps {
   onCount?: (count: number) => void;
 }
 
-type Stage = "needs_proposal" | "needs_second" | "proposed_by_me";
+export type Stage = "needs_proposal" | "needs_second" | "proposed_by_me";
 
 function stageOf(payout: HeldPayout, me: string): Stage {
   if (!payout.release) return "needs_proposal";
@@ -292,21 +292,31 @@ const BUTTONS: Record<HeldAction, string> = {
 };
 
 /** Approving and declining cannot be undone, so each asks once more. Proposing and withdrawing move no money. */
-const CONFIRMATIONS: Partial<Record<HeldAction, { text: string; confirm: string }>> = {
+export type Confirmations = Partial<Record<HeldAction, { text: string; confirm: string }>>;
+
+const CONFIRMATIONS: Confirmations = {
   approve: { text: "Approving releases this money to be paid to the client. It cannot be undone.", confirm: "Yes, approve" },
   decline: { text: "Declining cancels the payout and gives the money back. It cannot be undone.", confirm: "Yes, decline" },
 };
 
-function HeldForm({
+const PROPOSED_BY_ME =
+  "You proposed releasing this payout, so a different person must approve it. You can withdraw your proposal or decline the payout.";
+
+/** The reason, then propose, approve or withdraw, and decline. Shared with held transfers. */
+export function HeldForm({
   stage,
   busy,
   error,
   onAct,
+  confirmations = CONFIRMATIONS,
+  proposedByMe = PROPOSED_BY_ME,
 }: {
   stage: Stage;
   busy: boolean;
   error: string | null;
   onAct: (action: HeldAction, reason: string) => void;
+  confirmations?: Confirmations;
+  proposedByMe?: string;
 }) {
   const ids = useId();
   const [reason, setReason] = useState("");
@@ -326,7 +336,7 @@ function HeldForm({
       return;
     }
     setProblem(undefined);
-    if (!confirmed && CONFIRMATIONS[action]) {
+    if (!confirmed && confirmations[action]) {
       setConfirming(action);
       return;
     }
@@ -334,12 +344,12 @@ function HeldForm({
     onAct(action, reason.trim());
   }
 
-  const asked = confirming ? CONFIRMATIONS[confirming] : undefined;
+  const asked = confirming ? confirmations[confirming] : undefined;
 
   return (
     <form aria-label="Decision" className="flex flex-col gap-4 border-t border-divider pt-4" onSubmit={(event: FormEvent) => event.preventDefault()}>
       {stage === "proposed_by_me" ? (
-        <Notice>You proposed releasing this payout, so a different person must approve it. You can withdraw your proposal or decline the payout.</Notice>
+        <Notice>{proposedByMe}</Notice>
       ) : null}
       <div className="flex flex-col gap-1.5">
         <Label htmlFor={`${ids}-reason`}>Reason for your decision</Label>
