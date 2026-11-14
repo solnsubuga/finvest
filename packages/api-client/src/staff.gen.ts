@@ -22,15 +22,6 @@ export type AccountView = z.infer<typeof AccountView>;
 export const Action = z.enum(["approve", "send_back", "withdraw", "record_result", "confirm_result", "reject_result"]);
 export type Action = z.infer<typeof Action>;
 
-export const LimitsView = z.object({
-  bank_per_day: z.number().int().nullable(),
-  bank_per_payout: z.number().int().nullable(),
-  mobile_money_per_day: z.number().int().nullable(),
-  mobile_money_per_payout: z.number().int().nullable(),
-  review_above: z.number().int().nullable(),
-});
-export type LimitsView = z.infer<typeof LimitsView>;
-
 export const StatementPeriod = z.object({
   date_from: z.string(),
   date_to: z.string(),
@@ -44,6 +35,15 @@ export const WithdrawalIn = z.object({
 });
 export type WithdrawalIn = z.infer<typeof WithdrawalIn>;
 
+export const ConsoleActionsApiLimitsView = z.object({
+  bank_per_day: z.number().int().nullable(),
+  bank_per_payout: z.number().int().nullable(),
+  mobile_money_per_day: z.number().int().nullable(),
+  mobile_money_per_payout: z.number().int().nullable(),
+  review_above: z.number().int().nullable(),
+});
+export type ConsoleActionsApiLimitsView = z.infer<typeof ConsoleActionsApiLimitsView>;
+
 export const ActionView = z.object({
   client_id: z.string(),
   decided_at: z.string().nullable(),
@@ -52,7 +52,7 @@ export const ActionView = z.object({
   decision_reason: z.string().nullable(),
   id: z.string(),
   kind: z.enum(["pin_reset", "withdrawal_limits", "statement", "withdrawal"]),
-  limits: LimitsView.nullable(),
+  limits: ConsoleActionsApiLimitsView.nullable(),
   proposed_at: z.string(),
   proposed_by: z.string(),
   proposed_by_name: z.string(),
@@ -162,7 +162,7 @@ export type Approval = z.infer<typeof Approval>;
 export const ApprovalItemOut = z.object({
   can_decide: z.boolean(),
   id: z.string(),
-  kind: z.enum(["wording_change", "ledger_correction", "pot_transfer", "bank_transfer_match", "day_close", "dealing_order", "dealing_result", "buffer_rules", "buffer_capital", "rate_change", "migration_totals", "migration_sign_off", "phone_change", "team_change", "client_lock", "suppression_lift", "complaint_outcome", "announcement", "payout_account", "investment_correction", "investment_run", "payout_resolution", "tax_remittance", "deposit_reassignment", "payout_release", "investment_transfer", "organisation", "account_closure", "compliance_case", "bank_account_change", "account_code_map", "deposit_reversal", "deposit_receivable", "client_pin_reset", "client_limits", "client_statement", "client_withdrawal", "payment_channels_change", "calendar_change", "staff_security_change", "statement_layout_change"]),
+  kind: z.enum(["wording_change", "ledger_correction", "pot_transfer", "bank_transfer_match", "day_close", "dealing_order", "dealing_result", "buffer_rules", "buffer_capital", "rate_change", "migration_totals", "migration_sign_off", "phone_change", "team_change", "client_lock", "suppression_lift", "complaint_outcome", "announcement", "payout_account", "investment_correction", "investment_run", "payout_resolution", "tax_remittance", "deposit_reassignment", "payout_release", "investment_transfer", "organisation", "account_closure", "compliance_case", "bank_account_change", "account_code_map", "deposit_reversal", "deposit_receivable", "client_pin_reset", "client_limits", "client_statement", "client_withdrawal", "payment_channels_change", "calendar_change", "staff_security_change", "statement_layout_change", "withdrawal_limits_change"]),
   proposed_at: z.string(),
   proposed_by: z.string(),
   proposed_by_name: z.string().nullable(),
@@ -748,10 +748,10 @@ export const ClientCards = z.object({
 export type ClientCards = z.infer<typeof ClientCards>;
 
 export const ClientLimitsView = z.object({
-  applied: LimitsView,
+  applied: ConsoleActionsApiLimitsView,
   can_change: z.boolean(),
-  own: LimitsView.nullable(),
-  shared: LimitsView,
+  own: ConsoleActionsApiLimitsView.nullable(),
+  shared: ConsoleActionsApiLimitsView,
 });
 export type ClientLimitsView = z.infer<typeof ClientLimitsView>;
 
@@ -1183,6 +1183,12 @@ export const DecideLift = z.object({
   reason: z.string(),
 });
 export type DecideLift = z.infer<typeof DecideLift>;
+
+export const DecideLimits = z.object({
+  decision: z.enum(["approved", "rejected", "withdrawn"]),
+  reason: z.string(),
+});
+export type DecideLimits = z.infer<typeof DecideLimits>;
 
 export const DecideLock = z.object({
   decision: z.enum(["approved", "rejected", "withdrawn"]),
@@ -1648,6 +1654,27 @@ export const LiftView = z.object({
 });
 export type LiftView = z.infer<typeof LiftView>;
 
+export const PayoutsLimitsApiLimitsView = z.object({
+  bank_per_day_minor: z.number().int().nullable(),
+  bank_per_payout_minor: z.number().int().nullable(),
+  currency: z.literal("UGX"),
+  effective_from: z.string(),
+  mobile_money_per_day_minor: z.number().int().nullable(),
+  mobile_money_per_payout_minor: z.number().int(),
+  review_above_minor: z.number().int().nullable(),
+});
+export type PayoutsLimitsApiLimitsView = z.infer<typeof PayoutsLimitsApiLimitsView>;
+
+export const LimitsChangeView = z.object({
+  id: z.string(),
+  limits: PayoutsLimitsApiLimitsView,
+  proposed_at: z.string(),
+  proposed_by: z.string(),
+  reason: z.string(),
+  yours: z.boolean(),
+});
+export type LimitsChangeView = z.infer<typeof LimitsChangeView>;
+
 export const LimitsIn = z.object({
   bank_per_day: z.number().int().nullable(),
   bank_per_payout: z.number().int().nullable(),
@@ -1656,6 +1683,14 @@ export const LimitsIn = z.object({
   review_above: z.number().int().nullable(),
 });
 export type LimitsIn = z.infer<typeof LimitsIn>;
+
+export const LimitsScreen = z.object({
+  can_change: z.boolean(),
+  change: LimitsChangeView.nullable(),
+  in_force: PayoutsLimitsApiLimitsView,
+  upcoming: z.array(PayoutsLimitsApiLimitsView),
+});
+export type LimitsScreen = z.infer<typeof LimitsScreen>;
 
 export const LogComplaint = z.object({
   amount: SupportApiAmount.nullable().optional(),
@@ -2268,6 +2303,17 @@ export const ProposeLift = z.object({
 });
 export type ProposeLift = z.infer<typeof ProposeLift>;
 
+export const ProposeLimits = z.object({
+  bank_per_day_minor: z.number().int().nullable().optional(),
+  bank_per_payout_minor: z.number().int().nullable().optional(),
+  effective_from: z.string(),
+  mobile_money_per_day_minor: z.number().int().nullable().optional(),
+  mobile_money_per_payout_minor: z.number().int(),
+  reason: z.string(),
+  review_above_minor: z.number().int().nullable().optional(),
+});
+export type ProposeLimits = z.infer<typeof ProposeLimits>;
+
 export const ProposeLock = z.object({
   kind: z.enum(["lock", "unlock"]),
   reason: z.string(),
@@ -2660,7 +2706,7 @@ export const ReviewedPayoutOut = z.object({
 export type ReviewedPayoutOut = z.infer<typeof ReviewedPayoutOut>;
 
 export const RoleView = z.object({
-  permissions: z.array(z.enum(["overview.view", "review_queue.view", "identity_checks.view", "identity_checks.review", "maturities.view", "support.view", "support.reply", "complaints.view", "complaints.manage", "complaints.close", "clients.view", "clients.lock", "clients.close", "money_movement.view", "reconciliation.view", "reconciliation.change", "investments.view", "automatic_investing.view", "goals.view", "dealing_desk.view", "dealing_orders.change", "finance.view", "tax_remittances.change", "products.view", "rates.view", "rates.change", "compliance.view", "compliance_cases.change", "team.view", "team.change", "reports.view", "audit.view", "settings.view", "wordings.change", "bank_accounts.change", "email_suppressions.lift", "payment_channels.change", "calendar.change", "staff_security.change", "statement_layouts.change", "announcements.send", "account_codes.change", "migration.view", "bank_transfers.change", "deposit_reassignments.change", "payout_accounts.change", "bank_payouts.change", "migration.import", "migration.sign_off", "client_phones.change", "investment_corrections.change", "investment_transfers.change", "organisations.review", "client_notes.write", "client_pins.reset", "client_limits.change", "client_statements.send", "client_withdrawals.start"])),
+  permissions: z.array(z.enum(["overview.view", "review_queue.view", "identity_checks.view", "identity_checks.review", "maturities.view", "support.view", "support.reply", "complaints.view", "complaints.manage", "complaints.close", "clients.view", "clients.lock", "clients.close", "money_movement.view", "reconciliation.view", "reconciliation.change", "investments.view", "automatic_investing.view", "goals.view", "dealing_desk.view", "dealing_orders.change", "finance.view", "tax_remittances.change", "products.view", "rates.view", "rates.change", "compliance.view", "compliance_cases.change", "team.view", "team.change", "reports.view", "audit.view", "settings.view", "wordings.change", "bank_accounts.change", "email_suppressions.lift", "payment_channels.change", "withdrawal_limits.change", "calendar.change", "staff_security.change", "statement_layouts.change", "announcements.send", "account_codes.change", "migration.view", "bank_transfers.change", "deposit_reassignments.change", "payout_accounts.change", "bank_payouts.change", "migration.import", "migration.sign_off", "client_phones.change", "investment_corrections.change", "investment_transfers.change", "organisations.review", "client_notes.write", "client_pins.reset", "client_limits.change", "client_statements.send", "client_withdrawals.start"])),
   role: z.enum(["admin", "operations", "finance", "compliance", "support"]),
 });
 export type RoleView = z.infer<typeof RoleView>;
@@ -3173,7 +3219,7 @@ export type StaffSendMessage = z.infer<typeof StaffSendMessage>;
 export const StaffSessionView = z.object({
   confirmed_until: z.string(),
   name: z.string(),
-  permissions: z.array(z.enum(["overview.view", "review_queue.view", "identity_checks.view", "identity_checks.review", "maturities.view", "support.view", "support.reply", "complaints.view", "complaints.manage", "complaints.close", "clients.view", "clients.lock", "clients.close", "money_movement.view", "reconciliation.view", "reconciliation.change", "investments.view", "automatic_investing.view", "goals.view", "dealing_desk.view", "dealing_orders.change", "finance.view", "tax_remittances.change", "products.view", "rates.view", "rates.change", "compliance.view", "compliance_cases.change", "team.view", "team.change", "reports.view", "audit.view", "settings.view", "wordings.change", "bank_accounts.change", "email_suppressions.lift", "payment_channels.change", "calendar.change", "staff_security.change", "statement_layouts.change", "announcements.send", "account_codes.change", "migration.view", "bank_transfers.change", "deposit_reassignments.change", "payout_accounts.change", "bank_payouts.change", "migration.import", "migration.sign_off", "client_phones.change", "investment_corrections.change", "investment_transfers.change", "organisations.review", "client_notes.write", "client_pins.reset", "client_limits.change", "client_statements.send", "client_withdrawals.start"])),
+  permissions: z.array(z.enum(["overview.view", "review_queue.view", "identity_checks.view", "identity_checks.review", "maturities.view", "support.view", "support.reply", "complaints.view", "complaints.manage", "complaints.close", "clients.view", "clients.lock", "clients.close", "money_movement.view", "reconciliation.view", "reconciliation.change", "investments.view", "automatic_investing.view", "goals.view", "dealing_desk.view", "dealing_orders.change", "finance.view", "tax_remittances.change", "products.view", "rates.view", "rates.change", "compliance.view", "compliance_cases.change", "team.view", "team.change", "reports.view", "audit.view", "settings.view", "wordings.change", "bank_accounts.change", "email_suppressions.lift", "payment_channels.change", "withdrawal_limits.change", "calendar.change", "staff_security.change", "statement_layouts.change", "announcements.send", "account_codes.change", "migration.view", "bank_transfers.change", "deposit_reassignments.change", "payout_accounts.change", "bank_payouts.change", "migration.import", "migration.sign_off", "client_phones.change", "investment_corrections.change", "investment_transfers.change", "organisations.review", "client_notes.write", "client_pins.reset", "client_limits.change", "client_statements.send", "client_withdrawals.start"])),
   role: z.enum(["admin", "operations", "finance", "compliance", "support"]),
   second_steps: z.array(z.enum(["passkey", "authenticator", "code", "signup"])),
   staff_id: z.string(),
@@ -6999,6 +7045,41 @@ export const operations = {
     idempotent: false,
     status: 200,
     response: ChangeView,
+  },
+  "GET /staff/withdrawal-limits": {
+    method: "GET",
+    path: "/staff/withdrawal-limits",
+    params: z.object({}),
+    query: z.object({}),
+    body: null,
+    bodyKind: null,
+    idempotent: false,
+    status: 200,
+    response: LimitsScreen,
+  },
+  "POST /staff/withdrawal-limits/changes": {
+    method: "POST",
+    path: "/staff/withdrawal-limits/changes",
+    params: z.object({}),
+    query: z.object({}),
+    body: ProposeLimits,
+    bodyKind: "json",
+    idempotent: false,
+    status: 201,
+    response: LimitsChangeView,
+  },
+  "POST /staff/withdrawal-limits/changes/{change_id}/decision": {
+    method: "POST",
+    path: "/staff/withdrawal-limits/changes/{change_id}/decision",
+    params: z.object({
+    change_id: z.string(),
+  }),
+    query: z.object({}),
+    body: DecideLimits,
+    bodyKind: "json",
+    idempotent: false,
+    status: 200,
+    response: LimitsChangeView,
   },
 } as const;
 

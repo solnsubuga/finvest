@@ -1,6 +1,6 @@
 # Platform settings
 
-The console's Settings screen holds the rules the platform runs on. The trust account clients pay into has its own table and routes ([payments.md](payments.md#the-account-clients-pay-into)), the message wordings and announcements have theirs ([notifications.md](notifications.md)), and the withdrawal limits are versioned by payouts ([payouts.md](payouts.md)). Everything else on the screen is a **platform setting**, kept by the `platform_settings` module.
+The console's Settings screen holds the rules the platform runs on. The trust account clients pay into has its own table and routes ([payments.md](payments.md#the-account-clients-pay-into)), the message wordings and announcements have theirs ([notifications.md](notifications.md)), and the withdrawal limits and the review threshold are versions kept by payouts, changed by two people on the same screen ([payouts.md](payouts.md#changing-the-limits), permission `withdrawal_limits.change`, held by admin and finance). Everything else on the screen is a **platform setting**, kept by the `platform_settings` module.
 
 ## How a setting changes
 
