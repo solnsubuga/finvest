@@ -1,4 +1,4 @@
-import { render, screen, within } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router";
 import { describe, expect, it, vi } from "vitest";
@@ -31,7 +31,8 @@ describe("acting for a client", () => {
     await user.type(within(card).getByLabelText(/Note for the audit trail/), "Called the client back on their number");
     await user.click(within(card).getByRole("button", { name: "Approve and sign out of the app" }));
     expect(await screen.findByRole("status")).toHaveTextContent("signed out of the phone app");
-    expect(screen.queryByRole("article")).not.toBeInTheDocument();
+    // The notice shows as soon as the approval answers; the list is fetched again after it.
+    await waitFor(() => expect(screen.queryByRole("article")).not.toBeInTheDocument());
     expect(within(screen.getByRole("list", { name: "Decided actions, newest first" })).getAllByRole("listitem")).toHaveLength(2);
   });
 
@@ -135,6 +136,38 @@ describe("acting for a client", () => {
     await user.click(screen.getByRole("button", { name: "Send for approval" }));
     await screen.findByRole("article", { name: "Reset the app PIN, waiting" });
     expect(keys).toEqual(["key-1", "key-1"]);
+  });
+
+  it("chooses a new key when the request changes before a retry", async () => {
+    const stub = createStubActionsApi(ME, ACTION_KINDS, "empty", () => NOW, 0);
+    const keys: string[] = [];
+    let fail = true;
+    const api: ActionsApi = {
+      ...stub,
+      propose: (clientId, proposal, key) => {
+        keys.push(key);
+        if (fail) {
+          fail = false;
+          return Promise.reject(new ActionError("unavailable"));
+        }
+        return stub.propose(clientId, proposal, key);
+      },
+    };
+    let next = 0;
+    render(
+      <MemoryRouter>
+        <ActionsSection api={api} clientId={CLIENT} canRefund newKey={() => `key-${String(++next)}`} />
+      </MemoryRouter>,
+    );
+    const user = userEvent.setup();
+    await user.click(await screen.findByRole("button", { name: "Reset app PIN" }));
+    await user.type(screen.getByLabelText(/Why/), "Client called");
+    await user.click(screen.getByRole("button", { name: "Send for approval" }));
+    await screen.findByText(/could not reach Finvest/);
+    await user.type(screen.getByLabelText(/Why/), " from their number");
+    await user.click(screen.getByRole("button", { name: "Send for approval" }));
+    await screen.findByRole("article", { name: "Reset the app PIN, waiting" });
+    expect(keys).toEqual(["key-1", "key-2"]);
   });
 
   it("shows when acting for a client is not connected", async () => {

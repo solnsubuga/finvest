@@ -4,6 +4,7 @@ import { Redirect, Stack, useLocalSearchParams, useRouter } from "expo-router";
 
 import { Notice } from "@/components/Blocks";
 import { Button, TextLink } from "@/components/Button";
+import { DocumentLink, useDocumentFor } from "@/documents/DocumentLink";
 import { Icon } from "@/components/Icon";
 import { Screen } from "@/components/Screen";
 import { Txt } from "@/components/Txt";
@@ -18,6 +19,7 @@ export default function Receipt() {
   const router = useRouter();
   const { depositId } = useLocalSearchParams<{ depositId: string }>();
   const { deposit, missing, stale } = useDeposit(depositId);
+  const pdf = useDocumentFor("receipt", depositId);
   const done = () => router.replace("/");
   const [shared, setShared] = useState<ShareOutcome | null>(null);
 
@@ -70,7 +72,11 @@ export default function Receipt() {
         <>
           <Button label="Share receipt" variant="secondary" onPress={share} testID="receipt-share" />
           <Button label="Done" onPress={done} testID="receipt-done" />
-          <TextLink label="Something wrong with this?" onPress={() => router.push("/help")} />
+          <TextLink
+            label="Something wrong with this?"
+            onPress={() => router.push({ pathname: "/support/complaints/new", params: { payment: deposit.reference } })}
+            testID="receipt-complain"
+          />
         </>
       }
     >
@@ -97,12 +103,21 @@ export default function Receipt() {
         <DetailList rows={rows} />
       </View>
       <ShareNote outcome={shared} />
-      <View style={{ marginTop: 16, gap: 4 }}>
-        <Txt size={fontSizes.sm} color={colors.muted}>
-          A PDF of this receipt is kept in Documents, and emailed to you if you have proved your email address.
-        </Txt>
-        <TextLink label="Open Documents" onPress={() => router.push("/documents")} />
-      </View>
+      {pdf ? (
+        <View style={{ marginTop: 12, gap: 8 }}>
+          <DocumentLink document={pdf} title="Receipt (PDF)" testID="receipt-pdf" />
+          <Txt size={fontSizes.sm} color={colors.muted}>
+            It is also emailed to you if you have proved your email address.
+          </Txt>
+        </View>
+      ) : (
+        <View style={{ marginTop: 16, gap: 4 }}>
+          <Txt size={fontSizes.sm} color={colors.muted}>
+            A PDF of this receipt is kept in Documents, and emailed to you if you have proved your email address.
+          </Txt>
+          <TextLink label="Open Documents" onPress={() => router.push("/documents")} />
+        </View>
+      )}
     </Screen>
   );
 }

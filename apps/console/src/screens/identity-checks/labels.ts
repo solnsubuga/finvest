@@ -37,7 +37,8 @@ const PHONE_NAME_VERDICTS: Record<PhoneName["status"], string> = {
 /** The result, in words. The network's name is shown when it is not the same as the ID's. */
 export function phoneNameVerdict(phone: PhoneName): string {
   const verdict = PHONE_NAME_VERDICTS[phone.status];
-  return phone.registeredName && phone.status !== "matches" ? `${verdict}: ${phone.registeredName}` : verdict;
+  const said = phone.registeredName && phone.status !== "matches" ? `${verdict}: ${phone.registeredName}` : verdict;
+  return phone.currentNumber ? said : `${said} (earlier number)`;
 }
 
 const VERDICT_LABELS: Record<AutomaticCheckName, Record<Verdict, string>> = {

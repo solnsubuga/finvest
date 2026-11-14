@@ -24,7 +24,9 @@ from app.modules.autoinvest.jobs import AutoinvestJobs
 from app.modules.dealing.jobs import DealingJobs
 from app.modules.documents.jobs import DocumentJobs
 from app.modules.goals.jobs import GoalJobs
+from app.modules.identity.cloudflare_access import CloudflareAccessSettings
 from app.modules.identity.service import client_contact
+from app.modules.identity.staff_access_jobs import StaffAccessJobs
 from app.modules.investments.jobs import InvestmentJobs
 from app.modules.kyc.face_confirmation_jobs import FaceConfirmationJobs
 from app.modules.kyc.jobs import ProviderJobs, sweep_unanswered
@@ -71,6 +73,8 @@ def handlers(
         **DealingJobs(clock).handlers(),
         **GoalJobs(database, clock).handlers(),
         **OrganisationJobs(database, clock).handlers(),
+        # Runs without Cloudflare settings too, so the team view says Access is not set up.
+        **StaffAccessJobs(database, CloudflareAccessSettings().access_list(), clock).handlers(),
     }
     identity = KycSettings()
     kinds.update(

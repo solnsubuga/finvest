@@ -2,6 +2,7 @@ import { operations, type OperationName, type Operations } from "@finvest/api-cl
 import type { z } from "zod";
 
 import { API_URL, USES_COOKIE } from "./config";
+import { reportConnection } from "./connection";
 import { readToken } from "./token";
 
 /**
@@ -48,6 +49,8 @@ export type ApiErrorCode =
   | "payload_too_large"
   | "rate_limited"
   | "unavailable"
+  // Finvest switched the client side off for an update. Nothing was done.
+  | "maintenance"
   | "internal_error";
 
 const KNOWN_CODES = new Set<string>([
@@ -75,6 +78,7 @@ const KNOWN_CODES = new Set<string>([
   "payload_too_large",
   "rate_limited",
   "unavailable",
+  "maintenance",
   "internal_error",
 ]);
 
@@ -276,6 +280,7 @@ export async function api<K extends OperationName>(name: K, input: ApiInput<K>):
     // fetch rejects when no answer came back: no network, DNS, TLS, a refused connection, or
     // one that dropped after the request left. Only the last may have reached the API, and the
     // app cannot tell them apart, so `offline` counts as uncertain.
+    reportConnection("offline");
     throw new ApiError("offline");
   } finally {
     clearTimeout(timer);
@@ -284,6 +289,10 @@ export async function api<K extends OperationName>(name: K, input: ApiInput<K>):
 
   if (!response.ok) {
     const error = await refusal(response);
+    // The edge answers a bare 502, 503 or 504 while the API is stopped for an update. The
+    // error stays uncertain: only the API's own `maintenance` code proves nothing was done.
+    const bareEdge = error.requestId === null && [502, 503, 504].includes(response.status);
+    reportConnection(error.code === "maintenance" || bareEdge ? "maintenance" : "online");
     if (error.code === "unauthorized") {
       for (const listener of unauthorizedListeners) listener(error);
     }
@@ -292,6 +301,7 @@ export async function api<K extends OperationName>(name: K, input: ApiInput<K>):
     }
     throw error;
   }
+  reportConnection("online");
   if (!op.response) {
     return null as ApiOutput<K>;
   }

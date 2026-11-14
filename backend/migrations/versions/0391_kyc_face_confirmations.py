@@ -1,7 +1,7 @@
 """Add face confirmations: a live selfie matched to the approved check before a sign-in change.
 
 Revision ID: 0391_kyc_face_confirmations
-Revises: 0321_finance_month_closes
+Revises: 0390_staff_access_sync
 
 `kyc_face_confirmations` holds one row per attempt. A client with an approved check starts one
 from a signed-in session. The worker asks the liveness provider for a page, saves it sealed,
@@ -19,7 +19,7 @@ from collections.abc import Sequence
 from alembic import op
 
 revision: str = "0391_kyc_face_confirmations"
-down_revision: str | None = "0321_finance_month_closes"
+down_revision: str | None = "0390_staff_access_sync"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 

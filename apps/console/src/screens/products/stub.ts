@@ -1,4 +1,13 @@
-import { CatalogueError, type CatalogueApi, type NewProposal, type Product, type Proposal, type Rate } from "./api.ts";
+import {
+  CatalogueError,
+  type CatalogueApi,
+  type NewProposal,
+  type Product,
+  type ProductChange,
+  type ProductReach,
+  type Proposal,
+  type Rate,
+} from "./api.ts";
 import { previewClientRate } from "./format.ts";
 
 /**
@@ -12,8 +21,8 @@ export interface StubOptions {
   me: string;
   /** The Kampala business day. */
   today: string;
-  /** "empty" starts with no rate changes waiting. */
-  sample?: "default" | "empty";
+  /** "empty" starts with no rate or product changes waiting. "offline" acts as if Finvest could not be reached. */
+  sample?: "default" | "empty" | "offline";
 }
 
 const COLLEAGUE = "-StaffSampleFinance01";
@@ -74,11 +83,41 @@ function sampleRates(): Map<string, Rate[]> {
   ]);
 }
 
-export function createStubCatalogueApi({ me, today, sample = "default" }: StubOptions): CatalogueApi {
+/** Sample counts for who a change reaches, by product. A product not here reaches nobody. */
+const SAMPLE_REACH: Record<string, ProductReach> = {
+  "TREA-91": { runningInvestments: 1_284, awaitingPayment: 37, clients: 912, openGoals: 146, activePlans: 88, pausedPlans: 9 },
+  "TREA-182": { runningInvestments: 655, awaitingPayment: 12, clients: 498, openGoals: 61, activePlans: 23, pausedPlans: 2 },
+};
+const NOBODY: ProductReach = { runningInvestments: 0, awaitingPayment: 0, clients: 0, openGoals: 0, activePlans: 0, pausedPlans: 0 };
+
+export function createStubCatalogueApi(options: StubOptions): CatalogueApi {
+  if (options.sample !== "offline") return createSample(options);
+  const offline = () => Promise.reject(new CatalogueError("unavailable"));
+  return Object.fromEntries(Object.keys(createSample({ ...options, sample: "empty" })).map((name) => [name, offline])) as unknown as CatalogueApi;
+}
+
+function createSample({ me, today, sample = "default" }: StubOptions): CatalogueApi {
   const products = sampleProducts();
   const rates = sampleRates();
   const proposals: Proposal[] = [];
+  const changes: ProductChange[] = [];
   let counter = 0;
+
+  function addChange(proposedBy: string, change: Omit<ProductChange, "id" | "status" | "proposedBy" | "proposedAt" | "decidedBy" | "decidedAt" | "decisionNote">, at: string): ProductChange {
+    counter += 1;
+    const made: ProductChange = {
+      ...change,
+      id: `-ProductChangeSample${counter}`,
+      status: "proposed",
+      proposedBy,
+      proposedAt: at,
+      decidedBy: null,
+      decidedAt: null,
+      decisionNote: null,
+    };
+    changes.unshift(made);
+    return made;
+  }
 
   function add(proposedBy: string, draft: NewProposal, at: string): Proposal {
     counter += 1;
@@ -112,7 +151,60 @@ export function createStubCatalogueApi({ me, today, sample = "default" }: StubOp
     );
   }
 
+  if (sample === "default") {
+    addChange(
+      COLLEAGUE,
+      {
+        action: "create",
+        productCode: "TREA-364",
+        name: "364 Day Treasury Bill",
+        kind: "treasury_bill",
+        currency: "UGX",
+        termDays: 364,
+        minimum: { minor: 500_000, currency: "UGX" },
+        interestPaid: "at_maturity",
+        productStatus: "draft",
+        firstRate: rate(today, 1500, 1500),
+        reason: "Bank of Uganda auctions the 364 day bill every fortnight and clients ask for a longer term.",
+      },
+      "2026-11-13T09:05:00Z",
+    );
+  }
+
   const clone = <T>(value: T): T => structuredClone(value);
+
+  function waitingChange(changeId: string): ProductChange {
+    const change = changes.find((c) => c.id === changeId);
+    if (!change) throw new CatalogueError("not_found");
+    if (change.status !== "proposed") throw new CatalogueError("conflict");
+    return change;
+  }
+
+  function oneWaitingFor(code: string): void {
+    if (changes.some((c) => c.status === "proposed" && c.productCode === code)) throw new CatalogueError("conflict");
+  }
+
+  function productFor(code: string): Product {
+    const product = products.find((p) => p.code === code);
+    if (!product) throw new CatalogueError("not_found");
+    return product;
+  }
+
+  function attempt<T>(work: () => T): Promise<T> {
+    try {
+      return Promise.resolve(work());
+    } catch (error) {
+      return Promise.reject(error instanceof Error ? error : new CatalogueError("unavailable"));
+    }
+  }
+
+  function decideChange(change: ProductChange, status: ProductChange["status"], note: string | null): ProductChange {
+    change.status = status;
+    change.decidedBy = me;
+    change.decidedAt = new Date().toISOString();
+    change.decisionNote = note;
+    return clone(change);
+  }
 
   function view(product: Product): Product {
     const history = rates.get(product.code) ?? [];
@@ -182,6 +274,135 @@ export function createStubCatalogueApi({ me, today, sample = "default" }: StubOp
         return Promise.reject(error instanceof Error ? error : new CatalogueError("unavailable"));
       }
     },
+    listProductChanges: (status) => Promise.resolve(clone(changes.filter((c) => !status || c.status === status))),
+    proposeNewProduct: (draft) =>
+      attempt(() => {
+        if (!draft.reason.trim()) throw new CatalogueError("reason_required");
+        if (products.some((p) => p.code === draft.code) || changes.some((c) => c.status === "proposed" && c.action === "create" && c.productCode === draft.code)) {
+          throw new CatalogueError("code_taken");
+        }
+        if (draft.annualRateBps < 1 || draft.annualRateBps > 5000 || draft.taxBps > 9999) throw new CatalogueError("out_of_range");
+        return clone(
+          addChange(
+            me,
+            {
+              action: "create",
+              productCode: draft.code,
+              name: draft.name,
+              kind: draft.kind,
+              currency: draft.currency,
+              termDays: draft.termDays,
+              minimum: { minor: draft.minimumMinor, currency: draft.currency },
+              interestPaid: draft.interestPaid,
+              productStatus: "draft",
+              firstRate: rate(today, draft.annualRateBps, draft.taxBps),
+              reason: draft.reason,
+            },
+            new Date().toISOString(),
+          ),
+        );
+      }),
+    proposeNewTerms: (draft) =>
+      attempt(() => {
+        const product = productFor(draft.productCode);
+        if (!draft.reason.trim()) throw new CatalogueError("reason_required");
+        if (product.status !== "draft" && draft.kind !== product.kind) throw new CatalogueError("kind_fixed");
+        if (product.status !== "draft" && draft.interestPaid !== product.interestPaid) throw new CatalogueError("interest_paid_fixed");
+        if (
+          draft.name === product.name &&
+          draft.kind === product.kind &&
+          draft.termDays === product.termDays &&
+          draft.minimumMinor === product.minimum.minor &&
+          draft.interestPaid === product.interestPaid
+        ) {
+          throw new CatalogueError("terms_unchanged");
+        }
+        oneWaitingFor(product.code);
+        return clone(
+          addChange(
+            me,
+            {
+              action: "edit",
+              productCode: product.code,
+              name: draft.name,
+              kind: draft.kind,
+              currency: product.currency,
+              termDays: draft.termDays,
+              minimum: { minor: draft.minimumMinor, currency: product.currency },
+              interestPaid: draft.interestPaid,
+              productStatus: product.status,
+              firstRate: null,
+              reason: draft.reason,
+            },
+            new Date().toISOString(),
+          ),
+        );
+      }),
+    proposeStatus: (code, to, reason) =>
+      attempt(() => {
+        const product = productFor(code);
+        if (!reason.trim()) throw new CatalogueError("reason_required");
+        if (to === "paused" && product.status !== "live") throw new CatalogueError("not_live");
+        if (to === "live") {
+          if (product.status === "live") throw new CatalogueError("already_live");
+          if (product.currency !== "UGX") throw new CatalogueError("currency_not_open");
+          if (!view(product).rate) throw new CatalogueError("no_rate");
+        }
+        oneWaitingFor(code);
+        return clone(
+          addChange(
+            me,
+            {
+              action: to === "live" ? "open" : "pause",
+              productCode: code,
+              name: product.name,
+              kind: product.kind,
+              currency: product.currency,
+              termDays: product.termDays,
+              minimum: product.minimum,
+              interestPaid: product.interestPaid,
+              productStatus: to,
+              firstRate: null,
+              reason,
+            },
+            new Date().toISOString(),
+          ),
+        );
+      }),
+    approveChange: (changeId) =>
+      attempt(() => {
+        const change = waitingChange(changeId);
+        if (change.proposedBy === me) throw new CatalogueError("forbidden");
+        const terms = {
+          name: change.name,
+          kind: change.kind,
+          termDays: change.termDays,
+          minimum: change.minimum,
+          interestPaid: change.interestPaid,
+          status: change.productStatus,
+        };
+        if (change.action === "create") {
+          products.push({ id: `-ProductSample${changeId}`, code: change.productCode, currency: change.currency, rate: null, nextRate: null, ...terms });
+          rates.set(change.productCode, change.firstRate ? [change.firstRate] : []);
+        } else {
+          Object.assign(productFor(change.productCode), terms);
+        }
+        return decideChange(change, "approved", null);
+      }),
+    sendBackChange: (changeId, note) =>
+      attempt(() => {
+        const change = waitingChange(changeId);
+        if (change.proposedBy === me) throw new CatalogueError("forbidden");
+        if (!note.trim()) throw new CatalogueError("reason_required");
+        return decideChange(change, "sent_back", note.trim());
+      }),
+    withdrawChange: (changeId) =>
+      attempt(() => {
+        const change = waitingChange(changeId);
+        if (change.proposedBy !== me) throw new CatalogueError("forbidden");
+        return decideChange(change, "withdrawn", null);
+      }),
+    reach: (code) => attempt(() => clone(SAMPLE_REACH[productFor(code).code] ?? NOBODY)),
     withdraw(proposalId) {
       try {
         const proposal = waiting(proposalId);
@@ -192,4 +413,10 @@ export function createStubCatalogueApi({ me, today, sample = "default" }: StubOp
       }
     },
   };
+}
+
+/** The sample a page's `?sample=` asks for: `empty`, `offline`, or the default. */
+export function sampleFrom(search: string): "default" | "empty" | "offline" {
+  const asked = new URLSearchParams(search).get("sample");
+  return asked === "empty" || asked === "offline" ? asked : "default";
 }

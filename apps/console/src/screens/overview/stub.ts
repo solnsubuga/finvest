@@ -17,6 +17,7 @@ const SOURCES: Record<Kind, { view: Permission; decide: Permission }> = {
   buffer_rules: { view: "dealing_desk.view", decide: "dealing_orders.change" },
   buffer_capital: { view: "dealing_desk.view", decide: "dealing_orders.change" },
   rate_change: { view: "rates.view", decide: "rates.view" },
+  product_change: { view: "products.view", decide: "products.change" },
   migration_totals: { view: "migration.view", decide: "migration.sign_off" },
   migration_sign_off: { view: "migration.view", decide: "migration.sign_off" },
   // The console has no `client_phones.change` yet, so the sample stands in with the client permissions.
@@ -44,6 +45,7 @@ const SOURCES: Record<Kind, { view: Permission; decide: Permission }> = {
   organisation: { view: "review_queue.view", decide: "organisations.review" },
   investment_correction: { view: "investments.view", decide: "investment_corrections.change" },
   investment_run: { view: "investments.view", decide: "investment_corrections.change" },
+  investment_booking: { view: "investments.view", decide: "investment_corrections.change" },
   client_pin_reset: { view: "clients.view", decide: "client_pins.reset" },
   client_limits: { view: "clients.view", decide: "client_limits.change" },
   client_statement: { view: "clients.view", decide: "client_statements.send" },

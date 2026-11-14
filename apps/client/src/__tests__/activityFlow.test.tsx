@@ -32,7 +32,7 @@ async function signUp(local: string) {
   await fireEvent.changeText(await screen.findByTestId("password-input"), "green matooke sunday");
   await fireEvent.changeText(screen.getByTestId("password-confirm-input"), "green matooke sunday");
   await fireEvent.press(screen.getByTestId("password-submit"));
-  await screen.findByText("Welcome to Finvest");
+  await screen.findByTestId("home");
 }
 
 beforeAll(warmRouter, WARM_ROUTER_MS);
@@ -46,19 +46,19 @@ describe("Activity", () => {
     await fireEvent.changeText(screen.getByTestId("password-input"), DEMO_PASSWORD);
     await fireEvent.press(screen.getByTestId("login-submit"));
     await fireEvent.press(await screen.findByTestId("use-passkey"));
-    await screen.findByText("Welcome, Amara");
+    await screen.findByTestId("home");
     await fireEvent.press(screen.getByLabelText("Activity"));
 
-    expect(await screen.findByText("Payment for 182 day Treasury bill")).toBeTruthy();
+    expect(await screen.findByText("Payment for 182 Day Treasury Bill")).toBeTruthy();
     expect(screen.getByText("Being checked")).toBeTruthy();
     expect(screen.getByText("Did not go through")).toBeTruthy();
-    expect(screen.getByText("Interest on 91 day Treasury bill")).toBeTruthy();
+    expect(screen.getByText("Interest on 91 Day Treasury Bill")).toBeTruthy();
     expect(screen.getByText("+UGX 15,400")).toBeTruthy();
     expect(screen.getByText("Payout")).toBeTruthy();
 
     await fireEvent.press(screen.getByTestId("filter-interest"));
     expect(screen.queryByText("Payout")).toBeNull();
-    expect(screen.getByText("Interest on 91 day Treasury bill")).toBeTruthy();
+    expect(screen.getByText("Interest on 91 Day Treasury Bill")).toBeTruthy();
     await fireEvent.press(screen.getByTestId("filter-payout"));
     expect(screen.getByText("Paid to you")).toBeTruthy();
     expect(screen.queryByText(/^Payment for/)).toBeNull();

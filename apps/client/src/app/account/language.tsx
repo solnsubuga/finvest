@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Pressable, StyleSheet, View } from "react-native";
+import { Platform, Pressable, StyleSheet, View } from "react-native";
 import { Stack, useRouter } from "expo-router";
 
 import { BackButton } from "@/components/BackButton";
@@ -9,7 +9,10 @@ import { Choice } from "@/components/Choice";
 import { Icon } from "@/components/Icon";
 import { Screen } from "@/components/Screen";
 import { SignInAgain } from "@/components/SignInAgain";
+import { ToggleRow } from "@/components/Toggle";
 import { Eyebrow, Title, Txt } from "@/components/Txt";
+import { useDataSaving } from "@/dataSaving/DataSavingProvider";
+import { canTellConnection } from "@/dataSaving/network";
 import { useProfile } from "@/profile/ProfileProvider";
 import { describeProfileError, ProfileError } from "@/profile/types";
 import { colors, fontSizes } from "@/theme";
@@ -21,9 +24,13 @@ const LANGUAGES = [
   { key: "sw", label: "Kiswahili", detail: "Coming soon", ready: false },
 ] as const;
 
-/** Profile, Language and data: the app's language, SMS receipts and a copy of my data. */
+/**
+ * Profile, Language and data: the app's language, data saving on this device,
+ * SMS receipts and a copy of my data.
+ */
 export default function LanguageAndData() {
   const profile = useProfile();
+  const saving = useDataSaving();
   const router = useRouter();
   const [busy, setBusy] = useState(false);
   const [note, setNote] = useState<{ tone: "neutral" | "danger"; text: string } | null>(null);
@@ -79,6 +86,38 @@ export default function LanguageAndData() {
       </View>
 
       <View style={{ marginTop: 26, gap: 10 }}>
+        <Txt weight="bold">Data saving</Txt>
+        <Card padded={false}>
+          <View style={{ paddingHorizontal: 16, paddingVertical: 4 }} testID="data-saving">
+            <ToggleRow
+              title="Light mode for slow networks"
+              detail="Figures as text instead of charts, and fewer updates in the background"
+              on={saving.light}
+              onChange={(light) => saving.change({ light })}
+              disabled={!saving.ready}
+              testID="data-saving-light"
+            />
+            <View style={styles.divider} />
+            <ToggleRow
+              title="Download documents on Wi-Fi only"
+              detail={
+                canTellConnection()
+                  ? "Statements, receipts and certificates wait for Wi-Fi unless you say otherwise"
+                  : "This browser does not say whether it is on Wi-Fi, so downloads here are never held"
+              }
+              on={saving.wifiOnlyDocuments}
+              onChange={(wifiOnlyDocuments) => saving.change({ wifiOnlyDocuments })}
+              disabled={!saving.ready}
+              testID="data-saving-wifi"
+            />
+          </View>
+        </Card>
+        <Txt size={fontSizes.sm} color={colors.muted}>
+          {Platform.OS === "web" ? "These apply in this browser only." : "These apply on this phone only."}
+        </Txt>
+      </View>
+
+      <View style={{ marginTop: 26, gap: 10 }}>
         <Txt weight="bold">Messages</Txt>
         <Card padded={false}>
           <Pressable
@@ -90,7 +129,7 @@ export default function LanguageAndData() {
             <View style={{ flex: 1 }}>
               <Txt weight="bold">SMS receipts</Txt>
               <Txt size={fontSizes.sm} color={colors.muted}>
-                Choose which messages come by SMS, email or in the app
+                For when you have no data. Choose which messages come by SMS, email or in the app
               </Txt>
             </View>
             <Icon name="chevron" size={16} strokeWidth={2.2} />
@@ -124,4 +163,5 @@ export default function LanguageAndData() {
 
 const styles = StyleSheet.create({
   row: { flexDirection: "row", alignItems: "center", gap: 12, padding: 16, minHeight: 68 },
+  divider: { height: 1, backgroundColor: colors.divider },
 });

@@ -9,6 +9,18 @@ export type StaffStatus = "invited" | "active" | "disabled";
 export type ChangeKind = "invite" | "change_role" | "deactivate" | "reactivate" | "reset_sign_in";
 export type Decision = "approved" | "rejected" | "withdrawn";
 
+/** Where Cloudflare Access, in front of the console, stands for one person. */
+export type AccessState = "waiting" | "in_access" | "removed" | "failed" | "not_set_up";
+
+export interface AccessSync {
+  state: AccessState;
+  /** Why the last attempt did not finish, as a code. */
+  errorCode: string | null;
+  requestedAt: string;
+  /** When Cloudflare's list last said what the team says. */
+  syncedAt: string | null;
+}
+
 export interface Member {
   id: string;
   name: string;
@@ -19,6 +31,8 @@ export interface Member {
   hasAuthenticator: boolean;
   createdAt: string;
   lastSignedInAt: string | null;
+  /** Null until a change, or the daily check, first asks for it. */
+  access: AccessSync | null;
 }
 
 export interface Change {
@@ -65,6 +79,8 @@ export interface TeamApi {
   load(): Promise<Team>;
   propose(change: NewChange): Promise<Change>;
   decide(changeId: string, decision: Decision, reason: string): Promise<Change>;
+  /** Bring Cloudflare Access in line with the team again for one person. */
+  syncAccess(staffId: string): Promise<AccessSync>;
 }
 
 export type TeamErrorCode =
@@ -113,4 +129,4 @@ export function teamErrorMessage(error: unknown): string {
 
 const notConnected = () => Promise.reject(new TeamError("not_connected"));
 
-export const notConnectedTeamApi: TeamApi = { load: notConnected, propose: notConnected, decide: notConnected };
+export const notConnectedTeamApi: TeamApi = { load: notConnected, propose: notConnected, decide: notConnected, syncAccess: notConnected };

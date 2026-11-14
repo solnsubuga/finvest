@@ -26,10 +26,10 @@ function day(now: number, days: number): string {
 function history(now: number): [PaymentRow[], InvestmentRow[], PayoutRow[]] {
   const ugx = (minor: number) => ({ currency: "UGX" as const, minor });
   const investments: InvestmentRow[] = [
-    { id: "demo-activity-inv-1", product_name: "91 day Treasury bill", currency: "UGX", status: "active", maturity_date: day(now, -88), interest_at_maturity_minor: 61_800 },
-    { id: "demo-activity-inv-2", product_name: "182 day Treasury bill", currency: "UGX", status: "active", maturity_date: day(now, -170), interest_at_maturity_minor: 128_400 },
-    { id: "demo-activity-inv-3", product_name: "91 day Treasury bill", currency: "UGX", status: "matured", maturity_date: day(now, 18), interest_at_maturity_minor: 15_400 },
-    { id: "demo-activity-inv-4", product_name: "Fixed deposit, 6 months", currency: "UGX", status: "awaiting_payment", maturity_date: null, interest_at_maturity_minor: null },
+    { id: "demo-activity-inv-1", product_name: "91 Day Treasury Bill", currency: "UGX", status: "active", maturity_date: day(now, -88), interest_at_maturity_minor: 61_800 },
+    { id: "demo-activity-inv-2", product_name: "182 Day Treasury Bill", currency: "UGX", status: "active", maturity_date: day(now, -170), interest_at_maturity_minor: 128_400 },
+    { id: "demo-activity-inv-3", product_name: "91 Day Treasury Bill", currency: "UGX", status: "matured", maturity_date: day(now, 18), interest_at_maturity_minor: 15_400 },
+    { id: "demo-activity-inv-4", product_name: "91 Day Treasury Bill", currency: "UGX", status: "awaiting_payment", maturity_date: null, interest_at_maturity_minor: null },
   ];
   const payments: PaymentRow[] = [
     { id: "demo-activity-pay-1", investment_id: "demo-activity-inv-4", method: "airtel", status: "failed", amount: ugx(500_000), created_at: ago(now, 0, 2), confirmed_at: null },

@@ -1,6 +1,6 @@
 import type { Permission, Role, ScreenPermission } from "@/auth/types.ts";
 import { NAV_ITEMS } from "@/nav/nav.ts";
-import type { Change, ChangeKind, Member, StaffStatus } from "./api.ts";
+import type { AccessSync, Change, ChangeKind, Member, StaffStatus } from "./api.ts";
 
 export const STATUS_LABELS: Record<StaffStatus, string> = {
   invited: "Invited",
@@ -39,6 +39,7 @@ const ACTIONS: readonly { permission: Permission; label: string; under: ScreenPe
   { permission: "dealing_orders.change", label: "Deal and settle orders", under: "dealing_desk.view" },
   { permission: "tax_remittances.change", label: "Pay withholding tax to URA", under: "finance.view" },
   { permission: "rates.change", label: "Change rates", under: "rates.view" },
+  { permission: "products.change", label: "Add, change, pause and open products", under: "products.view" },
   { permission: "investment_corrections.change", label: "Undo investments and refund", under: "investments.view" },
   { permission: "investment_transfers.change", label: "Let large investment transfers through", under: "review_queue.view" },
   { permission: "organisations.review", label: "Check and open company and group accounts", under: "review_queue.view" },
@@ -103,5 +104,39 @@ export function describeChange(change: Change, roleLabel: (role: Role) => string
       return `Reactivate ${change.staffName}. They set up sign-in again from a new link.`;
     case "reset_sign_in":
       return `Reset sign-in for ${change.staffName}. They get a new set-up link by email.`;
+  }
+}
+
+export type AccessTone = "good" | "waiting" | "bad" | "quiet";
+
+const ACCESS_PROBLEMS: Record<string, string> = {
+  cloudflare_token_refused: "Cloudflare refused the token. Check that FINVEST_CLOUDFLARE_ACCESS_TOKEN has Zero Trust edit rights.",
+  cloudflare_list_missing: "Cloudflare could not find the staff list. Check FINVEST_CLOUDFLARE_STAFF_LIST_ID.",
+  cloudflare_refused: "Cloudflare would not take this address.",
+  cloudflare_unavailable: "Cloudflare did not answer.",
+  cloudflare_unreachable: "Cloudflare could not be reached.",
+  access_not_confirmed: "Cloudflare took the change but does not show it yet.",
+};
+
+/** What the team view says about Cloudflare Access for one person. */
+export function accessLabel(member: Pick<Member, "status" | "access">): { text: string; tone: AccessTone; detail: string | null } {
+  const sync: AccessSync | null = member.access;
+  const problem = sync?.errorCode ? (ACCESS_PROBLEMS[sync.errorCode] ?? "Cloudflare did not finish it.") : null;
+  if (!sync) return { text: "Access not checked yet", tone: "quiet", detail: "The daily check will look at Cloudflare." };
+  switch (sync.state) {
+    case "in_access":
+      return { text: "Can reach the console", tone: "good", detail: null };
+    case "removed":
+      return { text: "Removed from Access", tone: "quiet", detail: null };
+    case "waiting":
+      return {
+        text: member.status === "disabled" ? "Removing from Access" : "Adding to Access",
+        tone: "waiting",
+        detail: problem ? `${problem} Trying again.` : null,
+      };
+    case "failed":
+      return { text: "Access not updated", tone: "bad", detail: problem };
+    case "not_set_up":
+      return { text: "Access sync is off", tone: "quiet", detail: "Cloudflare settings are not set for the worker, so add or remove this address by hand." };
   }
 }

@@ -64,6 +64,7 @@ const FAILURES: Record<string, string> = {
 const PARAM: Record<Kind, string> = { reversal: "reversal", receivable: "receivable" };
 
 const sameItem = (a: Selected | null, b: Selected | null) => a !== null && b !== null && a.kind === b.kind && a.id === b.id;
+const itemKey = (at: Selected) => `${at.kind}:${at.id}`;
 const selectionOf = (item: CorrectionSummary): Selected => ({ kind: kindOf(item.step), id: item.id });
 
 /**
@@ -79,7 +80,11 @@ export function MistakenPayments({ api, canChange, newKey = () => crypto.randomU
       ? { kind: "receivable", id: params.get("receivable") as string }
       : null;
   const [list, setList] = useState<Load<{ items: CorrectionSummary[]; owed: CorrectionSummary[] }>>({ state: "loading" });
-  const [loaded, setLoaded] = useState<{ at: Selected; load: Load<CorrectionDetail> } | null>(null);
+  // Each step's detail is kept under its own key. The address can name the step it named before
+  // for one render after a proposal, and a fetch started then must not evict the new step.
+  const [loaded, setLoadedAll] = useState<Record<string, Load<CorrectionDetail>>>({});
+  const setLoaded = ({ at, load }: { at: Selected; load: Load<CorrectionDetail> }) =>
+    setLoadedAll((known) => ({ ...known, [itemKey(at)]: load }));
   const [proposing, setProposing] = useState<Partial<Proposal> | null>(null);
   const [busy, setBusy] = useState(false);
   const [failure, setFailure] = useState<{ at: Selected; message: string } | null>(null);
@@ -131,7 +136,7 @@ export function MistakenPayments({ api, canChange, newKey = () => crypto.randomU
     };
   }, [fetchDetail, selectedKind, selectedId]);
 
-  const detail: Load<CorrectionDetail> = loaded && sameItem(loaded.at, selected) ? loaded.load : { state: "loading" };
+  const detail: Load<CorrectionDetail> = (selected && loaded[itemKey(selected)]) || { state: "loading" };
 
   function keyFor(request: string): string {
     if (pending.current?.request === request) return pending.current.key;
@@ -180,6 +185,7 @@ export function MistakenPayments({ api, canChange, newKey = () => crypto.randomU
       const at = selectionOf(made);
       pending.current = null;
       setProposing(null);
+      setKept(at);
       setLoaded({ at, load: { state: "ready", value: made } });
       setParams({ [PARAM[at.kind]]: made.id });
       await reloadList();

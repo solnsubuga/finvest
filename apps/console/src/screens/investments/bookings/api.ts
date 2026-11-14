@@ -135,6 +135,13 @@ export function bookingFailureText(code: string | null): string {
   return (code && FAILURES[code]) ?? "Finvest could not save it.";
 }
 
+/** What happens when the term ends, in the words the booking form uses. */
+export const AT_MATURITY_WORDS: Record<AtMaturity, string> = {
+  roll_over: "Roll it over",
+  pay_out: "Pay it out",
+  pay_interest: "Pay the interest, keep the rest invested",
+};
+
 const notConnected = () => Promise.reject(new BookingsError("not_connected"));
 
 export const notConnectedBookingsApi: BookingsApi = {

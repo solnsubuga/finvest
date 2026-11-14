@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Pressable, StyleSheet, View } from "react-native";
-import { Stack, useRouter } from "expo-router";
+import { Stack, useLocalSearchParams, useRouter } from "expo-router";
 
 import { Notice } from "@/components/Blocks";
 import { Button } from "@/components/Button";
@@ -22,11 +22,22 @@ import { colors } from "@/theme";
 
 type Problems = { category?: string; summary?: string; details?: string };
 
-/** Make a complaint: what it is about, one line, and the full story. */
+/** A Finvest payment reference passed in from a receipt. Anything else in the link is ignored. */
+function paymentReference(value: string | string[] | undefined): string | null {
+  return typeof value === "string" && /^[A-Za-z0-9_-]{4,40}$/.test(value) ? value : null;
+}
+
+/**
+ * Make a complaint: what it is about, one line, and the full story. Opened from a receipt, it is
+ * about that payment: "A payment" is chosen and the Finvest reference goes first in the story, so
+ * staff can find the payment without the client typing it.
+ */
 export default function NewComplaint() {
   const router = useRouter();
   const { client, refreshUnread } = useSupport();
-  const [category, setCategory] = useState<ComplaintCategory | null>(null);
+  const payment = paymentReference(useLocalSearchParams<{ payment?: string }>().payment);
+  const opening = payment ? `About my payment with Finvest reference ${payment}.\n\n` : "";
+  const [category, setCategory] = useState<ComplaintCategory | null>(payment ? "payments" : null);
   const [summary, setSummary] = useState("");
   const [details, setDetails] = useState("");
   const [problems, setProblems] = useState<Problems>({});
@@ -64,7 +75,7 @@ export default function NewComplaint() {
       const complaint = await client.makeComplaint({
         category,
         summary: summary.trim(),
-        details: details.trim(),
+        details: opening + details.trim(),
         key,
       });
       void refreshUnread();
@@ -105,6 +116,13 @@ export default function NewComplaint() {
       <Stack.Screen options={{ title: "Make a complaint" }} />
       <StackHeader title="Make a complaint" fallback="/support/complaints" />
       <View style={{ marginTop: 20, gap: 18 }}>
+        {payment ? (
+          <View testID="complaint-payment">
+            <Notice tone="neutral">
+              {`This complaint is about your payment with Finvest reference ${payment}. We add the reference for you.`}
+            </Notice>
+          </View>
+        ) : null}
         <Field label="What is it about?" error={problems.category}>
           <View style={styles.choices} accessibilityRole="radiogroup">
             {complaintCategories.map((choice) => {
@@ -155,7 +173,7 @@ export default function NewComplaint() {
             setDetails(text);
             clear("details");
           }}
-          maxLength={MAX_DETAILS}
+          maxLength={MAX_DETAILS - opening.length}
           editable={!locked}
           multiline
           textAlignVertical="top"

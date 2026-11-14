@@ -21,6 +21,8 @@ const SCREENS = [
   "/dealing-desk",
   "/finance",
   "/products",
+  "/products?new",
+  "/products?edit=TREA-91",
   "/rates",
   "/compliance",
   "/team",

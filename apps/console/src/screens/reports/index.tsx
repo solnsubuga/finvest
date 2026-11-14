@@ -30,8 +30,12 @@ import {
   OUTCOME_LABELS,
 } from "./labels.ts";
 import { createStubAuditApi } from "./stub.ts";
+import { notConnectedReportsApi, type ReportFile, type ReportsApi } from "./catalogue.ts";
+import { createHttpReportsApi } from "./catalogue-http.ts";
+import { createStubReportsApi } from "./catalogue-stub.ts";
+import { ReportsSection, type ReportLink } from "./Catalogue.tsx";
 
-const SUMMARY = "Reports from the ledger, and the record of who did what and why.";
+const SUMMARY = "Download any report for any period, or have it emailed on a schedule. Below them, the record of who did what and why.";
 const INPUT = "w-full rounded-lg border border-border-strong bg-surface px-3 py-2.5 text-md font-medium text-ink";
 
 type Load =
@@ -40,7 +44,7 @@ type Load =
   | { state: "ready"; events: AuditEvent[]; nextCursor: string | null };
 
 /** Hands the browser the exported file. */
-export function saveFile({ file, filename }: AuditExport) {
+export function saveFile({ file, filename }: AuditExport | ReportFile) {
   const url = URL.createObjectURL(file);
   const link = document.createElement("a");
   link.href = url;
@@ -54,12 +58,25 @@ interface ReportsScreenProps {
   /** `audit.view`. Without it the screen says so and asks the API for nothing. */
   canReadAudit: boolean;
   save?: (exported: AuditExport) => void;
+  /** The reports and their schedules. Left out, the screen shows the audit trail alone. */
+  reports?: {
+    api: ReportsApi;
+    /** The reader's own staff ID. */
+    me: string;
+    newKey?: () => string;
+    /** From a scheduled email's link: the report and period to open. */
+    link?: ReportLink | null;
+    save?: (file: ReportFile) => void;
+  } | null;
 }
 
-export function ReportsScreen({ api, canReadAudit, save = saveFile }: ReportsScreenProps) {
+export function ReportsScreen({ api, canReadAudit, save = saveFile, reports = null }: ReportsScreenProps) {
   return (
     <>
       <PageHeader title="Reports and audit" summary={SUMMARY} />
+      {reports ? (
+        <ReportsSection api={reports.api} me={reports.me} save={reports.save ?? saveFile} newKey={reports.newKey ?? (() => crypto.randomUUID())} link={reports.link ?? null} />
+      ) : null}
       {canReadAudit ? (
         <AuditTrail api={api} save={save} />
       ) : (
@@ -430,5 +447,31 @@ export default function ReportsPage() {
     const base = apiBaseUrl();
     return base ? createHttpAuditApi(createHttp(base)) : notConnectedAuditApi;
   });
-  return <ReportsScreen api={api} canReadAudit={session ? can(session, "audit.view") : false} />;
+  const canReadReports = session ? can(session, "reports.view") : false;
+  const [reportsApi] = useState<ReportsApi>(() => {
+    if (isStubAuth() && session) {
+      // Under the stub, `?sample=empty` shows no schedules and `?sample=offline` as if Finvest could not be reached.
+      const sample = new URLSearchParams(window.location.search).get("sample");
+      if (sample === "offline") return notConnectedReportsApi;
+      return createStubReportsApi({ id: session.staffId, name: session.name, permissions: session.permissions }, Date.now, { empty: sample === "empty" });
+    }
+    const base = apiBaseUrl();
+    return base ? createHttpReportsApi(createHttp(base)) : notConnectedReportsApi;
+  });
+  const [link] = useState<ReportLink | null>(() => readLink(window.location.search));
+  return (
+    <ReportsScreen
+      api={api}
+      canReadAudit={session ? can(session, "audit.view") : false}
+      reports={canReadReports && session ? { api: reportsApi, me: session.staffId, link } : null}
+    />
+  );
+}
+
+/** The `?report=&from=&to=&currency=` a scheduled email links to, or null. */
+export function readLink(search: string): ReportLink | null {
+  const query = new URLSearchParams(search);
+  const report = query.get("report");
+  if (!report) return null;
+  return { report, from: query.get("from"), to: query.get("to"), currency: query.get("currency") };
 }

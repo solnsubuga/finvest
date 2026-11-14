@@ -7,6 +7,7 @@ import {
   LoginChallenge,
   Passkey,
   PinCheck,
+  UnlockKeyTurnedOn,
   PinConfirmation,
   SecondStep,
   SelfieAttempt,
@@ -213,6 +214,8 @@ export function createStubAuthClient(options: StubOptions = {}): AuthClient {
   /** This session's app PIN, and the wrong tries in a row against it. */
   let pin: string | null = null;
   let wrongPins = 0;
+  /** This session's key for fingerprint or face unlock. */
+  let unlockKey: string | null = null;
 
   const nextId = (prefix: string) => `${prefix}_${(counter += 1)}`;
   const wait = () =>
@@ -244,6 +247,7 @@ export function createStubAuthClient(options: StubOptions = {}): AuthClient {
     // A PIN belongs to one session, so a new log in starts without one.
     pin = null;
     wrongPins = 0;
+    unlockKey = null;
     const account = accounts.get(phone);
     return {
       phone,
@@ -484,6 +488,8 @@ export function createStubAuthClient(options: StubOptions = {}): AuthClient {
       if (pinProblem(next)) throw new AuthError("pin_too_simple");
       pin = next;
       wrongPins = 0;
+      // A new PIN forgets the unlock key, as the server does.
+      unlockKey = null;
     },
 
     async unlockWithPin(tried): Promise<PinCheck> {
@@ -499,6 +505,31 @@ export function createStubAuthClient(options: StubOptions = {}): AuthClient {
         triesLeft: checked.triesLeft,
         confirmation: checked.unlocked ? `demo-${action}-${Date.now()}` : null,
       };
+    },
+
+    async turnOnUnlockKey(tried): Promise<UnlockKeyTurnedOn> {
+      await wait();
+      const checked = checkPin(tried);
+      if (checked.unlocked) unlockKey = nextId("demo-unlock-key");
+      return { enabled: checked.unlocked, triesLeft: checked.triesLeft, key: checked.unlocked ? unlockKey : null };
+    },
+
+    async turnOffUnlockKey(): Promise<void> {
+      await wait();
+      currentAccount();
+      unlockKey = null;
+    },
+
+    async unlockWithKey(key): Promise<PinCheck> {
+      await wait();
+      currentAccount();
+      if (unlockKey !== null && key === unlockKey) {
+        wrongPins = 0;
+        return { unlocked: true, triesLeft: MAX_WRONG_PINS };
+      }
+      // A wrong key turns the unlock off and charges no PIN try.
+      unlockKey = null;
+      return { unlocked: false, triesLeft: MAX_WRONG_PINS - wrongPins };
     },
 
     async sendLoginCode(loginId, _channel): Promise<void> {

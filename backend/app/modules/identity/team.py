@@ -18,6 +18,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.modules.audit import service as audit
 from app.modules.audit.domain.events import AuditActor, AuditEvent
+from app.modules.identity import staff_access
 from app.modules.identity.domain.accounts import InvalidIdentifier, normalize_email
 from app.modules.identity.domain.permissions import Role
 from app.modules.identity.domain.team import (
@@ -55,6 +56,8 @@ class TeamMember:
     has_authenticator: bool
     created_at: datetime
     last_signed_in_at: datetime | None
+    # Where Cloudflare Access stands for them. None: nothing has asked for it yet.
+    access: staff_access.AccessStatus | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -135,6 +138,7 @@ _DECIDE = text(
 async def list_team(session: AsyncSession) -> list[TeamMember]:
     """Everyone who has been added, active first, by name."""
     rows = (await session.execute(_MEMBERS)).all()
+    access = await staff_access.statuses(session)
     return [
         TeamMember(
             id=row.id,
@@ -146,6 +150,7 @@ async def list_team(session: AsyncSession) -> list[TeamMember]:
             has_authenticator=row.has_authenticator,
             created_at=row.created_at,
             last_signed_in_at=row.last_signed_in_at,
+            access=access.get(row.id),
         )
         for row in rows
     ]
@@ -318,7 +323,40 @@ async def _apply(
             ),
             {"id": change.staff_id},
         )
+    if change.kind != "change_role":
+        # Cloudflare Access lets in whoever is invited or active and nobody deactivated. A new
+        # set-up link checks it too, in case the address was taken off the list by hand.
+        await staff_access.request_sync(
+            session, change.staff_id, key=f"change:{change.id}", now=now
+        )
     logger.info("team_change_applied", kind=change.kind, change_id=change.id)
+
+
+async def request_access_sync(
+    session: AsyncSession, staff: Actor, staff_id: str, clock: Clock
+) -> staff_access.AccessStatus:
+    """Ask for Cloudflare Access to be brought in line with the team again, such as after it
+    failed. One admin may ask: it changes nothing the team did not already approve."""
+    acting = _staff_id(staff)
+    await _member(session, staff_id)
+    now = clock.now()
+    await staff_access.request_sync(session, staff_id, key=f"again:{push_id(clock)}", now=now)
+    await audit.record(
+        session,
+        AuditEvent(
+            category="change",
+            action="identity.team.access_sync_requested",
+            resource_type="staff",
+            resource_id=staff_id,
+            actor=AuditActor.staff(acting),
+            reason=None,
+            details={},
+        ),
+        clock,
+    )
+    status = await staff_access.status_of(session, staff_id)
+    assert status is not None  # just written
+    return status
 
 
 async def _send_link(

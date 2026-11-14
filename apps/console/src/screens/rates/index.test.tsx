@@ -35,6 +35,16 @@ describe("rates screen", () => {
     ]);
   });
 
+  it("shows who a rate change reaches before anyone approves it", async () => {
+    renderRates();
+    const card = await waitingCard();
+    expect(await within(card).findByText("912 clients keep their rate")).toBeInTheDocument();
+    expect(within(card).getByText(/1,284 running investments and 37 investments waiting for payment keep the rate/)).toBeInTheDocument();
+    expect(within(card).getByText("New money from 146 open goals and 97 automatic investing plans takes the change.")).toBeInTheDocument();
+    expect(screen.getByText("New investments only")).toBeInTheDocument();
+    expect(screen.getByText("1 change")).toBeInTheDocument();
+  });
+
   it("lets a second person approve a colleague's change", async () => {
     const { user } = renderRates();
     const card = await waitingCard();

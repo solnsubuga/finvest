@@ -6,6 +6,9 @@ const paths = {
   back: ["M15 6l-6 6 6 6"],
   chevron: ["M9 6l6 6-6 6"],
   check: ["M5 12.5l4.5 4.5L19 7.5"],
+  arrowUp: ["M7 17L17 7M8 7h9v9"],
+  arrowDown: ["M12 5v14M6 13l6 6 6-6"],
+  statement: ["M7 3h8l4 4v14H7zM10 12h6M10 16h6"],
   eye: ["M2 12s3.6-6.5 10-6.5S22 12 22 12s-3.6 6.5-10 6.5S2 12 2 12z"],
   eyeOff: [
     "M2 12s3.6-6.5 10-6.5S22 12 22 12s-3.6 6.5-10 6.5S2 12 2 12z",
@@ -36,6 +39,13 @@ const paths = {
   calendar: ["M4 6h16v14H4zM4 10h16M8 3v4M16 3v4"],
   // A shield with a tick: the identity check.
   shield: ["M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6z", "M8.5 12l2.5 2.5 4.5-5"],
+  // Ridges of a fingertip: unlocking with a fingerprint or face.
+  fingerprint: [
+    "M5.5 8.5A7.5 7.5 0 0119 10",
+    "M8 19.5c1-1.8 1.5-3.8 1.5-6.5a2.5 2.5 0 015 0c0 2-.3 3.8-.9 5.5",
+    "M5 15c.6-1.2.9-2.4.9-3.8a6.1 6.1 0 0112.2 0c0 1.6-.1 3.1-.5 4.6",
+    "M12 13c0 3-.8 5.6-2.2 8",
+  ],
   // A padlock: freezing the account.
   lock: ["M5 11h14v10H5z", "M8 11V7a4 4 0 018 0v4"],
 } as const;

@@ -206,6 +206,40 @@ export function createApiAuthClient(): AuthClient {
         }
       }),
 
+    turnOnUnlockKey: (pin) =>
+      wrap(async () => {
+        try {
+          const result = await api("PUT /client/pin/unlock-key", { body: { pin } });
+          return { enabled: result.enabled, triesLeft: result.tries_left, key: result.key ?? null };
+        } catch (error) {
+          // The fifth wrong PIN ended the session on the server.
+          if (error instanceof ApiError && error.code === "unauthorized") {
+            await saveToken(null);
+            throw new AuthError("signed_out");
+          }
+          throw error;
+        }
+      }),
+
+    turnOffUnlockKey: () =>
+      wrap(async () => {
+        await api("DELETE /client/pin/unlock-key", {});
+      }),
+
+    unlockWithKey: (key) =>
+      wrap(async () => {
+        try {
+          const result = await api("POST /client/pin/unlock-with-key", { body: { key } });
+          return { unlocked: result.unlocked, triesLeft: result.tries_left };
+        } catch (error) {
+          if (error instanceof ApiError && error.code === "unauthorized") {
+            await saveToken(null);
+            throw new AuthError("signed_out");
+          }
+          throw error;
+        }
+      }),
+
     sendLoginCode: (loginId, channel) =>
       wrap(async () => {
         await api("POST /client/login/code/send", { body: { login_id: loginId, channel } });

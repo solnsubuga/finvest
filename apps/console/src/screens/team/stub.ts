@@ -1,6 +1,6 @@
 import { STUB_ROLE_PERMISSIONS } from "@/auth/stub.ts";
 import { ROLES, type Role } from "@/auth/types.ts";
-import { TeamError, type Change, type Decision, type Member, type NewChange, type Team, type TeamApi } from "./api.ts";
+import { TeamError, type AccessSync, type Change, type Decision, type Member, type NewChange, type Team, type TeamApi } from "./api.ts";
 
 /**
  * A sample team for `pnpm dev` and tests. It keeps the rules the backend
@@ -37,13 +37,28 @@ function member(
   lastSignedInAt: string | null,
   { passkey = true, authenticator = true, status = "active" }: { passkey?: boolean; authenticator?: boolean; status?: Member["status"] } = {},
 ): Member {
-  return { id, name, email, role, status, hasPasskey: passkey, hasAuthenticator: authenticator, createdAt, lastSignedInAt };
+  const access: AccessSync = { state: status === "disabled" ? "removed" : "in_access", errorCode: null, requestedAt: createdAt, syncedAt: createdAt };
+  return { id, name, email, role, status, hasPasskey: passkey, hasAuthenticator: authenticator, createdAt, lastSignedInAt, access };
 }
 
-export type TeamSample = "sample" | "quiet";
+/** `access` shows each way Cloudflare Access can stand: failed, trying again, off, never checked. */
+export type TeamSample = "sample" | "quiet" | "access";
+
+function withAccessProblems(members: Member[]): void {
+  const set = (id: string, access: AccessSync | null) => {
+    const found = members.find((m) => m.id === id);
+    if (found) found.access = access;
+  };
+  set("sample-finance", { state: "failed", errorCode: "cloudflare_token_refused", requestedAt: "2026-11-13T08:00:00Z", syncedAt: null });
+  set("sample-compliance", { state: "waiting", errorCode: "cloudflare_unavailable", requestedAt: "2026-11-13T08:05:00Z", syncedAt: null });
+  set("sample-support", { state: "not_set_up", errorCode: null, requestedAt: "2026-11-13T08:10:00Z", syncedAt: null });
+  set("sample-left", { state: "waiting", errorCode: null, requestedAt: "2026-11-13T08:12:00Z", syncedAt: "2026-10-30T17:00:00Z" });
+  set("sample-ops", null);
+}
 
 export function createStubTeamApi(me: Me, now: () => number = Date.now, sample: TeamSample = "sample"): TeamApi {
   const members = sampleMembers(me);
+  if (sample === "access") withAccessProblems(members);
   const changes: Change[] = [];
   let count = 0;
   const nextId = () => `sample-change-${++count}`;
@@ -142,6 +157,14 @@ export function createStubTeamApi(me: Me, now: () => number = Date.now, sample: 
       changes.push(change);
       return Promise.resolve({ ...change });
     },
+    syncAccess(staffId: string) {
+      const target = members.find((m) => m.id === staffId);
+      if (!target) return Promise.reject(new TeamError("not_found"));
+      // The sample worker answers at once.
+      const access: AccessSync = { state: target.status === "disabled" ? "removed" : "in_access", errorCode: null, requestedAt: stamp(), syncedAt: stamp() };
+      target.access = access;
+      return Promise.resolve({ ...access, state: "waiting", syncedAt: null });
+    },
     decide(changeId: string, decision: Decision, reason: string) {
       const change = changes.find((c) => c.id === changeId && c.status === "proposed");
       if (!change) return Promise.reject(new TeamError("not_found"));
@@ -167,6 +190,9 @@ export function createStubTeamApi(me: Me, now: () => number = Date.now, sample: 
           if (change.kind === "reset_sign_in") {
             target.hasPasskey = false;
             target.hasAuthenticator = false;
+          }
+          if (change.kind !== "change_role") {
+            target.access = { state: target.status === "disabled" ? "removed" : "in_access", errorCode: null, requestedAt: stamp(), syncedAt: stamp() };
           }
         }
       }

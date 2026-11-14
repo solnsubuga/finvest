@@ -21,6 +21,7 @@ Staff and their roles live in the identity module (`backend/app/modules/identity
 | `GET /staff/team` | `team.view` | Everyone on the team, which second steps each has set up, when each last signed in, what each role may do, and the changes waiting for a second admin. |
 | `POST /staff/team/changes` | `team.change` | Propose a change, with a reason. |
 | `POST /staff/team/changes/{id}/decision` | `team.change` | `approved` or `rejected` by a different admin, or `withdrawn` by the one who proposed it. A reason is required. |
+| `POST /staff/team/members/{id}/access-sync` | `team.change` | Bring Cloudflare Access in line with the team again for one person (see below). |
 
 `team.change` is held by admins only.
 
@@ -34,6 +35,18 @@ Rules, and where they are enforced:
 - **One open change per person,** and one open invite per email address. An address already on the team cannot be invited again.
 - **There is always an active admin.** A change that would deactivate or demote the last active admin is refused when it is proposed and again when it is approved. Approvals lock the active admins, so two approvals cannot each remove one of the last two.
 - **On the record.** The proposal and the decision are audit events (`identity.team.<kind>_proposed`, `identity.team.change_<decision>`) with their reasons, and a set-up link issued is `identity.staff.enrolment_link_issued`, recorded as the admin who approved it.
+
+### Cloudflare Access
+
+The console (admin.finvestug.com), and the client app before launch, sit behind Cloudflare Access. Its policy lets in two sets of addresses: the break-glass list `ADMIN_ACCESS_EMAILS`, which Terraform owns and the console never touches, and a Zero Trust email list that the team keeps (infra PR #539, `cloudflare_zero_trust_list.staff_emails`). Inviting someone in the console is what puts them on that list, so nobody edits Cloudflare by hand.
+
+- **Who belongs on it.** Everyone invited or active. Invited staff need it to open their set-up link. Deactivated staff do not.
+- **When it changes.** Approving an `invite`, `deactivate`, `reactivate` or `reset_sign_in` marks the person `waiting` in `identity_staff_access` (migration `0390_staff_access_sync`) and queues `identity.staff_access.sync` in the same transaction. A role change leaves the list alone. A daily check at 05:10 Kampala time (`identity.staff_access.check`) queues the same job for everyone, which covers the first admin added from the command line and any hand edit in Cloudflare.
+- **How the worker does it.** It reads the person's address and status when the job runs, asks Cloudflare whether the address is on the list (`GET /accounts/{account}/gateway/lists/{list}/items`), adds or removes it only if it is not where it should be (`PATCH …/gateway/lists/{list}` with `append` or `remove`), and asks again. It records the result only if the team still says the same thing, so a deactivation approved while an invite's add is in flight still ends off the list. An address already there, or already gone, counts as done.
+- **Retries.** Every attempt asks Cloudflare before it writes, so a timeout is simply tried again (up to eight attempts over about twenty minutes). That is why the handler is not registered as an external effect. A refused token or a missing list fails at once.
+- **What the team view shows.** Each person carries `access`: `in_access` (can reach the console), `removed`, `waiting` (with the reason it is still trying, if any), `failed`, or `not_set_up`. An admin can ask for a failed or never-checked one again with `POST /staff/team/members/{id}/access-sync` (`team.change`, audited as `identity.team.access_sync_requested`). One admin may ask: it only brings Cloudflare in line with changes two admins already approved.
+- **Settings, worker only.** `FINVEST_CLOUDFLARE_ACCOUNT_ID` and `FINVEST_CLOUDFLARE_STAFF_LIST_ID` (written by Terraform) and the secret `FINVEST_CLOUDFLARE_ACCESS_TOKEN` (set by the owner; scope Account > Zero Trust > Edit). Without all three the worker sends nothing and the team view says Access sync is off.
+- **Privacy.** Job payloads carry the staff ID only, and logs carry staff IDs and error codes, never the address.
 
 ### How many admins the scheme needs
 

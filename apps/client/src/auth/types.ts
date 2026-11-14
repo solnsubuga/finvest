@@ -58,6 +58,8 @@ export type RecoveryAsk = { phone: string; contactPhone: string; reason: Recover
 
 /** What checking a PIN said. Out of tries signs the phone out instead (`signed_out`). */
 export type PinCheck = { unlocked: boolean; triesLeft: number };
+/** A right PIN gives the unlock key, once. Otherwise how many tries are left. */
+export type UnlockKeyTurnedOn = { enabled: boolean; triesLeft: number; key: string | null };
 
 /** What the PIN confirms on the phone app, as well as the checks these already have. */
 export type PinAction = "withdrawal" | "payout_account";
@@ -310,6 +312,18 @@ export interface AuthClient {
    * fifth wrong one in a row fails with `signed_out`.
    */
   confirmWithPin(pin: string, action: PinAction): Promise<PinConfirmation>;
+  /**
+   * Turns on fingerprint or face unlock for this phone's session. The PIN is checked as when
+   * unlocking, so a wrong one counts. A right one gives a new unlock key, once.
+   */
+  turnOnUnlockKey(pin: string): Promise<UnlockKeyTurnedOn>;
+  /** Forgets this session's unlock key. */
+  turnOffUnlockKey(): Promise<void>;
+  /**
+   * Opens a locked app with the unlock key instead of the PIN. A wrong key turns the unlock off
+   * and charges no PIN try, so the answer is then `unlocked: false`.
+   */
+  unlockWithKey(key: string): Promise<PinCheck>;
 
   /**
    * Confirms it is the client with a passkey or their authenticator app, on

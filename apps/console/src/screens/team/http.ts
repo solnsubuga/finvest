@@ -1,6 +1,6 @@
 import { ApiError, type Http } from "@/api/http.ts";
 import { PERMISSIONS, ROLES, type Permission, type Role } from "@/auth/types.ts";
-import { TeamError, type Change, type Member, type NewChange, type Team, type TeamApi, type TeamErrorCode } from "./api.ts";
+import { TeamError, type AccessSync, type Change, type Member, type NewChange, type Team, type TeamApi, type TeamErrorCode } from "./api.ts";
 
 interface MemberJson {
   id: string;
@@ -12,6 +12,18 @@ interface MemberJson {
   has_authenticator: boolean;
   created_at: string;
   last_signed_in_at: string | null;
+  access: AccessJson | null;
+}
+
+interface AccessJson {
+  state: AccessSync["state"];
+  error_code: string | null;
+  requested_at: string;
+  synced_at: string | null;
+}
+
+function access(json: AccessJson): AccessSync {
+  return { state: json.state, errorCode: json.error_code, requestedAt: json.requested_at, syncedAt: json.synced_at };
 }
 
 interface ChangeJson {
@@ -52,6 +64,7 @@ function member(json: MemberJson): Member {
     hasAuthenticator: json.has_authenticator,
     createdAt: json.created_at,
     lastSignedInAt: json.last_signed_in_at,
+    access: json.access ? access(json.access) : null,
   };
 }
 
@@ -147,5 +160,7 @@ export function createHttpTeamApi(http: Http): TeamApi {
         toChange(await http.request<ChangeJson>("POST", `/staff/team/changes/${encodeURIComponent(changeId)}/decision`, { decision, reason })),
       true,
       ),
+    syncAccess: (staffId) =>
+      call(async () => access(await http.request<AccessJson>("POST", `/staff/team/members/${encodeURIComponent(staffId)}/access-sync`))),
   };
 }

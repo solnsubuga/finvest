@@ -48,6 +48,25 @@ jest.mock("expo-crypto", () => ({
   randomUUID: () => jest.requireActual("node:crypto").randomUUID(),
 }));
 
+const mockComplain = jest.fn();
+
+jest.mock("@/support/stubSupportClient", () => {
+  const actual = jest.requireActual("@/support/stubSupportClient");
+  return {
+    ...actual,
+    createStubSupportClient: () => {
+      const client = actual.createStubSupportClient({ delayMs: 0, now: () => mockClock.ms });
+      return {
+        ...client,
+        makeComplaint: async (complaint: unknown) => {
+          mockComplain(complaint);
+          return client.makeComplaint(complaint);
+        },
+      };
+    },
+  };
+});
+
 jest.mock("@/payments/pollInterval", () => ({ POLL_MS: 25 }));
 
 jest.mock("expo-font", () => ({
@@ -62,7 +81,7 @@ async function openPayScreen() {
   await fireEvent.changeText(screen.getByTestId("password-input"), DEMO_PASSWORD);
   await fireEvent.press(screen.getByTestId("login-submit"));
   await fireEvent.press(await screen.findByTestId("use-passkey"));
-  await screen.findByText("Welcome, Amara");
+  await screen.findByTestId("home");
   await fireEvent.press(screen.getByLabelText("Invest"));
   await fireEvent.press(await screen.findByTestId("demo-pay"));
   await screen.findByText("Pay UGX 1,000,000");
@@ -108,6 +127,8 @@ describe("paying for an investment by mobile money", () => {
     expect(screen.getByText("13 Nov 2026, 15:31")).toBeTruthy();
     expect(screen.getByText("MTN Mobile Money")).toBeTruthy();
     expect(screen.getByText("+256 77• ••• •56")).toBeTruthy();
+    // Its PDF receipt is in Documents, so the receipt offers it.
+    expect(await screen.findByTestId("receipt-pdf")).toHaveTextContent(/Receipt \(PDF\).*Signed PDF, saved in Documents/);
 
     const share = jest.spyOn(Share, "share").mockResolvedValue({ action: "sharedAction", activityType: undefined });
     await fireEvent.press(screen.getByTestId("receipt-share"));
@@ -119,7 +140,29 @@ describe("paying for an investment by mobile money", () => {
     share.mockRestore();
 
     await fireEvent.press(screen.getByTestId("receipt-done"));
-    await screen.findByText("Welcome, Amara");
+    await screen.findByTestId("home");
+  });
+
+  it("opens a complaint about this payment from its receipt, with the reference added", async () => {
+    await openPayScreen();
+    await fireEvent.press(screen.getByTestId("pay-submit"));
+    await screen.findByText("Approve on your phone");
+    await advance(8_000);
+    await screen.findByText("Completed");
+    const reference = screen.getByText(/^FV-DEMO-/).props.children as string;
+
+    await fireEvent.press(screen.getByTestId("receipt-complain"));
+    await screen.findByText(`This complaint is about your payment with Finvest reference ${reference}. We add the reference for you.`);
+    expect(screen.getByTestId("category-payments")).toBeChecked();
+    await fireEvent.changeText(screen.getByTestId("complaint-summary"), "The amount looks wrong");
+    await fireEvent.changeText(screen.getByTestId("complaint-details"), "I meant to pay less.");
+    await fireEvent.press(screen.getByTestId("send-complaint"));
+    await screen.findByText("The amount looks wrong");
+    expect(mockComplain.mock.calls[0][0]).toMatchObject({
+      category: "payments",
+      summary: "The amount looks wrong",
+      details: `About my payment with Finvest reference ${reference}.\n\nI meant to pay less.`,
+    });
   });
 
   it("repeats the same request under the same key after a lost try", async () => {

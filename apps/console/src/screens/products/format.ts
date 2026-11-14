@@ -1,4 +1,4 @@
-import type { Amount, Currency, InterestPaid, ProductKind, ProductStatus, ProposalStatus } from "./api.ts";
+import type { Amount, Currency, InterestPaid, ProductAction, ProductKind, ProductStatus, ProposalStatus } from "./api.ts";
 
 const MINOR_DIGITS: Record<Currency, number> = { UGX: 0, USD: 2 };
 const SYMBOL: Record<Currency, string> = { UGX: "UGX ", USD: "$" };
@@ -90,3 +90,35 @@ export const PROPOSAL_STATUS_LABELS: Record<ProposalStatus, string> = {
   sent_back: "Sent back",
   withdrawn: "Withdrawn",
 };
+
+/**
+ * Reads a typed amount in whole units, "100,000" or "500.00", as the smallest unit.
+ * Text only, never floating point. Null when it is not a positive amount the currency can hold.
+ */
+export function parseAmount(text: string, currency: Currency): number | null {
+  const digits = MINOR_DIGITS[currency];
+  const cleaned = text.trim().replace(/,/g, "");
+  const match = digits ? /^(\d{1,13})(?:\.(\d{1,2}))?$/.exec(cleaned) : /^(\d{1,15})$/.exec(cleaned);
+  if (!match) return null;
+  const whole = Number(match[1]);
+  const fraction = digits ? Number((match[2] ?? "").padEnd(digits, "0")) : 0;
+  const minor = whole * 10 ** digits + fraction;
+  return minor > 0 && Number.isSafeInteger(minor) ? minor : null;
+}
+
+/** The smallest unit as text a person types: "100000" or "500.00". */
+export function amountInput(amount: Amount): string {
+  const digits = MINOR_DIGITS[amount.currency];
+  if (!digits) return String(amount.minor);
+  const unit = 10 ** digits;
+  return `${Math.trunc(amount.minor / unit)}.${String(amount.minor % unit).padStart(digits, "0")}`;
+}
+
+export const ACTION_LABELS: Record<ProductAction, string> = {
+  create: "New product",
+  edit: "New terms",
+  pause: "Pause",
+  open: "Open to clients",
+};
+
+export const CURRENCY_LABELS: Record<Currency, string> = { UGX: "Uganda shillings (UGX)", USD: "US dollars (USD)" };

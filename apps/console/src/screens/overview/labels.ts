@@ -33,6 +33,8 @@ export const KIND_INFO: Record<Kind, KindInfo> = {
   buffer_rules: { label: "Buffer rules change", path: at("/dealing-desk") },
   buffer_capital: { label: "Finvest's money in the buffer", path: at("/dealing-desk") },
   rate_change: { label: "Rate change", path: at("/rates") },
+  // The subject is the product code, or a new product's code. Every change waits on Products.
+  product_change: { label: "Product change", path: at("/products") },
   migration_totals: { label: "Migration totals", path: at("/migration") },
   migration_sign_off: { label: "Migration sign-off", path: at("/migration") },
   phone_change: { label: "Client's mobile number", path: (item) => `/clients?client=${encodeURIComponent(item.subject)}` },
@@ -75,6 +77,8 @@ export const KIND_INFO: Record<Kind, KindInfo> = {
     label: "Run again",
     path: (item) => (item.subject.startsWith("maturity") ? "/maturities" : "/investments"),
   },
+  // An investment staff booked for a client who asked. The subject is the product's code.
+  investment_booking: { label: "Investment booked for a client", path: at("/investments") },
 };
 
 const RECEIVABLE_STEPS: Record<string, string> = { open: "Record what is owed", recover: "Money arrived", write_off: "Write off" };

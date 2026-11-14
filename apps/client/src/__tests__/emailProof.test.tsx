@@ -55,7 +55,7 @@ describe("Proving an email address", () => {
   it("emails a link, and opening it marks the address proved on Profile", async () => {
     await logInAndOpenProfile("772123456");
     await fireEvent.press(screen.getByTestId("use-passkey"));
-    await screen.findByText("Welcome, Amara");
+    await screen.findByTestId("home");
     await fireEvent.press(screen.getByLabelText("Profile"));
     expect(await screen.findByText("Not proved yet")).toBeTruthy();
     expect(screen.getByText("amara@example.com")).toBeTruthy();
