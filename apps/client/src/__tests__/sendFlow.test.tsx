@@ -110,6 +110,14 @@ async function openSend() {
   await screen.findByTestId("send-to");
 }
 
+/** "Check and send", then the second tap that sends. */
+async function sendNow() {
+  if (screen.queryByTestId("send-confirm") === null) {
+    await fireEvent.press(screen.getByTestId("review-send"));
+  }
+  await fireEvent.press(await screen.findByTestId("confirm-send"));
+}
+
 async function findBrian() {
   await fireEvent.changeText(screen.getByTestId("send-to"), "1001005170");
   await fireEvent.press(screen.getByTestId("find-recipient"));
@@ -122,7 +130,7 @@ describe("sending an investment to someone", () => {
     await findBrian();
     expect(within(screen.getByTestId("recipient")).getByText("Brian K.")).toBeTruthy();
     expect(screen.getByText("Finvest account 1001005170")).toBeTruthy();
-    expect(screen.getByTestId("confirm-send")).toBeDisabled();
+    expect(screen.getByTestId("review-send")).toBeDisabled();
   });
 
   it("says when nobody has that number", async () => {
@@ -138,7 +146,7 @@ describe("sending an investment to someone", () => {
     await findBrian();
     await fireEvent.changeText(screen.getByTestId("send-amount"), "1000000");
     await fireEvent.changeText(screen.getByTestId("send-message"), "For school fees");
-    await fireEvent.press(screen.getByTestId("confirm-send"));
+    await sendNow();
 
     expect(await screen.findByText("To Brian K.")).toBeTruthy();
     expect(screen.getByTestId("transfer-amount").props.children).toBe("UGX 1,000,000");
@@ -152,10 +160,10 @@ describe("sending an investment to someone", () => {
     await openSend();
     await findBrian();
     await fireEvent.changeText(screen.getByTestId("send-amount"), "50000");
-    await fireEvent.press(screen.getByTestId("confirm-send"));
+    await sendNow();
     expect(await screen.findByText(/below the smallest amount for this product/)).toBeTruthy();
     await fireEvent.changeText(screen.getByTestId("send-amount"), "1000000");
-    await fireEvent.press(screen.getByTestId("confirm-send"));
+    await sendNow();
     await screen.findByText("To Brian K.");
     expect(mockSend.mock.calls[0][0].idempotencyKey).not.toBe(mockSend.mock.calls[1][0].idempotencyKey);
   });
@@ -165,12 +173,49 @@ describe("sending an investment to someone", () => {
     await findBrian();
     await fireEvent.changeText(screen.getByTestId("send-amount"), "1000000");
     mockFailNext.code = "unavailable";
-    await fireEvent.press(screen.getByTestId("confirm-send"));
+    await sendNow();
     expect(await screen.findByText(/so you will not send twice/)).toBeTruthy();
     expect(screen.getByTestId("send-amount").props.editable).toBe(false);
-    await fireEvent.press(screen.getByTestId("confirm-send"));
+    await sendNow();
     await screen.findByText("To Brian K.");
     expect(mockSend.mock.calls[0][0].idempotencyKey).toBe(mockSend.mock.calls[1][0].idempotencyKey);
+  });
+
+  it("shows the amount, the name and the number once more before sending, and goes back", async () => {
+    await openSend();
+    await findBrian();
+    await fireEvent.changeText(screen.getByTestId("send-amount"), "1000000");
+    await fireEvent.press(screen.getByTestId("review-send"));
+    const check = await screen.findByTestId("send-confirm");
+    expect(within(check).getByText("You are sending UGX 1,000,000 to Brian K.")).toBeTruthy();
+    expect(within(check).getByText(/Finvest account 1001005170/)).toBeTruthy();
+    expect(screen.getByTestId("send-amount").props.editable).toBe(false);
+    expect(mockSend).not.toHaveBeenCalled();
+    await fireEvent.press(screen.getByTestId("send-go-back"));
+    expect(screen.queryByTestId("send-confirm")).toBeNull();
+    expect(screen.getByTestId("send-amount").props.editable).toBe(true);
+  });
+
+  it("sends everything as everything, so interest added meanwhile goes too", async () => {
+    await openSend();
+    await findBrian();
+    await fireEvent.press(screen.getByTestId("send-everything"));
+    await sendNow();
+    await screen.findByText("To Brian K.");
+    expect(mockSend.mock.calls[0][0]).toMatchObject({ whole: true });
+  });
+
+  it("unlocks the details when a retry after a lost answer is refused", async () => {
+    await openSend();
+    await findBrian();
+    await fireEvent.changeText(screen.getByTestId("send-amount"), "1000000");
+    mockFailNext.code = "unavailable";
+    await sendNow();
+    expect(await screen.findByText(/so you will not send twice/)).toBeTruthy();
+    mockFailNext.code = "below_product_minimum";
+    await fireEvent.press(screen.getByTestId("confirm-send"));
+    expect(await screen.findByText(/below the smallest amount for this product/)).toBeTruthy();
+    expect(screen.getByTestId("send-amount").props.editable).toBe(true);
   });
 
   it("lists what was sent and received", async () => {

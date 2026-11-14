@@ -34,6 +34,8 @@ const SIGNED_IN = [
   "/id-check",
   "/id-check/details",
   "/id-check/document",
+  "/transfers",
+  "/transfers/demo-transfer-received",
 ];
 
 /** Violations of WCAG 2.1 A and AA, one line each, so a failure names the rule and the element.
@@ -85,5 +87,39 @@ test("every main screen after sign-in meets WCAG 2.1 AA", async ({ page }) => {
     await visit(page, path);
     found.push(...(await violations(page)).map((line) => `${path} ${line}`));
   }
+  expect(found).toEqual([]);
+});
+
+test("sending an investment to someone meets WCAG 2.1 AA at every step", async ({ page }) => {
+  test.setTimeout(120_000);
+  await page.goto("/");
+  await page.getByText("Log in", { exact: true }).first().click();
+  await page.getByTestId("phone-input").fill(DEMO_PHONE);
+  await page.getByTestId("password-input").fill(DEMO_PASSWORD);
+  await page.getByTestId("login-submit").click();
+  await page.getByTestId("use-passkey").click();
+  await expect(page.getByText("Welcome, Amara")).toBeVisible();
+  await visit(page, "/portfolio");
+  await page.getByLabel(/^91 Day Treasury Bill, Running/).first().click();
+  await page.getByTestId("send-investment").click();
+  await expect(page.getByTestId("send-to")).toBeVisible();
+  const found: string[] = [];
+  const check = async (step: string) => found.push(...(await violations(page)).map((line) => `${step} ${line}`));
+  await check("empty");
+  await page.getByTestId("send-to").fill("1009999999");
+  await page.getByTestId("find-recipient").click();
+  await expect(page.getByText(/could not find a Finvest client/)).toBeVisible();
+  await check("not found");
+  await page.getByTestId("send-to").fill("1001005170");
+  await page.getByTestId("find-recipient").click();
+  await expect(page.getByTestId("recipient")).toBeVisible();
+  await page.getByTestId("send-amount").fill("1000000");
+  await check("filled in");
+  await page.getByTestId("review-send").click();
+  await expect(page.getByTestId("send-confirm")).toBeVisible();
+  await check("confirm");
+  await page.getByTestId("confirm-send").click();
+  await expect(page.getByTestId("transfer-amount")).toBeVisible();
+  await check("sent");
   expect(found).toEqual([]);
 });

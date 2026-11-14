@@ -45,6 +45,8 @@ export default function Send() {
   // trying again asks for the same thing under the same key and cannot send twice.
   const [idempotencyKey, setIdempotencyKey] = useState(newIdempotencyKey);
   const [locked, setLocked] = useState(false);
+  // Sending cannot be undone, so the amount and the person are shown once more first.
+  const [confirming, setConfirming] = useState(false);
 
   const investment = loaded.state === "ready" ? loaded.value : null;
   const amount: Amount | null = investment
@@ -77,6 +79,7 @@ export default function Send() {
         toAccountNumber: recipient.accountNumber,
         amount,
         message: message.trim() || null,
+        whole: everything,
         idempotencyKey,
       });
       // Replace, so Back does not land on a send button for money already sent.
@@ -87,8 +90,11 @@ export default function Send() {
         setLocked(true);
         setError(`${describeInvestingError(caught)} Trying again sends the same request, so you will not send twice.`);
       } else {
+        // A definite refusal: nothing was sent, so the details can be corrected under a new key.
+        setLocked(false);
         setIdempotencyKey(newIdempotencyKey());
         setError(describeInvestingError(caught));
+        setConfirming(false);
       }
       setBusy(false);
     }
@@ -100,13 +106,16 @@ export default function Send() {
       signedIn
       footer={
         investment?.canSend && recipient ? (
-          <Button
-            label={`Send to ${first}`}
-            onPress={confirm}
-            loading={busy}
-            disabled={!canConfirm}
-            testID="confirm-send"
-          />
+          confirming && amount ? (
+            <View style={{ gap: 10 }}>
+              <Button label={`Send to ${first}`} onPress={confirm} loading={busy} testID="confirm-send" />
+              {locked ? null : (
+                <Button label="Go back" variant="secondary" onPress={() => setConfirming(false)} disabled={busy} testID="send-go-back" />
+              )}
+            </View>
+          ) : (
+            <Button label="Check and send" onPress={() => setConfirming(true)} disabled={!canConfirm} testID="review-send" />
+          )
         ) : null
       }
     >
@@ -137,10 +146,13 @@ export default function Send() {
               value={to}
               onChangeText={(typed) => {
                 setTo(typed);
-                if (!locked) setRecipient(null);
+                if (!locked) {
+                  setRecipient(null);
+                  setConfirming(false);
+                }
                 setFindError(null);
               }}
-              editable={!locked}
+              editable={!locked && !confirming}
               onSubmitEditing={find}
               placeholder="1001005170 or 0772 123 456"
               keyboardType="phone-pad"
@@ -165,16 +177,18 @@ export default function Send() {
                   label="Amount"
                   value={everything ? groupDigits(String(loaded.value.value.minor)) : amountText}
                   onChangeText={(typed) => setAmountText(groupDigits(typed))}
-                  editable={!everything && !locked}
+                  editable={!everything && !locked && !confirming}
                   keyboardType="number-pad"
                   placeholder="1,000,000"
                   testID="send-amount"
                 />
               </Field>
               <Pressable
-                accessibilityRole="checkbox"
-                accessibilityState={{ checked: everything, disabled: locked }}
-                disabled={locked}
+                role="checkbox"
+                aria-checked={everything}
+                aria-disabled={locked || confirming}
+                aria-label="Send everything"
+                disabled={locked || confirming}
                 onPress={() => setEverything((value) => !value)}
                 style={{ flexDirection: "row", alignItems: "center", gap: 10 }}
                 testID="send-everything"
@@ -204,11 +218,21 @@ export default function Send() {
                 label="Message (optional)"
                 value={message}
                 onChangeText={(typed) => setMessage(typed.slice(0, MAX_MESSAGE))}
-                editable={!locked}
+                editable={!locked && !confirming}
                 placeholder="For school fees"
                 hint={`${MAX_MESSAGE - message.length} characters left`}
                 testID="send-message"
               />
+              {confirming && amount ? (
+                <View style={{ backgroundColor: colors.limeSurface, borderRadius: 18, padding: 16, gap: 6 }} testID="send-confirm">
+                  <Txt weight="bold">{`You are sending ${everything ? "everything, " : ""}${formatAmount(amount)} to ${recipient.name}`}</Txt>
+                  <Txt size={fontSizes.sm}>{`Finvest account ${recipient.accountNumber}, from your ${loaded.value.productName}.`}</Txt>
+                  {everything ? (
+                    <Txt size={fontSizes.sm}>Interest added before it is sent goes with it.</Txt>
+                  ) : null}
+                  <Txt size={fontSizes.sm} weight="semibold">Check the name and number. It cannot be undone.</Txt>
+                </View>
+              ) : null}
               {error ? <Notice tone="danger">{error}</Notice> : null}
               <Txt size={fontSizes.xs} color={colors.muted}>
                 Once it is sent, it cannot be undone. Large amounts are checked by Finvest first, and you can cancel until then.
@@ -252,6 +276,9 @@ function RecipientCard({ recipient }: { recipient: Recipient }) {
         <Txt weight="bold">{recipient.name}</Txt>
         <Txt size={fontSizes.xs} color={colors.muted}>
           {`Finvest account ${recipient.accountNumber}`}
+        </Txt>
+        <Txt size={fontSizes.xs} color={colors.muted}>
+          Their identity is checked by Finvest. Make sure this is the person you mean.
         </Txt>
       </View>
       <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
