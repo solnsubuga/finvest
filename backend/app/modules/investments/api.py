@@ -25,6 +25,8 @@ from app.api.idempotency import IdempotencyKey
 from app.infrastructure.database import Database
 from app.infrastructure.idempotency import Receipt, run_once
 from app.infrastructure.settings import Settings
+from app.modules.audit import service as audit
+from app.modules.audit.domain.events import AuditActor, AuditEvent
 from app.modules.goals import reads as goal_reads
 from app.modules.identity.api import CurrentClient, require_confirmed, require_permission
 from app.modules.identity.pins_api import Pins
@@ -32,8 +34,10 @@ from app.modules.identity.service import StaffSession
 from app.modules.investments import service
 from app.modules.investments.domain.interest import ClientReturns
 from app.modules.investments.domain.investments import AtMaturity, InvestmentStatus
+from app.modules.investments.domain.positions import PositionRow, positions_csv
 from app.modules.investments.domain.products import InterestPaid, ProductKind, ProductStatus
 from app.modules.investments.domain.rates import ProposalStatus, RateVersion
+from app.modules.kyc import service as kyc
 from app.modules.payouts import payouts
 from app.shared.actors import Actor
 from app.shared.business_day import business_date
@@ -1274,6 +1278,65 @@ async def staff_investments(
         found = await service.list_investments(session, staff.actor, status=status, limit=limit)
         names = await _staff_goal_names(session, found)
     return [_staff_investment_out(investment, names) for investment in found]
+
+
+# A POST, because every export is recorded on the audit trail.
+@staff_router.post(
+    "/investments/positions.csv",
+    response_class=Response,
+    responses={200: {"content": {"text/csv": {}}}, 422: {"model": ErrorEnvelope}},
+    summary="Every running investment as a CSV file: the positions",
+)
+async def export_positions(request: Request, staff: InvestmentsViewer, clock: AppClock) -> Response:
+    """Soonest to mature first, each client by account number only. Every export is on the audit
+    trail. More than 20,000 running investments is refused with `too_many_positions`."""
+    async with _transaction(request, staff.actor) as session:
+        found = await service.positions(session, staff.actor)
+        numbers = await kyc.identities(session, sorted({i.client_id for i in found}))
+        goal_names = await _staff_goal_names(session, found)
+        await audit.record(
+            session,
+            AuditEvent(
+                category="access",
+                action="investments.positions_exported",
+                resource_type="investment_positions",
+                resource_id="all",
+                actor=AuditActor.staff(staff.staff_id),
+                details={"investments": len(found)},
+            ),
+            clock,
+        )
+    rows = [
+        PositionRow(
+            investment_id=investment.id,
+            account_number=(found_number.account_number if found_number else None),
+            product=investment.product_name,
+            invested=investment.amount,
+            annual_rate_bps=investment.terms.annual_rate_bps,
+            tax_bps=investment.terms.tax_bps,
+            start_date=investment.start_date,
+            maturity_date=investment.maturity_date,
+            term_days=investment.term_days,
+            accrued_through=investment.accrued_through,
+            interest_gross=investment.accrued_gross,
+            tax=investment.accrued_tax,
+            at_maturity=investment.at_maturity.value if investment.at_maturity else None,
+            interest_goal=goal_names.get(investment.interest_goal_id)
+            if investment.interest_goal_id
+            else None,
+        )
+        for investment in found
+        for found_number in [numbers.get(investment.client_id)]
+    ]
+    name = f"finvest-positions-{business_date(clock.now()).isoformat()}.csv"
+    return Response(
+        content=positions_csv(rows),
+        media_type="text/csv; charset=utf-8",
+        headers={
+            "Content-Disposition": f'attachment; filename="{name}"',
+            "Cache-Control": "no-store",
+        },
+    )
 
 
 @staff_router.get("/investments/{investment_id}")

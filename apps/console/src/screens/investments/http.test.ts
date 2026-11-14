@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import { createHttp } from "@/api/http.ts";
-import { createHttpInvestmentsApi } from "./http.ts";
+import { createHttpInvestmentsApi, positionsFilename } from "./http.ts";
 
 const INVESTMENT = {
   id: "-NinvestA00000000001",
@@ -111,6 +111,31 @@ describe("investments over HTTP", () => {
     );
     expect(await createHttpInvestmentsApi(createHttp("https://api.test", oneDown)).listInvestments().catch((e: unknown) => e)).toMatchObject({
       code: "unavailable",
+    });
+  });
+
+  it("exports the positions with a POST, named for the Kampala day", async () => {
+    const fetch = vi.fn<typeof globalThis.fetch>(() =>
+      Promise.resolve(new Response("Investment ID\r\n", { status: 200, headers: { "Content-Type": "text/csv; charset=utf-8" } })),
+    );
+    const exported = await createHttpInvestmentsApi(createHttp("https://api.test", fetch)).exportPositions();
+    const [url, init] = fetch.mock.calls[0]!;
+    expect(String(url)).toBe("https://api.test/staff/investments/positions.csv");
+    expect(init?.method).toBe("POST");
+    expect(exported.filename).toMatch(/^finvest-positions-\d{4}-\d{2}-\d{2}\.csv$/);
+    expect(await exported.file.text()).toBe("Investment ID\r\n");
+    expect(positionsFilename(new Date("2026-11-14T22:30:00Z"))).toBe("finvest-positions-2026-11-15.csv");
+  });
+
+  it("says when there are too many positions for one file", async () => {
+    const fetch = vi.fn<typeof globalThis.fetch>(() =>
+      reply(422, {
+        request_id: "r",
+        error: { code: "validation_failed", message: "", fields: [{ field_path: ["positions"], code: "too_many_positions" }] },
+      }),
+    );
+    expect(await createHttpInvestmentsApi(createHttp("https://api.test", fetch)).exportPositions().catch((e: unknown) => e)).toMatchObject({
+      code: "too_many_positions",
     });
   });
 });

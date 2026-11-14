@@ -81,14 +81,22 @@ export interface InterestRun {
   finishedAt: string | null;
 }
 
+/** The positions file, ready to hand to the browser. */
+export interface PositionsFile {
+  file: Blob;
+  filename: string;
+}
+
 export interface InvestmentsApi {
   /** Newest first, at most 200 of each status. */
   listInvestments(status?: InvestmentStatus): Promise<readonly Investment[]>;
   /** Newest run first. */
   interestRuns(): Promise<readonly InterestRun[]>;
+  /** Every running investment as a CSV file. Each export is on the audit trail. */
+  exportPositions(): Promise<PositionsFile>;
 }
 
-export type InvestmentsErrorCode = "forbidden" | "not_connected" | "unavailable";
+export type InvestmentsErrorCode = "forbidden" | "not_connected" | "too_many_positions" | "unavailable";
 
 export class InvestmentsError extends Error {
   readonly code: InvestmentsErrorCode;
@@ -103,6 +111,7 @@ export class InvestmentsError extends Error {
 const MESSAGES: Record<InvestmentsErrorCode, string> = {
   forbidden: "You are not allowed to see client investments.",
   not_connected: "Investments are not connected to the Finvest service yet.",
+  too_many_positions: "There are more than 20,000 running investments, which is more than one file holds. Ask the engineering team for the positions.",
   unavailable: "We could not reach Finvest. Check your connection and try again.",
 };
 
@@ -115,4 +124,5 @@ const notConnected = () => Promise.reject(new InvestmentsError("not_connected"))
 export const notConnectedInvestmentsApi: InvestmentsApi = {
   listInvestments: notConnected,
   interestRuns: notConnected,
+  exportPositions: notConnected,
 };

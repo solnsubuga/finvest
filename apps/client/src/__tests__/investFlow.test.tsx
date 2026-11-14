@@ -218,6 +218,20 @@ describe("investing", () => {
     expect(screen.getByLabelText("When the term ends: Roll over")).toBeTruthy();
     expect(screen.queryByText(/tax:|15%/)).toBeNull();
   });
+
+  it("shows how far through its term a running investment is, and adds more to the same product", async () => {
+    mockSample.value = "default";
+    await signIn();
+    await act(async () => {
+      router.push("/portfolio");
+    });
+    await fireEvent.press(await screen.findByLabelText(/^91 Day Treasury Bill, Running/));
+    const progress = await screen.findByTestId("term-progress");
+    expect(within(progress).getByText(/^Day \d+ of 91\. Matures /)).toBeTruthy();
+    await fireEvent.press(screen.getByTestId("add-more"));
+    expect(await screen.findByTestId("amount")).toBeTruthy();
+    expect(screen.getAllByText("91 Day Treasury Bill").length).toBeGreaterThan(0);
+  });
 });
 
 describe("withdrawing early", () => {

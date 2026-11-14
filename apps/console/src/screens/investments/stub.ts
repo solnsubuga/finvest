@@ -109,11 +109,25 @@ function runs(): InterestRun[] {
   ]);
 }
 
+/** An amount in its major unit from integers, "1234.56" for USD: never through a float. */
+function major({ minor, currency }: Amount): string {
+  if (currency === "UGX") return String(minor);
+  return `${Math.trunc(minor / 100)}.${String(minor % 100).padStart(2, "0")}`;
+}
+
 export function createStubInvestmentsApi(sample: "default" | "empty" = "default"): InvestmentsApi {
   const all = sample === "empty" ? [] : SAMPLES.map(investment);
   const history = sample === "empty" ? [] : runs();
   return {
     listInvestments: (status) => Promise.resolve(all.filter((i) => !status || i.status === status)),
     interestRuns: () => Promise.resolve(history),
+    exportPositions: () => {
+      const running = all.filter((i) => i.status === "active");
+      const lines = [
+        "Investment ID,Client account number,Product,Currency,Invested",
+        ...running.map((i) => `${i.id},,${i.productName},${i.amount.currency},${major(i.amount)}`),
+      ];
+      return Promise.resolve({ file: new Blob([`${lines.join("\r\n")}\r\n`], { type: "text/csv" }), filename: "finvest-positions-sample.csv" });
+    },
   };
 }

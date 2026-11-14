@@ -5655,6 +5655,17 @@ export const operations = {
     status: 200,
     response: z.array(StaffInvestmentOut),
   },
+  "POST /staff/investments/positions.csv": {
+    method: "POST",
+    path: "/staff/investments/positions.csv",
+    params: z.object({}),
+    query: z.object({}),
+    body: null,
+    bodyKind: null,
+    idempotent: false,
+    status: 200,
+    response: null,
+  },
   "GET /staff/investments/{investment_id}": {
     method: "GET",
     path: "/staff/investments/{investment_id}",

@@ -538,3 +538,53 @@ async def test_a_running_investment_can_be_withdrawn_once_it_is_switched_on(
         assert shown.json()["can_withdraw"] is True
         listed = await api.http.get("/client/investments", headers=auth)
         assert listed.json()[0]["can_withdraw"] is True
+
+
+async def test_staff_export_the_running_investments_as_positions(
+    api: Api, worker_database: Database, migrator_database: Database
+) -> None:
+    investment_id, _ = await running_investment(api, worker_database)
+    _, support = await signed_in_staff(api, "support")
+    refused = await api.http.post("/staff/investments/positions.csv", headers=support)
+    assert (refused.status_code, code(refused)) == (403, "forbidden")
+
+    staff_id, cookies = await signed_in_staff(api, "finance")
+    exported = await api.http.post("/staff/investments/positions.csv", headers=cookies)
+    assert exported.status_code == 200, exported.text
+    assert exported.headers["content-type"].startswith("text/csv")
+    assert exported.headers["cache-control"] == "no-store"
+    assert exported.headers["content-disposition"] == (
+        f'attachment; filename="finvest-positions-{today().isoformat()}.csv"'
+    )
+    lines = exported.text.split("\r\n")
+    assert lines[0].startswith("Investment ID,Client account number,Product,Currency,Invested")
+    [row] = [line for line in lines if line.startswith(investment_id)]
+    cells = row.split(",")
+    async with worker_database.actor_transaction(SYSTEM) as session:
+        investment = await investments.get_investment(session, investment_id)
+        holder = await kyc.account_holder(session, investment.client_id)
+    assert holder is not None
+    assert cells[1] == holder.account_number
+    assert cells[3:7] == ["UGX", "1000000", "12.50", "15.00"]
+    assert cells[7] == today().isoformat()
+    # Only what is running: an investment not yet paid is not a position.
+    _, auth = await signed_in_client(api)
+    unpaid = await api.http.post(
+        "/client/investments",
+        json={"product_code": "TREA-91", "amount_minor": 500_000, "currency": "UGX"},
+        headers={**auth, "Idempotency-Key": f"k-{push_id()}"},
+    )
+    again = await api.http.post("/staff/investments/positions.csv", headers=cookies)
+    assert unpaid.json()["id"] not in again.text
+    # Every export is on the audit trail.
+    async with migrator_database.transaction() as session:
+        exports = (
+            await session.execute(
+                text(
+                    "SELECT count(*) FROM audit_events WHERE action = "
+                    "'investments.positions_exported' AND actor_id = :staff_id"
+                ),
+                {"staff_id": staff_id},
+            )
+        ).scalar_one()
+    assert exports == 2
