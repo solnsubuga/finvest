@@ -26,6 +26,7 @@ from app.modules.investments.jobs import InvestmentJobs
 from app.modules.kyc.jobs import ProviderJobs, sweep_unanswered
 from app.modules.kyc.service import SWEEP_UNANSWERED
 from app.modules.kyc.settings import KycSettings
+from app.modules.migration.jobs import MigrationJobs
 from app.modules.notifications import jobs as notification_jobs
 from app.modules.notifications.announcements import AnnouncementJobs
 from app.modules.notifications.delivery import DeliveryJobs
@@ -66,6 +67,16 @@ def handlers(
             sealer=identity.sealer() if identity.identity_data_key is not None else None,
         ).handlers()
     )
+    if identity.identity_data_key is not None:
+        # The switch's sheets are sealed with the identity data key.
+        kinds.update(
+            MigrationJobs(
+                database,
+                identity.sealer(),
+                clock,
+                settings.client_allowed_origins[0] if settings.client_allowed_origins else None,
+            ).handlers()
+        )
     if identity.identity_provider != "manual":
         # The manual provider sends every client to a person and queues no provider jobs.
         kinds.update(

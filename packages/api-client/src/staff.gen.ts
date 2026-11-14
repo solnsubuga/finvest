@@ -1195,6 +1195,12 @@ export const NewSavedReply = z.object({
 });
 export type NewSavedReply = z.infer<typeof NewSavedReply>;
 
+export const NotCarriedView = z.object({
+  code: z.string(),
+  legacy_client_ref: z.string(),
+});
+export type NotCarriedView = z.infer<typeof NotCarriedView>;
+
 export const NoteIn = z.object({
   note: z.string(),
 });
@@ -1216,6 +1222,7 @@ export const SwitchView = z.object({
   decided_by: z.string().nullable(),
   decision_reason: z.string().nullable(),
   id: z.string(),
+  not_carried: z.array(NotCarriedView),
   proposed_at: z.string(),
   proposed_by: z.string(),
   state: z.enum(["proposed", "approved", "rejected"]),

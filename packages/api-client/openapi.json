@@ -7083,6 +7083,26 @@
         "title": "NewSaving",
         "type": "object"
       },
+      "NotCarriedView": {
+        "additionalProperties": false,
+        "description": "A client the worker could not carry over. Staff resolve it by hand.",
+        "properties": {
+          "code": {
+            "title": "Code",
+            "type": "string"
+          },
+          "legacy_client_ref": {
+            "title": "Legacy Client Ref",
+            "type": "string"
+          }
+        },
+        "required": [
+          "legacy_client_ref",
+          "code"
+        ],
+        "title": "NotCarriedView",
+        "type": "object"
+      },
       "NotMatchedIn": {
         "additionalProperties": false,
         "properties": {
@@ -13406,6 +13426,13 @@
             "title": "Id",
             "type": "string"
           },
+          "not_carried": {
+            "items": {
+              "$ref": "#/components/schemas/NotCarriedView"
+            },
+            "title": "Not Carried",
+            "type": "array"
+          },
           "proposed_at": {
             "format": "date-time",
             "title": "Proposed At",
@@ -13444,7 +13471,8 @@
           "state",
           "decided_by",
           "decision_reason",
-          "clients_carried"
+          "clients_carried",
+          "not_carried"
         ],
         "title": "SwitchView",
         "type": "object"
