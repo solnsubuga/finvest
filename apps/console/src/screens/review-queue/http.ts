@@ -18,6 +18,7 @@ import {
   type PayoutAccount,
   type PayoutAccountDetail,
   type ProofKind,
+  type Release,
   type RejectionReason,
   type ReviewQueueApi,
   type ReviewQueueErrorCode,
@@ -63,6 +64,16 @@ export interface HeldJson {
   amount: { minor: number; currency: "UGX" | "USD" };
   business_date: string;
   created_at: string;
+  release: ReleaseJson | null;
+}
+
+export interface ReleaseJson {
+  id: string;
+  payout_id: string;
+  reason: string;
+  status: string;
+  proposed_by: string;
+  proposed_at: string;
 }
 
 export function toAccount(json: AccountJson): PayoutAccount {
@@ -102,6 +113,10 @@ export function toAccountDetail(json: AccountDetailJson): PayoutAccountDetail {
   };
 }
 
+export function toRelease(json: ReleaseJson): Release {
+  return { id: json.id, payoutId: json.payout_id, reason: json.reason, proposedBy: json.proposed_by, proposedAt: json.proposed_at };
+}
+
 export function toHeld(json: HeldJson): HeldPayout {
   return {
     id: json.id,
@@ -111,6 +126,8 @@ export function toHeld(json: HeldJson): HeldPayout {
     amount: { minor: json.amount.minor, currency: json.amount.currency },
     businessDate: json.business_date,
     createdAt: json.created_at,
+    // Only an open proposal waits for a person. A decided or withdrawn one is history.
+    release: json.release && json.release.status === "proposed" ? toRelease(json.release) : null,
   };
 }
 
@@ -125,6 +142,10 @@ const NAMED: readonly ReviewQueueErrorCode[] = [
   "account_in_use",
   "checked_by_you",
   "payout_not_held",
+  "release_already_proposed",
+  "release_already_decided",
+  "proposed_by_you",
+  "not_proposed_by_you",
 ];
 
 function named(error: ApiError, otherwise: ReviewQueueErrorCode): ReviewQueueError {
@@ -142,7 +163,7 @@ export function toReviewQueueError(error: unknown): ReviewQueueError {
     // The account or payout moved on: approved for another client, not checked, no longer held.
     case "conflict":
       return named(error, "conflict");
-    // Approving your own check is the two-person rule, not a missing permission.
+    // Approving your own check or proposal is the two-person rule, not a missing permission.
     case "forbidden":
       return named(error, "forbidden");
     case "not_found":
@@ -184,9 +205,23 @@ export function createHttpReviewQueueApi(http: Http): ReviewQueueApi {
     reject: (id, rejectionReason, reason) => act(id, "/reject", { rejection_reason: rejectionReason, reason }),
     remove: (id, reason) => act(id, "/remove", { reason }),
     listHeld: () => call(async () => (await http.request<HeldJson[]>("GET", "/staff/payouts/held")).map(toHeld)),
-    decideHeld: (id, decision, reason, idempotencyKey) =>
+    proposeRelease: (payoutId, reason, idempotencyKey) =>
+      call(async () =>
+        toRelease(
+          await http.request<ReleaseJson>("POST", `/staff/payouts/${encodeURIComponent(payoutId)}/release`, { reason }, { idempotencyKey }),
+        ),
+      ),
+    approveRelease: (releaseId, reason, idempotencyKey) =>
       call(() =>
-        http.request<DecidedPayout>("POST", `/staff/payouts/${encodeURIComponent(id)}/${decision}`, { reason }, { idempotencyKey }),
+        http.request<DecidedPayout>("POST", `/staff/payout-releases/${encodeURIComponent(releaseId)}/approve`, { reason }, { idempotencyKey }),
+      ),
+    withdrawRelease: (releaseId, reason) =>
+      call(async () => {
+        await http.request<ReleaseJson>("POST", `/staff/payout-releases/${encodeURIComponent(releaseId)}/withdraw`, { reason });
+      }),
+    decline: (payoutId, reason, idempotencyKey) =>
+      call(() =>
+        http.request<DecidedPayout>("POST", `/staff/payouts/${encodeURIComponent(payoutId)}/decline`, { reason }, { idempotencyKey }),
       ),
   };
 }

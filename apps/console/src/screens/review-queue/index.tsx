@@ -17,7 +17,7 @@ import { createStubReviewQueueApi, type StubCase } from "./stub.ts";
 
 type Tab = "accounts" | "held";
 
-const SUMMARY = "Only what the system could not clear on its own: payout accounts to check, and large withdrawals to approve.";
+const SUMMARY = "Only what the system could not clear on its own: payout accounts to check, and large withdrawals to release.";
 
 export function ReviewQueueScreen({
   api,
@@ -87,6 +87,7 @@ export function ReviewQueueScreen({
         <HeldSection
           api={api}
           directory={directory}
+          me={me}
           canDecide={canDecide}
           now={now}
           newKey={newKey}
