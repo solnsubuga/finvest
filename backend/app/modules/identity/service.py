@@ -200,39 +200,57 @@ class IdentityService:
     # Step one
 
     async def start_login(
-        self, kind: AccountKind, identifier: str, password: str, *, address: str | None
+        self,
+        kind: AccountKind,
+        identifier: str,
+        password: str,
+        *,
+        address: str | None,
+        by_email: bool = False,
     ) -> LoginChallenge:
         """Check the number or email and the password. Opens nothing.
 
-        Every failure is the same `invalid_credentials`, after the same amount of work, whether
-        the account is missing, inactive or the password is wrong.
+        A client signs in with their mobile number, or with `by_email` and an email address they
+        have proved. Staff always use their email. Every failure is the same
+        `invalid_credentials`, after the same amount of work, whether the account is missing,
+        inactive or the password is wrong.
         """
+        email_login = kind == "staff" or by_email
         try:
-            identifier = (
-                normalize_phone(identifier) if kind == "client" else normalize_email(identifier)
-            )
+            identifier = normalize_email(identifier) if email_login else normalize_phone(identifier)
         except InvalidIdentifier:
             identifier = ""  # still do the work below, then fail like any wrong password
-        account_key = throttle_key(f"{kind}-account", identifier)
-        pair_key = throttle_key(f"{kind}-account-from", f"{identifier}\x00{address}")
+
+        if kind == "client" and by_email:
+            # Only a proved address signs a client in, and only one account can have proved it.
+            query = (
+                "SELECT id, phone, password_hash FROM identity_clients "
+                "WHERE email = :identifier AND email_verified_at IS NOT NULL AND status = 'active'"
+            )
+        elif kind == "client":
+            query = (
+                "SELECT id, phone, password_hash FROM identity_clients "
+                "WHERE phone = :identifier AND status = 'active'"
+            )
+        else:
+            query = (
+                "SELECT id, email AS phone, password_hash FROM identity_staff "
+                "WHERE email = :identifier AND status = 'active'"
+            )
+        async with self.database.transaction() as session:
+            account = (await session.execute(text(query), {"identifier": identifier})).one_or_none()
+
+        # A client's attempts count against their number whichever way they sign in, so the
+        # email gives no second budget of guesses. An unknown address counts against itself.
+        counted = account.phone if account is not None and kind == "client" else identifier
+        account_key = throttle_key(f"{kind}-account", counted)
+        pair_key = throttle_key(f"{kind}-account-from", f"{counted}\x00{address}")
         keys = [(account_key, ACCOUNT_ATTEMPTS), (pair_key, ACCOUNT_FROM_ADDRESS_ATTEMPTS)]
         if address is not None:
             keys.append((throttle_key("address", address), ADDRESS_ATTEMPTS))
         await reserve_attempts(self.database, self.clock, keys)
 
-        table, column = (
-            ("identity_clients", "phone") if kind == "client" else ("identity_staff", "email")
-        )
-        async with self.database.transaction() as session:
-            account = (
-                await session.execute(
-                    text(
-                        f"SELECT id, password_hash FROM {table} "  # noqa: S608 - fixed names
-                        f"WHERE {column} = :identifier AND status = 'active'"
-                    ),
-                    {"identifier": identifier},
-                )
-            ).one_or_none()
+        table = "identity_clients" if kind == "client" else "identity_staff"
         hashed = account.password_hash if account is not None else None
         if not await self.hasher.verify(password, hashed) or account is None:
             logger.info("login_refused", kind=kind, error_code="invalid_credentials")
