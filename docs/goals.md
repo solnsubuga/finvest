@@ -39,7 +39,7 @@ Once a goal is set up, its plan is worked out again on every read for what is st
 
 ## Changing and closing
 
-The client can change the name, what it is for, the target and the date. A new target or date can change the product for later savings. Savings already made are not touched. The currency never changes.
+The client can change the name, what it is for, the target and the date. A new target or date can change the product for later savings. Savings already made are not touched. The currency never changes. In the app, "Change name, target or date" on the goal's screen opens the change screen, which sends `PUT /client/goals/{id}`. The date can be kept, moved to 6 months to 5 years from today, or taken away.
 
 Closing a goal is final. Its investments carry on as the client's ordinary investments, because they are the client's own and closing moves no money. A closed goal takes no saving.
 
