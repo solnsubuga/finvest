@@ -29735,7 +29735,7 @@
     },
     "/health/operations": {
       "get": {
-        "description": "Background work is moving. 503 while any job is overdue, stalled or recently failed, or a\nrecurring run is late. An uptime alert watches this.\n\nThe answer is only ok or not, because anyone may call it. Which count is above zero goes to\nthe logs, where the person who gets the alert looks next.",
+        "description": "Background work is moving. 503 while any job is overdue, stalled or recently failed, or a\nrecurring run is late. An uptime alert watches this.\n\nThe answer is only ok or not, because anyone may call it. Which count is above zero goes to\nthe logs, where the person who gets the alert looks next. One reading answers every call for\n`OPERATIONS_CACHE_FOR`, so calling it often does not load the database.",
         "operationId": "operations_health_operations_get",
         "responses": {
           "200": {
