@@ -25,9 +25,12 @@ import {
   type EnteredTotals,
   type Figure,
   type MigrationApi,
+  type NotCarried,
   type Overview,
   type Problem,
   type SignOff,
+  type Switch,
+  type SwitchInput,
   type TotalLine,
   type TotalsInput,
   type TrialInput,
@@ -108,6 +111,30 @@ interface ClaimsJson {
   cannot_be_invited: number;
 }
 
+interface NotCarriedJson {
+  legacy_client_ref: string;
+  code: string;
+  attempt: number;
+  noted_at: string;
+  state: NotCarried["state"];
+  resolution_id: string | null;
+  proposed_by: string | null;
+  reason: string | null;
+}
+
+interface SwitchJson {
+  id: string;
+  trial_id: string;
+  as_of: string;
+  proposed_by: string;
+  proposed_at: string;
+  state: Switch["state"];
+  decided_by: string | null;
+  decision_reason: string | null;
+  clients_carried: number;
+  not_carried: NotCarriedJson[];
+}
+
 export interface OverviewJson {
   trials_run: number;
   trial: TrialJson | null;
@@ -116,6 +143,8 @@ export interface OverviewJson {
   differences: DifferenceJson[];
   blockers: Blocker[];
   claims: ClaimsJson | null;
+  /** Older backends leave it out. */
+  switch?: SwitchJson | null;
   allowed: Allowed[];
 }
 
@@ -136,6 +165,11 @@ function staffIdsIn(json: OverviewJson): string[] {
       ids.add(item.sign_off.proposed_by);
       if (item.sign_off.decided_by) ids.add(item.sign_off.decided_by);
     }
+  }
+  if (json.switch) {
+    ids.add(json.switch.proposed_by);
+    if (json.switch.decided_by) ids.add(json.switch.decided_by);
+    for (const client of json.switch.not_carried) if (client.proposed_by) ids.add(client.proposed_by);
   }
   return [...ids];
 }
@@ -172,6 +206,31 @@ function toTotals(json: TotalsJson, me: string, name: Names): EnteredTotals {
     enteredAt: json.entered_at,
     confirmedBy: json.confirmed_by === null ? null : name(json.confirmed_by),
     mine: json.entered_by === me,
+  };
+}
+
+function toSwitch(json: SwitchJson, me: string, name: Names): Switch {
+  return {
+    id: json.id,
+    asOf: json.as_of,
+    proposedBy: name(json.proposed_by),
+    proposedAt: json.proposed_at,
+    state: json.state,
+    decidedBy: json.decided_by === null ? null : name(json.decided_by),
+    decisionReason: json.decision_reason,
+    clientsCarried: json.clients_carried,
+    notCarried: json.not_carried.map((client) => ({
+      legacyClientRef: client.legacy_client_ref,
+      code: client.code,
+      attempt: client.attempt,
+      notedAt: client.noted_at,
+      state: client.state,
+      resolutionId: client.resolution_id,
+      proposedBy: client.proposed_by === null ? null : name(client.proposed_by),
+      reason: client.reason,
+      mine: client.proposed_by === me,
+    })),
+    mine: json.proposed_by === me,
   };
 }
 
@@ -227,6 +286,7 @@ export function toOverview(json: OverviewJson, me: string, name: Names): Overvie
       notYetClaimed: json.claims.not_yet_claimed,
       cannotBeInvited: json.claims.cannot_be_invited,
     },
+    switch: json.switch ? toSwitch(json.switch, me, name) : null,
     blockers: json.blockers,
     allowed: json.allowed,
   };
@@ -265,9 +325,16 @@ export function totalsBody(input: TotalsInput) {
 export function toMigrationError(error: unknown): MigrationError {
   if (error instanceof MigrationError) return error;
   if (!(error instanceof ApiError)) return new MigrationError("unavailable");
+  const fields = error.fields.map((field) => field.code);
   switch (error.code) {
     case "validation_failed":
+      if (fields.includes("not_the_trial_sheet")) return new MigrationError("not_the_trial_sheet");
+      if (error.fields.some((field) => field.code === "missing" && field.field_path.at(-1) === "phone")) {
+        return new MigrationError("phone_missing");
+      }
       return new MigrationError("invalid");
+    case "phone_taken":
+      return new MigrationError("phone_taken");
     case "payload_too_large":
       return new MigrationError("file_too_large");
     // A sign-off for figures that no longer stand, totals already confirmed, or one's own entry.
@@ -324,6 +391,16 @@ export function createHttpMigrationApi(http: Http, directory: Directory, me: str
     }
   }
 
+  async function sheets(input: SwitchInput) {
+    if (input.clients.size > MAX_SHEET_BYTES || input.investments.size > MAX_SHEET_BYTES) {
+      throw new MigrationError("file_too_large");
+    }
+    const [clients, investments] = await Promise.all([input.clients.text(), input.investments.text()]);
+    return { clients_csv: clients, investments_csv: investments };
+  }
+
+  const decision = (approve: boolean, reason?: string) => ({ approve, reason: reason ?? null });
+
   return {
     getOverview: read,
     async runTrial(input: TrialInput) {
@@ -351,6 +428,30 @@ export function createHttpMigrationApi(http: Http, directory: Directory, me: str
           approve,
           reason: reason ?? null,
         }),
+      ),
+    async proposeSwitch(input) {
+      const body = await sheets(input);
+      return thenRead(() => http.request("POST", "/staff/migration/switch", body));
+    },
+    decideSwitch: (switchId, approve, reason) =>
+      thenRead(() =>
+        http.request("POST", `/staff/migration/switch/${encodeURIComponent(switchId)}/decision`, decision(approve, reason)),
+      ),
+    proposeResolution: (switchId, legacyClientRef, action, reason) =>
+      thenRead(() =>
+        http.request("POST", `/staff/migration/switch/${encodeURIComponent(switchId)}/resolutions`, {
+          legacy_client_ref: legacyClientRef,
+          action,
+          reason,
+        }),
+      ),
+    decideResolution: (resolutionId, approve, reason) =>
+      thenRead(() =>
+        http.request(
+          "POST",
+          `/staff/migration/switch/resolutions/${encodeURIComponent(resolutionId)}/decision`,
+          decision(approve, reason),
+        ),
       ),
   };
 }

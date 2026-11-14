@@ -11,18 +11,23 @@ import {
   notConnectedMigrationApi,
   type MigrationApi,
   type Overview,
+  type SwitchInput,
   type TotalsInput,
   type TrialInput,
 } from "./api.ts";
 import { Cards, ChecksTable, Panel, PanelRow } from "./Checks.tsx";
 import { SignOffs, TotalsForm, TotalsPanel, type FinanceActions } from "./Finance.tsx";
-import { BLOCKER_LABELS, formatAmount } from "./labels.ts";
+import { formatAmount } from "./labels.ts";
 import { createHttpMigrationApi } from "./http.ts";
 import { createStubMigrationApi } from "./stub.ts";
+import { NotCarriedList, SwitchForm, SwitchPanel, type SwitchActions } from "./Switch.tsx";
 import { Problems, TrialForm } from "./Trial.tsx";
 
-function sampleStart(sample: string | null): "empty" | "imported" | "unconfirmed" {
-  return sample === "empty" || sample === "unconfirmed" ? sample : "imported";
+const SAMPLES = ["empty", "unconfirmed", "cleared", "taken", "switched"] as const;
+type Sample = (typeof SAMPLES)[number] | "imported";
+
+function sampleStart(sample: string | null): Sample {
+  return SAMPLES.find((name) => name === sample) ?? "imported";
 }
 
 /**
@@ -31,8 +36,10 @@ function sampleStart(sample: string | null): "empty" | "imported" | "unconfirmed
  */
 function defaultApi(staffId: string | null): MigrationApi {
   if (isStubAuth()) {
-    // Under the stub, `?sample=empty` shows the screen before any trial has been run, and
-    // `?sample=unconfirmed` shows Finvest 1.0 totals waiting for a second person.
+    // Under the stub, `?sample=` picks the start: `empty` before any trial has been run,
+    // `unconfirmed` Finvest 1.0 totals waiting for a second person, `cleared` a switch awaiting
+    // your approval, `taken` the same refused for a phone number in use, and `switched` clients
+    // the switch could not carry over.
     return createStubMigrationApi(150, sampleStart(new URLSearchParams(window.location.search).get("sample")));
   }
   const base = apiBaseUrl();
@@ -52,7 +59,7 @@ function today(now: Date): string {
 
 export function MigrationScreen({ api, now = () => new Date() }: { api: MigrationApi; now?: () => Date }) {
   const [load, setLoad] = useState<Load>({ state: "loading" });
-  const [formOpen, setFormOpen] = useState<"trial" | "totals" | null>(null);
+  const [formOpen, setFormOpen] = useState<"trial" | "totals" | "switch" | null>(null);
   const [busy, setBusy] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
@@ -118,7 +125,22 @@ export function MigrationScreen({ api, now = () => new Date() }: { api: Migratio
         onEnter={(input: TotalsInput) => void act(() => api.enterTotals(input), true)}
         onCancel={closeForm}
       />
+    ) : formOpen === "switch" && overview?.trial ? (
+      <SwitchForm
+        busy={busy}
+        error={formError}
+        asOf={overview.trial.asOf}
+        onPropose={(input: SwitchInput) => void act(() => api.proposeSwitch(input), true)}
+        onCancel={closeForm}
+      />
     ) : null;
+  const switchActions: SwitchActions = {
+    busy,
+    onOpenProposal: () => setFormOpen("switch"),
+    onDecide: (switchId, approve, reason) => void act(() => api.decideSwitch(switchId, approve, reason), false),
+    onPropose: (switchId, ref, action, reason) => void act(() => api.proposeResolution(switchId, ref, action, reason), false),
+    onDecideResolution: (resolutionId, approve, reason) => void act(() => api.decideResolution(resolutionId, approve, reason), false),
+  };
   const actions: FinanceActions = {
     busy,
     onPropose: (key, reason) => void act(() => api.proposeSignOff(key, reason), false),
@@ -167,6 +189,7 @@ export function MigrationScreen({ api, now = () => new Date() }: { api: Migratio
           form={form}
           actionError={actionError}
           actions={actions}
+          switchActions={switchActions}
           onOpenTotals={() => setFormOpen("totals")}
           onConfirmTotals={(totalsId) => void act(() => api.confirmTotals(totalsId), false)}
         />
@@ -180,11 +203,12 @@ interface ReadyProps {
   form: React.ReactNode;
   actionError: string | null;
   actions: FinanceActions;
+  switchActions: SwitchActions;
   onOpenTotals: () => void;
   onConfirmTotals: (totalsId: string) => void;
 }
 
-function Ready({ overview, form, actionError, actions, onOpenTotals, onConfirmTotals }: ReadyProps) {
+function Ready({ overview, form, actionError, actions, switchActions, onOpenTotals, onConfirmTotals }: ReadyProps) {
   const claims = overview.claims;
   const count = (value: number) => formatAmount(String(value), null);
   return (
@@ -198,6 +222,7 @@ function Ready({ overview, form, actionError, actions, onOpenTotals, onConfirmTo
       <Cards overview={overview} />
       <div className="flex flex-wrap items-start gap-5">
         <div className="flex min-w-0 flex-[3_1_480px] flex-col gap-5">
+          <NotCarriedList overview={overview} actions={switchActions} />
           <ChecksTable lines={overview.lines} />
           {overview.trial ? <Problems trial={overview.trial} /> : null}
         </div>
@@ -210,21 +235,7 @@ function Ready({ overview, form, actionError, actions, onOpenTotals, onConfirmTo
             onConfirm={onConfirmTotals}
           />
           <SignOffs overview={overview} actions={actions} />
-          <Panel title="Before the switch">
-            <PanelRow name="Trial imports run" value={count(overview.trialsRun)} />
-            {overview.blockers.length === 0 ? (
-              <p className="m-0 border-t border-divider pt-2.5 text-md font-bold">Everything agrees. The switch can be scheduled.</p>
-            ) : (
-              <ul aria-label="Still to do before the switch" className="m-0 flex list-none flex-col p-0">
-                {overview.blockers.map((blocker) => (
-                  <li key={blocker} className="flex items-center gap-2.5 border-t border-divider py-2.5 text-md font-bold">
-                    <span aria-hidden="true" className="size-2.5 shrink-0 rounded-pill bg-warning" />
-                    {BLOCKER_LABELS[blocker]}
-                  </li>
-                ))}
-              </ul>
-            )}
-          </Panel>
+          <SwitchPanel overview={overview} actions={switchActions} />
           <Panel title="Clients claiming their accounts">
             {claims ? (
               <>
