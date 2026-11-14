@@ -20,7 +20,7 @@ from app.modules.kyc.providers import (
     DevelopmentStubProvider,
     ManualProvider,
 )
-from app.modules.kyc.regula import RegulaProvider, private_or_https
+from app.modules.kyc.regula import RegulaProvider, is_demo, private_or_https
 
 
 class KycSettings(BaseSettings):
@@ -31,12 +31,13 @@ class KycSettings(BaseSettings):
     # 32 random bytes in base64url, one per environment. It seals document numbers, dates of
     # birth and TINs. Losing it loses them, and changing it makes every saved check unreadable.
     identity_data_key: SecretStr | None = None
-    # `manual` sends every client to a person and runs no jobs. `regula` is Regula, run on
-    # Finvest's own servers. `iotec` is ioTec Verify. `development-stub` is for a developer's
-    # own machine.
+    # `manual` sends every client to a person and runs no jobs. `regula` is Regula, in its
+    # cloud or on Finvest's own servers. `iotec` is ioTec Verify. `development-stub` is for a
+    # developer's own machine.
     identity_provider: Literal["manual", "regula", "iotec", "development-stub"] = "manual"
-    # Where Finvest's own Regula services answer, such as http://regula-docreader:8080. Plain
-    # http only on the private network. Needed for `regula`.
+    # Where Regula's services answer: the cloud addresses from Regula's contract, or, self-hosted,
+    # such as http://regula-docreader:8080. Plain http only on the private network. Needed for
+    # `regula`. Regula's public demo services are refused in production.
     regula_document_reader_url: str | None = None
     regula_face_url: str | None = None
     # From the ioTec Verify portal, Management > Settings > Configuration. Needed for `iotec`.
@@ -75,6 +76,9 @@ class KycSettings(BaseSettings):
             for url in (self.regula_document_reader_url, self.regula_face_url):
                 if not private_or_https(url):
                     raise ValueError("Regula must be reached over https or the private network")
+                if is_demo(url) and self.environment == "production":
+                    # Regula's demo services are for trying it out, not for clients' IDs.
+                    raise ValueError("Regula's demo services may not be used in production")
         if self.identity_provider == "iotec":
             if not self.iotec_verify_client_id or self.iotec_verify_api_key is None:
                 raise ValueError(
