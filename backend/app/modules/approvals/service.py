@@ -11,7 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.modules.approvals.domain.inbox import InboxItem, Kind, Waiting, inbox, visible_kinds
 from app.modules.closures import service as closures
 from app.modules.console import actions as client_actions
-from app.modules.dealing import buffer, capital
+from app.modules.dealing import auctions, buffer, capital
 from app.modules.dealing import orders as dealing
 from app.modules.dealing.domain.capital import Direction
 from app.modules.dealing.domain.orders import OrderStatus
@@ -62,6 +62,8 @@ async def waiting_for(session: AsyncSession, staff: StaffSession, now: datetime)
         found += await _buffer_rules(session)
     if "buffer_capital" in kinds:
         found += await _buffer_capital(session)
+    if "auction_date" in kinds:
+        found += await _auction_dates(session)
     if "rate_change" in kinds:
         found += await _rates(session, staff)
     if "product_change" in kinds:
@@ -257,6 +259,21 @@ async def _buffer_capital(session: AsyncSession) -> list[Waiting]:
             m.proposed_at,
         )
         for m in await capital.waiting(session)
+    ]
+
+
+async def _auction_dates(session: AsyncSession) -> list[Waiting]:
+    # "TREA-91 on 2026-11-18", or "Cancel TREA-91 on 2026-11-18".
+    return [
+        Waiting(
+            "auction_date",
+            c.id,
+            f"{'Cancel ' if c.action == 'cancel' else ''}{c.product_code} on "
+            f"{c.auction_date.isoformat()}",
+            c.proposed_by,
+            c.proposed_at,
+        )
+        for c in await auctions.waiting(session)
     ]
 
 

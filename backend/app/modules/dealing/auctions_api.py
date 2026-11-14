@@ -1,13 +1,14 @@
 """The Treasury bill auction calendar over HTTP.
 
-`GET /staff/dealing/auctions` lists the dates from a month ago on, with `dealing_desk.view`.
-Entering and cancelling a date need `dealing_orders.change` and an `Idempotency-Key`, so a retry
-from a weak connection never enters a date twice. Every command answers with the calendar.
+`GET /staff/dealing/auctions` lists the dates from a month ago on, and any change still waiting,
+with `dealing_desk.view`. Proposing a date or a cancellation, and approving, declining or
+withdrawing a change, need `dealing_orders.change` and an `Idempotency-Key`, so a retry from a
+weak connection never applies a step twice. Every command answers with the calendar.
 """
 
 from collections.abc import Awaitable, Callable
 from datetime import date, datetime
-from typing import Annotated
+from typing import Annotated, Literal
 
 from fastapi import APIRouter, Depends, Request
 from pydantic import Field
@@ -17,6 +18,7 @@ from app.api.idempotency import IdempotencyKey
 from app.infrastructure.database import Database
 from app.infrastructure.idempotency import Receipt, run_once
 from app.modules.dealing import auctions
+from app.modules.dealing.domain.auctions import Change, State, Status, Step
 from app.modules.identity.api import require_permission
 from app.modules.identity.service import StaffSession
 from app.shared.clock import Clock
@@ -41,21 +43,45 @@ class CancelIn(Contract):
     reason: Reason
 
 
+class DeclineIn(Contract):
+    note: Reason
+
+
+class CancellationOut(Contract):
+    id: str
+    reason: str
+    status: Status
+    proposed_by: str
+    proposed_at: datetime
+    decided_by: str | None
+    decided_at: datetime | None
+    decision_note: str | None
+    # The steps the reader may take on the cancellation.
+    allowed: list[Step]
+
+
 class AuctionOut(Contract):
     id: str
     product_code: str
     auction_date: date
-    added_by: str
-    added_at: datetime
-    cancelled_by: str | None
-    cancelled_at: datetime | None
-    cancel_reason: str | None
+    # waiting: for a second person; standing: counts on the desk; cancelling: still counts, a
+    # cancellation waits; cancelled; declined or withdrawn: never counted.
+    state: State
+    proposed_by: str
+    proposed_at: datetime
+    decided_by: str | None
+    decided_at: datetime | None
+    decision_note: str | None
+    # The cancellation waiting or approved, else the latest one declined or withdrawn.
+    cancellation: CancellationOut | None
+    # The steps the reader may take on the date: approve, decline, withdraw or cancel.
+    allowed: list[Step]
 
 
 class CalendarOut(Contract):
-    # From a month ago on, cancelled dates included, earliest first.
+    # From a month ago on, and any date still waiting, earliest first.
     auctions: list[AuctionOut]
-    # False for a reader who may not enter or cancel a date.
+    # False for a reader who may not propose or decide a change.
     may_change: bool
 
 
@@ -69,23 +95,47 @@ DeskStaff = Annotated[StaffSession, Depends(require_permission("dealing_desk.vie
 Changer = Annotated[StaffSession, Depends(require_permission("dealing_orders.change"))]
 
 
-async def _calendar(session: AsyncSession, staff: StaffSession, clock: Clock) -> CalendarOut:
-    return CalendarOut(
-        auctions=[
-            AuctionOut(
-                id=a.id,
-                product_code=a.product_code,
-                auction_date=a.auction_date,
-                added_by=a.added_by,
-                added_at=a.added_at,
-                cancelled_by=a.cancelled_by,
-                cancelled_at=a.cancelled_at,
-                cancel_reason=a.cancel_reason,
-            )
-            for a in await auctions.calendar(session, clock)
-        ],
-        may_change="dealing_orders.change" in staff.permissions,
+def _cancellation(change: Change, allowed: list[Step]) -> CancellationOut:
+    return CancellationOut(
+        id=change.id,
+        reason=change.reason or "",
+        status=change.status,
+        proposed_by=change.proposed_by,
+        proposed_at=change.proposed_at,
+        decided_by=change.decided_by,
+        decided_at=change.decided_at,
+        decision_note=change.decision_note,
+        allowed=allowed,
     )
+
+
+async def _calendar(session: AsyncSession, staff: StaffSession, clock: Clock) -> CalendarOut:
+    may_change = "dealing_orders.change" in staff.permissions
+    shown = []
+    for view in await auctions.calendar(session, staff.actor, clock):
+        entry = view.entry
+        shown.append(
+            AuctionOut(
+                id=entry.id,
+                product_code=entry.product_code,
+                auction_date=entry.auction_date,
+                state=view.state,
+                proposed_by=entry.proposed_by,
+                proposed_at=entry.proposed_at,
+                decided_by=entry.decided_by,
+                decided_at=entry.decided_at,
+                decision_note=entry.decision_note,
+                cancellation=(
+                    _cancellation(
+                        view.cancellation, view.cancellation_allowed if may_change else []
+                    )
+                    if view.cancellation
+                    else None
+                ),
+                allowed=view.allowed if may_change else [],
+            )
+        )
+    return CalendarOut(auctions=shown, may_change=may_change)
 
 
 async def _command(
@@ -128,17 +178,17 @@ async def get_calendar(request: Request, staff: DeskStaff, clock: AppClock) -> C
 
 
 @router.post("")
-async def add_auction(
+async def propose_auction(
     request: Request, staff: Changer, clock: AppClock, key: IdempotencyKey, body: AuctionIn
 ) -> CalendarOut:
     async def command(session: AsyncSession) -> None:
-        await auctions.add(session, staff.actor, body.product_code, body.auction_date, clock)
+        await auctions.propose(session, staff.actor, body.product_code, body.auction_date, clock)
 
     return await _command(
         request,
         staff,
         clock,
-        operation="dealing.auction.add",
+        operation="dealing.auction.propose",
         key=key,
         body=body.model_dump(mode="json"),
         command=command,
@@ -146,7 +196,7 @@ async def add_auction(
 
 
 @router.post("/{auction_id}/cancel")
-async def cancel_auction(
+async def propose_cancellation(
     request: Request,
     staff: Changer,
     clock: AppClock,
@@ -155,7 +205,7 @@ async def cancel_auction(
     body: CancelIn,
 ) -> CalendarOut:
     async def command(session: AsyncSession) -> None:
-        await auctions.cancel(session, staff.actor, auction_id, body.reason, clock)
+        await auctions.propose_cancel(session, staff.actor, auction_id, body.reason, clock)
 
     return await _command(
         request,
@@ -166,3 +216,55 @@ async def cancel_auction(
         body={"auction_id": auction_id, **body.model_dump(mode="json")},
         command=command,
     )
+
+
+async def _decide(
+    request: Request,
+    staff: StaffSession,
+    clock: Clock,
+    key: str,
+    change_id: str,
+    step: Literal["approve", "decline", "withdraw"],
+    note: str = "",
+) -> CalendarOut:
+    async def command(session: AsyncSession) -> None:
+        await auctions.decide(session, staff.actor, change_id, step, note, clock)
+
+    body: dict[str, object] = {"change_id": change_id}
+    if step == "decline":
+        body["note"] = note
+    return await _command(
+        request,
+        staff,
+        clock,
+        operation=f"dealing.auction.{step}",
+        key=key,
+        body=body,
+        command=command,
+    )
+
+
+@router.post("/changes/{change_id}/approve")
+async def approve_change(
+    request: Request, staff: Changer, clock: AppClock, key: IdempotencyKey, change_id: str
+) -> CalendarOut:
+    return await _decide(request, staff, clock, key, change_id, "approve")
+
+
+@router.post("/changes/{change_id}/withdraw")
+async def withdraw_change(
+    request: Request, staff: Changer, clock: AppClock, key: IdempotencyKey, change_id: str
+) -> CalendarOut:
+    return await _decide(request, staff, clock, key, change_id, "withdraw")
+
+
+@router.post("/changes/{change_id}/decline")
+async def decline_change(
+    request: Request,
+    staff: Changer,
+    clock: AppClock,
+    key: IdempotencyKey,
+    change_id: str,
+    body: DeclineIn,
+) -> CalendarOut:
+    return await _decide(request, staff, clock, key, change_id, "decline", body.note)

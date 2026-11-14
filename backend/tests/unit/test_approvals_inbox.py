@@ -123,13 +123,17 @@ def test_oldest_first_then_by_kind_and_id() -> None:
 
 
 def test_buffer_changes_are_seen_with_the_desk_and_decided_by_who_changes_orders() -> None:
-    for kind in ("buffer_rules", "buffer_capital"):
+    for kind in ("buffer_rules", "buffer_capital", "auction_date"):
         assert SOURCES[kind].view == "dealing_desk.view"
         assert SOURCES[kind].decide == "dealing_orders.change"
-    items = [waiting("buffer_rules", id="a"), waiting("buffer_capital", id="b")]
+    items = [
+        waiting("buffer_rules", id="a"),
+        waiting("buffer_capital", id="b"),
+        waiting("auction_date", id="c"),
+    ]
     for role in ("admin", "finance"):
         shown = {i.kind: i.can_decide for i in inbox(items, "me", permissions_for(role))}
-        assert shown == {"buffer_rules": True, "buffer_capital": True}
+        assert shown == {"buffer_rules": True, "buffer_capital": True, "auction_date": True}
     assert inbox(items, "me", permissions_for("support")) == []
 
 
