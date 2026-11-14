@@ -1,13 +1,15 @@
+import { useState } from "react";
 import { StyleSheet, View } from "react-native";
 import { Redirect, Stack, useLocalSearchParams, useRouter } from "expo-router";
 
 import { Notice } from "@/components/Blocks";
-import { Button } from "@/components/Button";
+import { Button, TextLink } from "@/components/Button";
 import { Icon } from "@/components/Icon";
 import { Screen } from "@/components/Screen";
 import { Txt } from "@/components/Txt";
 import { formatDateTime, formatMoney, networkName, networkProduct } from "@/payments/format";
-import { Detail, DetailList, Loading } from "@/payments/Parts";
+import { Detail, DetailList, Loading, ShareNote } from "@/payments/Parts";
+import { asText, shareText, ShareOutcome } from "@/payments/share";
 import { useDeposit } from "@/payments/useDeposit";
 import { colors, fontSizes } from "@/theme";
 
@@ -17,6 +19,7 @@ export default function Receipt() {
   const { depositId } = useLocalSearchParams<{ depositId: string }>();
   const { deposit, missing, stale } = useDeposit(depositId);
   const done = () => router.replace("/");
+  const [shared, setShared] = useState<ShareOutcome | null>(null);
 
   if (missing) {
     return (
@@ -56,9 +59,21 @@ export default function Receipt() {
     rows.push({ label: `${network} reference`, value: deposit.networkReference });
   }
   rows.push({ label: "Finvest reference", value: deposit.reference });
+  // The number is already masked as the PDF receipt masks it.
+  const share = async () =>
+    setShared(await shareText("Finvest receipt", asText(`Finvest receipt: ${formatMoney(deposit.amount)} paid into ${deposit.payable.title}`, rows)));
 
   return (
-    <Screen signedIn footer={<Button label="Done" onPress={done} testID="receipt-done" />}>
+    <Screen
+      signedIn
+      footer={
+        <>
+          <Button label="Share receipt" variant="secondary" onPress={share} testID="receipt-share" />
+          <Button label="Done" onPress={done} testID="receipt-done" />
+          <TextLink label="Something wrong with this?" onPress={() => router.push("/help")} />
+        </>
+      }
+    >
       <Stack.Screen options={{ title: "Receipt" }} />
       <View style={styles.top}>
         <View style={styles.tick}>
@@ -80,6 +95,13 @@ export default function Receipt() {
       </View>
       <View style={{ marginTop: 24 }}>
         <DetailList rows={rows} />
+      </View>
+      <ShareNote outcome={shared} />
+      <View style={{ marginTop: 16, gap: 4 }}>
+        <Txt size={fontSizes.sm} color={colors.muted}>
+          We also email you this receipt as a PDF and keep it in Documents.
+        </Txt>
+        <TextLink label="Open Documents" onPress={() => router.push("/documents")} />
       </View>
     </Screen>
   );
