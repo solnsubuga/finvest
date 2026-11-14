@@ -1,5 +1,6 @@
 """A client's own stricter withdrawal limits, set and cleared by two members of staff."""
 
+import uuid
 from collections.abc import AsyncIterator
 from typing import Any
 
@@ -36,6 +37,7 @@ async def api(test_database: TestDatabase, app_database: Database) -> AsyncItera
 async def propose(api: Api, client: Actor, **limits: int | None) -> httpx.Response:
     return await api.http.post(
         f"/staff/clients/{client.id}/actions",
+        headers={"Idempotency-Key": uuid.uuid4().hex},
         json={
             "kind": "withdrawal_limits",
             "reason": "Asked by compliance after a monitoring alert",
@@ -47,6 +49,7 @@ async def propose(api: Api, client: Actor, **limits: int | None) -> httpx.Respon
 async def approve(api: Api, action_id: str) -> httpx.Response:
     return await api.http.post(
         f"/staff/clients/actions/{action_id}/decision",
+        headers={"Idempotency-Key": uuid.uuid4().hex},
         json={"decision": "approved", "reason": "Checked the alert"},
     )
 
@@ -109,11 +112,13 @@ async def test_a_client_limit_must_be_below_the_shared_one(api: Api) -> None:
     assert over.status_code == 422
     missing = await api.http.post(
         f"/staff/clients/{client.id}/actions",
+        headers={"Idempotency-Key": uuid.uuid4().hex},
         json={"kind": "withdrawal_limits", "reason": "Lower them"},
     )
     assert missing.status_code == 422
     stray = await api.http.post(
         f"/staff/clients/{client.id}/actions",
+        headers={"Idempotency-Key": uuid.uuid4().hex},
         json={"kind": "pin_reset", "reason": "Lost phone", "limits": NONE},
     )
     assert stray.status_code == 422
