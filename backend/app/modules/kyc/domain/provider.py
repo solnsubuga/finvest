@@ -17,8 +17,11 @@ from app.modules.kyc.domain.checks import DocumentType, IdentityDetails, PhotoKi
 
 class AutomaticCheck(StrEnum):
     DOCUMENT_GENUINE = "document_genuine"  # real, readable and not expired
-    SELFIE_MATCH = "selfie_match"  # a live person who is the person on the document
+    SELFIE_MATCH = "selfie_match"  # the selfie is the person on the document
     SCREENING = "screening"  # sanctions and politically exposed person lists
+    # The selfie was captured by a liveness check that saw a live person. Filled in by the
+    # service from where the selfie came from, not by the identity provider.
+    LIVENESS = "liveness"
 
 
 class Verdict(StrEnum):

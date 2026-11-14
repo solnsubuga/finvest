@@ -155,6 +155,7 @@ export const ClientPhoto = z.object({
   byte_size: z.number().int(),
   content_type: z.string(),
   kind: PhotoKind,
+  live: z.boolean().optional(),
 });
 export type ClientPhoto = z.infer<typeof ClientPhoto>;
 
@@ -579,6 +580,27 @@ export const LinkView = z.object({
   kind: z.enum(["deposit", "payout", "investment", "identity_check", "payout_destination", "statement", "security", "conversation", "complaint"]),
 });
 export type LinkView = z.infer<typeof LinkView>;
+
+export const LivenessStatus = z.enum(["starting", "open", "passed", "failed", "not_started", "expired"]);
+export type LivenessStatus = z.infer<typeof LivenessStatus>;
+
+export const LivenessAttempt = z.object({
+  expires_at: z.string(),
+  failure_code: z.string().nullable(),
+  id: z.string(),
+  photo_used: z.boolean(),
+  status: LivenessStatus,
+  url: z.string().nullable(),
+});
+export type LivenessAttempt = z.infer<typeof LivenessAttempt>;
+
+export const LivenessState = z.object({
+  attempts_left: z.number().int(),
+  available: z.boolean(),
+  latest: LivenessAttempt.nullable(),
+  problem: z.string().nullable(),
+});
+export type LivenessState = z.infer<typeof LivenessState>;
 
 export const LoginCode = z.object({
   code: z.string(),
@@ -1577,6 +1599,28 @@ export const operations = {
     idempotent: false,
     status: 200,
     response: ClientCheck,
+  },
+  "GET /client/identity-check/liveness": {
+    method: "GET",
+    path: "/client/identity-check/liveness",
+    params: z.object({}),
+    query: z.object({}),
+    body: null,
+    bodyKind: null,
+    idempotent: false,
+    status: 200,
+    response: LivenessState,
+  },
+  "POST /client/identity-check/liveness": {
+    method: "POST",
+    path: "/client/identity-check/liveness",
+    params: z.object({}),
+    query: z.object({}),
+    body: null,
+    bodyKind: null,
+    idempotent: false,
+    status: 200,
+    response: LivenessAttempt,
   },
   "PUT /client/identity-check/photos/{kind}": {
     method: "PUT",

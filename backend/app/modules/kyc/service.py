@@ -96,6 +96,12 @@ class PhotoView:
     content_type: str
     byte_size: int
     created_at: datetime
+    # `client` when the client sent it, `liveness` when a liveness check captured it.
+    source: str = "client"
+
+    @property
+    def live(self) -> bool:
+        return self.source == "liveness"
 
 
 @dataclass(frozen=True, slots=True)
@@ -243,12 +249,19 @@ _DOCUMENT_TAKEN = text(
     "AND document_fingerprint = :document_fingerprint)"
 )
 _PHOTOS = text(
-    "SELECT id, kind, storage_key, content_type, byte_size, created_at FROM kyc_photos "
+    "SELECT id, kind, storage_key, content_type, byte_size, created_at, source FROM kyc_photos "
     "WHERE check_id = :check_id AND replaced_at IS NULL ORDER BY kind"
 )
 _PROVIDER_PHOTOS = text(
     "SELECT kind, storage_key, sha256, content_type FROM kyc_photos "
     "WHERE check_id = :check_id AND replaced_at IS NULL"
+)
+_SELFIE_IS_LIVE = text(
+    "SELECT source = 'liveness' FROM kyc_photos WHERE check_id = :check_id AND kind = 'selfie' "
+    "AND replaced_at IS NULL"
+)
+_LIVENESS_FAILED = text(
+    "SELECT EXISTS (SELECT FROM kyc_liveness WHERE check_id = :check_id AND status = 'failed')"
 )
 _PHOTO_COUNT = text("SELECT count(*) FROM kyc_photos WHERE check_id = :check_id")
 _REPLACE_PHOTO = text(
@@ -579,6 +592,11 @@ async def record_provider_result(
         raise ApplicationError("not_found")
     if row.status != CheckStatus.SUBMITTED or row.submission != submission:
         return await _view(session, sealer, row)
+    # Liveness is not the identity provider's to answer: it comes from the selfie handed in.
+    outcomes = tuple(o for o in outcomes if o.check is not AutomaticCheck.LIVENESS)
+    live = await liveness_outcome(session, row.id)
+    if live is not None:
+        outcomes = (*outcomes, live)
     decision = decide(outcomes, automatic_approval=automatic_approval)
     flags = list(decision.flags)
     if decision.approve and row.document_expires_on < clock.now().date():
@@ -620,6 +638,20 @@ async def record_provider_result(
         details={"flags": flags},
     )
     return await _view_by_id(session, sealer, row.id)
+
+
+async def liveness_outcome(session: AsyncSession, check_id: str) -> CheckOutcome | None:
+    """The liveness result for the automatic decision, from the selfie as handed in.
+
+    A selfie captured by a passed liveness check passes. A selfie the client sent after a
+    failed attempt fails, so staff see that a live person was not confirmed. A selfie the
+    client sent with no failed attempt has no result, and shows as not run.
+    """
+    live = (await session.execute(_SELFIE_IS_LIVE, {"check_id": check_id})).scalar_one_or_none()
+    if live:
+        return CheckOutcome(AutomaticCheck.LIVENESS, Verdict.PASS)
+    failed = (await session.execute(_LIVENESS_FAILED, {"check_id": check_id})).scalar_one()
+    return CheckOutcome(AutomaticCheck.LIVENESS, Verdict.FAIL) if failed else None
 
 
 # Finvest 1.0 ----------------------------------------------------------------------------------
@@ -1301,6 +1333,7 @@ async def _view(session: AsyncSession, sealer: Sealer, row: Row[Any]) -> CheckVi
                 content_type=photo.content_type,
                 byte_size=photo.byte_size,
                 created_at=photo.created_at,
+                source=photo.source,
             )
             for photo in photos.all()
         ),

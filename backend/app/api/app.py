@@ -48,6 +48,7 @@ from app.modules.insights import api as insights_api
 from app.modules.investments import api as investments_api
 from app.modules.kyc import api as kyc_api
 from app.modules.kyc import claims_api as kyc_claims_api
+from app.modules.kyc.domain.liveness import LivenessProvider
 from app.modules.kyc.domain.provider import IdentityProvider
 from app.modules.kyc.settings import KycSettings
 from app.modules.migration import api as migration_api
@@ -97,6 +98,7 @@ def create_app(
     email_hooks: WebhookVerifier | None = None,
     identity_sealer: Sealer | None = None,
     identity_provider: IdentityProvider | None = None,
+    identity_liveness: LivenessProvider | None = None,
     email_hash: EmailHashSettings | None = None,
     iotec_wallet: WalletBalances | None = None,
 ) -> FastAPI:
@@ -114,7 +116,10 @@ def create_app(
     identity_checks = KycSettings()
     if identity_sealer is None and identity_checks.identity_data_key is not None:
         identity_sealer = identity_checks.sealer()
-    identity_provider = identity_provider or identity_checks.provider(storage)
+    if identity_provider is None:
+        identity_provider = identity_checks.provider(storage)
+        # A provider passed in (a test's) comes without liveness unless one is passed too.
+        identity_liveness = identity_liveness or identity_checks.liveness()
 
     @asynccontextmanager
     async def lifespan(_: FastAPI) -> AsyncIterator[None]:
@@ -221,7 +226,9 @@ def create_app(
     app.include_router(insights_api.router)
     for router in investments_api.routers:
         app.include_router(router)
-    for router in kyc_api.create_routers(identity_sealer, identity_provider, storage):
+    for router in kyc_api.create_routers(
+        identity_sealer, identity_provider, storage, identity_liveness
+    ):
         app.include_router(router)
     for router in kyc_claims_api.create_routers(storage):
         app.include_router(router)
