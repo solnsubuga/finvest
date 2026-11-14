@@ -63,6 +63,8 @@ function investment(fields: Pick<Investment, "id" | "clientId" | "amount" | "mat
     rolledIntoId: null,
     rolledFromId: null,
     payoutId: null,
+    interestGoalName: null,
+    interestFromId: null,
     payoutRefusal: null,
     ...fields,
   };

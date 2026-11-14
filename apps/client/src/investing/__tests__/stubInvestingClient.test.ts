@@ -207,6 +207,24 @@ describe("demo maturity choice and pay-out", () => {
     expect((await api.chooseAtMaturity({ investmentId: running.id, atMaturity: "roll_over", destinationId: null })).payoutDestinationId).toBeNull();
   });
 
+  it("saves the interest to one of the demo goals, and clears it on another choice", async () => {
+    const api = createStubInvestingClient({ delayMs: 0 });
+    const [running] = (await api.listInvestments()).filter((one) => one.canChangeMaturity);
+    if (!running) throw new Error("no running sample");
+    await expect(
+      api.chooseAtMaturity({ investmentId: running.id, atMaturity: "interest_to_goal", destinationId: null, goalId: "nope" }),
+    ).rejects.toEqual(new InvestingError("invalid"));
+    const saved = await api.chooseAtMaturity({
+      investmentId: running.id,
+      atMaturity: "interest_to_goal",
+      destinationId: null,
+      goalId: "demo-goal-1",
+    });
+    expect(saved).toMatchObject({ atMaturity: "interest_to_goal", interestGoal: { id: "demo-goal-1", name: "School fees, Term 1" } });
+    const back = await api.chooseAtMaturity({ investmentId: running.id, atMaturity: "roll_over", destinationId: null });
+    expect(back.interestGoal).toBeNull();
+  });
+
   it("pays matured money once, to a ready account within the mobile money limit", async () => {
     const api = demo(true);
     const matured = (await api.listInvestments()).find((one) => one.waitingForDestination)!;

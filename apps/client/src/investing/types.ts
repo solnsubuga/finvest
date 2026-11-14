@@ -204,8 +204,8 @@ export type MaturedPayOut = {
 export type NewInvestment = {
   productCode: string;
   amount: Amount;
-  /** Fixed terms only. Null means roll over, the default. */
-  atMaturity: AtMaturity | null;
+  /** Fixed terms only. Null means roll over, the default. A goal is chosen later, on the investment. */
+  atMaturity: Exclude<AtMaturity, "interest_to_goal"> | null;
   /** Made once when the review screen opens and sent with every try, so a double tap saves one investment. */
   idempotencyKey: string;
 };
@@ -291,6 +291,8 @@ export type InvestingErrorCode =
   | "invalid"
   | "cannot_withdraw"
   | "account_not_ready"
+  /** The goal chosen for the interest is closed, in another currency, or the investment's own. */
+  | "goal_not_usable"
   | "cannot_change_maturity"
   | "already_sent"
   | "over_mobile_money_limit"
@@ -332,6 +334,7 @@ const messages: Record<InvestingErrorCode, string> = {
   invalid: "We could not accept that. Go back, check the details and try again.",
   cannot_withdraw: "This investment cannot be withdrawn early now. It may already be on its way to you, or it matures too soon.",
   account_not_ready: "That account cannot be paid yet. A new account can be paid one day after it is approved.",
+  goal_not_usable: "That goal cannot take this interest. It may be closed, or this investment already saves towards it. Choose another goal.",
   cannot_change_maturity: "What happens at the end can no longer be changed. It matures too soon, or has already ended.",
   already_sent: "This money is already on its way to you. Open your payouts to follow it.",
   over_mobile_money_limit: "That is more than mobile money can take in one payout. Choose a bank account instead.",

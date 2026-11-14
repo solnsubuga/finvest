@@ -10,7 +10,7 @@ import { formatBps, formatDay, formatExact, formatStamp } from "../products/form
 import {
   investmentsErrorMessage,
   notConnectedInvestmentsApi,
-  type AtMaturity,
+  choiceLabel,
   type InterestRun,
   type Investment,
   type InvestmentStatus,
@@ -35,7 +35,6 @@ const TABS: readonly { status: InvestmentStatus; label: string; empty: string }[
   { status: "cancelled", label: "Cancelled", empty: "No investment has been cancelled." },
 ];
 
-const AT_MATURITY_LABELS: Record<AtMaturity, string> = { roll_over: "Roll over", pay_out: "Pay out", pay_interest: "Pay the interest" };
 
 const REFUSAL_LABELS: Record<string, string> = {
   no_destination: "Waiting for the client to choose where to be paid",
@@ -248,7 +247,7 @@ function LastColumn({ investment }: { investment: Investment }) {
     // A payout ID means the payout was created, not that the money has arrived.
     return <span>{investment.payoutId ? "Payout created" : "Being paid out"}</span>;
   }
-  return <span>{investment.atMaturity ? AT_MATURITY_LABELS[investment.atMaturity] : "Paid monthly"}</span>;
+  return <span>{investment.atMaturity ? choiceLabel(investment) : "Paid monthly"}</span>;
 }
 
 function LatestRun({ runs, today }: { runs: readonly InterestRun[]; today: string }) {
@@ -300,7 +299,7 @@ function Maturing({ investments }: { investments: readonly Investment[] }) {
             <Row
               key={investment.id}
               name={`${formatDay(investment.maturityDate ?? "")}, ${investment.productName}`}
-              value={`${formatExact(investment.amount)}, ${investment.atMaturity ? AT_MATURITY_LABELS[investment.atMaturity].toLowerCase() : "open"}`}
+              value={`${formatExact(investment.amount)}, ${investment.atMaturity ? choiceLabel(investment).toLowerCase() : "open"}`}
             />
           ))}
         </dl>

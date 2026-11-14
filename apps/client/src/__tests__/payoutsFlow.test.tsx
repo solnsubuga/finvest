@@ -248,6 +248,22 @@ describe("the maturity choice", () => {
     );
   });
 
+  it("keeps what was put in invested and saves the interest to a chosen goal", async () => {
+    await signIn();
+    await open("/portfolio");
+    await fireEvent.press(await screen.findByLabelText(/^91 Day Treasury Bill, Running/));
+    await fireEvent.press(await screen.findByTestId("change-maturity"));
+    await fireEvent.press(await screen.findByTestId("maturity-interest_to_goal"));
+    expect(screen.getByText("Save the interest to")).toBeTruthy();
+    await fireEvent.press(await screen.findByTestId("maturity-goal-demo-goal-1"));
+    expect(screen.getByText(/starts a new saving in School fees, Term 1, straight away and with nothing to pay/)).toBeTruthy();
+    await fireEvent.press(screen.getByTestId("maturity-save"));
+    expect(await screen.findByText("Saved to School fees, Term 1")).toBeTruthy();
+    expect(mockChoose).toHaveBeenCalledWith(
+      expect.objectContaining({ atMaturity: "interest_to_goal", destinationId: null, goalId: "demo-goal-1" }),
+    );
+  });
+
   it("sends matured money to a ready account, and asks the same again after a lost answer", async () => {
     mockInvesting.maturedWaiting = true;
     await signIn();

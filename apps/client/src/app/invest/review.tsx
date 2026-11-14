@@ -17,7 +17,9 @@ import { DetailList, Loading } from "@/payments/Parts";
 import { colors, fontSizes, radii } from "@/theme";
 import { IdCheckPrompt } from "@/identity/Parts";
 
-const CHOICES: AtMaturity[] = ["roll_over", "pay_out", "pay_interest"];
+/** The choices when investing. Saving the interest to a goal is chosen later, on the investment. */
+type NewChoice = Exclude<AtMaturity, "interest_to_goal">;
+const CHOICES: NewChoice[] = ["roll_over", "pay_out", "pay_interest"];
 
 /**
  * Review and confirm. Confirming saves the investment at today's rate, then
@@ -27,7 +29,7 @@ export default function Review() {
   const router = useRouter();
   const params = useLocalSearchParams<{ code: string; amount: string }>();
   const client = useInvesting();
-  const [atMaturity, setAtMaturity] = useState<AtMaturity>("roll_over");
+  const [atMaturity, setAtMaturity] = useState<NewChoice>("roll_over");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   // Refused because the ID check is not approved yet: the error then opens it.

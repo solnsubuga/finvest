@@ -34,6 +34,8 @@ export function toInvestment(json: StaffInvestmentOut): Investment {
     taxBps: json.tax_bps,
     termDays: json.term_days,
     atMaturity: json.at_maturity,
+    interestGoalName: json.interest_goal_id ? (json.interest_goal_name ?? "a goal") : null,
+    interestFromId: json.interest_from_investment_id ?? null,
     createdAt: json.created_at,
     payBy: json.pay_by,
     startDate: json.start_date,

@@ -74,6 +74,7 @@ export function toInvestment(view: ClientInvestmentOut): Investment {
     withdrawalRequestedAt: view.withdrawal_requested_at,
     canSend: view.can_send ?? false,
     lockedUntil: view.withdrawal_locked_until ?? null,
+    interestGoal: view.interest_goal_id ? { id: view.interest_goal_id, name: view.interest_goal_name ?? "your goal" } : null,
   };
 }
 
@@ -210,6 +211,8 @@ export function toInvestingError(error: unknown, call: Call = "other"): Investin
       return new InvestingError(CONFLICT[call]);
     case "validation_failed": {
       const codes = error.fields.map((field) => field.code);
+      // The goal chosen for the interest, which shares the code `not_usable` with accounts.
+      if (error.fields.some((field) => field.field === "goal_id" || field.field.endsWith(".goal_id"))) return new InvestingError("goal_not_usable");
       const refusal = codes.map((code) => SEND_REFUSALS[code]).find((found) => found !== undefined);
       if ((call === "send" || call === "lookup") && refusal) return new InvestingError(refusal);
       if (
@@ -313,7 +316,7 @@ export function createApiInvestingClient(): InvestingClient {
           toInvestment(
             await api("PUT /client/investments/{investment_id}/at-maturity", {
               params: { investment_id: choice.investmentId },
-              body: { at_maturity: choice.atMaturity, destination_id: choice.destinationId },
+              body: { at_maturity: choice.atMaturity, destination_id: choice.destinationId, ...(choice.goalId ? { goal_id: choice.goalId } : {}) },
             }),
           ),
         "maturity",
