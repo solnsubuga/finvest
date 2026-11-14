@@ -25,6 +25,10 @@ import { createHttpReassignmentsApi } from "./reassignments/http.ts";
 import { Reassignments } from "./reassignments/Reassignments.tsx";
 import { createStubReassignmentsApi } from "./reassignments/stub.ts";
 import { createStubBankTransfersApi, type StubCase } from "./stub.ts";
+import { notConnectedPotTransfersApi, type PotTransfersApi } from "./transfers/api.ts";
+import { createHttpPotTransfersApi } from "./transfers/http.ts";
+import { PotTransfers } from "./transfers/PotTransfers.tsx";
+import { createStubPotTransfersApi } from "./transfers/stub.ts";
 import { Transfer, type TransferCommand } from "./Transfer.tsx";
 
 type Load<T> = { state: "loading" } | { state: "failed"; message: string } | { state: "ready"; value: T };
@@ -256,11 +260,22 @@ export default function ReconciliationPage() {
     const base = apiBaseUrl();
     return base ? createHttpDayCloseApi(createHttp(base), session.staffId) : notConnectedDayCloseApi;
   });
+  // Transfers between pots: sample pots under the stub, the real routes otherwise.
+  const [potTransfers] = useState<PotTransfersApi>(() => {
+    if (!session) return notConnectedPotTransfersApi;
+    if (isStubAuth()) {
+      const which = stubCase();
+      return createStubPotTransfersApi(session.staffId, 150, which === "unsorted" ? "sample" : which);
+    }
+    const base = apiBaseUrl();
+    return base ? createHttpPotTransfersApi(createHttp(base)) : notConnectedPotTransfersApi;
+  });
   return (
     <>
       <BankTransfersScreen api={api} canDecide={session ? can(session, "bank_transfers.change") : false} />
       <DayClose api={days} canAct={session ? can(session, "reconciliation.change") : false} />
       <Reassignments api={moves} canChange={session ? can(session, "deposit_reassignments.change") : false} />
+      <PotTransfers api={potTransfers} me={session?.staffId ?? ""} canChange={session ? can(session, "reconciliation.change") : false} />
     </>
   );
 }
