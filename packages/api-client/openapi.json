@@ -6206,6 +6206,25 @@
             ],
             "title": "Not Final From"
           },
+          "note": {
+            "anyOf": [
+              {
+                "enum": [
+                  "started",
+                  "ended"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note"
+          },
+          "reference": {
+            "title": "Reference",
+            "type": "string"
+          },
           "requested_at": {
             "format": "date-time",
             "title": "Requested At",
@@ -6231,7 +6250,9 @@
           "finished_at",
           "file_name",
           "byte_size",
-          "not_final_from"
+          "not_final_from",
+          "reference",
+          "note"
         ],
         "title": "DocumentItem",
         "type": "object"

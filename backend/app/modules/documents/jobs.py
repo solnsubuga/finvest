@@ -58,7 +58,13 @@ from app.modules.documents.domain.statements import (
     previous_month,
 )
 from app.modules.documents.events import ENDED_NOTE_KIND, INVESTMENT_NOTE_KIND, RECEIPT_KIND
-from app.modules.documents.service import DocumentFile, DocumentKind, DocumentStatus, DocumentView
+from app.modules.documents.service import (
+    DocumentFile,
+    DocumentKind,
+    DocumentStatus,
+    DocumentView,
+    NoteStage,
+)
 from app.modules.identity import service as identity
 from app.modules.kyc import service as kyc
 from app.modules.ledger import closing
@@ -107,22 +113,6 @@ _STALE_EMAILS = text(
 )
 
 
-def statement_reference(document_id: str) -> str:
-    return f"ST-{document_id}"
-
-
-def receipt_reference(document_id: str) -> str:
-    return f"RC-{document_id}"
-
-
-def note_reference(document_id: str) -> str:
-    return f"IN-{document_id}"
-
-
-def certificate_reference(document_id: str) -> str:
-    return f"TC-{document_id}"
-
-
 def _tax_year(view: DocumentView) -> tax.TaxYear:
     assert view.period is not None
     return tax.tax_year_of(view.period.start)
@@ -130,12 +120,12 @@ def _tax_year(view: DocumentView) -> tax.TaxYear:
 
 def file_name(view: DocumentView) -> str:
     if view.kind is DocumentKind.RECEIPT:
-        return f"Finvest receipt {receipt_reference(view.id)}.pdf"
+        return f"Finvest receipt {view.reference}.pdf"
     if view.kind is DocumentKind.TAX_CERTIFICATE:
         return f"Finvest tax certificate {_tax_year(view).label}.pdf"
     if view.kind is DocumentKind.INVESTMENT_NOTE:
-        stage = "end note" if is_ended_note(view) else "note"
-        return f"Finvest investment {stage} {note_reference(view.id)}.pdf"
+        stage = "end note" if view.note is NoteStage.ENDED else "note"
+        return f"Finvest investment {stage} {view.reference}.pdf"
     assert view.period is not None
     return f"Finvest statement {view.period.label}.pdf"
 
@@ -243,7 +233,7 @@ class DocumentJobs:
             if view.kind is DocumentKind.RECEIPT:
                 assert view.source_id is not None
                 receipt, _ = await building.receipt(
-                    session, deposit_id=view.source_id, reference=receipt_reference(view.id)
+                    session, deposit_id=view.source_id, reference=view.reference
                 )
                 return DocumentStatus.READY, None, pdf.receipt_pdf(receipt), None
             if view.kind is DocumentKind.INVESTMENT_NOTE:
@@ -265,7 +255,7 @@ class DocumentJobs:
                 if view.kind is DocumentKind.MONTHLY_STATEMENT
                 else StatementKind.REQUESTED,
                 period=view.period,
-                reference=statement_reference(view.id),
+                reference=view.reference,
                 issued_on=business_date(self._clock.now()),
                 not_final_from=open_from,
             )
@@ -309,7 +299,7 @@ class DocumentJobs:
             return DocumentStatus.EMPTY, None, None, None
         drawn = pdf.tax_certificate_pdf(
             certificate,
-            reference=certificate_reference(view.id),
+            reference=view.reference,
             issued_on=business_date(self._clock.now()),
         )
         return DocumentStatus.READY, None, drawn, None
@@ -640,15 +630,10 @@ class DocumentJobs:
         return effect
 
 
-def is_ended_note(view: DocumentView) -> bool:
-    """An investment note keyed `ended:<id>` confirms the investment ended; `started:` began."""
-    return view.idempotency_key.startswith("ended:")
-
-
 async def _draw_note(session: AsyncSession, view: DocumentView, clock: Clock) -> bytes:
     assert view.source_id is not None
-    reference, issued_on = note_reference(view.id), business_date(clock.now())
-    if is_ended_note(view):
+    reference, issued_on = view.reference, business_date(clock.now())
+    if view.note is NoteStage.ENDED:
         ended, _ = await building.ended_note(
             session,
             client_id=view.client_id,
@@ -689,15 +674,15 @@ async def _render(
     if view.kind is DocumentKind.RECEIPT:
         assert view.source_id is not None
         receipt, _ = await building.receipt(
-            session, deposit_id=view.source_id, reference=receipt_reference(view.id)
+            session, deposit_id=view.source_id, reference=view.reference
         )
         return receipt_email(
             first_name=holder.first_name, receipt=receipt, file_name=file.file_name, links=links
         )
     if view.kind is DocumentKind.INVESTMENT_NOTE:
         assert view.source_id is not None
-        reference = note_reference(view.id)
-        if is_ended_note(view):
+        reference = view.reference
+        if view.note is NoteStage.ENDED:
             ended, _ = await building.ended_note(
                 session,
                 client_id=view.client_id,

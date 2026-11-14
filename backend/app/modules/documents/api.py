@@ -67,6 +67,11 @@ class DocumentItem(Contract):
     # A statement for dates the ledger has not all closed yet: the first day whose figures
     # may still change. Null when every figure is final.
     not_final_from: date | None
+    # What the PDF and its email call the document: "ST-", "RC-", "TC-" or "IN-" and its ID.
+    reference: str
+    # For an investment note, whether it confirms the investment started or ended. Null for
+    # every other kind.
+    note: Literal["started", "ended"] | None
 
 
 class DocumentList(Contract):
@@ -87,6 +92,8 @@ def _item(view: DocumentView) -> DocumentItem:
         file_name=view.file_name,
         byte_size=view.byte_size,
         not_final_from=view.not_final_from,
+        reference=view.reference,
+        note=view.note.value if view.note else None,
     )
 
 

@@ -17,7 +17,7 @@ from app.infrastructure.jobs import JobRequest, enqueue
 from app.modules.documents import pdf, service
 from app.modules.documents.domain.investment_notes import EndedNote, Ending, InvestmentNote
 from app.modules.documents.events import ENDED_NOTE_KIND, INVESTMENT_NOTE_KIND
-from app.modules.documents.service import DocumentKind, DocumentStatus
+from app.modules.documents.service import DocumentKind, DocumentStatus, NoteStage
 from app.modules.identity import service as identity_service
 from app.modules.identity.service import ClientContact
 from app.modules.investments import holdings
@@ -99,6 +99,7 @@ async def test_a_started_investment_gets_one_note_built_listed_and_emailed_locke
         investment.id,
     )
     assert note.file_name == f"Finvest investment note IN-{note.id}.pdf"
+    assert (note.reference, note.note) == (f"IN-{note.id}", NoteStage.STARTED)
     assert file.content.startswith(b"%PDF-")
     (figures,) = drawn
     assert figures.amount == investment.amount
@@ -234,9 +235,10 @@ async def test_a_matured_investment_gets_a_note_that_says_what_it_came_to_and_wh
     async with app_database.actor_transaction(client) as session:
         listed = await service.client_documents(session, client)
     ended = [view for view in listed if view.idempotency_key == f"ended:{investment.id}"]
-    assert [(view.kind, view.status) for view in ended] == [
-        (DocumentKind.INVESTMENT_NOTE, DocumentStatus.READY)
+    assert [(view.kind, view.status, view.note) for view in ended] == [
+        (DocumentKind.INVESTMENT_NOTE, DocumentStatus.READY, NoteStage.ENDED)
     ]
+    assert ended[0].reference == f"IN-{ended[0].id}"
     (message,) = email.sent
     assert message.subject == f"Your Finvest investment note: {investment.product_name} ended"
     assert "rolled over" in message.text

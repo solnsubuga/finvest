@@ -9,9 +9,7 @@ import { Icon } from "@/components/Icon";
 import { Eyebrow, Txt } from "@/components/Txt";
 import { useDocuments } from "@/documents/DocumentsProvider";
 import {
-  isEndNote,
   monthLabel,
-  noteReference,
   parseDay,
   periodLabel,
   periodProblem,
@@ -20,7 +18,6 @@ import {
   QUICK_PICKS,
   quickPeriod,
   QuickPick,
-  receiptReference,
   taxYearLabel,
 } from "@/documents/periods";
 import { STATEMENT_POLL_LIMIT, STATEMENT_POLL_MS } from "@/documents/poll";
@@ -548,17 +545,15 @@ function Rows({ items }: { items: DocumentItem[] }) {
 
 function rowText(document: DocumentItem): { title: string; subtitle: string } {
   if (document.kind === "receipt") {
-    const reference = receiptReference(document);
     return {
-      title: reference ? `Receipt ${reference}` : "Receipt",
+      title: `Receipt ${document.reference}`,
       subtitle: `Payment confirmed on ${formatDateTime(document.requestedAt)}`,
     };
   }
   if (document.kind === "investment_note") {
-    const reference = noteReference(document);
     return {
-      title: reference ? `Investment note ${reference}` : "Investment note",
-      subtitle: `${isEndNote(document) ? "Investment ended" : "Investment started"}. Note made on ${formatDateTime(document.finishedAt ?? document.requestedAt)}`,
+      title: `Investment note ${document.reference}`,
+      subtitle: `${document.note === "ended" ? "Investment ended" : "Investment started"}. Note made on ${formatDateTime(document.finishedAt ?? document.requestedAt)}`,
     };
   }
   if (document.kind === "tax_certificate" && document.dateFrom && document.dateTo) {
