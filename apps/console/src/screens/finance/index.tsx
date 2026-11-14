@@ -23,8 +23,13 @@ import {
 import { formatAmount, formatDay, formatMonth, parseAmount } from "./format.ts";
 import { createHttpTaxApi } from "./http.ts";
 import { createStubTaxApi } from "./stub.ts";
+import { Figure } from "./Figure.tsx";
+import { BooksSection } from "./Books.tsx";
+import { notConnectedBooksApi, BooksError, type BooksApi } from "./books.ts";
+import { createHttpBooksApi } from "./booksHttp.ts";
+import { createStubBooksApi } from "./booksStub.ts";
 
-const SUMMARY = "Tax withheld from clients' interest, what is owed to URA, and paying it.";
+const SUMMARY = "Finvest's income and costs, the books by account, the journal for the accounting system, and tax held for URA.";
 const INPUT = "w-full rounded-lg border border-border-strong bg-surface px-3 py-2.5 text-md font-medium text-ink";
 const NEW_PAYMENT = "new";
 // Payments shown before "Show all": enough for the last few months.
@@ -47,6 +52,8 @@ export function saveFile({ file, filename }: TaxExport) {
 
 interface FinanceScreenProps {
   api: TaxApi;
+  /** The books and the accounting export. Left out, the screen shows withholding tax only. */
+  booksApi?: BooksApi;
   /** `tax_remittances.change`: recording, approving and declining payments to URA. */
   canPay: boolean;
   newKey?: () => string;
@@ -54,7 +61,7 @@ interface FinanceScreenProps {
   save?: (exported: TaxExport) => void;
 }
 
-export function FinanceScreen({ api, canPay, newKey = () => crypto.randomUUID(), today = kampalaToday, save = saveFile }: FinanceScreenProps) {
+export function FinanceScreen({ api, booksApi, canPay, newKey = () => crypto.randomUUID(), today = kampalaToday, save = saveFile }: FinanceScreenProps) {
   const [currency, setCurrency] = useState<Currency>("UGX");
   const [load, setLoad] = useState<Load>({ state: "loading" });
   const [detail, setDetail] = useState<Detail | null>(null);
@@ -158,11 +165,18 @@ export function FinanceScreen({ api, canPay, newKey = () => crypto.randomUUID(),
       </div>
     </div>
   );
+  const top = (
+    <>
+      {header}
+      {booksApi ? <BooksSection key={currency} api={booksApi} currency={currency} today={today()} save={save} /> : null}
+      {booksApi ? <h2 className="m-0 mt-4 text-xl font-extrabold">Withholding tax</h2> : null}
+    </>
+  );
 
   if (load.state === "loading") {
     return (
       <>
-        {header}
+        {top}
         <p role="status" className="m-0 text-md text-muted">
           Loading withholding tax
         </p>
@@ -172,7 +186,7 @@ export function FinanceScreen({ api, canPay, newKey = () => crypto.randomUUID(),
   if (load.state === "failed") {
     return (
       <>
-        {header}
+        {top}
         <section role="alert" className="flex max-w-[640px] flex-col items-start gap-3 rounded-xl border border-border bg-surface p-5">
           <h2 className="m-0 text-xl font-extrabold">Withholding tax could not be loaded</h2>
           <p className="m-0 text-md leading-normal text-muted">{load.message}</p>
@@ -194,7 +208,7 @@ export function FinanceScreen({ api, canPay, newKey = () => crypto.randomUUID(),
 
   return (
     <>
-      {header}
+      {top}
       <dl className="m-0 grid grid-cols-[repeat(auto-fit,minmax(200px,1fr))] gap-4">
         <Figure name="Held for URA now" value={formatAmount(screen.heldForUra)} note="Withheld and not yet paid, every month" />
         <Figure
@@ -303,16 +317,6 @@ function useScrolledTo<T extends HTMLElement = HTMLElement>() {
     ref.current?.scrollIntoView?.({ block: "start", behavior: "smooth" });
   }, []);
   return ref;
-}
-
-function Figure({ name, value, note, warn = false }: { name: string; value: string; note: string; warn?: boolean }) {
-  return (
-    <div className={cn("rounded-[18px] bg-surface p-4", warn ? "border-2 border-warning p-[15px]" : "border border-border")}>
-      <dt className="text-sm text-muted">{name}</dt>
-      <dd className="m-0 text-[22px] font-extrabold tracking-[-0.4px] tabular-nums">{value}</dd>
-      <dd className={cn("m-0 text-xs font-bold", warn ? "text-warning-text" : "text-muted")}>{note}</dd>
-    </div>
-  );
 }
 
 function monthState(month: TaxMonth, thisMonth: string): { label: string; style: string } {
@@ -732,5 +736,14 @@ export default function FinancePage() {
     const base = apiBaseUrl();
     return base ? createHttpTaxApi(createHttp(base)) : notConnectedTaxApi;
   });
-  return <FinanceScreen api={api} canPay={session ? can(session, "tax_remittances.change") : false} />;
+  const [booksApi] = useState<BooksApi>(() => {
+    if (isStubAuth() && session) {
+      const sample = new URLSearchParams(window.location.search).get("sample");
+      if (sample === "offline") return { ...notConnectedBooksApi, getBooks: () => Promise.reject(new BooksError("unavailable")) };
+      return createStubBooksApi({ id: session.staffId, name: session.name }, { empty: sample === "empty" });
+    }
+    const base = apiBaseUrl();
+    return base ? createHttpBooksApi(createHttp(base)) : notConnectedBooksApi;
+  });
+  return <FinanceScreen api={api} booksApi={booksApi} canPay={session ? can(session, "tax_remittances.change") : false} />;
 }
