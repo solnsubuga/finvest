@@ -1172,6 +1172,15 @@ ROWS = {
         "now(), now()); COMMIT",
         "refusing to drop the paydays clients named",
     ),
+    "0303_goal_locks": (
+        "BEGIN; SELECT set_config('finvest.actor_kind', 'client', true); "
+        "SELECT set_config('finvest.actor_id', '-Nabc0000000000000B1', true); "
+        "INSERT INTO goals (id, client_id, name, category, currency, target_minor, "
+        "product_code, locked_until, created_at, updated_at) VALUES ('-Nabc0000000000000A1', "
+        "'-Nabc0000000000000B1', 'School fees', 'school_fees', 'UGX', 2000000, 'TREA-91', "
+        "DATE '2099-01-01', now(), now()); COMMIT",
+        "refusing to drop the locks clients set",
+    ),
 }
 
 

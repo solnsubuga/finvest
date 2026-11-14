@@ -69,6 +69,7 @@ from app.modules.investments.holdings import (
     investment_from_row,
     select_investments,
 )
+from app.modules.investments.locks import LOCKED, is_locked
 from app.modules.investments.maturity import out_of_holding
 from app.modules.kyc import service as kyc
 from app.modules.ledger import service as ledger
@@ -775,6 +776,11 @@ async def _ask(
     )
     if refusal in (TransferRefusal.NOT_RUNNING, TransferRefusal.WITHDRAWAL_REQUESTED):
         raise ApplicationError("conflict")
+    if is_locked(investment.withdrawal_locked_until, today):
+        # Locked through a goal until a later day. The database refuses it too (0303).
+        raise ApplicationError(
+            "conflict", fields=[FieldProblem(field_path=["investment"], code=LOCKED)]
+        )
     if refusal is not None:
         raise invalid("amount_minor", refusal.value)
     await session.execute(_CLIENT_LOCK, {"lock": f"finvest.transfers.client:{sender_id}"})
@@ -854,6 +860,9 @@ async def _why_not(
         return TransferRefusal.WITHDRAWAL_REQUESTED.value
     if investment.maturity_date is not None and today >= investment.maturity_date:
         return TransferRefusal.MATURES_TODAY.value
+    # Locked through a goal after the transfer was asked for.
+    if is_locked(investment.withdrawal_locked_until, today):
+        return LOCKED
     # A held transfer can wait for days: either account may have been locked or closed since.
     if await client_status(session, transfer.sender_client_id) != "active":
         return "sender_not_available"

@@ -342,6 +342,7 @@ export const ClientInvestmentOut = z.object({
   total_at_maturity_minor: z.number().int().nullable(),
   value_minor: z.number().int(),
   waiting_for_destination: z.boolean(),
+  withdrawal_locked_until: z.string().nullable().optional(),
   withdrawal_requested_at: z.string().nullable(),
 });
 export type ClientInvestmentOut = z.infer<typeof ClientInvestmentOut>;
@@ -637,6 +638,7 @@ export const GoalView = z.object({
   created_at: z.string(),
   currency: Currency,
   goal_id: z.string(),
+  locked_until: z.string().nullable().optional(),
   name: z.string(),
   payday: z.number().int().nullable(),
   plan: GoalsApiPlanView.nullable(),
@@ -647,6 +649,7 @@ export const GoalView = z.object({
   status: GoalStatus,
   target_date: z.string().nullable(),
   target_minor: z.number().int(),
+  unlock_requested_at: z.string().nullable().optional(),
 });
 export type GoalView = z.infer<typeof GoalView>;
 
@@ -1982,6 +1985,19 @@ export const operations = {
     status: 200,
     response: GoalView,
   },
+  "POST /client/goals/{goal_id}/lock": {
+    method: "POST",
+    path: "/client/goals/{goal_id}/lock",
+    params: z.object({
+    goal_id: z.string(),
+  }),
+    query: z.object({}),
+    body: null,
+    bodyKind: null,
+    idempotent: false,
+    status: 200,
+    response: GoalView,
+  },
   "PUT /client/goals/{goal_id}/payday": {
     method: "PUT",
     path: "/client/goals/{goal_id}/payday",
@@ -2033,6 +2049,19 @@ export const operations = {
     idempotent: true,
     status: 201,
     response: SavingView,
+  },
+  "POST /client/goals/{goal_id}/unlock": {
+    method: "POST",
+    path: "/client/goals/{goal_id}/unlock",
+    params: z.object({
+    goal_id: z.string(),
+  }),
+    query: z.object({}),
+    body: null,
+    bodyKind: null,
+    idempotent: false,
+    status: 200,
+    response: GoalView,
   },
   "GET /client/identity-check": {
     method: "GET",

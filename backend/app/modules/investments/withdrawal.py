@@ -35,6 +35,7 @@ from app.modules.investments.holdings import (
     investment_from_row,
     select_investments,
 )
+from app.modules.investments.locks import LOCKED, is_locked
 from app.modules.investments.maturity import out_of_holding
 from app.modules.ledger import service as ledger
 from app.modules.ledger.domain.entries import EntryDraft, credit
@@ -45,7 +46,7 @@ from app.modules.payouts.domain.limits import check_withdrawal
 from app.shared.actors import SYSTEM, Actor
 from app.shared.business_day import business_date
 from app.shared.clock import Clock
-from app.shared.errors import ApplicationError
+from app.shared.errors import ApplicationError, FieldProblem
 from app.shared.money import Currency, Money
 
 WITHDRAWN_EARLY_TOPIC = "investments.withdrawn_early"
@@ -174,6 +175,11 @@ async def _save_request(
         requested=investment.withdrawal_requested_at is not None,
     ):
         raise ApplicationError("conflict")
+    if is_locked(investment.withdrawal_locked_until, today):
+        # Locked through a goal until a later day. The database refuses it too (0303).
+        raise ApplicationError(
+            "conflict", fields=[FieldProblem(field_path=["investment"], code=LOCKED)]
+        )
     # Not while it is being sent to another client. The investment is locked, so a
     # transfer asked for at the same moment waits for this one and then sees it.
     if await session.scalar(_OPEN_TRANSFER, {"id": investment.id}):

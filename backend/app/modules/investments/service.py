@@ -66,6 +66,7 @@ from app.modules.investments.holdings import (
     request_system_investment,
     start_investment,
 )
+from app.modules.investments.locks import UNLOCK_WAIT_DAYS, lock_withdrawals, unlock_withdrawals
 from app.modules.investments.maturities import Maturities, MaturityDay, maturities
 from app.modules.investments.maturity import (
     MATURED_TOPIC,
@@ -107,6 +108,7 @@ __all__ = [
     "ROLLED_OVER_TOPIC",
     "STARTED_TOPIC",
     "TRANSFERRED_TOPIC",
+    "UNLOCK_WAIT_DAYS",
     "WITHDRAWN_EARLY_TOPIC",
     "ClientInvestment",
     "ClientProduct",
@@ -155,6 +157,7 @@ __all__ = [
     "list_runs",
     "list_transfers",
     "lock_investment",
+    "lock_withdrawals",
     "mature_investment",
     "maturing",
     "maturities",
@@ -175,6 +178,7 @@ __all__ = [
     "send_back_correction",
     "send_back_rate",
     "start_investment",
+    "unlock_withdrawals",
     "withdraw",
     "withdraw_correction",
     "withdraw_rate",

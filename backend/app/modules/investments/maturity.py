@@ -53,6 +53,7 @@ from app.modules.investments.holdings import (
     investment_from_row,
     select_investments,
 )
+from app.modules.investments.locks import inherit_lock
 from app.modules.ledger import service as ledger
 from app.modules.ledger.domain.entries import EntryDraft, Line, credit, debit
 from app.modules.notifications import contract as notifications
@@ -377,6 +378,10 @@ async def _roll_over(
             "entry_id": entry.id,
             "now": now,
         },
+    )
+    # A saving locked through a goal stays locked in its next term, until the same day.
+    await inherit_lock(
+        session, old_id=investment.id, new_id=new_id, today=business_date(now), now=now
     )
     await session.execute(
         _MATURE,
