@@ -11317,6 +11317,35 @@
         "title": "MemberView",
         "type": "object"
       },
+      "MenuCountsOut": {
+        "additionalProperties": false,
+        "properties": {
+          "counts": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "propertyNames": {
+              "enum": [
+                "review-queue",
+                "identity-checks",
+                "maturities",
+                "support",
+                "complaints",
+                "reconciliation",
+                "rates",
+                "compliance"
+              ]
+            },
+            "title": "Counts",
+            "type": "object"
+          }
+        },
+        "required": [
+          "counts"
+        ],
+        "title": "MenuCountsOut",
+        "type": "object"
+      },
       "MessageItem": {
         "additionalProperties": false,
         "properties": {
@@ -56037,6 +56066,58 @@
         "summary": "Staff Maturities",
         "tags": [
           "staff investing"
+        ]
+      }
+    },
+    "/staff/menu-counts": {
+      "get": {
+        "description": "Work waiting on each screen this member of staff may open, for the badges on the menu.",
+        "operationId": "menu_counts_staff_menu_counts_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MenuCountsOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          }
+        },
+        "summary": "Menu Counts",
+        "tags": [
+          "staff review queue"
         ]
       }
     },

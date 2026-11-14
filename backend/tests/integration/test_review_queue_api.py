@@ -92,3 +92,43 @@ async def test_each_role_reads_only_the_kinds_it_may_see(api: Api) -> None:
     await api.staff("support")
     refused = await api.http.get("/staff/review-queue")
     assert refused.status_code == 403
+
+
+async def counts(api: Api) -> dict[str, int]:
+    response = await api.http.get("/staff/menu-counts")
+    assert response.status_code == 200, response.text
+    body: dict[str, int] = response.json()["counts"]
+    return body
+
+
+async def test_the_menu_counts_what_the_review_queue_shows(api: Api, world: World) -> None:
+    await world.request(LARGE)
+    api.clock.current = datetime.now(UTC)
+    await api.staff("operations")
+
+    body = await read(api)
+    menu = await counts(api)
+    assert menu["review-queue"] == min(body["waiting"], 100) >= 1
+    assert menu["identity-checks"] == sum(
+        1 for each in body["items"] if each["kind"] == "identity_check"
+    )
+    assert menu["reconciliation"] == sum(
+        1 for each in body["items"] if each["kind"] == "bank_transfer"
+    )
+    assert all(0 <= value <= 100 for value in menu.values())
+
+
+async def test_the_menu_counts_only_screens_the_role_may_open(api: Api) -> None:
+    await api.staff("support")
+    menu = await counts(api)
+    assert "support" in menu
+    assert {"review-queue", "reconciliation", "rates", "compliance"}.isdisjoint(menu)
+
+    await api.staff("compliance")
+    assert "compliance" in await counts(api)
+
+
+async def test_the_menu_counts_need_a_signed_in_member_of_staff(api: Api) -> None:
+    api.http.cookies.clear()
+    response = await api.http.get("/staff/menu-counts")
+    assert response.status_code == 401
