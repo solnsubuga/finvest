@@ -300,6 +300,8 @@ async def create_payout(
             idempotency_key=f"payout:{payout_id}",
             now=now,
         )
+    # Transaction monitoring reads every payout asked for, whatever happens to it next.
+    await screening.watch_payout(session, payout_id, now)
     await _audit(session, actor, "payouts.payout_requested", payout_id, clock)
     return await get_payout(session, payout_id)
 

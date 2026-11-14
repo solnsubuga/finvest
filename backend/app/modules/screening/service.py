@@ -425,7 +425,7 @@ async def record_result(
             },
         )
     if found.new:
-        case_id = await _open_case(
+        case_id = await open_case(
             session,
             client_id=row.client_id,
             source=CaseSource.SCREENING,
@@ -584,7 +584,7 @@ async def _standing_changed(session: AsyncSession, client_id: str, key: str, now
 # Cases.
 
 
-async def _open_case(
+async def open_case(
     session: AsyncSession,
     *,
     client_id: str,
