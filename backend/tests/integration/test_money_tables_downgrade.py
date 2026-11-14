@@ -1085,6 +1085,17 @@ ROWS = {
         "'Phone lost', '-Nabc0000000000000S1', now())",
         "refusing to drop staff actions that hold records",
     ),
+    "0352_payout_client_limits": (
+        "ALTER TABLE console_client_actions DISABLE TRIGGER console_client_actions_guard; "
+        "INSERT INTO identity_clients (id, phone, status, created_at) VALUES "
+        "('-Nabc0000000000000B1', '+256772123456', 'unclaimed', now()); "
+        "INSERT INTO identity_staff (id, email, name, role, created_at) "
+        "VALUES ('-Nabc0000000000000S1', 'ada@example.com', 'Ada Nakato', 'support', now()); "
+        "INSERT INTO console_client_actions (id, client_id, kind, details, reason, proposed_by, "
+        "proposed_at) VALUES ('-Nabc0000000000000A1', '-Nabc0000000000000B1', "
+        "'withdrawal_limits', '{}', 'Lower them', '-Nabc0000000000000S1', now())",
+        "refusing to drop client withdrawal limits that hold records",
+    ),
 }
 
 

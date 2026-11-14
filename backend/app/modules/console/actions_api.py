@@ -15,10 +15,15 @@ from pydantic import Field
 from app.infrastructure.database import Database
 from app.modules.console import actions, notes
 from app.modules.identity.api import require_confirmed, require_permission
+from app.modules.identity.client_locks import client_status
 from app.modules.identity.service import StaffSession
+from app.modules.payouts import payouts
+from app.modules.payouts.domain.limits import ClientLimits, WithdrawalLimits, for_client
+from app.shared.business_day import business_date
 from app.shared.clock import Clock
 from app.shared.contracts import Contract, PushId
-from app.shared.errors import ApplicationError, ErrorEnvelope
+from app.shared.errors import ApplicationError, ErrorEnvelope, FieldProblem
+from app.shared.money import Money
 
 _REFUSALS: dict[int | str, dict[str, object]] = {
     401: {"model": ErrorEnvelope},
@@ -35,6 +40,7 @@ NoteWriter = Annotated[StaffSession, Depends(require_permission("client_notes.wr
 ActionDecider = Annotated[StaffSession, Depends(require_confirmed("clients.view"))]
 Reason = Annotated[str, Field(min_length=1, max_length=actions.MAX_REASON)]
 ActionKind = actions.Kind
+MAX_AMOUNT = 10**15
 NoteBody = Annotated[str, Field(min_length=1, max_length=notes.MAX_BODY)]
 
 
@@ -71,6 +77,36 @@ class WriteNote(Contract):
     body: NoteBody
 
 
+class LimitsIn(Contract):
+    """A client's own limits in whole shillings. Null leaves that sort to the shared limit."""
+
+    mobile_money_per_payout: Annotated[int, Field(ge=1, le=5_000_000)] | None
+    mobile_money_per_day: Annotated[int, Field(ge=1, le=MAX_AMOUNT)] | None
+    bank_per_payout: Annotated[int, Field(ge=1, le=MAX_AMOUNT)] | None
+    bank_per_day: Annotated[int, Field(ge=1, le=MAX_AMOUNT)] | None
+    review_above: Annotated[int, Field(ge=1, le=MAX_AMOUNT)] | None
+
+
+class LimitsView(Contract):
+    """Withdrawal limits in whole shillings (UGX). Null is no limit of that sort."""
+
+    mobile_money_per_payout: int | None
+    mobile_money_per_day: int | None
+    bank_per_payout: int | None
+    bank_per_day: int | None
+    review_above: int | None
+
+
+class ClientLimitsView(Contract):
+    # The limits for every client today.
+    shared: LimitsView
+    # Staff's stricter limits for this client, or null when none are set.
+    own: LimitsView | None
+    # What a payout today is checked against: the lower of the two for each sort.
+    applied: LimitsView
+    can_change: bool
+
+
 class ActionView(Contract):
     id: PushId
     client_id: PushId
@@ -84,6 +120,8 @@ class ActionView(Contract):
     decided_by_name: str | None
     decided_at: datetime | None
     decision_reason: str | None
+    # For `withdrawal_limits`, the limits it sets. All null clears the client's own limits.
+    limits: LimitsView | None
     # The proposer can withdraw it. Anyone else who holds the kind's permission decides it.
     yours: bool
 
@@ -97,6 +135,8 @@ class ActionsView(Contract):
 class ProposeAction(Contract):
     kind: actions.Kind
     reason: Reason
+    # Required for `withdrawal_limits`, and only there.
+    limits: LimitsIn | None = None
 
 
 class DecideAction(Contract):
@@ -165,8 +205,53 @@ async def decide_action(
     return _action(action, staff)
 
 
+@router.get("/{client_id}/limits")
+async def client_withdrawal_limits(
+    client_id: PushId, staff: ClientViewer, database: Db, clock: Time
+) -> ClientLimitsView:
+    """The withdrawal limits that apply to the client today, and staff's own for them."""
+    today = business_date(clock.now())
+    async with database.actor_transaction(staff.actor) as session:
+        if await client_status(session, client_id) is None:
+            raise ApplicationError("not_found")
+        shared = await payouts.current_limits(session, today)
+        own = await payouts.client_limits(session, client_id)
+    applied = for_client(shared, own)
+    return ClientLimitsView(
+        shared=_limits(shared),
+        own=_limits(own) if own is not None else None,
+        applied=_limits(applied),
+        can_change="client_limits.change" in staff.permissions,
+    )
+
+
 def _details(body: ProposeAction) -> dict[str, Any]:
-    return {}
+    if body.kind != "withdrawal_limits":
+        if body.limits is not None:
+            raise ApplicationError(
+                "validation_failed",
+                fields=[FieldProblem(field_path=["body", "limits"], code="not_allowed")],
+            )
+        return {}
+    if body.limits is None:
+        raise ApplicationError(
+            "validation_failed",
+            fields=[FieldProblem(field_path=["body", "limits"], code="required")],
+        )
+    return body.limits.model_dump()
+
+
+def _limits(limits: WithdrawalLimits | ClientLimits) -> LimitsView:
+    def minor(value: Money | None) -> int | None:
+        return None if value is None else value.minor
+
+    return LimitsView(
+        mobile_money_per_payout=minor(limits.mobile_money_per_payout),
+        mobile_money_per_day=minor(limits.mobile_money_per_day),
+        bank_per_payout=minor(limits.bank_per_payout),
+        bank_per_day=minor(limits.bank_per_day),
+        review_above=minor(limits.review_above),
+    )
 
 
 def _allowed(staff: StaffSession) -> list[actions.Kind]:
@@ -198,5 +283,8 @@ def _action(action: actions.ClientAction, staff: StaffSession) -> ActionView:
         decided_by_name=action.decided_by_name,
         decided_at=action.decided_at,
         decision_reason=action.decision_reason,
+        limits=_limits(actions.client_limits(action.details))
+        if action.kind == "withdrawal_limits"
+        else None,
         yours=action.proposed_by == staff.staff_id,
     )

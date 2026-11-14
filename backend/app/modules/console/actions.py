@@ -9,6 +9,9 @@ Each kind needs its own permission (`PERMISSIONS`) and has its own effect (`_app
 
 - `pin_reset`, with `client_pins.reset`: ends every phone app session the client holds, so they
   log in again and choose a new PIN (`identity.pin_resets`).
+- `withdrawal_limits`, with `client_limits.change`: sets the client's own stricter withdrawal
+  limits, or clears them (`payouts.set_client_limits`). `details` holds each limit in whole
+  shillings, or null for none of that sort.
 """
 
 import json
@@ -27,14 +30,18 @@ from app.modules.audit.domain.events import AuditActor, AuditEvent
 from app.modules.identity import pin_resets
 from app.modules.identity.client_locks import client_status
 from app.modules.identity.domain.permissions import Permission
+from app.modules.payouts import payouts
+from app.modules.payouts.domain.limits import ClientLimits, InvalidLimits
 from app.shared.actors import Actor
+from app.shared.business_day import business_date
 from app.shared.clock import Clock
 from app.shared.errors import ApplicationError, FieldProblem
+from app.shared.money import Currency, Money
 from app.shared.push_ids import push_id
 
 RESOURCE = "client_action"
 MAX_REASON = 500
-Kind = Literal["pin_reset"]
+Kind = Literal["pin_reset", "withdrawal_limits"]
 KINDS: tuple[Kind, ...] = get_args(Kind)
 Decision = Literal["approved", "rejected", "withdrawn"]
 Status = Literal["proposed", "approved", "rejected", "withdrawn"]
@@ -43,7 +50,15 @@ logger = structlog.get_logger()
 # Who may propose or decide each kind. Seeing the client is `clients.view` as well.
 PERMISSIONS: dict[Kind, Permission] = {
     "pin_reset": "client_pins.reset",
+    "withdrawal_limits": "client_limits.change",
 }
+LIMIT_FIELDS = (
+    "mobile_money_per_payout",
+    "mobile_money_per_day",
+    "bank_per_payout",
+    "bank_per_day",
+    "review_above",
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -106,6 +121,14 @@ async def propose(
     if status is None:
         raise ApplicationError("not_found")
     _check_client(status)
+    details = details or {}
+    if kind == "withdrawal_limits":
+        await _check_limits(session, details, clock)
+    elif details:
+        raise ApplicationError(
+            "validation_failed",
+            fields=[FieldProblem(field_path=["body", "limits"], code="not_allowed")],
+        )
     action_id = push_id(clock)
     try:
         async with session.begin_nested():
@@ -119,7 +142,7 @@ async def propose(
                     "id": action_id,
                     "client_id": client_id,
                     "kind": kind,
-                    "details": _json(details or {}),
+                    "details": _json(details),
                     "reason": reason,
                     "staff": acting,
                     "now": clock.now(),
@@ -186,6 +209,60 @@ async def decide(
 async def _apply(session: AsyncSession, action: ClientAction, now: datetime) -> None:
     if action.kind == "pin_reset":
         await pin_resets.end_phone_sessions(session, action.client_id, now, action_id=action.id)
+    elif action.kind == "withdrawal_limits":
+        await payouts.set_client_limits(
+            session,
+            action.client_id,
+            client_limits(action.details),
+            action_id=action.id,
+            now=now,
+        )
+
+
+def client_limits(details: dict[str, Any]) -> ClientLimits:
+    """The limits a `withdrawal_limits` action holds, in shillings."""
+
+    def money(name: str) -> Money | None:
+        value = details.get(name)
+        return None if value is None else Money(int(value), Currency.UGX)
+
+    return ClientLimits(**{name: money(name) for name in LIMIT_FIELDS})
+
+
+async def _check_limits(session: AsyncSession, details: dict[str, Any], clock: Clock) -> None:
+    """Each limit is a whole number of shillings below the shared limit of its sort, if any.
+
+    A client's limits only ever tighten the shared ones, so a figure at or above the shared
+    limit would do nothing and is refused rather than shown as if it raised it.
+    """
+    if set(details) != set(LIMIT_FIELDS):
+        raise ApplicationError(
+            "validation_failed",
+            fields=[FieldProblem(field_path=["body", "limits"], code="required")],
+        )
+    shared = await payouts.current_limits(session, business_date(clock.now()))
+    for name in LIMIT_FIELDS:
+        value = details[name]
+        if value is None:
+            continue
+        if not isinstance(value, int) or isinstance(value, bool) or value < 1:
+            raise ApplicationError(
+                "validation_failed",
+                fields=[FieldProblem(field_path=["body", "limits", name], code="not_positive")],
+            )
+        ceiling = getattr(shared, name)
+        if ceiling is not None and value >= ceiling.minor:
+            raise ApplicationError(
+                "validation_failed",
+                fields=[FieldProblem(field_path=["body", "limits", name], code="not_below_shared")],
+            )
+    try:
+        client_limits(details)
+    except InvalidLimits:
+        raise ApplicationError(
+            "validation_failed",
+            fields=[FieldProblem(field_path=["body", "limits"], code="invalid")],
+        ) from None
 
 
 def _check_client(status: str) -> None:

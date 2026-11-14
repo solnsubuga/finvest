@@ -25,6 +25,7 @@ def test_admin_sees_every_kind_and_support_sees_what_touches_clients() -> None:
         "suppression_lift",
         "complaint_outcome",
         "client_pin_reset",
+        "client_limits",
     }
 
 
