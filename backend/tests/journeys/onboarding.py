@@ -32,7 +32,11 @@ async def sign_up(world: World, *, phone: str | None = None, email: str | None =
     assert confirmed.status_code == 200, confirmed.text
     completed = await http.post(
         "/client/signup/complete",
-        json={"ticket": confirmed.json()["ticket"], "password": PASSWORD},
+        json={
+            "ticket": confirmed.json()["ticket"],
+            "password": PASSWORD,
+            "accepted_terms": True,
+        },
     )
     assert completed.status_code == 200, completed.text
     body = completed.json()

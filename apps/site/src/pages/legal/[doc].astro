@@ -1,5 +1,5 @@
 ---
-import { layoutOnlyNotice, legalDocuments, type LegalDocument } from "../../data/legal.ts";
+import { layoutOnlyNotice, legalDocuments, versionLabel, type LegalDocument } from "../../data/legal.ts";
 import Base from "../../layouts/Base.astro";
 
 export function getStaticPaths() {
@@ -25,6 +25,7 @@ const { document } = Astro.props;
     <div class="wrap">
       <p class="eyebrow">Legal</p>
       <h1>{document.title}</h1>
+      {document.version ? <p class="legal__version">Version of {versionLabel(document.version)}</p> : null}
       <div class="legal__grid">
         <div class="legal__side">
           <nav class="legal__nav" aria-label="Legal documents">

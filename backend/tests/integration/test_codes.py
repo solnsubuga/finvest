@@ -4,15 +4,18 @@ import asyncio
 import itertools
 from collections.abc import AsyncIterator
 from dataclasses import dataclass
+from datetime import datetime
 
 import httpx
 import pytest
 from sqlalchemy import text
+from sqlalchemy.exc import DBAPIError
 
 from app.api.app import create_app
 from app.infrastructure.database import Database
 from app.modules.identity.api import COOKIES
 from app.modules.identity.codes import MAX_TRIES, SENDS_PER_NUMBER
+from app.modules.identity.domain.terms import CURRENT_VERSIONS
 from app.modules.identity.hashing import PasswordHasher
 from app.modules.identity.service import IdentityService
 from app.shared.actors import SYSTEM, Actor
@@ -96,7 +99,7 @@ async def sign_up(api: Api, phone: str, headers: dict[str, str] | None = None) -
     assert confirmed.status_code == 200, confirmed.text
     return await api.http.post(
         "/client/signup/complete",
-        json={"ticket": confirmed.json()["ticket"], "password": PASSWORD},
+        json={"ticket": confirmed.json()["ticket"], "password": PASSWORD, "accepted_terms": True},
         headers=headers,
     )
 
@@ -120,7 +123,7 @@ async def test_a_client_signs_up_with_a_texted_code_and_a_password(api: Api) -> 
     assert confirmed.json()["phone"] == phone
     completed = await api.http.post(
         "/client/signup/complete",
-        json={"ticket": confirmed.json()["ticket"], "password": PASSWORD},
+        json={"ticket": confirmed.json()["ticket"], "password": PASSWORD, "accepted_terms": True},
     )
     assert completed.status_code == 200, completed.text
     body = completed.json()
@@ -132,7 +135,7 @@ async def test_a_client_signs_up_with_a_texted_code_and_a_password(api: Api) -> 
     # The ticket made one account and is spent.
     again = await api.http.post(
         "/client/signup/complete",
-        json={"ticket": confirmed.json()["ticket"], "password": PASSWORD},
+        json={"ticket": confirmed.json()["ticket"], "password": PASSWORD, "accepted_terms": True},
     )
     assert (again.status_code, code(again)) == (410, "expired")
 
@@ -239,14 +242,16 @@ async def test_a_weak_password_keeps_the_ticket(api: Api) -> None:
         (f"{phone[1:]}ab", "leaked_password", "leaked_password"),
     ):
         weak = await api.http.post(
-            "/client/signup/complete", json={"ticket": ticket, "password": password}
+            "/client/signup/complete",
+            json={"ticket": ticket, "password": password, "accepted_terms": True},
         )
         assert (weak.status_code, code(weak)) == (422, error)
         assert weak.json()["error"]["fields"] == [
             {"field_path": ["body", "password"], "code": problem}
         ]
     good = await api.http.post(
-        "/client/signup/complete", json={"ticket": ticket, "password": PASSWORD}
+        "/client/signup/complete",
+        json={"ticket": ticket, "password": PASSWORD, "accepted_terms": True},
     )
     assert good.status_code == 200
 
@@ -266,7 +271,10 @@ async def test_two_people_finishing_with_one_number_make_one_account(api: Api) -
         tickets.append(confirmed.json()["ticket"])
     responses = await asyncio.gather(
         *(
-            api.http.post("/client/signup/complete", json={"ticket": t, "password": PASSWORD})
+            api.http.post(
+                "/client/signup/complete",
+                json={"ticket": t, "password": PASSWORD, "accepted_terms": True},
+            )
             for t in tickets
         )
     )
@@ -525,3 +533,78 @@ async def test_no_code_or_number_is_logged(api: Api, capsys: pytest.CaptureFixtu
     for secret in (phone, phone[4:], sent, PASSWORD):
         assert secret not in logged.out
         assert secret not in logged.err
+
+
+# Terms and the privacy notice
+
+
+async def test_signing_up_records_the_terms_the_client_agreed_to(api: Api) -> None:
+    signed_up = await sign_up(api, a_phone())
+    assert signed_up.status_code == 200, signed_up.text
+    bearer = {"Authorization": f"Bearer {signed_up.json()['token']}"}
+    agreed = await api.http.get("/client/terms-acceptances", headers=bearer)
+    assert agreed.status_code == 200, agreed.text
+    items = agreed.json()["items"]
+    assert sorted((item["document"], item["version"], item["via"]) for item in items) == [
+        ("privacy", CURRENT_VERSIONS["privacy"], "signup"),
+        ("terms", CURRENT_VERSIONS["terms"], "signup"),
+    ]
+    assert {datetime.fromisoformat(item["accepted_at"]) for item in items} == {api.clock.now()}
+
+
+async def test_sign_up_is_refused_without_agreeing_to_the_terms(api: Api) -> None:
+    phone = a_phone()
+    started = await api.http.post("/client/signup/start", json={"phone": phone})
+    confirmed = await api.http.post(
+        "/client/signup/confirm",
+        json={
+            "challenge_id": started.json()["challenge_id"],
+            "code": (await texted(api, phone))[-1],
+        },
+    )
+    ticket = confirmed.json()["ticket"]
+    for agreed in ({}, {"accepted_terms": False}):
+        refused = await api.http.post(
+            "/client/signup/complete", json={"ticket": ticket, "password": PASSWORD, **agreed}
+        )
+        assert (refused.status_code, code(refused)) == (422, "validation_failed")
+    # Nothing was made, so the ticket still works once the box is ticked.
+    good = await api.http.post(
+        "/client/signup/complete",
+        json={"ticket": ticket, "password": PASSWORD, "accepted_terms": True},
+    )
+    assert good.status_code == 200, good.text
+
+
+async def test_an_agreement_is_never_changed_and_only_sign_up_writes_one(
+    api: Api, app_database: Database
+) -> None:
+    signed_up = await sign_up(api, a_phone())
+    client = Actor("client", signed_up.json()["session"]["client_id"])
+    for statement in (
+        "UPDATE identity_terms_acceptances SET version = '2001-01-01' WHERE client_id = :id",
+        "DELETE FROM identity_terms_acceptances WHERE client_id = :id",
+    ):
+        with pytest.raises(DBAPIError, match="permission denied"):
+            async with app_database.actor_transaction(client) as session:
+                await session.execute(text(statement), {"id": client.id})
+    # A signed-in client cannot add one of their own.
+    with pytest.raises(DBAPIError, match="row-level security"):
+        async with app_database.actor_transaction(client) as session:
+            await session.execute(
+                text(
+                    "INSERT INTO identity_terms_acceptances "
+                    "(id, client_id, document, version, via, accepted_at) "
+                    "VALUES ('-Nabc0000000000000T1', :id, 'terms', '2030-01-01', 'signup', now())"
+                ),
+                {"id": client.id},
+            )
+    # Another client sees none of them.
+    other = await sign_up(api, a_phone())
+    other_actor = Actor("client", other.json()["session"]["client_id"])
+    async with app_database.actor_transaction(other_actor) as session:
+        seen = await session.scalar(
+            text("SELECT count(*) FROM identity_terms_acceptances WHERE client_id = :id"),
+            {"id": client.id},
+        )
+    assert seen == 0

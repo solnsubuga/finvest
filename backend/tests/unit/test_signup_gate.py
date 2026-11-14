@@ -47,10 +47,15 @@ def test_sign_up_is_closed_anywhere_deployed_unless_opened(
     [
         ("/client/signup/start", {"phone": "0772123456"}),
         ("/client/signup/confirm", {"challenge_id": "-Nabc0000000000000A1", "code": "123456"}),
-        ("/client/signup/complete", {"ticket": "x" * 43, "password": "copper-harbour-violin"}),
+        (
+            "/client/signup/complete",
+            {"ticket": "x" * 43, "password": "copper-harbour-violin", "accepted_terms": True},
+        ),
     ],
 )
-async def test_a_closed_sign_up_is_refused_before_any_work(path: str, body: dict[str, str]) -> None:
+async def test_a_closed_sign_up_is_refused_before_any_work(
+    path: str, body: dict[str, object]
+) -> None:
     settings = Settings(database_url=URL, environment="production")
     app = create_app(settings, UntouchedDatabase())  # type: ignore[arg-type]
     transport = httpx.ASGITransport(app=app, raise_app_exceptions=False)
