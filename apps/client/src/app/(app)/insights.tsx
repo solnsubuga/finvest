@@ -385,7 +385,7 @@ function UpcomingRow({
     <Pressable
       style={[styles.row, !first && styles.divider]}
       accessibilityRole="link"
-      accessibilityLabel={`${formatLongDay(item.on)}. ${words.title}. ${words.detail}. ${amount}`}
+      accessibilityLabel={`${formatLongDay(item.on)}. ${words.title}. ${words.detail}. ${amount}${words.amountNote ? `, ${words.amountNote.toLowerCase()}` : ""}`}
       onPress={onPress}
       testID={`insights-upcoming-${upcomingKey(item)}`}
     >
@@ -405,9 +405,16 @@ function UpcomingRow({
           {words.detail}
         </Txt>
       </View>
-      <Txt size={14} weight="bold">
-        {amount}
-      </Txt>
+      <View style={{ alignItems: "flex-end" }}>
+        <Txt size={14} weight="bold">
+          {amount}
+        </Txt>
+        {words.amountNote ? (
+          <Txt size={11} color={colors.muted}>
+            {words.amountNote}
+          </Txt>
+        ) : null}
+      </View>
     </Pressable>
   );
 }

@@ -37,6 +37,10 @@ describe("coming up rows", () => {
     });
     expect(upcomingWords({ ...maturity, atMaturity: "roll_over" }).detail).toBe("Rolls over and keeps earning");
     expect(upcomingWords({ ...maturity, atMaturity: "pay_interest" }).detail).toBe("Pays the interest, keeps the rest invested");
+    // The amount is the whole value, so a maturity that pays only the interest says so under it.
+    expect(upcomingWords({ ...maturity, atMaturity: "pay_interest" }).amountNote).toBe("Total, interest included");
+    expect(upcomingWords({ ...maturity, atMaturity: "roll_over" }).amountNote).toBeUndefined();
+    expect(upcomingWords(maturity).amountNote).toBeUndefined();
     expect(upcomingWords(run)).toEqual({
       title: "Automatic investment",
       detail: "Into 91 Day Treasury Bill, from your mobile money",

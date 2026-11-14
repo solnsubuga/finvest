@@ -14,8 +14,11 @@ export function upcomingHref(item: Upcoming): string {
   }
 }
 
-/** What the row says the day holds, and one line under it. */
-export function upcomingWords(item: Upcoming): { title: string; detail: string } {
+/**
+ * What the row says the day holds, one line under it, and a caption under the
+ * amount when the amount needs one.
+ */
+export function upcomingWords(item: Upcoming): { title: string; detail: string; amountNote?: string } {
   switch (item.kind) {
     case "maturity":
       return {
@@ -26,6 +29,8 @@ export function upcomingWords(item: Upcoming): { title: string; detail: string }
             : item.atMaturity === "pay_interest"
               ? "Pays the interest, keeps the rest invested"
               : "Rolls over and keeps earning",
+        // Only the interest is paid out, so say the amount shown is the whole value.
+        ...(item.atMaturity === "pay_interest" ? { amountNote: "Total, interest included" } : {}),
       };
     case "goal_saving":
       return {
