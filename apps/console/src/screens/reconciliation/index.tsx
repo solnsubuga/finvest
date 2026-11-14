@@ -259,7 +259,7 @@ export default function ReconciliationPage() {
   return (
     <>
       <BankTransfersScreen api={api} canDecide={session ? can(session, "bank_transfers.change") : false} />
-      <DayClose api={days} canAct={session ? can(session, "reconciliation.view") : false} />
+      <DayClose api={days} canAct={session ? can(session, "reconciliation.change") : false} />
       <Reassignments api={moves} canChange={session ? can(session, "deposit_reassignments.change") : false} />
     </>
   );

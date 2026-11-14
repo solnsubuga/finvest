@@ -37,7 +37,7 @@ async def test_bills_are_bought_with_clients_money_by_four_eyes(
     # A client's 3,000,000 arrives in the trust bank account by transfer.
     client = await onboarded(world)
     requested = await invest(world, client, FACE)
-    importer = await world.staff("operations")
+    importer = await world.staff("finance")
     sent_on = await bank.receive(world, importer, f"FV{client.id[-6:]}", FACE)
     payment = await pay_by_bank_transfer(
         world,

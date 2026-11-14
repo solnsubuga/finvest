@@ -30,6 +30,11 @@ Permission = Literal[
     "clients.lock",
     "money_movement.view",
     "reconciliation.view",
+    # Importing a statement, pairing a line with a movement by hand, preparing, approving or
+    # sending back a day close, and proposing, approving, declining or withdrawing the
+    # settlement of a payout the provider never answered for. Seeing reconciliation is
+    # `reconciliation.view`. Every signature still takes a second person. Not a screen.
+    "reconciliation.change",
     "investments.view",
     "automatic_investing.view",
     "goals.view",
@@ -137,6 +142,7 @@ ROLE_PERMISSIONS: dict[Role, frozenset[Permission]] = {
             "clients.view",
             "money_movement.view",
             "reconciliation.view",
+            "reconciliation.change",
             "investments.view",
             "automatic_investing.view",
             "goals.view",
