@@ -327,6 +327,8 @@ export function createStubInvestingClient(options: StubOptions = {}): InvestingC
         entry.withdrawnAtMs === null &&
         (maturity === null || today < maturity) &&
         ![...transfers.values()].some((transfer) => transfer.investmentId === entry.id && OPEN.includes(transfer.status)),
+      // The demo goals keep their own lock (stubGoalsClient.ts); the demo investments are never locked.
+      lockedUntil: null,
     };
   }
 

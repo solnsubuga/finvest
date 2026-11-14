@@ -25,6 +25,7 @@
 | [client-profile.md](client-profile.md) | Next of kin as contacts, the investing questions and the profile they give |
 | [account-closure.md](account-closure.md) | Closing an account at the client's request: what must be clear first, the two staff steps and what the database enforces |
 | [organisations.md](organisations.md) | Company and group accounts: who applies and signs, the documents, the two-person business check and what the database enforces |
+| [sign-in.md](sign-in.md) | A signed-in client changing their password, PIN, mobile number and email, and the passkey or app check each needs |
 | [client-accounts.md](client-accounts.md) | Finding a client in the console, the client page, and locking or unlocking an account with two people |
 | [console-admin.md](console-admin.md) | The team and its two-admin changes, the approvals inbox, the audit trail viewer, email suppressions and client account support |
 | [account-numbers.md](account-numbers.md) | Format, generation and lifetime of client account numbers |

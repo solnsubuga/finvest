@@ -16,6 +16,7 @@ import {
   type InvestmentStatus,
   type InvestmentsApi,
 } from "./api.ts";
+import { BookingsPanel } from "./bookings/index.tsx";
 import { CorrectionsPanel } from "./corrections/index.tsx";
 import { RunAgainPanel } from "./runs/index.tsx";
 import { createHttpInvestmentsApi } from "./http.ts";
@@ -384,6 +385,7 @@ export default function InvestmentsPage() {
     <>
       <InvestmentsScreen api={api} directory={directory} />
       <RunAgainPanel kind="interest" />
+      <BookingsPanel />
       <CorrectionsPanel />
     </>
   );

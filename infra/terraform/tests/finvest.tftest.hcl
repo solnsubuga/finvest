@@ -104,6 +104,18 @@ run "production_with_access" {
     error_message = "Production puts the back office behind Cloudflare Access."
   }
   assert {
+    condition     = length(cloudflare_zero_trust_list.staff_emails) == 1 && cloudflare_zero_trust_list.staff_emails[0].type == "EMAIL"
+    error_message = "Production has the console's staff email list."
+  }
+  assert {
+    condition     = length(local.staff_include) == 2
+    error_message = "Access lets in the break-glass emails and the console's staff list."
+  }
+  assert {
+    condition     = contains(keys(github_actions_environment_variable.deploy), "FINVEST_CLOUDFLARE_STAFF_LIST_ID")
+    error_message = "The worker is told which list to keep in step."
+  }
+  assert {
     condition     = cloudflare_zero_trust_access_policy.admin_staff[0].account_id == "account"
     error_message = "Access uses the zone's own Cloudflare account."
   }

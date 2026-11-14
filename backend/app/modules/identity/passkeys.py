@@ -438,6 +438,16 @@ class PasskeyService:
         await self._check_assertion(staff.actor, credential, "reverify", staff.session_id)
         return await self.identity.confirm_staff(staff, "passkey")
 
+    # A signed-in client confirming it is them before changing how they sign in
+
+    async def client_reconfirm_options(self, client: ClientSession) -> dict[str, Any]:
+        return await self._assertion_options(client.actor, "reverify", client.session_id)
+
+    async def client_reconfirm(self, client: ClientSession, credential: dict[str, Any]) -> datetime:
+        """Check a fresh passkey signature on this session. Returns when it stops counting."""
+        await self._check_assertion(client.actor, credential, "reverify", client.session_id)
+        return await self.identity.confirm_client(client, "passkey")
+
     # A signed-in client's passkeys
 
     def _recent(self, client: ClientSession) -> None:

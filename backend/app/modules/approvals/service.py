@@ -15,7 +15,7 @@ from app.modules.dealing import buffer, capital
 from app.modules.dealing import orders as dealing
 from app.modules.dealing.domain.capital import Direction
 from app.modules.dealing.domain.orders import OrderStatus
-from app.modules.finance import code_maps
+from app.modules.finance import code_maps, month_close
 from app.modules.identity import client_locks, phone_changes, team
 from app.modules.identity.service import StaffSession
 from app.modules.investments import service as investments
@@ -35,6 +35,8 @@ from app.modules.payouts import destinations, limit_changes, resolutions, review
 from app.modules.platform_settings import service as platform_settings
 from app.modules.platform_settings.domain.catalogue import SECTIONS, Section
 from app.modules.reconciliation import day_close, transfers
+from app.modules.reports import schedules as report_schedules
+from app.modules.reports.domain.catalogue import REPORTS, may_download
 from app.modules.screening import service as screening
 from app.modules.support import complaints
 from app.modules.tax import service as tax
@@ -61,6 +63,8 @@ async def waiting_for(session: AsyncSession, staff: StaffSession, now: datetime)
         found += await _buffer_capital(session)
     if "rate_change" in kinds:
         found += await _rates(session, staff)
+    if "product_change" in kinds:
+        found += await _product_changes(session, staff)
     if kinds & {"migration_totals", "migration_sign_off"}:
         found += await _migration(session)
     if "phone_change" in kinds:
@@ -83,6 +87,8 @@ async def waiting_for(session: AsyncSession, staff: StaffSession, now: datetime)
         found += await _investment_corrections(session, staff)
     if "investment_run" in kinds:
         found += await _investment_runs(session, staff)
+    if "investment_booking" in kinds:
+        found += await _investment_bookings(session, staff)
     if "payout_resolution" in kinds:
         found += await _payout_resolutions(session)
     if "tax_remittance" in kinds:
@@ -120,6 +126,10 @@ async def waiting_for(session: AsyncSession, staff: StaffSession, now: datetime)
         )
     if kinds & set(_SETTING_KINDS.values()):
         found += await _settings(session, kinds)
+    if "report_schedule" in kinds:
+        found += await _report_schedules(session, staff)
+    if "month_close" in kinds:
+        found += await _month_closes(session)
     return inbox(found, staff.staff_id, staff.permissions)
 
 
@@ -247,6 +257,15 @@ async def _buffer_capital(session: AsyncSession) -> list[Waiting]:
     ]
 
 
+async def _product_changes(session: AsyncSession, staff: StaffSession) -> list[Waiting]:
+    return [
+        Waiting("product_change", c.id, c.target.code, c.proposed_by, c.proposed_at)
+        for c in await investments.list_product_changes(
+            session, staff.actor, status=ProposalStatus.PROPOSED
+        )
+    ]
+
+
 async def _rates(session: AsyncSession, staff: StaffSession) -> list[Waiting]:
     return [
         Waiting("rate_change", p.id, p.product_code, p.proposed_by, p.proposed_at)
@@ -277,6 +296,14 @@ async def _investment_runs(session: AsyncSession, staff: StaffSession) -> list[W
             r.proposed_at,
         )
         for r in await investments.list_runs(session, staff.actor, status="proposed", limit=200)
+    ]
+
+
+async def _investment_bookings(session: AsyncSession, staff: StaffSession) -> list[Waiting]:
+    # The subject is the product code, such as "TREA-91". Never the client or the amount.
+    return [
+        Waiting("investment_booking", b.id, b.product_code, b.proposed_by, b.proposed_at)
+        for b in await investments.list_bookings(session, staff.actor, status="proposed", limit=200)
     ]
 
 
@@ -475,4 +502,27 @@ async def _code_maps(session: AsyncSession) -> list[Waiting]:
     return [
         Waiting("account_code_map", m.id, m.system.value, m.proposed_by, m.proposed_at)
         for m in await code_maps.waiting(session)
+    ]
+
+
+async def _report_schedules(session: AsyncSession, staff: StaffSession) -> list[Waiting]:
+    # The subject is the report and how often, never who it goes to.
+    return [
+        Waiting(
+            "report_schedule",
+            s.id,
+            f"{s.report_key} {s.frequency}",
+            s.proposed_by,
+            s.proposed_at,
+        )
+        for s in await report_schedules.waiting(session)
+        if may_download(REPORTS[s.report_key], staff.permissions)
+    ]
+
+
+async def _month_closes(session: AsyncSession) -> list[Waiting]:
+    # The subject is the month.
+    return [
+        Waiting("month_close", c.id, f"{c.month:%Y-%m}", c.proposed_by, c.proposed_at)
+        for c in await month_close.waiting(session)
     ]

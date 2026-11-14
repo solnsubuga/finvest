@@ -1,7 +1,7 @@
 """Send a client carried over from Finvest 1.0 to the full ID check when their claim photos fail.
 
 Revision ID: 0371_kyc_superseded
-Revises: 0370_kyc_phone_names
+Revises: 0321_finance_month_closes
 
 A client carried over from Finvest 1.0 takes a selfie and a photo of their document at the claim,
 and staff compare them with the check carried over (migration 0053). When staff say they do not
@@ -26,7 +26,7 @@ from collections.abc import Sequence
 from alembic import op
 
 revision: str = "0371_kyc_superseded"
-down_revision: str | None = "0370_kyc_phone_names"
+down_revision: str | None = "0321_finance_month_closes"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 # The previous release inserts drafts with ON CONFLICT ON CONSTRAINT uq_kyc_checks_client.

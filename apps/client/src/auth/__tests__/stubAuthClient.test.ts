@@ -309,3 +309,38 @@ describe("claiming an account moved from Finvest 1.0", () => {
     );
   });
 });
+
+describe("changing how the client signs in", () => {
+  async function signedIn(step: "passkey" | "code", now: () => number = Date.now) {
+    const auth = createStubAuthClient({ delayMs: 0, now });
+    const challenge = await auth.startLogin({ phone: DEMO_PHONE }, DEMO_PASSWORD);
+    if (step === "passkey") await auth.verifyWithPasskey(challenge.loginId);
+    else await auth.verifyWithCode(challenge.loginId, DEMO_CODE);
+    return auth;
+  }
+
+  it("asks for a passkey or app after a log in by SMS code, then lets the change through", async () => {
+    const auth = await signedIn("code");
+    expect(await codeOf(auth.changeEmail("nakato@example.com"))).toBe("confirm_it_is_you");
+    await auth.confirmWithAuthenticator(DEMO_CODE);
+    expect(await auth.changeEmail("Nakato@Example.com")).toBe("nakato@example.com");
+    expect(await codeOf(auth.changeEmail("nakato@example.com"))).toBe("same_as_now");
+  });
+
+  it("needs the current password, and a strong one, to change it", async () => {
+    const auth = await signedIn("passkey");
+    expect(await codeOf(auth.changePassword("wrong one", "lantern meadow quartz"))).toBe("invalid_credentials");
+    expect(await codeOf(auth.changePassword(DEMO_PASSWORD, "password123"))).toBe("leaked_password");
+    await auth.changePassword(DEMO_PASSWORD, "lantern meadow quartz");
+  });
+
+  it("moves to a new number only with the code sent to it", async () => {
+    let clock = 0;
+    const auth = await signedIn("passkey", () => clock);
+    const id = await auth.startPhoneChange("701 555 013");
+    expect(await codeOf(auth.confirmPhoneChange(id, "000000"))).toBe("invalid_code");
+    expect(await auth.confirmPhoneChange(id, DEMO_CODE)).toBe(NEW_PHONE.replace("012", "013"));
+    clock += RECENT_SIGN_IN_MS + 1;
+    expect(await codeOf(auth.startPhoneChange("701 555 014"))).toBe("confirm_it_is_you");
+  });
+});
