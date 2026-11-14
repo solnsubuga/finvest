@@ -28,9 +28,11 @@ export function accountStatusPill(
   nowMs: number,
 ): { label: string; tone: Tone } {
   const numberWaits =
-    account.nameCheck === "not_answered" || account.nameCheck === "waiting_for_id"
+    account.nameCheck === "not_answered"
       ? { label: "Check again", tone: "warning" as const }
-      : account.nameCheck === "limit_reached"
+      : account.nameCheck === "waiting_for_id"
+        ? { label: "Waiting for ID", tone: "neutral" as const }
+        : account.nameCheck === "limit_reached"
         ? { label: "Not checked", tone: "warning" as const }
         : { label: "Checking", tone: "neutral" as const };
   const pills: Record<AccountStatus, { label: string; tone: Tone }> = {

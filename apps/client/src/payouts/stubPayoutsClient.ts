@@ -40,6 +40,8 @@ type Stored = Omit<PayoutAccount, "bankName"> & {
   wrongCodes: number;
   codeSent: boolean;
   nameChecks: number;
+  /** Asked again once the ID was approved: the worker compares the name on the next read. */
+  decisionQueued?: boolean;
 };
 
 /** A demo Airtel number stuck at its name check, or refused for having no name. */
@@ -238,7 +240,15 @@ export function createStubPayoutsClient(options: StubOptions = {}): PayoutsClien
 
     async getAccount(accountId) {
       await reachable();
-      return view(find(accountId));
+      const account = find(accountId);
+      if (account.decisionQueued) {
+        // The worker has compared the name by now. The demo client's ID matches.
+        account.decisionQueued = false;
+        account.status = "in_review";
+        account.proofKind = "network_registered_name";
+        account.nameCheck = null;
+      }
+      return view(account);
     },
 
     async addAccount(account: NewAccount) {
@@ -317,10 +327,9 @@ export function createStubPayoutsClient(options: StubOptions = {}): PayoutsClien
       if (account.kind !== "mobile_money" || account.status !== "awaiting_proof") throw new PayoutsError("moved_on");
       if (account.nameCheck === "checking") throw new PayoutsError("name_check_in_progress");
       if (account.nameCheck === "waiting_for_id") {
-        // The demo client's ID is approved, so the same answer is compared now and matches.
-        account.status = "in_review";
-        account.proofKind = "network_registered_name";
-        account.nameCheck = null;
+        // As the backend does, this only queues the worker's comparison and answers with the
+        // account as it is. The next read shows the result.
+        account.decisionQueued = true;
         return view(account);
       }
       if (account.nameChecks >= MAX_NAME_CHECKS) throw new PayoutsError("name_check_limit_reached");
