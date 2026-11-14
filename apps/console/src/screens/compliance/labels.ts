@@ -22,7 +22,7 @@ export const CODE_LABELS: Record<string, { title: string; hint: string }> = {
   },
   many_deposits: {
     title: "Many deposits",
-    hint: "More deposits than usual within one day.",
+    hint: "Many deposits within one day.",
   },
   unusual_deposit: {
     title: "Unusual deposit",
