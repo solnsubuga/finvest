@@ -2,7 +2,9 @@ import {
   AuthClient,
   AuthError,
   AuthenticatorSetup,
+  Device,
   LoginChallenge,
+  Passkey,
   SecondStep,
   Session,
   SignupChallenge,
@@ -40,7 +42,54 @@ type Account = {
   displayName: string | null;
   hasPasskey: boolean;
   hasAuthenticator: boolean;
+  /** The passkeys behind `hasPasskey`. It is true while any are left. */
+  passkeys: Passkey[];
+  /** Other devices signed in to the account. This device is added on top. */
+  otherDevices: Device[];
 };
+
+const HOUR_MS = 60 * 60 * 1000;
+
+/** Made-up passkeys and devices for the demo accounts, dated relative to now. */
+function demoPasskeys(at: number): Passkey[] {
+  return [
+    {
+      id: "passkey_demo_1",
+      name: "iPhone",
+      createdAt: new Date(at - 40 * 24 * HOUR_MS).toISOString(),
+      lastUsedAt: new Date(at - 2 * HOUR_MS).toISOString(),
+    },
+    {
+      id: "passkey_demo_2",
+      name: "Chrome on Windows",
+      createdAt: new Date(at - 12 * 24 * HOUR_MS).toISOString(),
+      lastUsedAt: null,
+    },
+  ];
+}
+
+function demoDevices(at: number): Device[] {
+  return [
+    {
+      id: "device_demo_1",
+      label: "Finvest app on iPhone",
+      kind: "app",
+      confirmedWith: "passkey",
+      signedInAt: new Date(at - 6 * 24 * HOUR_MS).toISOString(),
+      lastSeenAt: new Date(at - 3 * HOUR_MS).toISOString(),
+      current: false,
+    },
+    {
+      id: "device_demo_2",
+      label: "Chrome on Windows",
+      kind: "browser",
+      confirmedWith: "code",
+      signedInAt: new Date(at - 2 * 24 * HOUR_MS).toISOString(),
+      lastSeenAt: new Date(at - 30 * HOUR_MS).toISOString(),
+      current: false,
+    },
+  ];
+}
 
 /** Every account can receive an SMS code, so "code" is always last. */
 function methodsFor(account: Account): SecondStep[] {
@@ -90,6 +139,8 @@ export function createStubAuthClient(options: StubOptions = {}): AuthClient {
         displayName: "Amara Nakato",
         hasPasskey: true,
         hasAuthenticator: true,
+        passkeys: demoPasskeys(now()),
+        otherDevices: demoDevices(now()),
       },
     ],
     [
@@ -99,6 +150,8 @@ export function createStubAuthClient(options: StubOptions = {}): AuthClient {
         displayName: "Joseph Okello",
         hasPasskey: false,
         hasAuthenticator: true,
+        passkeys: [],
+        otherDevices: [],
       },
     ],
   ]);
@@ -110,6 +163,8 @@ export function createStubAuthClient(options: StubOptions = {}): AuthClient {
   /** A set-up that was started and not yet confirmed, for this session only. */
   let pendingAuthenticatorAt: number | null = null;
   let signedInAt = 0;
+  /** How this device's session was confirmed, for its row in the device list. */
+  let confirmedWith: Device["confirmedWith"] = "signup";
   /** The number of whoever is signed in, as the server would know from the session. */
   let signedIn: string | null = null;
   let counter = 0;
@@ -189,7 +244,10 @@ export function createStubAuthClient(options: StubOptions = {}): AuthClient {
         displayName: null,
         hasPasskey: false,
         hasAuthenticator: false,
+        passkeys: [],
+        otherDevices: [],
       });
+      confirmedWith = "signup";
       return sessionFor(signup.phone, false);
     },
 
@@ -211,6 +269,7 @@ export function createStubAuthClient(options: StubOptions = {}): AuthClient {
         throw new AuthError("expired");
       }
       logins.delete(loginId);
+      confirmedWith = "passkey";
       return sessionFor(phone, false);
     },
 
@@ -224,6 +283,7 @@ export function createStubAuthClient(options: StubOptions = {}): AuthClient {
         throw new AuthError("invalid_code");
       }
       logins.delete(loginId);
+      confirmedWith = "authenticator";
       return sessionFor(phone, false);
     },
 
@@ -244,6 +304,7 @@ export function createStubAuthClient(options: StubOptions = {}): AuthClient {
         throw new AuthError("invalid_code");
       }
       logins.delete(loginId);
+      confirmedWith = "code";
       return sessionFor(phone, true);
     },
 
@@ -254,7 +315,14 @@ export function createStubAuthClient(options: StubOptions = {}): AuthClient {
 
     async addPasskey(): Promise<void> {
       await wait();
-      recentAccount().hasPasskey = true;
+      const account = recentAccount();
+      account.hasPasskey = true;
+      account.passkeys.push({
+        id: nextId("passkey"),
+        name: "This device",
+        createdAt: new Date(now()).toISOString(),
+        lastUsedAt: null,
+      });
     },
 
     async startAuthenticatorSetup(): Promise<AuthenticatorSetup> {
@@ -305,6 +373,64 @@ export function createStubAuthClient(options: StubOptions = {}): AuthClient {
       account.password = password;
       signedIn = null;
       pendingAuthenticatorAt = null;
+    },
+
+    async listDevices(): Promise<Device[]> {
+      await wait();
+      const account = currentAccount();
+      const here: Device = {
+        id: "device_this",
+        label: "Chrome on this computer",
+        kind: "browser",
+        confirmedWith,
+        signedInAt: new Date(signedInAt).toISOString(),
+        lastSeenAt: new Date(now()).toISOString(),
+        current: true,
+      };
+      return [here, ...account.otherDevices];
+    },
+
+    async signOutDevice(id): Promise<void> {
+      await wait();
+      const account = currentAccount();
+      const left = account.otherDevices.filter((device) => device.id !== id);
+      if (left.length === account.otherDevices.length) {
+        throw new AuthError("not_found");
+      }
+      account.otherDevices = left;
+    },
+
+    async signOutOtherDevices(): Promise<number> {
+      await wait();
+      const account = currentAccount();
+      const ended = account.otherDevices.length;
+      account.otherDevices = [];
+      return ended;
+    },
+
+    async listPasskeys(): Promise<Passkey[]> {
+      await wait();
+      return [...currentAccount().passkeys];
+    },
+
+    async removePasskey(id): Promise<void> {
+      await wait();
+      const account = recentAccount();
+      const left = account.passkeys.filter((passkey) => passkey.id !== id);
+      if (left.length === account.passkeys.length) {
+        throw new AuthError("not_found");
+      }
+      account.passkeys = left;
+      account.hasPasskey = left.length > 0;
+    },
+
+    async turnOffAuthenticator(): Promise<void> {
+      await wait();
+      const account = recentAccount();
+      if (!account.hasAuthenticator) {
+        throw new AuthError("not_found");
+      }
+      account.hasAuthenticator = false;
     },
 
     async signOut(): Promise<void> {

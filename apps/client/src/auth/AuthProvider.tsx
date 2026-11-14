@@ -44,8 +44,12 @@ type AuthState = {
   setReturnTo: (returnTo: ReturnTo | null) => void;
 };
 
-/** Only the set-up screens, so a log in can never be sent somewhere unexpected. */
-export type ReturnTo = "/security/passkey" | "/security/authenticator";
+/** Only the screens that change how a client signs in, so a log in can never be sent somewhere unexpected. */
+export type ReturnTo =
+  | "/security/passkey"
+  | "/security/authenticator"
+  | "/security/passkeys"
+  | "/security/authenticator-off";
 
 /** The return address is for logging in again right away, not for a later visit. */
 export const RETURN_TO_LIFETIME_MS = 5 * 60 * 1000;

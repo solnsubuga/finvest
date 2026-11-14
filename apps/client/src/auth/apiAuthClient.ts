@@ -3,7 +3,7 @@ import type { ClientSignedIn } from "@finvest/api-client/client";
 import { api, ApiError } from "@/api/http";
 import { saveToken } from "@/api/token";
 
-import { AuthClient, AuthError, AuthErrorCode, SecondStep, Session } from "./types";
+import { AuthClient, AuthError, AuthErrorCode, Device, SecondStep, Session } from "./types";
 import { createPasskey, PasskeyCancelled, passkeysSupported, signWithPasskey } from "./webauthn";
 
 /**
@@ -21,6 +21,7 @@ const PASSTHROUGH: ReadonlySet<AuthErrorCode> = new Set([
   "sign_in_again",
   "passkey_failed",
   "rate_limited",
+  "not_found",
   "offline",
 ]);
 
@@ -170,6 +171,50 @@ export function createApiAuthClient(): AuthClient {
         });
         // The server ended every session, this device's too.
         await saveToken(null);
+      }),
+
+    listDevices: () =>
+      wrap(async () => {
+        const result = await api("GET /client/sessions", {});
+        return result.items.map(
+          (item): Device => ({
+            id: item.id,
+            label: item.device,
+            kind: item.transport === "token" ? "app" : "browser",
+            confirmedWith: item.second_step,
+            signedInAt: item.signed_in_at,
+            lastSeenAt: item.last_seen_at,
+            current: item.current,
+          }),
+        );
+      }),
+
+    signOutDevice: (id) =>
+      wrap(async () => {
+        await api("DELETE /client/sessions/{session_id}", { params: { session_id: id } });
+      }),
+
+    signOutOtherDevices: () =>
+      wrap(async () => (await api("POST /client/sessions/sign-out-others", {})).ended),
+
+    listPasskeys: () =>
+      wrap(async () =>
+        (await api("GET /client/passkeys", {})).map((item) => ({
+          id: item.id,
+          name: item.name,
+          createdAt: item.created_at,
+          lastUsedAt: item.last_used_at,
+        })),
+      ),
+
+    removePasskey: (id) =>
+      wrap(async () => {
+        await api("DELETE /client/passkeys/{passkey_id}", { params: { passkey_id: id } });
+      }),
+
+    turnOffAuthenticator: () =>
+      wrap(async () => {
+        await api("DELETE /client/authenticator", {});
       }),
 
     signOut: async () => {
