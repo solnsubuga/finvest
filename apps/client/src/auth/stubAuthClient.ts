@@ -350,6 +350,10 @@ export function createStubAuthClient(options: StubOptions = {}): AuthClient {
 
     async startPasswordReset(phone): Promise<PasswordReset> {
       await wait();
+      // A new code replaces any older one for the same number.
+      for (const [id, number] of resets) {
+        if (number === phone) resets.delete(id);
+      }
       const challengeId = nextId("reset");
       resets.set(challengeId, phone);
       return { challengeId, phone };

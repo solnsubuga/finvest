@@ -99,8 +99,8 @@ export default function Devices() {
         <Eyebrow>Sign in and security</Eyebrow>
         <Title>Devices</Title>
         <Txt color={colors.muted}>
-          Everywhere your account is signed in. If you do not know a device, sign it out and change
-          your password.
+          Everywhere your account is signed in. If you do not know a device, sign it out. If someone
+          may know your password, log out and use &quot;Forgot password?&quot; to set a new one.
         </Txt>
       </View>
 
