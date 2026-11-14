@@ -486,4 +486,22 @@ def release_screened(database: Database, clock: Clock) -> dict[str, JobHandler |
 
         await context.apply(release)
 
-    return {RELEASE_SCREENED_KIND: handler}
+    async def retry(job: ClaimedJob, context: JobContext) -> None:
+        async def again(session: AsyncSession) -> Mapping[str, object]:
+            found = await payouts.retry_screening(session, clock)
+            for payout_id in found.still_waiting_long:
+                # Staff see it on the Compliance screen; this is for whoever watches the logs.
+                logger.warning(
+                    "payout_waiting_for_screening",
+                    payout_id=payout_id,
+                    error_code="screening_not_clear",
+                )
+            return {
+                "clients": found.clients,
+                "released": found.released,
+                "waiting_long": len(found.still_waiting_long),
+            }
+
+        await context.apply(again)
+
+    return {RELEASE_SCREENED_KIND: handler, payouts.RETRY_SCREENING_KIND: retry}
