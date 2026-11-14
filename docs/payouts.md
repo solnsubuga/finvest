@@ -218,7 +218,7 @@ A payout is sent at most once:
 
 A payout the provider keeps taking nothing of is never given up on, because the client's money is in flight. Two hours after its first try it is **held up**: each time the sweep sends it again it logs `payout_held_up` with the payout ID and `error_code=provider_deferred` (never an amount, number or name), and staff with `money_movement.view` (admin, operations and finance) see it on `GET /staff/payouts/held-up`, longest first, with its first and last try and how many sends were tried. It leaves the list as soon as a send is taken. Finding out why is a person's job, with the provider; nothing is cancelled or refunded automatically.
 
-Status reads come 10 seconds after the send, then further apart, then hourly, for 3 days. Pending, no record or a failed read keeps reading. Confirmed for the payout's amount pays it and settles the money from the pot. Refused fails it and parks the money. Confirmed for another amount moves nothing, stops the reads and is logged for staff. After 3 days with no answer, two staff members settle it from the statement, which is not built yet.
+Status reads come 10 seconds after the send, then further apart, then hourly, for 3 days. Pending, no record or a failed read keeps reading. Confirmed for the payout's amount pays it and settles the money from the pot. Refused fails it and parks the money. Confirmed for another amount moves nothing, stops the reads and is logged for staff. After 3 days with no answer, two staff members settle it from the statement (below).
 
 A sweep runs every minute. It marks attempts that never got their answer saved as `interrupted`, queues a fresh send for a queued payout left alone for 10 minutes with no attempt that may have gone, and queues a read for a sent or uncertain payout nothing has read for an hour.
 
@@ -239,3 +239,35 @@ What the database enforces:
 The sandbox provider (`FINVEST_PAYMENTS_PROVIDER=sandbox`, local and staging only) pays nobody. The last two digits of the number choose what happens: 01 refused, 02 fails after accepting, 04 uncertain with no record, 05 deferred, 06 confirmed for another amount, anything else paid after 5 seconds.
 
 Not built yet: the two-person settlement of a stranded payout, and paying a bank payout from the trust account. Both follow.
+
+## Settling a payout the provider never answered for
+
+When the reads end with no answer, the payout is **stranded**: sent or uncertain, and first sent three or more days ago. The ioTec statement is then the only evidence. Two members of staff with `reconciliation.view` settle it from there (`backend/app/modules/payouts/resolutions.py`, migration 0037).
+
+1. One proposes an outcome with a reason. The evidence is the statement of the ioTec wallet the payout left from (the destination's network, so `mtn` or `airtel`), in the payout's currency.
+   - For `paid` they name the line on that wallet's statement that carries the payout's ID, going out, for its amount.
+   - For `failed` they name that wallet's statement for a day at least three days after the send. The wallet must have a statement for every day from the send to that day, and the payout's ID must be on no ioTec line at all. A day nobody imported could hold the payout's line, and settling a paid payout as failed would pay the client twice.
+2. A different person approves it. In the same transaction the payout becomes paid (settled from the wallet) or failed (parked in the client's "payout pending" account, `failure_code=staff_resolved`), and the client is told, as when the provider answers. They may instead decline it with a reason, or the proposer may withdraw it. Either way, it can be proposed again.
+
+| Route | What it does |
+| --- | --- |
+| `GET /staff/payouts/stranded` | Stranded payouts, longest first, with any open proposal |
+| `POST /staff/payouts/{id}/resolutions` | `{outcome, statement_line_id?, statement_id?, reason}`. 409 `provider_still_being_read`, `payout_not_stranded`, `statement_line_not_this_payout`, `payout_on_statement`, `statement_not_this_wallet`, `statement_too_early`, `statement_day_missing` or `resolution_already_proposed`; 422 `statement_line_required` or `statement_required` |
+| `POST /staff/payout-resolutions/{id}/approve` | `{reason}`. Needs the second step in the last ten minutes (403 `confirm_it_is_you`). 403 `proposed_by_you` |
+| `POST /staff/payout-resolutions/{id}/decline` | `{reason}`. 403 `proposed_by_you` |
+| `POST /staff/payout-resolutions/{id}/withdraw` | `{reason}`. 403 `not_proposed_by_you` |
+
+Proposing and approving take an `Idempotency-Key`: a retried request returns what the first one did, and a key reused for a different request is refused with `idempotency_key_reused`.
+
+Open proposals wait in the approvals inbox as `payout_resolution`, with the outcome as the subject. The database holds the rules too:
+
+| Rule | How |
+| --- | --- |
+| The provider has its three days first | A proposal is refused while the first send is less than three days before it |
+| The statement is the evidence | The database checks the line or the statement itself, the wallet, the currency and that no day is missing, at the proposal and again at approval |
+| Two people | A different signed-in member of staff approves or declines; only the proposer withdraws |
+| The payout moves with the approval | The payouts guard admits a staff step out of sent or uncertain only with an approved resolution for that outcome by the same person, and an approved resolution whose payout has not moved cannot commit |
+| One at a time | One open and one approved resolution per payout |
+| Nothing changes afterwards | Only a decision is written, a decided resolution never changes, and nothing is deleted |
+
+Only the worker writes a destination's note of its first payout, so a payout settled as paid by hand queues a job for it.

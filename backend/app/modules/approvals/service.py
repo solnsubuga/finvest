@@ -9,7 +9,9 @@ from datetime import datetime
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.modules.approvals.domain.inbox import InboxItem, Kind, Waiting, inbox, visible_kinds
+from app.modules.dealing import buffer, capital
 from app.modules.dealing import orders as dealing
+from app.modules.dealing.domain.capital import Direction
 from app.modules.dealing.domain.orders import OrderStatus
 from app.modules.identity import client_locks, phone_changes, team
 from app.modules.identity.service import StaffSession
@@ -19,7 +21,7 @@ from app.modules.ledger import corrections
 from app.modules.migration import service as migration
 from app.modules.notifications import announcements, suppression_lifts, wording_store
 from app.modules.payments import bank_transfers
-from app.modules.payouts import destinations
+from app.modules.payouts import destinations, resolutions
 from app.modules.reconciliation import day_close, transfers
 from app.modules.support import complaints
 
@@ -39,6 +41,10 @@ async def waiting_for(session: AsyncSession, staff: StaffSession, now: datetime)
         found += await _day_closes(session)
     if kinds & {"dealing_order", "dealing_result"}:
         found += await _dealing(session)
+    if "buffer_rules" in kinds:
+        found += await _buffer_rules(session)
+    if "buffer_capital" in kinds:
+        found += await _buffer_capital(session)
     if "rate_change" in kinds:
         found += await _rates(session, staff)
     if kinds & {"migration_totals", "migration_sign_off"}:
@@ -59,6 +65,8 @@ async def waiting_for(session: AsyncSession, staff: StaffSession, now: datetime)
         found += await _payout_accounts(session)
     if "investment_correction" in kinds:
         found += await _investment_corrections(session, staff)
+    if "payout_resolution" in kinds:
+        found += await _payout_resolutions(session)
     return inbox(found, staff.staff_id, staff.permissions)
 
 
@@ -126,6 +134,37 @@ async def _dealing(session: AsyncSession) -> list[Waiting]:
                 )
             )
     return found
+
+
+async def _buffer_rules(session: AsyncSession) -> list[Waiting]:
+    # "UGX from 2026-12-01": the currency and the day the new rules would start.
+    return [
+        Waiting(
+            "buffer_rules",
+            p.id,
+            f"{p.rules.currency.value} from {p.rules.effective_from.isoformat()}",
+            p.proposed_by,
+            p.proposed_at,
+        )
+        for p in await buffer.waiting_proposals(session)
+    ]
+
+
+_MOVED = {Direction.IN: "paid in", Direction.OUT: "taken out"}
+
+
+async def _buffer_capital(session: AsyncSession) -> list[Waiting]:
+    # "UGX paid in" or "UGX taken out". The amount is on the buffer screen, not in the inbox.
+    return [
+        Waiting(
+            "buffer_capital",
+            m.id,
+            f"{m.amount.currency.value} {_MOVED[m.direction]}",
+            m.proposed_by,
+            m.proposed_at,
+        )
+        for m in await capital.waiting(session)
+    ]
 
 
 async def _rates(session: AsyncSession, staff: StaffSession) -> list[Waiting]:
@@ -220,4 +259,12 @@ async def _payout_accounts(session: AsyncSession) -> list[Waiting]:
         Waiting("payout_account", d.id, d.kind.value, d.checked_by, d.checked_at)
         for d in await destinations.checks_awaiting_approval(session)
         if d.checked_by is not None and d.checked_at is not None
+    ]
+
+
+async def _payout_resolutions(session: AsyncSession) -> list[Waiting]:
+    # The subject is the outcome proposed, never the client, the number or the amount.
+    return [
+        Waiting("payout_resolution", r.id, r.outcome.value, r.proposed_by, r.proposed_at)
+        for r in await resolutions.waiting(session)
     ]

@@ -8,6 +8,7 @@ import { resolveAuthClient } from "./resolveClient";
 import {
   AuthClient,
   LoginChallenge,
+  PasswordReset,
   Session,
   SignupChallenge,
   SignupTicket,
@@ -33,6 +34,8 @@ type AuthState = {
   setTicket: (ticket: SignupTicket | null) => void;
   login: LoginChallenge | null;
   setLogin: (login: LoginChallenge | null) => void;
+  reset: PasswordReset | null;
+  setReset: (reset: PasswordReset | null) => void;
   /**
    * Where to go straight after the next log in. Set when a set-up screen
    * sends the client to log in again, so they come back to the same set-up.
@@ -66,6 +69,7 @@ export function AuthProvider({
   const [signup, setSignup] = useState<SignupChallenge | null>(null);
   const [ticket, setTicket] = useState<SignupTicket | null>(null);
   const [login, setLogin] = useState<LoginChallenge | null>(null);
+  const [reset, setReset] = useState<PasswordReset | null>(null);
   const [returnTo, setReturnTo] = useState<ReturnTo | null>(null);
 
   // The return address is dropped after a few minutes, so a much later log in
@@ -113,10 +117,12 @@ export function AuthProvider({
       setTicket,
       login,
       setLogin,
+      reset,
+      setReset,
       returnTo,
       setReturnTo,
     }),
-    [resolved, session, signup, ticket, login, returnTo],
+    [resolved, session, signup, ticket, login, reset, returnTo],
   );
 
   if (restoring) {

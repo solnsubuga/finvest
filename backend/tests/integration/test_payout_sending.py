@@ -28,6 +28,7 @@ from app.modules.payouts.domain.sending import (
     HELD_UP_AFTER,
     READ_WINDOW,
     RESEND_AFTER,
+    SEND_ATTEMPTS,
     SEND_GRACE,
     AttemptOutcome,
 )
@@ -136,7 +137,8 @@ async def test_a_payout_is_sent_once_read_until_paid_and_settled(
     await drain(worker)
     sent = await reload(world, payout)
     assert (sent.status, sent.provider_reference) == (S.SENT, "IOT-1")
-    request = provider.requests[-1]
+    # Payouts other tests left queued may be sent by the same drain, so find this one's.
+    [request] = [each for each in provider.requests if each.request_id == payout.id]
     assert (request.request_id, request.amount, request.network.value) == (
         payout.id,
         ugx(1_000_000),
@@ -238,8 +240,13 @@ async def test_a_payout_the_provider_takes_nothing_of_for_hours_is_shown_to_staf
     payout = await world.request(1_000_000)
     provider.on_send(payout.id, Deferred())
     await drain(worker)
-    for _ in range(6):
+    # Until its first send job has used every try. Jobs other tests left behind share the
+    # worker, so this waits on the attempts rather than on a fixed number of steps.
+    for _ in range(20):
+        if len(await attempts(world, payout)) == SEND_ATTEMPTS:
+            break
         await later(world.clock, worker, RETRY)
+    assert await attempts(world, payout) == ["deferred"] * SEND_ATTEMPTS
     reader = staff()
 
     async def held_up() -> list[payouts.HeldUpPayout]:
@@ -251,12 +258,16 @@ async def test_a_payout_the_provider_takes_nothing_of_for_hours_is_shown_to_staf
     assert await held_up() == []
     with capture_logs() as quiet:
         await sweep(worker, world.worker, world.clock)
-    assert not [log for log in quiet if log["event"] == "payout_held_up"]
+    assert not [
+        log for log in quiet if log["event"] == "payout_held_up" and log["payout_id"] == payout.id
+    ]
 
     world.clock.advance(seconds=HELD_UP_AFTER.total_seconds())
     with capture_logs() as logs:
         await sweep(worker, world.worker, world.clock)
-    [warning] = [log for log in logs if log["event"] == "payout_held_up"]
+    [warning] = [
+        log for log in logs if log["event"] == "payout_held_up" and log["payout_id"] == payout.id
+    ]
     assert (warning["payout_id"], warning["error_code"]) == (payout.id, "provider_deferred")
     # Logs carry the payout ID and a code, never an amount, a number or a name.
     assert set(warning) <= {"event", "log_level", "payout_id", "attempts", "error_code"}

@@ -47,6 +47,11 @@ const FLAG_LABELS: Record<string, string> = {
   screening_unsure: "Possible screening match",
   screening_not_run: "Screening did not run",
   provider_result_unclear: "Provider result unclear",
+  automatic_checks_passed: "Automatic checks passed",
+  document_expired: "ID has expired",
+  provider_refused: "Provider refused the check",
+  provider_not_received: "Provider never received the check",
+  provider_no_answer: "Provider did not answer",
 };
 
 /** The first reason a person is needed, in words. */

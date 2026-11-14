@@ -24,6 +24,7 @@ const ACTIONS: readonly { permission: Permission; label: string; under: ScreenPe
   { permission: "clients.lock", label: "Lock client accounts", under: "clients.view" },
   { permission: "email_suppressions.lift", label: "Lift email suppressions", under: "clients.view" },
   { permission: "bank_transfers.change", label: "Match bank transfers", under: "reconciliation.view" },
+  { permission: "identity_checks.review", label: "Decide identity checks", under: "identity_checks.view" },
   { permission: "payout_accounts.change", label: "Check payout accounts", under: "review_queue.view" },
   { permission: "dealing_orders.change", label: "Deal and settle orders", under: "dealing_desk.view" },
   { permission: "rates.change", label: "Change rates", under: "rates.view" },
