@@ -74,7 +74,7 @@ That is roughly $27 for staging, $59 for production and $5 for Spaces. **Staging
 1. Change Terraform in a pull request. **Terraform checks** formats, validates, runs `terraform test` and shellcheck, with no credentials.
 2. Merge after review.
 3. **Actions → Provision → Run workflow** on `main`. Pick `shared`, `staging` or `production`, and `plan` or `apply`.
-   - **Plan** runs in the GitHub environment (`prod` for `shared` and `production`, `dev` for `staging`) and shows the whole plan in the run summary. With required reviewers on the environment, approve it to start.
+   - **Plan** runs in the GitHub environment (`prod` for `shared` and `production`, `dev` for `staging`) and shows the whole plan in the run summary. With required reviewers on the environment, approve it to start. That first approval only lets the plan run, before anyone has seen it: the review that matters is the second one, on apply, after you have read the plan.
    - **Apply** (only with `apply`) runs in the same environment and waits for your approval. Read the plan, then approve. Apply plans again and stops if that plan differs from the one you read. After applying it admits its own address to SSH, installs Docker on the host with `prepare-host.sh`, creates the database roles from the host, and removes its address again.
 
 Nothing applies on merge. Nothing that costs money is created until someone runs an apply and approves it.
