@@ -20,6 +20,7 @@
 | [support.md](support.md) | Help chat between clients and staff, and the complaints register: routes, rules and who sees what |
 | [automatic-investing.md](automatic-investing.md) | Plans that invest the same amount on a schedule, the daily run that asks for each payment, and what the database enforces |
 | [insights.md](insights.md) | What a client invested, earned and was paid each month, what comes next, and where each figure is read from in the ledger |
+| [client-profile.md](client-profile.md) | Next of kin and their shares, the investing questions and the profile they give |
 | [client-accounts.md](client-accounts.md) | Finding a client in the console, the client page, and locking or unlocking an account with two people |
 | [console-admin.md](console-admin.md) | The team and its two-admin changes, the approvals inbox, the audit trail viewer, email suppressions and client account support |
 | [account-numbers.md](account-numbers.md) | Format, generation and lifetime of client account numbers |

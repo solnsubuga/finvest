@@ -313,6 +313,77 @@
         "title": "AnnouncementView",
         "type": "object"
       },
+      "AnswersBody": {
+        "additionalProperties": false,
+        "properties": {
+          "answers": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "maxProperties": 6,
+            "title": "Answers",
+            "type": "object"
+          }
+        },
+        "required": [
+          "answers"
+        ],
+        "title": "AnswersBody",
+        "type": "object"
+      },
+      "AnswersView": {
+        "additionalProperties": false,
+        "properties": {
+          "answered_at": {
+            "format": "date-time",
+            "title": "Answered At",
+            "type": "string"
+          },
+          "answers": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "title": "Answers",
+            "type": "object"
+          },
+          "due_again_at": {
+            "format": "date-time",
+            "title": "Due Again At",
+            "type": "string"
+          },
+          "id": {
+            "maxLength": 20,
+            "minLength": 20,
+            "pattern": "^[-0-9A-Z_a-z]{20}$",
+            "title": "Id",
+            "type": "string"
+          },
+          "longest_term_days": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Longest Term Days"
+          },
+          "profile": {
+            "$ref": "#/components/schemas/Profile"
+          }
+        },
+        "required": [
+          "id",
+          "answers",
+          "profile",
+          "longest_term_days",
+          "answered_at",
+          "due_again_at"
+        ],
+        "title": "AnswersView",
+        "type": "object"
+      },
       "Approval": {
         "additionalProperties": false,
         "properties": {
@@ -7570,6 +7641,54 @@
         "title": "NewSaving",
         "type": "object"
       },
+      "NextOfKinBody": {
+        "additionalProperties": false,
+        "properties": {
+          "people": {
+            "items": {
+              "$ref": "#/components/schemas/PersonBody"
+            },
+            "maxItems": 10,
+            "title": "People",
+            "type": "array"
+          }
+        },
+        "required": [
+          "people"
+        ],
+        "title": "NextOfKinBody",
+        "type": "object"
+      },
+      "NextOfKinView": {
+        "additionalProperties": false,
+        "properties": {
+          "people": {
+            "items": {
+              "$ref": "#/components/schemas/app__modules__kyc__profile_api__PersonView"
+            },
+            "title": "People",
+            "type": "array"
+          },
+          "updated_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Updated At"
+          }
+        },
+        "required": [
+          "people",
+          "updated_at"
+        ],
+        "title": "NextOfKinView",
+        "type": "object"
+      },
       "NotCarriedView": {
         "additionalProperties": false,
         "description": "A client the worker could not carry over, and where resolving them stands.",
@@ -7800,6 +7919,20 @@
           "next_before"
         ],
         "title": "NotificationPage",
+        "type": "object"
+      },
+      "OptionView": {
+        "additionalProperties": false,
+        "properties": {
+          "code": {
+            "title": "Code",
+            "type": "string"
+          }
+        },
+        "required": [
+          "code"
+        ],
+        "title": "OptionView",
         "type": "object"
       },
       "OrderKind": {
@@ -8540,7 +8673,7 @@
         "properties": {
           "people": {
             "items": {
-              "$ref": "#/components/schemas/PersonView"
+              "$ref": "#/components/schemas/app__modules__identity__people_api__PersonView"
             },
             "title": "People",
             "type": "array"
@@ -8552,26 +8685,40 @@
         "title": "PeopleList",
         "type": "object"
       },
-      "PersonView": {
+      "PersonBody": {
         "additionalProperties": false,
         "properties": {
-          "id": {
-            "maxLength": 20,
-            "minLength": 20,
-            "pattern": "^[-0-9A-Z_a-z]{20}$",
-            "title": "Id",
+          "full_name": {
+            "maxLength": 150,
+            "title": "Full Name",
             "type": "string"
           },
-          "name": {
-            "title": "Name",
+          "id_number": {
+            "maxLength": 40,
+            "title": "Id Number",
             "type": "string"
+          },
+          "phone": {
+            "maxLength": 32,
+            "title": "Phone",
+            "type": "string"
+          },
+          "relationship": {
+            "$ref": "#/components/schemas/Relationship"
+          },
+          "share_bps": {
+            "title": "Share Bps",
+            "type": "integer"
           }
         },
         "required": [
-          "id",
-          "name"
+          "full_name",
+          "relationship",
+          "phone",
+          "id_number",
+          "share_bps"
         ],
-        "title": "PersonView",
+        "title": "PersonBody",
         "type": "object"
       },
       "PhoneChangeList": {
@@ -9085,6 +9232,15 @@
           "paused"
         ],
         "title": "ProductStatus",
+        "type": "string"
+      },
+      "Profile": {
+        "enum": [
+          "careful",
+          "balanced",
+          "long_term"
+        ],
+        "title": "Profile",
         "type": "string"
       },
       "ProgressView": {
@@ -9690,6 +9846,28 @@
           "token"
         ],
         "title": "PushDeviceToken",
+        "type": "object"
+      },
+      "QuestionView": {
+        "additionalProperties": false,
+        "properties": {
+          "code": {
+            "title": "Code",
+            "type": "string"
+          },
+          "options": {
+            "items": {
+              "$ref": "#/components/schemas/OptionView"
+            },
+            "title": "Options",
+            "type": "array"
+          }
+        },
+        "required": [
+          "code",
+          "options"
+        ],
+        "title": "QuestionView",
         "type": "object"
       },
       "Queue": {
@@ -10333,6 +10511,19 @@
         ],
         "title": "Rejection",
         "type": "object"
+      },
+      "Relationship": {
+        "enum": [
+          "spouse",
+          "child",
+          "parent",
+          "sibling",
+          "other_relative",
+          "friend",
+          "other"
+        ],
+        "title": "Relationship",
+        "type": "string"
       },
       "ReleaseOut": {
         "additionalProperties": false,
@@ -11313,6 +11504,39 @@
           "status"
         ],
         "title": "ReviewedPayoutOut",
+        "type": "object"
+      },
+      "RiskProfileView": {
+        "additionalProperties": false,
+        "properties": {
+          "due": {
+            "title": "Due",
+            "type": "boolean"
+          },
+          "latest": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/AnswersView"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "questions": {
+            "items": {
+              "$ref": "#/components/schemas/QuestionView"
+            },
+            "title": "Questions",
+            "type": "array"
+          }
+        },
+        "required": [
+          "questions",
+          "latest",
+          "due"
+        ],
+        "title": "RiskProfileView",
         "type": "object"
       },
       "RoleView": {
@@ -13920,6 +14144,39 @@
         "title": "StaffMemberView",
         "type": "object"
       },
+      "StaffPersonView": {
+        "additionalProperties": false,
+        "properties": {
+          "full_name": {
+            "title": "Full Name",
+            "type": "string"
+          },
+          "id_number_masked": {
+            "title": "Id Number Masked",
+            "type": "string"
+          },
+          "phone": {
+            "title": "Phone",
+            "type": "string"
+          },
+          "relationship": {
+            "$ref": "#/components/schemas/Relationship"
+          },
+          "share_bps": {
+            "title": "Share Bps",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "full_name",
+          "relationship",
+          "phone",
+          "id_number_masked",
+          "share_bps"
+        ],
+        "title": "StaffPersonView",
+        "type": "object"
+      },
       "StaffPhoto": {
         "additionalProperties": false,
         "properties": {
@@ -14026,6 +14283,51 @@
           "next_rate"
         ],
         "title": "StaffProductOut",
+        "type": "object"
+      },
+      "StaffProfileView": {
+        "additionalProperties": false,
+        "properties": {
+          "next_of_kin": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/StaffPersonView"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Of Kin"
+          },
+          "next_of_kin_updated_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Of Kin Updated At"
+          },
+          "risk": {
+            "items": {
+              "$ref": "#/components/schemas/AnswersView"
+            },
+            "title": "Risk",
+            "type": "array"
+          }
+        },
+        "required": [
+          "next_of_kin",
+          "next_of_kin_updated_at",
+          "risk"
+        ],
+        "title": "StaffProfileView",
         "type": "object"
       },
       "StaffRunList": {
@@ -16077,6 +16379,69 @@
           "raised_to_minimum"
         ],
         "title": "PlanView",
+        "type": "object"
+      },
+      "app__modules__identity__people_api__PersonView": {
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "maxLength": 20,
+            "minLength": 20,
+            "pattern": "^[-0-9A-Z_a-z]{20}$",
+            "title": "Id",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name"
+        ],
+        "title": "PersonView",
+        "type": "object"
+      },
+      "app__modules__kyc__profile_api__PersonView": {
+        "additionalProperties": false,
+        "properties": {
+          "full_name": {
+            "title": "Full Name",
+            "type": "string"
+          },
+          "id": {
+            "maxLength": 20,
+            "minLength": 20,
+            "pattern": "^[-0-9A-Z_a-z]{20}$",
+            "title": "Id",
+            "type": "string"
+          },
+          "id_number": {
+            "title": "Id Number",
+            "type": "string"
+          },
+          "phone": {
+            "title": "Phone",
+            "type": "string"
+          },
+          "relationship": {
+            "$ref": "#/components/schemas/Relationship"
+          },
+          "share_bps": {
+            "title": "Share Bps",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "full_name",
+          "relationship",
+          "phone",
+          "id_number",
+          "share_bps"
+        ],
+        "title": "PersonView",
         "type": "object"
       },
       "app__modules__migration__api__Amount": {
@@ -22821,6 +23186,158 @@
         ]
       }
     },
+    "/client/next-of-kin": {
+      "get": {
+        "description": "The people the signed-in client has named, in their order.",
+        "operationId": "my_next_of_kin_client_next_of_kin_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NextOfKinView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "summary": "My Next Of Kin",
+        "tags": [
+          "client profile"
+        ]
+      },
+      "put": {
+        "description": "Replace the whole list. Shares add up to 10,000 basis points, or the list is empty.",
+        "operationId": "save_next_of_kin_client_next_of_kin_put",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NextOfKinBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NextOfKinView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "summary": "Save Next Of Kin",
+        "tags": [
+          "client profile"
+        ]
+      }
+    },
     "/client/notification-preferences": {
       "get": {
         "operationId": "get_preferences_client_notification_preferences_get",
@@ -24929,6 +25446,158 @@
         "summary": "Remove Push Device",
         "tags": [
           "client notifications"
+        ]
+      }
+    },
+    "/client/risk-profile": {
+      "get": {
+        "description": "The questions, the client's latest answers, and whether they are due again.",
+        "operationId": "my_risk_profile_client_risk_profile_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RiskProfileView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "summary": "My Risk Profile",
+        "tags": [
+          "client profile"
+        ]
+      },
+      "put": {
+        "description": "Answer every question. Earlier answers are kept on the record.",
+        "operationId": "answer_risk_questions_client_risk_profile_put",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AnswersBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RiskProfileView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "summary": "Answer Risk Questions",
+        "tags": [
+          "client profile"
         ]
       }
     },
@@ -28516,6 +29185,92 @@
         "summary": "Propose Phone Change",
         "tags": [
           "client numbers"
+        ]
+      }
+    },
+    "/staff/clients/{client_id}/profile": {
+      "get": {
+        "description": "A client's next of kin, with ID numbers masked, and every set of risk answers.\n\nNext of kin are None when the identity data key is not configured.",
+        "operationId": "client_profile_staff_clients__client_id__profile_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "client_id",
+            "required": true,
+            "schema": {
+              "maxLength": 20,
+              "minLength": 20,
+              "pattern": "^[-0-9A-Z_a-z]{20}$",
+              "title": "Client Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StaffProfileView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "summary": "Client Profile",
+        "tags": [
+          "client profile"
         ]
       }
     },
