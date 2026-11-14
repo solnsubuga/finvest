@@ -75,6 +75,9 @@ async def test_the_catalogue_is_seeded_with_the_products_and_rates_in_the_rules(
 ) -> None:
     async with app_database.actor_transaction(new_staff()) as session:
         views = await investments.list_products(session, NOW)
+    # Staff may add products, so other tests' drafts can follow the seeded ones.
+    seeded = {product.code for product in SEED_PRODUCTS}
+    views = [view for view in views if view.product.code in seeded]
     assert [view.product for view in views] == list(SEED_PRODUCTS)
     assert {
         view.product.code: (view.rate.annual_rate_bps, view.rate.tax_bps)
@@ -299,12 +302,13 @@ async def test_a_rate_is_never_changed_or_removed(
 
 
 async def test_the_application_cannot_change_a_product(app_database: Database) -> None:
+    # Only an approved product change writes a product (migration 0360), and nothing deletes one.
     for statement in (
         "UPDATE investment_products SET minimum_minor = 1",
         "DELETE FROM investment_products",
         "INSERT INTO investment_products SELECT * FROM investment_products",
     ):
-        with pytest.raises(DBAPIError, match="permission denied"):
+        with pytest.raises(DBAPIError, match=r"permission denied|only by an approved change"):
             async with app_database.actor_transaction(new_staff()) as session:
                 await session.execute(text(statement))
 

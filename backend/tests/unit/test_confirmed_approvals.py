@@ -60,6 +60,7 @@ DECISIONS = {
     "POST /staff/migration/switch/{switch_id}/decision",
     "POST /staff/migration/switch/resolutions/{resolution_id}/decision",
     "POST /staff/rate-proposals/{proposal_id}/approve",
+    "POST /staff/product-changes/{change_id}/approve",
     "POST /staff/investment-corrections/{correction_id}/approve",
     "POST /staff/investment-run-requests/{request_id}/approve",
     "POST /staff/investment-run-requests/{request_id}/decline",
