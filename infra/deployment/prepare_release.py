@@ -281,6 +281,16 @@ def prepare(output: Path, env: Mapping[str, str]) -> None:
             ),
             (api, worker),
         ),
+        # Custodian statement checks (PR 568): uploads are read by the API and the worker. Unset, the
+        # reader is off and uploads answer 503 custodian_reading_off.
+        (
+            (
+                "FINVEST_CUSTODIAN_READER",
+                "FINVEST_ANTHROPIC_API_KEY",
+                "FINVEST_CUSTODIAN_READER_MODEL",
+            ),
+            (api, worker),
+        ),
         # The worker keeps the back office's Cloudflare Access list in step with console Team
         # changes. The list and account come from Terraform; the token is the owner's.
         (
