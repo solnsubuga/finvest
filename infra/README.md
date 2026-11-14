@@ -43,7 +43,7 @@ Terraform owns these names in the `dev` (staging) and `prod` (production) GitHub
 
 | Kind | Names |
 | --- | --- |
-| Variables | `SITE_DOMAINS`, `APP_DOMAIN`, `ADMIN_DOMAIN`, `API_DOMAIN`, `DEPLOY_HOST`, `DEPLOY_USER`, `DATABASE_HOST`, `DATABASE_PORT`, `DATABASE_NAME`, `FINVEST_OBJECT_STORAGE_BUCKET`, `FINVEST_OBJECT_STORAGE_ENDPOINT`, `FINVEST_OBJECT_STORAGE_REGION` |
+| Variables | `SITE_DOMAINS`, `APP_DOMAIN`, `ADMIN_DOMAIN`, `API_DOMAIN`, `DEPLOY_HOST`, `DEPLOY_USER`, `DATABASE_HOST`, `DATABASE_PORT`, `DATABASE_NAME`, `FINVEST_OBJECT_STORAGE_BUCKET`, `FINVEST_OBJECT_STORAGE_ENDPOINT`, `FINVEST_OBJECT_STORAGE_REGION`, and where Access protects the back office `FINVEST_CLOUDFLARE_ACCOUNT_ID` and `FINVEST_CLOUDFLARE_STAFF_LIST_ID` |
 | Secrets | `DATABASE_CA_CERT`, `DATABASE_MIGRATOR_PASSWORD`, `DATABASE_APP_PASSWORD`, `DATABASE_WORKER_PASSWORD`, `FINVEST_OBJECT_STORAGE_ACCESS_KEY_ID`, `FINVEST_OBJECT_STORAGE_SECRET_ACCESS_KEY`, `ORIGIN_TLS_CERT`, `ORIGIN_TLS_KEY` |
 
 GitHub refuses to create a variable that already exists, so do not create these by hand.
@@ -123,7 +123,7 @@ Repository variables under **Settings → Secrets and variables → Actions → 
 | --- | --- |
 | `TERRAFORM_STATE_BUCKET` | The state bucket's name |
 | `SSH_SOURCE_ADDRESSES` | Optional. Your own addresses, comma separated, such as `203.0.113.10`. Unset, nobody can SSH to the host except a Provision or deploy run, which admits only its own address while it works. Set it and run Provision when you want to log in yourself. |
-| `ADMIN_ACCESS_EMAILS` | Staff emails allowed into the back office, comma separated, such as `a@finvestug.com,b@finvestug.com`. Required for production. |
+| `ADMIN_ACCESS_EMAILS` | Break-glass staff emails that Cloudflare Access always lets into the back office, comma separated, such as `a@finvestug.com,b@finvestug.com`. Required for production. Everyone else gets in through the console: inviting someone on the Team screen adds their email to a Cloudflare list that the worker keeps in step (`FINVEST_CLOUDFLARE_ACCESS_TOKEN` below), and deactivating them removes it. |
 | `ADMIN_OFFICE_NETWORKS` | Optional. Office addresses as CIDR ranges, comma separated, such as `203.0.113.10/32`. When set, Cloudflare Access lets staff into the back office only from these networks. It is a second fence: the console's own office networks setting (Settings, Staff security, two people) is the real check, and it also covers the staff API, which this does not. Keep this list the same as the Settings list or wider, or a change made in Settings is undone at the edge. Run Provision `production` after changing it. |
 | `ALERT_EMAILS` | Who gets alerts, comma separated like `ADMIN_ACCESS_EMAILS`. Optional, but set two people before launch. |
 | `CLIENT_APP_PUBLIC` | Leave unset until switch day. Until then the production client app host lets in only `ADMIN_ACCESS_EMAILS`, through Cloudflare Access, while the API stays public. On switch day ([docs/launch.md](../docs/launch.md)) set it to `true` and run Provision `production` (plan, then apply) to lift Access from the app host. The back office keeps it. |
@@ -200,6 +200,7 @@ In each of the `prod` and `dev` GitHub environments, beside what Terraform write
 | `FINVEST_IOTEC_VERIFY_CLIENT_ID`, `FINVEST_IOTEC_VERIFY_API_KEY` | Secrets | From the ioTec Verify portal (Management, Settings, Configuration). Required once the provider is `iotec`. API and worker. |
 | `FINVEST_IOTEC_VERIFY_BASE_URL` | Variable, optional | Defaults to `https://verify-api.iotec.io`. |
 | `FINVEST_PAYOUT_NAME_PROVIDER` | Variable | Unset (`none`) until the ioTec Verify credentials exist, then `iotec`: the worker reads the name a network holds for a payout number with the same Verify credentials. Until then a new payout number waits for proof. The API and worker get it. |
+| `FINVEST_CLOUDFLARE_ACCESS_TOKEN` | Secret | A Cloudflare API token with **Account → Zero Trust → Edit** on the Finvest account, and nothing else. The worker uses it to add invited staff to the back office's Access list and to take out deactivated staff. Unset, console invites do not reach Cloudflare, and the Team screen says so. Worker only. |
 | `FINVEST_SCREENING_PROVIDER` | Variable | Unset (`none`) until the owner's Sigma360 account exists ([docs/screening.md](../docs/screening.md)), then `sigma360`. While `none`, every screen is recorded as not run. `development-stub` is refused in production. The API and worker get it. |
 | `FINVEST_SIGMA360_API_KEY` | Secret | The Sigma360 API key. Required once the provider is `sigma360`. API and worker. |
 | `FINVEST_SIGMA360_FILTER_SET_ID` | Variable | The number of the filter set in Sigma360's console. Required once the provider is `sigma360`. API and worker. |
