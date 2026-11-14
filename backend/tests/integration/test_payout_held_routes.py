@@ -4,10 +4,12 @@ from collections.abc import AsyncIterator
 from datetime import UTC, datetime, timedelta
 
 import pytest
+from sqlalchemy import text
 
 from app.infrastructure.database import Database
 from app.modules.audit import service as audit
 from app.modules.payouts.domain.payouts import PayoutStatus
+from app.shared.actors import SYSTEM
 from app.shared.push_ids import push_id
 from tests.support.database import TestDatabase
 from tests.support.http import Api, running_api
@@ -86,6 +88,19 @@ async def test_declining_a_held_payout_gives_the_money_back(api: Api, world: Wor
     assert declined.json() == {"id": held.id, "decision": "declined", "status": "cancelled"}
     assert await world.balance(world.holding) == FUNDS
     assert await world.balance(held.in_flight_account_id) == 0
+    # The client is told once, naming where it was going, never the account itself.
+    async with world.worker.actor_transaction(SYSTEM) as session:
+        told = (
+            await session.execute(
+                text(
+                    "SELECT event, body FROM notifications"
+                    " WHERE client_id = :client AND link_id = :id"
+                ),
+                {"client": world.client_id, "id": held.id},
+            )
+        ).all()
+    assert [row.event for row in told] == ["payout_declined"]
+    assert "your bank account" in told[0].body
     late = await api.http.post(
         f"/staff/payouts/{held.id}/approve", json={"reason": "Changed my mind"}, headers=key()
     )
