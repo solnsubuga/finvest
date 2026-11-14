@@ -21,6 +21,7 @@ case $mode in
     done
     if (( ${#missing[@]} )); then
       missing=("${missing[@]/#GITHUB_TOKEN/TERRAFORM_GITHUB_TOKEN}")
+      missing=("${missing[@]/#DIGITALOCEAN_TOKEN/TERRAFORM_DIGITALOCEAN_TOKEN}")
       echo "Missing settings for $TARGET: ${missing[*]}" >&2
       exit 1
     fi

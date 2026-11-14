@@ -100,7 +100,7 @@ Everything else is created by Terraform. These are made by hand, once:
 
 | Secret name | Read-only (plan environments) | Read and write (apply environments) |
 | --- | --- | --- |
-| `DIGITALOCEAN_TOKEN` | API → Tokens, custom scopes, read on droplet, vpc, firewall, reserved_ip, database, project, ssh_key, monitoring, uptime, tag | Full access, or the same scopes with write |
+| `TERRAFORM_DIGITALOCEAN_TOKEN` | API → Tokens, custom scopes, read on droplet, vpc, firewall, reserved_ip, database, project, ssh_key, monitoring, uptime, tag | Full access, or the same scopes with write |
 | `SPACES_ACCESS_KEY_ID`, `SPACES_SECRET_ACCESS_KEY` | A Spaces key with read on the state bucket and the documents buckets | A Spaces key with full access. Terraform uses it to create buckets and keys and to keep state. |
 | `CLOUDFLARE_API_TOKEN` | Zone DNS Read, Zone Settings Read, Zone WAF Read, SSL and Certificates Read, Account Access: Apps and Policies Read | The same with Edit |
 | `TERRAFORM_GITHUB_TOKEN` | A fine-grained GitHub token for this repository, read on Environments, Secrets and Variables | The same with read and write |
