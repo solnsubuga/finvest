@@ -6,6 +6,8 @@ import { cn } from "@/lib.ts";
 import type { CheckDetail, Decision, PhotoKind } from "./api.ts";
 import {
   CHECK_LABELS,
+  SCREENING_LABELS,
+  screeningWarning,
   countryName,
   flagLabel,
   formatAccountNumber,
@@ -176,8 +178,24 @@ export function Review({ check, busy, error, onDecide, onShowNumber, canDecide =
               ))}
             </ul>
           )}
+          <dl className="m-0">
+            <div className="flex items-center gap-2.5 border-b border-divider py-2.5 text-md">
+              <span
+                aria-hidden="true"
+                className={cn("size-2.5 shrink-0 rounded-pill", check.screening === "clear" ? "bg-black" : "bg-warning")}
+              />
+              <dt className="grow">Screening on file</dt>
+              <dd className="m-0 font-bold">{SCREENING_LABELS[check.screening ?? "none"]}</dd>
+            </div>
+          </dl>
         </Section>
       </div>
+
+      {screeningWarning(check.screening) && check.allowed.includes("approve") ? (
+        <p role="note" className="m-0 rounded-md bg-warning-surface p-3.5 text-md leading-normal text-warning-text">
+          <strong>Look before approving.</strong> {screeningWarning(check.screening)}
+        </p>
+      ) : null}
 
       <Outcome check={check} />
       {check.allowed.length > 0 && canDecide ? (

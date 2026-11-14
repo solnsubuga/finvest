@@ -16,6 +16,7 @@ import {
   type KycApi,
   type PhotoKind,
   type QueueItem,
+  type ScreeningStanding,
 } from "./api.ts";
 
 interface QueueJson {
@@ -37,6 +38,8 @@ interface CheckJson extends QueueJson {
   document_expires_on: string | null;
   photos: { id: string; kind: PhotoKind; live?: boolean }[];
   automatic_checks: AutomaticCheck[];
+  /** Missing from a backend older than the screening at hand-in. */
+  screening?: ScreeningStanding | null;
   retake_photos: PhotoKind[];
   client_message: string | null;
   account_number: string | null;
@@ -77,6 +80,7 @@ export function toCheck(json: CheckJson, links: PhotoLinksJson | null): CheckDet
       live: photo.live === true,
     })),
     automaticChecks: json.automatic_checks.map((item) => ({ check: item.check, verdict: item.verdict, score: item.score })),
+    screening: json.screening ?? null,
     retakePhotos: json.retake_photos,
     clientMessage: json.client_message,
     accountNumber: json.account_number,
