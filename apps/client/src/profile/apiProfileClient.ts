@@ -3,7 +3,7 @@ import type { ClientClosureView, NextOfKinView, RiskProfileView } from "@finvest
 import { api, ApiError } from "@/api/http";
 
 import { saveMyData } from "./saveData";
-import { Closure, NextOfKin, Person, ProfileClient, ProfileError, RiskAnswers, RiskProfile } from "./types";
+import { Closure, NextOfKin, Person, ProfileClient, ProfileError, refusalFor, RiskAnswers, RiskProfile } from "./types";
 
 /** The profile screens' contract, answered by the client routes in docs/client-profile.md. */
 
@@ -69,12 +69,14 @@ function translate(error: unknown): ProfileError {
         error.fields.map((f) => ({ field: f.field.replace(/^body\./, ""), code: f.code })),
       );
     }
-    if (error.code === "sign_in_again") return new ProfileError("sign_in_again");
     if (error.code === "conflict") {
       return error.fields.some((f) => f.field === "blockers")
         ? new ProfileError("blocked", error.fields)
         : new ProfileError("conflict");
     }
+    // Offline and timed out never reached an answer; anything else was a refusal.
+    if (error.code === "offline" || error.code === "timeout") return new ProfileError("unavailable");
+    return refusalFor(error.code, error.status);
   }
   return new ProfileError("unavailable");
 }

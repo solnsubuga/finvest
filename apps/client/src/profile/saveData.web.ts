@@ -1,6 +1,6 @@
 import { API_URL } from "@/api/config";
 
-import { ProfileError } from "./types";
+import { ProfileError, refusalFor } from "./types";
 
 export const DATA_PATH = "/client/data-export";
 
@@ -25,7 +25,7 @@ export async function saveMyData(fileName: string): Promise<void> {
     } catch {
       code = undefined;
     }
-    throw new ProfileError(code === "sign_in_again" ? "sign_in_again" : "unavailable");
+    throw refusalFor(code, response.status);
   }
   const url = URL.createObjectURL(await response.blob());
   try {
