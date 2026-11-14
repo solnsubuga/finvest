@@ -102,6 +102,40 @@ describe("review queue over HTTP", () => {
     expect(sent(fetch, 1).body).toEqual({ proof_name: "Peter Okello", reason: "Card matches" });
   });
 
+  it("reads the name the network holds, and sends no name for a number", async () => {
+    const number = {
+      ...ACCOUNT,
+      kind: "mobile_money",
+      network: "mtn",
+      bank_code: null,
+      proof_kind: "network_registered_name",
+      check: null,
+      network_name: "AMARA NAKATO",
+    };
+    const fetch = vi.fn<typeof globalThis.fetch>(() => reply(200, number));
+    const api = apiWith(fetch);
+    const checked = await api.check(ACCOUNT.id, { proofName: null, statementDate: null, reason: "Network name matches" });
+    expect(checked.networkName).toBe("AMARA NAKATO");
+    expect(sent(fetch).body).toEqual({ reason: "Network name matches" });
+    const fetchOld = vi.fn<typeof globalThis.fetch>(() => reply(200, [ACCOUNT]));
+    const [bank] = await apiWith(fetchOld).listAccounts();
+    expect(bank!.networkName).toBeNull();
+  });
+
+  it("names a typed name for a number, and a missing name for a bank account", async () => {
+    const fetch = vi
+      .fn<typeof globalThis.fetch>()
+      .mockImplementationOnce(() => refusal(422, "validation_failed", "proof_name_from_network"))
+      .mockImplementationOnce(() => refusal(422, "validation_failed", "proof_name_required"));
+    const api = apiWith(fetch);
+    await expect(api.check(ACCOUNT.id, { proofName: "Amara", statementDate: null, reason: "x" })).rejects.toMatchObject({
+      code: "proof_name_from_network",
+    });
+    await expect(api.check(ACCOUNT.id, { proofName: null, statementDate: null, reason: "x" })).rejects.toMatchObject({
+      code: "proof_name_required",
+    });
+  });
+
   it("sends approve, reject and remove to their routes", async () => {
     const fetch = vi.fn<typeof globalThis.fetch>(() => reply(200, ACCOUNT));
     const api = apiWith(fetch);
