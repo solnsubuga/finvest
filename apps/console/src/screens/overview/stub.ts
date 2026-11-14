@@ -27,6 +27,7 @@ const SOURCES: Record<Kind, { view: Permission; decide: Permission }> = {
   suppression_lift: { view: "clients.view", decide: "email_suppressions.lift" },
   complaint_outcome: { view: "complaints.view", decide: "complaints.close" },
   announcement: { view: "settings.view", decide: "announcements.send" },
+  account_code_map: { view: "settings.view", decide: "account_codes.change" },
   payout_account: { view: "review_queue.view", decide: "review_queue.view" },
   deposit_reassignment: { view: "reconciliation.view", decide: "deposit_reassignments.change" },
   tax_remittance: { view: "finance.view", decide: "tax_remittances.change" },
