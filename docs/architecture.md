@@ -56,6 +56,7 @@ Each can be restarted or scaled alone without splitting the code.
 | Dealing | The dealing desk: orders for bills and bonds, bills held at the custodian, allocation to client investments, the liquidity buffer |
 | Goals | Goals, saving rules, group goals and approvals |
 | Automatic investing | Plans that invest the same amount weekly or monthly, and the runs that ask for each payment. Module `autoinvest`. See [automatic-investing.md](automatic-investing.md). |
+| Account closure | A client's request to close their account and the two staff steps that close it. Module `closures`. See [account-closure.md](account-closure.md). |
 | Reconciliation | Statement import, matching, exceptions, daily close |
 | Notifications | Templates and delivery by push, SMS and email |
 | Console and audit | Review queue, maker and checker approvals, audit trail, reports |

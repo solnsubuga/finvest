@@ -9,6 +9,7 @@ from datetime import datetime
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.modules.approvals.domain.inbox import InboxItem, Kind, Waiting, inbox, visible_kinds
+from app.modules.closures import service as closures
 from app.modules.dealing import buffer, capital
 from app.modules.dealing import orders as dealing
 from app.modules.dealing.domain.capital import Direction
@@ -74,6 +75,8 @@ async def waiting_for(session: AsyncSession, staff: StaffSession, now: datetime)
         found += await _reassignments(session)
     if "payout_release" in kinds:
         found += await _payout_releases(session)
+    if "account_closure" in kinds:
+        found += await _closures(session)
     return inbox(found, staff.staff_id, staff.permissions)
 
 
@@ -225,6 +228,14 @@ async def _team_changes(session: AsyncSession) -> list[Waiting]:
     return [
         Waiting("team_change", c.id, c.kind, c.proposed_by, c.proposed_at, about_staff=c.staff_id)
         for c in await team.open_changes(session)
+    ]
+
+
+async def _closures(session: AsyncSession) -> list[Waiting]:
+    return [
+        Waiting("account_closure", r.id, r.client_id, r.prepared_by, r.prepared_at)
+        for r in await closures.open_requests(session)
+        if r.status == "prepared" and r.prepared_by is not None and r.prepared_at is not None
     ]
 
 

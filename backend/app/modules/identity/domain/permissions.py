@@ -28,6 +28,10 @@ Permission = Literal[
     # Proposing or deciding to lock or unlock a client's account. Seeing clients is
     # `clients.view`. Not a screen.
     "clients.lock",
+    # Preparing a client's request to close their account, approving someone else's
+    # preparation, which closes it, or declining a request. Seeing clients is `clients.view`.
+    # Closing always takes two people. Not a screen.
+    "clients.close",
     "money_movement.view",
     "reconciliation.view",
     # Importing a statement, pairing a line with a movement by hand, preparing, approving or
@@ -125,6 +129,7 @@ ROLE_PERMISSIONS: dict[Role, frozenset[Permission]] = {
             "clients.view",
             "email_suppressions.lift",
             "clients.lock",
+            "clients.close",
             "money_movement.view",
             "reconciliation.view",
             "investments.view",
@@ -178,6 +183,7 @@ ROLE_PERMISSIONS: dict[Role, frozenset[Permission]] = {
             "complaints.close",
             "clients.view",
             "clients.lock",
+            "clients.close",
             "compliance.view",
             "reports.view",
             "audit.view",

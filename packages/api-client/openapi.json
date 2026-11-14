@@ -171,24 +171,6 @@
         "title": "AmountOut",
         "type": "object"
       },
-      "AmountView": {
-        "additionalProperties": false,
-        "properties": {
-          "currency": {
-            "$ref": "#/components/schemas/Currency"
-          },
-          "minor": {
-            "title": "Minor",
-            "type": "integer"
-          }
-        },
-        "required": [
-          "currency",
-          "minor"
-        ],
-        "title": "AmountView",
-        "type": "object"
-      },
       "AnnouncementList": {
         "additionalProperties": false,
         "properties": {
@@ -436,7 +418,8 @@
               "payout_resolution",
               "tax_remittance",
               "deposit_reassignment",
-              "payout_release"
+              "payout_release",
+              "account_closure"
             ],
             "title": "Kind",
             "type": "string"
@@ -501,6 +484,25 @@
           "items"
         ],
         "title": "ApprovalsOut",
+        "type": "object"
+      },
+      "AskBody": {
+        "additionalProperties": false,
+        "properties": {
+          "reason": {
+            "anyOf": [
+              {
+                "maxLength": 500,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason"
+          }
+        },
+        "title": "AskBody",
         "type": "object"
       },
       "AskForPhotosBody": {
@@ -1181,6 +1183,18 @@
         ],
         "title": "BillsOut",
         "type": "object"
+      },
+      "Blocker": {
+        "enum": [
+          "investments_running",
+          "money_owed",
+          "deposits_in_progress",
+          "payouts_in_progress",
+          "goals_open",
+          "plans_live"
+        ],
+        "title": "Blocker",
+        "type": "string"
       },
       "Body_add_photo_client_claim_check_photos__kind__put": {
         "properties": {
@@ -2236,6 +2250,30 @@
         "title": "ClientClaimCheckEnvelope",
         "type": "object"
       },
+      "ClientClosureView": {
+        "additionalProperties": false,
+        "properties": {
+          "request": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ClosureView"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "standing": {
+            "$ref": "#/components/schemas/StandingView"
+          }
+        },
+        "required": [
+          "standing",
+          "request"
+        ],
+        "title": "ClientClosureView",
+        "type": "object"
+      },
       "ClientComplaint": {
         "additionalProperties": false,
         "description": "A complaint as its client sees it. Staff notes and the owner are not shown.",
@@ -2918,6 +2956,91 @@
           "decided_by"
         ],
         "title": "CloseOut",
+        "type": "object"
+      },
+      "ClosureView": {
+        "additionalProperties": false,
+        "properties": {
+          "cancelled_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cancelled At"
+          },
+          "decided_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Decided At"
+          },
+          "decision_note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Decision Note"
+          },
+          "id": {
+            "maxLength": 20,
+            "minLength": 20,
+            "pattern": "^[-0-9A-Z_a-z]{20}$",
+            "title": "Id",
+            "type": "string"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason"
+          },
+          "requested_at": {
+            "format": "date-time",
+            "title": "Requested At",
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "requested",
+              "prepared",
+              "closed",
+              "declined",
+              "cancelled"
+            ],
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "status",
+          "reason",
+          "requested_at",
+          "decision_note",
+          "decided_at",
+          "cancelled_at"
+        ],
+        "title": "ClosureView",
         "type": "object"
       },
       "CodeAnswer": {
@@ -7800,6 +7923,22 @@
         "title": "NotMatchedIn",
         "type": "object"
       },
+      "NoteBody": {
+        "additionalProperties": false,
+        "properties": {
+          "note": {
+            "maxLength": 500,
+            "minLength": 1,
+            "title": "Note",
+            "type": "string"
+          }
+        },
+        "required": [
+          "note"
+        ],
+        "title": "NoteBody",
+        "type": "object"
+      },
       "NoteIn": {
         "additionalProperties": false,
         "properties": {
@@ -11557,6 +11696,7 @@
                 "complaints.close",
                 "clients.view",
                 "clients.lock",
+                "clients.close",
                 "money_movement.view",
                 "reconciliation.view",
                 "reconciliation.change",
@@ -13017,6 +13157,238 @@
           "decided_at"
         ],
         "title": "StaffClaimCheck",
+        "type": "object"
+      },
+      "StaffClosureList": {
+        "additionalProperties": false,
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/StaffClosureView"
+            },
+            "title": "Items",
+            "type": "array"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "title": "StaffClosureList",
+        "type": "object"
+      },
+      "StaffClosureView": {
+        "additionalProperties": false,
+        "properties": {
+          "account_number": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Account Number"
+          },
+          "can_approve": {
+            "title": "Can Approve",
+            "type": "boolean"
+          },
+          "can_decline": {
+            "title": "Can Decline",
+            "type": "boolean"
+          },
+          "can_prepare": {
+            "title": "Can Prepare",
+            "type": "boolean"
+          },
+          "cancelled_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cancelled At"
+          },
+          "client_id": {
+            "maxLength": 20,
+            "minLength": 20,
+            "pattern": "^[-0-9A-Z_a-z]{20}$",
+            "title": "Client Id",
+            "type": "string"
+          },
+          "decided_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Decided At"
+          },
+          "decided_by": {
+            "anyOf": [
+              {
+                "maxLength": 20,
+                "minLength": 20,
+                "pattern": "^[-0-9A-Z_a-z]{20}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Decided By"
+          },
+          "decided_by_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Decided By Name"
+          },
+          "decision_note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Decision Note"
+          },
+          "id": {
+            "maxLength": 20,
+            "minLength": 20,
+            "pattern": "^[-0-9A-Z_a-z]{20}$",
+            "title": "Id",
+            "type": "string"
+          },
+          "prepared_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Prepared At"
+          },
+          "prepared_by": {
+            "anyOf": [
+              {
+                "maxLength": 20,
+                "minLength": 20,
+                "pattern": "^[-0-9A-Z_a-z]{20}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Prepared By"
+          },
+          "prepared_by_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Prepared By Name"
+          },
+          "prepared_note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Prepared Note"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason"
+          },
+          "requested_at": {
+            "format": "date-time",
+            "title": "Requested At",
+            "type": "string"
+          },
+          "standing": {
+            "$ref": "#/components/schemas/StandingView"
+          },
+          "status": {
+            "enum": [
+              "requested",
+              "prepared",
+              "closed",
+              "declined",
+              "cancelled"
+            ],
+            "title": "Status",
+            "type": "string"
+          },
+          "verified_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Verified Name"
+          }
+        },
+        "required": [
+          "id",
+          "status",
+          "reason",
+          "requested_at",
+          "decision_note",
+          "decided_at",
+          "cancelled_at",
+          "client_id",
+          "verified_name",
+          "account_number",
+          "prepared_by",
+          "prepared_by_name",
+          "prepared_at",
+          "prepared_note",
+          "decided_by",
+          "decided_by_name",
+          "standing",
+          "can_prepare",
+          "can_approve",
+          "can_decline"
+        ],
+        "title": "StaffClosureView",
         "type": "object"
       },
       "StaffComplaint": {
@@ -14595,6 +14967,7 @@
                 "complaints.close",
                 "clients.view",
                 "clients.lock",
+                "clients.close",
                 "money_movement.view",
                 "reconciliation.view",
                 "reconciliation.change",
@@ -14685,6 +15058,56 @@
         ],
         "title": "Standing",
         "type": "string"
+      },
+      "StandingView": {
+        "additionalProperties": false,
+        "properties": {
+          "blockers": {
+            "items": {
+              "$ref": "#/components/schemas/Blocker"
+            },
+            "title": "Blockers",
+            "type": "array"
+          },
+          "live_plans": {
+            "title": "Live Plans",
+            "type": "integer"
+          },
+          "open_deposits": {
+            "title": "Open Deposits",
+            "type": "integer"
+          },
+          "open_goals": {
+            "title": "Open Goals",
+            "type": "integer"
+          },
+          "open_payouts": {
+            "title": "Open Payouts",
+            "type": "integer"
+          },
+          "owed": {
+            "items": {
+              "$ref": "#/components/schemas/app__modules__closures__api__AmountView"
+            },
+            "title": "Owed",
+            "type": "array"
+          },
+          "running_investments": {
+            "title": "Running Investments",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "running_investments",
+          "owed",
+          "open_deposits",
+          "open_payouts",
+          "open_goals",
+          "live_plans",
+          "blockers"
+        ],
+        "title": "StandingView",
+        "type": "object"
       },
       "StatementLineOut": {
         "additionalProperties": false,
@@ -15312,14 +15735,14 @@
           },
           "interest_before_tax": {
             "items": {
-              "$ref": "#/components/schemas/AmountView"
+              "$ref": "#/components/schemas/app__modules__migration__api__AmountView"
             },
             "title": "Interest Before Tax",
             "type": "array"
           },
           "invested": {
             "items": {
-              "$ref": "#/components/schemas/AmountView"
+              "$ref": "#/components/schemas/app__modules__migration__api__AmountView"
             },
             "title": "Invested",
             "type": "array"
@@ -16077,6 +16500,25 @@
         "title": "PlanView",
         "type": "object"
       },
+      "app__modules__closures__api__AmountView": {
+        "additionalProperties": false,
+        "properties": {
+          "amount_minor": {
+            "title": "Amount Minor",
+            "type": "integer"
+          },
+          "currency": {
+            "title": "Currency",
+            "type": "string"
+          }
+        },
+        "required": [
+          "amount_minor",
+          "currency"
+        ],
+        "title": "AmountView",
+        "type": "object"
+      },
       "app__modules__console__api__ComplaintSummary": {
         "additionalProperties": false,
         "properties": {
@@ -16464,6 +16906,24 @@
         "title": "Amount",
         "type": "object"
       },
+      "app__modules__migration__api__AmountView": {
+        "additionalProperties": false,
+        "properties": {
+          "currency": {
+            "$ref": "#/components/schemas/Currency"
+          },
+          "minor": {
+            "title": "Minor",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "currency",
+          "minor"
+        ],
+        "title": "AmountView",
+        "type": "object"
+      },
       "app__modules__payments__routes__MatchIn": {
         "additionalProperties": false,
         "properties": {
@@ -16836,6 +17296,244 @@
   },
   "openapi": "3.1.0",
   "paths": {
+    "/client/account-closure": {
+      "get": {
+        "description": "What still stops the account closing, and the latest request to close it.",
+        "operationId": "my_closure_client_account_closure_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ClientClosureView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          }
+        },
+        "summary": "My Closure",
+        "tags": [
+          "account closure"
+        ]
+      },
+      "post": {
+        "description": "Ask to close the account. Needs a sign-in from the last few minutes, and nothing blocking.\n\nA refusal lists what blocks it as `blockers` field problems.",
+        "operationId": "ask_to_close_client_account_closure_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AskBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ClientClosureView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          }
+        },
+        "summary": "Ask To Close",
+        "tags": [
+          "account closure"
+        ]
+      }
+    },
+    "/client/account-closure/{request_id}/cancellation": {
+      "post": {
+        "description": "Keep the account open after all, while staff have not decided.",
+        "operationId": "cancel_closure_client_account_closure__request_id__cancellation_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "request_id",
+            "required": true,
+            "schema": {
+              "maxLength": 20,
+              "minLength": 20,
+              "pattern": "^[-0-9A-Z_a-z]{20}$",
+              "title": "Request Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ClientClosureView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          }
+        },
+        "summary": "Cancel Closure",
+        "tags": [
+          "account closure"
+        ]
+      }
+    },
     "/client/authenticator": {
       "delete": {
         "operationId": "client_authenticator_remove_client_authenticator_delete",
@@ -29271,6 +29969,451 @@
         "summary": "Client Profile",
         "tags": [
           "client profile"
+        ]
+      }
+    },
+    "/staff/closures": {
+      "get": {
+        "description": "Every request to close an account that waits for staff, oldest first.",
+        "operationId": "open_closures_staff_closures_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StaffClosureList"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          }
+        },
+        "summary": "Open Closures",
+        "tags": [
+          "account closure"
+        ]
+      }
+    },
+    "/staff/closures/{request_id}": {
+      "get": {
+        "operationId": "closure_staff_closures__request_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "request_id",
+            "required": true,
+            "schema": {
+              "maxLength": 20,
+              "minLength": 20,
+              "pattern": "^[-0-9A-Z_a-z]{20}$",
+              "title": "Request Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StaffClosureView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          }
+        },
+        "summary": "Closure",
+        "tags": [
+          "account closure"
+        ]
+      }
+    },
+    "/staff/closures/{request_id}/approval": {
+      "post": {
+        "description": "Close the account of someone else's prepared request. It cannot be undone.",
+        "operationId": "approve_closure_staff_closures__request_id__approval_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "request_id",
+            "required": true,
+            "schema": {
+              "maxLength": 20,
+              "minLength": 20,
+              "pattern": "^[-0-9A-Z_a-z]{20}$",
+              "title": "Request Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NoteBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StaffClosureView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          }
+        },
+        "summary": "Approve Closure",
+        "tags": [
+          "account closure"
+        ]
+      }
+    },
+    "/staff/closures/{request_id}/decline": {
+      "post": {
+        "description": "Turn the request down. The client sees the note and the account stays open.",
+        "operationId": "decline_closure_staff_closures__request_id__decline_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "request_id",
+            "required": true,
+            "schema": {
+              "maxLength": 20,
+              "minLength": 20,
+              "pattern": "^[-0-9A-Z_a-z]{20}$",
+              "title": "Request Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NoteBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StaffClosureView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          }
+        },
+        "summary": "Decline Closure",
+        "tags": [
+          "account closure"
+        ]
+      }
+    },
+    "/staff/closures/{request_id}/preparation": {
+      "post": {
+        "description": "Check the request and pass it to a second member of staff to close.",
+        "operationId": "prepare_closure_staff_closures__request_id__preparation_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "request_id",
+            "required": true,
+            "schema": {
+              "maxLength": 20,
+              "minLength": 20,
+              "pattern": "^[-0-9A-Z_a-z]{20}$",
+              "title": "Request Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NoteBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StaffClosureView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          }
+        },
+        "summary": "Prepare Closure",
+        "tags": [
+          "account closure"
         ]
       }
     },
