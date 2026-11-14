@@ -23,6 +23,14 @@ DOCUMENT_TYPES = frozenset({"application/pdf", "image/jpeg", "image/png"})
 # Uganda Registration Services Bureau numbers are digits, sometimes with a letter prefix and
 # slashes or dashes. Loose on purpose: staff check the certificate itself.
 _REGISTRATION = re.compile(r"[A-Z0-9][A-Z0-9/ -]{2,38}[A-Z0-9]")
+# A registered name: letters in any script, digits, spaces and the marks names use. Nothing that
+# writes a web or email address (no ':', '/' or '@', and no dot straight before a letter, as in
+# "x.com"), and no run of seven or more digits, which reads as a phone number. So a name cannot
+# carry a link or a number to call. The invitation's message leaves the name out as well.
+_NAME = re.compile(r"[^\W_][\w &'.,()-]*")
+# Phone keyboards type a curly apostrophe; it is kept as a plain one.
+_CURLY_APOSTROPHE = "\u2019"
+_ADDRESS_LIKE = re.compile(r"\.[^\W\d_]|(?:\d[ -]?){6}\d")
 
 
 class Kind(StrEnum):
@@ -104,10 +112,16 @@ def problems(found: Readiness) -> list[Problem]:
 
 
 def clean_name(value: str) -> str | None:
-    """The organisation's name with spacing tidied, or None if it is empty or too long."""
-    cleaned = " ".join(value.split())
+    """The organisation's name with spacing tidied, or None if it is empty or too long.
+
+    Raises ValueError when it has a character a name does not, or reads like an address or a
+    phone number.
+    """
+    cleaned = " ".join(value.replace(_CURLY_APOSTROPHE, "'").split())
     if not cleaned or len(cleaned) > MAX_NAME:
         return None
+    if not _NAME.fullmatch(cleaned) or _ADDRESS_LIKE.search(cleaned):
+        raise ValueError("not a name")
     return cleaned
 
 

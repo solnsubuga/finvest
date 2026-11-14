@@ -206,10 +206,11 @@ DEFAULTS: dict[str, Wording] = {
         "happens next.",
     ),
     "organisation_invited": Wording(
-        "You are asked to sign for {organisation}",
-        "{person} asked you to sign for {organisation} on Finvest. Open it in the app to join "
-        "or decline.",
-        "Finvest: {person} asked you to sign for {organisation}. Open the app to join or decline.",
+        "You are asked to sign for an account",
+        "{person} asked you to sign for a company or group account on Finvest. Open the app to "
+        "see which, and to join or decline.",
+        "Finvest: {person} asked you to sign for a company or group account. Open the app to "
+        "join or decline.",
     ),
     "organisation_returned": Wording(
         "Please change your application",

@@ -77,6 +77,8 @@ The backend reviewer keeps a list of follow-ups asked for in reviews (team memor
 
 Transfers of investments between clients: screening holds are built (see [investing.md](investing.md)). Transaction monitoring of transfers is owed by the screening thread once #393 is on `main`: `screening.contract.watch_transfer`, called from the worker transaction that makes a transfer, new kinds `transfer_sent` and `transfer_received` (migration 0183), and the rules that read them. Investing already exposes `transfers.for_monitoring`.
 
+Company and group accounts: the signatories are screened as clients, but nothing screens the organisation itself, its name and registration number, against sanctions lists. That is acceptable while an organisation cannot invest ([organisations.md](organisations.md)), and must be built before investing as an organisation opens.
+
 ## Accessibility
 
 A WCAG 2.1 AA pass over every main screen of the client app and the console on 14 November 2026, phone and wide, with axe in the browser tests (`apps/web-e2e/tests/accessibility.*.spec.ts`, which now fail on any violation) and by hand for keyboard focus and touch targets. Contrast passed everywhere. Fixed in the same pass: on the web, the client app's radios, switches, checkboxes and tabs never told a screen reader which one was chosen (React Native Web 0.21 ignores `accessibilityState` and `accessibilityValue`; they are now `aria-*` props), spinners and progress bars had no name, a busy button had no name, two text boxes hid their focus outline, some filter chips and date fields were under 44 points, and the console's wide tables could not be scrolled by keyboard. What is left:
