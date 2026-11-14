@@ -5,7 +5,7 @@ returns a login challenge. It never opens a session. A second step, a passkey or
 code, turns the challenge into a session with `open_session`.
 """
 
-from collections.abc import Collection
+from collections.abc import Collection, Sequence
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from typing import Literal
@@ -701,6 +701,25 @@ async def active_client_ids(session: AsyncSession, *, after: str | None, limit: 
         {"after": after, "limit": limit},
     )
     return [row.id for row in rows]
+
+
+async def count_active_clients(session: AsyncSession, among: Sequence[str] | None = None) -> int:
+    """How many clients `active_client_ids` would list, of all or of `among` only.
+
+    Other modules call this instead of reading identity tables, to say before a message to every
+    client how many it reaches.
+    """
+    return int(
+        (
+            await session.execute(
+                text(
+                    "SELECT count(*) FROM identity_clients WHERE status = 'active' "
+                    "AND (CAST(:among AS text[]) IS NULL OR id = ANY(CAST(:among AS text[])))"
+                ),
+                {"among": None if among is None else list(among)},
+            )
+        ).scalar_one()
+    )
 
 
 def _staff_only(actor: Actor) -> None:
