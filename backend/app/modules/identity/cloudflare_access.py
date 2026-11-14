@@ -89,6 +89,10 @@ class CloudflareStaffList:
         return "CloudflareStaffList()"
 
     async def contains(self, email: str) -> bool:
+        return await self._stored(email) is not None
+
+    async def _stored(self, email: str) -> str | None:
+        """The address as the list holds it, which may differ in capitals from ours."""
         wanted = email.lower()
         page = 1
         while page <= _MAX_PAGES:
@@ -96,12 +100,13 @@ class CloudflareStaffList:
                 "GET", f"{self._url}/items", params={"page": page, "per_page": _PAGE_SIZE}
             )
             body = _body(response)
-            if any(value.lower() == wanted for value in _values(body.get("result"))):
-                return True
+            for value in _values(body.get("result")):
+                if value.lower() == wanted:
+                    return value
             info = body.get("result_info")
             pages = info.get("total_pages") if isinstance(info, Mapping) else None
             if not isinstance(pages, int) or page >= pages:
-                return False
+                return None
             page += 1
         raise AccessUnavailable("cloudflare_list_too_long")
 
@@ -109,7 +114,10 @@ class CloudflareStaffList:
         _body(await self._send("PATCH", self._url, json={"append": [{"value": email}]}))
 
     async def remove(self, email: str) -> None:
-        _body(await self._send("PATCH", self._url, json={"remove": [email]}))
+        # Cloudflare removes only an exact match, so send the address as the list spells it:
+        # one added by hand with other capitals would otherwise never come off.
+        stored = await self._stored(email) or email
+        _body(await self._send("PATCH", self._url, json={"remove": [stored]}))
 
     async def _send(
         self,
