@@ -2,7 +2,7 @@ name: Deploy Production
 
 # Deploys the head of `release` to production (Reusable Deploy). It runs only once `production` is listed in
 # the repository variable DEPLOY_ENVIRONMENTS, so nothing deploys before Provision has made the
-# environment. The `production` GitHub environment's protection rules apply to every run.
+# environment. The `prod` GitHub environment's protection rules apply to every run.
 
 on:
   push:
@@ -21,7 +21,7 @@ permissions:
 
 jobs:
   deploy:
-    if: github.ref == 'refs/heads/release' && contains(vars.DEPLOY_ENVIRONMENTS, 'production')
+    if: github.ref == 'refs/heads/release' && contains(vars.DEPLOY_ENVIRONMENTS, 'prod')
     uses: ./.github/workflows/deploy.yml
     with:
       environment: production
