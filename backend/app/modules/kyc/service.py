@@ -177,6 +177,7 @@ _BY_CLIENT_LOCKED = text(
     f"SELECT {_COLUMNS} FROM kyc_checks WHERE client_id = :client_id FOR UPDATE"  # noqa: S608
 )
 _BY_ID = text(f"SELECT {_COLUMNS} FROM kyc_checks WHERE id = :id")  # noqa: S608
+_CLIENT_OF = text("SELECT client_id FROM kyc_checks WHERE id = :id")
 _BY_ID_LOCKED = text(f"SELECT {_COLUMNS} FROM kyc_checks WHERE id = :id FOR UPDATE")  # noqa: S608
 _INSERT = text(
     "INSERT INTO kyc_checks (id, client_id, document_type, document_country, created_at, "
@@ -615,6 +616,10 @@ async def record_provider_result(
     live = await liveness_outcome(session, row.id)
     if live is not None:
         outcomes = (*outcomes, live)
+    # With the screening module on, screening is its answer, not the identity provider's.
+    screened = await screening_outcome(session, row.client_id)
+    if screened is not None:
+        outcomes = (*(o for o in outcomes if o.check is not AutomaticCheck.SCREENING), screened)
     decision = decide(outcomes, automatic_approval=automatic_approval)
     flags = list(decision.flags)
     if decision.approve and row.document_expires_on < clock.now().date():
@@ -666,6 +671,41 @@ async def _phone_name_allows(session: AsyncSession, check_id: str) -> bool:
     """
     looked_up = await phone_lookups.phone_name_for_check(session, check_id)
     return looked_up is None or looked_up.status is PhoneName.MATCHES
+
+
+async def screening_outcome(session: AsyncSession, client_id: str) -> CheckOutcome | None:
+    """The sanctions and PEP screening result for the automatic decision. None with the
+    screening module off, when the identity provider's own screening, if any, is used.
+
+    Clear passes. A possible or confirmed match fails, so a person looks. A politically
+    exposed person, a screen still running, one that could not run, or none at all is unsure.
+    """
+    if not ScreeningSettings().screening_on:
+        return None
+    standing = await screening.latest_outcome(session, client_id)
+    if standing is None:
+        verdict = Verdict.UNSURE
+    elif standing.outcome in (screening.Outcome.POSSIBLE_MATCH, screening.Outcome.CONFIRMED_MATCH):
+        verdict = Verdict.FAIL
+    elif standing.outcome is screening.Outcome.CLEAR and not standing.pep:
+        verdict = Verdict.PASS
+    else:
+        verdict = Verdict.UNSURE
+    return CheckOutcome(AutomaticCheck.SCREENING, verdict)
+
+
+async def screening_running(session: AsyncSession, check_id: str) -> bool:
+    """Whether the client's screen is still to finish, so the automatic decision should wait.
+
+    Only with the screening module on. The worker asks before applying the provider's answer.
+    """
+    if not ScreeningSettings().screening_on:
+        return False
+    client_id = (await session.execute(_CLIENT_OF, {"id": check_id})).scalar_one_or_none()
+    if client_id is None:
+        return False
+    standing = await screening.latest_outcome(session, client_id)
+    return standing is not None and standing.outcome is screening.Outcome.PENDING
 
 
 async def liveness_outcome(session: AsyncSession, check_id: str) -> CheckOutcome | None:
