@@ -24,6 +24,7 @@ function view(overrides: Record<string, unknown> = {}) {
     photos: [],
     missing: ["front", "back", "details", "selfie"],
     retake_photos: [],
+    retaken: [],
     client_message: null,
     submitted_at: null,
     account_number: null,
