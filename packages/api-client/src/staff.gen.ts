@@ -2015,6 +2015,25 @@ export const Queue = z.object({
 });
 export type Queue = z.infer<typeof Queue>;
 
+export const QueueAmount = z.object({
+  currency: z.enum(["UGX", "USD"]),
+  minor: z.number().int(),
+});
+export type QueueAmount = z.infer<typeof QueueAmount>;
+
+export const QueueItemOut = z.object({
+  amount: QueueAmount.nullable(),
+  client_id: z.string().nullable(),
+  group: z.enum(["deposits", "withdrawals", "identity", "transfers", "accounts"]),
+  id: z.string(),
+  kind: z.enum(["bank_transfer", "identity_check", "payout_account", "held_payout", "payout_held_up", "payout_unanswered", "investment_transfer", "organisation"]),
+  proposed_by: z.string().nullable(),
+  reason: z.string(),
+  waiting_since: z.string(),
+  yours: z.boolean(),
+});
+export type QueueItemOut = z.infer<typeof QueueItemOut>;
+
 export const ReasonBody = z.object({
   reason: z.string(),
 });
@@ -2315,6 +2334,15 @@ export const ReviewIn = z.object({
   reason: z.string(),
 });
 export type ReviewIn = z.infer<typeof ReviewIn>;
+
+export const ReviewQueueOut = z.object({
+  cleared_automatically_today: z.number().int(),
+  items: z.array(QueueItemOut),
+  kinds: z.array(z.enum(["bank_transfer", "identity_check", "payout_account", "held_payout", "payout_held_up", "payout_unanswered", "investment_transfer", "organisation"])),
+  oldest_waiting_since: z.string().nullable(),
+  waiting: z.number().int(),
+});
+export type ReviewQueueOut = z.infer<typeof ReviewQueueOut>;
 
 export const ReviewedPayoutOut = z.object({
   decision: z.enum(["approved", "declined"]),
@@ -5962,6 +5990,17 @@ export const operations = {
     idempotent: false,
     status: 204,
     response: null,
+  },
+  "GET /staff/review-queue": {
+    method: "GET",
+    path: "/staff/review-queue",
+    params: z.object({}),
+    query: z.object({}),
+    body: null,
+    bodyKind: null,
+    idempotent: false,
+    status: 200,
+    response: ReviewQueueOut,
   },
   "GET /staff/session": {
     method: "GET",

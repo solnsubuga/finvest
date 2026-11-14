@@ -92,6 +92,7 @@ from app.modules.reconciliation import api as reconciliation_api
 from app.modules.reconciliation import transfers_api as pot_transfers_api
 from app.modules.reconciliation.domain.wallet import WalletBalances
 from app.modules.reconciliation.wiring import wallet_balances
+from app.modules.review_queue import api as review_queue_api
 from app.modules.screening import api as screening_api
 from app.modules.screening.settings import ScreeningSettings
 from app.modules.support import api as support_api
@@ -226,6 +227,7 @@ def create_app(
         *audit_api.routers,
         *payouts_api.routers,
         *approvals_api.routers,
+        *review_queue_api.routers,
         *payouts_staff_api.routers,
         *staff_payouts_api.routers,
         *staff_held_api.routers,

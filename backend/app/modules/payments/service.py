@@ -457,6 +457,23 @@ async def list_deposits(
     return [_deposit(row) for row in rows.all()]
 
 
+_CONFIRMED_AUTOMATICALLY = text(
+    "SELECT count(*) AS confirmed FROM payment_deposits "
+    "WHERE status = 'confirmed' AND method <> 'bank_transfer' "
+    "AND settled_at >= :since AND settled_at < :until"
+)
+
+
+async def confirmed_automatically(
+    session: AsyncSession, *, since: datetime, until: datetime
+) -> int:
+    """Mobile money deposits the provider confirmed from `since` up to `until`: money that
+    arrived and started its investment with no person involved. For the review queue's figures.
+    A staff transaction sees every deposit."""
+    row = (await session.execute(_CONFIRMED_AUTOMATICALLY, {"since": since, "until": until})).one()
+    return int(row.confirmed)
+
+
 async def record_notice(
     session: AsyncSession, provider: str, notice: ProviderNotice, clock: Clock
 ) -> bool:
