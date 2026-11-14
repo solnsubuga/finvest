@@ -6015,6 +6015,17 @@
             ],
             "title": "Date To"
           },
+          "deposit_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Deposit Id"
+          },
           "file_name": {
             "anyOf": [
               {
@@ -6044,6 +6055,17 @@
             "pattern": "^[-0-9A-Z_a-z]{20}$",
             "title": "Id",
             "type": "string"
+          },
+          "investment_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Investment Id"
           },
           "kind": {
             "enum": [
@@ -6093,7 +6115,9 @@
           "finished_at",
           "file_name",
           "byte_size",
-          "not_final_from"
+          "not_final_from",
+          "investment_id",
+          "deposit_id"
         ],
         "title": "DocumentItem",
         "type": "object"
