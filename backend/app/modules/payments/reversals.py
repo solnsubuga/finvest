@@ -419,6 +419,7 @@ async def apply_reversal(session: AsyncSession, reversal_id: str, clock: Clock) 
             ),
             clock,
         )
+        await service.tell_client_reversed(session, deposit, now)
     finished = await _reversal(session, reversal.id)
     await audit.record(
         session,
