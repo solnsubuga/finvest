@@ -115,7 +115,13 @@ function steps(account: PayoutAccount, nowMs: number): Step[] {
     { label: "Code entered", state: state(0, false), note: at === 0 ? "Your turn" : undefined },
     account.kind === "bank"
       ? { label: "Proof sent", state: state(1, false), note: at === 1 ? "Your turn" : undefined }
-      : { label: "Name checked with the network", state: state(1, true) },
+      : {
+          label: "Name checked with the network",
+          // Only a lookup in flight is ours. One that went unanswered waits for the client to ask
+          // again, and one at the limit has stopped, so neither shows as moving.
+          state: state(1, !account.nameCheck || account.nameCheck === "checking"),
+          note: at === 1 && account.nameCheck === "not_answered" ? "Your turn" : undefined,
+        },
     {
       label: account.status === "rejected" ? "Not approved" : "Checked by our team",
       state: account.status === "rejected" ? "later" : state(2, true),
