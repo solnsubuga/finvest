@@ -20,7 +20,11 @@ export type ProductKind = "treasury_bill" | "fixed_income";
 export type ProductStatus = "live" | "paused";
 export type InterestPaid = "at_maturity" | "monthly";
 /** `pay_interest`: keep what was put in invested for another term, and pay the interest out. */
-export type AtMaturity = "roll_over" | "pay_out" | "pay_interest";
+/** `interest_to_goal`: keep what was put in invested for another term, and save the interest towards one of the client's goals. */
+export type AtMaturity = "roll_over" | "pay_out" | "pay_interest" | "interest_to_goal";
+
+/** The goal an investment's interest is saved towards at maturity. */
+export type InterestGoal = { id: string; name: string };
 export type InvestmentStatus = "awaiting_payment" | "active" | "matured" | "cancelled" | "withdrawn" | "unwound" | "transferred";
 
 export type Product = {
@@ -61,6 +65,8 @@ export type Investment = {
   atMaturity: AtMaturity | null;
   /** The approved account chosen to be paid at maturity. Null when rolling over. */
   payoutDestinationId: string | null;
+  /** For `interest_to_goal`: the goal the interest is saved towards. */
+  interestGoal: InterestGoal | null;
   canChangeMaturity: boolean;
   /** Pay by this moment, or the quoted rate lapses. ISO 8601, UTC. */
   payBy: string;
@@ -183,6 +189,8 @@ export type MaturityChoice = {
   atMaturity: AtMaturity;
   /** Required to be paid out, all of it or the interest, and only then: one of the client's approved accounts. */
   destinationId: string | null;
+  /** Required for `interest_to_goal`, and only then: one of the client's open goals in the same currency. */
+  goalId?: string | null;
 };
 
 export type MaturedPayOut = {
