@@ -22,6 +22,9 @@ type Row = {
   /** Where set-up starts. SMS has none: it is on for every account. */
   setup?: Href;
   action?: string;
+  /** Where to manage it once it is on, and what the link says. */
+  manage?: Href;
+  manageAction?: string;
 };
 
 function rowsFor(maskedPhone: string): Row[] {
@@ -34,6 +37,8 @@ function rowsFor(maskedPhone: string): Row[] {
       off: "Your fingerprint, face or screen lock. The safest way.",
       setup: "/security/passkey",
       action: "Add",
+      manage: "/security/passkeys",
+      manageAction: "Manage",
     },
     {
       method: "authenticator",
@@ -43,6 +48,8 @@ function rowsFor(maskedPhone: string): Row[] {
       off: "A 6 digit code from an app on your phone. No SMS to wait for.",
       setup: "/security/authenticator",
       action: "Set up",
+      manage: "/security/authenticator-off",
+      manageAction: "Turn off",
     },
     {
       method: "code",
@@ -101,7 +108,8 @@ export default function Security() {
           <Card padded={false}>
             {rowsFor(maskE164(session.phone)).map((row, index) => {
               const isOn = methods.includes(row.method);
-              const setup = isOn ? undefined : row.setup;
+              const target = isOn ? row.manage : row.setup;
+              const actionLabel = isOn ? row.manageAction : row.action;
               const content = (
                 <>
                   <View style={[styles.rowIcon, isOn && { backgroundColor: colors.black }]}>
@@ -114,10 +122,13 @@ export default function Security() {
                     </Txt>
                   </View>
                   {isOn ? (
-                    <View style={styles.on}>
-                      <Txt size={12} weight="bold">
-                        On
-                      </Txt>
+                    <View style={styles.add}>
+                      <View style={styles.on}>
+                        <Txt size={12} weight="bold">
+                          On
+                        </Txt>
+                      </View>
+                      {target ? <Icon name="chevron" size={16} strokeWidth={2.2} /> : null}
                     </View>
                   ) : (
                     <View style={styles.add}>
@@ -130,14 +141,14 @@ export default function Security() {
                 </>
               );
               const style = [styles.row, index > 0 && styles.rowDivider];
-              return setup ? (
+              return target ? (
                 <Pressable
                   key={row.method}
                   accessibilityRole="button"
-                  accessibilityLabel={`${row.action} ${row.title.toLowerCase()}`}
-                  onPress={() => router.push(setup)}
+                  accessibilityLabel={`${actionLabel} ${row.title.toLowerCase()}${isOn ? ": on" : ""}`}
+                  onPress={() => router.push(target)}
                   style={({ pressed }) => [...style, pressed && { opacity: 0.7 }]}
-                  testID={`setup-${row.method}`}
+                  testID={isOn ? `on-${row.method}` : `setup-${row.method}`}
                 >
                   {content}
                 </Pressable>
@@ -153,6 +164,26 @@ export default function Security() {
                 </View>
               );
             })}
+          </Card>
+
+          <Card padded={false}>
+            <Pressable
+              accessibilityRole="link"
+              onPress={() => router.push("/security/devices")}
+              style={({ pressed }) => [styles.row, pressed && { opacity: 0.7 }]}
+              testID="open-devices"
+            >
+              <View style={styles.rowIcon}>
+                <Icon name="phone" size={18} color={colors.black} />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Txt weight="bold">Devices</Txt>
+                <Txt size={fontSizes.sm} color={colors.muted}>
+                  Where you are signed in. Sign out a device you do not know.
+                </Txt>
+              </View>
+              <Icon name="chevron" size={16} strokeWidth={2.2} />
+            </Pressable>
           </Card>
 
           {session.restricted ? (

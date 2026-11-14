@@ -87,6 +87,7 @@ type LinkProps = {
   onPress: () => void;
   onDark?: boolean;
   underline?: boolean;
+  testID?: string;
 };
 
 /** A text link with a full 44 point touch target. */
@@ -95,11 +96,13 @@ export function TextLink({
   onPress,
   onDark,
   underline = true,
+  testID,
 }: LinkProps) {
   return (
     <Pressable
       accessibilityRole="link"
       onPress={onPress}
+      testID={testID}
       style={({ pressed }) => [styles.link, pressed && styles.pressed]}
     >
       <Txt

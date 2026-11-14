@@ -48,7 +48,7 @@ export default function Profile() {
           <Row
             icon="key"
             title="Sign in and security"
-            detail="Passkey, authenticator app and SMS codes"
+            detail="Passkey, authenticator app, SMS codes and devices"
             onPress={() => router.push("/security")}
             testID="open-security"
           />

@@ -104,6 +104,63 @@ describe("the sign-in client for the real API", () => {
     await expect(readToken()).resolves.toBe("old-token");
   });
 
+  it("reads the devices and passkeys in the screens' shape", async () => {
+    serve({
+      "GET /client/sessions": {
+        status: 200,
+        body: {
+          items: [
+            { id: ID, device: "Chrome on Android", transport: "cookie", second_step: "code", signed_in_at: "2026-11-13T10:00:00Z", last_seen_at: "2026-11-13T11:00:00Z", current: true },
+            { id: "B".repeat(20), device: "Finvest app on iPhone", transport: "token", second_step: "passkey", signed_in_at: "2026-11-10T10:00:00Z", last_seen_at: "2026-11-12T11:00:00Z", current: false },
+          ],
+        },
+      },
+      "GET /client/passkeys": {
+        status: 200,
+        body: [{ id: ID, name: "iPhone", created_at: "2026-11-01T10:00:00Z", last_used_at: null }],
+      },
+    });
+    const client = createApiAuthClient();
+    const devices = await client.listDevices();
+    expect(devices.map((d) => [d.label, d.kind, d.confirmedWith, d.current])).toEqual([
+      ["Chrome on Android", "browser", "code", true],
+      ["Finvest app on iPhone", "app", "passkey", false],
+    ]);
+    await expect(client.listPasskeys()).resolves.toEqual([
+      { id: ID, name: "iPhone", createdAt: "2026-11-01T10:00:00Z", lastUsedAt: null },
+    ]);
+  });
+
+  it("signs out devices and removes sign-in methods on the right routes", async () => {
+    const seen = serve({
+      [`DELETE /client/sessions/${ID}`]: { status: 204 },
+      "POST /client/sessions/sign-out-others": { status: 200, body: { ended: 2 } },
+      [`DELETE /client/passkeys/${ID}`]: { status: 204 },
+      "DELETE /client/authenticator": { status: 204 },
+    });
+    const client = createApiAuthClient();
+    await client.signOutDevice(ID);
+    await expect(client.signOutOtherDevices()).resolves.toBe(2);
+    await client.removePasskey(ID);
+    await client.turnOffAuthenticator();
+    expect(seen.map((s) => s.key)).toEqual([
+      `DELETE /client/sessions/${ID}`,
+      "POST /client/sessions/sign-out-others",
+      `DELETE /client/passkeys/${ID}`,
+      "DELETE /client/authenticator",
+    ]);
+  });
+
+  it("passes on a stale session and a device already gone", async () => {
+    serve({
+      [`DELETE /client/passkeys/${ID}`]: refused(403, "sign_in_again"),
+      [`DELETE /client/sessions/${ID}`]: refused(404, "not_found"),
+    });
+    const client = createApiAuthClient();
+    await expect(client.removePasskey(ID)).rejects.toEqual(new AuthError("sign_in_again"));
+    await expect(client.signOutDevice(ID)).rejects.toEqual(new AuthError("not_found"));
+  });
+
   it("adds nothing the API did not list", async () => {
     serve({ "GET /client/second-steps": { status: 200, body: { methods: ["authenticator"] } } });
     await expect(createApiAuthClient().listSecondSteps()).resolves.toEqual(["authenticator"]);
