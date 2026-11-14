@@ -68,7 +68,12 @@ from app.modules.payments.settings import (
 from app.modules.payments.wiring import collections_provider
 from app.modules.payouts import api as payouts_api
 from app.modules.payouts import staff_api as payouts_staff_api
-from app.modules.payouts import staff_bank_api, staff_held_api, staff_payouts_api
+from app.modules.payouts import (
+    staff_bank_api,
+    staff_held_api,
+    staff_payouts_api,
+    staff_returns_api,
+)
 from app.modules.reconciliation import api as reconciliation_api
 from app.modules.reconciliation import transfers_api as pot_transfers_api
 from app.modules.support import api as support_api
@@ -189,6 +194,7 @@ def create_app(
         *staff_payouts_api.routers,
         *staff_held_api.routers,
         *staff_bank_api.routers,
+        *staff_returns_api.routers,
         *reconciliation_api.routers,
         *pot_transfers_api.routers,
     ):
