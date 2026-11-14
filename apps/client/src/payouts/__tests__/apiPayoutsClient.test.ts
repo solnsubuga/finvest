@@ -231,6 +231,7 @@ describe("the payouts client for the real API", () => {
       mobile_money_per_day: null,
       bank_per_payout: null,
       bank_per_day: { minor: 50000000, currency: "UGX" },
+      bank_payout_day: "2026-11-13",
     });
     expect(await client.getLimits()).toEqual({
       effectiveFrom: "2026-11-01",
