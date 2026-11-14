@@ -176,13 +176,20 @@ function Selfie({ check, onChanged }: { check: ClaimCheck | null; onChanged: (cl
   );
 }
 
-/** Finvest 1.0 never checked their ID, so they take the full ID check. */
-function FullCheck() {
+/**
+ * The full ID check: Finvest 1.0 never checked their ID, or the person who
+ * compared their claim photos could not match them to the ID it checked.
+ */
+function FullCheck({ afterSelfie }: { afterSelfie: boolean }) {
   const router = useRouter();
   return (
     <Page
-      title="Confirm who you are"
-      intro="Finvest 1.0 did not keep a checked ID for you, so we need one now. It takes about two minutes: photos of your ID, a selfie and your details."
+      title={afterSelfie ? "We need a full ID check" : "Confirm who you are"}
+      intro={
+        afterSelfie
+          ? "The person who compared your photos could not match them to the ID Finvest 1.0 checked, so we need a full ID check instead. It takes about two minutes: photos of your ID, a selfie and your details."
+          : "Finvest 1.0 did not keep a checked ID for you, so we need one now. It takes about two minutes: photos of your ID, a selfie and your details."
+      }
       footer={<Button label="Go to the ID check" onPress={() => router.push("/id-check")} testID="claim-id-check" />}
     >
       <Steps now="identity" />
@@ -401,7 +408,7 @@ export default function Moving() {
   if (!claim) return <Redirect href={HOME} />;
   switch (claim.status) {
     case "signed_in":
-      return claim.identityStep === "selfie" ? <Selfie check={check} onChanged={state.replace} /> : <FullCheck />;
+      return claim.identityStep === "selfie" ? <Selfie check={check} onChanged={state.replace} /> : <FullCheck afterSelfie={check?.status === "not_matched"} />;
     case "identity_submitted":
       return check?.status === "awaiting_client" ? <Retake check={check} onChanged={state.replace} /> : <Checking />;
     case "identity_confirmed":

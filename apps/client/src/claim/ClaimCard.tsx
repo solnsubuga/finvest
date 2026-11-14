@@ -11,7 +11,9 @@ function copyFor(claim: Claim, check: ClaimCheck | null): { title: string; detai
   switch (claim.status) {
     case "signed_in":
       if (check?.status === "not_matched") {
-        return { title: "We could not confirm it is you", detail: "We will contact you to sort it out.", urgent: false };
+        return claim.identityStep === "selfie"
+          ? { title: "We could not confirm it is you", detail: "We will contact you to sort it out.", urgent: false }
+          : { title: "We need a full ID check", detail: "We could not match your photos. An ID check finishes moving from Finvest 1.0.", urgent: true };
       }
       return {
         title: "Confirm it is you",

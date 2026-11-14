@@ -1,6 +1,6 @@
 import { IdentityError } from "@/identity/types";
 
-import { DEMO_CLAIM_FULL_CHECK, DEMO_CLAIM_SELFIE } from "./demo";
+import { DEMO_CLAIM_FULL_CHECK, DEMO_CLAIM_NOT_MATCHED, DEMO_CLAIM_SELFIE } from "./demo";
 import {
   Claim,
   ClaimCheck,
@@ -25,11 +25,12 @@ import {
  * claim is read after handing in, and the screen first shows it being checked.
  * The first selfie claim check handed in is asked for a new selfie, with a
  * message, so the retake can be tried. Photos sent again are matched, and a
- * full ID check is confirmed.
+ * full ID check is confirmed. The not-matched account's photos never match, so
+ * it is sent to the full ID check, as the API does.
  */
 
 type StubOptions = {
-  /** The signed-in number. Only the demo's two moved accounts have a claim. */
+  /** The signed-in number. Only the demo's moved accounts have a claim. */
   phone: string | null;
   delayMs?: number;
   /** Hands the demo ID check in, for a client who takes the full check. */
@@ -42,7 +43,7 @@ export const DEMO_CLAIM_RETAKE_MESSAGE =
   "Your selfie is too dark to compare with your ID. Take it again facing a window, without a hat or glasses.";
 
 export function stepFor(phone: string | null): IdentityStep | null {
-  if (phone === DEMO_CLAIM_SELFIE.phone) return "selfie";
+  if (phone === DEMO_CLAIM_SELFIE.phone || phone === DEMO_CLAIM_NOT_MATCHED.phone) return "selfie";
   if (phone === DEMO_CLAIM_FULL_CHECK.phone) return "full_id_check";
   return null;
 }
@@ -54,6 +55,7 @@ export function createStubClaimClient(options: StubOptions): ClaimClient {
   let check: ClaimCheck | null = null;
   let readsBeforeDecision = 0;
   let askedForRetake = false;
+  const neverMatches = options.phone === DEMO_CLAIM_NOT_MATCHED.phone;
 
   const wait = () =>
     delayMs > 0 ? new Promise<void>((resolve) => setTimeout(resolve, delayMs)) : Promise.resolve();
@@ -76,7 +78,14 @@ export function createStubClaimClient(options: StubOptions): ClaimClient {
     if (!claim || claim.status !== "identity_submitted" || readsBeforeDecision <= 0) return;
     readsBeforeDecision -= 1;
     if (readsBeforeDecision > 0) return;
-    if (check && !askedForRetake) {
+    if (check && neverMatches && claim.identityStep === "selfie") {
+      // Final for the claim check: the client takes the full ID check instead.
+      check = { ...check, status: "not_matched" };
+      claim.status = "signed_in";
+      claim.identityStep = "full_id_check";
+      return;
+    }
+    if (check && !askedForRetake && !neverMatches) {
       askedForRetake = true;
       check = { ...check, status: "awaiting_client", retakePhotos: ["selfie"], retaken: [], clientMessage: DEMO_CLAIM_RETAKE_MESSAGE };
       return;

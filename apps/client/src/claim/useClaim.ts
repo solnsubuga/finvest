@@ -27,7 +27,8 @@ export function useClaim(): ClaimState & {
       let current = true;
       (async () => {
         const claim = await client.getClaim();
-        const check = claim?.identityStep === "selfie" ? await client.getCheck() : null;
+        // Read for a full ID check too: one sent there after photos that did not match keeps them.
+        const check = claim ? await client.getCheck() : null;
         return { claim, check };
       })().then(
         ({ claim, check }) => current && setState({ status: "ready", claim, check }),

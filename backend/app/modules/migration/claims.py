@@ -10,7 +10,7 @@ module only records that the link was used and the claim moved on.
 from __future__ import annotations
 
 import secrets
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import datetime
 from typing import Any
 
@@ -79,6 +79,13 @@ _CLAIM = text(
 _MOVE = text(
     "UPDATE migration_claims SET status = :status, problem_text = :problem, "
     "reminders_sent = :reminders, updated_at = :now WHERE client_id = :client_id"
+)
+# A selfie that does not match sends the client to the full ID check: the one change the database
+# allows to `needs_id_check`, made with the step back (migration 0078).
+_TO_FULL_CHECK = text(
+    "UPDATE migration_claims SET status = 'signed_in', needs_id_check = true, "
+    "updated_at = :now WHERE client_id = :client_id AND status = 'identity_submitted' "
+    "AND NOT needs_id_check"
 )
 _CANCEL_LIVE = text(
     "UPDATE migration_claim_links SET cancelled_at = :now "
@@ -242,11 +249,25 @@ async def submit_identity(session: AsyncSession, client: Actor, clock: Clock) ->
 async def record_identity_result(
     session: AsyncSession, system: Actor, clock: Clock, client_id: str, *, matched: bool
 ) -> ClaimView:
-    """The identity checks module's answer. A failed check sends the client back a step."""
+    """The identity checks module's answer. A failed check sends the client back a step.
+
+    A selfie that staff found does not match the identity carried over is final in the identity
+    checks module, so the client is sent to the full ID check instead (the owner's choice,
+    2026-11-14). The identity checks module retires the carried-over check in the same
+    decision, so the client starts that check as a new client would.
+    """
     _only(system, "system")
     claim = await _claim(session, client_id)
-    target = ClaimStatus.IDENTITY_CONFIRMED if matched else ClaimStatus.SIGNED_IN
-    return await _move(session, system, clock, claim, target)
+    if matched or claim.identity_step is IdentityStep.FULL_ID_CHECK:
+        target = ClaimStatus.IDENTITY_CONFIRMED if matched else ClaimStatus.SIGNED_IN
+        return await _move(session, system, clock, claim, target)
+    if not can_move(system.kind, claim.status, ClaimStatus.SIGNED_IN):
+        raise ApplicationError("conflict")
+    await session.execute(_TO_FULL_CHECK, {"client_id": client_id, "now": clock.now()})
+    await _audit(
+        session, system, "change", "migration.claim_sent_to_full_id_check", client_id, clock
+    )
+    return replace(claim, status=ClaimStatus.SIGNED_IN, identity_step=IdentityStep.FULL_ID_CHECK)
 
 
 async def confirm_investments(session: AsyncSession, client: Actor, clock: Clock) -> ClaimView:

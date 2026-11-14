@@ -2,7 +2,7 @@ import { act, fireEvent, screen } from "@testing-library/react-native";
 import { router } from "expo-router";
 import { renderRouter } from "expo-router/testing-library";
 
-import { DEMO_CLAIM_FULL_CHECK, DEMO_CLAIM_SELFIE } from "@/claim/demo";
+import { DEMO_CLAIM_FULL_CHECK, DEMO_CLAIM_NOT_MATCHED, DEMO_CLAIM_SELFIE } from "@/claim/demo";
 import { DEMO_CLAIM_RETAKE_MESSAGE } from "@/claim/stubClaimClient";
 import { WARM_ROUTER_MS, warmRouter } from "@/testing/warmRouter";
 
@@ -183,5 +183,23 @@ describe("claiming an account moved from Finvest 1.0", () => {
     // The move waits for the decision too.
     await fireEvent.press(screen.getByTestId("id-check-home"));
     expect(await screen.findByText("We are checking it is you")).toBeTruthy();
+  });
+
+  it("sends a client whose photos do not match to the full ID check", async () => {
+    await claim(DEMO_CLAIM_NOT_MATCHED.token);
+    await fireEvent.press(await screen.findByTestId("claim-photos-start"));
+    await photograph();
+    await photograph();
+    await fireEvent.press(await top("claim-hand-in"));
+    expect(await screen.findByText("We are checking it is you")).toBeTruthy();
+
+    // The demo's stand-in for staff cannot match them: the move and Home lead to the ID check.
+    await comeBack();
+    expect((await screen.findAllByText("We need a full ID check")).length).toBeGreaterThan(0);
+    await goHome();
+    expect(await screen.findByText("We could not match your photos. An ID check finishes moving from Finvest 1.0.")).toBeTruthy();
+    await fireEvent.press(screen.getByTestId("home-claim"));
+    await fireEvent.press(await top("claim-id-check"));
+    expect(await screen.findByText("Which ID will you use?")).toBeTruthy();
   });
 });

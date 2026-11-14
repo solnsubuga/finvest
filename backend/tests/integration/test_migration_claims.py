@@ -354,3 +354,70 @@ async def test_progress_counts_every_claim(
     async with app_database.actor_transaction(Actor("client", invited)) as session:
         mine = await claims.claim_progress(session)
     assert (mine.invited, mine.cannot_be_invited) == (1, 0)
+
+
+async def test_a_selfie_that_does_not_match_sends_the_client_to_the_full_id_check(
+    app_database: Database, worker_database: Database
+) -> None:
+    clock = FakeClock(START)
+    client_id = await a_claim(worker_database, clock)
+    link = await open_link(app_database, clock, await invite(worker_database, clock, client_id))
+    signed_in = await as_client(app_database, client_id, claims.record_signed_in, clock, link)
+    assert signed_in.identity_step is IdentityStep.SELFIE
+    await as_client(app_database, client_id, claims.submit_identity, clock)
+
+    async with worker_database.actor_transaction(SYSTEM) as session:
+        back = await claims.record_identity_result(session, SYSTEM, clock, client_id, matched=False)
+    assert (back.status, back.identity_step) == (ClaimStatus.SIGNED_IN, IdentityStep.FULL_ID_CHECK)
+    async with worker_database.actor_transaction(SYSTEM) as session:
+        kept = await claims.claim_for(session, client_id)
+    assert kept is not None
+    assert (kept.status, kept.identity_step) == (ClaimStatus.SIGNED_IN, IdentityStep.FULL_ID_CHECK)
+
+    # The full check failing sends them back again, still to the full check; passing moves on.
+    await as_client(app_database, client_id, claims.submit_identity, clock)
+    async with worker_database.actor_transaction(SYSTEM) as session:
+        again = await claims.record_identity_result(
+            session, SYSTEM, clock, client_id, matched=False
+        )
+    assert again.identity_step is IdentityStep.FULL_ID_CHECK
+    await as_client(app_database, client_id, claims.submit_identity, clock)
+    async with worker_database.actor_transaction(SYSTEM) as session:
+        done = await claims.record_identity_result(session, SYSTEM, clock, client_id, matched=True)
+    assert done.status is ClaimStatus.IDENTITY_CONFIRMED
+
+    staff = new_staff()
+    async with app_database.actor_transaction(staff) as session:
+        events = await events_for_resource(session, "migration_claim", client_id)
+    assert "migration.claim_sent_to_full_id_check" in {event.action for event in events}
+
+
+async def test_the_database_changes_the_identity_step_only_for_a_failed_selfie(
+    app_database: Database, worker_database: Database
+) -> None:
+    clock = FakeClock(START)
+    client_id = await a_claim(worker_database, clock)
+    flip = text("UPDATE migration_claims SET needs_id_check = :value WHERE client_id = :id")
+    refused = "only a selfie that did not match"
+
+    # Not on its own, not by the client, and never back to the selfie.
+    with pytest.raises(DBAPIError, match=refused):
+        async with worker_database.actor_transaction(SYSTEM) as session:
+            await session.execute(flip, {"value": True, "id": client_id})
+    link = await open_link(app_database, clock, await invite(worker_database, clock, client_id))
+    await as_client(app_database, client_id, claims.record_signed_in, clock, link)
+    await as_client(app_database, client_id, claims.submit_identity, clock)
+    with pytest.raises(DBAPIError, match=refused):
+        async with app_database.actor_transaction(Actor("client", client_id)) as session:
+            await session.execute(
+                text(
+                    "UPDATE migration_claims SET needs_id_check = true, status = 'signed_in' "
+                    "WHERE client_id = :id"
+                ),
+                {"id": client_id},
+            )
+    async with worker_database.actor_transaction(SYSTEM) as session:
+        await claims.record_identity_result(session, SYSTEM, clock, client_id, matched=False)
+    with pytest.raises(DBAPIError, match=refused):
+        async with worker_database.actor_transaction(SYSTEM) as session:
+            await session.execute(flip, {"value": False, "id": client_id})
