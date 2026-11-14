@@ -35,9 +35,12 @@ Staff can approve, reject, ask for photos again or escalate. One member of staff
 
 ## Automatic checks
 
-A provider is asked for three things: that the document is genuine and not expired, that the selfie matches the document, and sanctions and politically exposed person screening. A fourth, `liveness`, says the selfie was captured by a liveness check that saw a live person ([Liveness](#liveness)). It comes from the selfie handed in, not from the identity provider, so all four must pass for `automatic_checks_passed`.
+Four checks decide. The identity provider answers two: `document_genuine`, that the document is genuine and is the one the client described, and `selfie_match`, that the selfie matches the face on it. `liveness` says the selfie was captured by a liveness check that saw a live person ([Liveness](#liveness)); it comes from the selfie handed in. `screening` is sanctions and politically exposed person screening. All four must pass for `automatic_checks_passed`.
 
-- A client whose checks all ran and passed is approved with no person involved, by the owner's decision (2026-11-14). This needs the four checks to pass, the network's name for their phone to match, and the document to still be valid. It is on with ioTec Verify unless `FINVEST_IDENTITY_AUTOMATIC_APPROVAL=false`, which sends every client to staff flagged `automatic_checks_passed` instead. It is never on with the development stub, which checks nothing.
+- With the screening module on (`FINVEST_SCREENING_PROVIDER` set, Sigma360 in production), `screening` is the client's standing there, and any screening answer from the identity provider is ignored. Clear passes. A possible or confirmed match fails. A politically exposed person, a screen that could not run, or no screen at all is `unsure`. A screen still running holds the result: the worker reads again (`screening_pending`) until the screen finishes, and a screen that never finishes leaves the check to the sweep, which gives it to a person.
+- With the screening module off, `screening` is whatever the identity provider said. Regula does not screen, so with Regula and no screening module every client goes to a person flagged `screening_not_run`.
+
+- A client whose checks all ran and passed is approved with no person involved, by the owner's decision (2026-11-14). This needs the four checks to pass, the network's name for their phone to match, and the document to still be valid. It is on with Regula and ioTec Verify unless `FINVEST_IDENTITY_AUTOMATIC_APPROVAL=false`, which sends every client to staff flagged `automatic_checks_passed` instead. It is never on with the development stub, which checks nothing.
 - Anything else, including a failed check, sends the client to a person with the reasons listed. A provider never rejects a client on its own.
 - The name the network holds for the client's phone number is looked up too and shown to staff ([Phone number name](#phone-number-name)). It is not one of the four checks: a different name never fails the check, but it blocks approval, and approval with no person needs it to match.
 - The expiry date is checked again at approval. Staff cannot approve a document that expired while the check waited.
@@ -111,9 +114,25 @@ The module talks to an `IdentityProvider` port (`domain/provider.py`) with three
 | Provider | Status |
 | --- | --- |
 | `manual` | Built, and the default. It checks nothing, so every client goes to a person. Nobody is approved by a check that did not happen. |
-| `iotec` | Built: ioTec Verify, below. Off until `FINVEST_IDENTITY_PROVIDER=iotec` and its credentials are set. |
+| `regula` | Built: Regula, run on Finvest's own servers, below. The owner's choice (2026-11-14). Off until `FINVEST_IDENTITY_PROVIDER=regula` and its addresses are set. |
+| `iotec` | Built: ioTec Verify, below. Kept for now, but not to be used: the owner chose Regula, with no ID number lookup at NIRA. |
 | `development-stub` | Built, for a developer's own machine. It checks nothing: everyone "passes", except a document number ending in 0, whose selfie comes back unsure. Its answers go to a person, and the settings refuse to combine it with automatic approval, so it can never approve a client. It is refused at start-up where `FINVEST_ENVIRONMENT` is `production`, because staff would see passes for checks nobody ran. |
-| Smile ID | Not built. A candidate if ioTec Verify falls short. |
+
+### Regula
+
+`app/modules/kyc/regula.py`. Regula's Document Reader and Face services run as containers on Finvest's own servers, so ID photos and selfies never leave them. There is no API key: the services are reached only on the private network, and each needs a Regula licence file. One submission is two requests, each answered straight away:
+
+| Check | Regula request | Pass | Fail | Otherwise |
+| --- | --- | --- | --- | --- |
+| `document_genuine` | Document Reader, `POST /api/process`, scenario `FullAuth`, with the front (`page_idx` 0) and back (`page_idx` 1) in white light | Security features, document type and image quality all checked and fine (`detailsOptical.security`, `docType`, `imageQA` all 1), and the document number or personal number Regula read is the number the client typed, ignoring case, spaces and punctuation | A security feature failed (an altered or forged ID), or the document is not one Regula recognises | `unsure`. A document Regula did not finish processing is left out and shows as not run. |
+| `selfie_match` | Face, `POST /api/match`: the selfie as a live image (type 3) against the front of the ID as a printed document (type 1) | Similarity of at least 90% | Never | `unsure`, with the similarity rounded down as the score |
+
+- Neither request changes anything at Regula, so sending again is harmless. A timeout, a dropped connection, a 5xx, 429 or 403 (a missing or expired licence) is deferred and the worker tries again. A refusal (400 or 422) of the document request refuses the submission (`regula_refused`), and it goes to a person. A refused face match is left out.
+- Both verdicts are kept in the reference the worker saves (`regula:<tag>:doc=pass,face=pass@96`), and the result is read back from it. The reference holds no details. The tag sent to Regula is a hash of the submission's key.
+- The addresses are `FINVEST_REGULA_DOCUMENT_READER_URL` and `FINVEST_REGULA_FACE_URL`, such as `http://regula-docreader:8080`. The settings take https anywhere, or plain http only to a container name, localhost or a private address: never plain http over the internet.
+- Liveness stays the camera selfie with Regula for now: `liveness` is not run, so nobody is approved with no person until Regula's liveness is built ([Not built yet](#not-built-yet)). Face confirmations are off with Regula for the same reason.
+- To confirm on a running Regula: the `/api` prefix on both paths, that `similarity` comes back in percent as the specification says (a fraction would always be below 90 and go to a person, never pass), and the text field types for the Ugandan national ID's NIN. Anything not recognised is `unsure`, never a pass.
+- Nothing Regula sends back is logged or kept beyond the verdicts and the similarity, because it carries the client's details.
 
 ### ioTec Verify
 
@@ -228,7 +247,7 @@ How a send can end:
 
 A result that arrives after the check moved on changes nothing.
 
-Settings, all optional while the provider is `manual`: `FINVEST_IDENTITY_PROVIDER` (`manual`, `iotec` or `development-stub`), `FINVEST_IDENTITY_AUTOMATIC_APPROVAL` (unset: on with `iotec`, off otherwise; `false` turns it off; the owner's decision), and `FINVEST_IDENTITY_DATA_KEY`, which any provider other than `manual` requires in the worker. `iotec` also needs `FINVEST_IOTEC_VERIFY_CLIENT_ID` and `FINVEST_IOTEC_VERIFY_API_KEY` (from the ioTec Verify portal, Management, Settings, Configuration). The API and the worker both read these settings and refuse to start without them: the API records which provider a submission goes to, and only the worker sends. The worker also needs the `FINVEST_OBJECT_STORAGE_*` settings, which the API already has, to read the photos. `FINVEST_IOTEC_VERIFY_BASE_URL` points it elsewhere, for a sandbox.
+Settings, all optional while the provider is `manual`: `FINVEST_IDENTITY_PROVIDER` (`manual`, `regula`, `iotec` or `development-stub`), `FINVEST_IDENTITY_AUTOMATIC_APPROVAL` (unset: on with `regula` and `iotec`, off otherwise; `false` turns it off; the owner's decision), and `FINVEST_IDENTITY_DATA_KEY`, which any provider other than `manual` requires in the worker. `regula` also needs `FINVEST_REGULA_DOCUMENT_READER_URL` and `FINVEST_REGULA_FACE_URL`. `iotec` also needs `FINVEST_IOTEC_VERIFY_CLIENT_ID` and `FINVEST_IOTEC_VERIFY_API_KEY` (from the ioTec Verify portal, Management, Settings, Configuration). The API and the worker both read these settings and refuse to start without them: the API records which provider a submission goes to, and only the worker sends. The worker also needs the `FINVEST_OBJECT_STORAGE_*` settings, which the API already has, to read the photos. `FINVEST_IOTEC_VERIFY_BASE_URL` points it elsewhere, for a sandbox.
 
 ## Routes
 
@@ -277,3 +296,6 @@ Without `FINVEST_IDENTITY_DATA_KEY` the routes answer `unavailable`, and so do t
 - The console calling these routes. It still uses sample data.
 - Replacing the identity data key. Do not rotate it yet: a sealed value records which key sealed it and an old key can still be read, but nothing seals the rows again, and the document fingerprints are made with the current key only, so the one-document rule would stop matching earlier clients.
 - Company, joint and group accounts. Only personal accounts are issued.
+- Regula's liveness and the guided selfie: a straight-on selfie for the match, then a frame each turning left, turning right, looking up and looking down, each checked on the phone and by Regula's face quality check (centred, big enough, sharp, well lit, no glare, eyes open) with retake prompts. Until then `liveness` is not run with Regula, so nobody is approved with no person. The owner is choosing how liveness and the poses combine.
+- The Regula containers in `infra/`, with their licence. That is the infrastructure thread's.
+- Removing the ioTec Verify identity adapter (NIRA lookup, face match and AML), now that Regula replaces it. ioTec stays for SMS, mobile money and phone names.
