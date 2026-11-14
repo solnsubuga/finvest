@@ -281,3 +281,24 @@ async def test_nothing_is_asked_without_a_pin(api: Api) -> None:
     await api.pins.spend(client, "withdrawal", None)
     refused = await confirm(api, phone)
     assert (refused.status_code, refused.json()["error"]["code"]) == (409, "conflict")
+
+
+async def test_a_confirmation_spent_in_a_failed_action_can_be_used_again(api: Api) -> None:
+    _, phone = await a_phone(api)
+    await set_pin(api, phone)
+    given = (await confirm(api, phone)).json()["confirmation"]
+    client = await api.identity.client_session(token_of(phone))
+    assert client is not None
+
+    # The action fails after spending, so its transaction rolls back and the confirmation stays.
+    with pytest.raises(RuntimeError):
+        async with api.owner.transaction() as session:
+            await api.pins.spend(client, "withdrawal", given, session=session)
+            raise RuntimeError("the withdrawal failed")
+
+    # The retry, in a transaction that commits, spends it; a third try is refused.
+    async with api.owner.transaction() as session:
+        await api.pins.spend(client, "withdrawal", given, session=session)
+    with pytest.raises(ApplicationError) as again:
+        await api.pins.spend(client, "withdrawal", given)
+    assert again.value.code == "pin_required"
