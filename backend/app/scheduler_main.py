@@ -30,6 +30,7 @@ from app.modules.payments import service as payments
 from app.modules.payments.settings import PaymentsSettings
 from app.modules.payments.wiring import ensure_allowed
 from app.modules.payouts import payouts
+from app.modules.screening.service import RESCREEN_KIND
 from app.shared.business_day import KAMPALA
 from app.shared.clock import SystemClock
 
@@ -118,6 +119,14 @@ def schedules() -> list[Schedule]:
             kind=MONTHLY_KIND,
             max_age=timedelta(hours=20),
         ),
+        # Screens again every approved client whose last screen is a month old, and gives up on
+        # screens the provider never answered. One run covers any day it missed.
+        Schedule(
+            name="screening.rescreen_due",
+            trigger=CronTrigger(hour=2, minute=15, timezone=KAMPALA),
+            kind=RESCREEN_KIND,
+            max_age=timedelta(hours=20),
+        ),
     ]
     payments_settings = PaymentsSettings()
     ensure_allowed(payments_settings)
@@ -140,6 +149,16 @@ def schedules() -> list[Schedule]:
                 max_age=timedelta(minutes=5),
             )
         )
+    # Tries again for payouts waiting for screening, so one whose screen could not run is
+    # screened afresh once that screen is a day old. Calls no provider itself.
+    runs.append(
+        Schedule(
+            name="payouts.retry_screening",
+            trigger=CronTrigger(minute=23, timezone=UTC),
+            kind=payouts.RETRY_SCREENING_KIND,
+            max_age=timedelta(hours=1),
+        )
+    )
     # Clears the content of messages that were never sent, and old addresses and numbers.
     runs.append(
         Schedule(

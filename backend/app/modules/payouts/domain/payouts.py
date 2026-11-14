@@ -17,6 +17,9 @@ from enum import StrEnum
 
 
 class PayoutStatus(StrEnum):
+    # Waiting for the client to be screened against sanctions and politically exposed person
+    # lists. Its money is reserved and nothing has been sent.
+    SCREENING = "screening"
     HELD = "held"  # waiting for a staff member to approve a large withdrawal
     QUEUED = "queued"  # ready for the worker to send; nothing has reached the provider
     SENT = "sent"  # the provider accepted it and has not yet said how it ended
@@ -32,6 +35,9 @@ COUNTS_TOWARDS_LIMIT = frozenset(PayoutStatus) - {PayoutStatus.FAILED, PayoutSta
 
 
 class PayoutEvent(StrEnum):
+    # The client was screened clear: on to the queue, or to staff review for a large payout.
+    SCREENING_CLEARED = "screening_cleared"
+    SCREENING_CLEARED_FOR_REVIEW = "screening_cleared_for_review"
     # Staff review of a held payout.
     REVIEW_APPROVED = "review_approved"
     REVIEW_DECLINED = "review_declined"
@@ -93,6 +99,10 @@ _FAILED = Transition(_S.FAILED, _L.PARK)
 _CANCELLED = Transition(_S.CANCELLED, _L.RELEASE)
 
 _TABLE: dict[tuple[PayoutStatus, PayoutEvent], Transition] = {
+    (_S.SCREENING, _E.SCREENING_CLEARED): Transition(_S.QUEUED),
+    (_S.SCREENING, _E.SCREENING_CLEARED_FOR_REVIEW): Transition(_S.HELD),
+    # Staff may decline a payout waiting for screening, as they may a held one.
+    (_S.SCREENING, _E.REVIEW_DECLINED): _CANCELLED,
     (_S.HELD, _E.REVIEW_APPROVED): Transition(_S.QUEUED),
     (_S.HELD, _E.REVIEW_DECLINED): _CANCELLED,
     (_S.HELD, _E.CLIENT_CANCELLED): _CANCELLED,
@@ -120,8 +130,17 @@ _TABLE: dict[tuple[PayoutStatus, PayoutEvent], Transition] = {
 }
 
 
-def initial_status(*, needs_review: bool) -> PayoutStatus:
+def initial_status(*, needs_review: bool, screened: bool = True) -> PayoutStatus:
+    """Waiting for screening first, then staff review for a large payout, then the queue."""
+    if not screened:
+        return PayoutStatus.SCREENING
     return PayoutStatus.HELD if needs_review else PayoutStatus.QUEUED
+
+
+def after_screening(*, needs_review: bool) -> PayoutEvent:
+    return (
+        PayoutEvent.SCREENING_CLEARED_FOR_REVIEW if needs_review else PayoutEvent.SCREENING_CLEARED
+    )
 
 
 def apply(status: PayoutStatus, event: PayoutEvent) -> Transition:

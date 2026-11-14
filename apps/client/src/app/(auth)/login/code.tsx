@@ -3,7 +3,7 @@ import { View } from "react-native";
 import { Redirect, Stack, useRouter } from "expo-router";
 
 import { useAuth } from "@/auth/AuthProvider";
-import { maskE164 } from "@/auth/phone";
+import { codeTargetFor } from "@/auth/codeTarget";
 import { describeAuthError } from "@/auth/types";
 import { BackButton } from "@/components/BackButton";
 import { Notice } from "@/components/Blocks";
@@ -23,6 +23,7 @@ export default function LoginCode() {
   if (!login) {
     return <Redirect href="/login" />;
   }
+  const target = codeTargetFor(login, login.codeSentBy);
 
   const submit = async () => {
     setBusy(true);
@@ -49,7 +50,7 @@ export default function LoginCode() {
             disabled={code.length < CODE_LENGTH}
             testID="code-submit"
           />
-          {login.methods.length > 1 ? (
+          {login.methods.length > 1 || login.email ? (
             <TextLink
               label="Use another way"
               onPress={() =>
@@ -66,7 +67,9 @@ export default function LoginCode() {
         <Eyebrow>Step 2 of 2</Eyebrow>
         <Title>Enter the code we sent you</Title>
         <Txt color={colors.muted}>
-          {`We sent a 6 digit code by SMS to ${maskE164(login.phone)}.`}
+          {target.channel === "email"
+            ? `We emailed a 6 digit code to ${target.where}. It can take a minute to arrive.`
+            : `We sent a 6 digit code by SMS to ${target.where}.`}
         </Txt>
       </View>
       <View style={{ marginTop: 24, gap: 12 }}>
@@ -80,7 +83,7 @@ export default function LoginCode() {
         />
         {error ? <Notice tone="danger">{error}</Notice> : null}
         <Notice tone="warning">
-          Because you are using an SMS code, withdrawals only go to accounts you have used before for the
+          Because you are using a code, withdrawals only go to accounts you have used before for the
           next 24 hours.
         </Notice>
       </View>

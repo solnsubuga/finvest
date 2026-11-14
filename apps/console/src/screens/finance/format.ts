@@ -14,6 +14,11 @@ export function formatAmount(amount: Amount): string {
   return `${sign}${SYMBOL[amount.currency]}${GROUPED.format(whole)}${fraction}`;
 }
 
+/** The exact amount without its currency, for a table that names it once: "4,674" or "7.25". */
+export function formatNumber(amount: Amount): string {
+  return formatAmount(amount).replace(SYMBOL[amount.currency], "");
+}
+
 /**
  * Reads "4,674" or "4674", and for dollars "7.25", as the smallest unit. Null
  * when it is anything else or not above zero. No floating point: the digits

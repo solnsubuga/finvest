@@ -23,6 +23,7 @@ const SOURCES: Record<Kind, { view: Permission; decide: Permission }> = {
   phone_change: { view: "clients.view", decide: "clients.lock" },
   team_change: { view: "team.view", decide: "team.change" },
   client_lock: { view: "clients.view", decide: "clients.lock" },
+  account_closure: { view: "clients.view", decide: "clients.close" },
   suppression_lift: { view: "clients.view", decide: "email_suppressions.lift" },
   complaint_outcome: { view: "complaints.view", decide: "complaints.close" },
   announcement: { view: "settings.view", decide: "announcements.send" },
@@ -44,6 +45,7 @@ export function createStubApprovalsApi(reader: Reader, now: () => number = Date.
   const raw: [Kind, string, string, string, number][] = [
     ["client_lock", "-NstubLock0000000003", "lock -NstubClient00000042", "Grace Auma", 55],
     ["rate_change", "-NstubRate0000000003", "TB364", "Ruth Namata", 190],
+    ["account_closure", "-NstubClosure0000001", "-NstubClient00000077", "Grace Auma", 240],
     ["bank_transfer_match", "-NstubDeposit0000012", "-NstubDeposit0000012", "Daniel Kato", 35],
     ["team_change", "-NstubChange00000001", "change_role", "Grace Auma", 80],
     ["suppression_lift", "-NstubLift0000000001", "d356ebd92915", "Grace Auma", 120],

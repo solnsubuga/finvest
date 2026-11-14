@@ -8,10 +8,6 @@ import { Title, Txt } from "@/components/Txt";
 import { colors } from "@/theme";
 
 const topics: Record<string, { title: string; body: string }> = {
-  "email-login": {
-    title: "Log in with email",
-    body: "Logging in with your email address is not ready yet. Use your mobile number for now.",
-  },
   "locked-out": {
     title: "Get back into your account",
     body: "Account recovery in the app is not ready yet.",

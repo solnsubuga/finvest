@@ -5,14 +5,17 @@ import { colors } from "@/theme";
 
 import { Icon } from "./Icon";
 
-/** Goes back, or to `fallback` when the screen was opened directly on the web. */
-export function BackButton({ fallback }: { fallback: Href }) {
+/**
+ * Goes back, or to `fallback` when the screen was opened directly on the web.
+ * A screen with steps of its own passes `onPress` to go back a step instead.
+ */
+export function BackButton({ fallback, onPress }: { fallback: Href; onPress?: () => void }) {
   const router = useRouter();
   return (
     <Pressable
       accessibilityRole="button"
       accessibilityLabel="Back"
-      onPress={() => (router.canGoBack() ? router.back() : router.replace(fallback))}
+      onPress={onPress ?? (() => (router.canGoBack() ? router.back() : router.replace(fallback)))}
       style={({ pressed }) => [styles.button, pressed && { opacity: 0.7 }]}
     >
       <Icon name="back" strokeWidth={2.2} />
