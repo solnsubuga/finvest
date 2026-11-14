@@ -69,7 +69,7 @@ What the database enforces (migration 0170), whatever the code does:
 | Nothing is deleted | The application cannot delete, and a downgrade refuses to drop rows |
 | Staff may post it | `tax.remittance` is on the ledger's list of source types a staff transaction may post |
 
-The payment leaves the trust account, so the bank statement shows it. Reconciliation should expect it by its bank reference; that is a follow-up with the reconciliation thread.
+The payment leaves the trust account, so the bank statement shows it. Reconciliation pairs it with that line by its bank reference: `service.expected_bank_movements` gives the bank reference of each approved payment (see [reconciliation.md](reconciliation.md#matching)).
 
 ## The yearly certificate
 
