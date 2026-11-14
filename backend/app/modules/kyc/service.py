@@ -1160,6 +1160,7 @@ async def _audit(
     *,
     reason: str | None = None,
     details: dict[str, object] | None = None,
+    resource: str = RESOURCE,
 ) -> None:
     if category == "approval" and not (reason and reason.strip()):
         raise _invalid("reason", "missing")
@@ -1168,7 +1169,7 @@ async def _audit(
         AuditEvent(
             category=category,
             action=action,
-            resource_type=RESOURCE,
+            resource_type=resource,
             resource_id=check_id,
             actor=AuditActor(actor.kind, actor.id),
             reason=reason,

@@ -102,8 +102,10 @@ async def test_each_day_ties_to_its_statements_and_is_closed_by_two_people(
 ) -> None:
     now = today(world)
     first = now - timedelta(days=TrustBank.FIRST_DAY_BACK)
+    # Importing is a change to reconciliation, so it takes finance too: a third person, since
+    # whoever imports a day's statement cannot approve its close.
     importer, preparer, approver = (
-        await world.staff("operations"),
+        await world.staff("finance"),
         await world.staff("finance"),
         await world.staff("finance"),
     )
@@ -144,7 +146,7 @@ async def test_each_day_ties_to_its_statements_and_is_closed_by_two_people(
     # Today: every mobile money collection the journeys made, as ioTec's statement shows it.
     world.clock.current = morning_after(now)
     # A day or more has passed since the morning's sign-in, so the importer signs in again.
-    importer = await world.staff("operations")
+    importer = await world.staff("finance")
     for network in IOTEC_POTS:
         mine = [c for c in collected.values() if c.confirmed_at.astimezone(KAMPALA).date() == now]
         await import_iotec(

@@ -360,7 +360,7 @@ async def test_reconciliation_pairs_an_approved_payment_by_the_banks_reference(
         )
     found = {payment.ledger_entry_id: payment for payment in expected}
     # Only an approved payment has left the trust account in the books.
-    assert waiting.id not in {payment.ledger_entry_id for payment in expected}
+    assert waiting.bank_reference not in {payment.bank_reference for payment in expected}
     payment = found[approved.ledger_entry_id]
     assert (payment.bank_reference, payment.amount, payment.paid_on) == (
         approved.bank_reference,

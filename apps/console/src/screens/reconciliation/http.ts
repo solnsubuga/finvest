@@ -165,6 +165,9 @@ export function toBankTransferError(error: unknown, approving = false): BankTran
   switch (error.code) {
     case "not_found":
       return new BankTransferError("not_found");
+    // A key spent on a different request means this try was refused unread. Reloading shows
+    // what the first one did, and the next try gets a key of its own.
+    case "idempotency_key_reused":
     case "conflict":
       return new BankTransferError("conflict");
     // The person closed the "confirm it is you" dialog, so nothing was done.

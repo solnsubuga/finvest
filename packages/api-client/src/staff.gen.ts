@@ -366,6 +366,9 @@ export type CheckOut = z.infer<typeof CheckOut>;
 export const CheckStatus = z.enum(["draft", "submitted", "needs_review", "with_compliance", "awaiting_client", "approved", "rejected"]);
 export type CheckStatus = z.infer<typeof CheckStatus>;
 
+export const ClaimCheckStatus = z.enum(["draft", "needs_review", "awaiting_client", "matched", "not_matched"]);
+export type ClaimCheckStatus = z.infer<typeof ClaimCheckStatus>;
+
 export const ClaimProgressView = z.object({
   cannot_be_invited: z.number().int(),
   claimed_and_confirmed: z.number().int(),
@@ -374,6 +377,31 @@ export const ClaimProgressView = z.object({
   said_something_is_wrong: z.number().int(),
 });
 export type ClaimProgressView = z.infer<typeof ClaimProgressView>;
+
+export const StaffPhoto = z.object({
+  id: z.string(),
+  kind: PhotoKind,
+});
+export type StaffPhoto = z.infer<typeof StaffPhoto>;
+
+export const StaffClaimCheck = z.object({
+  check_id: z.string(),
+  client_id: z.string(),
+  client_message: z.string().nullable(),
+  decided_at: z.string().nullable(),
+  id: z.string(),
+  photos: z.array(StaffPhoto),
+  retake_photos: z.array(PhotoKind),
+  status: ClaimCheckStatus,
+  submission: z.number().int(),
+  submitted_at: z.string().nullable(),
+});
+export type StaffClaimCheck = z.infer<typeof StaffClaimCheck>;
+
+export const ClaimQueue = z.object({
+  items: z.array(StaffClaimCheck),
+});
+export type ClaimQueue = z.infer<typeof ClaimQueue>;
 
 export const ClientCardView = z.object({
   account_number: z.string().nullable(),
@@ -1610,7 +1638,7 @@ export const ReviewedPayoutOut = z.object({
 export type ReviewedPayoutOut = z.infer<typeof ReviewedPayoutOut>;
 
 export const RoleView = z.object({
-  permissions: z.array(z.enum(["overview.view", "review_queue.view", "identity_checks.view", "identity_checks.review", "maturities.view", "support.view", "support.reply", "complaints.view", "complaints.manage", "complaints.close", "clients.view", "clients.lock", "money_movement.view", "reconciliation.view", "investments.view", "automatic_investing.view", "goals.view", "dealing_desk.view", "dealing_orders.change", "finance.view", "tax_remittances.change", "products.view", "rates.view", "rates.change", "compliance.view", "team.view", "team.change", "reports.view", "audit.view", "settings.view", "wordings.change", "email_suppressions.lift", "announcements.send", "migration.view", "bank_transfers.change", "deposit_reassignments.change", "payout_accounts.change", "migration.import", "migration.sign_off", "client_phones.change", "investment_corrections.change"])),
+  permissions: z.array(z.enum(["overview.view", "review_queue.view", "identity_checks.view", "identity_checks.review", "maturities.view", "support.view", "support.reply", "complaints.view", "complaints.manage", "complaints.close", "clients.view", "clients.lock", "money_movement.view", "reconciliation.view", "reconciliation.change", "investments.view", "automatic_investing.view", "goals.view", "dealing_desk.view", "dealing_orders.change", "finance.view", "tax_remittances.change", "products.view", "rates.view", "rates.change", "compliance.view", "team.view", "team.change", "reports.view", "audit.view", "settings.view", "wordings.change", "email_suppressions.lift", "announcements.send", "migration.view", "bank_transfers.change", "deposit_reassignments.change", "payout_accounts.change", "migration.import", "migration.sign_off", "client_phones.change", "investment_corrections.change"])),
   role: z.enum(["admin", "operations", "finance", "compliance", "support"]),
 });
 export type RoleView = z.infer<typeof RoleView>;
@@ -1676,12 +1704,6 @@ export const StaffChat = z.object({
   messages: z.array(MessageItem),
 });
 export type StaffChat = z.infer<typeof StaffChat>;
-
-export const StaffPhoto = z.object({
-  id: z.string(),
-  kind: PhotoKind,
-});
-export type StaffPhoto = z.infer<typeof StaffPhoto>;
 
 export const StaffCheck = z.object({
   account_number: z.string().nullable(),
@@ -1881,7 +1903,7 @@ export type StaffSendMessage = z.infer<typeof StaffSendMessage>;
 export const StaffSessionView = z.object({
   confirmed_until: z.string(),
   name: z.string(),
-  permissions: z.array(z.enum(["overview.view", "review_queue.view", "identity_checks.view", "identity_checks.review", "maturities.view", "support.view", "support.reply", "complaints.view", "complaints.manage", "complaints.close", "clients.view", "clients.lock", "money_movement.view", "reconciliation.view", "investments.view", "automatic_investing.view", "goals.view", "dealing_desk.view", "dealing_orders.change", "finance.view", "tax_remittances.change", "products.view", "rates.view", "rates.change", "compliance.view", "team.view", "team.change", "reports.view", "audit.view", "settings.view", "wordings.change", "email_suppressions.lift", "announcements.send", "migration.view", "bank_transfers.change", "deposit_reassignments.change", "payout_accounts.change", "migration.import", "migration.sign_off", "client_phones.change", "investment_corrections.change"])),
+  permissions: z.array(z.enum(["overview.view", "review_queue.view", "identity_checks.view", "identity_checks.review", "maturities.view", "support.view", "support.reply", "complaints.view", "complaints.manage", "complaints.close", "clients.view", "clients.lock", "money_movement.view", "reconciliation.view", "reconciliation.change", "investments.view", "automatic_investing.view", "goals.view", "dealing_desk.view", "dealing_orders.change", "finance.view", "tax_remittances.change", "products.view", "rates.view", "rates.change", "compliance.view", "team.view", "team.change", "reports.view", "audit.view", "settings.view", "wordings.change", "email_suppressions.lift", "announcements.send", "migration.view", "bank_transfers.change", "deposit_reassignments.change", "payout_accounts.change", "migration.import", "migration.sign_off", "client_phones.change", "investment_corrections.change"])),
   role: z.enum(["admin", "operations", "finance", "compliance", "support"]),
   second_steps: z.array(z.enum(["passkey", "authenticator", "code", "signup"])),
   staff_id: z.string(),
@@ -2100,6 +2122,82 @@ export const operations = {
     idempotent: false,
     status: 200,
     response: Facets,
+  },
+  "GET /staff/claim-checks": {
+    method: "GET",
+    path: "/staff/claim-checks",
+    params: z.object({}),
+    query: z.object({}),
+    body: null,
+    bodyKind: null,
+    idempotent: false,
+    status: 200,
+    response: ClaimQueue,
+  },
+  "GET /staff/claim-checks/{claim_check_id}": {
+    method: "GET",
+    path: "/staff/claim-checks/{claim_check_id}",
+    params: z.object({
+    claim_check_id: z.string(),
+  }),
+    query: z.object({}),
+    body: null,
+    bodyKind: null,
+    idempotent: false,
+    status: 200,
+    response: StaffClaimCheck,
+  },
+  "POST /staff/claim-checks/{claim_check_id}/ask-for-photos": {
+    method: "POST",
+    path: "/staff/claim-checks/{claim_check_id}/ask-for-photos",
+    params: z.object({
+    claim_check_id: z.string(),
+  }),
+    query: z.object({}),
+    body: AskForPhotosBody,
+    bodyKind: "json",
+    idempotent: false,
+    status: 200,
+    response: StaffClaimCheck,
+  },
+  "POST /staff/claim-checks/{claim_check_id}/match": {
+    method: "POST",
+    path: "/staff/claim-checks/{claim_check_id}/match",
+    params: z.object({
+    claim_check_id: z.string(),
+  }),
+    query: z.object({}),
+    body: ReasonBody,
+    bodyKind: "json",
+    idempotent: false,
+    status: 200,
+    response: StaffClaimCheck,
+  },
+  "POST /staff/claim-checks/{claim_check_id}/no-match": {
+    method: "POST",
+    path: "/staff/claim-checks/{claim_check_id}/no-match",
+    params: z.object({
+    claim_check_id: z.string(),
+  }),
+    query: z.object({}),
+    body: ReasonBody,
+    bodyKind: "json",
+    idempotent: false,
+    status: 200,
+    response: StaffClaimCheck,
+  },
+  "POST /staff/claim-checks/{claim_check_id}/photo-links": {
+    method: "POST",
+    path: "/staff/claim-checks/{claim_check_id}/photo-links",
+    params: z.object({
+    claim_check_id: z.string(),
+  }),
+    query: z.object({}),
+    body: null,
+    bodyKind: null,
+    idempotent: false,
+    status: 200,
+    response: PhotoLinks,
   },
   "GET /staff/clients/cards": {
     method: "GET",

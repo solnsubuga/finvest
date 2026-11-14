@@ -285,6 +285,23 @@ async def test_stranded_payouts_and_their_resolutions_need_reconciliation(api: A
     # Settling money is never done twice on a retried request.
     unkeyed = await api.http.post(approve, json={"reason": "Agree"})
     assert unkeyed.json()["error"]["code"] == "idempotency_key_required", unkeyed.text
+    # Operations sees reconciliation but does not change it: every step of a settlement is
+    # refused before anything is read.
+    await api.staff("operations")
+    assert (await api.http.get("/staff/payouts/stranded")).status_code == 200
+    proposed = await api.http.post(
+        "/staff/payouts/-Nabc0000000000000Z1/resolutions",
+        json={"outcome": "failed", "statement_id": "-Nabc0000000000000Z2", "reason": "Checked"},
+        headers={"Idempotency-Key": push_id()},
+    )
+    assert (proposed.status_code, proposed.json()["error"]["code"]) == (403, "forbidden")
+    for step in ("approve", "decline", "withdraw"):
+        refused = await api.http.post(
+            f"/staff/payout-resolutions/-Nabc0000000000000Z3/{step}",
+            json={"reason": "No"},
+            headers={"Idempotency-Key": push_id()},
+        )
+        assert (refused.status_code, refused.json()["error"]["code"]) == (403, "forbidden"), step
     await api.staff("support")
     assert (await api.http.get("/staff/payouts/stranded")).status_code == 403
     assert (

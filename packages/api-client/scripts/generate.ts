@@ -54,8 +54,10 @@ function refName(ref: string): string {
 
 /** A valid identifier for a schema name such as `Amount-Output` or `app__modules__x__api__Amount`. */
 function identifier(name: string): string {
+  // Only a module-qualified name drops its prefix. A form body such as
+  // `Body_add_photo_client_x__kind__put` keeps its whole name, or two would both become `Put`.
   const parts = name.split("__");
-  const base = parts.length > 2 ? parts.slice(2).join("_") : name;
+  const base = name.startsWith("app__") && parts.length > 2 ? parts.slice(2).join("_") : name;
   return base
     .split(/[^A-Za-z0-9]+/)
     .filter(Boolean)

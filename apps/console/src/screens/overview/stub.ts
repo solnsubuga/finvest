@@ -9,9 +9,9 @@ import type { ApprovalItem, ApprovalsApi, Kind } from "./api.ts";
 const SOURCES: Record<Kind, { view: Permission; decide: Permission }> = {
   wording_change: { view: "settings.view", decide: "wordings.change" },
   ledger_correction: { view: "finance.view", decide: "finance.view" },
-  pot_transfer: { view: "reconciliation.view", decide: "reconciliation.view" },
+  pot_transfer: { view: "reconciliation.view", decide: "reconciliation.change" },
   bank_transfer_match: { view: "reconciliation.view", decide: "bank_transfers.change" },
-  day_close: { view: "reconciliation.view", decide: "reconciliation.view" },
+  day_close: { view: "reconciliation.view", decide: "reconciliation.change" },
   dealing_order: { view: "dealing_desk.view", decide: "dealing_desk.view" },
   dealing_result: { view: "dealing_desk.view", decide: "dealing_desk.view" },
   buffer_rules: { view: "dealing_desk.view", decide: "dealing_orders.change" },

@@ -128,6 +128,7 @@ describe("bank transfers over HTTP", () => {
       [() => refusal(422, "validation_failed", "line_already_used"), "match", "already confirms another payment"],
       [() => refusal(422, "validation_failed", "line_not_found"), "match", "no longer fits this transfer"],
       [() => refusal(409, "conflict"), "match", "Someone else has already acted"],
+      [() => refusal(422, "idempotency_key_reused"), "approve", "Someone else has already acted"],
       [() => refusal(404, "not_found"), "match", "no longer exists"],
       [() => refusal(403, "forbidden"), "approve", "You matched it yourself."],
       [() => refusal(403, "forbidden"), "match", "not allowed to decide"],

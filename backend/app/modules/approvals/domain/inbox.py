@@ -51,9 +51,9 @@ class Source:
 SOURCES: dict[Kind, Source] = {
     "wording_change": Source("settings.view", "wordings.change"),
     "ledger_correction": Source("finance.view", "finance.view"),
-    "pot_transfer": Source("reconciliation.view", "reconciliation.view"),
+    "pot_transfer": Source("reconciliation.view", "reconciliation.change"),
     "bank_transfer_match": Source("reconciliation.view", "bank_transfers.change"),
-    "day_close": Source("reconciliation.view", "reconciliation.view"),
+    "day_close": Source("reconciliation.view", "reconciliation.change"),
     "dealing_order": Source("dealing_desk.view", "dealing_orders.change"),
     "dealing_result": Source("dealing_desk.view", "dealing_orders.change"),
     # The buffer's rules and Finvest's own money in it, decided as the buffer routes decide them.
@@ -69,7 +69,7 @@ SOURCES: dict[Kind, Source] = {
     "complaint_outcome": Source("complaints.view", "complaints.close"),
     "announcement": Source("settings.view", "announcements.send"),
     # Checking a payout account is part of the review queue, so approving the check is too.
-    "payout_resolution": Source("reconciliation.view", "reconciliation.view"),
+    "payout_resolution": Source("reconciliation.view", "reconciliation.change"),
     "payout_account": Source("review_queue.view", "payout_accounts.change"),
     "investment_correction": Source("investments.view", "investment_corrections.change"),
     "tax_remittance": Source("finance.view", "tax_remittances.change"),
