@@ -855,6 +855,11 @@ export const LivenessState = z.object({
 });
 export type LivenessState = z.infer<typeof LivenessState>;
 
+export const LivenessTransactionBody = z.object({
+  transaction_id: z.string(),
+});
+export type LivenessTransactionBody = z.infer<typeof LivenessTransactionBody>;
+
 export const LoginCode = z.object({
   code: z.string(),
   login_id: z.string(),
@@ -2168,6 +2173,19 @@ export const operations = {
     query: z.object({}),
     body: null,
     bodyKind: null,
+    idempotent: false,
+    status: 200,
+    response: LivenessAttempt,
+  },
+  "POST /client/identity-check/liveness/{attempt_id}/transaction": {
+    method: "POST",
+    path: "/client/identity-check/liveness/{attempt_id}/transaction",
+    params: z.object({
+    attempt_id: z.string(),
+  }),
+    query: z.object({}),
+    body: LivenessTransactionBody,
+    bodyKind: "json",
     idempotent: false,
     status: 200,
     response: LivenessAttempt,

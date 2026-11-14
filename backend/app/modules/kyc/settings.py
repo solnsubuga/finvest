@@ -1,6 +1,7 @@
 """Identity check configuration. Read by the API and the worker, the two processes that open
 identity details."""
 
+import re
 from typing import Literal, Self
 
 from pydantic import SecretStr, field_validator, model_validator
@@ -22,7 +23,10 @@ from app.modules.kyc.providers import (
     ManualProvider,
 )
 from app.modules.kyc.regula import RegulaProvider, is_demo, private_or_https
+from app.modules.kyc.regula_liveness import RegulaLivenessProvider
 from app.modules.kyc.regula_quality import RegulaFaceQuality
+
+_HOST = re.compile(r"(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}")
 
 
 class KycSettings(BaseSettings):
@@ -42,6 +46,9 @@ class KycSettings(BaseSettings):
     # `regula`. Regula's public demo services are refused in production.
     regula_document_reader_url: str | None = None
     regula_face_url: str | None = None
+    # Hosts the liveness capture may be downloaded from besides the Face service's own, such as
+    # the storage Regula's cloud links to. Comma separated; https only.
+    regula_capture_hosts: str = ""
     # From the ioTec Verify portal, Management > Settings > Configuration. Needed for `iotec`.
     iotec_verify_client_id: str | None = None
     iotec_verify_api_key: SecretStr | None = None
@@ -59,6 +66,14 @@ class KycSettings(BaseSettings):
         if value is not None:
             # key_from_text never puts the value in its error.
             key_from_text(value.get_secret_value())
+        return value
+
+    @field_validator("regula_capture_hosts")
+    @classmethod
+    def plain_hosts(cls, value: str) -> str:
+        for host in (h.strip() for h in value.split(",")):
+            if host and _HOST.fullmatch(host) is None:
+                raise ValueError("FINVEST_REGULA_CAPTURE_HOSTS takes host names, such as a.b.com")
         return value
 
     @model_validator(mode="after")
@@ -137,6 +152,14 @@ class KycSettings(BaseSettings):
 
     def liveness(self) -> LivenessProvider | None:
         """The liveness provider, or None when clients can only send a camera selfie."""
+        if self.identity_provider == "regula":
+            assert self.regula_face_url  # checked above
+            return RegulaLivenessProvider(
+                face_url=self.regula_face_url,
+                capture_hosts=tuple(
+                    host.strip() for host in self.regula_capture_hosts.split(",") if host.strip()
+                ),
+            )
         if self.identity_provider == "iotec":
             assert self.iotec_verify_client_id and self.iotec_verify_api_key  # checked above
             return IotecLivenessProvider(
@@ -152,7 +175,9 @@ class KycSettings(BaseSettings):
         """The face match for face confirmations, or None when liveness is off.
 
         Always paired with `liveness()`: a live capture with nothing to compare it to, or a
-        comparison of a photo the client chose, would not prove who is there.
+        comparison of a photo the client chose, would not prove who is there. None with Regula
+        for now: its liveness runs in the app and is reported back, which face confirmations do
+        not take yet, so confirmations stay off (docs/identity-checks.md#regula-liveness).
         """
         if self.identity_provider == "iotec":
             assert self.iotec_verify_client_id and self.iotec_verify_api_key  # checked above

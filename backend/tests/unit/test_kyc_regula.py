@@ -31,6 +31,7 @@ from app.modules.kyc.regula import (
     face_verdict,
     private_or_https,
 )
+from app.modules.kyc.regula_liveness import RegulaLivenessProvider
 from app.modules.kyc.settings import KycSettings
 
 KEY = "check:1"
@@ -445,8 +446,17 @@ def test_regula_needs_its_addresses_and_approves_clean_results(
         identity_automatic_approval=False,
     )
     assert not off.automatic_approval
-    # Liveness stays with the camera selfie until Regula's liveness is wired.
-    assert settings.liveness() is None and settings.face_matcher(MemoryStorage()) is None
+    # Regula's liveness runs in the app; face confirmations do not take it yet.
+    assert isinstance(settings.liveness(), RegulaLivenessProvider)
+    assert settings.face_matcher(MemoryStorage()) is None
+    with pytest.raises(ValidationError):
+        KycSettings(
+            identity_data_key=key,
+            identity_provider="regula",
+            regula_document_reader_url=DOCUMENT_READER,
+            regula_face_url=FACE,
+            regula_capture_hosts="https://storage.example.com",
+        )
 
 
 def test_regulas_demo_services_are_refused_in_production() -> None:

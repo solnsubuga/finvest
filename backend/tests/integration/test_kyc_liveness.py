@@ -40,6 +40,7 @@ from app.modules.kyc.liveness_jobs import LivenessJobs
 from app.modules.kyc.providers import ManualProvider
 from app.shared.actors import SYSTEM, Actor
 from app.shared.errors import ApplicationError
+from app.shared.push_ids import push_id
 from tests.support.clock import AsyncBarrier, FakeClock
 from tests.support.kyc import SEALER, SHA256, FakeProvider, all_passed, live_selfie, ready_draft
 from tests.support.ledger import client as new_client
@@ -81,7 +82,8 @@ class FakeLiveness:
         return answer
 
     async def result(self, request_id: str) -> StillOpen | Live | NotLive:
-        if request_id not in self._requests:
+        # A session the client reported comes after the request ID (`liveness.to_read`).
+        if request_id.partition("|")[0] not in self._requests:
             return NotLive("not_this_test")
         self.read.append(request_id)
         answer = self.results.pop(0) if len(self.results) > 1 else self.results[0]
@@ -547,3 +549,144 @@ async def test_a_passport_takes_a_live_selfie_too(
     client = await draft(app_database, fake_clock, document_type=DocumentType.PASSPORT)
     await live_selfie(app_database, worker_database, client, fake_clock)
     assert (await selfie(app_database, client)).live
+
+
+# A session the client reports (Regula's liveness, which runs in the app) ------------------------
+
+
+async def opened(
+    database: Database,
+    worker: Database,
+    client: Actor,
+    clock: FakeClock,
+    provider: FakeLiveness,
+) -> liveness.LivenessView:
+    attempt = await start(database, client, clock, provider)
+    await work(worker, clock, provider, MemoryStorage())
+    return attempt
+
+
+async def report(
+    database: Database, client: Actor, attempt_id: str, clock: FakeClock, txn: str
+) -> liveness.LivenessView:
+    async with database.actor_transaction(client) as session:
+        return await liveness.report_transaction(session, client, attempt_id, txn, clock)
+
+
+async def test_the_reported_session_is_read_and_its_capture_retires_the_pose_frames(
+    app_database: Database, worker_database: Database, fake_clock: FakeClock
+) -> None:
+    client = await draft(app_database, fake_clock)
+    txn = str(uuid.uuid4())  # the database is shared, and a session is used once
+    # Pose frames taken with the camera selfie.
+    check_id = (await selfie(app_database, client)).storage_key.split("/")[1]
+    frame = push_id()
+    async with app_database.actor_transaction(client) as session:
+        await session.execute(
+            text(
+                "INSERT INTO kyc_pose_frames (id, check_id, pose, storage_key, content_type, "
+                "byte_size, sha256, yaw, pitch, created_at) VALUES (:id, :check_id, "
+                "'left', :key, 'image/jpeg', 10, :sha, 30, 0, now())"
+            ),
+            {
+                "id": frame,
+                "check_id": check_id,
+                "key": f"kyc/{check_id}/poses/{frame}",
+                "sha": SHA256,
+            },
+        )
+    provider = FakeLiveness(results=[StillOpen(), Live(CAPTURE, "image/jpeg")])
+    attempt = await opened(app_database, worker_database, client, fake_clock, provider)
+
+    shown = await report(app_database, client, attempt.id, fake_clock, txn)
+    assert shown.status is LivenessStatus.OPEN
+    # Again, the same session: nothing changes.
+    await report(app_database, client, attempt.id, fake_clock, txn)
+    for _ in range(2):
+        fake_clock.advance(seconds=liveness.POLL_EVERY.total_seconds())
+        await work(worker_database, fake_clock, provider, MemoryStorage())
+    # The provider is asked about the session the client reported.
+    assert provider.read[-1].endswith("|" + txn)
+    done = await state(app_database, client, fake_clock)
+    assert done.latest is not None and done.latest.status is LivenessStatus.PASSED
+    assert (await selfie(app_database, client)).live
+    async with app_database.actor_transaction(client) as session:
+        assert await kyc.kept_poses(session, check_id) == {}
+
+    async with app_database.actor_transaction(new_staff()) as session:
+        events = await events_for_resource(session, liveness.RESOURCE, attempt.id)
+    assert "kyc.liveness.transaction_reported" in [event.action for event in events]
+
+
+async def test_a_session_is_reported_once_for_one_open_attempt_of_the_clients_own(
+    app_database: Database, worker_database: Database, fake_clock: FakeClock
+) -> None:
+    client = await draft(app_database, fake_clock)
+    txn = str(uuid.uuid4())  # the database is shared, and a session is used once
+    provider = FakeLiveness(results=[StillOpen()])
+    waiting = await start(app_database, client, fake_clock)
+    with pytest.raises(ApplicationError) as error:
+        # Not open yet.
+        await report(app_database, client, waiting.id, fake_clock, txn)
+    assert error.value.code == "conflict"
+
+    attempt = await opened(app_database, worker_database, client, fake_clock, provider)
+    with pytest.raises(ApplicationError) as error:
+        await report(app_database, client, attempt.id, fake_clock, "NOT-A-UUID")
+    assert error.value.code == "validation_failed"
+    await report(app_database, client, attempt.id, fake_clock, txn)
+    with pytest.raises(ApplicationError) as error:
+        # A different session for the same attempt.
+        await report(app_database, client, attempt.id, fake_clock, str(uuid.uuid4()))
+    assert error.value.code == "conflict"
+
+    other = await draft(app_database, fake_clock)
+    with pytest.raises(ApplicationError) as error:
+        await report(app_database, other, attempt.id, fake_clock, str(uuid.uuid4()))
+    assert error.value.code == "not_found"
+    # Someone else's session is never used for another attempt.
+    theirs = await opened(app_database, worker_database, other, fake_clock, provider)
+    with pytest.raises(ApplicationError) as error:
+        await report(app_database, other, theirs.id, fake_clock, txn)
+    assert error.value.code == "conflict"
+
+    fake_clock.advance(seconds=OPEN_FOR.total_seconds() + 1)
+    with pytest.raises(ApplicationError) as error:
+        await report(app_database, other, theirs.id, fake_clock, str(uuid.uuid4()))
+    assert error.value.code == "conflict"
+
+
+async def test_the_database_keeps_a_reported_session_as_it_was_sent(
+    app_database: Database, worker_database: Database, fake_clock: FakeClock
+) -> None:
+    client = await draft(app_database, fake_clock)
+    txn = str(uuid.uuid4())  # the database is shared, and a session is used once
+    provider = FakeLiveness(results=[StillOpen()])
+    waiting = await start(app_database, client, fake_clock)
+    insert = text(
+        "INSERT INTO kyc_liveness_transactions (attempt_id, transaction_id, created_at) "
+        "VALUES (:id, :txn, now())"
+    )
+    with pytest.raises(DBAPIError):
+        # Only for an open attempt.
+        async with app_database.actor_transaction(client) as session:
+            await session.execute(insert, {"id": waiting.id, "txn": txn})
+    attempt = await opened(app_database, worker_database, client, fake_clock, provider)
+    with pytest.raises(DBAPIError):
+        async with app_database.actor_transaction(client) as session:
+            await session.execute(insert, {"id": attempt.id, "txn": "not-a-uuid"})
+    with pytest.raises(DBAPIError):
+        # Only by the client.
+        async with worker_database.actor_transaction(SYSTEM) as session:
+            await session.execute(insert, {"id": attempt.id, "txn": txn})
+    await report(app_database, client, attempt.id, fake_clock, txn)
+    for database, actor in ((app_database, client), (worker_database, SYSTEM)):
+        for statement in (
+            "UPDATE kyc_liveness_transactions SET transaction_id = :txn WHERE attempt_id = :id",
+            "DELETE FROM kyc_liveness_transactions WHERE attempt_id = :id",
+        ):
+            with pytest.raises(DBAPIError):
+                async with database.actor_transaction(actor) as session:
+                    await session.execute(
+                        text(statement), {"id": attempt.id, "txn": str(uuid.uuid4())}
+                    )
