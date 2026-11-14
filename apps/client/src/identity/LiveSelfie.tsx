@@ -59,7 +59,8 @@ export function LiveSelfie({ check, top, frame, onCamera, onDone, regula = false
   const [earlier, setEarlier] = useState<Set<string> | null>(null);
   const noteEarlier = useCallback((next: LivenessState) => {
     const latest = next.latest;
-    setEarlier((known) => known ?? new Set(latest?.status === "open" || latest?.status === "starting" ? [latest.id] : []));
+    // Only an open attempt can have had its session. One still starting has not, so it runs here.
+    setEarlier((known) => known ?? new Set(latest?.status === "open" ? [latest.id] : []));
   }, []);
   const [reported, setReported] = useState<string | null>(null);
   const [unsent, setUnsent] = useState<{ attempt: string; transaction: string } | null>(null);

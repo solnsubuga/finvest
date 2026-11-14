@@ -168,6 +168,23 @@ describe("Regula's liveness in the app", () => {
     expect((await client.getLiveness()).latest!.id).not.toBe(first);
   });
 
+  it("runs an attempt that was still starting when the screen opened", async () => {
+    await upToTheSelfie();
+    const client = made[made.length - 1]!;
+    const started = await client.startLiveness();
+    // The client comes back while the attempt is still being set up: it never had a session.
+    const real = client.getLiveness.bind(client);
+    jest.spyOn(client, "getLiveness").mockImplementationOnce(async () => {
+      const state = await real();
+      return { ...state, latest: { ...state.latest!, status: "starting", url: null } };
+    });
+    await act(async () => router.replace("/id-check"));
+    await act(async () => router.push("/id-check/photo/selfie"));
+    for (let read = 0; read < 4 && !regulaSession.open; read++) await nextRead();
+    expect(regulaSession.open).toBe(true);
+    expect(regulaSession.tag).toBe(started.id);
+  });
+
   it("says why a session could not run", async () => {
     await upToTheSelfie();
     await startSession();
