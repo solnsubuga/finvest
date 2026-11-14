@@ -115,13 +115,28 @@ describe("review queue over HTTP", () => {
     ]);
   });
 
-  it("lists held payouts and decides one with the screen's idempotency key", async () => {
-    const fetch = vi.fn<typeof globalThis.fetch>((url) =>
-      String(url).endsWith("/held") ? reply(200, [HELD]) : reply(200, { id: HELD.id, decision: "approved", status: "queued" }),
+  it("lists held payouts with an open proposal to release them, and none once it is decided", async () => {
+    const release = {
+      id: "-NreleaseA0000000001",
+      payout_id: HELD.id,
+      reason: "Called the client",
+      status: "proposed",
+      proposed_by: "-Nstaff000000000000A",
+      proposed_at: "2026-11-13T09:30:00Z",
+      decided_by: null,
+      decided_at: null,
+      decision_reason: null,
+    };
+    const fetch = vi.fn<typeof globalThis.fetch>(() =>
+      reply(200, [
+        { ...HELD, release },
+        { ...HELD, id: "-NpayoutB00000000001", release: { ...release, status: "withdrawn" } },
+        { ...HELD, id: "-NpayoutC00000000001", release: null },
+      ]),
     );
-    const api = apiWith(fetch);
-    const [payout] = await api.listHeld();
-    expect(payout).toEqual({
+    const [open, withdrawn, none] = await apiWith(fetch).listHeld();
+    expect(sent(fetch).url).toBe("https://api.test/staff/payouts/held");
+    expect(open).toEqual({
       id: HELD.id,
       clientId: HELD.client_id,
       destinationId: HELD.destination_id,
@@ -129,21 +144,44 @@ describe("review queue over HTTP", () => {
       amount: { minor: 12_500_000, currency: "UGX" },
       businessDate: "2026-11-13",
       createdAt: "2026-11-13T09:00:00Z",
+      release: {
+        id: "-NreleaseA0000000001",
+        payoutId: HELD.id,
+        reason: "Called the client",
+        proposedBy: "-Nstaff000000000000A",
+        proposedAt: "2026-11-13T09:30:00Z",
+      },
     });
-    expect(await api.decideHeld(HELD.id, "approve", "Known client", "key-1")).toEqual({ id: HELD.id, decision: "approved", status: "queued" });
-    await api.decideHeld(HELD.id, "decline", "Asked by phone", "key-2");
-    expect(sent(fetch, 1)).toMatchObject({ url: `https://api.test/staff/payouts/${HELD.id}/approve`, body: { reason: "Known client" } });
-    expect(sent(fetch, 1).headers["Idempotency-Key"]).toBe("key-1");
-    expect(sent(fetch, 2)).toMatchObject({ url: `https://api.test/staff/payouts/${HELD.id}/decline`, body: { reason: "Asked by phone" } });
-    expect(sent(fetch, 2).headers["Idempotency-Key"]).toBe("key-2");
+    expect(withdrawn?.release).toBeNull();
+    expect(none?.release).toBeNull();
   });
 
-  it("sends a decision again with the same key once the person confirms it is them", async () => {
+  it("proposes, approves, withdraws and declines on their routes, with the screen's keys", async () => {
+    const fetch = vi.fn<typeof globalThis.fetch>((url) =>
+      String(url).endsWith("/release")
+        ? reply(201, { id: "-NreleaseA0000000001", payout_id: HELD.id, reason: "Called", status: "proposed", proposed_by: "-Nstaff000000000000A", proposed_at: "2026-11-13T09:30:00Z" })
+        : reply(200, { id: HELD.id, decision: "approved", status: "queued" }),
+    );
+    const api = apiWith(fetch);
+    expect(await api.proposeRelease(HELD.id, "Called", "key-1")).toMatchObject({ id: "-NreleaseA0000000001", proposedBy: "-Nstaff000000000000A" });
+    expect(await api.approveRelease("-NreleaseA0000000001", "Agreed", "key-2")).toEqual({ id: HELD.id, decision: "approved", status: "queued" });
+    await api.withdrawRelease("-NreleaseA0000000001", "Wrong payout");
+    await api.decline(HELD.id, "Asked by phone", "key-3");
+    const calls = [0, 1, 2, 3].map((call) => sent(fetch, call));
+    expect(calls.map((call) => [call.url, call.body, call.headers["Idempotency-Key"]])).toEqual([
+      [`https://api.test/staff/payouts/${HELD.id}/release`, { reason: "Called" }, "key-1"],
+      ["https://api.test/staff/payout-releases/-NreleaseA0000000001/approve", { reason: "Agreed" }, "key-2"],
+      ["https://api.test/staff/payout-releases/-NreleaseA0000000001/withdraw", { reason: "Wrong payout" }, undefined],
+      [`https://api.test/staff/payouts/${HELD.id}/decline`, { reason: "Asked by phone" }, "key-3"],
+    ]);
+  });
+
+  it("sends an approval again with the same key once the person confirms it is them", async () => {
     const fetch = vi
       .fn<typeof globalThis.fetch>()
       .mockImplementationOnce(() => refusal(403, "confirm_it_is_you"))
       .mockImplementationOnce(() => reply(200, { id: HELD.id, decision: "approved", status: "queued" }));
-    await apiWith(fetch, () => Promise.resolve(true)).decideHeld(HELD.id, "approve", "Known client", "key-1");
+    await apiWith(fetch, () => Promise.resolve(true)).approveRelease("-NreleaseA0000000001", "Agreed", "key-1");
     expect(fetch).toHaveBeenCalledTimes(2);
     expect(sent(fetch, 1).headers["Idempotency-Key"]).toBe("key-1");
   });
@@ -157,6 +195,10 @@ describe("review queue over HTTP", () => {
     [refusal(409, "conflict", "destination_not_checked"), "destination_not_checked"],
     [refusal(409, "conflict", "account_in_use"), "account_in_use"],
     [refusal(409, "conflict", "payout_not_held"), "payout_not_held"],
+    [refusal(409, "conflict", "release_already_proposed"), "release_already_proposed"],
+    [refusal(409, "conflict", "release_already_decided"), "release_already_decided"],
+    [refusal(403, "forbidden", "proposed_by_you"), "proposed_by_you"],
+    [refusal(403, "forbidden", "not_proposed_by_you"), "not_proposed_by_you"],
     [refusal(409, "conflict", "something_new"), "conflict"],
     [refusal(403, "forbidden", "checked_by_you"), "checked_by_you"],
     [refusal(403, "forbidden"), "forbidden"],
