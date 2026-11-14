@@ -14,7 +14,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.modules.documents.domain import building
 from app.modules.documents.domain.building import EntryChange, InvestmentFacts, Names
-from app.modules.documents.domain.investment_notes import AtMaturityFigures, InvestmentNote
+from app.modules.documents.domain.investment_notes import (
+    AtMaturityFigures,
+    EndedNote,
+    Ending,
+    InvestmentNote,
+)
 from app.modules.documents.domain.receipts import Receipt, masked
 from app.modules.documents.domain.statements import (
     Activity,
@@ -173,6 +178,48 @@ async def investment_note(
             if fixed and returns is not None
             else None,
             then=building.at_maturity_wording(found.at_maturity) if fixed else None,
+        ),
+        account,
+    )
+
+
+async def ended_note(
+    session: AsyncSession, *, client_id: str, investment_id: str, reference: str, clock: Clock
+) -> tuple[EndedNote, Holder]:
+    """The note that confirms an investment ended, read as its client sees it: after tax."""
+    account = await holder(session, client_id)
+    found = await investments.client_investment(
+        session, Actor("client", client_id), investment_id, clock
+    )
+    status = found.status.value
+    if found.start_date is None or status not in ("matured", "withdrawn"):
+        raise ApplicationError("conflict")  # it has not ended, so there is nothing to confirm
+    if status == "withdrawn":
+        assert found.withdrawal_requested_at is not None  # a withdrawal is always asked for
+        # Interest stops on the day the client asks, so that is the day it ended.
+        ending, ended_on = Ending.WITHDRAWN, business_date(found.withdrawal_requested_at)
+    else:
+        assert found.maturity_date is not None  # only a fixed term matures
+        ended_on = found.maturity_date
+        if found.rolled_into_id is not None:
+            ending = Ending.ROLLED_OVER
+        elif found.payout_id is not None:
+            ending = Ending.PAID_OUT
+        else:
+            ending = Ending.WAITING
+    return (
+        EndedNote(
+            reference=reference,
+            client_name=account.name,
+            account_number=account.account_number,
+            investment_id=found.id,
+            product_name=found.product_name,
+            amount=found.amount,
+            interest=found.interest_so_far,
+            start_date=found.start_date,
+            ended_on=ended_on,
+            ending=ending,
+            rolled_into_id=found.rolled_into_id,
         ),
         account,
     )

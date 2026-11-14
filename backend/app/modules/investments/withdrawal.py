@@ -24,6 +24,7 @@ from app.infrastructure.jobs import JobRequest, enqueue, publish
 from app.modules.audit import service as audit
 from app.modules.audit.domain.events import AuditActor, AuditEvent
 from app.modules.dealing.events import FUND_EARLY_WITHDRAWAL
+from app.modules.documents.events import NOTE_ON_END
 from app.modules.investments.catalogue import invalid
 from app.modules.investments.domain.investments import InvestmentStatus, can_withdraw_early
 from app.modules.investments.events import WITHDRAW_KIND
@@ -218,8 +219,9 @@ async def withdraw(session: AsyncSession, investment_id: str, clock: Clock) -> I
             "amount_minor": amount.minor,
         },
         # The dealing desk funds it from the buffer or a sale, then announces
-        # `dealing.withdrawal_funded`, which pays the client.
-        consumers=[FUND_EARLY_WITHDRAWAL],
+        # `dealing.withdrawal_funded`, which pays the client. Documents issues the note that
+        # confirms the investment ended.
+        consumers=[FUND_EARLY_WITHDRAWAL, NOTE_ON_END],
         now=now,
     )
     await audit.record(

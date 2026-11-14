@@ -27,6 +27,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.infrastructure.jobs import publish
 from app.modules.audit import service as audit
 from app.modules.audit.domain.events import AuditActor, AuditEvent
+from app.modules.documents.events import NOTE_ON_END
 from app.modules.goals.events import FOLLOW_ROLLOVER
 from app.modules.investments import accrual
 from app.modules.investments.catalogue import invalid, product_from_row, product_row, rates_for
@@ -388,7 +389,8 @@ async def _roll_over(
             "principal_minor": proceeds.minor,
             "currency": proceeds.currency.value,
         },
-        consumers=[FOLLOW_ROLLOVER],
+        # Goals follows the rollover; documents issues the note that confirms the end.
+        consumers=[FOLLOW_ROLLOVER, NOTE_ON_END],
         now=now,
     )
     logger.info("investment_rolled_over", investment_id=investment.id, new_investment_id=new_id)
@@ -470,7 +472,8 @@ async def _hand_over(
             "principal_minor": investment.amount.minor,
             "currency": proceeds.currency.value,
         },
-        consumers=[],
+        # Documents issues the note that confirms the investment ended.
+        consumers=[NOTE_ON_END],
         now=now,
     )
     logger.info(

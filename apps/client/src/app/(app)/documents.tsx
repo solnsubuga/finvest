@@ -9,6 +9,7 @@ import { Icon } from "@/components/Icon";
 import { Eyebrow, Txt } from "@/components/Txt";
 import { useDocuments } from "@/documents/DocumentsProvider";
 import {
+  isEndNote,
   monthLabel,
   noteReference,
   parseDay,
@@ -557,7 +558,7 @@ function rowText(document: DocumentItem): { title: string; subtitle: string } {
     const reference = noteReference(document);
     return {
       title: reference ? `Investment note ${reference}` : "Investment note",
-      subtitle: `Investment started. Note made on ${formatDateTime(document.finishedAt ?? document.requestedAt)}`,
+      subtitle: `${isEndNote(document) ? "Investment ended" : "Investment started"}. Note made on ${formatDateTime(document.finishedAt ?? document.requestedAt)}`,
     };
   }
   if (document.kind === "tax_certificate" && document.dateFrom && document.dateTo) {
