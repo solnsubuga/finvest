@@ -27,8 +27,15 @@ jest.mock("@/identity/stubIdentityClient", () => {
   const actual = jest.requireActual("@/identity/stubIdentityClient");
   return {
     ...actual,
+    // The camera selfie. The guided selfie is covered in guidedSelfieFlow.test.tsx.
     createStubIdentityClient: (options: object) =>
-      actual.createStubIdentityClient({ ...options, delayMs: 0, liveness: false, now: () => Date.parse("2026-11-13T09:00:00Z") }),
+      actual.createStubIdentityClient({
+        ...options,
+        delayMs: 0,
+        liveness: false,
+        guided: false,
+        now: () => Date.parse("2026-11-13T09:00:00Z"),
+      }),
   };
 });
 

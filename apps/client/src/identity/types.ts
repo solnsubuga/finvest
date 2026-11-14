@@ -9,6 +9,8 @@
  * provider's answers, review flags or who decided.
  */
 
+import type { FrameProblem, Pose } from "./poses";
+
 export type DocumentType = "national_id" | "passport" | "driving_permit" | "refugee_id";
 
 export type PhotoKind = "front" | "back" | "selfie";
@@ -52,7 +54,14 @@ export type IdentityCheck = {
   photos: PhotoKind[];
   /** True when the selfie was captured by a live check that saw a live person. */
   liveSelfie: boolean;
-  /** What is still needed before it can be handed in: photo kinds and "details". */
+  /**
+   * True when the selfie is the guided one: after the straight-on selfie, a frame for each
+   * pose (docs/identity-checks.md#guided-selfie).
+   */
+  guidedSelfie: boolean;
+  /** The pose frames kept with the current selfie. */
+  poses: Pose[];
+  /** What is still needed before it can be handed in: photo kinds, "details" and `pose_<pose>`. */
   missing: string[];
   /** The photos staff asked for again. Only while `awaiting_client`. */
   retakePhotos: PhotoKind[];
@@ -109,6 +118,11 @@ export type IdentityErrorCode =
   | "photo_not_needed"
   /** Not a JPEG, PNG or WebP, larger than 10 MB, or not really a picture. */
   | "photo_not_accepted"
+  /**
+   * The guided selfie or a pose frame was not good enough. `problems` says why, each a prompt
+   * to show before it is taken again.
+   */
+  | "retake"
   /** The details were refused. `fields` says which and why. */
   | "invalid_details"
   /** Something is still missing. `missing` says what. */
@@ -124,16 +138,23 @@ export class IdentityError extends Error {
   readonly fields: { field: DetailField; code: string }[];
   /** For `incomplete`: photo kinds and "details". */
   readonly missing: string[];
+  /** For `retake`: why the picture was refused. */
+  readonly problems: FrameProblem[];
 
   constructor(
     code: IdentityErrorCode,
-    { fields = [], missing = [] }: { fields?: { field: DetailField; code: string }[]; missing?: string[] } = {},
+    {
+      fields = [],
+      missing = [],
+      problems = [],
+    }: { fields?: { field: DetailField; code: string }[]; missing?: string[]; problems?: FrameProblem[] } = {},
   ) {
     super(code);
     this.name = "IdentityError";
     this.code = code;
     this.fields = fields;
     this.missing = missing;
+    this.problems = problems;
   }
 }
 
@@ -144,6 +165,8 @@ export type IdentityClient = {
   chooseDocument(documentType: DocumentType, country: string): Promise<IdentityCheck>;
   /** Sends one photo. It replaces the one of the same kind. */
   sendPhoto(kind: PhotoKind, file: PhotoFile): Promise<IdentityCheck>;
+  /** Sends one frame of the guided selfie, after the selfie. It replaces the one for the same pose. */
+  sendPose(pose: Pose, file: PhotoFile): Promise<IdentityCheck>;
   confirmDetails(details: IdentityDetails): Promise<IdentityCheck>;
   /** Hands the check in, or the photos staff asked for. */
   submit(): Promise<IdentityCheck>;
@@ -158,6 +181,7 @@ const errorCopy: Record<IdentityErrorCode, string> = {
   cannot_change: "Your ID check is with us now, so it cannot be changed. Pull down to see where it stands.",
   photo_not_needed: "We do not need that photo now.",
   photo_not_accepted: "We could not use that photo. Take a JPG, PNG or WebP photo under 10 MB.",
+  retake: "That picture was not clear enough. Please take it again.",
   invalid_details: "Some details are not right. Check the fields marked in red.",
   incomplete: "Something is still missing. Check each step and try again.",
   liveness_used_up: "You have used every live check for this ID. Take a selfie with your camera instead.",

@@ -7,3 +7,6 @@ expo-env.d.ts
 /android
 .metro-health-check*
 *.tsbuildinfo
+
+# The guided selfie face detector, copied by scripts/face-assets.mjs
+/public/face/

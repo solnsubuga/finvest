@@ -91,6 +91,12 @@ What the stub does not cover yet, each with a screen on the design canvas: the a
 
 Still outstanding on the sign up screen: "the terms" and "the privacy notice" are not links yet, because neither document exists. They must link to the real documents before launch.
 
+## Identity check camera
+
+The guided selfie (docs/identity-checks.md#guided-selfie) needs a live camera with a face detector. On a phone that is `react-native-vision-camera` with `react-native-vision-camera-face-detector` (ML Kit), which are native modules: the app runs in a development build (`expo prebuild` or EAS), not Expo Go. On the web, `pnpm web` and `pnpm build:web` first run `scripts/face-assets.mjs`, which copies MediaPipe's library and WebAssembly runtime and the model in `face-model/` to `public/face/`. A browser loads about 14 MB the first time it opens the selfie. Serving it needs `'wasm-unsafe-eval'` in the page's script-src and the camera allowed by Permissions-Policy for the app's own origin.
+
+In a demo build, `globalThis.finvestDemoFace(reading)` says what the web camera sees, for screenshots and browser tests; production builds leave it out, and CI checks that.
+
 ## Goals
 
 The goal screens live in `src/app/goals/` and talk to the `GoalsClient` interface in `src/goals/types.ts`. `src/goals/apiGoalsClient.ts` answers it from the API's `/client/goals` routes (docs/goals.md); the demo in `stubGoalsClient.ts` answers it in tests and with `EXPO_PUBLIC_DEMO_AUTH=1`.

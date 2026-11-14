@@ -102,3 +102,42 @@ describe("the demo's live selfie", () => {
     await expect(client.getLiveness()).resolves.toMatchObject({ latest: { id: second.id } });
   });
 });
+
+describe("the demo's guided selfie", () => {
+  async function upToTheTurns() {
+    const client = createStubIdentityClient({ delayMs: 0, now: NOW, guided: true });
+    await client.chooseDocument("national_id", "UG");
+    await client.sendPhoto("front", photo);
+    await client.sendPhoto("back", photo);
+    await client.confirmDetails(details("CF94012343"));
+    return client;
+  }
+
+  it("needs the selfie first, then a frame for each pose before handing in", async () => {
+    const client = await upToTheTurns();
+    await expect(client.sendPose("left", photo)).rejects.toMatchObject({ code: "retake", problems: ["selfie_first"] });
+    const afterSelfie = await client.sendPhoto("selfie", photo);
+    expect(afterSelfie).toMatchObject({ guidedSelfie: true, missing: ["pose_left", "pose_right", "pose_up", "pose_down"] });
+    await client.sendPose("left", photo);
+    await client.sendPose("right", photo);
+    // The demo refuses the first look up, so the prompt can be seen.
+    await expect(client.sendPose("up", photo)).rejects.toMatchObject({ code: "retake", problems: ["turn_more"] });
+    await client.sendPose("up", photo);
+    await expect(client.submit()).rejects.toMatchObject({ code: "incomplete", missing: ["pose_down"] });
+    await expect(client.sendPose("down", photo)).resolves.toMatchObject({ poses: ["left", "right", "up", "down"], missing: [] });
+    await expect(client.submit()).resolves.toMatchObject({ status: "needs_review" });
+  });
+
+  it("drops the frames when the selfie is taken again", async () => {
+    const client = await upToTheTurns();
+    await client.sendPhoto("selfie", photo);
+    await client.sendPose("left", photo);
+    await expect(client.sendPhoto("selfie", photo)).resolves.toMatchObject({ poses: [] });
+  });
+
+  it("has no frames when the selfie is not the guided one", async () => {
+    const client = createStubIdentityClient({ delayMs: 0, now: NOW });
+    await client.chooseDocument("national_id", "UG");
+    await expect(client.sendPose("left", photo)).rejects.toEqual(new IdentityError("not_found"));
+  });
+});

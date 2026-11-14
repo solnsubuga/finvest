@@ -12,6 +12,7 @@ import {
   PhotoFile,
   PhotoKind,
 } from "./types";
+import { isFrameProblem, Pose } from "./poses";
 
 /**
  * The ID check screens' contract, answered by the real API (`/client/identity-check`,
@@ -50,6 +51,8 @@ export function toCheck(view: ClientCheck): IdentityCheck {
     detailsConfirmed: view.details_confirmed,
     photos: view.photos.map((photo) => photo.kind),
     liveSelfie: view.photos.some((photo) => photo.kind === "selfie" && photo.live === true),
+    guidedSelfie: view.guided_selfie ?? false,
+    poses: view.poses ?? [],
     missing: view.missing,
     retakePhotos: view.retake_photos,
     clientMessage: view.client_message,
@@ -69,7 +72,7 @@ export function toAttempt(attempt: ApiAttempt): LivenessAttempt {
   };
 }
 
-type Action = "read" | "document" | "photo" | "details" | "submit" | "liveness";
+type Action = "read" | "document" | "photo" | "pose" | "details" | "submit" | "liveness";
 
 export function toIdentityError(error: unknown, action: Action): IdentityError {
   if (error instanceof IdentityError) return error;
@@ -79,11 +82,21 @@ export function toIdentityError(error: unknown, action: Action): IdentityError {
     case "not_found":
       return new IdentityError("not_found");
     case "conflict":
+      // A frame is refused this way once the selfie can no longer change.
+      if (action === "pose") return new IdentityError("cannot_change");
       // During a retake, a photo staff did not ask for is refused the same way as a decided check.
       return new IdentityError(action === "photo" ? "photo_not_needed" : "cannot_change");
     case "payload_too_large":
       return new IdentityError("photo_not_accepted");
     case "validation_failed": {
+      if (action === "photo" || action === "pose") {
+        // The guided selfie (field `photo`) or a pose frame (field `frame`) was not good enough.
+        const problems = error.fields.flatMap((problem) =>
+          ["photo", "frame", "pose"].includes(problem.field) && isFrameProblem(problem.code) ? [problem.code] : [],
+        );
+        if (problems.length > 0) return new IdentityError("retake", { problems });
+      }
+      if (action === "pose") return new IdentityError("photo_not_accepted");
       if (action === "photo") {
         const notPart = error.fields.some((problem) => problem.code === "photo_not_part_of_document");
         return new IdentityError(notPart ? "photo_not_needed" : "photo_not_accepted");
@@ -156,6 +169,20 @@ export function createApiIdentityClient(): IdentityClient {
         );
       } catch (error) {
         throw toIdentityError(error, "photo");
+      }
+    },
+
+    async sendPose(pose: Pose, file) {
+      try {
+        return toCheck(
+          await api("PUT /client/identity-check/poses/{pose}", {
+            params: { pose },
+            body: { photo: await uploadable(file) },
+            timeoutMs: 90_000,
+          }),
+        );
+      } catch (error) {
+        throw toIdentityError(error, "pose");
       }
     },
 

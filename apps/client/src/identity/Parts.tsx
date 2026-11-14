@@ -12,8 +12,19 @@ import { stepNumber, Step } from "./steps";
 import { DocumentType } from "./types";
 
 /** Back, then "2 of 5": the top row of every step of the ID check. */
-export function StepTop({ step, documentType, fallback }: { step: Step; documentType: DocumentType | null; fallback: Href }) {
-  const where = stepNumber(step, documentType);
+export function StepTop({
+  step,
+  documentType,
+  fallback,
+  guided = false,
+}: {
+  step: Step;
+  documentType: DocumentType | null;
+  fallback: Href;
+  /** The guided selfie adds the head turns after the selfie. */
+  guided?: boolean;
+}) {
+  const where = stepNumber(step, documentType, guided);
   return (
     <View style={styles.top}>
       <BackButton fallback={fallback} />

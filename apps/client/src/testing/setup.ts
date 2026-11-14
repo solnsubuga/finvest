@@ -4,3 +4,6 @@ jest.mock("@/auth/pin", () => {
   const actual = jest.requireActual("@/auth/pin");
   return { ...actual, appPinApplies: jest.fn(() => false) };
 });
+
+// Tests have no camera or face detector. `faceCamera` in fakeGuideCamera says what it sees.
+jest.mock("@/identity/camera/GuideCamera", () => jest.requireActual("@/testing/fakeGuideCamera"));

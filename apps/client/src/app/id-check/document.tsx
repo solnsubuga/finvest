@@ -102,7 +102,7 @@ function DocumentForm({ check }: { check: IdentityCheck | null }) {
       }
     >
       <Stack.Screen options={{ title: "Which ID will you use?" }} />
-      <StepTop step="document" documentType={documentType} fallback="/id-check" />
+      <StepTop step="document" documentType={documentType} guided={check?.guidedSelfie ?? false} fallback="/id-check" />
       <View style={{ marginTop: 28, gap: 10 }}>
         <Title>Which ID will you use?</Title>
         <Txt color={colors.muted}>The law asks us to confirm who you are before you invest. It takes about two minutes.</Txt>

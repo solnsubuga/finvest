@@ -12,6 +12,8 @@ function draft(overrides: Partial<IdentityCheck> = {}): IdentityCheck {
     detailsConfirmed: false,
     photos: [],
     liveSelfie: false,
+    guidedSelfie: false,
+    poses: [],
     missing: ["front", "back", "details", "selfie"],
     retakePhotos: [],
     clientMessage: null,
@@ -52,5 +54,18 @@ describe("a photo from the device", () => {
     expect(checkPhoto({ uri: "u", name: "a.heic", mimeType: "image/heic", size: 5 })).toBe("wrong_type");
     expect(checkPhoto({ uri: "u", name: "a.png", mimeType: "image/png", size: 10 * 1024 * 1024 + 1 })).toBe("too_large");
     expect(checkPhoto({ uri: "u", name: "a.png", mimeType: "image/png", size: null })).toBe("empty");
+  });
+
+  it("puts the head turns after the selfie when the selfie is the guided one", () => {
+    expect(stepsFor("national_id", true)).toEqual(["document", "front", "back", "details", "selfie", "poses"]);
+    expect(stepNumber("selfie", "passport", true)).toEqual({ step: 4, of: 5 });
+    expect(stepNumber("poses", "passport", true)).toEqual({ step: 5, of: 5 });
+    const guided = (missing: string[]) => draft({ guidedSelfie: true, missing });
+    expect(nextStep(guided(["selfie", "pose_left", "pose_right", "pose_up", "pose_down"]))).toBe("selfie");
+    expect(nextStep(guided(["pose_up"]))).toBe("poses");
+    expect(stepAfter("selfie", guided(["pose_left", "pose_right", "pose_up", "pose_down"]))).toBe("poses");
+    expect(stepAfter("selfie", guided([]))).toBeNull();
+    // Not guided: pose entries are never asked for.
+    expect(nextStep(draft({ missing: ["pose_up"] }))).toBeNull();
   });
 });
