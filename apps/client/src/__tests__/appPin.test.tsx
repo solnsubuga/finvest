@@ -78,7 +78,7 @@ describe("the app PIN on a phone", () => {
 
     await typePin("48151");
     await typePin("48151");
-    await screen.findByText("Welcome, Amara");
+    await screen.findByTestId("home");
   });
 
   it("opens the app again after a while in the background", async () => {
@@ -86,7 +86,7 @@ describe("the app PIN on a phone", () => {
     await screen.findByText("Create a 5 digit PIN");
     await typePin("48151");
     await typePin("48151");
-    await screen.findByText("Welcome, Amara");
+    await screen.findByTestId("home");
 
     // A short look at another app does not lock it.
     await background(LOCK_AFTER_MS - 1000);
@@ -98,7 +98,7 @@ describe("the app PIN on a phone", () => {
     await typePin("90817");
     await screen.findByText("That PIN is not right. 4 tries left before this phone is signed out.");
     await typePin("48151");
-    await screen.findByText("Welcome, Amara");
+    await screen.findByTestId("home");
   });
 
   it("signs the phone out after five wrong PINs", async () => {
@@ -106,7 +106,7 @@ describe("the app PIN on a phone", () => {
     await screen.findByText("Create a 5 digit PIN");
     await typePin("48151");
     await typePin("48151");
-    await screen.findByText("Welcome, Amara");
+    await screen.findByTestId("home");
     await background(LOCK_AFTER_MS);
     await screen.findByText("Enter your PIN to open the app on this phone");
     for (let tries = 0; tries < 5; tries += 1) {
@@ -122,7 +122,7 @@ describe("the app PIN on a phone", () => {
     await screen.findByText("Create a 5 digit PIN");
     await typePin("48151");
     await typePin("48151");
-    await screen.findByText("Welcome, Amara");
+    await screen.findByTestId("home");
     await background(LOCK_AFTER_MS);
     await fireEvent.press(await screen.findByTestId("pin-forgot"));
     await screen.findByText("Reset your PIN");
@@ -158,6 +158,6 @@ describe("signing up", () => {
     await screen.findByRole("header", { name: "Add a passkey" });
     expect(screen.getByText("4 of 4")).toBeTruthy();
     await fireEvent.press(screen.getByTestId("offer-not-now"));
-    await waitFor(() => expect(screen.getByText("Welcome to Finvest")).toBeTruthy());
+    await waitFor(() => expect(screen.getByTestId("home")).toBeTruthy());
   });
 });

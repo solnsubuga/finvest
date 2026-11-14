@@ -131,7 +131,7 @@ describe("the identity check", () => {
 
   it("shows an approved client their account number from Profile", async () => {
     await signIn("772123456");
-    await screen.findByText("Welcome, Amara");
+    await screen.findByTestId("home");
     // Approved: Home no longer asks for the check.
     expect(screen.queryByTestId("home-id-check")).toBeNull();
     await fireEvent.press(screen.getByLabelText("Profile"));

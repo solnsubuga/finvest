@@ -74,7 +74,7 @@ async function openPayScreen() {
   await fireEvent.changeText(screen.getByTestId("password-input"), DEMO_PASSWORD);
   await fireEvent.press(screen.getByTestId("login-submit"));
   await fireEvent.press(await screen.findByTestId("use-passkey"));
-  await screen.findByText("Welcome, Amara");
+  await screen.findByTestId("home");
   await fireEvent.press(screen.getByLabelText("Invest"));
   await fireEvent.press(await screen.findByTestId("demo-pay"));
   await screen.findByText("Pay UGX 1,000,000");
@@ -155,7 +155,7 @@ describe("paying for an investment by bank transfer", () => {
     await screen.findByText("Completed");
     expect(screen.getByText("Bank transfer")).toBeTruthy();
     await fireEvent.press(screen.getByTestId("transfer-done"));
-    await screen.findByText("Welcome, Amara");
+    await screen.findByTestId("home");
   });
 
   it("sends nothing until the receipt and every detail are there", async () => {

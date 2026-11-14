@@ -7,6 +7,7 @@ import { SafeAreaProvider } from "react-native-safe-area-context";
 import { ActivityProvider } from "@/activity/ActivityProvider";
 import { AuthProvider } from "@/auth/AuthProvider";
 import { AutoinvestProvider } from "@/autoinvest/AutoinvestProvider";
+import { ConnectionProvider } from "@/connection/ConnectionProvider";
 import { DocumentsProvider } from "@/documents/DocumentsProvider";
 import { GoalsProvider } from "@/goals/GoalsProvider";
 import { IdentityProvider } from "@/identity/IdentityProvider";
@@ -48,12 +49,14 @@ export default function RootLayout() {
                         <PayoutsProvider>
                           <ActivityProvider>
                             <ProfileProvider>
-                              <Stack
-                                screenOptions={{
-                                  headerShown: false,
-                                  contentStyle: { backgroundColor: colors.paper },
-                                }}
-                              />
+                              <ConnectionProvider>
+                                <Stack
+                                  screenOptions={{
+                                    headerShown: false,
+                                    contentStyle: { backgroundColor: colors.paper },
+                                  }}
+                                />
+                              </ConnectionProvider>
                             </ProfileProvider>
                           </ActivityProvider>
                         </PayoutsProvider>

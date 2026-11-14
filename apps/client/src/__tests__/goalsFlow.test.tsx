@@ -70,7 +70,7 @@ beforeAll(warmRouter, WARM_ROUTER_MS);
 describe("goals", () => {
   it("lists the demo account's goals with their progress", async () => {
     await signIn("772123456");
-    await screen.findByText("Welcome, Amara");
+    await screen.findByTestId("home");
     await fireEvent.press(screen.getByLabelText("Goals"));
     expect(await screen.findByText("School fees, Term 1")).toBeTruthy();
     expect(screen.getByText("Emergency fund")).toBeTruthy();
@@ -78,7 +78,7 @@ describe("goals", () => {
 
   it("sets up a goal in three steps, then pays the first saving", async () => {
     await signIn("772123456");
-    await screen.findByText("Welcome, Amara");
+    await screen.findByTestId("home");
     await fireEvent.press(screen.getByLabelText("Goals"));
     await fireEvent.press(await screen.findByTestId("new-goal"));
 
@@ -101,7 +101,7 @@ describe("goals", () => {
 
   it("refuses a first saving below the minimum without creating anything", async () => {
     await signIn("772123456");
-    await screen.findByText("Welcome, Amara");
+    await screen.findByTestId("home");
     await fireEvent.press(screen.getByLabelText("Goals"));
     await fireEvent.press(await screen.findByTestId("new-goal"));
     await fireEvent.press(await screen.findByTestId("category-emergency"));
@@ -116,7 +116,7 @@ describe("goals", () => {
 
   it("fixes the first saving after a lost answer and sends the same one again", async () => {
     await signIn("772123456");
-    await screen.findByText("Welcome, Amara");
+    await screen.findByTestId("home");
     await fireEvent.press(screen.getByLabelText("Goals"));
     await fireEvent.press(await screen.findByTestId("new-goal"));
     await fireEvent.press(await screen.findByTestId("category-land_or_home"));
@@ -137,7 +137,7 @@ describe("goals", () => {
 
   it("fixes a saving to a goal after a lost answer and sends the same one again", async () => {
     await signIn("772123456");
-    await screen.findByText("Welcome, Amara");
+    await screen.findByTestId("home");
     await fireEvent.press(screen.getByLabelText("Goals"));
     await fireEvent.press(await screen.findByText("Emergency fund"));
     await fireEvent.press(await screen.findByTestId("save-now"));

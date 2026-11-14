@@ -19,11 +19,11 @@ function loadStub(): StubModule | null {
 
 /** Chooses what the investing screens talk to: the demo when it is switched on, otherwise the API. */
 export function resolveInvestingClient(stub: StubModule | null = loadStub()): InvestingClient {
-  return stub ? stub.createStubInvestingClient({ sample: demoSample(), ...demoWithdrawal() }) : createApiInvestingClient();
+  return stub ? stub.createStubInvestingClient({ sample: demoSample(), ...demoWithdrawal(), failPortfolio: demoSearch().includes("portfolio=fail") }) : createApiInvestingClient();
 }
 
 /**
- * On the web, `?accounts=none` has no approved accounts, `?withdraw=lost` loses the first
+ * On the web, `?portfolio=fail` fails the Home and Portfolio totals, `?accounts=none` has no approved accounts, `?withdraw=lost` loses the first
  * withdrawal's answer, and `?matured=waiting` adds matured money waiting for an account.
  */
 function demoWithdrawal(): { accounts: "default" | "none"; loseFirstWithdrawal: boolean; maturedWaiting: boolean } {
@@ -39,4 +39,8 @@ function demoWithdrawal(): { accounts: "default" | "none"; loseFirstWithdrawal: 
 function demoSample(): "default" | "empty" {
   const search = typeof window !== "undefined" ? window.location?.search : undefined;
   return search?.includes("sample=empty") ? "empty" : "default";
+}
+
+function demoSearch(): string {
+  return typeof window !== "undefined" ? (window.location?.search ?? "") : "";
 }

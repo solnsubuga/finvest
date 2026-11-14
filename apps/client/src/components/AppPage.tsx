@@ -16,10 +16,15 @@ type Props = {
   /** A control at the end of the heading row, such as the notifications bell. */
   action?: ReactNode;
   children?: ReactNode;
+  /** Replaces the heading row, for a page with its own header such as Home on a phone. */
+  header?: ReactNode;
+  /** Lets a dashboard use more of a wide screen than a reading page does. */
+  roomy?: boolean;
+  testID?: string;
 };
 
 /** The frame for a signed-in page: heading, then content, with room for the wide layout. */
-export function AppPage({ title, subtitle, action, children }: Props) {
+export function AppPage({ title, subtitle, action, children, header, roomy = false, testID }: Props) {
   const insets = useSafeAreaInsets();
   const wide = useIsWide();
   return (
@@ -27,11 +32,13 @@ export function AppPage({ title, subtitle, action, children }: Props) {
       style={{ flex: 1, backgroundColor: colors.paper }}
       contentContainerStyle={[
         styles.content,
-        wide ? styles.wide : { paddingTop: insets.top + spacing[6] },
+        wide ? [styles.wide, roomy && { maxWidth: 1200 }] : { paddingTop: insets.top + spacing[6] },
       ]}
+      testID={testID}
     >
       <StatusBar style="dark" />
       <DemoLabel signedIn />
+      {header ?? (
       <View style={styles.heading}>
         <View style={{ flex: 1, gap: 4 }}>
           <Txt
@@ -51,6 +58,7 @@ export function AppPage({ title, subtitle, action, children }: Props) {
         </View>
         {action}
       </View>
+      )}
       {children}
     </ScrollView>
   );

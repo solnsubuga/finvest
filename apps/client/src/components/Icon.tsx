@@ -6,6 +6,9 @@ const paths = {
   back: ["M15 6l-6 6 6 6"],
   chevron: ["M9 6l6 6-6 6"],
   check: ["M5 12.5l4.5 4.5L19 7.5"],
+  arrowUp: ["M7 17L17 7M8 7h9v9"],
+  arrowDown: ["M12 5v14M6 13l6 6 6-6"],
+  statement: ["M7 3h8l4 4v14H7zM10 12h6M10 16h6"],
   eye: ["M2 12s3.6-6.5 10-6.5S22 12 22 12s-3.6 6.5-10 6.5S2 12 2 12z"],
   eyeOff: [
     "M2 12s3.6-6.5 10-6.5S22 12 22 12s-3.6 6.5-10 6.5S2 12 2 12z",
