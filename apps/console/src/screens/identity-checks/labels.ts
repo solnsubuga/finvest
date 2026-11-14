@@ -20,12 +20,14 @@ export const CHECK_LABELS: Record<AutomaticCheckName, string> = {
   document_genuine: "ID is genuine and not expired",
   selfie_match: "Selfie matches ID photo",
   screening: "Sanctions and political exposure",
+  liveness: "Selfie taken live",
 };
 
 const VERDICT_LABELS: Record<AutomaticCheckName, Record<Verdict, string>> = {
   document_genuine: { pass: "Pass", fail: "Fail", unsure: "Unsure" },
   selfie_match: { pass: "Pass", fail: "No match", unsure: "Unsure" },
   screening: { pass: "Clear", fail: "Match found", unsure: "Possible match" },
+  liveness: { pass: "Live", fail: "Live check failed", unsure: "Unsure" },
 };
 
 export function verdictLabel(check: AutomaticCheckName, verdict: Verdict, score: number | null): string {
@@ -46,6 +48,9 @@ const FLAG_LABELS: Record<string, string> = {
   screening_fail: "Screening match",
   screening_unsure: "Possible screening match",
   screening_not_run: "Screening did not run",
+  liveness_fail: "Live check failed, camera selfie sent",
+  liveness_unsure: "Live check unclear",
+  liveness_not_run: "Selfie not taken live",
   provider_result_unclear: "Provider result unclear",
   automatic_checks_passed: "Automatic checks passed",
   document_expired: "ID has expired",

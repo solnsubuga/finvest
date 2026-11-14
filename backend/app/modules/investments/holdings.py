@@ -682,3 +682,14 @@ def _client_view(investment: Investment, today: date) -> ClientInvestment:
         and investment.withdrawal_requested_at is None
         and (investment.maturity_date is None or today < investment.maturity_date),
     )
+
+
+_RUNNING_FOR_CLIENT = text(
+    "SELECT count(*) FROM investments WHERE client_id = :client_id "
+    "AND status IN ('awaiting_payment', 'active')"
+)
+
+
+async def running_count(session: AsyncSession, client_id: str) -> int:
+    """How many of the client's investments are waiting for payment or still running."""
+    return int(await session.scalar(_RUNNING_FOR_CLIENT, {"client_id": client_id}) or 0)

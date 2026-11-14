@@ -22,7 +22,7 @@ Infrastructure as code for Finvest, modelled on Fidiba's provisioning. Terraform
 | Database roles | Same | Same | `finvest_migrator`, `finvest_app`, `finvest_worker`, created from the host with `backend/db/init-roles.sql` and generated passwords |
 | Spaces bucket and key | `finvest-staging-documents` | `finvest-production-documents` | Private, versioned, read by the console through short-lived links (no browser uploads), and a key limited to the bucket |
 | Cloudflare | Proxied records, Origin CA certificate | Same, plus Access on the back office, and on the client app until switch day | Full (strict) TLS from the edge to the host |
-| GitHub settings | Written into the `staging` environment | Written into `production` | See below |
+| GitHub settings | Written into the `dev` environment | Written into `prod` | See below |
 | Alerts | When `ALERT_EMAILS` is set | Same | Uptime on `https://<api>/health/ready` and `/health/operations`, host CPU and disk, database CPU, memory and disk. What each alert means: [docs/observability.md](../docs/observability.md) |
 | Tag | `finvest-staging` | `finvest-production` | Tells the environments apart inside the one project |
 
@@ -39,7 +39,7 @@ Staging names sit one level below the zone so Cloudflare's free certificate cove
 
 ### Settings Terraform writes into GitHub
 
-Terraform owns these names in the `staging` and `production` GitHub environments. Change them in `infra/terraform`, not in GitHub, or the next Provision run puts them back. The deploy workflow reads them.
+Terraform owns these names in the `dev` (staging) and `prod` (production) GitHub environments. Change them in `infra/terraform`, not in GitHub, or the next Provision run puts them back. The deploy workflow reads them.
 
 | Kind | Names |
 | --- | --- |
@@ -53,7 +53,7 @@ GitHub refuses to create a variable that already exists, so do not create these 
 Like Fidiba, Terraform generates and holds these credentials, so they are in its state file: the database admin connection, the three role passwords, the documents bucket key and the origin certificate key. This is the one recorded exception to "no secrets in Terraform state" (see `docs/decisions.md`). It is kept safe like this:
 
 - The state bucket is private, and only the Provision workflow's Spaces keys can read it.
-- The Provision workflow runs only from `main`, and its GitHub environments are limited to `main`, so no pull request or other branch ever gets a token.
+- The Provision workflow runs only from `main`, and its GitHub environments are limited to `main`. Keep the tokens in the `prod` environment, not as repository secrets, so no pull request or other branch ever gets one.
 - The application never uses the database admin login. Each process gets only its own role.
 
 ### Monthly cost estimate
@@ -74,12 +74,11 @@ That is roughly $27 for staging, $59 for production and $5 for Spaces. **Staging
 1. Change Terraform in a pull request. **Terraform checks** formats, validates, runs `terraform test` and shellcheck, with no credentials.
 2. Merge after review.
 3. **Actions → Provision → Run workflow** on `main`. Pick `shared`, `staging` or `production`, and `plan` or `apply`.
-   - **Plan** runs in `<env>-plan` with read-only tokens and shows the whole plan in the run summary.
-   - **Apply** (only with `apply`) runs in `<env>`, which holds the write tokens and waits for your approval. Read the plan, then approve. Apply plans again and stops if that plan differs from the one you read. After applying it admits its own address to SSH, installs Docker on the host with `prepare-host.sh`, creates the database roles from the host, and removes its address again.
+   - **Plan** runs in the GitHub environment (`prod` for `shared` and `production`, `dev` for `staging`) and shows the whole plan in the run summary. With required reviewers on the environment, approve it to start. That first approval only lets the plan run, before anyone has seen it: the review that matters is the second one, on apply, after you have read the plan.
+   - **Apply** (only with `apply`) runs in the same environment and waits for your approval. Read the plan, then approve. Apply plans again and stops if that plan differs from the one you read. After applying it admits its own address to SSH, installs Docker on the host with `prepare-host.sh`, creates the database roles from the host, and removes its address again.
 
 Nothing applies on merge. Nothing that costs money is created until someone runs an apply and approves it.
 
-On the first staging run, check that Apply's plan matches Plan's. If Apply stops with "The plan changed" while nothing changed, a read-only token is missing a read scope.
 
 ## One time setup
 
@@ -90,44 +89,42 @@ Everything else is created by Terraform. These are made by hand, once:
 | The Spaces bucket for Terraform state | Terraform needs it before it can run |
 | The DigitalOcean, Spaces, Cloudflare and GitHub tokens | Terraform runs with them |
 | The `finvestug.com` zone on Cloudflare | It belongs to the domain registration |
-| The four GitHub environments, their main-only limits, required reviewers and secrets | They protect the tokens Terraform runs with |
-| The deploy SSH key pair and the repository variables below | Inputs to Terraform |
+| The `prod` and `dev` GitHub environments, their main-only limits, required reviewers and secrets | They protect the tokens Terraform runs with |
+| The deploy SSH key and the repository variables below | Inputs to Terraform |
 
 ### 1. In DigitalOcean, Cloudflare and GitHub tokens
 
 1. **State bucket.** Create a private Spaces bucket in `lon1` with versioning on, for example `finvest-terraform-state`. It is the only thing made by hand, because Terraform needs it before it can run. It holds secrets, so keep it private.
-2. **Tokens.** A write set for applies and a read-only set for plans:
+2. **Tokens.** Plan and apply use the same ones:
 
-| Secret name | Read-only (plan environments) | Read and write (apply environments) |
-| --- | --- | --- |
-| `DIGITALOCEAN_TOKEN` | API → Tokens, custom scopes, read on droplet, vpc, firewall, reserved_ip, database, project, ssh_key, monitoring, uptime, tag | Full access, or the same scopes with write |
-| `SPACES_ACCESS_KEY_ID`, `SPACES_SECRET_ACCESS_KEY` | A Spaces key with read on the state bucket and the documents buckets | A Spaces key with full access. Terraform uses it to create buckets and keys and to keep state. |
-| `CLOUDFLARE_API_TOKEN` | Zone DNS Read, Zone Settings Read, Zone WAF Read, SSL and Certificates Read, Account Access: Apps and Policies Read | The same with Edit |
-| `TERRAFORM_GITHUB_TOKEN` | A fine-grained GitHub token for this repository, read on Environments, Secrets and Variables | The same with read and write |
+| Secret name | Token |
+| --- | --- |
+| `TERRAFORM_DIGITALOCEAN_TOKEN` | API → Tokens, full access, or custom scopes with write on droplet, vpc, firewall, reserved_ip, database, project, ssh_key, monitoring, uptime, tag. Deploys also use it to open and close SSH. |
+| `SPACES_ACCESS_KEY_ID`, `SPACES_SECRET_ACCESS_KEY` | A Spaces key with full access. Terraform uses it to create buckets and keys and to keep state. |
+| `CLOUDFLARE_API_TOKEN` | Zone DNS Edit, Zone Settings Edit, Zone WAF Edit, SSL and Certificates Edit, Account Access: Apps and Policies Edit. Terraform finds the account from the zone, so there is no account ID to set. |
+| `TERRAFORM_GITHUB_TOKEN` | A fine-grained GitHub token for this repository, read and write on Environments, Secrets and Variables |
 
 3. **Cloudflare zone.** `finvestug.com` must already be a zone on the account.
 
 ### 2. In GitHub
 
-Create four environments under **Settings → Environments**, and limit every one of them to the `main` branch under **Deployment branches**. `production-plan` and `production` also serve `shared`.
+Create the environments under **Settings → Environments**, and limit each to the `main` branch under **Deployment branches**. `prod` also serves `shared`. `dev` is needed only when staging is switched on.
 
-| Environment | Protection | Secrets |
-| --- | --- | --- |
-| `staging-plan`, `production-plan` | Main only | The read-only set |
-| `staging`, `production` | Main only, you as required reviewer | The write set, plus `DEPLOY_SSH_KEY` |
+| Environment | Serves | Protection | Secrets |
+| --- | --- | --- | --- |
+| `prod` | `shared` and `production` | Main only, you as required reviewer | The tokens above, plus `DEPLOY_SSH_KEY` |
+| `dev` | `staging` | Main only, you as required reviewer | The same |
 
-`DEPLOY_SSH_KEY` is a private key for the deploy user, made with `ssh-keygen -t ed25519 -N '' -f finvest-deploy`. Both environments can use the same key.
+`DEPLOY_SSH_KEY` is a private key for the deploy user, made with `ssh-keygen -t ed25519 -N '' -f finvest-deploy`, with no passphrase. Provision installs its public half on the host, so there is no public key to set. Both environments can use the same key.
 
 Repository variables under **Settings → Secrets and variables → Actions → Variables**:
 
 | Variable | Value |
 | --- | --- |
 | `TERRAFORM_STATE_BUCKET` | The state bucket's name |
-| `DEPLOY_SSH_PUBLIC_KEY` | The public half of `DEPLOY_SSH_KEY` (`finvest-deploy.pub`) |
 | `SSH_SOURCE_ADDRESSES` | Your own addresses, comma separated, such as `203.0.113.10` |
-| `CLOUDFLARE_ACCOUNT_ID` | From the Cloudflare dashboard. Required for production. |
-| `ADMIN_ACCESS_EMAILS` | Staff emails allowed into the back office, comma separated. Required for production. |
-| `ALERT_EMAILS` | Optional, comma separated |
+| `ADMIN_ACCESS_EMAILS` | Staff emails allowed into the back office, comma separated, such as `a@finvestug.com,b@finvestug.com`. Required for production. |
+| `ALERT_EMAILS` | Who gets alerts, comma separated like `ADMIN_ACCESS_EMAILS`. Optional, but set two people before launch. |
 | `CLIENT_APP_PUBLIC` | Leave unset until switch day. Until then the production client app host lets in only `ADMIN_ACCESS_EMAILS`, through Cloudflare Access, while the API stays public. On switch day ([docs/launch.md](../docs/launch.md)) set it to `true` and run Provision `production` (plan, then apply) to lift Access from the app host. The back office keeps it. |
 
 ## Provision
@@ -143,10 +140,10 @@ Deploys follow Fidiba. A push to the source branch deploys its environment, and 
 
 | Workflow | Source branch | GitHub environment |
 | --- | --- | --- |
-| Deploy Staging | `main` | `staging` |
-| Deploy Production | `release` | `production`, so it waits for your approval |
+| Deploy Staging | `main` | `dev` |
+| Deploy Production | `release` | `prod`, so it waits for your approval |
 
-A workflow does nothing until its environment is listed in the repository variable `DEPLOY_ENVIRONMENTS` (`production` while staging is on hold, `staging,production` later). Add an environment only after Provision has applied it.
+A workflow does nothing until its environment is listed in the repository variable `DEPLOY_ENVIRONMENTS` by its GitHub name (`prod` while staging is on hold, `dev,prod` later). Add an environment only after Provision has applied it.
 
 ### Staging on hold
 
@@ -154,13 +151,13 @@ Staging costs about $27 a month, so it is switched off for now (the owner's deci
 
 - Provision refuses `staging` with a message, for both plan and apply.
 - Deploy Staging skips every push to `main`.
-- Its GitHub environments, settings and secrets need not exist yet.
+- Its GitHub environment (`dev`), settings and secrets need not exist yet.
 
 The CI rehearsal still runs a whole deployment on the runner on every infrastructure pull request, using staging's names. It creates nothing in the cloud and costs nothing.
 
 Without staging, a release goes from `main` to production by updating the `release` branch, so check a change in the rehearsal and in review before you push `release`.
 
-To switch staging on: set the repository variable `STAGING_ENABLED` to `true`, create its GitHub environments and settings (above), run Provision for `staging`, then add `staging` to `DEPLOY_ENVIRONMENTS`. To switch it off again, first destroy its resources (ask the infrastructure thread), then set `STAGING_ENABLED` back.
+To switch staging on: set the repository variable `STAGING_ENABLED` to `true`, create the `dev` GitHub environment and its settings (above), run Provision for `staging`, then add `dev` to `DEPLOY_ENVIRONMENTS`. To switch it off again, first destroy its resources (ask the infrastructure thread), then set `STAGING_ENABLED` back.
 
 Each run:
 
@@ -187,11 +184,10 @@ To go back to an earlier version, revert the commit on the source branch and let
 
 ### Settings you add for deploys
 
-In each of the `staging` and `production` GitHub environments, beside what Terraform writes:
+In each of the `prod` and `dev` GitHub environments, beside what Terraform writes:
 
 | Name | Kind | Value |
 | --- | --- | --- |
-| `DEPLOY_FIREWALL_TOKEN` | Secret | A DigitalOcean token with only the `firewall` read and update scopes. The deploy uses it to open and close SSH for itself. Do not reuse the write token here. |
 | `FINVEST_AUTHENTICATOR_KEY` | Secret | `python3 -c "import secrets; print(secrets.token_urlsafe(32))"`, one per environment. It protects staff authenticator secrets. Never change it once staff have enrolled, and keep an offline copy. |
 | `FINVEST_IDENTITY_DATA_KEY` | Secret | `python3 -c "import secrets; print(secrets.token_urlsafe(32))"`, one per environment. It encrypts clients' document numbers, dates of birth and TINs, and reaches the API and worker only. Never change it once clients have been checked: saved checks become unreadable. Keep an offline copy. |
 | `FINVEST_PAYMENTS_PROVIDER`, `FINVEST_IOTEC_CURRENCY_CODE` | Variables | `iotec` and `UGX` once ioTec Pay is set up ([docs/payments.md](../docs/payments.md)). Leave unset until then. The API, worker and scheduler get them. `ITX` (an ioTec test wallet) is refused in production. |
@@ -202,14 +198,14 @@ In each of the `staging` and `production` GitHub environments, beside what Terra
 | `FINVEST_IDENTITY_PROVIDER` | Variable | Unset (manual review) until the ioTec Verify credentials exist, then `iotec` ([docs/identity-checks.md](../docs/identity-checks.md)). API and worker. |
 | `FINVEST_IOTEC_VERIFY_CLIENT_ID`, `FINVEST_IOTEC_VERIFY_API_KEY` | Secrets | From the ioTec Verify portal (Management, Settings, Configuration). Required once the provider is `iotec`. API and worker. |
 | `FINVEST_IOTEC_VERIFY_BASE_URL` | Variable, optional | Defaults to `https://verify-api.iotec.io`. |
+| `FINVEST_PAYOUT_NAME_PROVIDER` | Variable | Unset (`none`) until the ioTec Verify credentials exist, then `iotec`: the worker reads the name a network holds for a payout number with the same Verify credentials. Until then a new payout number waits for proof. Worker only. |
 | `FINVEST_SMS_BACKEND`, `FINVEST_SMS_IOTEC_CLIENT_ID` | Variables | `iotec`, and the client id from the ioTec Messaging portal (Management, Settings, Configuration). Only the worker gets them; it sends every SMS. |
 | `FINVEST_SMS_IOTEC_API_KEY` | Secret | The ioTec Messaging API key from the same page. Worker only. |
 | `FINVEST_SMS_IOTEC_BASE_URL` | Variable, optional | Defaults to `https://messaging-api.iotec.io`. The host's firewall already allows outbound HTTPS. |
 | `FINVEST_EMAIL_HASH_KEY` | Secret | `python3 -c "import secrets; print(secrets.token_urlsafe(32))"`, one per environment. It keys the hash under which email addresses are kept on the suppression list and in delivery events, and reaches the API and worker only. Never change it once set: every stored hash would stop matching. Keep an offline copy. |
-| `FINVEST_EMAIL_RESEND_API_KEY` | Secret | The Resend key, once email is set up |
+| `FINVEST_RESEND_API_KEY` | Secret | An API key from Finvest's own Resend account, once email is set up. Deploy hands it to the worker as `FINVEST_EMAIL_RESEND_API_KEY`. |
 | `FINVEST_EMAIL_BACKEND`, `FINVEST_EMAIL_FROM` | Variables | `resend` and `Finvest <no-reply@finvestug.com>` |
-| `FINVEST_EMAIL_FIDIBA_ENVIRONMENT` | Variable | The router tag, `app_finvest_prod` in production. The worker tags every message with it, so the hooks.fidiba.com router sends Resend's delivery events back to `https://<api>/webhooks/resend`. |
-| `RESEND_HOOK_SECRET` | Secret | The router's hook secret (`whsec_...`), not the Resend API key. Only the API gets it, to check each delivery event. Without it the webhook answers 404 and delivery events are lost. |
+| `RESEND_HOOK_SECRET` | Secret | The signing secret (`whsec_...`) of the webhook in Finvest's own Resend account, pointed at `https://<api>/webhooks/resend`. Not the Resend API key. Only the API gets it, to check each delivery event. Without it the webhook answers 404 and delivery events are lost. |
 | `FINVEST_CLIENT_SIGNUP_OPEN` | Variable | `true` opens client sign-up on the API. Leave it unset in production until switch day ([docs/launch.md](../docs/launch.md)). In staging, set it only for the pen test weeks. Anything else keeps sign-up closed. |
 | `FINVEST_BANK_TRANSFER_ACCOUNTS` | Variable | The trust account clients pay bank transfers into, as JSON keyed by currency: `{"UGX": {"bank_name": "...", "account_name": "...", "account_number": "...", "branch": null}}`. It must be the account whose statements reconciliation imports. Not a secret. Until it is set, paying by bank transfer is unavailable and the app offers mobile money. |
 | `SITE_PUBLISHED` | Variable, production only | The owner's decision, nobody else's: `true` puts the public website live at the production address. Set it when the owner launches the website. |
@@ -235,7 +231,7 @@ Every process also gets `FINVEST_ENVIRONMENT` (`staging` or `production`), taken
 ## Host access
 
 - The deploy user has passwordless sudo, which `prepare-host.sh` needs, and is in the `docker` group. Both are root equivalent. Treat `DEPLOY_SSH_KEY` like a root key.
-- SSH keys are written once at first boot. To change who can log in, edit `/home/deploy/.ssh/authorized_keys` on the host and update `DEPLOY_SSH_PUBLIC_KEY` so a rebuilt host matches.
+- SSH keys are written once at first boot. To change who can log in, edit `/home/deploy/.ssh/authorized_keys` on the host and update `DEPLOY_SSH_KEY` so a rebuilt host matches.
 - The firewall reads Cloudflare's ranges at apply time. A range Cloudflare adds later stays blocked until the next apply, so run Provision apply now and then even with no changes.
 - The host's SSH key is pinned. The first Provision run that reaches a new host trusts the key it sees at the reserved IP, because DigitalOcean publishes no host key to check it against, and records it as the `DEPLOY_HOST_KEY` variable of the environment. Every later Provision run and every deploy accepts only that key. If the server is rebuilt, delete `DEPLOY_HOST_KEY` from the environment and run Provision apply, which records the new one.
 - A run opens port 22 to its own runner and closes it when it ends. The runner's address comes from two public services (`infra/deployment/runner-address.sh`) that must agree. A deploy fails loudly if its rule is still there at the end. Provision apply resets the firewall to `SSH_SOURCE_ADDRESSES`, so run it to clear anything a broken run left behind.

@@ -32,7 +32,7 @@ from app.modules.payouts.domain.limits import (
     check_withdrawal,
     limits_in_force,
 )
-from app.modules.payouts.domain.payouts import LedgerEffect, PayoutEvent, PayoutStatus
+from app.modules.payouts.domain.payouts import FINAL, LedgerEffect, PayoutEvent, PayoutStatus
 from app.modules.payouts.domain.posting import PayoutTerms
 from app.modules.payouts.domain.sending import HELD_UP_AFTER, SEND_ATTEMPTS
 from app.shared.actors import Actor
@@ -555,4 +555,18 @@ def _view(row: Row[Any]) -> PayoutView:
         source_account_id=row.source_account_id,
         source_reference=row.source_reference,
         in_flight_account_id=row.in_flight_account_id,
+    )
+
+
+_OPEN_FOR_CLIENT = text(
+    "SELECT count(*) FROM payouts WHERE client_id = :client_id "
+    "AND NOT (status = ANY(CAST(:final AS text[])))"
+)
+
+
+async def open_payout_count(session: AsyncSession, client_id: str) -> int:
+    """How many of the client's payouts have not ended: held, queued, sent or unclear."""
+    final = sorted(status.value for status in FINAL)
+    return int(
+        await session.scalar(_OPEN_FOR_CLIENT, {"client_id": client_id, "final": final}) or 0
     )

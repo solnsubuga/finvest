@@ -31,12 +31,6 @@ variable "zone_name" {
   default     = "finvestug.com"
 }
 
-variable "cloudflare_account_id" {
-  description = "Cloudflare account id, for Cloudflare Access on the back office."
-  type        = string
-  default     = ""
-}
-
 variable "site_domains" {
   description = "Hostnames of the public website. The first is canonical; Caddy redirects the others to it."
   type        = list(string)
@@ -126,11 +120,6 @@ variable "admin_access_emails" {
   validation {
     condition     = var.environment != "production" || length(var.admin_access_emails) > 0
     error_message = "Production needs at least one admin_access_emails entry, so the back office is never public."
-  }
-
-  validation {
-    condition     = length(var.admin_access_emails) == 0 || var.cloudflare_account_id != ""
-    error_message = "cloudflare_account_id is needed when admin_access_emails is set."
   }
 }
 

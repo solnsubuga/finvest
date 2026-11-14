@@ -177,3 +177,52 @@ describe("the identity check client for the real API", () => {
     await expect(client.getCheck()).rejects.toEqual(new IdentityError("offline"));
   });
 });
+
+describe("the live selfie through the real API", () => {
+  it("reads whether a live check is offered and how the latest one stands", async () => {
+    const seen = serve(200, {
+      available: true,
+      problem: null,
+      attempts_left: 9,
+      latest: {
+        id: ID,
+        status: "open",
+        url: "https://faces.iotec.io/auth?token=t",
+        failure_code: null,
+        photo_used: false,
+        expires_at: "2026-11-14T09:30:00Z",
+      },
+    });
+    await expect(createApiIdentityClient().getLiveness()).resolves.toEqual({
+      available: true,
+      problem: null,
+      attemptsLeft: 9,
+      latest: {
+        id: ID,
+        status: "open",
+        url: "https://faces.iotec.io/auth?token=t",
+        failureCode: null,
+        photoUsed: false,
+        expiresAt: "2026-11-14T09:30:00Z",
+      },
+    });
+    expect(seen[0]).toMatchObject({ method: "GET", path: "/client/identity-check/liveness" });
+  });
+
+  it("says when every live check is used up, and marks a live selfie", async () => {
+    serve(422, refusal("validation_failed", [{ field_path: ["body", "liveness"], code: "too_many_attempts" }]));
+    await expect(createApiIdentityClient().startLiveness()).rejects.toMatchObject({ code: "liveness_used_up" });
+    serve(409, refusal("conflict"));
+    await expect(createApiIdentityClient().startLiveness()).rejects.toMatchObject({ code: "cannot_change" });
+
+    serve(200, {
+      check: view({
+        photos: [
+          { kind: "front", content_type: "image/jpeg", byte_size: 10, live: false },
+          { kind: "selfie", content_type: "image/jpeg", byte_size: 10, live: true },
+        ],
+      }),
+    });
+    await expect(createApiIdentityClient().getCheck()).resolves.toMatchObject({ liveSelfie: true });
+  });
+});

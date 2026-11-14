@@ -47,7 +47,7 @@ Four screens were still the placeholder page. The Review Queue is connected to `
 | --- | --- | --- |
 | Money Movement | Payouts that are held up or stranded, and deposits under way | `GET /staff/payouts/held-up`; stranded payouts in PR #263 (payouts thread) |
 | ~~Maturities~~ | ~~The daily maturity run and its exceptions~~ Closed by the Maturities screen PR. | `GET /staff/maturities` |
-| Finance | Day close, fee income, withholding tax owed and the accounting export | Reconciliation routes below; tax in the tax certificates thread |
+| ~~Finance~~ | ~~Day close, fee income, withholding tax owed and the accounting export~~ Built: income and costs, the books by code and the daily journal export ([finance.md](finance.md)). The ioTec collection charge is not booked yet. | `GET /staff/finance`, `GET /staff/finance/journal.csv` |
 | Compliance | Screening results and monitoring alerts | Nothing built (see below) |
 
 ~~Staff routes with no screen at all: `/staff/phone-changes` (three; the Clients screen does not show pending phone changes) and `/staff/sessions` (three).~~ Closed by the mobile number and devices PR: the client page has a Mobile number section, and every member of staff has Your devices.
@@ -64,7 +64,7 @@ Four screens were still the placeholder page. The Review Queue is connected to `
 | **Tax certificates and URA withholding reports.** | | Running thread "Build tax certificates and URA reports" |
 | **Sending push, SMS and email.** | | Notifications thread |
 | **Anti-money-laundering.** Sanctions and politically exposed person screening runs once, when a client hands in their identity check, through ioTec Verify's AML screening (once `FINVEST_IDENTITY_PROVIDER=iotec`). Not built: screening again later, screening at payouts, transaction monitoring rules and the Financial Intelligence Authority report. | Listed on the roadmap's back office checklist and likely a licence condition. | Identity checks thread for the screening; the rest needs an owner |
-| **Next of kin and the suitability questions.** Not built. | Listed on the roadmap and "usually asked for by the regulator". | None |
+| ~~**Next of kin and the suitability questions.** Not built.~~ Backend closed by the next of kin and investing questions PR ([client-profile.md](client-profile.md)). | ~~Listed on the roadmap and "usually asked for by the regulator".~~ | Client profile thread |
 | **The real device checks** in [launch.md](launch.md) have not been run. | A launch condition. | Engineering, once Android and iPhone builds exist |
 | **Web end-to-end tests** cover 7 client and 6 console journeys. The claim has none, because its screen does not exist yet. Payout accounts and the identity check have theirs. | Each new screen above should add its journey. | Each screen's thread |
 

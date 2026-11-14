@@ -50,6 +50,8 @@ export type IdentityCheck = {
   detailsConfirmed: boolean;
   /** The kinds of photo handed in so far. */
   photos: PhotoKind[];
+  /** True when the selfie was captured by a live check that saw a live person. */
+  liveSelfie: boolean;
   /** What is still needed before it can be handed in: photo kinds and "details". */
   missing: string[];
   /** The photos staff asked for again. Only while `awaiting_client`. */
@@ -59,6 +61,36 @@ export type IdentityCheck = {
   submittedAt: string | null;
   /** The 10-digit Finvest account number, once approved. */
   accountNumber: string | null;
+};
+
+/**
+ * One live check of the selfie (docs/identity-checks.md#liveness).
+ *
+ * - `starting`: we are asking our partner for the check's page.
+ * - `open`: the page is ready. Open `url` and follow what it asks.
+ * - `passed`: a live person. What it captured is the selfie, unless `photoUsed` is false.
+ * - `failed`: not confirmed as a live person.
+ * - `not_started`, `expired`: start another.
+ */
+export type LivenessStatus = "starting" | "open" | "passed" | "failed" | "not_started" | "expired";
+
+export type LivenessAttempt = {
+  id: string;
+  status: LivenessStatus;
+  /** The partner's page for this check. Only while it is open. */
+  url: string | null;
+  failureCode: string | null;
+  photoUsed: boolean;
+  expiresAt: string;
+};
+
+export type LivenessState = {
+  /** False when live checks are not switched on: the selfie is a camera photo then. */
+  available: boolean;
+  /** Why a new check cannot start now, such as `too_many_attempts`. */
+  problem: string | null;
+  attemptsLeft: number;
+  latest: LivenessAttempt | null;
 };
 
 export type PhotoMimeType = "image/jpeg" | "image/png" | "image/webp";
@@ -81,6 +113,8 @@ export type IdentityErrorCode =
   | "invalid_details"
   /** Something is still missing. `missing` says what. */
   | "incomplete"
+  /** Every live check for this ID check has been used. A camera selfie is still possible. */
+  | "liveness_used_up"
   | "offline"
   | "unavailable";
 
@@ -113,6 +147,10 @@ export type IdentityClient = {
   confirmDetails(details: IdentityDetails): Promise<IdentityCheck>;
   /** Hands the check in, or the photos staff asked for. */
   submit(): Promise<IdentityCheck>;
+  /** Whether the selfie can be a live check, and how the latest one stands. */
+  getLiveness(): Promise<LivenessState>;
+  /** Starts a live check of the selfie. Any check still waiting is replaced. */
+  startLiveness(): Promise<LivenessAttempt>;
 };
 
 const errorCopy: Record<IdentityErrorCode, string> = {
@@ -122,6 +160,7 @@ const errorCopy: Record<IdentityErrorCode, string> = {
   photo_not_accepted: "We could not use that photo. Take a JPG, PNG or WebP photo under 10 MB.",
   invalid_details: "Some details are not right. Check the fields marked in red.",
   incomplete: "Something is still missing. Check each step and try again.",
+  liveness_used_up: "You have used every live check for this ID. Take a selfie with your camera instead.",
   offline: "You seem to be offline. Check your connection and try again.",
   unavailable: "ID checks are not available right now. Try again in a moment.",
 };

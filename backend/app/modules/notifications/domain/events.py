@@ -79,6 +79,9 @@ _SPECS = (
     # It could not be done, for example the investment matured first. Nothing moved.
     _event("investment_transfer_failed", Category.INVESTMENTS, "investments", "product", "person"),
     _event("interest_earned", Category.EARNINGS, "investments", "amount", "count"),
+    # Goals. The goal's name is the client's own words. Never an amount.
+    _event("goal_top_up_due", Category.INVESTMENTS, "goals", "goal", "date"),
+    _event("goal_reached", Category.INVESTMENTS, "goals", "goal"),
     # The account.
     _event("kyc_approved", Category.ACCOUNT, "kyc"),
     _event("kyc_retake_requested", Category.ACCOUNT, "kyc"),

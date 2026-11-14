@@ -8,13 +8,17 @@ from datetime import timedelta
 import httpx
 import pytest
 from sqlalchemy import text
-from sqlalchemy.exc import DBAPIError
+from sqlalchemy.exc import DBAPIError, IntegrityError
 
 from app.api.app import create_app
 from app.infrastructure.database import Database
 from app.modules.identity.email_checks import LINK_LIFETIME, LINKS_PER_CLIENT, VERIFY_PATH
 from app.modules.identity.hashing import PasswordHasher
-from app.modules.identity.service import IdentityService, client_contact
+from app.modules.identity.service import (
+    ACCOUNT_FROM_ADDRESS_ATTEMPTS,
+    IdentityService,
+    client_contact,
+)
 from app.shared.actors import Actor
 from tests.support.clock import FakeClock
 from tests.support.database import TestDatabase
@@ -241,4 +245,99 @@ async def test_the_api_sees_only_the_links_of_the_client_it_acts_for(api: Api) -
                     "now() + interval '1 day')"
                 ),
                 {"id": client_id},
+            )
+
+
+async def prove(api: Api, email: str, bearer: dict[str, str]) -> httpx.Response:
+    await api.http.post("/client/email/verification", headers=bearer)
+    link = (await links(api, email))[-1]
+    return await confirm(api, token_of(link))
+
+
+async def test_only_one_account_can_prove_an_address(api: Api) -> None:
+    _, email, first = await a_client(api)
+    assert email is not None
+    number = next(_numbers)
+    second_id = await api.identity.create_client(
+        phone=f"+256{number}", email=email, password=PASSWORD
+    )
+    issued = await api.identity.issue_session(
+        Actor("client", second_id), second_step="passkey", transport="token"
+    )
+    second = {"Authorization": f"Bearer {issued.token}"}
+    assert (await prove(api, email, first)).status_code == 204
+
+    taken = await prove(api, email, second)
+    assert (taken.status_code, taken.json()["error"]["code"]) == (409, "email_taken")
+    session = await api.http.get("/client/session", headers=second)
+    assert session.json()["email_verified"] is False
+
+
+async def login_by_email(api: Api, email: str, password: str = PASSWORD) -> httpx.Response:
+    return await api.http.post("/client/login/start", json={"email": email, "password": password})
+
+
+async def test_a_proved_address_signs_the_client_in(api: Api) -> None:
+    _, email, bearer = await a_client(api)
+    assert email is not None
+    # Before the proof the address opens nothing, with the same answer as a wrong password.
+    before = await login_by_email(api, email)
+    assert (before.status_code, before.json()["error"]["code"]) == (401, "invalid_credentials")
+    assert (await prove(api, email, bearer)).status_code == 204
+
+    started = await login_by_email(api, f"  {email.upper()} ")
+    assert started.status_code == 200
+    assert started.json()["methods"][-1] == "code"
+    wrong = await login_by_email(api, email, "not-the-password-at-all")
+    assert (wrong.status_code, wrong.json()["error"]["code"]) == (401, "invalid_credentials")
+    unknown = await login_by_email(api, "nobody-here@example.com")
+    assert (unknown.status_code, unknown.json()["error"]["code"]) == (401, "invalid_credentials")
+
+
+async def test_login_takes_a_phone_or_an_email_not_both(api: Api) -> None:
+    both = await api.http.post(
+        "/client/login/start",
+        json={"phone": "+256772000000", "email": "a@example.com", "password": PASSWORD},
+    )
+    neither = await api.http.post("/client/login/start", json={"password": PASSWORD})
+    assert both.status_code == neither.status_code == 422
+
+
+async def test_email_and_phone_share_one_budget_of_guesses(api: Api) -> None:
+    client_id, email, bearer = await a_client(api)
+    assert email is not None
+    assert (await prove(api, email, bearer)).status_code == 204
+    async with api.worker.transaction() as session:
+        contact = await client_contact(session, client_id)
+    assert contact is not None
+    for attempt in range(ACCOUNT_FROM_ADDRESS_ATTEMPTS):
+        if attempt % 2:
+            await login_by_email(api, email, "wrong-password-guess")
+        else:
+            await api.http.post(
+                "/client/login/start",
+                json={"phone": contact.phone, "password": "wrong-password-guess"},
+            )
+    limited = await login_by_email(api, email)
+    assert limited.status_code == 429
+
+
+async def test_the_database_holds_one_proof_per_address_whoever_writes_it(api: Api) -> None:
+    # What 0220 meets if two accounts proved one address before it ran: the index refuses it,
+    # and the migration stops until one proof is cleared by hand.
+    first, email, _ = await a_client(api)
+    assert email is not None
+    second = await api.identity.create_client(
+        phone=f"+256{next(_numbers)}", email=email, password=PASSWORD
+    )
+    async with api.owner.transaction() as session:
+        await session.execute(
+            text("UPDATE identity_clients SET email_verified_at = now() WHERE id = :id"),
+            {"id": first},
+        )
+    with pytest.raises(IntegrityError):
+        async with api.owner.transaction() as session:
+            await session.execute(
+                text("UPDATE identity_clients SET email_verified_at = now() WHERE id = :id"),
+                {"id": second},
             )

@@ -334,3 +334,25 @@ def _reason(reason: str) -> str:
             fields=[FieldProblem(field_path=["body", "reason"], code="required")],
         )
     return cleaned
+
+
+async def close_account(
+    session: AsyncSession, request_id: str, client_id: str, now: datetime
+) -> None:
+    """Close the client of a closure approved in this same transaction.
+
+    Called only by the closures module, after it has approved the request. Every session the
+    client holds ends, and they can never sign in again. Migration 0232 refuses the change
+    unless the approval was made in this transaction, for this client.
+    """
+    if not await session.scalar(text("SELECT identity_close_client(:id)"), {"id": request_id}):
+        # The account moved since the request (locked, or already closed).
+        raise ApplicationError("conflict")
+    await session.execute(
+        text(
+            "UPDATE identity_sessions SET revoked_at = :now, revoked_reason = 'closed' "
+            "WHERE actor_kind = 'client' AND actor_id = :id AND revoked_at IS NULL"
+        ),
+        {"now": now, "id": client_id},
+    )
+    logger.info("client_account_closed", request_id=request_id)

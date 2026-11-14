@@ -176,6 +176,18 @@ DEFAULTS: dict[str, Wording] = {
         "You earned interest today, after tax. See the amount in the app.",
         "Finvest: you earned interest today, after tax. See the amount in the app.",
     ),
+    "goal_top_up_due": Wording(
+        "Your goal top-up is due",
+        "Your monthly saving towards {goal} is due on {date}. See how much to save and pay in "
+        "the app.",
+        "Finvest: your monthly saving towards {goal} is due on {date}. Pay in the app.",
+    ),
+    "goal_reached": Wording(
+        "You reached your goal",
+        "Well done. {goal} has reached its target. It keeps earning until its investments "
+        "mature, and you choose what happens then in the app.",
+        "Finvest: well done, {goal} has reached its target. See it in the app.",
+    ),
     "kyc_approved": Wording(
         "Identity check approved",
         "Your account is fully open. You can now invest.",
@@ -407,5 +419,6 @@ def sample_values(spec: EventSpec) -> dict[str, Value]:
         "title": "A message from Finvest",
         "message": "Your investment matures soon.",
         "person": "Brian K.",
+        "goal": "School fees 2027",
     }
     return {name: samples[name] for name in spec.variables}
