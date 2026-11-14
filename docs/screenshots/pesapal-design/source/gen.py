@@ -12,9 +12,9 @@ TOKENS = """
 """
 
 CLIENT_CSS = TOKENS + """
-@font-face{font-family:PJ;src:url(../../../../backend/app/modules/documents/fonts/PlusJakartaSans-Regular.ttf);font-weight:400}
-@font-face{font-family:PJ;src:url(../../../../backend/app/modules/documents/fonts/PlusJakartaSans-Bold.ttf);font-weight:700}
-@font-face{font-family:PJ;src:url(../../../../backend/app/modules/documents/fonts/PlusJakartaSans-ExtraBold.ttf);font-weight:800}
+@font-face{font-family:PJ;src:url(../../../../../backend/app/modules/documents/fonts/PlusJakartaSans-Regular.ttf);font-weight:400}
+@font-face{font-family:PJ;src:url(../../../../../backend/app/modules/documents/fonts/PlusJakartaSans-Bold.ttf);font-weight:700}
+@font-face{font-family:PJ;src:url(../../../../../backend/app/modules/documents/fonts/PlusJakartaSans-ExtraBold.ttf);font-weight:800}
 *{box-sizing:border-box;margin:0;padding:0}
 body{font-family:PJ,sans-serif;background:var(--paper);color:var(--ink);letter-spacing:-.01em}
 .col{max-width:688px;margin:0 auto;padding:24px 24px 32px}
