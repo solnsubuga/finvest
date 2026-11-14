@@ -100,14 +100,33 @@ The document number, date of birth and TIN are encrypted before they are saved (
 
 ## Provider
 
-No identity provider is chosen yet. The module talks to an `IdentityProvider` port (`domain/provider.py`) with three calls: submit a check, find a submission by its idempotency key, and read a result. A timeout is treated as uncertain, so the worker asks the provider what it holds before sending again.
+The module talks to an `IdentityProvider` port (`domain/provider.py`) with three calls: submit a check, find a submission by its idempotency key, and read a result. A timeout is treated as uncertain, so the worker asks the provider what it holds before sending again.
 
 | Provider | Status |
 | --- | --- |
 | `manual` | Built, and the default. It checks nothing, so every client goes to a person. Nobody is approved by a check that did not happen. |
+| `iotec` | Built: ioTec Verify, below. Off until `FINVEST_IDENTITY_PROVIDER=iotec` and its credentials are set. |
 | `development-stub` | Built, for a developer's own machine. It checks nothing: everyone "passes", except a document number ending in 0, whose selfie comes back unsure. Its answers go to a person, and the settings refuse to combine it with automatic approval, so it can never approve a client. It is refused at start-up where `FINVEST_ENVIRONMENT` is `production`, because staff would see passes for checks nobody ran. |
-| Smile ID | Candidate. Coverage and pricing for Uganda to confirm. |
-| ioTec Verify | Candidate. Decided for phone number verification. Whether it can check identity documents is to confirm with ioTec. |
+| Smile ID | Not built. A candidate if ioTec Verify falls short, for example on liveness. |
+
+### ioTec Verify
+
+`app/modules/kyc/iotec.py`, against `https://verify-api.iotec.io` with the `Client-Id` and `X-Api-Key` headers. One submission is up to three ioTec requests, each sent in the background with the submission's key as its `referenceId`:
+
+| Check | ioTec request | Pass | Otherwise |
+| --- | --- | --- | --- |
+| `document_genuine` | ID verification at NIRA (`/api/idv/verify-person-information`): the NIN, names, date of birth and expiry the client confirmed. Ugandan national IDs only. | NIRA says the details match and the card is valid | `fail` when NIRA says they do not match; `unsure` for anything else |
+| `selfie_match` | Face match (`/api/face-match`): the selfie against the front of the document | ioTec calls them identical with a confidence of at least 80% | `unsure`, with the confidence as the score |
+| `screening` | AML screening (`/api/aml-screening`): sanctions and politically exposed person lists, by full name and date of birth, allowing one letter's difference | No hits | `fail` on any hit, which staff compare |
+
+- The three request IDs together are the reference (`iotec:idv=…,face=…,aml=…`). The worker reads all three and waits while any is still running.
+- A check ioTec refused, could not be sent, or that failed at ioTec is left out, so it shows as `<check>_not_run` and a person looks. A passport, driving permit or refugee ID has no NIRA lookup, so its `document_genuine` is always not run.
+- Once one request is accepted the others are never sent again, so nothing is paid for twice. If none was accepted and one may have arrived, the send is uncertain. ioTec cannot be asked for a request by our key, so `find` holds nothing, and that check goes to a person (`provider_not_received`).
+- Wrong credentials (401, 403) and too many requests (429) count as not received and are tried again; the sweep hands the check to a person after 30 minutes.
+- The worker reads the selfie and front from private storage, with the digest saved for each, before sending anything. A photo it cannot read sends nothing and is tried again.
+- The face match compares two photos and does not prove a live person. The settings therefore refuse ioTec with `FINVEST_IDENTITY_AUTOMATIC_APPROVAL`, whatever the owner decides, until liveness is checked. ioTec's liveness check (`/api/face-verification`) emails the client a link to ioTec Faces, which is a separate client step and is not built.
+- To confirm against ioTec's sandbox: the exact values of `matchingStatus` and `cardStatus`, which the API reference does not list. Anything not recognised is `unsure`, never a pass.
+- Nothing ioTec sends back is logged or kept beyond the verdicts and the face match score, because it carries the client's details.
 
 ## Talking to the provider
 
@@ -127,7 +146,7 @@ How a send can end:
 
 A result that arrives after the check moved on changes nothing.
 
-Settings, all optional while the provider is `manual`: `FINVEST_IDENTITY_PROVIDER` (`manual` or `development-stub`), `FINVEST_IDENTITY_AUTOMATIC_APPROVAL` (off; the owner's decision), and `FINVEST_IDENTITY_DATA_KEY`, which any provider other than `manual` requires in the worker.
+Settings, all optional while the provider is `manual`: `FINVEST_IDENTITY_PROVIDER` (`manual`, `iotec` or `development-stub`), `FINVEST_IDENTITY_AUTOMATIC_APPROVAL` (off; the owner's decision), and `FINVEST_IDENTITY_DATA_KEY`, which any provider other than `manual` requires in the worker. `iotec` also needs `FINVEST_IOTEC_VERIFY_CLIENT_ID` and `FINVEST_IOTEC_VERIFY_API_KEY` in the worker (from the ioTec Verify portal, Management, Settings, Configuration), and the worker needs the `FINVEST_OBJECT_STORAGE_*` settings to read the photos. `FINVEST_IOTEC_VERIFY_BASE_URL` points it elsewhere, for a sandbox.
 
 ## Routes
 

@@ -44,6 +44,7 @@ from app.modules.kyc.domain.provider import (
     AutomaticCheck,
     CheckOutcome,
     IdentityProvider,
+    PhotoRef,
     ProviderRequest,
     Verdict,
     decide,
@@ -244,6 +245,10 @@ _DOCUMENT_TAKEN = text(
 _PHOTOS = text(
     "SELECT id, kind, storage_key, content_type, byte_size, created_at FROM kyc_photos "
     "WHERE check_id = :check_id AND replaced_at IS NULL ORDER BY kind"
+)
+_PROVIDER_PHOTOS = text(
+    "SELECT kind, storage_key, sha256, content_type FROM kyc_photos "
+    "WHERE check_id = :check_id AND replaced_at IS NULL"
 )
 _PHOTO_COUNT = text("SELECT count(*) FROM kyc_photos WHERE check_id = :check_id")
 _REPLACE_PHOTO = text(
@@ -478,7 +483,10 @@ async def provider_request(
         document_type=view.document_type,
         document_country=view.document_country,
         details=view.details,
-        photos={photo.kind: photo.storage_key for photo in view.photos},
+        photos={
+            PhotoKind(photo.kind): PhotoRef(photo.storage_key, photo.sha256, photo.content_type)
+            for photo in await session.execute(_PROVIDER_PHOTOS, {"check_id": check_id})
+        },
     )
 
 

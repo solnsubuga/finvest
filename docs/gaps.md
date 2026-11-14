@@ -63,7 +63,7 @@ Four screens were still the placeholder page. The Review Queue is connected to `
 | **Deposits credited to the wrong client.** | | Running thread "Fix deposits credited to the wrong client" |
 | **Tax certificates and URA withholding reports.** | | Running thread "Build tax certificates and URA reports" |
 | **Sending push, SMS and email.** | | Notifications thread |
-| **Anti-money-laundering.** Nothing is built: no sanctions or politically exposed person screening, no transaction monitoring rules, no Financial Intelligence Authority report. | Listed on the roadmap's back office checklist and likely a licence condition. | None. Needs the owner's choice of list source first (below). |
+| **Anti-money-laundering.** Sanctions and politically exposed person screening runs once, when a client hands in their identity check, through ioTec Verify's AML screening (once `FINVEST_IDENTITY_PROVIDER=iotec`). Not built: screening again later, screening at payouts, transaction monitoring rules and the Financial Intelligence Authority report. | Listed on the roadmap's back office checklist and likely a licence condition. | Identity checks thread for the screening; the rest needs an owner |
 | **Next of kin and the suitability questions.** Not built. | Listed on the roadmap and "usually asked for by the regulator". | None |
 | **The real device checks** in [launch.md](launch.md) have not been run. | A launch condition. | Engineering, once Android and iPhone builds exist |
 | **Web end-to-end tests** cover 7 client and 6 console journeys. The claim has none, because its screen does not exist yet. Payout accounts and the identity check have theirs. | Each new screen above should add its journey. | Each screen's thread |
@@ -106,8 +106,7 @@ Credentials and accounts:
 - The Cloudflare token's Zone WAF Edit permission, so the rate limit can be applied.
 - Repository settings: secret scanning, push protection and Dependabot ([security.md](security.md) finding 8), and "Keep my email addresses private" on GitHub.
 - The go-ahead for the first Provision and the first production deploy.
-- An identity check provider (Smile ID or ioTec Verify), if people are not to review every client.
-- A sanctions and politically exposed persons list source, before screening can be built.
+- ioTec Verify credentials for the worker (`FINVEST_IOTEC_VERIFY_CLIENT_ID`, `FINVEST_IOTEC_VERIFY_API_KEY`), to turn on the automatic identity checks and screening.
 
 Legal and regulatory:
 
