@@ -30,6 +30,7 @@ ErrorCode = Literal[
     "payload_too_large",
     "rate_limited",
     "unavailable",
+    "maintenance",
     "internal_error",
 ]
 
@@ -57,6 +58,7 @@ STATUS: dict[ErrorCode, int] = {
     "payload_too_large": 413,
     "rate_limited": 429,
     "unavailable": 503,
+    "maintenance": 503,
     "internal_error": 500,
 }
 
@@ -84,6 +86,7 @@ MESSAGES: dict[ErrorCode, str] = {
     "payload_too_large": "The request is too large.",
     "rate_limited": "Too many requests. Try again later.",
     "unavailable": "The service is temporarily unavailable.",
+    "maintenance": "Finvest is being updated. Try again in a few minutes.",
     "internal_error": "Something went wrong on our side.",
 }
 

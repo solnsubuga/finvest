@@ -9,7 +9,11 @@ from uvicorn.middleware.proxy_headers import ProxyHeadersMiddleware
 
 from app.api import health
 from app.api.errors import UnexpectedErrorMiddleware, install_error_handlers
-from app.api.hardening import BodyLimitMiddleware, SecurityHeadersMiddleware
+from app.api.hardening import (
+    BodyLimitMiddleware,
+    MaintenanceMiddleware,
+    SecurityHeadersMiddleware,
+)
 from app.api.request_id import RequestIdMiddleware
 from app.api.request_log import RequestLogMiddleware
 from app.infrastructure.database import Database
@@ -178,6 +182,8 @@ def create_app(
     )
     install_error_handlers(app)
     # The last middleware added is the outermost, so the request ID exists before anything runs.
+    # Inside CORS, so a browser can read the maintenance answer and show its screen.
+    app.add_middleware(MaintenanceMiddleware, on=settings.client_maintenance)
     origins = sorted({*settings.client_allowed_origins, *settings.staff_allowed_origins})
     if origins:
         # Browsers only. The exact origins, with cookies, and nothing else.
