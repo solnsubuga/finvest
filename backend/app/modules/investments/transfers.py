@@ -38,6 +38,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.infrastructure.idempotency import Receipt, run_once
 from app.infrastructure.jobs import JobRequest, enqueue, publish
 from app.modules.audit import service as audit
+from app.modules.closures import service as closures
 from app.modules.audit.domain.events import AuditActor, AuditCategory, AuditEvent
 from app.modules.goals.events import FOLLOW_ROLLOVER
 from app.modules.identity.client_locks import client_id_for_phone, client_status
@@ -733,6 +734,12 @@ async def _ask(
     if sender is None:
         # Nobody sends before their own identity check is approved.
         raise ApplicationError("forbidden")
+    asked_to_close = await closures.latest(session, sender_id)
+    if asked_to_close is not None and asked_to_close.is_open:
+        # The client asked to close their account: nothing new starts while staff decide.
+        raise ApplicationError(
+            "conflict", fields=[FieldProblem(field_path=["client"], code="closure_requested")]
+        )
     now = clock.now()
     today = business_date(now)
     product = product_from_row(await product_row(session, investment.product_code))
@@ -830,6 +837,9 @@ async def _why_not(
         return TransferRefusal.WITHDRAWAL_REQUESTED.value
     if investment.maturity_date is not None and today >= investment.maturity_date:
         return TransferRefusal.MATURES_TODAY.value
+    # A held transfer can wait for days: either account may have been locked or closed since.
+    if await client_status(session, transfer.sender_client_id) != "active":
+        return "sender_not_available"
     recipient = await kyc.transfer_recipient(session, client_id=transfer.recipient_client_id)
     if recipient is None or await client_status(session, transfer.recipient_client_id) != "active":
         return "recipient_not_available"

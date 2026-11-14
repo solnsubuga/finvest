@@ -92,9 +92,8 @@ _LOCK = text(
     "SELECT id FROM identity_client_locks WHERE id = :id AND status = 'proposed' FOR UPDATE"
 )
 _STATUS = text("SELECT status FROM identity_clients WHERE id = :id FOR UPDATE")
-
-
-_STATUS = text("SELECT status FROM identity_clients WHERE id = :id")
+# The same read without the row lock, for a transaction that only needs to know.
+_STATUS_UNLOCKED = text("SELECT status FROM identity_clients WHERE id = :id")
 _ID_FOR_PHONE = text("SELECT id FROM identity_clients WHERE phone = :phone")
 
 
@@ -104,7 +103,7 @@ async def client_status(session: AsyncSession, client_id: str) -> str | None:
     Reads the account alone, so any transaction may ask, such as a client sending an
     investment to another.
     """
-    status = await session.scalar(_STATUS, {"id": client_id})
+    status = await session.scalar(_STATUS_UNLOCKED, {"id": client_id})
     return str(status) if status is not None else None
 
 

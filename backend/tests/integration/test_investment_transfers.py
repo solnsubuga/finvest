@@ -11,6 +11,8 @@ from sqlalchemy.exc import DBAPIError
 
 from app.infrastructure.database import Database
 from app.modules.audit import service as audit
+from app.modules.closures import service as closures
+from app.modules.identity import client_locks
 from app.modules.investments import accrual, transfers
 from app.modules.investments import service as investments
 from app.modules.investments.domain.investments import InvestmentStatus
@@ -665,3 +667,95 @@ async def test_monitoring_reads_a_transfer_once_it_is_made(
     assert (seen.sender_client_id, seen.recipient_client_id) == (sender.id, recipient.id)
     assert (seen.amount_minor, seen.currency.value) == (1_000_000, "UGX")
     assert seen.finished_at == done.finished_at
+
+
+async def active_staff(app_database: Database, role: str = "operations") -> Actor:
+    """A member of staff with an active account, for steps whose records name real staff."""
+    staff_id = push_id()
+    async with app_database.transaction() as session:
+        await session.execute(
+            text(
+                "INSERT INTO identity_staff (id, email, name, role, password_hash, status, "
+                "created_at) VALUES (:id, :email, 'Grace Auma', :role, 'x', 'active', now())"
+            ),
+            {"id": staff_id, "email": f"staff.{staff_id.lower()}@finvestug.com", "role": role},
+        )
+    return Actor("staff", staff_id)
+
+
+async def test_a_sender_locked_before_the_move_fails_the_transfer(
+    app_database: Database, worker_database: Database
+) -> None:
+    sender, _ = await person(app_database)
+    recipient, _ = await person(app_database)
+    source = await running(app_database, worker_database, sender)
+    asked = await send(
+        app_database, sender, source.id, await number_of(app_database, recipient), ugx(1_000_000)
+    )
+    proposer, decider = await active_staff(app_database), await active_staff(app_database)
+    async with app_database.actor_transaction(proposer) as session:
+        lock = await client_locks.propose(
+            session, proposer, str(sender.id), "lock", "Phone stolen", PRESENT
+        )
+    async with app_database.actor_transaction(decider) as session:
+        await client_locks.decide(session, decider, lock.id, "approved", "Confirmed", PRESENT)
+
+    failed = await carry_out(worker_database, asked.id)
+    assert (failed.status, failed.failure_code) == (TransferStatus.FAILED, "sender_not_available")
+    assert (await investment(worker_database, source.id)).status is InvestmentStatus.ACTIVE
+    assert await account_balance(worker_database, source, HOLDING) == 5_000_000
+
+
+async def test_account_closure_and_transfers(
+    app_database: Database, worker_database: Database
+) -> None:
+    sender, _ = await person(app_database)
+    recipient, _ = await person(app_database)
+    source = await running(app_database, worker_database, sender)
+    asked = await send(
+        app_database, sender, source.id, await number_of(app_database, recipient), ugx(1_000_000)
+    )
+    # The sender cannot close while a transfer is open: the investment it is sent from still
+    # runs until the money moves, so the running investment blocker already stops it.
+    async with app_database.actor_transaction(sender) as session:
+        with pytest.raises(ApplicationError) as blocked:
+            await closures.ask(session, sender, "Moving abroad", PRESENT)
+    assert "investments_running" in {problem.code for problem in blocked.value.fields}
+
+    # The recipient, with nothing yet, may close; the transfer then fails and nothing moves.
+    async with app_database.actor_transaction(recipient) as session:
+        request = await closures.ask(session, recipient, "Moving abroad", PRESENT)
+    preparer, closer = await active_staff(app_database), await active_staff(app_database)
+    async with app_database.actor_transaction(preparer) as session:
+        await closures.prepare(session, preparer, request.id, "Checked", PRESENT)
+    async with app_database.actor_transaction(closer) as session:
+        await closures.approve(session, closer, request.id, "Second check", PRESENT)
+    failed = await carry_out(worker_database, asked.id)
+    assert (failed.status, failed.failure_code) == (
+        TransferStatus.FAILED,
+        "recipient_not_available",
+    )
+    assert (await investment(worker_database, source.id)).status is InvestmentStatus.ACTIVE
+
+
+async def test_a_client_who_asked_to_close_cannot_send(
+    app_database: Database, worker_database: Database
+) -> None:
+    sender, _ = await person(app_database)
+    recipient, _ = await person(app_database)
+    async with app_database.actor_transaction(sender) as session:
+        asked = await closures.ask(session, sender, None, PRESENT)
+    # An investment paid for after asking: nothing new should leave while staff decide.
+    source = await running(app_database, worker_database, sender)
+    with pytest.raises(ApplicationError) as refused:
+        await send(
+            app_database,
+            sender,
+            source.id,
+            await number_of(app_database, recipient),
+            ugx(1_000_000),
+        )
+    assert refused.value.fields[0].code == "closure_requested"
+    # Leave no open request behind for the staff queue other tests read.
+    async with app_database.actor_transaction(sender) as session:
+        await closures.cancel(session, sender, asked.id, PRESENT)
