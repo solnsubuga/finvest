@@ -11,7 +11,7 @@ account, the journals sent to the accounting system, who set the bank account cl
 into, why a payout send waited, the account code maps, the deposits taken back as mistakes,
 what clients owe for them, the runs staff asked for again, staff notes and actions on a
 client, the account freezes, why an investment was sent to another client, the platform
-settings, the withdrawal limit changes or the paydays clients named."""
+settings, the withdrawal limit changes, the paydays clients named or the auction calendar."""
 
 import os
 from collections.abc import Iterator
@@ -293,6 +293,14 @@ ROWS = {
         "('-Nabc0000000000000A1', 'in', 'UGX', 100000, 'FT1', DATE '2026-11-13', 'Test', "
         "'proposed', '-Nabc0000000000000B1', now()); COMMIT",
         "refusing to drop buffer capital movements",
+    ),
+    "0088_dealing_auctions": (
+        "BEGIN; SELECT set_config('finvest.actor_kind', 'staff', true); "
+        "SELECT set_config('finvest.actor_id', '-Nabc0000000000000B1', true); "
+        "INSERT INTO dealing_auctions (id, product_code, auction_date, added_by, added_at) "
+        "VALUES ('-Nabc0000000000000A1', 'TREA-91', DATE '2026-11-18', '-Nabc0000000000000B1', "
+        "now()); COMMIT",
+        "refusing to drop the auction calendar",
     ),
     # The owner turns the guards off: a real funding from a sale needs a settled sale.
     "0086_dealing_sale_funding": (

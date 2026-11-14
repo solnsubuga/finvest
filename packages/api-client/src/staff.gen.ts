@@ -215,6 +215,24 @@ export const AttentionOut = z.object({
 });
 export type AttentionOut = z.infer<typeof AttentionOut>;
 
+export const AuctionIn = z.object({
+  auction_date: z.string(),
+  product_code: z.string(),
+});
+export type AuctionIn = z.infer<typeof AuctionIn>;
+
+export const AuctionOut = z.object({
+  added_at: z.string(),
+  added_by: z.string(),
+  auction_date: z.string(),
+  cancel_reason: z.string().nullable(),
+  cancelled_at: z.string().nullable(),
+  cancelled_by: z.string().nullable(),
+  id: z.string(),
+  product_code: z.string(),
+});
+export type AuctionOut = z.infer<typeof AuctionOut>;
+
 export const AuthenticatorSetupView = z.object({
   secret: z.string(),
   uri: z.string(),
@@ -588,6 +606,17 @@ export const BulkOut = z.object({
   total: MoneyView,
 });
 export type BulkOut = z.infer<typeof BulkOut>;
+
+export const CalendarOut = z.object({
+  auctions: z.array(AuctionOut),
+  may_change: z.boolean(),
+});
+export type CalendarOut = z.infer<typeof CalendarOut>;
+
+export const CancelIn = z.object({
+  reason: z.string(),
+});
+export type CancelIn = z.infer<typeof CancelIn>;
 
 export const CaseAmountOut = z.object({
   currency: z.enum(["UGX", "USD"]),
@@ -1290,6 +1319,7 @@ export const DealingApiPositionOut = z.object({
   discount_only: z.boolean(),
   face_held: AmountOut,
   lot_size: AmountOut,
+  next_auction: z.string().nullable(),
   on_order: AmountOut,
   product_code: z.string(),
   product_name: z.string(),
@@ -4461,6 +4491,41 @@ export const operations = {
     idempotent: false,
     status: 200,
     response: InvestmentBillsOut,
+  },
+  "GET /staff/dealing/auctions": {
+    method: "GET",
+    path: "/staff/dealing/auctions",
+    params: z.object({}),
+    query: z.object({}),
+    body: null,
+    bodyKind: null,
+    idempotent: false,
+    status: 200,
+    response: CalendarOut,
+  },
+  "POST /staff/dealing/auctions": {
+    method: "POST",
+    path: "/staff/dealing/auctions",
+    params: z.object({}),
+    query: z.object({}),
+    body: AuctionIn,
+    bodyKind: "json",
+    idempotent: true,
+    status: 200,
+    response: CalendarOut,
+  },
+  "POST /staff/dealing/auctions/{auction_id}/cancel": {
+    method: "POST",
+    path: "/staff/dealing/auctions/{auction_id}/cancel",
+    params: z.object({
+    auction_id: z.string(),
+  }),
+    query: z.object({}),
+    body: CancelIn,
+    bodyKind: "json",
+    idempotent: true,
+    status: 200,
+    response: CalendarOut,
   },
   "GET /staff/dealing/buffer": {
     method: "GET",

@@ -6,10 +6,11 @@ Every figure comes from the module's own reads. The console shows them and works
 
 from collections import defaultdict
 from dataclasses import dataclass
+from datetime import date
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.modules.dealing import holdings, orders, withdrawals
+from app.modules.dealing import auctions, holdings, orders, withdrawals
 from app.modules.dealing.domain.orders import LOT_SIZES, Action, OrderKind, allowed_actions
 from app.modules.dealing.domain.position import Cover, ProductPosition
 from app.modules.dealing.domain.withdrawals import Source
@@ -35,6 +36,9 @@ class PositionView:
     # Face value held that is not already in an open sale.
     face_held: Money
     cover: Cover
+    # The next auction entered in the calendar, on or after today. None when none is entered,
+    # and always None for a product that is not a Treasury bill.
+    next_auction: date | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -93,6 +97,7 @@ async def desk(
     for order in open_orders:
         if order.kind is OrderKind.SECONDARY_SALE and order.face.currency is currency:
             selling[order.product_code] += order.face.minor
+    next_auction = await auctions.next_by_product(session, on)
     positions = []
     for product in products:
         position = ProductPosition(
@@ -113,6 +118,11 @@ async def desk(
                 on_order=position.on_order,
                 face_held=Money(max(face[product.code] - selling[product.code], 0), currency),
                 cover=position.cover,
+                next_auction=(
+                    next_auction.get(product.code)
+                    if product.kind is ProductKind.TREASURY_BILL
+                    else None
+                ),
             )
         )
     buffer = await withdrawals.buffer_now(session, currency, clock)
