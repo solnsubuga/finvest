@@ -110,7 +110,7 @@ def create_app(
     identity_checks = KycSettings()
     if identity_sealer is None and identity_checks.identity_data_key is not None:
         identity_sealer = identity_checks.sealer()
-    identity_provider = identity_provider or identity_checks.provider()
+    identity_provider = identity_provider or identity_checks.provider(storage)
 
     @asynccontextmanager
     async def lifespan(_: FastAPI) -> AsyncIterator[None]:

@@ -8,6 +8,7 @@ import pytest
 from pydantic import ValidationError
 
 from app.infrastructure.sealing import associated_data
+from app.infrastructure.storage import MemoryStorage
 from app.modules.kyc.domain.checks import DocumentType, IdentityDetails
 from app.modules.kyc.domain.provider import (
     Accepted,
@@ -53,7 +54,7 @@ def test_without_a_key_the_default_is_the_manual_provider_and_nothing_is_sealed(
     for name in ("IDENTITY_DATA_KEY", "IDENTITY_PROVIDER", "IDENTITY_AUTOMATIC_APPROVAL"):
         monkeypatch.delenv(f"FINVEST_{name}", raising=False)
     settings = KycSettings()
-    assert isinstance(settings.provider(), ManualProvider)
+    assert isinstance(settings.provider(MemoryStorage()), ManualProvider)
     assert not settings.identity_automatic_approval
     with pytest.raises(ValueError, match="FINVEST_IDENTITY_DATA_KEY is not set"):
         settings.sealer()
@@ -77,13 +78,13 @@ def test_the_development_stub_does_not_start_in_production(
     else:
         monkeypatch.setenv("FINVEST_ENVIRONMENT", environment)
     if starts:
-        assert isinstance(KycSettings().provider(), DevelopmentStubProvider)
+        assert isinstance(KycSettings().provider(MemoryStorage()), DevelopmentStubProvider)
     else:
         with pytest.raises(ValidationError, match="may not run in production"):
             KycSettings()
     # The manual provider is unaffected by where it runs.
     monkeypatch.setenv("FINVEST_IDENTITY_PROVIDER", "manual")
-    assert isinstance(KycSettings().provider(), ManualProvider)
+    assert isinstance(KycSettings().provider(MemoryStorage()), ManualProvider)
 
 
 def test_the_development_stub_can_never_approve_clients() -> None:
@@ -94,7 +95,7 @@ def test_the_development_stub_can_never_approve_clients() -> None:
             identity_automatic_approval=True,
         )
     stub = KycSettings(identity_data_key=fresh_key(), identity_provider="development-stub")
-    assert isinstance(stub.provider(), DevelopmentStubProvider)
+    assert isinstance(stub.provider(MemoryStorage()), DevelopmentStubProvider)
 
 
 async def test_the_stub_passes_everyone_except_document_numbers_ending_in_zero() -> None:
