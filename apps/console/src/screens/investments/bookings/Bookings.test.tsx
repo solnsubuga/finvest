@@ -66,6 +66,44 @@ describe("investments: booking for a client", () => {
     expect(within(booked).getByRole("button", { name: "Withdraw it" })).toBeInTheDocument();
   });
 
+  it("books every ready row of a spreadsheet, and says why the others cannot be", async () => {
+    const { user } = renderBookings();
+    await user.click(await screen.findByRole("button", { name: "Upload a spreadsheet" }));
+    const form = screen.getByRole("form", { name: "Book investments from a spreadsheet" });
+    const csv = [
+      "account_number,product_code,amount,at_maturity",
+      "1001006044,TREA-91,\"2,000,000\",pay_out",
+      "1001003318,TREA-364,500000,",
+      "1001002291,TREA-91,500000,",
+      "1001004827,TREA-91,5000,",
+    ].join("\n");
+    await user.upload(within(form).getByLabelText("Spreadsheet"), new File([csv], "bookings.csv", { type: "text/csv" }));
+    const table = await within(form).findByRole("table", { name: "Rows to book" });
+    const rows = within(table).getAllByRole("row").slice(1);
+    expect(rows[0]).toHaveTextContent("Sarah Achieng");
+    expect(rows[0]).toHaveTextContent("Ready");
+    expect(rows[1]).toHaveTextContent("Joan Namutebi");
+    expect(rows[2]).toHaveTextContent("No approved, active client has this account number.");
+    expect(rows[3]).toHaveTextContent("Below the product's minimum.");
+    await user.click(within(form).getByRole("button", { name: "Send 2 for approval" }));
+    expect(form).toHaveTextContent("Fill this in.");
+    await user.type(within(form).getByLabelText(/How did the clients ask/), "Asked at the Kira Road savings meeting on 13 November.");
+    await user.click(within(form).getByRole("button", { name: "Send 2 for approval" }));
+    await waitFor(() => expect(form).toHaveTextContent("2 sent for approval."));
+    const booked = await screen.findByRole("article", { name: /UGX\s?2,000,000 in the 91-day Treasury bill for Sarah Achieng/ });
+    expect(booked).toHaveTextContent("(row 2 of the uploaded sheet)");
+    expect(screen.getByRole("article", { name: /in the 364-day Treasury bill for Joan Namutebi/ })).toHaveTextContent("Roll it over");
+    expect(within(form).queryByRole("button", { name: /for approval/ })).toBeNull();
+  });
+
+  it("refuses a file that is not the template's shape", async () => {
+    const { user } = renderBookings();
+    await user.click(await screen.findByRole("button", { name: "Upload a spreadsheet" }));
+    const form = screen.getByRole("form", { name: "Book investments from a spreadsheet" });
+    await user.upload(within(form).getByLabelText("Spreadsheet"), new File(["name,amount\nJoan,5"], "x.csv", { type: "text/csv" }));
+    expect(await within(form).findByRole("alert")).toHaveTextContent("Missing: account_number, product_code.");
+  });
+
   it("shows nothing booked on a new system", async () => {
     renderBookings({ api: createStubBookingsApi(ME.id, "empty") });
     expect(await screen.findByText("Nothing has been booked for a client yet.")).toBeInTheDocument();
