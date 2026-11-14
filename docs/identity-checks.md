@@ -120,9 +120,10 @@ The module talks to an `IdentityProvider` port (`domain/provider.py`) with three
 | `screening` | AML screening (`/api/aml-screening`): sanctions and politically exposed person lists, by full name and date of birth, allowing one letter's difference | No hits | `fail` on any hit, which staff compare |
 
 - The three request IDs together are the reference (`iotec:idv=…,face=…,aml=…`). The worker reads all three and waits while any is still running.
-- A check ioTec refused, could not be sent, or that failed at ioTec is left out, so it shows as `<check>_not_run` and a person looks. A passport, driving permit or refugee ID has no NIRA lookup, so its `document_genuine` is always not run.
+- A request that certainly never reached ioTec (no connection, 401, 403, 429) is tried once more straight away. A check ioTec refused, still could not be sent, or that failed at ioTec is left out, so it shows as `<check>_not_run` and a person looks. Staff must not approve a client on `screening_not_run`: the screening has to be run first, by sending the check back for a fresh submission. A passport, driving permit or refugee ID has no NIRA lookup, so its `document_genuine` is always not run.
 - Once one request is accepted the others are never sent again, so nothing is paid for twice. If none was accepted and one may have arrived, the send is uncertain. ioTec cannot be asked for a request by our key, so `find` holds nothing, and that check goes to a person (`provider_not_received`).
-- Wrong credentials (401, 403) and too many requests (429) count as not received and are tried again; the sweep hands the check to a person after 30 minutes.
+- If nothing was accepted and nothing arrived, the whole submission is tried again; the sweep hands the check to a person after 30 minutes.
+- A face match confidence outside 0 to 1 is not understood, so it has no score and is `unsure`. The base URL must be https.
 - The worker reads the selfie and front from private storage, with the digest saved for each, before sending anything. A photo it cannot read sends nothing and is tried again.
 - The face match compares two photos and does not prove a live person. The settings therefore refuse ioTec with `FINVEST_IDENTITY_AUTOMATIC_APPROVAL`, whatever the owner decides, until liveness is checked. ioTec's liveness check (`/api/face-verification`) emails the client a link to ioTec Faces, which is a separate client step and is not built.
 - To confirm against ioTec's sandbox: the exact values of `matchingStatus` and `cardStatus`, which the API reference does not list. Anything not recognised is `unsure`, never a pass.
@@ -146,7 +147,7 @@ How a send can end:
 
 A result that arrives after the check moved on changes nothing.
 
-Settings, all optional while the provider is `manual`: `FINVEST_IDENTITY_PROVIDER` (`manual`, `iotec` or `development-stub`), `FINVEST_IDENTITY_AUTOMATIC_APPROVAL` (off; the owner's decision), and `FINVEST_IDENTITY_DATA_KEY`, which any provider other than `manual` requires in the worker. `iotec` also needs `FINVEST_IOTEC_VERIFY_CLIENT_ID` and `FINVEST_IOTEC_VERIFY_API_KEY` in the worker (from the ioTec Verify portal, Management, Settings, Configuration), and the worker needs the `FINVEST_OBJECT_STORAGE_*` settings to read the photos. `FINVEST_IOTEC_VERIFY_BASE_URL` points it elsewhere, for a sandbox.
+Settings, all optional while the provider is `manual`: `FINVEST_IDENTITY_PROVIDER` (`manual`, `iotec` or `development-stub`), `FINVEST_IDENTITY_AUTOMATIC_APPROVAL` (off; the owner's decision), and `FINVEST_IDENTITY_DATA_KEY`, which any provider other than `manual` requires in the worker. `iotec` also needs `FINVEST_IOTEC_VERIFY_CLIENT_ID` and `FINVEST_IOTEC_VERIFY_API_KEY` (from the ioTec Verify portal, Management, Settings, Configuration). The API and the worker both read these settings and refuse to start without them: the API records which provider a submission goes to, and only the worker sends. The worker also needs the `FINVEST_OBJECT_STORAGE_*` settings, which the API already has, to read the photos. `FINVEST_IOTEC_VERIFY_BASE_URL` points it elsewhere, for a sandbox.
 
 ## Routes
 

@@ -85,6 +85,7 @@ async def provider(fake: FakeIotec, storage: MemoryStorage | None = None) -> Iot
         api_key=SecretStr("IO-key"),
         storage=storage or MemoryStorage(),
         client=httpx.AsyncClient(transport=httpx.MockTransport(fake)),
+        retry_pause=0,
     )
 
 
@@ -315,3 +316,63 @@ def test_iotec_needs_its_credentials_and_never_approves_alone(
     )
     assert isinstance(settings.provider(MemoryStorage()), IotecVerifyProvider)
     assert "IO-key" not in repr(settings)
+
+
+async def test_a_request_that_never_arrived_is_tried_once_more() -> None:
+    fake = FakeIotec()
+    tries: list[int] = []
+
+    def once_down(request: httpx.Request) -> httpx.Response:
+        tries.append(1)
+        return unreachable(request) if len(tries) == 1 else accepted(AML)
+
+    fake.posts["/api/aml-screening"] = once_down
+    _, answer = await submitted(fake)
+    assert answer == Accepted(f"iotec:idv={IDV},face={FACE},aml={AML}")
+    assert len(tries) == 2
+    # Never again after it may have arrived.
+    tries.clear()
+
+    def counted_timeout(request: httpx.Request) -> httpx.Response:
+        tries.append(1)
+        return timed_out(request)
+
+    fake.posts["/api/aml-screening"] = counted_timeout
+    _, answer = await submitted(fake)
+    assert answer == Accepted(f"iotec:idv={IDV},face={FACE},aml=-")
+    assert len(tries) == 1
+
+
+@pytest.mark.parametrize("confidence", [1.4, -0.2, 93, "0.9"])
+async def test_a_confidence_outside_zero_to_one_is_unsure_with_no_score(confidence: object) -> None:
+    fake = FakeIotec()
+    fake.reads[FACE] = {
+        "status": "Completed",
+        "faceMatchStatus": "Success",
+        "isIdentical": True,
+        "confidence": confidence,
+    }
+    adapter, answer = await submitted(fake)
+    assert isinstance(answer, Accepted)
+    result = await adapter.result(answer.reference)
+    assert isinstance(result, Completed)
+    face = next(o for o in result.outcomes if o.check is AutomaticCheck.SELFIE_MATCH)
+    assert (face.verdict, face.score) == (Verdict.UNSURE, None)
+
+
+def test_iotec_is_only_reached_over_https() -> None:
+    with pytest.raises(ValueError, match="https"):
+        IotecVerifyProvider(
+            client_id="client-1",
+            api_key=SecretStr("IO-key"),
+            storage=MemoryStorage(),
+            base_url="http://verify-api.iotec.io",
+        )
+    with pytest.raises(ValidationError, match="https"):
+        KycSettings(
+            identity_data_key="A" * 43,
+            identity_provider="iotec",
+            iotec_verify_client_id="client-1",
+            iotec_verify_api_key="IO-key",
+            iotec_verify_base_url="http://verify-api.iotec.io",
+        )
