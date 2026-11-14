@@ -30,6 +30,8 @@ const SOURCES: Record<Kind, { view: Permission; decide: Permission }> = {
   account_code_map: { view: "settings.view", decide: "account_codes.change" },
   payout_account: { view: "review_queue.view", decide: "review_queue.view" },
   deposit_reassignment: { view: "reconciliation.view", decide: "deposit_reassignments.change" },
+  deposit_reversal: { view: "reconciliation.view", decide: "deposit_reassignments.change" },
+  deposit_receivable: { view: "reconciliation.view", decide: "deposit_reassignments.change" },
   tax_remittance: { view: "finance.view", decide: "tax_remittances.change" },
   payout_resolution: { view: "reconciliation.view", decide: "reconciliation.change" },
   payout_release: { view: "review_queue.view", decide: "payout_accounts.change" },
@@ -68,6 +70,8 @@ export function createStubApprovalsApi(reader: Reader, now: () => number = Date.
     ["payout_account", "-NstubDest0000000088", "bank", "Peter Okello", 2900],
     ["payout_release", "-NstubRelease0000003", "-NstubPayout00000017", "Grace Auma", 70],
     ["organisation", "-NstubOrg00000000002", "company", "Ruth Namata", 90],
+    ["deposit_reversal", "-NstubReversal000001", "-NstubDeposit0000031", "Daniel Kato", 40],
+    ["deposit_receivable", "-NstubOwed0000000001", "open -NstubDeposit0000027", "Grace Auma", 65],
   ];
   const held = new Set(reader.permissions);
   const items: ApprovalItem[] =
