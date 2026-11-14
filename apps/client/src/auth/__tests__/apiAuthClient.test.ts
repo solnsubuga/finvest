@@ -86,7 +86,7 @@ describe("the sign-in client for the real API", () => {
     expect(seen[0]!.body).toEqual({ phone: "+256772123456", email: null });
     const ticket = await client.confirmSignupCode(challenge.challengeId, "123456");
     const session = await client.completeSignup(ticket.ticket, "a-long-unusual-phrase");
-    expect(session).toEqual({ phone: "+256772123456", displayName: null, restricted: false, email: null, emailVerified: false, pinSet: false, locked: false });
+    expect(session).toEqual({ phone: "+256772123456", displayName: null, restricted: false, email: null, emailVerified: false, pinSet: false, locked: false, confirmedUntil: null });
     expect(await readToken()).toBe("phone-token");
     await expect(client.restoreSession()).resolves.toEqual(session);
     expect(seen.at(-1)!.auth).toBe("Bearer phone-token");
@@ -324,5 +324,46 @@ describe("the sign-in client for the real API", () => {
       },
     });
     expect(await createApiAuthClient().changeEmail("b@example.com").catch((e: AuthError) => e.code)).toBe("same_as_now");
+  });
+
+  it("takes a live selfie for a password or number change, and reads the session's confirmation", async () => {
+    const attempt = {
+      id: ID,
+      status: "open",
+      url: "https://faces.iotec.io/x",
+      failure_code: null,
+      expires_at: "2026-11-14T12:15:00Z",
+      counts_until: null,
+    };
+    serve({
+      "GET /client/session/confirmation/selfie": {
+        status: 200,
+        body: { needed: true, confirmed: false, problem: null, attempts_left: 4, latest: attempt },
+      },
+      "POST /client/session/confirmation/selfie": { status: 201, body: { ...attempt, status: "starting", url: null } },
+      [`GET /client/session/confirmation/selfie/${ID}`]: { status: 200, body: { ...attempt, status: "failed", url: null, failure_code: "face_not_matched" } },
+      "PUT /client/password": refused(403, "confirm_with_selfie"),
+    });
+    const client = createApiAuthClient();
+    expect(await client.getSelfieConfirmation()).toEqual({
+      needed: true,
+      confirmed: false,
+      attemptsLeft: 4,
+      latest: { id: ID, status: "open", url: "https://faces.iotec.io/x", failureCode: null },
+    });
+    expect((await client.startSelfieConfirmation()).status).toBe("starting");
+    expect(await client.getSelfieAttempt(ID)).toEqual({ id: ID, status: "failed", url: null, failureCode: "face_not_matched" });
+    expect(await client.changePassword("a", "b").catch((e: AuthError) => e.code)).toBe("confirm_with_selfie");
+    expect(toSession({ phone: "+256772123456", restricted_until: null, confirmed_until: "2026-11-14T12:10:00Z" }).confirmedUntil).toBe(
+      "2026-11-14T12:10:00Z",
+    );
+
+    serve({
+      "POST /client/session/confirmation/selfie": {
+        status: 422,
+        body: { request_id: RID, error: { code: "validation_failed", message: "x", fields: [{ field_path: ["face_confirmation"], code: "too_many_attempts" }] } },
+      },
+    });
+    expect(await createApiAuthClient().startSelfieConfirmation().catch((e: AuthError) => e.code)).toBe("selfie_used_up");
   });
 });

@@ -18,26 +18,49 @@ export function needsConfirmation(error: unknown): boolean {
   return error instanceof AuthError && error.code === "confirm_it_is_you";
 }
 
+/** True when the server also wants a live selfie before this change. */
+export function needsSelfie(error: unknown): boolean {
+  return error instanceof AuthError && error.code === "confirm_with_selfie";
+}
+
+/** How long a passkey or app confirmation counts, as the API allows. */
+export const CONFIRMATION_WINDOW_MS = 10 * 60 * 1000;
+
+/** Whether the session says a passkey or app was used recently enough for a change now. */
+export function stillConfirmed(confirmedUntil: string | null | undefined, now: number = Date.now()): boolean {
+  const until = confirmedUntil ? Date.parse(confirmedUntil) : NaN;
+  return Number.isFinite(until) && until > now;
+}
+
 /**
- * Runs a change to how the client signs in. When the server first wants a passkey or the
- * authenticator app, `confirming` turns on; once the client confirms, the same change is sent
- * again by itself.
+ * Runs a change to how the client signs in. When the session says no passkey or app was used in
+ * the last ten minutes, `confirming` turns on before anything is sent, and the server's
+ * `confirm_it_is_you` does the same. When the server then wants a live selfie too, `selfie`
+ * turns on. Once the client confirms, the same change is sent again by itself.
  */
 export function useConfirmedChange<T>(change: () => Promise<T>, onDone: (result: T) => void) {
+  const { session } = useAuth();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [confirming, setConfirming] = useState(false);
+  const [selfie, setSelfie] = useState(false);
+  const confirmedUntil = session?.confirmedUntil ?? null;
 
-  const run = useCallback(async () => {
+  const send = useCallback(async () => {
     setBusy(true);
     setError(null);
     try {
       const result = await change();
       setConfirming(false);
+      setSelfie(false);
       onDone(result);
     } catch (caught) {
       if (needsConfirmation(caught)) {
+        setSelfie(false);
         setConfirming(true);
+      } else if (needsSelfie(caught)) {
+        setConfirming(false);
+        setSelfie(true);
       } else {
         setError(describeAuthError(caught));
       }
@@ -46,7 +69,17 @@ export function useConfirmedChange<T>(change: () => Promise<T>, onDone: (result:
     }
   }, [change, onDone]);
 
-  return { run, busy, error, setError, confirming, setConfirming };
+  const run = useCallback(async () => {
+    if (!stillConfirmed(confirmedUntil)) {
+      // Ask now rather than send the change only to be refused.
+      setError(null);
+      setConfirming(true);
+      return;
+    }
+    await send();
+  }, [confirmedUntil, send]);
+
+  return { run, send, busy, error, setError, confirming, setConfirming, selfie, setSelfie };
 }
 
 type Props = {
@@ -63,7 +96,7 @@ type Props = {
  */
 export function ConfirmItIsYou({ onConfirmed, onCancel, otherwise }: Props) {
   const router = useRouter();
-  const { client } = useAuth();
+  const { client, session, setSession } = useAuth();
   const steps = useSecondSteps();
   const [code, setCode] = useState("");
   const [busy, setBusy] = useState(false);
@@ -80,6 +113,10 @@ export function ConfirmItIsYou({ onConfirmed, onCancel, otherwise }: Props) {
     setWrong(false);
     try {
       await work();
+      // The session now counts as confirmed for ten minutes, as the server records it.
+      if (session) {
+        setSession({ ...session, confirmedUntil: new Date(Date.now() + CONFIRMATION_WINDOW_MS).toISOString() });
+      }
       onConfirmed();
     } catch (caught) {
       setError(describeAuthError(caught));

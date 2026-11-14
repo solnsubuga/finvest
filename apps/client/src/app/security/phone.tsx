@@ -10,6 +10,7 @@ import { Notice } from "@/components/Blocks";
 import { Button, TextLink } from "@/components/Button";
 import { CODE_LENGTH, CodeInput } from "@/components/CodeInput";
 import { ConfirmItIsYou, useConfirmedChange } from "@/components/ConfirmItIsYou";
+import { ConfirmWithSelfie } from "@/components/ConfirmWithSelfie";
 import { Done } from "@/components/Done";
 import { PhoneField } from "@/components/Field";
 import { Screen } from "@/components/Screen";
@@ -76,7 +77,7 @@ export default function ChangePhone() {
     <Screen
       signedIn
       footer={
-        step.confirming ? null : challenge ? (
+        step.confirming || step.selfie ? null : challenge ? (
           <Button
             label="Change my number"
             onPress={confirming.run}
@@ -102,7 +103,10 @@ export default function ChangePhone() {
       </View>
       <View style={{ marginTop: 20, gap: 14 }}>
         {step.confirming ? (
-          <ConfirmItIsYou onConfirmed={step.run} onCancel={() => step.setConfirming(false)} otherwise={SUPPORT} />
+          <ConfirmItIsYou onConfirmed={step.send} onCancel={() => step.setConfirming(false)} otherwise={SUPPORT} />
+        ) : null}
+        {step.selfie ? (
+          <ConfirmWithSelfie onConfirmed={step.send} onCancel={() => step.setSelfie(false)} otherwise={SUPPORT} />
         ) : null}
         {error ? <Notice tone="danger">{error}</Notice> : null}
         {challenge ? (
@@ -131,7 +135,8 @@ export default function ChangePhone() {
           <>
             <PhoneField label="New mobile number" value={phone} onChangeText={setPhone} testID="phone-new" autoFocus />
             <Notice tone="warning">
-              You confirm it is you with your passkey or authenticator app first. When the number changes we sign
+              You confirm it is you with your passkey or authenticator app first, and a live selfie if your ID check
+              has one. When the number changes we sign
               out your other devices, and for 24 hours withdrawals go only to accounts you have used before.
             </Notice>
           </>

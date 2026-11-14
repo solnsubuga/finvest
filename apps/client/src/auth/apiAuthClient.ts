@@ -1,10 +1,10 @@
-import type { ClientSignedIn } from "@finvest/api-client/client";
+import type { ClientSignedIn, SelfieConfirmation } from "@finvest/api-client/client";
 
 import { api, ApiError } from "@/api/http";
 import { saveToken } from "@/api/token";
 import { forgetPush } from "@/push/registration";
 
-import { AuthClient, AuthError, AuthErrorCode, Device, SecondStep, Session } from "./types";
+import { AuthClient, AuthError, AuthErrorCode, Device, SecondStep, SelfieAttempt, Session } from "./types";
 import { createPasskey, PasskeyCancelled, passkeysSupported, signWithPasskey } from "./webauthn";
 
 /**
@@ -25,6 +25,7 @@ const PASSTHROUGH: ReadonlySet<AuthErrorCode> = new Set([
   "not_found",
   "offline",
   "confirm_it_is_you",
+  "confirm_with_selfie",
 ]);
 
 /** Turns what the API or the network said into a reason a sign-in screen can show. */
@@ -39,6 +40,7 @@ export function toAuthError(error: unknown): AuthError {
       const problem = error.fields[0]?.code;
       if (problem === "leaked_password") return new AuthError("leaked_password");
       if (problem === "same_as_now") return new AuthError("same_as_now");
+      if (problem === "too_many_attempts") return new AuthError("selfie_used_up");
       return new AuthError("not_accepted");
     }
   }
@@ -73,6 +75,7 @@ type SessionView = {
   email_verified?: boolean;
   pin_set?: boolean;
   locked?: boolean;
+  confirmed_until?: string | null;
 };
 
 export function toSession(view: SessionView, now: number = Date.now()): Session {
@@ -86,7 +89,12 @@ export function toSession(view: SessionView, now: number = Date.now()): Session 
     emailVerified: Boolean(view.email && view.email_verified),
     pinSet: Boolean(view.pin_set),
     locked: Boolean(view.locked),
+    confirmedUntil: view.confirmed_until ?? null,
   };
+}
+
+export function toSelfieAttempt(attempt: SelfieConfirmation): SelfieAttempt {
+  return { id: attempt.id, status: attempt.status, url: attempt.url, failureCode: attempt.failure_code };
 }
 
 async function signedIn(result: ClientSignedIn): Promise<Session> {
@@ -337,6 +345,27 @@ export function createApiAuthClient(): AuthClient {
       wrap(async () => {
         await api("PUT /client/password", { body: { current_password: current, new_password: next } });
       }),
+
+    getSelfieConfirmation: () =>
+      wrap(async () => {
+        const state = await api("GET /client/session/confirmation/selfie", {});
+        return {
+          needed: state.needed,
+          confirmed: state.confirmed,
+          attemptsLeft: state.attempts_left,
+          latest: state.latest ? toSelfieAttempt(state.latest) : null,
+        };
+      }),
+
+    startSelfieConfirmation: () =>
+      wrap(async () => toSelfieAttempt(await api("POST /client/session/confirmation/selfie", {}))),
+
+    getSelfieAttempt: (id) =>
+      wrap(async () =>
+        toSelfieAttempt(
+          await api("GET /client/session/confirmation/selfie/{attempt_id}", { params: { attempt_id: id } }),
+        ),
+      ),
 
     startPhoneChange: (phone) =>
       wrap(async () => (await api("POST /client/phone-change", { body: { phone } })).challenge_id),

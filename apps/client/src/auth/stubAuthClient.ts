@@ -9,6 +9,9 @@ import {
   PinCheck,
   PinConfirmation,
   SecondStep,
+  SelfieAttempt,
+  SelfieState,
+  SelfieStatus,
   Session,
   SignupChallenge,
   PasswordReset,
@@ -57,7 +60,12 @@ type Account = {
   otherDevices: Device[];
   email: string | null;
   emailVerified: boolean;
+  /** A selfie on an approved identity check, so a password or number change needs a live one. */
+  faceOnFile?: boolean;
 };
+
+/** Live selfies a client may start in a day, as the API allows. */
+export const SELFIES_PER_DAY = 5;
 
 const HOUR_MS = 60 * 60 * 1000;
 
@@ -156,6 +164,7 @@ export function createStubAuthClient(options: StubOptions = {}): AuthClient {
         otherDevices: demoDevices(now()),
         email: "amara@example.com",
         emailVerified: false,
+        faceOnFile: true,
       },
     ],
     [
@@ -190,8 +199,11 @@ export function createStubAuthClient(options: StubOptions = {}): AuthClient {
   /** A set-up that was started and not yet confirmed, for this session only. */
   let pendingAuthenticatorAt: number | null = null;
   let signedInAt = 0;
+  /** Live selfies on this session: each moves on one step every time it is read. */
+  const selfies = new Map<string, { status: SelfieStatus; startedAt: number }>();
+  let selfiePassedAt: number | null = null;
   /** When a passkey or authenticator app was last used on this session. */
-  let reconfirmedAt = 0;
+  let reconfirmedAt: number | null = null;
   let signedInRestricted = false;
   /** How this device's session was confirmed, for its row in the device list. */
   let confirmedWith: Device["confirmedWith"] = "signup";
@@ -226,7 +238,8 @@ export function createStubAuthClient(options: StubOptions = {}): AuthClient {
     signedInRestricted = restricted;
     signedIn = phone;
     signedInAt = now();
-    reconfirmedAt = 0;
+    reconfirmedAt = null;
+    selfiePassedAt = null;
     pendingAuthenticatorAt = null;
     // A PIN belongs to one session, so a new log in starts without one.
     pin = null;
@@ -240,6 +253,7 @@ export function createStubAuthClient(options: StubOptions = {}): AuthClient {
       emailVerified: account?.emailVerified ?? false,
       pinSet: false,
       locked: false,
+      confirmedUntil: confirmedUntil(),
     };
   };
 
@@ -251,14 +265,45 @@ export function createStubAuthClient(options: StubOptions = {}): AuthClient {
     return account;
   };
 
+  /** When a passkey or app was last used on this session, or null. */
+  const strongAt = (): number | null => {
+    const atLogIn = confirmedWith === "passkey" || confirmedWith === "authenticator" ? signedInAt : null;
+    if (reconfirmedAt === null) return atLogIn;
+    return atLogIn === null ? reconfirmedAt : Math.max(reconfirmedAt, atLogIn);
+  };
+
+  const confirmedUntil = (): string | null => {
+    const at = strongAt();
+    return at === null ? null : new Date(at + RECENT_SIGN_IN_MS).toISOString();
+  };
+
+  const selfieCounts = () => selfiePassedAt !== null && now() - selfiePassedAt < RECENT_SIGN_IN_MS;
+
+  /** A password or number change also needs a live selfie, when there is a face on file. */
+  const selfieConfirmedAccount = (): Account => {
+    const account = confirmedAccount();
+    if (account.faceOnFile && !selfieCounts()) {
+      throw new AuthError("confirm_with_selfie");
+    }
+    return account;
+  };
+
+  const selfieAttempt = (id: string): SelfieAttempt => {
+    const attempt = selfies.get(id);
+    if (!attempt) throw new AuthError("not_found");
+    return {
+      id,
+      status: attempt.status,
+      url: attempt.status === "open" ? `https://faces.iotec.io/demo/${id}` : null,
+      failureCode: attempt.status === "failed" ? "face_not_matched" : null,
+    };
+  };
+
   /** A change to how the account signs in needs a passkey or app in the last ten minutes. */
   const confirmedAccount = (): Account => {
     const account = currentAccount();
-    const strongAt = Math.max(
-      reconfirmedAt,
-      confirmedWith === "passkey" || confirmedWith === "authenticator" ? signedInAt : 0,
-    );
-    if (now() - strongAt > RECENT_SIGN_IN_MS) {
+    const at = strongAt();
+    if (at === null || now() - at > RECENT_SIGN_IN_MS) {
       throw new AuthError("confirm_it_is_you");
     }
     return account;
@@ -289,6 +334,7 @@ export function createStubAuthClient(options: StubOptions = {}): AuthClient {
             emailVerified: account.emailVerified,
             pinSet: pin !== null,
             locked: false,
+            confirmedUntil: confirmedUntil(),
           }
         : null;
     },
@@ -434,7 +480,7 @@ export function createStubAuthClient(options: StubOptions = {}): AuthClient {
 
     async setPin(next): Promise<void> {
       await wait();
-      if (now() - reconfirmedAt > RECENT_SIGN_IN_MS) recentAccount();
+      if (reconfirmedAt === null || now() - reconfirmedAt > RECENT_SIGN_IN_MS) recentAccount();
       if (pinProblem(next)) throw new AuthError("pin_too_simple");
       pin = next;
       wrongPins = 0;
@@ -662,9 +708,54 @@ export function createStubAuthClient(options: StubOptions = {}): AuthClient {
       reconfirmedAt = now();
     },
 
+    async getSelfieConfirmation(): Promise<SelfieState> {
+      await wait();
+      const account = currentAccount();
+      const today = [...selfies.values()].filter((attempt) => now() - attempt.startedAt < 24 * HOUR_MS).length;
+      const ids = [...selfies.keys()];
+      const last = ids[ids.length - 1];
+      return {
+        needed: Boolean(account.faceOnFile),
+        confirmed: selfieCounts(),
+        attemptsLeft: Math.max(0, SELFIES_PER_DAY - today),
+        latest: last ? selfieAttempt(last) : null,
+      };
+    },
+
+    async startSelfieConfirmation(): Promise<SelfieAttempt> {
+      await wait();
+      const account = currentAccount();
+      if (!account.faceOnFile) throw new AuthError("not_accepted");
+      const today = [...selfies.values()].filter((attempt) => now() - attempt.startedAt < 24 * HOUR_MS).length;
+      if (today >= SELFIES_PER_DAY) throw new AuthError("selfie_used_up");
+      for (const attempt of selfies.values()) {
+        if (attempt.status === "starting" || attempt.status === "open" || attempt.status === "matching") {
+          attempt.status = "expired";
+        }
+      }
+      const id = nextId("selfie");
+      selfies.set(id, { status: "starting", startedAt: now() });
+      return selfieAttempt(id);
+    },
+
+    async getSelfieAttempt(id): Promise<SelfieAttempt> {
+      await wait();
+      currentAccount();
+      const attempt = selfies.get(id);
+      if (!attempt) throw new AuthError("not_found");
+      // The demo partner page opens, sees a live face, and finds it matches the one on file.
+      const next: Partial<Record<SelfieStatus, SelfieStatus>> = { starting: "open", open: "matching", matching: "passed" };
+      const moved = next[attempt.status];
+      if (moved) {
+        attempt.status = moved;
+        if (moved === "passed") selfiePassedAt = now();
+      }
+      return selfieAttempt(id);
+    },
+
     async changePassword(current, next): Promise<void> {
       await wait();
-      const account = confirmedAccount();
+      const account = selfieConfirmedAccount();
       if (current !== account.password) throw new AuthError("invalid_credentials");
       if (next.length < 10) throw new AuthError("not_accepted");
       if (LEAKED.has(next.toLowerCase())) throw new AuthError("leaked_password");
@@ -674,7 +765,7 @@ export function createStubAuthClient(options: StubOptions = {}): AuthClient {
 
     async startPhoneChange(phone): Promise<string> {
       await wait();
-      confirmedAccount();
+      selfieConfirmedAccount();
       const normalized = toE164(phone);
       if (!normalized) throw new AuthError("not_accepted");
       if (normalized === signedIn) throw new AuthError("same_as_now");
@@ -685,7 +776,7 @@ export function createStubAuthClient(options: StubOptions = {}): AuthClient {
 
     async confirmPhoneChange(challengeId, code): Promise<string> {
       await wait();
-      const account = confirmedAccount();
+      const account = selfieConfirmedAccount();
       const phone = phoneChanges.get(challengeId);
       if (!phone || !signedIn) throw new AuthError("expired");
       if (code !== DEMO_CODE) throw new AuthError("invalid_code");

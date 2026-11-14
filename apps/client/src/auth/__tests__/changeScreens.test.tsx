@@ -4,6 +4,7 @@ import { SafeAreaProvider } from "react-native-safe-area-context";
 import ChangeEmail from "@/app/security/email";
 import ChangePassword from "@/app/security/password";
 import ChangePhone from "@/app/security/phone";
+import { selfiePolling } from "@/components/ConfirmWithSelfie";
 
 import { AuthProvider } from "../AuthProvider";
 import { createStubAuthClient, DEMO_CODE, DEMO_PASSWORD, DEMO_PHONE } from "../stubAuthClient";
@@ -39,6 +40,23 @@ async function show(client: AuthClient, Screen: () => React.ReactElement | null)
   );
 }
 
+beforeAll(() => {
+  selfiePolling.ms = 5;
+});
+
+/** The demo client has a selfie on their ID check, so a password or number change needs a live one. */
+async function takeALiveSelfie() {
+  expect(await screen.findByTestId("confirm-with-selfie")).toBeTruthy();
+  // The demo partner page answers on its own, and the change is then sent again by itself.
+  await fireEvent.press(await screen.findByTestId("selfie-start"));
+}
+
+/** Take a live selfie on the session itself, as the partner page would. */
+async function selfieTaken(client: AuthClient) {
+  const attempt = await client.startSelfieConfirmation();
+  for (let read = 0; read < 3; read += 1) await client.getSelfieAttempt(attempt.id);
+}
+
 async function confirmWithTheApp() {
   expect(await screen.findByTestId("confirm-it-is-you")).toBeTruthy();
   expect(await screen.findByTestId("confirm-passkey")).toBeTruthy();
@@ -53,12 +71,14 @@ describe("changing how you sign in", () => {
     await fireEvent.changeText(screen.getByTestId("password-again"), "lantern meadow quartz");
     await fireEvent.press(screen.getByTestId("password-change"));
     await confirmWithTheApp();
+    await takeALiveSelfie();
     expect(await screen.findByText("Password changed")).toBeTruthy();
   });
 
   it("says when the current password is wrong", async () => {
     const client = await loggedInWithCode();
     await client.confirmWithPasskey();
+    await selfieTaken(client);
     await show(client, ChangePassword);
     await fireEvent.changeText(await screen.findByTestId("password-current"), "not my password");
     await fireEvent.changeText(screen.getByTestId("password-new"), "lantern meadow quartz");
@@ -72,6 +92,7 @@ describe("changing how you sign in", () => {
     await fireEvent.changeText(await screen.findByTestId("phone-new"), "701555013");
     await fireEvent.press(screen.getByTestId("phone-send"));
     await confirmWithTheApp();
+    await takeALiveSelfie();
     expect(await screen.findByText(/We texted a 6 digit code to/)).toBeTruthy();
     await fireEvent.changeText(screen.getByTestId("code-input"), DEMO_CODE);
     await fireEvent.press(screen.getByTestId("phone-confirm"));
