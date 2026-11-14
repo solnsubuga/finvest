@@ -435,6 +435,45 @@ export const BufferScreenOut = z.object({
 });
 export type BufferScreenOut = z.infer<typeof BufferScreenOut>;
 
+export const BulkDebitLineOut = z.object({
+  amount: MoneyView,
+  id: z.string(),
+  narrative: z.string(),
+  reference: z.string(),
+  value_date: z.string(),
+});
+export type BulkDebitLineOut = z.infer<typeof BulkDebitLineOut>;
+
+export const BulkDebitOut = z.object({
+  batch: BatchOut,
+  lines: z.array(BulkDebitLineOut),
+  payouts: z.array(BankPayoutOut),
+});
+export type BulkDebitOut = z.infer<typeof BulkDebitOut>;
+
+export const BulkIn = z.object({
+  payout_ids: z.array(z.string()),
+  reason: z.string(),
+  statement_line_id: z.string(),
+});
+export type BulkIn = z.infer<typeof BulkIn>;
+
+export const BulkOut = z.object({
+  batch_id: z.string(),
+  decided_at: z.string().nullable(),
+  decided_by: z.string().nullable(),
+  decision_reason: z.string().nullable(),
+  id: z.string(),
+  payout_ids: z.array(z.string()),
+  proposed_at: z.string(),
+  proposed_by: z.string(),
+  reason: z.string(),
+  statement_line_id: z.string(),
+  status: z.enum(["proposed", "approved", "declined", "withdrawn"]),
+  total: MoneyView,
+});
+export type BulkOut = z.infer<typeof BulkOut>;
+
 export const CaseAmountOut = z.object({
   currency: z.enum(["UGX", "USD"]),
   minor: z.number().int(),
@@ -2202,6 +2241,7 @@ export type SendBackIn = z.infer<typeof SendBackIn>;
 
 export const SettlementOut = z.object({
   batch_id: z.string(),
+  bulk_id: z.string().nullable().optional(),
   decided_at: z.string().nullable(),
   decided_by: z.string().nullable(),
   decision_reason: z.string().nullable(),
@@ -4662,6 +4702,32 @@ export const operations = {
     status: 200,
     response: BatchOut,
   },
+  "GET /staff/payout-bank-batches/{batch_id}/bulk-debit": {
+    method: "GET",
+    path: "/staff/payout-bank-batches/{batch_id}/bulk-debit",
+    params: z.object({
+    batch_id: z.string(),
+  }),
+    query: z.object({}),
+    body: null,
+    bodyKind: null,
+    idempotent: false,
+    status: 200,
+    response: BulkDebitOut,
+  },
+  "POST /staff/payout-bank-batches/{batch_id}/bulk-settlements": {
+    method: "POST",
+    path: "/staff/payout-bank-batches/{batch_id}/bulk-settlements",
+    params: z.object({
+    batch_id: z.string(),
+  }),
+    query: z.object({}),
+    body: BulkIn,
+    bodyKind: "json",
+    idempotent: true,
+    status: 201,
+    response: BulkOut,
+  },
   "POST /staff/payout-bank-batches/{batch_id}/decline": {
     method: "POST",
     path: "/staff/payout-bank-batches/{batch_id}/decline",
@@ -4700,6 +4766,69 @@ export const operations = {
     idempotent: false,
     status: 200,
     response: BatchOut,
+  },
+  "GET /staff/payout-bank-bulk-settlements": {
+    method: "GET",
+    path: "/staff/payout-bank-bulk-settlements",
+    params: z.object({}),
+    query: z.object({}),
+    body: null,
+    bodyKind: null,
+    idempotent: false,
+    status: 200,
+    response: z.array(BulkOut),
+  },
+  "GET /staff/payout-bank-bulk-settlements/{bulk_id}": {
+    method: "GET",
+    path: "/staff/payout-bank-bulk-settlements/{bulk_id}",
+    params: z.object({
+    bulk_id: z.string(),
+  }),
+    query: z.object({}),
+    body: null,
+    bodyKind: null,
+    idempotent: false,
+    status: 200,
+    response: BulkOut,
+  },
+  "POST /staff/payout-bank-bulk-settlements/{bulk_id}/approve": {
+    method: "POST",
+    path: "/staff/payout-bank-bulk-settlements/{bulk_id}/approve",
+    params: z.object({
+    bulk_id: z.string(),
+  }),
+    query: z.object({}),
+    body: ReasonIn,
+    bodyKind: "json",
+    idempotent: true,
+    status: 200,
+    response: BulkOut,
+  },
+  "POST /staff/payout-bank-bulk-settlements/{bulk_id}/decline": {
+    method: "POST",
+    path: "/staff/payout-bank-bulk-settlements/{bulk_id}/decline",
+    params: z.object({
+    bulk_id: z.string(),
+  }),
+    query: z.object({}),
+    body: ReasonIn,
+    bodyKind: "json",
+    idempotent: false,
+    status: 200,
+    response: BulkOut,
+  },
+  "POST /staff/payout-bank-bulk-settlements/{bulk_id}/withdraw": {
+    method: "POST",
+    path: "/staff/payout-bank-bulk-settlements/{bulk_id}/withdraw",
+    params: z.object({
+    bulk_id: z.string(),
+  }),
+    query: z.object({}),
+    body: ReasonIn,
+    bodyKind: "json",
+    idempotent: false,
+    status: 200,
+    response: BulkOut,
   },
   "POST /staff/payout-bank-settlements/{settlement_id}/approve": {
     method: "POST",

@@ -132,6 +132,8 @@ class SettlementOut(Contract):
     decided_by: PushId | None
     decided_at: datetime | None
     decision_reason: str | None
+    # Set when this is one payout of a bulk debit, decided only with the bulk.
+    bulk_id: PushId | None = None
 
 
 class SentBankPayoutOut(Contract):
@@ -211,6 +213,7 @@ def _settlement(view: bank_payouts.SettlementView) -> SettlementOut:
         decided_by=view.decided_by,
         decided_at=view.decided_at,
         decision_reason=view.decision_reason,
+        bulk_id=view.bulk_id,
     )
 
 
@@ -438,8 +441,8 @@ async def approve_settlement(
     idempotency_key: IdempotencyKey,
 ) -> SettledPayoutOut:
     """A different person approves, and the payout is paid or failed, with its money settled
-    from the trust account or parked. 403 `proposed_by_you`; 409 `settlement_already_decided`
-    or `payout_not_sent`."""
+    from the trust account or parked. 403 `proposed_by_you`; 409 `settlement_already_decided`,
+    `settlement_in_bulk` or `payout_not_sent`."""
     try:
         async with database.actor_transaction(staff.actor) as session:
             moved = await bank_payouts.approve_settlement(
@@ -462,7 +465,7 @@ async def decline_settlement(
     settlement_id: PushId, body: ReasonIn, staff: Checker, database: Db, clock: Time
 ) -> SettlementOut:
     """Someone other than the proposer refuses it. The payout stays sent. 403 `proposed_by_you`;
-    409 `settlement_already_decided`."""
+    409 `settlement_already_decided` or `settlement_in_bulk`."""
     try:
         async with database.actor_transaction(staff.actor) as session:
             view = await bank_payouts.decline_settlement(
@@ -477,7 +480,8 @@ async def decline_settlement(
 async def withdraw_settlement(
     settlement_id: PushId, body: ReasonIn, staff: Maker, database: Db, clock: Time
 ) -> SettlementOut:
-    """The proposer takes it back. 403 `not_proposed_by_you`; 409 `settlement_already_decided`."""
+    """The proposer takes it back. 403 `not_proposed_by_you`; 409 `settlement_already_decided` or
+    `settlement_in_bulk`."""
     try:
         async with database.actor_transaction(staff.actor) as session:
             view = await bank_payouts.withdraw_settlement(
