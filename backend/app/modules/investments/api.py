@@ -158,6 +158,9 @@ class ClientInvestmentOut(Contract):
     withdrawal_requested_at: datetime | None
     # Whether the client may send part or all of it to another client now.
     can_send: bool = False
+    # Locked through a goal: the first day it may be withdrawn early or sent on again. Null
+    # when it is not locked.
+    withdrawal_locked_until: date | None = None
 
 
 class RateOut(Contract):
@@ -400,6 +403,7 @@ def _client_out(view: service.ClientInvestment, request: Request) -> ClientInves
         can_withdraw=view.can_withdraw and _withdrawals_open(request),
         withdrawal_requested_at=view.withdrawal_requested_at,
         can_send=view.can_send,
+        withdrawal_locked_until=view.withdrawal_locked_until,
     )
 
 

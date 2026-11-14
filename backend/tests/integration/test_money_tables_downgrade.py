@@ -8,7 +8,8 @@ complaint outcomes, the suppression lifts, the client locks, the announcements, 
 changes, Finvest's own money in the buffer, the payments of tax to URA, the payments moved to
 the right client, next of kin, the answers to the investing questions, the requests to close an
 account, the journals sent to the accounting system, who set the bank account clients pay
-into, why a payout send waited or the paydays clients named for their goals."""
+into, why a payout send waited, the paydays clients named for their goals
+or the locks they set on them."""
 
 import os
 from collections.abc import Iterator
@@ -987,6 +988,15 @@ ROWS = {
         "'-Nabc0000000000000B1', 'School fees', 'school_fees', 'UGX', 2000000, 'TREA-91', 25, "
         "now(), now()); COMMIT",
         "refusing to drop the paydays clients named",
+    ),
+    "0303_goal_locks": (
+        "BEGIN; SELECT set_config('finvest.actor_kind', 'client', true); "
+        "SELECT set_config('finvest.actor_id', '-Nabc0000000000000B1', true); "
+        "INSERT INTO goals (id, client_id, name, category, currency, target_minor, "
+        "product_code, locked_until, created_at, updated_at) VALUES ('-Nabc0000000000000A1', "
+        "'-Nabc0000000000000B1', 'School fees', 'school_fees', 'UGX', 2000000, 'TREA-91', "
+        "DATE '2099-01-01', now(), now()); COMMIT",
+        "refusing to drop the locks clients set",
     ),
 }
 
