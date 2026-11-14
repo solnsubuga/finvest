@@ -10,6 +10,7 @@ from sqlalchemy import text
 from sqlalchemy.exc import DBAPIError
 
 from app.infrastructure.database import Database
+from app.infrastructure.jobs import Worker, WorkerConfig
 from app.modules.audit import service as audit
 from app.modules.closures import service as closures
 from app.modules.identity import client_locks
@@ -20,9 +21,12 @@ from app.modules.investments.domain.transfers import NOT_POSSIBLE, HeldFor, Tran
 from app.modules.investments.holdings import HOLDING
 from app.modules.ledger import service as ledger
 from app.modules.screening import contract as screening
+from app.modules.screening import monitoring
+from app.modules.screening.domain.monitoring import Kind, Transaction
+from app.modules.screening.monitor_jobs import MonitoringJobs
 from app.shared.actors import SYSTEM, Actor
 from app.shared.errors import ApplicationError
-from app.shared.money import Money
+from app.shared.money import Currency, Money
 from app.shared.push_ids import push_id
 from tests.support.clock import AsyncBarrier, FakeClock
 from tests.support.investments import (
@@ -34,6 +38,7 @@ from tests.support.investments import (
     request,
     today,
 )
+from tests.support.jobs import run_due
 from tests.support.kyc import verify
 from tests.support.ledger import key, ugx
 from tests.support.ledger import staff as new_staff
@@ -809,3 +814,101 @@ async def test_nothing_is_sent_to_a_client_whose_request_to_close_waits(
     )
     async with app_database.actor_transaction(recipient) as session:
         await closures.cancel(session, recipient, request_id, PRESENT)
+
+
+async def monitored(worker_database: Database, transfer_id: str) -> list[tuple[str, str, int]]:
+    async with worker_database.actor_transaction(SYSTEM) as session:
+        rows = await session.execute(
+            text(
+                "SELECT client_id, kind, amount_minor FROM monitoring_transactions "
+                "WHERE source_id = :id ORDER BY kind"
+            ),
+            {"id": transfer_id},
+        )
+    return [(row.client_id, row.kind, int(row.amount_minor)) for row in rows]
+
+
+async def monitoring_cases(worker_database: Database, client_id: str) -> list[str]:
+    async with worker_database.actor_transaction(SYSTEM) as session:
+        rows = await session.scalars(
+            text("SELECT code FROM compliance_cases WHERE client_id = :id ORDER BY code"),
+            {"id": client_id},
+        )
+    return list(rows)
+
+
+async def test_a_made_transfer_is_monitored_for_both_clients(
+    app_database: Database, worker_database: Database
+) -> None:
+    sender, _ = await person(app_database)
+    recipient, _ = await person(app_database)
+    assert sender.id is not None and recipient.id is not None
+    source = await running(app_database, worker_database, sender)
+    # What came in for the sender over the last week, as monitoring saw it.
+    async with worker_database.actor_transaction(SYSTEM) as session:
+        await monitoring.record(
+            session,
+            client_id=sender.id,
+            transaction=Transaction(
+                push_id(), Kind.DEPOSIT, 5_000_000, Currency.UGX, PRESENT.now() - timedelta(days=1)
+            ),
+            clock=PRESENT,
+        )
+    asked = await send(
+        app_database, sender, source.id, await number_of(app_database, recipient), ugx(3_000_000)
+    )
+    assert (await carry_out(worker_database, asked.id)).status is TransferStatus.DONE
+    worker = Worker(
+        worker_database,
+        MonitoringJobs(worker_database, PRESENT).handlers(),
+        WorkerConfig(),
+        PRESENT,
+    )
+    await run_due(worker)
+
+    assert sorted(await monitored(worker_database, asked.id)) == sorted(
+        [(sender.id, "transfer_sent", 3_000_000), (recipient.id, "transfer_received", 3_000_000)]
+    )
+    # Most of what came in sent straight on: a case for the sender, and none for the recipient.
+    assert await monitoring_cases(worker_database, sender.id) == ["quick_withdrawal"]
+    assert await monitoring_cases(worker_database, recipient.id) == []
+
+    # Asked again, nothing is recorded twice and no case opens twice.
+    async with worker_database.actor_transaction(SYSTEM) as session:
+        await screening.watch_transfer(session, asked.id, PRESENT.now())
+    await run_due(worker)
+    assert len(await monitored(worker_database, asked.id)) == 2
+    assert await monitoring_cases(worker_database, sender.id) == ["quick_withdrawal"]
+
+
+async def test_a_transfer_that_failed_is_not_monitored(
+    app_database: Database, worker_database: Database
+) -> None:
+    sender, _ = await person(app_database)
+    recipient, _ = await person(app_database)
+    source = await running(app_database, worker_database, sender)
+    asked = await send(
+        app_database, sender, source.id, await number_of(app_database, recipient), ugx(1_000_000)
+    )
+    assert source.maturity_date is not None
+    failed = await carry_out(worker_database, asked.id, at(source.maturity_date))
+    assert failed.status is TransferStatus.FAILED
+    async with worker_database.actor_transaction(SYSTEM) as session:
+        # Nothing asked for, and a stray request records nothing.
+        assert (
+            await session.scalar(
+                text("SELECT count(*) FROM jobs WHERE kind = :kind AND idempotency_key = :id"),
+                {"kind": monitoring.MONITOR_TRANSFER_KIND, "id": asked.id},
+            )
+            == 0
+        )
+        await screening.watch_transfer(session, asked.id, PRESENT.now())
+    await run_due(
+        Worker(
+            worker_database,
+            MonitoringJobs(worker_database, PRESENT).handlers(),
+            WorkerConfig(),
+            PRESENT,
+        )
+    )
+    assert await monitored(worker_database, asked.id) == []
