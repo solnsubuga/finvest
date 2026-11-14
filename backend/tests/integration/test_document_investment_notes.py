@@ -19,7 +19,9 @@ from app.modules.documents.events import INVESTMENT_NOTE_KIND
 from app.modules.documents.service import DocumentKind, DocumentStatus
 from app.modules.identity import service as identity_service
 from app.modules.identity.service import ClientContact
+from app.modules.investments import holdings
 from app.shared.actors import SYSTEM
+from app.shared.errors import ApplicationError
 from app.shared.push_ids import push_id
 from tests.integration.test_documents import LATER, FakeEmail, invested, run_jobs
 from tests.support.ledger import ugx
@@ -132,3 +134,29 @@ async def test_the_database_holds_a_note_to_its_investment(worker_database: Data
                 key="started:x",
                 now=LATER.now(),
             )
+
+
+async def test_an_investment_undone_before_its_note_is_built_gets_none(
+    app_database: Database, worker_database: Database, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    client, investment = await invested(app_database, worker_database)
+    assert client.id is not None
+
+    # As investments answers once staff have undone it (investment_corrections): clients
+    # never see an unwound investment. The corrections tests cover the undo itself.
+    async def undone(*args: object, **kwargs: object) -> None:
+        raise ApplicationError("not_found")
+
+    monkeypatch.setattr(holdings, "client_investment", undone)
+    await deliver(worker_database, investment.id, client.id)
+    email = FakeEmail()
+    await run_jobs(worker_database, email=email)
+    async with worker_database.actor_transaction(SYSTEM) as session:
+        status = await session.scalar(
+            text("SELECT status FROM documents WHERE kind = 'investment_note' AND source_id = :id"),
+            {"id": investment.id},
+        )
+    assert status == "empty"
+    assert email.sent == []
+    async with app_database.actor_transaction(client) as session:
+        assert await service.client_documents(session, client) == []
