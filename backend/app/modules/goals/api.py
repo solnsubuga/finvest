@@ -179,6 +179,11 @@ class GoalView(Contract):
     saving_rule: SavingRuleView | None
     # The day of the month the client is paid and nudged to save, 1 to 31, or null.
     payday: int | None
+    # While the goal is locked: the first day its savings may be taken out early again, and
+    # when the client asked to unlock, which brings that day to seven days after asking. Both
+    # null when it is not locked.
+    locked_until: date | None = None
+    unlock_requested_at: datetime | None = None
 
 
 class Payday(Contract):
@@ -285,6 +290,8 @@ def _goal_view(goal: service.ClientGoal) -> GoalView:
         savings=[_saving_view(s) for s in goal.savings],
         saving_rule=None if goal.saving_rule is None else _rule_view(goal.saving_rule),
         payday=goal.payday,
+        locked_until=goal.locked_until,
+        unlock_requested_at=goal.unlock_requested_at,
     )
 
 
@@ -412,6 +419,26 @@ async def set_payday(
     """Name the day the client is paid, so they are nudged to save that morning."""
     async with database.actor_transaction(client.actor) as session:
         goal = await service.set_payday(session, client.actor, goal_id, body.day, clock)
+    return _goal_view(goal)
+
+
+@client_router.post("/{goal_id}/lock", responses={422: {"model": ErrorEnvelope}})
+async def lock_goal(
+    goal_id: PushId, client: CurrentClient, database: DatabaseDep, clock: ClockDep
+) -> GoalView:
+    """Lock the goal's savings until its date: none is taken out early or sent on before."""
+    async with database.actor_transaction(client.actor) as session:
+        goal = await service.lock_goal(session, client.actor, goal_id, clock)
+    return _goal_view(goal)
+
+
+@client_router.post("/{goal_id}/unlock")
+async def unlock_goal(
+    goal_id: PushId, client: CurrentClient, database: DatabaseDep, clock: ClockDep
+) -> GoalView:
+    """Ask to unlock the goal. Its savings are free seven days from today."""
+    async with database.actor_transaction(client.actor) as session:
+        goal = await service.unlock_goal(session, client.actor, goal_id, clock)
     return _goal_view(goal)
 
 

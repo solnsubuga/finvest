@@ -45,6 +45,14 @@ The client can change the name, what it is for, the target and the date. A new t
 
 Closing a goal is final. Its investments carry on as the client's ordinary investments, because they are the client's own and closing moves no money. A closed goal takes no saving.
 
+## Locking a goal
+
+A client who wants to keep their hands off the money can lock a goal with a date. Until that date none of its savings can be withdrawn early or sent to another client. Each saving waiting for payment or running is locked, and so is every new one, whether saved by hand or by the saving rule. A saving that rolls over keeps its lock in its next term.
+
+Undoing a lock takes seven days (Solo, 2026-11-14). The client asks to unlock, and seven days later the savings are free. A lock that ends sooner than that ends on its own day. Asking again changes nothing, and locking again before the day cancels the ask. Closing a locked goal counts as asking to unlock, because its savings become ordinary investments again.
+
+The lock is kept on each investment, in the investments module's own table `investment_withdrawal_locks` (migration 0303), so early withdrawal and sending refuse a locked investment without asking the goals module. They answer `conflict` with field problem `investment` / `locked`, and a client investment shows `withdrawal_locked_until` with `can_withdraw` and `can_send` false. The goal keeps its own copy, `locked_until` and `unlock_requested_at`, for its screens. Changing the goal's date does not move the lock: the client locks again to lock until the new date, and a lock is never shortened that way.
+
 ## Reminders
 
 The worker runs `goals.send_reminders` every morning at 08:00 Kampala time, so no text arrives at night. It reads every active goal and raises two notices through the notifications contract, with the goal as the link:
@@ -115,6 +123,7 @@ The database holds these, in migration 0112:
 - A saving belongs to one goal of the same client. It is never changed or removed by any role, and it is refused for a goal that is not active. The check locks the goal, so a saving and a close at the same moment cannot cross.
 - Only the worker records a rollover, as the system, and only from a saving already linked to the same goal. A saving rolls over once. A client's own saving never names one.
 - The guards run with `search_path = pg_catalog, pg_temp` and name every table in full. The savings guard runs as its owner, so the worker can lock the goal without holding UPDATE on it.
+- While an investment's lock runs, the database refuses its early withdrawal and a new transfer of it, whoever asks. A lock is on a client's own investment that is waiting for payment or running, and only the client or the system sets one. It is only lengthened, or shortened to seven days from the database's today at the soonest. Nobody deletes one. The goal's copy of the date is held to the same rule.
 - Nobody deletes a goal, and a downgrade refuses to drop the tables while they hold rows.
 
 ## API
@@ -126,6 +135,8 @@ The database holds these, in migration 0112:
 | `GET /client/goals`, `GET /client/goals/{id}` | The client's goals with progress, plan and savings |
 | `PUT /client/goals/{id}` | Change the name, what it is for, the target or the date |
 | `PUT /client/goals/{id}/payday` | `{day}`: the day of the month the client is paid, 1 to 31, or `null`. They are nudged to save that morning. |
+| `POST /client/goals/{id}/lock` | Lock its savings until its date. 422 `target_date` / `no_date_to_lock` without a date in the future. |
+| `POST /client/goals/{id}/unlock` | Ask to unlock: the savings are free seven days from today. `conflict` if it is not locked. |
 | `POST /client/goals/{id}/close` | Close it |
 | `POST /client/goals/{id}/saving-rule` | Set up the monthly saving rule from `amount_minor`, `currency`, `day` and `network` (`mtn` or `airtel`). Takes an `Idempotency-Key`. Answers 201 with the goal, whose `saving_rule` has `plan_id`, `amount_minor`, `currency`, `day`, `network`, `payer_msisdn`, `status`, `next_run_on` and `created_at`. |
 | `POST /client/goals/{id}/saving-rule/stop` | End the rule and stop its plan. Sending it again changes nothing. |
