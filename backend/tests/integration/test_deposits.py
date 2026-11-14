@@ -271,6 +271,51 @@ async def notices(database: Database, deposit: Deposit) -> list[tuple[str, str, 
         return [(row.event, row.body, row.link_kind) for row in rows]
 
 
+async def test_the_providers_charge_is_finvests_cost_and_the_client_is_credited_in_full(
+    app_database: Database,
+    worker_database: Database,
+    provider: FakeCollections,
+    worker: Worker,
+    fake_clock: FakeClock,
+) -> None:
+    deposit, msisdn, ref = await awaiting_deposit(app_database, provider, worker, fake_clock)
+    # ioTec's 24.5 reaches us already rounded up by the adapter.
+    confirmation = Confirmed(ref, ugx(50_000), ugx(25))
+    provider.on_status(msisdn, confirmation)
+    fake_clock.advance(seconds=POLL.total_seconds())
+    await drain(worker)
+    confirmed = await reload(worker_database, deposit)
+    assert confirmed.status is S.CONFIRMED
+    assert await awaiting_start(worker_database, deposit) == 50_000
+    # A second report of the same confirmation books nothing more.
+    async with worker_database.actor_transaction(SYSTEM) as session:
+        await service.settle_deposit(
+            session, deposit.id, confirmation, fake_clock, cause="reconciliation"
+        )
+    assert await entries(worker_database, deposit) == 2
+    async with worker_database.actor_transaction(SYSTEM) as session:
+        rows = (
+            await session.execute(
+                text(
+                    "SELECT e.entry_type, a.code, l.amount_minor FROM ledger_journal_entries e "
+                    "JOIN ledger_lines l ON l.entry_id = e.id "
+                    "JOIN ledger_accounts a ON a.id = l.account_id "
+                    "WHERE e.source_type = 'payment.deposit' AND e.source_id = :id "
+                    "ORDER BY e.entry_type, l.amount_minor"
+                ),
+                {"id": deposit.id},
+            )
+        ).all()
+        assert await ledger.find_balance_drift(session) == []
+    wallet = f"{deposit.provider}.wallet"
+    assert [tuple(row) for row in rows] == [
+        ("payment.deposit_confirmed", "client.awaiting_start", -50_000),
+        ("payment.deposit_confirmed", wallet, 50_000),
+        ("payment.provider_charge", wallet, -25),
+        ("payment.provider_charge", f"fees.provider.{deposit.provider}", 25),
+    ]
+
+
 async def test_a_refused_request_fails_and_posts_nothing(
     app_database: Database,
     worker_database: Database,

@@ -26,11 +26,11 @@ Finvest charges clients no fee to open an account, to invest or to withdraw earl
 | --- | --- |
 | `dealing.bill_income`, the discount earned on bills held to maturity | `investments.interest_expense`, the interest clients earned |
 | `dealing.sale_gains`, gains on bills sold | `dealing.sale_losses`, `dealing.maturity_losses` |
-| | `fees.provider.iotec`, charges ioTec kept on a sweep between pots |
+| | `fees.provider.iotec`, ioTec's charge on each mobile money payment in, and charges ioTec kept on a sweep between pots |
 
 The net is income less costs and can be negative. A reversal can make one code's movement negative, and it is shown as it is.
 
-**Not booked yet.** The charge ioTec takes on a mobile money collection leaves the ioTec wallet without a ledger entry, so it is missing from the costs until the owner's accountant agrees how it is booked (the open row in [decisions.md](decisions.md)). Bank charges on the trust account have no account either. The screen says so under the costs.
+**ioTec's charge on a payment in** is booked when the deposit is confirmed, as its own entry `payment.provider_charge`: debit `fees.provider.iotec`, credit `iotec.wallet`, rounded up to a whole shilling ([payments.md](payments.md#iotec-pay)). **Not booked yet:** bank charges on the trust account have no account. The screen says so under the costs.
 
 ## The daily journal for the accounting system
 
