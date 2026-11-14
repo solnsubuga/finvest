@@ -19,6 +19,8 @@ const json: DeskJson = {
     from_buffer_up_to: ugx(500_000),
     pay_within_working_days: 3,
     after_promised: ugx(2_500_000),
+    short: ugx(0),
+    to_raise: ugx(0),
   },
   early_withdrawals: { asked: ugx(500_000), clients: 1 },
   positions: [

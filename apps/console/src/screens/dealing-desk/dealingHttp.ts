@@ -9,76 +9,13 @@
 import { CONFIRM_IT_IS_YOU } from "@/api/confirmation.ts";
 import { ApiError, type Http } from "@/api/http.ts";
 import type { Directory } from "@/directory/api.ts";
-import {
-  DealingError,
-  type Amount,
-  type BufferLevel,
-  type Cover,
-  type DealingApi,
-  type DealingErrorCode,
-  type Desk,
-  type Fill,
-  type NewOrder,
-  type OrderAction,
-  type OrderKind,
-  type OrderStatus,
-} from "./api.ts";
+import type { DeskOut, FillOut } from "@finvest/api-client/staff";
+import { DealingError, type DealingApi, type DealingErrorCode, type Desk, type Fill, type NewOrder } from "./api.ts";
 
-interface FillJson {
-  face: Amount;
-  amount: Amount;
-  settled_on: string;
-  matures_on: string;
-  custodian_reference: string;
-}
+/** The desk as the API sends it, from the generated contract. */
+export type DeskJson = DeskOut;
 
-interface OrderJson {
-  id: string;
-  kind: OrderKind;
-  product_code: string;
-  product_name: string;
-  face: Amount;
-  status: OrderStatus;
-  prepared_by: string;
-  prepared_at: string;
-  note: string | null;
-  result: FillJson | null;
-  result_recorded_by: string | null;
-  allowed: OrderAction[];
-}
-
-interface PositionJson {
-  product_code: string;
-  product_name: string;
-  discount_only: boolean;
-  lot_size: Amount;
-  clients_owed: Amount;
-  bills_held: Amount;
-  to_buy: Amount;
-  on_order: Amount;
-  face_held: Amount;
-  cover: Cover;
-}
-
-export interface DeskJson {
-  money_to_place: Amount;
-  bills_held: Amount;
-  matches_custodian: boolean | null;
-  buffer: {
-    balance: Amount;
-    target: Amount;
-    floor: Amount;
-    level: BufferLevel;
-    from_buffer_up_to: Amount;
-    pay_within_working_days: number;
-    after_promised: Amount;
-  };
-  early_withdrawals: { asked: Amount; clients: number };
-  positions: PositionJson[];
-  orders: OrderJson[];
-}
-
-const fill = (json: FillJson): Fill => ({
+const fill = (json: FillOut): Fill => ({
   face: json.face,
   amount: json.amount,
   settledOn: json.settled_on,
