@@ -2690,7 +2690,7 @@ export const operations = {
     query: z.object({}),
     body: ProposeAnnouncement,
     bodyKind: "json",
-    idempotent: false,
+    idempotent: true,
     status: 201,
     response: AnnouncementView,
   },

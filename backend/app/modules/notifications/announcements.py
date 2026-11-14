@@ -17,6 +17,7 @@ from sqlalchemy import Row, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.infrastructure.database import Database
+from app.infrastructure.idempotency import Receipt, run_once
 from app.infrastructure.jobs import (
     ClaimedJob,
     Handler,
@@ -81,6 +82,10 @@ _OPEN_BY_ID = text(
     f"SELECT {_COLUMNS}, 0 AS told FROM notification_announcements a "  # noqa: S608 - constants
     "WHERE a.id = :id AND a.status = 'proposed' FOR UPDATE"
 )
+_ONE = text(
+    f"SELECT {_COLUMNS}, {_TOLD} FROM notification_announcements a "  # noqa: S608 - constants
+    "WHERE a.id = :id"
+)
 _INSERT = text(
     "INSERT INTO notification_announcements (id, title, message, reason, proposed_by, "
     "proposed_at) VALUES (:id, :title, :message, :reason, :staff, :now)"
@@ -98,10 +103,47 @@ async def list_announcements(session: AsyncSession) -> list[Announcement]:
     return [_announcement(row) for row in rows]
 
 
+PROPOSE_OPERATION = "notifications.announcement_propose"
+
+
 async def propose(
+    session: AsyncSession,
+    staff: Actor,
+    title: str,
+    message: str,
+    reason: str,
+    clock: Clock,
+    *,
+    idempotency_key: str,
+) -> Announcement:
+    """Put an announcement forward. Nothing is sent until someone else approves it.
+
+    The same key with the same words answers with the announcement already proposed, so a
+    retry after a lost answer never puts two forward.
+    """
+
+    async def command() -> Receipt:
+        made = await _propose(session, staff, title, message, reason, clock)
+        return Receipt(201, {"announcement_id": made.id})
+
+    outcome = await run_once(
+        session,
+        actor=staff,
+        operation=PROPOSE_OPERATION,
+        key=idempotency_key,
+        request={"title": title, "message": message, "reason": reason},
+        now=clock.now(),
+        command=command,
+    )
+    found = (
+        await session.execute(_ONE, {"id": str(outcome.receipt.response["announcement_id"])})
+    ).one()
+    return _announcement(found)
+
+
+async def _propose(
     session: AsyncSession, staff: Actor, title: str, message: str, reason: str, clock: Clock
 ) -> Announcement:
-    """Put an announcement forward. Nothing is sent until someone else approves it."""
     reason = _reason(reason, "reason")
     try:
         check_announcement(title, message)

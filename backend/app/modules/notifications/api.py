@@ -6,6 +6,7 @@ from typing import Annotated, Literal
 from fastapi import APIRouter, Depends, Query, Request
 from pydantic import Field
 
+from app.api.idempotency import IdempotencyKey
 from app.infrastructure.database import Database
 from app.modules.identity.api import CurrentClient, require_confirmed, require_permission
 from app.modules.identity.service import StaffSession
@@ -402,12 +403,23 @@ async def list_announcements(staff: SettingsStaff, database: Db) -> Announcement
 
 @staff_router.post("/announcements", status_code=201)
 async def propose_announcement(
-    body: ProposeAnnouncement, staff: AnnouncementStaff, database: Db, clock: Time
+    body: ProposeAnnouncement,
+    staff: AnnouncementStaff,
+    database: Db,
+    clock: Time,
+    idempotency_key: IdempotencyKey,
 ) -> AnnouncementView:
-    """Put an announcement to every client forward. A different member of staff approves it."""
+    """Put an announcement to every client forward. A different member of staff approves it.
+    The same `Idempotency-Key` with the same words answers with the one already proposed."""
     async with database.actor_transaction(staff.actor) as session:
         item = await announcements.propose(
-            session, staff.actor, body.title, body.message, body.reason, clock
+            session,
+            staff.actor,
+            body.title,
+            body.message,
+            body.reason,
+            clock,
+            idempotency_key=idempotency_key,
         )
     return _announcement(item, staff)
 

@@ -55,7 +55,8 @@ export interface AnnouncementProblem {
 export interface AnnouncementsApi {
   /** The latest announcements, newest first. */
   list(): Promise<Announcement[]>;
-  propose(announcement: NewAnnouncement): Promise<Announcement>;
+  /** `idempotencyKey` is chosen once per new announcement and sent again on every retry of it. */
+  propose(announcement: NewAnnouncement, idempotencyKey: string): Promise<Announcement>;
   /** `approved`, which starts sending, or `rejected` with a reason, by someone else. `withdrawn` by the proposer. */
   decide(announcementId: string, decision: AnnouncementDecision, reason: string | null): Promise<Announcement>;
 }

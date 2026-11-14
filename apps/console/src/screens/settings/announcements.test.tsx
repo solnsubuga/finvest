@@ -1,6 +1,6 @@
 import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { createStubDirectory } from "@/directory/stub.ts";
 import { AnnouncementsSection } from "./Announcements.tsx";
 import { checkAnnouncement, notConnectedAnnouncementsApi, type AnnouncementsApi } from "./announcements.ts";
@@ -85,6 +85,29 @@ describe("settings: announcements", () => {
     expect(within(mine).queryByRole("button", { name: "Approve and send" })).not.toBeInTheDocument();
     await user.click(within(mine).getByRole("button", { name: "Withdraw it" }));
     await waitFor(async () => expect(await card("App update")).toHaveTextContent("Withdrawn by you, 13 Nov, 12:00"));
+  });
+
+  it("gives each new announcement its own idempotency key", async () => {
+    const stub = createStubAnnouncementsApi(ME, () => NOW);
+    const propose = vi.spyOn(stub, "propose");
+    let n = 0;
+    render(<AnnouncementsSection api={stub} directory={createStubDirectory(ME)} canChange newKey={() => `key-${++n}`} />);
+    const user = userEvent.setup();
+    await card("Office closed on Monday");
+    const write = async (title: string) => {
+      await user.click(screen.getByRole("button", { name: "New announcement" }));
+      const form = screen.getByRole("form", { name: "New announcement" });
+      await user.type(within(form).getByLabelText(/^Title/), title);
+      await user.type(within(form).getByLabelText(/^Message/), "Our office is closed on Friday.");
+      await user.type(within(form).getByLabelText(/^Why send it/), "Holiday");
+      await user.click(within(form).getByRole("button", { name: "Send for approval" }));
+      await card(title);
+    };
+    await write("Closed Friday");
+    await write("Closed Saturday");
+    const keys = propose.mock.calls.map((call) => call[1]);
+    expect(keys).toHaveLength(2);
+    expect(new Set(keys).size).toBe(2);
   });
 
   it("shows a role that cannot send announcements who approves", async () => {
