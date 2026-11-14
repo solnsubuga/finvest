@@ -1,5 +1,6 @@
 """An early withdrawal two members of staff start for a client who asked for it in help chat."""
 
+import uuid
 from collections.abc import AsyncIterator
 from datetime import timedelta
 
@@ -200,6 +201,7 @@ async def test_support_cannot_start_a_withdrawal_and_it_is_off_while_withdrawals
         await closed.staff("admin")
         response = await closed.http.post(
             f"/staff/clients/{client.id}/actions",
+            headers={"Idempotency-Key": uuid.uuid4().hex},
             json={
                 "kind": "withdrawal",
                 "reason": "Asked in chat",
@@ -214,6 +216,7 @@ async def test_support_cannot_start_a_withdrawal_and_it_is_off_while_withdrawals
         await closed.staff("support")
         response = await closed.http.post(
             f"/staff/clients/{client.id}/actions",
+            headers={"Idempotency-Key": uuid.uuid4().hex},
             json={"kind": "withdrawal", "reason": "Asked in chat"},
         )
         assert response.status_code == 403
