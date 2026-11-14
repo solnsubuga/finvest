@@ -55,6 +55,11 @@ Nothing personal goes into a job payload or a log. The words live in the `notifi
 | `investment_matured` | Investments | `amount`, `product` | Investments |
 | `investment_withdrawal_requested` | Investments | `amount`, `product` | Investments |
 | `investment_withdrawal_paid` | Investments | `amount`, `product` | Investments |
+| `investment_sent` | Investments | `amount`, `product`, `person` | Investments |
+| `investment_received` | Investments | `amount`, `product`, `person` | Investments |
+| `investment_transfer_held` | Investments | `product`, `person` | Investments |
+| `investment_transfer_declined` | Investments | `product`, `person` | Investments |
+| `investment_transfer_failed` | Investments | `product`, `person` | Investments |
 | `interest_earned` | Investments | `amount`, `count` | Daily earnings |
 | `goal_top_up_due` | Goals | `goal`, `date` | Investments |
 | `goal_reached` | Goals | `goal` | Investments |
@@ -64,6 +69,10 @@ Nothing personal goes into a job payload or a log. The words live in the `notifi
 | `kyc_approved` | Identity checks | none | Account |
 | `kyc_retake_requested` | Identity checks | none | Account |
 | `kyc_rejected` | Identity checks | none | Account |
+| `organisation_invited` | Organisations, from the worker | `person` (never the organisation's name, which staff have not seen yet) | Account |
+| `organisation_returned` | Organisations | `organisation` | Account |
+| `organisation_rejected` | Organisations | `organisation` | Account |
+| `organisation_approved` | Organisations | `organisation` | Account |
 | `payout_destination_approved` | Payouts | `destination` | Account |
 | `payout_destination_refused` | Payouts | `destination` | Account |
 | `statement_ready` | Statements | `period` | Account |

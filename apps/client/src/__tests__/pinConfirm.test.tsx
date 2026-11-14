@@ -8,6 +8,7 @@ import { passkeysSupported } from "@/auth/webauthn";
 import { WARM_ROUTER_MS, warmRouter } from "@/testing/warmRouter";
 
 const mockAdded = jest.fn();
+const mockWithdraw = jest.fn();
 
 jest.mock("@/auth/stubAuthClient", () => {
   const actual = jest.requireActual("@/auth/stubAuthClient");
@@ -25,6 +26,23 @@ jest.mock("@/payouts/stubPayoutsClient", () => {
         addAccount: async (account: unknown) => {
           mockAdded(account);
           return client.addAccount(account);
+        },
+      };
+    },
+  };
+});
+
+jest.mock("@/investing/stubInvestingClient", () => {
+  const actual = jest.requireActual("@/investing/stubInvestingClient");
+  return {
+    ...actual,
+    createStubInvestingClient: () => {
+      const client = actual.createStubInvestingClient({ delayMs: 0, sample: "default" });
+      return {
+        ...client,
+        withdrawEarly: async (request: unknown) => {
+          mockWithdraw(request);
+          return client.withdrawEarly(request);
         },
       };
     },
@@ -51,6 +69,7 @@ beforeAll(warmRouter, WARM_ROUTER_MS);
 
 beforeEach(() => {
   mockAdded.mockClear();
+  mockWithdraw.mockClear();
   jest.mocked(passkeysSupported).mockReturnValue(false);
 });
 
@@ -117,5 +136,33 @@ describe("confirming a new payout account with the PIN", () => {
     await screen.findByText(/We texted a code/);
     expect(screen.queryByText("Confirm with your PIN")).toBeNull();
     expect(mockAdded.mock.calls[0][0].pinConfirmation).toBeNull();
+  });
+});
+
+describe("confirming an early withdrawal with the PIN", () => {
+  async function openWithdraw() {
+    await act(async () => {
+      router.push("/portfolio");
+    });
+    await fireEvent.press(await screen.findByLabelText(/^91 Day Treasury Bill, Running/));
+    await fireEvent.press(await screen.findByTestId("withdraw-early"));
+    await screen.findByTestId("withdraw-amount");
+  }
+
+  it("asks for the PIN before the withdrawal is sent, and sends nothing on cancel", async () => {
+    await logIn(true);
+    await openWithdraw();
+    await fireEvent.press(screen.getByTestId("confirm-withdraw"));
+    await screen.findByText("Enter your PIN to confirm this withdrawal");
+    await fireEvent.press(screen.getByTestId("pin-confirm-cancel"));
+    await screen.findByTestId("withdraw-amount");
+    expect(mockWithdraw).not.toHaveBeenCalled();
+
+    await fireEvent.press(screen.getByTestId("confirm-withdraw"));
+    await screen.findByText("Enter your PIN to confirm this withdrawal");
+    await typePin("48151");
+    expect(await screen.findByText(/goes to your account, and we tell you when it is sent/)).toBeTruthy();
+    expect(mockWithdraw).toHaveBeenCalledTimes(1);
+    expect(mockWithdraw.mock.calls[0][0].pinConfirmation).toMatch(/^demo-withdrawal-/);
   });
 });

@@ -142,6 +142,35 @@ DEFAULTS: dict[str, Wording] = {
         "The money from your {product} has been sent to you. See the amount in the app.",
         "Finvest: the money from your {product} has been sent to you. See the amount in the app.",
     ),
+    "investment_sent": Wording(
+        "Investment sent",
+        "Your {product} went to {person}. See what you kept in the app.",
+        "Finvest: your {product} went to {person}. See what you kept in the app.",
+    ),
+    "investment_received": Wording(
+        "You were sent an investment",
+        "{person} sent you an investment in the {product}. It is earning for you now. See it "
+        "in the app.",
+        "Finvest: {person} sent you an investment in the {product}. It is earning for you now.",
+    ),
+    "investment_transfer_held": Wording(
+        "Checking your transfer",
+        "We are checking your transfer of your {product} to {person} before it goes. "
+        "We will tell you when it is done.",
+        "Finvest: we are checking your transfer to {person} before it goes.",
+    ),
+    "investment_transfer_declined": Wording(
+        "Transfer not made",
+        "We did not make your transfer of your {product} to {person}. Your investment is as "
+        "it was. Ask us in the app if you need to know more.",
+        "Finvest: we did not make your transfer to {person}. Your investment is as it was.",
+    ),
+    "investment_transfer_failed": Wording(
+        "Transfer not made",
+        "Your transfer of your {product} to {person} could not be made, so your investment is "
+        "as it was. See why in the app.",
+        "Finvest: your transfer to {person} could not be made. Your investment is as it was.",
+    ),
     "interest_earned": Wording(
         "Interest earned today",
         "You earned interest today, after tax. See the amount in the app.",
@@ -196,6 +225,30 @@ DEFAULTS: dict[str, Wording] = {
         "explain what happens next.",
         "Finvest: we could not approve your identity check. Open Help in the app for what "
         "happens next.",
+    ),
+    "organisation_invited": Wording(
+        "You are asked to sign for an account",
+        "{person} asked you to sign for a company or group account on Finvest. Open the app to "
+        "see which, and to join or decline.",
+        "Finvest: {person} asked you to sign for a company or group account. Open the app to "
+        "join or decline.",
+    ),
+    "organisation_returned": Wording(
+        "Please change your application",
+        "We need something changed in the application for {organisation} before we can open "
+        "it. See what in the app.",
+        "Finvest: please change the application for {organisation}. See what in the app.",
+    ),
+    "organisation_rejected": Wording(
+        "Application not approved",
+        "We could not open an account for {organisation}. Open Help in the app and we will "
+        "explain what happens next.",
+        "Finvest: we could not open an account for {organisation}. Open Help in the app.",
+    ),
+    "organisation_approved": Wording(
+        "{organisation} is open",
+        "The account for {organisation} is open, with its own account number. See it in the app.",
+        "Finvest: the account for {organisation} is open. See its account number in the app.",
     ),
     "payout_destination_approved": Wording(
         "Payout account approved",
@@ -410,6 +463,8 @@ def sample_values(spec: EventSpec) -> dict[str, Value]:
         "reference": "C-2611",
         "title": "A message from Finvest",
         "message": "Your investment matures soon.",
+        "person": "Brian K.",
         "goal": "School fees 2027",
+        "organisation": "Kampala Traders Ltd",
     }
     return {name: samples[name] for name in spec.variables}

@@ -78,17 +78,28 @@ class Rejected:
         _checked(self.provider_reference, required=False)
 
 
+class DeferReason(StrEnum):
+    """Why nothing was sent, when it is something staff must act on. A code, never provider text."""
+
+    # Finvest's own provider wallet does not hold enough to pay. Staff top it up.
+    WALLET_SHORT = "wallet_short"
+
+
 @dataclass(frozen=True, slots=True)
 class Deferred:
-    """Nothing reached the provider's books. `retry_after_seconds` is the provider's own hint."""
+    """Nothing reached the provider's books. `retry_after_seconds` is the provider's own hint.
+    `reason` is set when the cause is ours to fix, such as a wallet that is short."""
 
     retry_after_seconds: int | None = None
+    reason: DeferReason | None = None
 
     def __post_init__(self) -> None:
         if self.retry_after_seconds is not None and (
             type(self.retry_after_seconds) is not int or self.retry_after_seconds < 0
         ):
             raise InvalidOutcome("A retry hint is a whole number of seconds")
+        if self.reason is not None and not isinstance(self.reason, DeferReason):
+            raise InvalidOutcome("Unknown deferral reason")
 
 
 @dataclass(frozen=True, slots=True)

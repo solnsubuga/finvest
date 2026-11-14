@@ -525,6 +525,19 @@ async def test_a_bank_transfer_is_checked_by_one_person_and_approved_by_another(
         await drain(worker)
         done = (await client_http.get(f"/client/payments/{payment['id']}")).json()
         assert done["status"] == "confirmed" and done["confirmed_at"] is not None
+        assert await told(worker_database, payment["id"]) == [
+            ("payment_confirmed", "We received your payment from your bank.")
+        ]
+
+
+async def told(worker_database: Database, deposit_id: str) -> list[tuple[str, str]]:
+    """What the client was told about a payment, oldest first."""
+    async with worker_database.actor_transaction(SYSTEM) as session:
+        rows = await session.execute(
+            text("SELECT event, body FROM notifications WHERE link_id = :id ORDER BY created_at"),
+            {"id": deposit_id},
+        )
+        return [(row.event, row.body) for row in rows]
 
 
 async def test_a_transfer_into_the_trust_account_is_the_money_dealing_and_the_day_close_see(
@@ -611,6 +624,8 @@ async def test_a_refused_transfer_says_why_and_staff_without_the_permission_are_
         await drain(worker)
         seen = (await client_http.get(f"/client/payments/{payment_id}")).json()
         assert seen["status"] == "failed" and seen["failure"] == "name_differs"
+        # Not told "no money was taken": the transfer may have reached the bank.
+        assert await told(worker_database, payment_id) == []
         assert (
             await client_http.get(f"/client/investments/{investment.id}/payment")
         ).status_code == 404

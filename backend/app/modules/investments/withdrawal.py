@@ -62,6 +62,10 @@ _WITHDRAW = text(
     "UPDATE investments SET status = 'withdrawn', withdrawn_at = :now, "
     "withdrawal_entry_id = :entry_id, updated_at = :now WHERE id = :id"
 )
+_OPEN_TRANSFER = text(
+    "SELECT EXISTS (SELECT FROM investment_transfers WHERE investment_id = :id "
+    "AND status IN ('waiting', 'held', 'release_proposed'))"
+)
 _RECORD_PAYOUT = text(
     "UPDATE investments SET withdrawal_payout_id = :payout_id, updated_at = :now WHERE id = :id"
 )
@@ -117,6 +121,10 @@ async def request_withdrawal(
             today,
             requested=investment.withdrawal_requested_at is not None,
         ):
+            raise ApplicationError("conflict")
+        # Not while it is being sent to another client. The investment is locked, so a
+        # transfer asked for at the same moment waits for this one and then sees it.
+        if await session.scalar(_OPEN_TRANSFER, {"id": investment.id}):
             raise ApplicationError("conflict")
         now = clock.now()
         await check_payable_destination(

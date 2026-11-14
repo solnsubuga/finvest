@@ -37,6 +37,7 @@ from app.modules.notifications.delivery import DeliveryJobs
 from app.modules.notifications.email_delivery import DeliveryEventJobs
 from app.modules.notifications.keyed_backfill import KeyedBackfillJobs
 from app.modules.notifications.settings import EmailHashSettings
+from app.modules.organisations.jobs import OrganisationJobs
 from app.modules.payments.bank_transfers import BankTransferJobs
 from app.modules.payments.jobs import DepositJobs
 from app.modules.payments.settings import PaymentsSettings
@@ -65,6 +66,7 @@ def handlers(
         **InvestmentJobs(database, clock).handlers(),
         **DealingJobs(clock).handlers(),
         **GoalJobs(database, clock).handlers(),
+        **OrganisationJobs(database, clock).handlers(),
     }
     identity = KycSettings()
     kinds.update(
