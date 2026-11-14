@@ -704,12 +704,19 @@ export const MonthView = z.object({
 });
 export type MonthView = z.infer<typeof MonthView>;
 
+export const UpcomingKind = z.enum(["maturity", "autoinvest_run", "goal_saving", "goal_date"]);
+export type UpcomingKind = z.infer<typeof UpcomingKind>;
+
 export const UpcomingView = z.object({
   amount_minor: z.number().int(),
   at_maturity: AtMaturity.nullable(),
-  investment_id: z.string(),
+  goal_id: z.string().nullable(),
+  goal_name: z.string().nullable(),
+  investment_id: z.string().nullable(),
+  kind: UpcomingKind,
   on: z.string(),
-  product_name: z.string(),
+  plan_id: z.string().nullable(),
+  product_name: z.string().nullable(),
 });
 export type UpcomingView = z.infer<typeof UpcomingView>;
 
