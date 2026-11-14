@@ -77,7 +77,7 @@ Client routes, signed in as the client. Each `POST` needs an `Idempotency-Key`.
 | --- | --- |
 | `POST /client/investments/{id}/payments/mobile-money` | `{"network": "mtn" or "airtel"}`. Prompts the number on the client's own account for exactly the investment's amount. The request cannot name a number or an amount. |
 | `POST /client/investments/{id}/payments/bank-transfer` | A `multipart/form-data` body: the `receipt` file (PDF, JPEG or PNG, at most 10 MiB), `amount_minor`, `sent_on`, `bank_name` and `transaction_number`. The amount must be the investment's, or it is refused with `amount_differs_from_investment`. First, `preflight_bank_receipt` runs the whole submission in a savepoint it rolls back. That covers the details, an investment already being paid, and a reused key. A replayed key gets the earlier transfer back without storing anything. The file's first bytes must match its claimed type (PDF, JPEG or PNG), or it is refused as `content_does_not_match_type`. Only then is the file stored, outside any transaction, under `payments/receipts/<deposit ID>`, and the transfer is saved pointing at it. So a saved transfer always has its file. If saving still fails, or a simultaneous identical request saved first, the stored file is deleted. If the store cannot be reached to delete it, `receipt_orphaned` is logged with the deposit ID. If storage is down when storing, the answer is `503` and nothing is saved. The body limit for this path is 11 MiB, and the edge allows 12 MiB. |
-| `GET /client/investments/{id}/bank-transfer-details` | Where to send a bank transfer: `bank_name`, `account_name`, `account_number`, `branch` (may be null), `reference` and `amount`. The `reference` is the client's Finvest account number, for the client to write on the transfer so staff can find the line on the statement. The same refusals as paying: `404` if it is not the client's, `409` if it can no longer be paid or already has a payment (fetch that one). `503` if no account is set for the investment's currency. The accounts come from `FINVEST_BANK_TRANSFER_ACCOUNTS`, a JSON object keyed by currency, set per deployment. Each must be the bank pot whose statement reconciliation imports. |
+| `GET /client/investments/{id}/bank-transfer-details` | Where to send a bank transfer: `bank_name`, `account_name`, `account_number`, `branch` (may be null), `reference` and `amount`. The `reference` is the client's Finvest account number, for the client to write on the transfer so staff can find the line on the statement. The same refusals as paying: `404` if it is not the client's, `409` if it can no longer be paid or already has a payment (fetch that one). `503` if no account is set for the investment's currency. The account is the one staff last approved on the console's Settings screen (see [The account clients pay into](#the-account-clients-pay-into)). |
 | `GET /client/investments/{id}/payment` | The investment's payment that has not failed. A `409` from either `POST` means one exists: show this one instead of asking the client to pay again. |
 | `GET /client/payments` | The client's own payments, newest first, 50 a page, for the Activity list. Each is the same shape as below without its `receipt`. Pass `next_before` back as `before` for the next page; it is null on the last. |
 | `GET /client/payments/{id}` | One payment, the client's own only. |
@@ -117,6 +117,24 @@ The entry's idempotency key is `deposit:<deposit ID>` and its source is the depo
 
 If the provider confirms a different amount from the one asked for, nothing is posted. The deposit is held as `uncertain` with `amount_mismatch` for staff, because an overpayment or an unmatched deposit is refunded or matched by staff and never kept as credit.
 
+## The account clients pay into
+
+Staff set the bank account clients send transfers to on the console's Settings screen, one per currency (`bank_accounts.py`, migration 0260). It used to be the `FINVEST_BANK_TRANSFER_ACCOUNTS` setting of each deploy, which nothing reads any more. An account changed by one person alone could send every client's transfer somewhere else, so a change takes two people: one proposes the details with a reason, a different one approves or rejects them, and only the proposer can withdraw. Until a proposal is approved, clients keep being shown the account in use, or none: with no account approved for a currency, `bank-transfer-details` answers `503` and the app offers mobile money. The account must be the bank pot whose statement reconciliation imports, or a transfer can never be matched; the person approving checks that.
+
+Seeing the account needs `settings.view`. Proposing and deciding need `bank_accounts.change`, held by admin and finance for now (finance also gains `settings.view` to open the screen). Deciding also needs a second step from the last few minutes. Each proposal and decision writes `payments.bank_account_proposed`, `_approved`, `_rejected` or `_withdrawn` to the audit log, naming the currency only: the details are on the row, which never changes. A waiting change shows in the approvals inbox as `bank_account_change`.
+
+| Route | What it does |
+| --- | --- |
+| `GET /staff/payments/bank-accounts` | Each currency with its account `in_use` (null if none), `changed_at` and any `proposal` waiting, marked `yours` for the proposer. |
+| `POST /staff/payments/bank-accounts/{currency}/proposals` (`bank_accounts.change`) | `{"account": {"bank_name", "account_name", "account_number", "branch"}, "reason"}`. The number is 6 to 20 digits; spaces and dashes are taken out. `409` if a change for that currency is already waiting. |
+| `POST /staff/payments/bank-accounts/proposals/{id}/decision` (`bank_accounts.change`) | `{"decision": "approved", "rejected" or "withdrawn", "reason"}`. The proposer can only withdraw, and anyone else can only approve or reject (`403`). |
+
+The database enforces the same rules: only staff write the table and only as themselves, at most one proposal waits per currency, a decided row never changes, the two-person rule is a check constraint, and no role can delete a row. A client reads only approved rows.
+
+## Telling the client
+
+When a deposit settles, the client is told in the same transaction, through the notifications module (`payment_confirmed` or `payment_failed`, linked to the payment, once per deposit). `method` is "MTN Mobile Money", "Airtel Money" or "your bank". A refused bank transfer is not told as `payment_failed`, because those words say no money was taken, which is not true of a transfer that reached the bank. The client sees the reason on the payment in the app, and staff return or match the money.
+
 ## What the database enforces
 
 - An investment has at most one deposit that has not failed (a partial unique index, migration 0021). The service checks first, and the index is what holds when two requests race.
@@ -137,7 +155,9 @@ Decided by the owner on 13 November 2026: receivable, then recover. The original
 
 **The money is still in `client.awaiting_start`.** Staff propose an exact reversal of the deposit entry and a second person approves it.
 
-**The money has moved on**, for example the investment has started, so a reversal would overdraw the account. Staff propose a forward entry `payment.deposit_correction`:
+**The investment has started and is still running.** Staff first unwind it with `/staff/investment-corrections` (see [investing.md](investing.md)), which moves the principal back to `client.awaiting_start`, takes back the interest so far and has the desk release the bills. The deposit is then reversed as above. An unwind is refused once the money has left: the investment matured and was paid out, it was withdrawn early, or a refund went out.
+
+**The money has left**, so there is nothing to reverse. Staff propose a forward entry `payment.deposit_correction`:
 
 | Debit | Credit |
 | --- | --- |
@@ -264,4 +284,5 @@ ioTec's test numbers: `011177777x` succeed, `011177799x` fail, `011177778x` stay
 - Trying the adapter against ioTec's test wallet, which needs the credentials and a staging deploy.
 - Paying for a goal over HTTP. The routes take investments only.
 - Provider limits and fees.
-- The receivable correction commands. Moving a transfer credited to the wrong client is built.
+- The receivable correction commands, for a mistaken credit whose money has already left. A running investment is unwound through investment corrections, and moving a transfer credited to the wrong client is built.
+- Words of their own for a refused bank transfer, so the client is told about it as well as seeing it in the app. The notifications module owns the event list.

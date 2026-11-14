@@ -73,7 +73,9 @@ SWEEP_BATCH = 200
 QUIET_READS = timedelta(hours=1)
 
 _LOCK_PAYOUT = text("SELECT id FROM payouts WHERE id = :id FOR UPDATE")
-_ATTEMPT_COLUMNS = "payout_id, attempt, provider, started_at, outcome, provider_reference"
+_ATTEMPT_COLUMNS = (
+    "payout_id, attempt, provider, started_at, outcome, provider_reference, deferred_for"
+)
 _LAST_ATTEMPT = text(
     f"SELECT {_ATTEMPT_COLUMNS} FROM payout_send_attempts "  # noqa: S608 - constant columns
     "WHERE payout_id = :payout_id ORDER BY attempt DESC LIMIT 1"
@@ -84,7 +86,7 @@ _START = text(
 )
 _FINISH = text(
     "UPDATE payout_send_attempts SET outcome = :outcome, finished_at = :now, "
-    "provider_reference = :provider_reference "
+    "provider_reference = :provider_reference, deferred_for = :deferred_for "
     "WHERE payout_id = :payout_id AND attempt = :attempt AND outcome IS NULL"
 )
 # Attempts that never had their answer saved. Locked before the payout, as the send does.
@@ -98,7 +100,9 @@ _INTERRUPTED = text(
 _UNSENT = text(
     "SELECT p.id, (SELECT count(*) FROM payout_send_attempts a WHERE a.payout_id = p.id) "
     "AS attempts, (SELECT min(a.started_at) FROM payout_send_attempts a "
-    "WHERE a.payout_id = p.id) AS first_tried_at FROM payouts p "
+    "WHERE a.payout_id = p.id) AS first_tried_at, (SELECT a.deferred_for "
+    "FROM payout_send_attempts a WHERE a.payout_id = p.id ORDER BY a.attempt DESC LIMIT 1) "
+    "AS waiting_for FROM payouts p "
     "WHERE p.status = 'queued' AND p.kind = 'mobile_money' "
     "AND p.updated_at <= :quiet AND NOT EXISTS (SELECT FROM payout_send_attempts a "
     "WHERE a.payout_id = p.id AND (a.outcome IS NULL OR a.outcome <> 'deferred')) "
@@ -191,8 +195,20 @@ class PayoutJobs:
     ) -> str:
         now = self._clock.now()
         finished = await finish_attempt(
-            session, payout_id, attempt, step.outcome, now, step.provider_reference
+            session,
+            payout_id,
+            attempt,
+            step.outcome,
+            now,
+            step.provider_reference,
+            deferred_for=step.deferred_for,
         )
+        if step.deferred_for is not None:
+            # Finvest's own wallet cannot pay it. The payout stays queued, the client's money
+            # is safe, and /health/operations raises it until someone tops the wallet up.
+            logger.warning(
+                "payout_waiting_on_wallet", payout_id=payout_id, error_code=step.deferred_for
+            )
         if not finished:
             # The sweep found this attempt first and made the payout uncertain. Its reads will
             # find what the provider has.
@@ -310,7 +326,7 @@ class PayoutJobs:
                         "payout_held_up",
                         payout_id=row.id,
                         attempts=row.attempts,
-                        error_code="provider_deferred",
+                        error_code=row.waiting_for or "provider_deferred",
                     )
                 # A fresh send each time the payout has been left alone for RESEND_AFTER,
                 # whatever happened to the last one.
@@ -432,8 +448,10 @@ async def finish_attempt(
     outcome: AttemptOutcome,
     now: datetime,
     provider_reference: str | None = None,
+    deferred_for: str | None = None,
 ) -> bool:
-    """Save how an attempt ended. False if its end was already saved, which changes nothing."""
+    """Save how an attempt ended. False if its end was already saved, which changes nothing.
+    `deferred_for` says why a deferred attempt took nothing, when staff must act."""
     result = await session.execute(
         _FINISH,
         {
@@ -441,6 +459,7 @@ async def finish_attempt(
             "attempt": attempt,
             "outcome": outcome.value,
             "provider_reference": provider_reference,
+            "deferred_for": deferred_for,
             "now": now,
         },
     )

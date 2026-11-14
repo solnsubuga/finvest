@@ -15,9 +15,27 @@ Every part escapes what it is given. A caller passes plain text, never markup, e
 
 import html
 from collections.abc import Sequence
+from dataclasses import dataclass
 
-APP = "https://app.finvestug.com"
-SITE = "https://finvestug.com"
+
+@dataclass(frozen=True, slots=True)
+class Links:
+    """Where the links in an email point: the client app and the public website.
+
+    The worker builds these from its settings (`Settings.email_links`), so an email sent by a
+    staging worker opens staging, not production. `PRODUCTION` is what they are when nothing
+    says otherwise.
+    """
+
+    app: str
+    site: str
+
+    def in_app(self, path: str) -> str:
+        """A link to a page of the client app, such as `/security`."""
+        return f"{self.app}{path}"
+
+
+PRODUCTION = Links(app="https://app.finvestug.com", site="https://finvestug.com")
 
 BLACK = "#0D0D0D"
 INK = "#141414"
@@ -147,8 +165,9 @@ def attachment(name: str, detail: str) -> str:
     )
 
 
-def page(*, preheader: str, title: str, body: str) -> str:
-    """The whole email around `body`: band, heading, body and footer.
+def page(*, preheader: str, title: str, body: str, links: Links = PRODUCTION) -> str:
+    """The whole email around `body`: band, heading, body and footer. The footer links to
+    `links.site`.
 
     `preheader` is the line a mail app shows after the subject in the inbox. It is hidden in
     the message itself.
@@ -177,7 +196,7 @@ def page(*, preheader: str, title: str, body: str) -> str:
         f'line-height:1.6;color:{MUTED};font-family:{FONT}">'
         "Finvest will never ask for your password, PIN or a code by email, phone or text. "
         "If a message asks for one, it is not from us.<br>"
-        f'Finvest, Kampala, Uganda. <a href="{SITE}" style="color:{MUTED}">'
+        f'Finvest, Kampala, Uganda. <a href="{escape(links.site)}" style="color:{MUTED}">'
         "finvestug.com</a></td></tr>"
         "</table></td></tr></table></body></html>"
     )

@@ -50,7 +50,7 @@ Four screens were still the placeholder page. The Review Queue is connected to `
 | ~~Finance~~ | ~~Day close, fee income, withholding tax owed and the accounting export~~ Built: income and costs, the books by code and the daily journal export ([finance.md](finance.md)). The ioTec collection charge is not booked yet. | `GET /staff/finance`, `GET /staff/finance/journal.csv` |
 | Compliance | Screening results and monitoring alerts | Nothing built (see below) |
 | Finance | Day close, fee income, withholding tax owed and the accounting export | Reconciliation routes below; tax in the tax certificates thread |
-| Compliance | Screening results and monitoring alerts | `/staff/compliance` routes ([screening.md](screening.md)); screen being built by the screening thread |
+| Compliance | Screening results and monitoring alerts | `/staff/compliance` routes ([screening.md](screening.md)), with the rules that are on, reports to the FIA this year and a register CSV. Risk rating, source of funds, document requests and escalation wait on Solo |
 
 ~~Staff routes with no screen at all: `/staff/phone-changes` (three; the Clients screen does not show pending phone changes) and `/staff/sessions` (three).~~ Closed by the mobile number and devices PR: the client page has a Mobile number section, and every member of staff has Your devices.
 
@@ -87,7 +87,7 @@ A WCAG 2.1 AA pass over every main screen of the client app and the console on 1
 | --- | --- | --- |
 | **Spoken names of whole cards.** An investment, payout, plan or notification card is one button whose spoken name is a summary ("91 Day Treasury Bill, Running, worth UGX 5,123,715") rather than every word shown on it. axe's "label in name" rule (WCAG 2.5.3) is switched off in the client test for this. A voice control user who says the card's title still reaches it, because each summary starts with the title. | Should be confirmed with a screen reader and voice control user before launch. | Client app |
 | **Real phones not checked.** axe runs on the web build only. TalkBack on Android and VoiceOver on iPhone have not been tried; the `aria-*` props used are the ones React Native maps on both. | Most clients use the phone apps. Add to the real device checks in [launch.md](launch.md). | Engineering, once builds exist |
-| **Console touch targets.** Some console controls are smaller than 44 by 44 on a phone: the identity check's "Show" link for the document number (33 by 18), tab chips (36 to 40 tall) and inline links in tables. WCAG 2.1 AA has no size rule and these are over the 24 point minimum of WCAG 2.2, except the "Show" link's height. | Staff use the console on a computer. | Console |
+| **Console touch targets.** Some console controls are smaller than 44 by 44 on a phone: tab chips (36 to 40 tall) and inline links in tables. WCAG 2.1 AA has no size rule and these are over the 24 point minimum of WCAG 2.2. The identity check's "Show" link for the document number, which was 33 by 18, now takes a 44 by 44 tap. | Staff use the console on a computer. | Console |
 | **Screen reader pass by a person.** No one has used either app end to end with a screen reader. axe cannot tell whether names and announcements make sense, or whether a change (a payment confirmed, an error) is announced. | The regulator may ask; clients with low vision use phones with screen readers. | Engineering |
 
 ## Built, but waiting on a provider
@@ -98,7 +98,7 @@ Each of these is blocked on something only the owner can get, and is listed agai
 | --- | --- |
 | **ioTec payments credentials.** The collections adapter is built (`FINVEST_PAYMENTS_PROVIDER=iotec`, see [payments.md](payments.md#iotec-pay)). It needs `FINVEST_IOTEC_CLIENT_ID`, `CLIENT_SECRET`, `WALLET_ID` and `CALLBACK_TOKEN` set in the deploy, and a first try against ioTec's test wallet. | No mobile money payment can be taken in production until they are set. |
 | **ioTec payouts adapter.** Only the sandbox exists. | No payout can be sent. |
-| **ioTec SMS adapter.** `FINVEST_SMS_BACKEND` accepts only `none` and `local-console`. | **No sign-up, SMS sign-in, payout account code or claim code can be delivered**, so nobody can sign up or claim an account. This is the most serious blocker. |
+| **ioTec SMS credentials.** The adapter is built (`FINVEST_SMS_BACKEND=iotec`), but the worker needs `FINVEST_SMS_IOTEC_CLIENT_ID` and `FINVEST_SMS_IOTEC_API_KEY` from the ioTec Messaging portal, and the FINVEST sender name set up there. It has been tested only against a fake ioTec: before launch, one real message must confirm the request shape, the `ReferenceId` lookup and the status names. | Until they are set, **no sign-up, SMS sign-in, payout account code or claim code can be delivered**, so nobody can sign up or claim an account. This is the most serious blocker. |
 | **ioTec Verify: the name a network holds for a number.** | Mobile money payout accounts wait at `awaiting_proof` for good ([payouts.md](payouts.md)). |
 | **Identity check provider.** Every client is reviewed by a person. | Works, but every sign-up needs staff time. |
 | **Public site facts.** `registeredName`, `regulator` and `licenceNumber` in `apps/site/src/data/company.ts` are empty, and `pnpm placeholders --strict` fails until they are set. The legal pages are headings only. | The site cannot be opened to search engines. |
@@ -108,7 +108,7 @@ Each of these is blocked on something only the owner can get, and is listed agai
 Credentials and accounts:
 
 - ioTec API access: the API details, the callback signature scheme, sandbox access and production credentials, for payments, payouts, SMS and Verify. Also the ioTec questions in [decisions.md](decisions.md) (fees, settlement speed, payout limits, which account a bank payout leaves).
-- The client trust account's details for `FINVEST_BANK_TRANSFER_ACCOUNTS`, and finance's confirmation that it is the account reconciliation imports.
+- The client trust account's details, to be entered by two people on the console's Settings screen, and finance's confirmation that it is the account reconciliation imports.
 - The GitHub secrets and variables still missing for provisioning and deploys (listed in [infra/README.md](../infra/README.md)), including `FINVEST_EMAIL_HASH_KEY` before the next release, `FINVEST_IDENTITY_DATA_KEY`, `FINVEST_AUTHENTICATOR_KEY`, `RESEND_HOOK_SECRET` and at least two `ALERT_EMAILS`.
 - The Cloudflare token's Zone WAF Edit permission, so the rate limit can be applied.
 - Repository settings: secret scanning, push protection and Dependabot ([security.md](security.md) finding 8), and "Keep my email addresses private" on GitHub.

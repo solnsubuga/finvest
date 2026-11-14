@@ -19,6 +19,10 @@ import {
   type WordingsApi,
 } from "./api.ts";
 import { AnnouncementsSection } from "./Announcements.tsx";
+import { BankAccountsSection } from "./BankAccounts.tsx";
+import { notConnectedBankAccountsApi, type BankAccountsApi } from "./bankAccounts.ts";
+import { createHttpBankAccountsApi } from "./bankAccountsHttp.ts";
+import { createStubBankAccountsApi, type BankAccountsSample } from "./bankAccountsStub.ts";
 import { notConnectedAnnouncementsApi, type AnnouncementsApi } from "./announcements.ts";
 import { createStubAnnouncementsApi } from "./announcementsStub.ts";
 import { createHttpAnnouncementsApi, createHttpWordingsApi } from "./http.ts";
@@ -33,14 +37,17 @@ type Load = { state: "loading" } | { state: "failed"; message: string } | { stat
 interface SettingsScreenProps {
   api: WordingsApi;
   announcements: AnnouncementsApi;
+  bankAccounts: BankAccountsApi;
   directory: Directory;
   /** `wordings.change`: propose and decide changes. The API checks it again. */
   canChange: boolean;
   /** `announcements.send`: propose and decide announcements. The API checks it again. */
   canSend: boolean;
+  /** `bank_accounts.change`: propose and decide the account clients pay into. The API checks it again. */
+  canChangeBankAccount: boolean;
 }
 
-export function SettingsScreen({ api, announcements, directory, canChange, canSend }: SettingsScreenProps) {
+export function SettingsScreen({ api, announcements, bankAccounts, directory, canChange, canSend, canChangeBankAccount }: SettingsScreenProps) {
   const [load, setLoad] = useState<Load>({ state: "loading" });
   const [selected, setSelected] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -121,6 +128,7 @@ export function SettingsScreen({ api, announcements, directory, canChange, canSe
     return (
       <>
         <PageHeader title="Settings" summary={SUMMARY} />
+        <BankAccountsSection api={bankAccounts} directory={directory} canChange={canChangeBankAccount} />
         <p role="status" className="m-0 text-md text-muted">
           Loading settings
         </p>
@@ -132,6 +140,7 @@ export function SettingsScreen({ api, announcements, directory, canChange, canSe
     return (
       <>
         <PageHeader title="Settings" summary={SUMMARY} />
+        <BankAccountsSection api={bankAccounts} directory={directory} canChange={canChangeBankAccount} />
         <section role="alert" className="flex max-w-[640px] flex-col items-start gap-3 rounded-xl border border-border bg-surface p-5">
           <h2 className="m-0 text-xl font-extrabold">Client messages could not be loaded</h2>
           <p className="m-0 text-md leading-normal text-muted">{load.message}</p>
@@ -158,6 +167,7 @@ export function SettingsScreen({ api, announcements, directory, canChange, canSe
   return (
     <>
       <PageHeader title="Settings" summary={SUMMARY} />
+        <BankAccountsSection api={bankAccounts} directory={directory} canChange={canChangeBankAccount} />
       <section aria-labelledby="client-messages" className="flex flex-col gap-4">
         <div className="flex flex-col gap-1">
           <h2 id="client-messages" className="m-0 text-xl font-extrabold">
@@ -226,32 +236,59 @@ export function SettingsScreen({ api, announcements, directory, canChange, canSe
 export default function SettingsPage() {
   const { session } = useAuth();
   // Sample messages under `pnpm dev` or a preview build, like sign-in. Otherwise the real API.
-  const [{ api, announcements, directory }] = useState<{ api: WordingsApi; announcements: AnnouncementsApi; directory: Directory }>(() => {
+  const [{ api, announcements, bankAccounts, directory }] = useState<{
+    api: WordingsApi;
+    announcements: AnnouncementsApi;
+    bankAccounts: BankAccountsApi;
+    directory: Directory;
+  }>(() => {
     if (isStubAuth() && session) {
       const me = { id: session.staffId, name: session.name };
-      // Under the stub, `?sample=offline` shows the screen as if Finvest could not be reached, and `?sample=empty` with no announcements.
+      // Under the stub, `?sample=offline` shows the screen as if Finvest could not be reached, `?sample=empty` with no
+      // announcements and no bank account set, and `?sample=mine` with the bank account change proposed by you.
       const sample = new URLSearchParams(window.location.search).get("sample");
       if (sample === "offline") {
-        return { api: notConnectedWordingsApi, announcements: notConnectedAnnouncementsApi, directory: createStubDirectory(me) };
+        return {
+          api: notConnectedWordingsApi,
+          announcements: notConnectedAnnouncementsApi,
+          bankAccounts: notConnectedBankAccountsApi,
+          directory: createStubDirectory(me),
+        };
       }
+      const seed: BankAccountsSample = sample === "empty" ? "empty" : sample === "mine" ? "mine" : "sample";
       return {
         api: createStubWordingsApi(me),
         announcements: createStubAnnouncementsApi(me, Date.now, sample === "empty" ? "empty" : "sample"),
+        bankAccounts: createStubBankAccountsApi(me, Date.now, seed),
         directory: createStubDirectory(me),
       };
     }
     const base = apiBaseUrl();
-    if (!base) return { api: notConnectedWordingsApi, announcements: notConnectedAnnouncementsApi, directory: emptyDirectory };
+    if (!base) {
+      return {
+        api: notConnectedWordingsApi,
+        announcements: notConnectedAnnouncementsApi,
+        bankAccounts: notConnectedBankAccountsApi,
+        directory: emptyDirectory,
+      };
+    }
     const http = createHttp(base);
-    return { api: createHttpWordingsApi(http), announcements: createHttpAnnouncementsApi(http), directory: createHttpDirectory(http) };
+    return {
+      api: createHttpWordingsApi(http),
+      announcements: createHttpAnnouncementsApi(http),
+      bankAccounts: createHttpBankAccountsApi(http),
+      directory: createHttpDirectory(http),
+    };
   });
   return (
     <SettingsScreen
       api={api}
       announcements={announcements}
+      bankAccounts={bankAccounts}
       directory={directory}
       canChange={session ? can(session, "wordings.change") : false}
       canSend={session ? can(session, "announcements.send") : false}
+      canChangeBankAccount={session ? can(session, "bank_accounts.change") : false}
     />
   );
 }

@@ -22,7 +22,7 @@ from app.modules.ledger import corrections
 from app.modules.migration import service as migration
 from app.modules.notifications import announcements, suppression_lifts, wording_store
 from app.modules.organisations import service as organisations
-from app.modules.payments import bank_transfers, reassignments
+from app.modules.payments import bank_accounts, bank_transfers, reassignments
 from app.modules.payouts import destinations, resolutions, reviews
 from app.modules.reconciliation import day_close, transfers
 from app.modules.screening import service as screening
@@ -85,6 +85,8 @@ async def waiting_for(session: AsyncSession, staff: StaffSession, now: datetime)
         found += await _closures(session)
     if "compliance_case" in kinds:
         found += await _compliance_cases(session)
+    if "bank_account_change" in kinds:
+        found += await _bank_accounts(session)
     return inbox(found, staff.staff_id, staff.permissions)
 
 
@@ -93,6 +95,15 @@ async def _wordings(session: AsyncSession) -> list[Waiting]:
         Waiting("wording_change", p.id, p.event, p.proposed_by, p.proposed_at)
         for w in await wording_store.list_wordings(session)
         if (p := w.proposal) is not None
+    ]
+
+
+async def _bank_accounts(session: AsyncSession) -> list[Waiting]:
+    # The currency only. The details are shown on Settings, to people who may see them.
+    return [
+        Waiting("bank_account_change", p.id, p.currency.value, p.proposed_by, p.proposed_at)
+        for a in await bank_accounts.list_accounts(session)
+        if (p := a.proposal) is not None
     ]
 
 

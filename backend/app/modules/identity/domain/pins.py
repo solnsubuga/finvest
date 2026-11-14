@@ -15,7 +15,12 @@ MAX_WRONG_PINS = 5
 # A session with a PIN that has not been used for this long needs the PIN again.
 LOCK_AFTER = timedelta(minutes=5)
 
+# A right PIN given to confirm an action is good for this long, once, from the same session.
+CONFIRMATION_LASTS = timedelta(minutes=3)
+
 PinProblem = Literal["format", "too_simple"]
+# The actions the phone app confirms with the PIN, on top of their own checks.
+PinAction = Literal["withdrawal", "payout_account"]
 
 
 def pin_problem(pin: str) -> PinProblem | None:

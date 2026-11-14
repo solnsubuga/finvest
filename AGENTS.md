@@ -33,7 +33,7 @@ Read these before writing code:
 - Work on a branch, keep each PR to one purpose, and keep it small enough to review in one sitting.
 - Fill in the PR template. Say what changed, why, and how you tested it.
 - **UI changes need screenshots.** Any PR that adds or changes a screen in the client app, console or website must include screenshots in the PR description, and you must also post them in your project thread. Cover the states you built: default, empty, error, and both phone and wide layouts where they differ.
-- **Tell the reviewer.** Whenever you open a PR or push an update to one, message the reviewer thread (project thread `cmsg_01LyhMqxc3x4zZEyjkGuHWzJXa6C9m19NRKjwxDB3UHLXN`) with the PR number so it is reviewed right away.
+- **Tell the reviewer.** Whenever you open a PR or push an update to one, message the reviewer thread (project thread `cmsg_01LyhMqxc3x4zZEyjkGuHWzJU9fyqzX2nxYQJAYDeBxxAa`) with the PR number so it is reviewed right away.
 - Do not merge your own PR without a review. Do not approve PRs on the owner's behalf.
 - Never skip, disable or loosen a test to get a green build. A pass on retry does not count as a pass.
 

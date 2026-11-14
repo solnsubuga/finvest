@@ -30,6 +30,9 @@ from app.shared.errors import ApplicationError
 from app.shared.money import Money
 
 FORMAT = "finvest-client-data/1"
+# The most recent this many investments and payouts are in the copy. When a list is this long,
+# `truncated` says so, and the client can ask support for the rest.
+MOST_RECENT = 100
 
 
 def _money(amount: Money) -> dict[str, Any]:
@@ -53,6 +56,8 @@ async def client_copy(
     check = await check_for_client(session, sealer, client)
     kin = await next_of_kin.next_of_kin(session, sealer, client_id)
     answers = await risk.history(session, client_id)
+    investments = await client_investments(session, client, clock, limit=MOST_RECENT)
+    payouts = await payouts_for_client(session, client_id, limit=MOST_RECENT)
     copy: dict[str, Any] = {
         "format": FORMAT,
         "made_at": clock.now().isoformat(),
@@ -116,7 +121,7 @@ async def client_copy(
                 "interest_so_far": _money(i.interest_so_far),
                 "value": _money(i.value),
             }
-            for i in await client_investments(session, client, clock)
+            for i in investments
         ],
         "goals": [
             {
@@ -159,13 +164,17 @@ async def client_copy(
                 "date": _when(p.business_date),
                 "created_at": _when(p.created_at),
             }
-            for p in await payouts_for_client(session, client_id, limit=100)
+            for p in payouts
         ],
         "notification_channels": {
             str(category): sorted(str(channel) for channel in channels)
             for category, channels in (await channels_for_client(session, client_id)).items()
         },
         "account_closure": None,
+        "truncated": {
+            "investments": len(investments) >= MOST_RECENT,
+            "payouts": len(payouts) >= MOST_RECENT,
+        },
     }
     closure = await closures.latest(session, client_id)
     if closure is not None:

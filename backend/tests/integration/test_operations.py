@@ -12,6 +12,7 @@ import pytest
 from sqlalchemy import text
 
 from app.api.app import create_app
+from app.api.health import OPERATIONS_CACHE_FOR
 from app.infrastructure.database import Database
 from app.infrastructure.operations import SIGNALS, operations_signals
 from app.shared.push_ids import push_id
@@ -102,6 +103,7 @@ async def test_each_kind_of_stopped_work_is_counted(
         "jobs_stalled": 1,
         "jobs_failed": 1,
         "schedules_late": 0,
+        "payouts_waiting_on_wallet": 0,
     }
 
 
@@ -133,3 +135,19 @@ async def test_the_endpoint_answers_ok_or_unavailable(
         response = await client.get("/health/operations")
         assert response.status_code == 503
         assert response.json()["error"]["code"] == "unavailable"
+
+
+async def test_one_reading_answers_every_call_for_a_few_seconds(
+    test_database: TestDatabase, app_database: Database
+) -> None:
+    clock = FakeClock(current=QUIET)
+    app = create_app(test_database.settings("finvest_app"), app_database, clock)
+    transport = httpx.ASGITransport(app=app)
+    async with httpx.AsyncClient(transport=transport, base_url="http://api") as client:
+        assert (await client.get("/health/operations")).status_code == 200
+        # Work that stopped after the reading is not seen until the reading is old.
+        await add_job(app_database, status="pending", run_at=QUIET - timedelta(minutes=11))
+        clock.current = QUIET + OPERATIONS_CACHE_FOR - timedelta(seconds=1)
+        assert (await client.get("/health/operations")).status_code == 200
+        clock.current = QUIET + OPERATIONS_CACHE_FOR
+        assert (await client.get("/health/operations")).status_code == 503

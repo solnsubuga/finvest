@@ -17,6 +17,7 @@ closes it in one transaction, and the principal and the interest leave the holdi
 See docs/investing.md.
 """
 
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from datetime import date, datetime
 
@@ -164,12 +165,21 @@ async def choose_at_maturity(
 
 
 async def pay_out_matured(
-    session: AsyncSession, client: Actor, investment_id: str, *, destination_id: str, clock: Clock
+    session: AsyncSession,
+    client: Actor,
+    investment_id: str,
+    *,
+    destination_id: str,
+    clock: Clock,
+    confirm: Callable[[], Awaitable[None]] | None = None,
 ) -> Investment:
     """Send on the money of a matured investment that is waiting for a destination.
 
     Raises `payouts.PayoutRefused` if payouts will not pay it there now. The money then keeps
     waiting, and the client can try again or choose another destination.
+
+    `confirm` is awaited once the investment and destination pass their checks, just before the
+    payout is made. The route passes the app PIN check, which raises to refuse.
     """
     investment = await _own_locked(session, client, investment_id)
     if (
@@ -179,6 +189,8 @@ async def pay_out_matured(
     ):
         raise ApplicationError("conflict")
     await _usable(session, investment.client_id, destination_id)
+    if confirm is not None:
+        await confirm()
     payout = await payouts.create_payout(
         session,
         client,

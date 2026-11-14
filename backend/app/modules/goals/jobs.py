@@ -6,11 +6,20 @@ completes the job, so a job that is run twice changes nothing the second time.
 """
 
 from collections.abc import Mapping
+from datetime import timedelta
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.infrastructure.database import Database
-from app.infrastructure.jobs import ClaimedJob, Handler, JobContext, JobHandler, PermanentJobError
+from app.infrastructure.jobs import (
+    ClaimedJob,
+    Handler,
+    JobContext,
+    JobHandler,
+    JobRequest,
+    PermanentJobError,
+    enqueue,
+)
 from app.modules.goals import groups, reminders, service
 from app.modules.goals.events import FOLLOW_ROLLOVER_KIND
 from app.shared.clock import Clock
@@ -19,6 +28,8 @@ from app.shared.clock import Clock
 REFRESH_GROUPS_KIND = "goals.refresh_groups"
 # The scheduler asks for this once a day, in the morning, so a reminder is not sent at night.
 SEND_REMINDERS_KIND = "goals.send_reminders"
+# A later page of the morning run. Old enough to finish the run, too young to text at night.
+REMINDER_PAGE_MAX_AGE = timedelta(hours=10)
 
 
 class GoalJobs:
@@ -60,9 +71,28 @@ class GoalJobs:
 
     async def send_reminders(self, job: ClaimedJob, context: JobContext) -> None:
         """Remind clients of a goal saving due in the next three days, and tell them when a
-        goal reaches its target. Each is keyed, so running it again tells nobody twice."""
+        goal reaches its target. Each is keyed, so running it again tells nobody twice.
+
+        One page of goals per job. The scheduler's job starts at the first goal; a page that
+        was full queues the next page, after its last goal, in the same transaction.
+        """
+        after = job.payload.get("after", "")
+        if not isinstance(after, str):
+            raise PermanentJobError(code="after_not_text")
 
         async def effect(session: AsyncSession) -> Mapping[str, object]:
-            return await reminders.send_reminders(session, self._clock)
+            page = await reminders.send_page(session, self._clock, after=after)
+            if page.last_id is not None:
+                await enqueue(
+                    session,
+                    JobRequest(
+                        kind=SEND_REMINDERS_KIND,
+                        idempotency_key=f"after:{job.id}",
+                        payload={"after": page.last_id},
+                        max_age=REMINDER_PAGE_MAX_AGE,
+                    ),
+                    now=self._clock.now(),
+                )
+            return {**page.told, "more": page.last_id is not None}
 
         await context.apply(effect)

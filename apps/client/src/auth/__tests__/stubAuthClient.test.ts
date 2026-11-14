@@ -32,7 +32,7 @@ describe("sign up", () => {
     const challenge = await auth.startSignup(signupInput);
     const ticket = await auth.confirmSignupCode(challenge.challengeId, DEMO_CODE);
     const session = await auth.completeSignup(ticket.ticket, "green matooke sunday");
-    expect(session).toEqual({ phone: NEW_PHONE, displayName: null, restricted: false, email: "new@example.com", emailVerified: false });
+    expect(session).toEqual({ phone: NEW_PHONE, displayName: null, restricted: false, email: "new@example.com", emailVerified: false, pinSet: false, locked: false });
   });
 
   it("does not reveal that a number has an account until the code proves ownership", async () => {
@@ -105,7 +105,7 @@ describe("log in", () => {
     const auth = client();
     const challenge = await auth.startLogin({ phone: DEMO_PHONE }, DEMO_PASSWORD);
     const session = await auth.verifyWithPasskey(challenge.loginId);
-    expect(session).toEqual({ phone: DEMO_PHONE, displayName: "Amara Nakato", restricted: false, email: "amara@example.com", emailVerified: false });
+    expect(session).toEqual({ phone: DEMO_PHONE, displayName: "Amara Nakato", restricted: false, email: "amara@example.com", emailVerified: false, pinSet: false, locked: false });
   });
 
   it("opens a restricted session with a code", async () => {
@@ -131,7 +131,7 @@ describe("log in", () => {
       "invalid_code",
     );
     const session = await auth.verifyWithAuthenticator(challenge.loginId, DEMO_CODE);
-    expect(session).toEqual({ phone: DEMO_PHONE, displayName: "Amara Nakato", restricted: false, email: "amara@example.com", emailVerified: false });
+    expect(session).toEqual({ phone: DEMO_PHONE, displayName: "Amara Nakato", restricted: false, email: "amara@example.com", emailVerified: false, pinSet: false, locked: false });
   });
 
   it("lets the client switch method within one log in", async () => {

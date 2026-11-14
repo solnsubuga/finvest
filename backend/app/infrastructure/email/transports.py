@@ -66,9 +66,9 @@ class DisabledTransport:
 class ResendTransport:
     """Send through Resend's HTTP API with its idempotency key, so a retry never duplicates.
 
-    `tags` go on every message this transport sends, after the message's own. The shared
-    webhook router at hooks.fidiba.com reads `fidiba_environment` to send Resend's events for
-    a message back to the environment that sent it.
+    `tags` go on every message this transport sends, after the message's own, and win over a
+    message's tag of the same name. Finvest's own Resend account sends its events straight to
+    the API, so none are needed today.
     """
 
     name = "resend"

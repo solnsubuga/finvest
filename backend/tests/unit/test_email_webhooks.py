@@ -123,7 +123,7 @@ def event(kind: str = "email.bounced", **data: object) -> bytes:
                 "from": "Finvest <no-reply@finvestug.com>",
                 "to": ["Ada@Example.com"],
                 "subject": "Your Finvest sign-in code",
-                "tags": {"fidiba_environment": "app_finvest_prod"},
+                "tags": {"template": "sign_in_code"},
                 **data,
             },
         }
@@ -220,42 +220,33 @@ def transport(tags: dict[str, str] | None) -> ResendTransport:
     )
 
 
-def test_every_resend_email_carries_the_environment_tag() -> None:
-    sent = transport({"fidiba_environment": "app_finvest_prod"}).payload(message(template="x"))
-    assert sent["tags"] == [
-        {"name": "template", "value": "x"},
-        {"name": "fidiba_environment", "value": "app_finvest_prod"},
-    ]
-    # A message cannot claim another environment.
-    sent = transport({"fidiba_environment": "app_finvest_prod"}).payload(
-        message(fidiba_environment="app_other")
-    )
-    assert sent["tags"] == [{"name": "fidiba_environment", "value": "app_finvest_prod"}]
+def test_a_transport_tag_goes_on_every_email_and_wins() -> None:
+    sent = transport({"app": "finvest"}).payload(message(template="x"))
+    assert sent["tags"] == [{"name": "template", "value": "x"}, {"name": "app", "value": "finvest"}]
+    # A message cannot override the transport's own tag.
+    sent = transport({"app": "finvest"}).payload(message(app="other"))
+    assert sent["tags"] == [{"name": "app", "value": "finvest"}]
 
 
 def test_a_bad_or_one_too_many_tag_is_refused() -> None:
     with pytest.raises(ValueError, match="tag"):
-        transport({"fidiba_environment": "app finvest"})
-    full = transport({"fidiba_environment": "app_finvest_prod"})
+        transport({"app": "fin vest"})
+    full = transport({"app": "finvest"})
     with pytest.raises(InvalidEmail):
         full.payload(message(a="1", b="2", c="3", d="4", e="5"))
 
 
-def test_the_environment_tag_setting(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_the_settings_add_no_tag_and_ignore_the_old_router_variable(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     monkeypatch.setenv("FINVEST_EMAIL_BACKEND", "resend")
     monkeypatch.setenv("FINVEST_EMAIL_FROM", "no-reply@finvestug.com")
     monkeypatch.setenv("FINVEST_EMAIL_RESEND_API_KEY", "re_test_not_a_real_key")
-    monkeypatch.setenv("FINVEST_EMAIL_FIDIBA_ENVIRONMENT", "")
-    plain = EmailSettings().transport()
-    assert isinstance(plain, ResendTransport)
-    assert plain.tags == {}
-    monkeypatch.setenv("FINVEST_EMAIL_FIDIBA_ENVIRONMENT", "app_finvest_prod")
-    tagged = EmailSettings().transport()
-    assert isinstance(tagged, ResendTransport)
-    assert tagged.tags == {"fidiba_environment": "app_finvest_prod"}
+    # Finvest has its own Resend account, so a deploy still setting this starts as before.
     monkeypatch.setenv("FINVEST_EMAIL_FIDIBA_ENVIRONMENT", "app finvest")
-    with pytest.raises(ValidationError):
-        EmailSettings()
+    sent = EmailSettings().transport()
+    assert isinstance(sent, ResendTransport)
+    assert sent.tags == {}
 
 
 async def test_the_tag_reaches_resend() -> None:
@@ -269,9 +260,7 @@ async def test_the_tag_reaches_resend() -> None:
         api_key=SecretStr("re_test_not_a_real_key"),
         sender=Sender.parse("Finvest <no-reply@finvestug.com>"),
         client=httpx.AsyncClient(transport=httpx.MockTransport(handler)),
-        tags={"fidiba_environment": "app_finvest_prod"},
+        tags={"app": "finvest"},
     )
     await tagged.send(message())
-    assert json.loads(seen[0].content)["tags"] == [
-        {"name": "fidiba_environment", "value": "app_finvest_prod"}
-    ]
+    assert json.loads(seen[0].content)["tags"] == [{"name": "app", "value": "finvest"}]

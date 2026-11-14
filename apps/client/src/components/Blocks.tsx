@@ -34,8 +34,8 @@ export function Notice({ tone, children }: NoticeProps) {
   );
 }
 
-/** "1 of 4" bar at the top of the sign-up steps. */
-export function StepProgress({ step, of }: { step: number; of: number }) {
+/** "1 of 4" bar at the top of the sign-up steps. `onDark` for the black PIN screen. */
+export function StepProgress({ step, of, onDark = false }: { step: number; of: number; onDark?: boolean }) {
   return (
     <View
       style={styles.progress}
@@ -49,11 +49,23 @@ export function StepProgress({ step, of }: { step: number; of: number }) {
         {Array.from({ length: of }, (_, index) => (
           <View
             key={index}
-            style={[styles.bar, { backgroundColor: index < step ? colors.black : colors.borderStrong }]}
+            style={[
+              styles.bar,
+              {
+                backgroundColor:
+                  index < step
+                    ? onDark
+                      ? colors.lime
+                      : colors.black
+                    : onDark
+                      ? colors.onBlackDivider
+                      : colors.borderStrong,
+              },
+            ]}
           />
         ))}
       </View>
-      <Txt size={fontSizes.sm} weight="semibold" color={colors.muted}>
+      <Txt size={fontSizes.sm} weight="semibold" color={onDark ? colors.onBlackMuted : colors.muted}>
         {`${step} of ${of}`}
       </Txt>
     </View>

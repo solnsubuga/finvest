@@ -93,10 +93,3 @@ def problems(people: list[Person], client_phone: str | None = None) -> list[Pers
     if people and sum(person.share_bps for person in people) != WHOLE:
         found.append(PersonProblem(None, "share_bps", "shares_must_total_100"))
     return found
-
-
-def mask_phone(phone: str) -> str:
-    """Enough of a number to recognise it, as "+256 7•• ••• 210"."""
-    if len(phone) < 7:
-        return "•" * len(phone)
-    return phone[:5] + "•" * (len(phone) - 8) + phone[-3:]

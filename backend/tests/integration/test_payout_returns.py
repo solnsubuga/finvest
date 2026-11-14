@@ -333,3 +333,55 @@ async def test_a_payout_that_did_not_come_back_cannot_be_sent_again(
         )
     assert refused_resend.status_code == 409
     assert refused_resend.json()["error"]["fields"][0]["code"] == "payout_not_returned"
+
+
+async def test_staff_pick_the_paid_payout_and_its_line_coming_back(
+    world: World, app_database: Database
+) -> None:
+    amount = 1_234_001
+    payout = await paid_by_phone(world, amount)
+    line = await MTN.statement(app_database, (("picked", amount), ("other", amount + 1)))
+
+    # Searching by the amount that came in finds the payout, with where it went masked.
+    async with app_database.actor_transaction(staff()) as session:
+        found = await returns.returnable(session, amount=ugx(amount), now=datetime.now(UTC))
+        lines = await returns.return_lines(session, payout.id)
+    assert [each.payout.id for each in found] == [payout.id]
+    assert found[0].network == "mtn"
+    assert "•" in found[0].masked_account
+    # Only lines coming in for its amount on the pot it was paid from.
+    assert [each.id for each in lines] == [line]
+
+    # Once a return names the payout and the line, neither is offered again.
+    await propose(app_database, payout.id, line, staff())
+    async with app_database.actor_transaction(staff()) as session:
+        found = await returns.returnable(session, amount=ugx(amount), now=datetime.now(UTC))
+        lines = await returns.return_lines(session, payout.id)
+    assert found == []
+    assert lines == []
+
+
+async def test_only_a_paid_payout_has_lines_to_pick(world: World, app_database: Database) -> None:
+    payout = await world.request(AMOUNT)
+    async with app_database.actor_transaction(staff()) as session:
+        assert await refused(returns.return_lines(session, payout.id)) == "payout_not_paid"
+
+
+async def test_the_picker_routes_answer_staff(
+    world: World, test_database: TestDatabase, app_database: Database
+) -> None:
+    amount = 1_234_777
+    payout = await paid_by_phone(world, amount)
+    line = await MTN.statement(app_database, (("route", amount),))
+    async with running_api(test_database, app_database) as api:
+        api.clock.current = datetime.now(UTC)
+        await api.staff(role="operations")
+        listed = await api.http.get(
+            "/staff/payout-returns/returnable", params={"amount_minor": amount}
+        )
+        offered = await api.http.get(f"/staff/payouts/{payout.id}/return-lines")
+    assert listed.status_code == 200, listed.text
+    assert [each["id"] for each in listed.json()] == [payout.id]
+    assert listed.json()[0]["kind"] == "mobile_money"
+    assert offered.status_code == 200, offered.text
+    assert [each["id"] for each in offered.json()] == [line]

@@ -33,6 +33,7 @@ const SOURCES: Record<Kind, { view: Permission; decide: Permission }> = {
   payout_resolution: { view: "reconciliation.view", decide: "reconciliation.change" },
   payout_release: { view: "review_queue.view", decide: "payout_accounts.change" },
   organisation: { view: "review_queue.view", decide: "organisations.review" },
+  bank_account_change: { view: "settings.view", decide: "bank_accounts.change" },
 };
 
 interface Reader {

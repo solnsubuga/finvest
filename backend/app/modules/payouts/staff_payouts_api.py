@@ -8,7 +8,9 @@ of a settlement needs `reconciliation.change`, as the day close does.
 `GET /staff/payouts/held-up` lists queued mobile money payouts the provider has taken nothing of
 since their first try `HELD_UP_AFTER` or more ago. The sweep keeps sending them and never gives
 up: a client's money is in flight. This is where a person sees that it is not moving, so they can
-find out why from the provider. Seeing it needs `money_movement.view`.
+find out why from the provider. A payout whose last send waited because Finvest's own ioTec
+wallet is short is listed at once, with `waiting_for` = `wallet_short`. Seeing it needs
+`money_movement.view`.
 """
 
 from datetime import datetime
@@ -62,7 +64,8 @@ Reason = Annotated[str, Field(min_length=1, max_length=500)]
 
 
 class HeldUpPayoutOut(Contract):
-    """A queued payout first tried two hours or more ago, and taken by nothing since."""
+    """A queued payout first tried two hours or more ago, and taken by nothing since, or one
+    waiting on Finvest's own wallet."""
 
     id: PushId
     client_id: PushId
@@ -73,6 +76,9 @@ class HeldUpPayoutOut(Contract):
     last_tried_at: datetime
     # Sends tried so far. Each one ended with the provider saying it took nothing.
     tries: int
+    # `wallet_short`: Finvest's ioTec wallet does not hold enough to pay it. Top the wallet up
+    # and the sweep sends it. Null when the provider gave no reason that is ours to fix.
+    waiting_for: Literal["wallet_short"] | None = None
 
 
 @staff_router.get("/payouts/held-up")
@@ -92,6 +98,7 @@ async def held_up(staff: Viewer, database: Db, clock: Time) -> list[HeldUpPayout
             first_tried_at=item.first_tried_at,
             last_tried_at=item.last_tried_at,
             tries=item.tries,
+            waiting_for="wallet_short" if item.waiting_for == "wallet_short" else None,
         )
         for item in found
     ]

@@ -213,7 +213,9 @@ async def test_two_people_close_a_monitoring_case_with_a_report_owed(
 
     await api.staff("compliance")
     listed = (await api.http.get("/staff/compliance/cases?source=monitoring")).json()
-    assert case_id in [item["id"] for item in listed]
+    [mine] = [item for item in listed if item["id"] == case_id]
+    assert mine["amount"] == {"minor": LARGE_AMOUNT, "currency": "UGX"}
+    reported = (await api.http.get("/staff/compliance/summary")).json()["reports_to_fia_this_year"]
     wrong = await api.http.post(
         f"/staff/compliance/cases/{case_id}/proposals",
         json={"outcome": "not_a_match", "reason": "Not a listed person"},
@@ -235,6 +237,29 @@ async def test_two_people_close_a_monitoring_case_with_a_report_owed(
     assert await cases_of(worker_database, client_id) == [
         ("monitoring", Rule.LARGE_DEPOSIT.value, "closed")
     ]
+    summary = (await api.http.get("/staff/compliance/summary")).json()
+    assert summary["reports_to_fia_this_year"] == reported + 1
+    register = await api.http.get("/staff/compliance/cases.csv")
+    assert register.status_code == 200, register.text
+    assert register.headers["content-type"].startswith("text/csv")
+    rows = register.text.split("\r\n")
+    assert rows[0].startswith("Case ID,Opened,Source,Raised by,Amount (UGX)")
+    [row] = [r for r in rows if r.startswith(case_id)]
+    assert f",monitoring,large_deposit,{LARGE_AMOUNT}," in row
+    assert ",closed,report_to_fia," in row
+
+
+async def test_the_rules_are_shown_as_they_run(api: Api) -> None:
+    await api.staff("support")
+    assert (await api.http.get("/staff/compliance/rules")).status_code == 403
+    await api.staff("compliance")
+    assert (await api.http.get("/staff/compliance/cases.csv")).status_code == 200
+    rules = (await api.http.get("/staff/compliance/rules")).json()
+    assert rules["currency"] == "UGX"
+    assert rules["large_deposit_minor"] == LARGE_AMOUNT
+    assert rules["quick_withdrawal_floor_minor"] == QUICK_FLOOR
+    assert (rules["split_deposits_days"], rules["many_deposits_hours"]) == (7, 24)
+    assert rules["rescreen_every_days"] == 30
 
 
 async def test_only_the_worker_records_and_nothing_changes_a_record(

@@ -1,7 +1,7 @@
 import { Platform } from "react-native";
 import type { BankTransferDetails, ClientInvestmentOut, PaymentView, Upload } from "@finvest/api-client/client";
 
-import { api, ApiError } from "@/api/http";
+import { api, ApiError, isAccountClosing } from "@/api/http";
 
 import {
   BankTransfer,
@@ -116,6 +116,7 @@ export function toPaymentError(error: unknown, call: Call = "read"): PaymentErro
     case "not_found":
       return new PaymentError(call === "pay" ? "not_payable" : "not_found");
     case "conflict":
+      if (isAccountClosing(error)) return new PaymentError("account_closing");
       return new PaymentError("not_payable");
     case "idempotency_key_reused":
       return new PaymentError("key_reused");
@@ -164,7 +165,9 @@ export function createApiPaymentsClient(): PaymentsClient {
    * longer be paid. The investment's live payment tells which.
    */
   async function whyRefused(investmentId: string, error: unknown): Promise<PaymentError> {
-    if (!(error instanceof ApiError) || error.code !== "conflict") return toPaymentError(error, "pay");
+    if (!(error instanceof ApiError) || error.code !== "conflict" || isAccountClosing(error)) {
+      return toPaymentError(error, "pay");
+    }
     try {
       const live = await api("GET /client/investments/{investment_id}/payment", { params: { investment_id: investmentId } });
       if (live.status === "confirmed") return new PaymentError("not_payable");

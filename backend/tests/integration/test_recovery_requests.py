@@ -213,20 +213,32 @@ async def open_requests(api: Api, client_id: str) -> int:
 async def test_the_account_is_told_once_while_its_request_is_open(api: Api) -> None:
     phone, _, client_id = await a_client(api)
     # Two asks, then two more after the limit's window: the same answer each time.
+    contacts = []
     for _ in range(2):
         for _ in range(REQUESTS_PER_NUMBER):
-            assert (await ask(api, phone, a_phone())).status_code == 202
+            contacts.append(a_phone())
+            assert (await ask(api, phone, contacts[-1])).status_code == 202
         api.clock.advance(minutes=16)
     assert await messages(api, phone) == ["recovery_requested"]
     assert await open_requests(api, client_id) == 1
 
-    # Once staff close it, the next ask opens a new request and tells the account again.
+    # Staff see the latest number to call and reason, and how many asks came in.
+    assert (await ask(api, phone, contacts[-1], "no_codes")).status_code == 202
     staff = await a_staff_member(api)
     [item] = [
         i
         for i in (await api.http.get("/staff/recovery-requests", headers=staff)).json()["items"]
         if i["client_id"] == client_id
     ]
+    assert (item["contact_phone"], item["reason"], item["asks"]) == (
+        contacts[-1],
+        "no_codes",
+        2 * REQUESTS_PER_NUMBER + 1,
+    )
+    assert item["last_asked_at"] > item["created_at"]
+    assert await messages(api, phone) == ["recovery_requested"]
+
+    # Once staff close it, the next ask opens a new request and tells the account again.
     closed = await api.http.post(
         f"/staff/recovery-requests/{item['id']}/close", json={"outcome": "helped"}, headers=staff
     )
@@ -244,3 +256,19 @@ async def test_parallel_asks_open_one_request_and_tell_the_account_once(api: Api
     assert [answer.status_code for answer in answers] == [202] * REQUESTS_PER_NUMBER
     assert await open_requests(api, client_id) == 1
     assert await messages(api, phone) == ["recovery_requested"]
+
+
+async def test_only_a_new_ask_changes_an_open_request(api: Api) -> None:
+    phone, _, client_id = await a_client(api)
+    await ask(api, phone, a_phone())
+    staff = await a_staff_member(api)
+    # Staff may close a request, but not change the number to call on it.
+    with pytest.raises(DBAPIError):
+        async with api.database.actor_transaction(Actor("staff", staff["X-Staff-Id"])) as session:
+            await session.execute(
+                text(
+                    "UPDATE identity_recovery_requests SET contact_phone = '+256700000001', "
+                    "asks = asks + 1 WHERE client_id = :id"
+                ),
+                {"id": client_id},
+            )

@@ -37,9 +37,10 @@ from app.infrastructure.jobs import (
     RetryableJobError,
     enqueue,
     external_effect,
+    is_active,
 )
 from app.infrastructure.sealing import Sealer
-from app.modules.documents import building, pdf, service
+from app.modules.documents import building, locking, pdf, service
 from app.modules.documents.domain.emails import (
     Rendered,
     receipt_email,
@@ -57,6 +58,7 @@ from app.modules.documents.domain.statements import (
 from app.modules.documents.events import RECEIPT_KIND
 from app.modules.documents.service import DocumentFile, DocumentKind, DocumentStatus, DocumentView
 from app.modules.identity import service as identity
+from app.modules.kyc import service as kyc
 from app.modules.ledger import closing
 from app.modules.ledger import statements as ledger
 from app.modules.notifications import contract as notifications
@@ -65,6 +67,7 @@ from app.modules.tax import service as tax
 from app.shared.actors import SYSTEM
 from app.shared.business_day import business_date
 from app.shared.clock import Clock
+from app.shared.email_layout import PRODUCTION, Links
 from app.shared.errors import ApplicationError
 
 MONTHLY_PAGE = 200
@@ -91,6 +94,15 @@ _EMAIL_DONE = text(
 )
 # Resend drops a repeat of a key for 24 hours, so a send is retried only within that time.
 EMAIL_MAX_AGE = timedelta(hours=20)
+# An email still queued this long after its document was ready will not be sent: its job
+# expired, or failed and was not put right. It is closed as `failed` with `expired`, so staff
+# and the record show it was never delivered. The document stays in the app.
+EMAIL_GIVE_UP_AFTER = timedelta(days=7)
+EXPIRE_PAGE = 500
+_STALE_EMAILS = text(
+    "SELECT document_id FROM document_emails WHERE status = 'queued' AND queued_at < :before "
+    "ORDER BY queued_at, document_id LIMIT :limit FOR UPDATE SKIP LOCKED"
+)
 
 
 def statement_reference(document_id: str) -> str:
@@ -135,8 +147,11 @@ class DocumentJobs:
         email: EmailTransport | None = None,
         closed_through: ClosedThrough | None = None,
         sealer: Sealer | None = None,
+        links: Links = PRODUCTION,
     ) -> None:
         self._database = database
+        # Where the email's buttons and footer point. The worker passes its settings' links.
+        self._links = links
         self._clock = clock
         self._email = email or DisabledTransport()
         # Opens the TIN a client gave, for their tax certificate. A worker started without the
@@ -150,6 +165,7 @@ class DocumentJobs:
         return {
             service.BUILD_KIND: self.build,
             service.MONTHLY_KIND: self.monthly_run,
+            service.EXPIRE_EMAILS_KIND: self.expire_emails,
             RECEIPT_KIND: self.receipt_from_deposit,
             # Sending reaches Resend. Its idempotency key makes a lost answer safe to repeat,
             # and a crash mid-send stops the job instead of sending blind.
@@ -390,6 +406,43 @@ class DocumentJobs:
         result = await context.apply(effect)
         logger.info("monthly_statements_asked", month=label, count=result.get("asked"))
 
+    async def expire_emails(self, job: ClaimedJob, context: JobContext) -> None:
+        """Close document emails that will never be sent, so none stays `queued` for ever.
+
+        The scheduler starts this every day. An email whose job is still waiting or running is
+        left alone, however old. One run closes a page; the next day's run takes the rest.
+        """
+
+        async def effect(session: AsyncSession) -> Mapping[str, object]:
+            now = self._clock.now()
+            rows = await session.execute(
+                _STALE_EMAILS, {"before": now - EMAIL_GIVE_UP_AFTER, "limit": EXPIRE_PAGE}
+            )
+            closed = 0
+            for document_id in rows.scalars().all():
+                key = f"document-email:{document_id}"
+                if await is_active(session, kind=service.EMAIL_KIND, idempotency_key=key):
+                    continue
+                await session.execute(
+                    _EMAIL_DONE,
+                    {
+                        "id": document_id,
+                        "status": "failed",
+                        "failure_code": "expired",
+                        "provider": None,
+                        "message_id": None,
+                        "now": now,
+                    },
+                )
+                closed += 1
+            return {"closed": closed}
+
+        result = await context.apply(effect)
+        if result.get("closed"):
+            logger.warning(
+                "document_emails_expired", count=result.get("closed"), error_code="expired"
+            )
+
     async def receipt_from_deposit(self, job: ClaimedJob, context: JobContext) -> None:
         """A payment was confirmed: ask for its receipt, which is built and emailed next."""
         data = job.payload.get("data")
@@ -421,7 +474,12 @@ class DocumentJobs:
         as `skipped` with `no_email`, an address the client has not proved with a link as
         `skipped` with `email_not_verified`, and an address on the notifications suppression
         list as `skipped` with `suppressed`.
-        Nothing is sent while a transaction is open.
+
+        The attached copy is locked with the client's date of birth, read from their identity
+        check, which needs the identity key. A worker without the key sends nothing and the job
+        waits for one that has it. A client with no check on record is `skipped` with
+        `no_date_of_birth`: an unlocked copy is never sent. Nothing is sent while a transaction
+        is open.
         """
         document_id = job.payload.get("document_id")
         if not isinstance(document_id, str):
@@ -432,11 +490,11 @@ class DocumentJobs:
             file = await service.document_file(session, document_id)
             if status is None or view is None or file is None:
                 raise PermanentJobError(code="document_email_missing")
-            rendered, address, skip = None, None, "no_email"
+            rendered, address, skip, password = None, None, "no_email", None
             if status == "queued":
                 contact = await identity.client_contact(session, view.client_id)
-                # The PDF has no password, so it goes only to an address the client proved
-                # with a link, and an account carried over from Finvest 1.0 gets none until
+                # The PDF goes only to an address the client proved with a link, as well as
+                # being locked, and an account carried over from Finvest 1.0 gets none until
                 # its owner claims it.
                 address = contact.email if contact is not None and contact.claimed else None
                 if address is not None and contact is not None and not contact.email_verified:
@@ -446,7 +504,11 @@ class DocumentJobs:
                     # PDF every month would harm the sending domain, and a complaint means
                     # the person asked us to stop.
                     address, skip = None, "suppressed"
-                rendered = await _render(session, view, file) if address else None
+                if address is not None:
+                    password = await self._password(session, view)
+                    if password is None:
+                        address, skip = None, "no_date_of_birth"
+                rendered = await _render(session, view, file, self._links) if address else None
 
         if status != "queued":
             # Finished by an earlier attempt whose result was saved.
@@ -456,6 +518,8 @@ class DocumentJobs:
             await context.apply(self._finish(document_id, "skipped", failure_code=skip))
             logger.info("document_email_skipped", document_id=document_id, error_code=skip)
             return
+        assert password is not None
+        attached = locking.lock(file.content, password)
         try:
             message = EmailMessage(
                 to=address,
@@ -464,7 +528,7 @@ class DocumentJobs:
                 text=rendered.text,
                 idempotency_key=f"document:{document_id}",
                 tags={"template": view.kind.value},
-                attachments=(Attachment(file.file_name, file.content),),
+                attachments=(Attachment(file.file_name, attached),),
             )
             sent = await self._email.send(message)
         except EmailDeferred as error:
@@ -483,6 +547,17 @@ class DocumentJobs:
             )
         )
         logger.info("document_emailed", document_id=document_id, kind=view.kind.value)
+
+    async def _password(self, session: AsyncSession, view: DocumentView) -> str | None:
+        """The client's date of birth as the attachment's password, or None with no check."""
+        if self._sealer is None:
+            # Configuration, not data: the email waits for a worker that has the key.
+            logger.error(
+                "document_email_waiting", document_id=view.id, error_code="identity_key_missing"
+            )
+            raise RetryableJobError(code="identity_key_missing")
+        subject = await kyc.screening_subject(session, self._sealer, view.client_id)
+        return locking.password_for(subject.date_of_birth) if subject is not None else None
 
     def _finish(
         self,
@@ -525,7 +600,9 @@ async def _queue_email(session: AsyncSession, view: DocumentView, now: datetime)
     )
 
 
-async def _render(session: AsyncSession, view: DocumentView, file: DocumentFile) -> Rendered:
+async def _render(
+    session: AsyncSession, view: DocumentView, file: DocumentFile, links: Links
+) -> Rendered:
     holder = await building.holder(session, view.client_id)
     if view.kind is DocumentKind.RECEIPT:
         assert view.source_id is not None
@@ -533,7 +610,7 @@ async def _render(session: AsyncSession, view: DocumentView, file: DocumentFile)
             session, deposit_id=view.source_id, reference=receipt_reference(view.id)
         )
         return receipt_email(
-            first_name=holder.first_name, receipt=receipt, file_name=file.file_name
+            first_name=holder.first_name, receipt=receipt, file_name=file.file_name, links=links
         )
     assert view.period is not None
     if view.kind is DocumentKind.TAX_CERTIFICATE:
@@ -543,6 +620,7 @@ async def _render(session: AsyncSession, view: DocumentView, file: DocumentFile)
             period=view.period,
             account_number=holder.account_number,
             file_name=file.file_name,
+            links=links,
         )
     monthly = view.kind is DocumentKind.MONTHLY_STATEMENT
     return statement_email(
@@ -552,6 +630,7 @@ async def _render(session: AsyncSession, view: DocumentView, file: DocumentFile)
         account_number=holder.account_number,
         file_name=file.file_name,
         requested_at=None if monthly else view.requested_at,
+        links=links,
     )
 
 

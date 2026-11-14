@@ -127,3 +127,30 @@ def test_the_authenticator_key_must_be_32_bytes_and_is_never_shown() -> None:
         with pytest.raises(ValidationError) as raised:
             Settings(database_url=URL, authenticator_key=bad)
         assert bad not in str(raised.value)
+
+
+def test_email_links_follow_the_client_app_origin_and_the_site() -> None:
+    value = Settings(
+        database_url="postgresql://u@db/finvest",
+        client_allowed_origins=["https://app.staging.example"],
+        public_site_origin="https://staging.example",
+    )
+    links = value.email_links()
+    assert links.app == "https://app.staging.example"
+    assert links.site == "https://staging.example"
+
+
+def test_email_links_are_production_when_nothing_names_the_app() -> None:
+    value = Settings(
+        database_url="postgresql://u@db/finvest",
+        client_allowed_origins=["https://app.finvestug.com", "http://localhost:8081"],
+    )
+    links = value.email_links()
+    assert links.app == "https://app.finvestug.com"
+    assert links.site == "https://finvestug.com"
+
+
+@pytest.mark.parametrize("site", ["finvestug.com", "https://finvestug.com/", " https://x.ug"])
+def test_the_public_site_must_be_an_exact_origin(site: str) -> None:
+    with pytest.raises(ValidationError):
+        Settings(database_url="postgresql://u@db/finvest", public_site_origin=site)

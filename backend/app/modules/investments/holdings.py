@@ -22,6 +22,7 @@ from app.infrastructure.idempotency import Receipt, run_once
 from app.infrastructure.jobs import publish
 from app.modules.audit import service as audit
 from app.modules.audit.domain.events import AuditActor, AuditEvent
+from app.modules.closures.pending import refuse_if_closing
 from app.modules.investments.catalogue import invalid, product_from_row, product_row, rates_for
 from app.modules.investments.domain.interest import (
     ClientReturns,
@@ -281,6 +282,8 @@ async def _create(
     if await kyc.verified_name(session, client_id) is None:
         # Nobody invests before their identity check is approved.
         raise ApplicationError("forbidden")
+    # Nothing new starts while two people check the account is clear to close.
+    await refuse_if_closing(session, client_id)
     now = clock.now()
     row = await product_row(session, product_code)
     product = product_from_row(row)

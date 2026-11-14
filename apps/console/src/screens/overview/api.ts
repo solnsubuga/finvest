@@ -33,6 +33,7 @@ export const KINDS = [
   "payout_resolution",
   "payout_release",
   "organisation",
+  "bank_account_change",
 ] as const;
 
 export type Kind = (typeof KINDS)[number];

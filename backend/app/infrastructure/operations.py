@@ -10,7 +10,13 @@ from sqlalchemy import text
 
 from app.infrastructure.database import Database
 
-SIGNALS = ("jobs_overdue", "jobs_stalled", "jobs_failed", "schedules_late")
+SIGNALS = (
+    "jobs_overdue",
+    "jobs_stalled",
+    "jobs_failed",
+    "schedules_late",
+    "payouts_waiting_on_wallet",
+)
 
 
 async def operations_signals(database: Database, now: datetime) -> dict[str, int]:

@@ -25,6 +25,7 @@ from app.shared.errors import ApplicationError
 from app.shared.push_ids import push_id
 from tests.support.clock import AsyncBarrier, FakeClock
 from tests.support.database import TestDatabase
+from tests.support.ledger import key
 from tests.support.ledger import staff as new_staff
 
 pytestmark = pytest.mark.integration
@@ -39,7 +40,9 @@ STAFF_ORIGIN = "https://admin.finvestug.com"
 async def proposed(database: Database, clock: FakeClock) -> tuple[Actor, str]:
     proposer = new_staff()
     async with database.actor_transaction(proposer) as session:
-        item = await announcements.propose(session, proposer, TITLE, MESSAGE, "Holiday", clock)
+        item = await announcements.propose(
+            session, proposer, TITLE, MESSAGE, "Holiday", clock, idempotency_key=key()
+        )
     return proposer, item.id
 
 
@@ -318,14 +321,22 @@ async def test_the_words_follow_the_wording_rules(
     ):
         with pytest.raises(ApplicationError) as refused:
             async with app_database.actor_transaction(staff) as session:
-                await announcements.propose(session, staff, title, message, "Why", fake_clock)
+                await announcements.propose(
+                    session, staff, title, message, "Why", fake_clock, idempotency_key=key()
+                )
         assert refused.value.code == "validation_failed"
         assert [(problem.field_path, problem.code) for problem in refused.value.fields] == [
             ([field], code)
         ]
     async with app_database.actor_transaction(staff) as session:
         ok = await announcements.propose(
-            session, staff, TITLE, "Details at https://finvestug.com/help", "Why", fake_clock
+            session,
+            staff,
+            TITLE,
+            "Details at https://finvestug.com/help",
+            "Why",
+            fake_clock,
+            idempotency_key=key(),
         )
     assert ok.status == "proposed"
 
@@ -373,12 +384,37 @@ async def api(test_database: TestDatabase, app_database: Database) -> AsyncItera
         yield Api(http, app.state.identity, app_database)
 
 
+def fresh() -> dict[str, str]:
+    return {"Idempotency-Key": key()}
+
+
+async def test_a_proposal_sent_twice_with_one_key_puts_one_forward(api: Api) -> None:
+    body = {"title": TITLE, "message": MESSAGE, "reason": "Holiday"}
+    await api.staff()
+    once = {"Idempotency-Key": key()}
+    first = await api.http.post("/staff/announcements", json=body, headers=once)
+    again = await api.http.post("/staff/announcements", json=body, headers=once)
+    assert (first.status_code, again.status_code) == (201, 201)
+    assert first.json()["id"] == again.json()["id"]
+    listed = (await api.http.get("/staff/announcements")).json()["announcements"]
+    assert [item["id"] for item in listed].count(first.json()["id"]) == 1
+    # Other words under the same key are refused, never answered with the first one.
+    other = {**body, "title": "Something else"}
+    refused = await api.http.post("/staff/announcements", json=other, headers=once)
+    assert refused.status_code == 422
+    assert refused.json()["error"]["code"] == "idempotency_key_reused"
+    missing = await api.http.post("/staff/announcements", json=body)
+    assert missing.status_code == 428
+
+
 async def test_staff_propose_and_approve_over_http(api: Api) -> None:
     body = {"title": TITLE, "message": MESSAGE, "reason": "Holiday"}
     await api.staff("support")
-    assert (await api.http.post("/staff/announcements", json=body)).status_code == 403
+    assert (
+        await api.http.post("/staff/announcements", json=body, headers=fresh())
+    ).status_code == 403
     proposer = await api.staff()
-    response = await api.http.post("/staff/announcements", json=body)
+    response = await api.http.post("/staff/announcements", json=body, headers=fresh())
     assert response.status_code == 201
     created = response.json()
     assert (created["status"], created["yours"], created["proposed_by"]) == (
@@ -396,7 +432,7 @@ async def test_staff_propose_and_approve_over_http(api: Api) -> None:
     assert response.status_code == 200
     assert response.json()["status"] == "approved"
     invalid = {"title": TITLE, "message": "See www.example.org", "reason": "Why"}
-    response = await api.http.post("/staff/announcements", json=invalid)
+    response = await api.http.post("/staff/announcements", json=invalid, headers=fresh())
     assert response.status_code == 422
 
 
@@ -411,9 +447,11 @@ async def test_changing_wordings_is_not_enough_to_send_an_announcement(
     )
     body = {"title": TITLE, "message": MESSAGE, "reason": "Holiday"}
     await api.staff()
-    created = (await api.http.post("/staff/announcements", json=body)).json()
+    created = (await api.http.post("/staff/announcements", json=body, headers=fresh())).json()
     await api.staff("operations")
     assert (await api.http.get("/staff/announcements")).status_code == 200
-    assert (await api.http.post("/staff/announcements", json=body)).status_code == 403
+    assert (
+        await api.http.post("/staff/announcements", json=body, headers=fresh())
+    ).status_code == 403
     decision = f"/staff/announcements/{created['id']}/decision"
     assert (await api.http.post(decision, json={"decision": "approved"})).status_code == 403
