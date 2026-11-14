@@ -89,3 +89,34 @@ test("a client pays for an investment by mobile money from their own number", as
   await expect(page.getByText("Completed")).toBeVisible({ timeout: 30_000 });
   await expect(page.getByText("Paid into 91 Day Treasury Bill")).toBeVisible();
 });
+
+test("a client adds a mobile money number to be paid to, and enters the texted code", async ({ page }) => {
+  await logIn(page);
+  await id(page, "use-passkey").click();
+  await expect(page.getByText("Welcome, Amara")).toBeVisible();
+  // The phone's tab bar and the wide sidebar both name it Profile.
+  await page
+    .getByRole("link", { name: "Profile", exact: true })
+    .or(page.getByLabel("Profile", { exact: true }))
+    .first()
+    .click();
+  await id(page, "open-payout-accounts").click();
+  await expect(id(page, "payout-account-demo-account-mtn")).toBeVisible();
+
+  await id(page, "payout-account-add").click();
+  // The client's own number is filled in; this one is another of theirs.
+  await id(page, "phone-input").fill("701 555 012");
+  await id(page, "holder-name-input").fill("Amara Nakato");
+  await id(page, "payout-account-save").click();
+
+  await expect(page.getByText(/We texted a code to \+256 70• ••• 012/)).toBeVisible();
+  await id(page, "code-input").fill("000000");
+  await id(page, "payout-code-submit").click();
+  await expect(page.getByText("That code is not right. Check it and try again.")).toBeVisible();
+  await id(page, "code-input").fill(DEMO_CODE);
+  await id(page, "payout-code-submit").click();
+
+  // A mobile money number is checked against the name the network holds, not by proof.
+  await expect(page.getByText(/We are checking the name the network holds for this number/)).toBeVisible();
+  await expect(id(page, "proof-upload")).toHaveCount(0);
+});

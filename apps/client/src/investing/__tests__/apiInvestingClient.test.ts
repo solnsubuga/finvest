@@ -183,6 +183,7 @@ describe("the investing client for the real API", () => {
       ratePercent: "10.63",
       termDays: 91,
       atMaturity: "roll_over",
+      payoutDestinationId: null,
       canChangeMaturity: true,
       payBy: "2026-11-16T09:00:00Z",
       startDate: "2026-11-13",
@@ -333,5 +334,50 @@ describe("early withdrawal through the real API", () => {
   it("passes on whether the investment can be withdrawn now", async () => {
     serve(200, { ...investment, can_withdraw: true });
     expect((await createApiInvestingClient().getInvestment(ID)).canWithdraw).toBe(true);
+  });
+
+  it("saves the maturity choice with the account to pay, and says why it was refused", async () => {
+    const client = createApiInvestingClient();
+    const seen = serve(200, { ...investment, at_maturity: "pay_out", payout_destination_id: account.id });
+    const after = await client.chooseAtMaturity({ investmentId: ID, atMaturity: "pay_out", destinationId: account.id });
+    expect(seen[0]).toEqual({
+      method: "PUT",
+      path: `/client/investments/${ID}/at-maturity`,
+      key: undefined,
+      body: { at_maturity: "pay_out", destination_id: account.id },
+    });
+    expect(after).toMatchObject({ atMaturity: "pay_out", payoutDestinationId: account.id });
+
+    // Too close to maturity, or already ended.
+    serve(409, refusal("conflict"));
+    await expect(client.chooseAtMaturity({ investmentId: ID, atMaturity: "roll_over", destinationId: null })).rejects.toEqual(
+      new InvestingError("cannot_change_maturity"),
+    );
+    serve(422, refusal("validation_failed", [{ field_path: ["body", "destination_id"], code: "not_usable" }]));
+    await expect(client.chooseAtMaturity({ investmentId: ID, atMaturity: "pay_out", destinationId: account.id })).rejects.toEqual(
+      new InvestingError("account_not_ready"),
+    );
+  });
+
+  it("pays out matured money to the chosen account, and says why payouts refused it", async () => {
+    const client = createApiInvestingClient();
+    const request = { investmentId: ID, destinationId: account.id };
+    const seen = serve(200, { ...investment, status: "matured", payout_id: "PPPPPPPPPPPPPPPPPPPP" });
+    expect((await client.payOutMatured(request)).payoutId).toBe("PPPPPPPPPPPPPPPPPPPP");
+    expect(seen[0]).toEqual({
+      method: "POST",
+      path: `/client/investments/${ID}/pay-out`,
+      key: undefined,
+      body: { destination_id: account.id },
+    });
+
+    serve(409, refusal("conflict"));
+    await expect(client.payOutMatured(request)).rejects.toEqual(new InvestingError("already_sent"));
+    serve(422, refusal("validation_failed", [{ field_path: ["destination_id"], code: "over_mobile_money_limit" }]));
+    await expect(client.payOutMatured(request)).rejects.toEqual(new InvestingError("over_mobile_money_limit"));
+    serve(422, refusal("validation_failed", [{ field_path: ["destination_id"], code: "over_daily_limit" }]));
+    await expect(client.payOutMatured(request)).rejects.toEqual(new InvestingError("over_limit"));
+    serve(422, refusal("validation_failed", [{ field_path: ["destination_id"], code: "destination_in_safety_wait" }]));
+    await expect(client.payOutMatured(request)).rejects.toEqual(new InvestingError("account_not_ready"));
   });
 });

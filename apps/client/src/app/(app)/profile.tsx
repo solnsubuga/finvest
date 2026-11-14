@@ -135,6 +135,14 @@ export default function Profile() {
           />
           <View style={styles.divider} />
           <Row
+            icon="send"
+            title="Payout accounts"
+            detail="Where we pay you, and your payouts"
+            onPress={() => router.push("/payouts")}
+            testID="open-payout-accounts"
+          />
+          <View style={styles.divider} />
+          <Row
             icon="bell"
             title="Notifications"
             detail="What we told you, and how we tell you"

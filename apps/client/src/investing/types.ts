@@ -58,6 +58,8 @@ export type Investment = {
   ratePercent: string;
   termDays: number | null;
   atMaturity: AtMaturity | null;
+  /** The approved account chosen to be paid at maturity. Null when rolling over. */
+  payoutDestinationId: string | null;
   canChangeMaturity: boolean;
   /** Pay by this moment, or the quoted rate lapses. ISO 8601, UTC. */
   payBy: string;
@@ -85,7 +87,7 @@ export type Investment = {
 export type PayoutAccount = {
   id: string;
   kind: "mobile_money" | "bank";
-  /** As the API shows it, already masked: "MTN 0772 *** 456", "Stanbic ****4821". */
+  /** Named the way the client knows it, the number already masked: "MTN +256 77• ••• 456", "Stanbic Bank •••• 4821". */
   label: string;
   /** Money can be sent here from this moment. Null or in the future: still in its first day's safety wait. */
   payableFrom: string | null;
@@ -98,6 +100,19 @@ export type EarlyWithdrawal = {
   destinationId: string;
   /** Made for this request and sent with every try, so a double tap asks once. */
   idempotencyKey: string;
+};
+
+export type MaturityChoice = {
+  investmentId: string;
+  atMaturity: AtMaturity;
+  /** Required to be paid out, and only then: one of the client's approved accounts. */
+  destinationId: string | null;
+};
+
+export type MaturedPayOut = {
+  investmentId: string;
+  /** One of the client's approved accounts past its first day. */
+  destinationId: string;
 };
 
 export type NewInvestment = {
@@ -121,6 +136,13 @@ export interface InvestingClient {
   listPayoutAccounts(): Promise<PayoutAccount[]>;
   /** Ask to withdraw a running investment early. It pays `value` as shown: interest stops now. */
   withdrawEarly(request: EarlyWithdrawal): Promise<Investment>;
+  /** Change what happens when the term ends. Allowed up to the day before maturity. */
+  chooseAtMaturity(choice: MaturityChoice): Promise<Investment>;
+  /**
+   * Send the money of a matured investment that is waiting for an account. Safe to repeat:
+   * the same account asked twice is the same payout, so it needs no idempotency key.
+   */
+  payOutMatured(request: MaturedPayOut): Promise<Investment>;
 }
 
 export type InvestingErrorCode =
@@ -133,6 +155,10 @@ export type InvestingErrorCode =
   | "invalid"
   | "cannot_withdraw"
   | "account_not_ready"
+  | "cannot_change_maturity"
+  | "already_sent"
+  | "over_mobile_money_limit"
+  | "over_limit"
   | "unavailable";
 
 export class InvestingError extends Error {
@@ -155,6 +181,10 @@ const messages: Record<InvestingErrorCode, string> = {
   invalid: "We could not accept that. Go back, check the details and try again.",
   cannot_withdraw: "This investment cannot be withdrawn early now. It may already be on its way to you, or it matures too soon.",
   account_not_ready: "That account cannot be paid yet. A new account can be paid one day after it is approved.",
+  cannot_change_maturity: "What happens at the end can no longer be changed. It matures too soon, or has already ended.",
+  already_sent: "This money is already on its way to you. Open your payouts to follow it.",
+  over_mobile_money_limit: "That is more than mobile money can take in one payout. Choose a bank account instead.",
+  over_limit: "That is more than your withdrawal limit allows today. Choose a bank account, or try again tomorrow.",
   unavailable: "We could not reach Finvest. Check your connection and try again.",
 };
 
