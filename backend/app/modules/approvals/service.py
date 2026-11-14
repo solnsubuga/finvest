@@ -20,7 +20,7 @@ from app.modules.investments.domain.rates import ProposalStatus
 from app.modules.ledger import corrections
 from app.modules.migration import service as migration
 from app.modules.notifications import announcements, suppression_lifts, wording_store
-from app.modules.payments import bank_transfers
+from app.modules.payments import bank_transfers, reassignments
 from app.modules.payouts import destinations, resolutions
 from app.modules.reconciliation import day_close, transfers
 from app.modules.support import complaints
@@ -70,6 +70,8 @@ async def waiting_for(session: AsyncSession, staff: StaffSession, now: datetime)
         found += await _payout_resolutions(session)
     if "tax_remittance" in kinds:
         found += await _tax_remittances(session)
+    if "deposit_reassignment" in kinds:
+        found += await _reassignments(session)
     return inbox(found, staff.staff_id, staff.permissions)
 
 
@@ -284,4 +286,12 @@ async def _tax_remittances(session: AsyncSession) -> list[Waiting]:
             r.proposed_at,
         )
         for r in await tax.waiting(session)
+    ]
+
+
+async def _reassignments(session: AsyncSession) -> list[Waiting]:
+    # The subject is the deposit's ID, never a name or an amount.
+    return [
+        Waiting("deposit_reassignment", r.id, r.deposit_id, r.proposed_by, r.proposed_at)
+        for r in await reassignments.proposals_awaiting_approval(session)
     ]

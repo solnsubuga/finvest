@@ -33,6 +33,7 @@ Kind = Literal[
     "investment_correction",
     "payout_resolution",
     "tax_remittance",
+    "deposit_reassignment",
 ]
 
 
@@ -71,6 +72,7 @@ SOURCES: dict[Kind, Source] = {
     "payout_account": Source("review_queue.view", "payout_accounts.change"),
     "investment_correction": Source("investments.view", "investment_corrections.change"),
     "tax_remittance": Source("finance.view", "tax_remittances.change"),
+    "deposit_reassignment": Source("reconciliation.view", "deposit_reassignments.change"),
 }
 
 

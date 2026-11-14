@@ -50,6 +50,17 @@ def test_a_confirmed_payment_is_money_in_named_by_its_method() -> None:
     assert unnamed is not None and unnamed.description == "Payment received"
 
 
+def test_a_transfer_moved_to_the_right_client_is_their_payment_and_the_others_correction() -> None:
+    arrived = activity_line(change("payment.deposit_reassigned", 1_000, "move-1"), NAMES)
+    left = activity_line(change("payment.deposit_reassigned", -1_000, "move-1"), NAMES)
+    assert arrived is not None and left is not None
+    assert (arrived.kind, arrived.description) == (
+        ActivityKind.PAID_IN,
+        "Payment received, Bank transfer",
+    )
+    assert (left.kind, left.description) == (ActivityKind.CORRECTION, "Correction")
+
+
 def test_interest_is_earned_on_the_investment_it_was_posted_to() -> None:
     line = activity_line(change("investment.interest_accrued", 7, "run-1", ("inv-1",)), NAMES)
     assert line is not None

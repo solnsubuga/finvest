@@ -66,7 +66,9 @@ POLL_DELAYS = (3, 3, 5, 5, 10, 10, 15, 30)
 
 _NOTICE_FIELD = re.compile(r"[A-Za-z0-9._:-]{1,128}")
 
-Cause = Literal["request", "send", "status_read", "sweep", "reconciliation", "staff_review"]
+Cause = Literal[
+    "request", "send", "status_read", "sweep", "reconciliation", "staff_review", "reassignment"
+]
 logger = structlog.get_logger()
 DEPOSIT_RESOURCE = "payment_deposit"
 
@@ -537,28 +539,35 @@ async def apply_move(
     if move.status.is_final:
         await _record_settled(session, deposit, move, cause, clock)
     if move.status is DepositStatus.CONFIRMED:
-        # Investments and goals start from this event, and the client's receipt is asked for.
-        # It is published once per deposit.
-        await publish(
-            session,
-            topic=CONFIRMED_TOPIC,
-            idempotency_key=deposit.id,
-            payload={
-                "deposit_id": deposit.id,
-                "purpose_type": deposit.purpose.value,
-                "purpose_id": deposit.purpose_id,
-                # The business day of the ledger entry. An investment earns from this day.
-                "confirmed_on": business_date(now).isoformat(),
-            },
-            consumers=[START_ON_DEPOSIT, RECEIPT_ON_DEPOSIT],
-            now=now,
-        )
+        await publish_confirmed(session, deposit, now)
     logger.info(
         "deposit_moved", deposit_id=deposit.id, status=move.status.value, error_code=move.code
     )
     moved = await find_deposit(session, deposit.id)
     assert moved is not None
     return moved
+
+
+async def publish_confirmed(session: AsyncSession, deposit: Deposit, now: datetime) -> None:
+    """Tell other modules a deposit was confirmed at `now`, in the caller's transaction.
+
+    Investments and goals start from this event, and the client's receipt is asked for. It is
+    published once per deposit.
+    """
+    await publish(
+        session,
+        topic=CONFIRMED_TOPIC,
+        idempotency_key=deposit.id,
+        payload={
+            "deposit_id": deposit.id,
+            "purpose_type": deposit.purpose.value,
+            "purpose_id": deposit.purpose_id,
+            # The business day of the ledger entry. An investment earns from this day.
+            "confirmed_on": business_date(now).isoformat(),
+        },
+        consumers=[START_ON_DEPOSIT, RECEIPT_ON_DEPOSIT],
+        now=now,
+    )
 
 
 async def schedule_status_read(

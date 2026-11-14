@@ -5,7 +5,7 @@ attempts and their resolutions, the migration checks, the imported statements, t
 and their recorded matches, the pot transfers, the help chat, the complaints register, the
 goals, the email delivery records, the unclaimed accounts, the complaint outcomes, the
 suppression lifts, the client locks, the announcements, the team changes, Finvest's own money
-in the buffer or the payments of tax to URA."""
+in the buffer, the payments of tax to URA or the payments moved to the right client."""
 
 import os
 from collections.abc import Iterator
@@ -212,6 +212,18 @@ ROWS = {
         "('-Nabc0000000000000A1', DATE '2026-10-01', 'UGX', 100000, 'PRN1', 'FT1', "
         "DATE '2026-11-12', 'Test', 'proposed', '-Nabc0000000000000B1', now()); COMMIT",
         "refusing to drop tax remittances",
+    ),
+    # A reassignment cannot be saved without a confirmed, reviewed transfer and its ledger entry,
+    # so the row is the history event an applied one leaves on the right client's new deposit.
+    "0171_payment_reassignments": (
+        "INSERT INTO payment_deposits (id, client_id, purpose_type, purpose_id, method, provider, "
+        "currency, amount_minor, status, created_at, updated_at) VALUES ('-Nabc0000000000000A1', "
+        "'-Nabc0000000000000B1', 'investment', '-Nabc0000000000000C1', 'bank_transfer', 'bank', "
+        "'UGX', 1000, 'in_review', now(), now()); "
+        "INSERT INTO payment_deposit_events (id, deposit_id, occurred_at, from_status, to_status, "
+        "cause) VALUES ('-Nabc0000000000000E1', '-Nabc0000000000000A1', now(), NULL, "
+        "'confirmed', 'reassignment')",
+        "refusing to drop the record of reassigned deposits",
     ),
     "0087_dealing_buffer_capital": (
         "BEGIN; SELECT set_config('finvest.actor_kind', 'staff', true); "

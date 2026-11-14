@@ -33,6 +33,7 @@ PRODUCTION_LIST = [
     "dealing.buffer_capital",
     "dealing.order",
     "ledger.correction",
+    "payment.reassignment",
     "payout",
     "pot_transfer",
     "tax.remittance",

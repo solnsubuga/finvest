@@ -27,6 +27,7 @@ export const KINDS = [
   "complaint_outcome",
   "announcement",
   "payout_account",
+  "deposit_reassignment",
   "tax_remittance",
 ] as const;
 
