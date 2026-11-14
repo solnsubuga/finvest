@@ -5,9 +5,12 @@ from datetime import date
 import pytest
 
 from app.infrastructure.database import Database
+from app.modules.kyc import api as kyc_api
 from app.modules.kyc import service as kyc
 from app.modules.kyc.domain.checks import DocumentType
 from app.modules.kyc.providers import ManualProvider
+from app.modules.screening import service as screening_service
+from app.modules.screening.contract import Clearance, Outcome, Reason
 from app.shared.actors import SYSTEM, Actor
 from tests.support.clock import FakeClock
 from tests.support.kyc import SEALER, ready_draft
@@ -99,3 +102,38 @@ async def test_the_sweep_pages_through_approved_clients_only(
     assert set(approved) <= set(seen)
     assert waiting.id not in seen
     assert seen == sorted(set(seen))
+
+
+async def onboarding_runs(database: Database, client: Actor) -> list[str]:
+    async with database.actor_transaction(SYSTEM) as session:
+        runs = await screening_service.runs_for_client(session, client.id or "")
+    return [run.status.value for run in runs if run.reason is Reason.ONBOARDING]
+
+
+async def test_handing_in_asks_for_a_screen_once_a_provider_is_on(
+    app_database: Database,
+    worker_database: Database,
+    fake_clock: FakeClock,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    off, off_check = await handed_in(app_database, fake_clock)
+    # With no provider nothing is asked, so nothing holds the client's payouts.
+    assert await onboarding_runs(worker_database, off) == []
+    async with worker_database.actor_transaction(SYSTEM) as session:
+        assert (
+            await screening_service.payout_clearance(session, off.id or "", fake_clock.now())
+            is Clearance.CLEAR
+        )
+
+    monkeypatch.setenv("FINVEST_SCREENING_PROVIDER", "development-stub")
+    client, check_id = await handed_in(app_database, fake_clock)
+    assert await onboarding_runs(worker_database, client) == ["pending"]
+    staff = new_staff()
+    async with app_database.actor_transaction(staff) as session:
+        view = await kyc.check_for_staff(session, SEALER, check_id)
+        shown = await kyc_api._staff_check_now(session, view)
+        unscreened = await kyc_api._staff_check_now(
+            session, await kyc.check_for_staff(session, SEALER, off_check)
+        )
+    assert shown.screening is Outcome.PENDING
+    assert unscreened.screening is None

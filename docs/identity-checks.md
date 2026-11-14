@@ -89,6 +89,8 @@ The document number, date of birth and TIN are encrypted before they are saved (
 
 `verified_name(session, client_id)` gives other modules the name on an approved client's document, and nothing before approval.
 
+Handing a check in also asks the screening module for a sanctions and PEP screen in the same transaction, once a screening provider is set up ([screening.md](screening.md)). The staff check carries the client's standing as `screening` (`clear`, `possible_match`, `confirmed_match`, `unavailable`, `pending`, `not_run`, or null if never screened). Anything but `clear` is a reason to look before approving. The decision stays with the one reviewer, and a possible match is decided on the screening case by two people.
+
 `screening_subject(session, sealer, client_id)` gives the screening module who to screen: the names, date of birth, document type and issuing country on a check that has been handed in or approved, and never the ID number. It returns nothing for a draft or a rejected check. While staff have sent a check back for photos, it gives the details as they stand. Nationality is not recorded. The issuing country is the nationality for a passport, but for a national ID it only shows the client lives in Uganda. Only the worker and staff can read it, because a client cannot read another client's check.
 
 `approved_client_ids(session, after=, limit=)` pages through approved clients, carried-over ones included, ordered by client id. It is for the screening module's rescreening sweep, in a worker transaction.
