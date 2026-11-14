@@ -207,7 +207,7 @@ In each of the `prod` and `dev` GitHub environments, beside what Terraform write
 | `FINVEST_SIGMA360_BASE_URL` | Variable, optional | Defaults to `https://api.sigma360.com/external/v2`, and must be https. The host's firewall already allows outbound HTTPS. |
 | `FINVEST_CUSTODIAN_READER` | Variable | Reads uploaded custodian statements for the statement checks. Unset (`none`) leaves reading off and uploads answer 503 `custodian_reading_off`. `claude` turns it on. `development-stub` is refused in production. API and worker. |
 | `FINVEST_ANTHROPIC_API_KEY` | Secret | The Anthropic API key the reader uses. Required once the reader is `claude`. API and worker. |
-| `FINVEST_CUSTODIAN_READER_MODEL` | Variable, optional | Overrides the reader's default model. API and worker. |
+| `FINVEST_CUSTODIAN_READER_MODEL` | Variable | The model the reader uses. There is no default in the code, so it is required once the reader is `claude`, and the reader refuses to start without it. API and worker. |
 | `FINVEST_SMS_BACKEND`, `FINVEST_SMS_IOTEC_CLIENT_ID` | Variables | `iotec`, and the client id from the ioTec Messaging portal (Management, Settings, Configuration). Only the worker gets them; it sends every SMS. |
 | `FINVEST_SMS_IOTEC_API_KEY` | Secret | The ioTec Messaging API key from the same page. Worker only. |
 | `FINVEST_SMS_IOTEC_BASE_URL` | Variable, optional | Defaults to `https://messaging-api.iotec.io`. The host's firewall already allows outbound HTTPS. |
