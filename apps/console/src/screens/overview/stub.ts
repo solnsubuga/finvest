@@ -40,6 +40,8 @@ const SOURCES: Record<Kind, { view: Permission; decide: Permission }> = {
   statement_layout_change: { view: "settings.view", decide: "statement_layouts.change" },
   withdrawal_limits_change: { view: "settings.view", decide: "withdrawal_limits.change" },
   organisation: { view: "review_queue.view", decide: "organisations.review" },
+  investment_correction: { view: "investments.view", decide: "investment_corrections.change" },
+  investment_run: { view: "investments.view", decide: "investment_corrections.change" },
 };
 
 interface Reader {

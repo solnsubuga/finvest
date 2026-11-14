@@ -40,6 +40,8 @@ export const KINDS = [
   "statement_layout_change",
   "withdrawal_limits_change",
   "organisation",
+  "investment_correction",
+  "investment_run",
 ] as const;
 
 export type Kind = (typeof KINDS)[number];
