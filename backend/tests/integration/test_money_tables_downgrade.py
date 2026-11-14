@@ -406,6 +406,24 @@ ROWS = {
         "'failed', '-Nabc0000000000000C1', 'Checked', 'proposed', '-Nabc0000000000000S1', now())",
         "refusing to drop the resolutions of payouts",
     ),
+    "0038_payout_releases": (
+        "INSERT INTO payout_destinations (id, client_id, kind, network, account_number, "
+        "holder_name, status, created_at, updated_at) VALUES ('-Nabc0000000000000D1', "
+        "'-Nabc0000000000000B1', 'mobile_money', 'mtn', '256772000000', 'Test', "
+        "'awaiting_code', now(), now()); "
+        "INSERT INTO payouts (id, client_id, destination_id, kind, amount_minor, currency, "
+        "status, business_date, source_account_id, source_reference, in_flight_account_id, "
+        "request_key, created_at, updated_at) VALUES ('-Nabc0000000000000A1', "
+        "'-Nabc0000000000000B1', '-Nabc0000000000000D1', 'mobile_money', 1000, 'UGX', 'held', "
+        "DATE '2026-11-10', '-Nabc0000000000000E1', 'investment-1', '-Nabc0000000000000F1', "
+        "'request-key-1', now(), now()); "
+        # The guard admits only staff proposing, by the person signed in.
+        "ALTER TABLE payout_releases DISABLE TRIGGER payout_releases_guard; "
+        "INSERT INTO payout_releases (id, payout_id, reason, status, proposed_by, proposed_at) "
+        "VALUES ('-Nabc0000000000000R1', '-Nabc0000000000000A1', 'Checked', 'proposed', "
+        "'-Nabc0000000000000S1', now())",
+        "refusing to drop the releases of payouts",
+    ),
     "0051_kyc_sealed_details": (
         "INSERT INTO kyc_checks (id, client_id, document_type, document_country, "
         "document_number_sealed, created_at, updated_at) VALUES ('-Nabc0000000000000A1', "
