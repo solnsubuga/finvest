@@ -1,3 +1,6 @@
+import asyncio
+from dataclasses import dataclass
+from datetime import datetime, timedelta
 from typing import Literal
 
 import structlog
@@ -15,6 +18,36 @@ router = APIRouter(prefix="/health", tags=["health"])
 
 class Health(Contract):
     status: Literal["ok"]
+
+
+# How long one reading of the operations counts answers every caller. The route is public and
+# each reading is a handful of counts over the queue, so callers in the same window share one.
+OPERATIONS_CACHE_FOR = timedelta(seconds=15)
+
+
+@dataclass(frozen=True, slots=True)
+class _Reading:
+    signals: dict[str, int]
+    read_at: datetime
+
+
+class OperationsCache:
+    """The last reading of the operations counts, shared by every caller for
+    `OPERATIONS_CACHE_FOR`. Only one caller reads at a time; the others wait for its answer. A
+    check that could not run is never kept, so the next caller tries again."""
+
+    def __init__(self) -> None:
+        self._reading: _Reading | None = None
+        self._lock = asyncio.Lock()
+
+    async def signals(self, database: Database, now: datetime) -> dict[str, int]:
+        async with self._lock:
+            kept = self._reading
+            if kept is not None and kept.read_at <= now < kept.read_at + OPERATIONS_CACHE_FOR:
+                return kept.signals
+            signals = await operations_signals(database, now)
+            self._reading = _Reading(signals, now)
+            return signals
 
 
 @router.get("/live")
@@ -38,12 +71,14 @@ async def operations(request: Request) -> Health:
     recurring run is late. An uptime alert watches this.
 
     The answer is only ok or not, because anyone may call it. Which count is above zero goes to
-    the logs, where the person who gets the alert looks next.
+    the logs, where the person who gets the alert looks next. One reading answers every call for
+    `OPERATIONS_CACHE_FOR`, so calling it often does not load the database.
     """
     database: Database = request.app.state.database
     clock: Clock = request.app.state.clock
+    cache: OperationsCache = request.app.state.operations_cache
     try:
-        signals = await operations_signals(database, clock.now())
+        signals = await cache.signals(database, clock.now())
     except Exception as error:  # the alert must fire when the check itself cannot run
         logger.warning("operations_unchecked", error_type=type(error).__name__)
         raise ApplicationError("unavailable") from None
