@@ -42,7 +42,7 @@ export default function Home() {
     >
       {session?.restricted ? (
         <Notice tone="warning">
-          You signed in with an SMS code, so for 24 hours withdrawals only go to
+          You signed in with a code, so for 24 hours withdrawals only go to
           accounts you have used before.
         </Notice>
       ) : null}

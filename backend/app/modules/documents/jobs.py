@@ -65,6 +65,7 @@ from app.modules.tax import service as tax
 from app.shared.actors import SYSTEM
 from app.shared.business_day import business_date
 from app.shared.clock import Clock
+from app.shared.email_layout import PRODUCTION, Links
 from app.shared.errors import ApplicationError
 
 MONTHLY_PAGE = 200
@@ -135,8 +136,11 @@ class DocumentJobs:
         email: EmailTransport | None = None,
         closed_through: ClosedThrough | None = None,
         sealer: Sealer | None = None,
+        links: Links = PRODUCTION,
     ) -> None:
         self._database = database
+        # Where the email's buttons and footer point. The worker passes its settings' links.
+        self._links = links
         self._clock = clock
         self._email = email or DisabledTransport()
         # Opens the TIN a client gave, for their tax certificate. A worker started without the
@@ -446,7 +450,7 @@ class DocumentJobs:
                     # PDF every month would harm the sending domain, and a complaint means
                     # the person asked us to stop.
                     address, skip = None, "suppressed"
-                rendered = await _render(session, view, file) if address else None
+                rendered = await _render(session, view, file, self._links) if address else None
 
         if status != "queued":
             # Finished by an earlier attempt whose result was saved.
@@ -525,7 +529,9 @@ async def _queue_email(session: AsyncSession, view: DocumentView, now: datetime)
     )
 
 
-async def _render(session: AsyncSession, view: DocumentView, file: DocumentFile) -> Rendered:
+async def _render(
+    session: AsyncSession, view: DocumentView, file: DocumentFile, links: Links
+) -> Rendered:
     holder = await building.holder(session, view.client_id)
     if view.kind is DocumentKind.RECEIPT:
         assert view.source_id is not None
@@ -533,7 +539,7 @@ async def _render(session: AsyncSession, view: DocumentView, file: DocumentFile)
             session, deposit_id=view.source_id, reference=receipt_reference(view.id)
         )
         return receipt_email(
-            first_name=holder.first_name, receipt=receipt, file_name=file.file_name
+            first_name=holder.first_name, receipt=receipt, file_name=file.file_name, links=links
         )
     assert view.period is not None
     if view.kind is DocumentKind.TAX_CERTIFICATE:
@@ -543,6 +549,7 @@ async def _render(session: AsyncSession, view: DocumentView, file: DocumentFile)
             period=view.period,
             account_number=holder.account_number,
             file_name=file.file_name,
+            links=links,
         )
     monthly = view.kind is DocumentKind.MONTHLY_STATEMENT
     return statement_email(
@@ -552,6 +559,7 @@ async def _render(session: AsyncSession, view: DocumentView, file: DocumentFile)
         account_number=holder.account_number,
         file_name=file.file_name,
         requested_at=None if monthly else view.requested_at,
+        links=links,
     )
 
 

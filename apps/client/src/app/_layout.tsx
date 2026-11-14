@@ -14,6 +14,7 @@ import { InsightsProvider } from "@/insights/InsightsProvider";
 import { InvestingProvider } from "@/investing/InvestingProvider";
 import { PaymentsProvider } from "@/payments/PaymentsProvider";
 import { PayoutsProvider } from "@/payouts/PayoutsProvider";
+import { ProfileProvider } from "@/profile/ProfileProvider";
 import { SupportProvider } from "@/support/SupportProvider";
 import { colors, fontAssets } from "@/theme";
 
@@ -46,12 +47,14 @@ export default function RootLayout() {
                       <DocumentsProvider>
                         <PayoutsProvider>
                           <ActivityProvider>
-                            <Stack
-                              screenOptions={{
-                                headerShown: false,
-                                contentStyle: { backgroundColor: colors.paper },
-                              }}
-                            />
+                            <ProfileProvider>
+                              <Stack
+                                screenOptions={{
+                                  headerShown: false,
+                                  contentStyle: { backgroundColor: colors.paper },
+                                }}
+                              />
+                            </ProfileProvider>
                           </ActivityProvider>
                         </PayoutsProvider>
                       </DocumentsProvider>

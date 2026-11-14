@@ -1,9 +1,11 @@
-import { createContext, ReactNode, useContext, useEffect, useMemo, useState } from "react";
-import { View } from "react-native";
+import { createContext, ReactNode, useContext, useEffect, useMemo, useRef, useState } from "react";
+import { AppState, View } from "react-native";
 
-import { onUnauthorized } from "@/api/http";
+import { onLocked, onUnauthorized } from "@/api/http";
+import { SignedOutForPins, UnlockScreen } from "@/components/pin/UnlockScreen";
 import { colors } from "@/theme";
 
+import { appPinApplies, LOCK_AFTER_MS } from "./pin";
 import { resolveAuthClient } from "./resolveClient";
 import {
   AuthClient,
@@ -42,6 +44,20 @@ type AuthState = {
    */
   returnTo: ReturnTo | null;
   setReturnTo: (returnTo: ReturnTo | null) => void;
+  /** True on the phone app (and in the demo), where a session gets a PIN. */
+  pinApplies: boolean;
+  /** The app is locked: only the PIN screen shows until it is entered. */
+  locked: boolean;
+  setLocked: (locked: boolean) => void;
+  /**
+   * Too many wrong PINs ended the session. The screen that says so stays up after the session
+   * is gone, until the client chooses to log in again.
+   */
+  signedOutForPins: boolean;
+  setSignedOutForPins: (signedOut: boolean) => void;
+  /** Set by finishing sign up, so the set-up screens that follow can offer a passkey. */
+  justSignedUp: boolean;
+  setJustSignedUp: (justSignedUp: boolean) => void;
 };
 
 /** Only the screens that change how a client signs in, so a log in can never be sent somewhere unexpected. */
@@ -49,7 +65,11 @@ export type ReturnTo =
   | "/security/passkey"
   | "/security/authenticator"
   | "/security/passkeys"
-  | "/security/authenticator-off";
+  | "/security/authenticator-off"
+  | "/account/close"
+  | "/account/language"
+  | "/setup/pin"
+  | "/setup/passkey";
 
 /** The return address is for logging in again right away, not for a later visit. */
 export const RETURN_TO_LIFETIME_MS = 5 * 60 * 1000;
@@ -75,6 +95,16 @@ export function AuthProvider({
   const [login, setLogin] = useState<LoginChallenge | null>(null);
   const [reset, setReset] = useState<PasswordReset | null>(null);
   const [returnTo, setReturnTo] = useState<ReturnTo | null>(null);
+  const [locked, setLocked] = useState(false);
+  const [signedOutForPins, setSignedOutForPins] = useState(false);
+  // Read by the unauthorized listener, which is set up once.
+  const lockedNow = useRef(false);
+  useEffect(() => {
+    lockedNow.current = Boolean(session) && locked;
+  }, [session, locked]);
+  const [justSignedUp, setJustSignedUp] = useState(false);
+  const pinApplies = appPinApplies(resolved.demo);
+  const backgroundSince = useRef<number | null>(null);
 
   // The return address is dropped after a few minutes, so a much later log in
   // goes Home and not to a set-up screen. It survives the app going to the
@@ -92,7 +122,10 @@ export function AuthProvider({
     resolved.client
       .restoreSession()
       .then((restored) => {
-        if (live && restored) setSession((current) => current ?? restored);
+        if (!live || !restored) return;
+        setSession((current) => current ?? restored);
+        // Opening the app on a phone with a PIN always asks for it first.
+        if (restored.locked || (pinApplies && restored.pinSet)) setLocked(true);
       })
       .catch(() => {
         // Offline or the API is down: start signed out. Logging in says why it cannot go on.
@@ -103,10 +136,41 @@ export function AuthProvider({
     return () => {
       live = false;
     };
-  }, [resolved]);
+  }, [resolved, pinApplies]);
+
+  // Back from the background after a while: the PIN again, as the API would ask.
+  useEffect(() => {
+    const subscription = AppState.addEventListener("change", (state) => {
+      if (state === "active") {
+        const since = backgroundSince.current;
+        backgroundSince.current = null;
+        if (since !== null && Date.now() - since >= LOCK_AFTER_MS) {
+          setSession((current) => {
+            if (current?.pinSet && pinApplies) setLocked(true);
+            return current;
+          });
+        }
+      } else if (backgroundSince.current === null) {
+        backgroundSince.current = Date.now();
+      }
+    });
+    return () => subscription.remove();
+  }, [pinApplies]);
+
+  // The API says this session wants its PIN first.
+  useEffect(() => onLocked(() => setLocked(true)), []);
 
   // The API says the session has ended (it timed out, or was ended elsewhere).
-  useEffect(() => onUnauthorized(() => setSession(null)), []);
+  useEffect(
+    () =>
+      onUnauthorized(() => {
+        // A 401 while the PIN screen is up is the fifth wrong PIN: say so, not just Log in.
+        if (lockedNow.current) setSignedOutForPins(true);
+        setSession(null);
+        setLocked(false);
+      }),
+    [],
+  );
 
   const value = useMemo(
     () => ({
@@ -125,15 +189,26 @@ export function AuthProvider({
       setReset,
       returnTo,
       setReturnTo,
+      pinApplies,
+      locked,
+      setLocked,
+      signedOutForPins,
+      setSignedOutForPins,
+      justSignedUp,
+      setJustSignedUp,
     }),
-    [resolved, session, signup, ticket, login, reset, returnTo],
+    [resolved, session, signup, ticket, login, reset, returnTo, pinApplies, locked, signedOutForPins, justSignedUp],
   );
 
   if (restoring) {
     return <View testID="auth-restoring" style={{ flex: 1, backgroundColor: colors.paper }} />;
   }
 
-  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
+  return (
+    <AuthContext.Provider value={value}>
+      {signedOutForPins ? <SignedOutForPins /> : session && locked ? <UnlockScreen /> : children}
+    </AuthContext.Provider>
+  );
 }
 
 export function useAuth(): AuthState {

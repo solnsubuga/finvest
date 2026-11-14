@@ -9,7 +9,7 @@ from app.infrastructure.jobs.errors import (
     UncertainOutcomeError,
 )
 from app.infrastructure.jobs.outbox import Consumer, publish
-from app.infrastructure.jobs.queue import ClaimedJob, JobRecord, JobRequest, enqueue
+from app.infrastructure.jobs.queue import ClaimedJob, JobRecord, JobRequest, enqueue, is_active
 from app.infrastructure.jobs.retry import RetryPolicy
 from app.infrastructure.jobs.scheduler import (
     LeaderLease,
@@ -49,5 +49,6 @@ __all__ = [
     "WorkerConfig",
     "enqueue",
     "external_effect",
+    "is_active",
     "publish",
 ]

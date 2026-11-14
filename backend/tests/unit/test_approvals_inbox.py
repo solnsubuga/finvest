@@ -21,6 +21,7 @@ def test_admin_sees_every_kind_and_support_sees_what_touches_clients() -> None:
     assert visible_kinds(permissions_for("admin")) == set(SOURCES)
     assert visible_kinds(permissions_for("support")) == {
         "client_lock",
+        "account_closure",
         "suppression_lift",
         "complaint_outcome",
     }

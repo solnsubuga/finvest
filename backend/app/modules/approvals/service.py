@@ -9,6 +9,7 @@ from datetime import datetime
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.modules.approvals.domain.inbox import InboxItem, Kind, Waiting, inbox, visible_kinds
+from app.modules.closures import service as closures
 from app.modules.dealing import buffer, capital
 from app.modules.dealing import orders as dealing
 from app.modules.dealing.domain.capital import Direction
@@ -23,6 +24,7 @@ from app.modules.notifications import announcements, suppression_lifts, wording_
 from app.modules.payments import bank_accounts, bank_transfers, reassignments
 from app.modules.payouts import destinations, resolutions, reviews
 from app.modules.reconciliation import day_close, transfers
+from app.modules.screening import service as screening
 from app.modules.support import complaints
 from app.modules.tax import service as tax
 
@@ -74,6 +76,10 @@ async def waiting_for(session: AsyncSession, staff: StaffSession, now: datetime)
         found += await _reassignments(session)
     if "payout_release" in kinds:
         found += await _payout_releases(session)
+    if "account_closure" in kinds:
+        found += await _closures(session)
+    if "compliance_case" in kinds:
+        found += await _compliance_cases(session)
     if "bank_account_change" in kinds:
         found += await _bank_accounts(session)
     return inbox(found, staff.staff_id, staff.permissions)
@@ -239,6 +245,14 @@ async def _team_changes(session: AsyncSession) -> list[Waiting]:
     ]
 
 
+async def _closures(session: AsyncSession) -> list[Waiting]:
+    return [
+        Waiting("account_closure", r.id, r.client_id, r.prepared_by, r.prepared_at)
+        for r in await closures.open_requests(session)
+        if r.status == "prepared" and r.prepared_by is not None and r.prepared_at is not None
+    ]
+
+
 async def _client_locks(session: AsyncSession) -> list[Waiting]:
     return [
         Waiting("client_lock", c.id, f"{c.kind} {c.client_id}", c.proposed_by, c.proposed_at)
@@ -315,4 +329,12 @@ async def _payout_releases(session: AsyncSession) -> list[Waiting]:
     return [
         Waiting("payout_release", r.id, r.payout_id, r.proposed_by, r.proposed_at)
         for r in await reviews.waiting(session)
+    ]
+
+
+async def _compliance_cases(session: AsyncSession) -> list[Waiting]:
+    # The subject is the proposed outcome, never the client or what the case is about.
+    return [
+        Waiting("compliance_case", p.id, p.outcome.value, p.proposed_by, p.proposed_at)
+        for p in await screening.waiting_proposals(session)
     ]

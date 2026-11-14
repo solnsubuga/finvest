@@ -7,6 +7,8 @@ the system happens here, never in the API and never inside a database transactio
 import asyncio
 from datetime import timedelta
 
+from sqlalchemy.ext.asyncio import AsyncSession
+
 from app.infrastructure.database import Database
 from app.infrastructure.database.roles import WORKER, check_role
 from app.infrastructure.email import EmailSettings
@@ -39,8 +41,14 @@ from app.modules.payments.bank_transfers import BankTransferJobs
 from app.modules.payments.jobs import DepositJobs
 from app.modules.payments.settings import PaymentsSettings
 from app.modules.payments.wiring import collections_provider
-from app.modules.payouts.jobs import PayoutJobs
-from app.modules.payouts.wiring import disbursements_provider
+from app.modules.payouts.jobs import PayoutJobs, release_screened
+from app.modules.payouts.name_lookup_jobs import NameLookupJobs
+from app.modules.payouts.wiring import PayoutNameSettings, disbursements_provider
+from app.modules.screening.domain.provider import ScreeningSubject
+from app.modules.screening.jobs import ScreeningJobs
+from app.modules.screening.monitor_jobs import MonitoringJobs
+from app.modules.screening.settings import ScreeningSettings
+from app.modules.screening.wiring import approved_clients, subjects_from_identity_checks
 from app.shared.clock import Clock, SystemClock
 
 
@@ -67,6 +75,7 @@ def handlers(
             email=EmailSettings().transport(),
             # Tax certificates print the TIN a client gave, which only this key opens.
             sealer=identity.sealer() if identity.identity_data_key is not None else None,
+            links=settings.email_links(),
         ).handlers()
     )
     if identity.identity_data_key is not None:
@@ -96,6 +105,24 @@ def handlers(
         if live is not None:
             # The face a liveness check captured is stored as the check's selfie.
             kinds.update(LivenessJobs(database, identity.sealer(), live, storage, clock).handlers())
+    screening = ScreeningSettings().provider()
+    if screening is not None and identity.identity_data_key is None:
+        # The date of birth a screen sends is sealed with the identity data key.
+        raise ValueError("A screening provider needs FINVEST_IDENTITY_DATA_KEY")
+    # Runs with no provider too, so every screen asked for is recorded as not run.
+    kinds.update(
+        ScreeningJobs(
+            database,
+            screening,
+            subjects_from_identity_checks(identity.sealer())
+            if identity.identity_data_key is not None
+            else _no_subjects,
+            approved_clients(),
+            clock,
+        ).handlers()
+    )
+    kinds.update(release_screened(database, clock))
+    kinds.update(MonitoringJobs(database, clock).handlers())
     # Bank transfers are settled from a staff review and call no provider, so they run even
     # where mobile money is turned off.
     kinds.update(BankTransferJobs(database, clock).handlers())
@@ -105,6 +132,10 @@ def handlers(
     disbursements = disbursements_provider(PaymentsSettings(), clock)
     if disbursements is not None:
         kinds.update(PayoutJobs(database, disbursements, clock).handlers())
+    names = PayoutNameSettings().provider()
+    if names is not None:
+        # Without a provider, a mobile money number waits for its name and its lookup waits.
+        kinds.update(NameLookupJobs(database, names, clock).handlers())
     kinds.update(
         notification_jobs.handlers(
             database,
@@ -113,6 +144,7 @@ def handlers(
             SmsSettings().transport(),
             # A link in a message may only point to the console or the client app.
             link_origins=[*settings.staff_allowed_origins, *settings.client_allowed_origins],
+            links=settings.email_links(),
         )
     )
     # Read at start-up, so production refuses to start without the key.
@@ -124,6 +156,11 @@ def handlers(
     )
     kinds.update(AnnouncementJobs(database, clock).handlers())
     return kinds
+
+
+async def _no_subjects(session: AsyncSession, client_id: str) -> ScreeningSubject | None:
+    """Without the identity data key nobody can be screened; only used with no provider."""
+    return None
 
 
 async def run(settings: Settings, stop: asyncio.Event | None = None) -> None:

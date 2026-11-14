@@ -6,6 +6,29 @@ import { z } from "zod";
 export type Upload = Blob | { uri: string; name: string; type: string };
 export const Upload = z.custom<Upload>((value) => value !== null && typeof value === "object");
 
+export const AnswersBody = z.object({
+  answers: z.record(z.string(), z.unknown()),
+});
+export type AnswersBody = z.infer<typeof AnswersBody>;
+
+export const Profile = z.enum(["careful", "balanced", "long_term"]);
+export type Profile = z.infer<typeof Profile>;
+
+export const AnswersView = z.object({
+  answered_at: z.string(),
+  answers: z.record(z.string(), z.unknown()),
+  due_again_at: z.string(),
+  id: z.string(),
+  longest_term_days: z.number().int().nullable(),
+  profile: Profile,
+});
+export type AnswersView = z.infer<typeof AnswersView>;
+
+export const AskBody = z.object({
+  reason: z.string().nullable().optional(),
+});
+export type AskBody = z.infer<typeof AskBody>;
+
 export const AtMaturity = z.enum(["roll_over", "pay_out"]);
 export type AtMaturity = z.infer<typeof AtMaturity>;
 
@@ -41,6 +64,9 @@ export const BankTransferDetails = z.object({
   reference: z.string(),
 });
 export type BankTransferDetails = z.infer<typeof BankTransferDetails>;
+
+export const Blocker = z.enum(["investments_running", "money_owed", "deposits_in_progress", "payouts_in_progress", "goals_open", "plans_live"]);
+export type Blocker = z.infer<typeof Blocker>;
 
 export const BodyAddPhotoClientClaimCheckPhotosKindPut = z.object({
   photo: Upload,
@@ -201,6 +227,40 @@ export const ClientClaimCheckEnvelope = z.object({
 });
 export type ClientClaimCheckEnvelope = z.infer<typeof ClientClaimCheckEnvelope>;
 
+export const ClosureView = z.object({
+  cancelled_at: z.string().nullable(),
+  decided_at: z.string().nullable(),
+  decision_note: z.string().nullable(),
+  id: z.string(),
+  reason: z.string().nullable(),
+  requested_at: z.string(),
+  status: z.enum(["requested", "prepared", "closed", "declined", "cancelled"]),
+});
+export type ClosureView = z.infer<typeof ClosureView>;
+
+export const ClosuresApiAmountView = z.object({
+  amount_minor: z.number().int(),
+  currency: z.string(),
+});
+export type ClosuresApiAmountView = z.infer<typeof ClosuresApiAmountView>;
+
+export const StandingView = z.object({
+  blockers: z.array(Blocker),
+  live_plans: z.number().int(),
+  open_deposits: z.number().int(),
+  open_goals: z.number().int(),
+  open_payouts: z.number().int(),
+  owed: z.array(ClosuresApiAmountView),
+  running_investments: z.number().int(),
+});
+export type StandingView = z.infer<typeof StandingView>;
+
+export const ClientClosureView = z.object({
+  request: ClosureView.nullable(),
+  standing: StandingView,
+});
+export type ClientClosureView = z.infer<typeof ClientClosureView>;
+
 export const ClientComplaint = z.object({
   category: z.enum(["payments", "withdrawals", "investments", "identity", "account", "fees", "service", "other"]),
   closed_at: z.string().nullable(),
@@ -257,8 +317,9 @@ export const ClientInvestmentOut = z.object({
 export type ClientInvestmentOut = z.infer<typeof ClientInvestmentOut>;
 
 export const ClientLoginStart = z.object({
+  email: z.string().nullable().optional(),
   password: z.string(),
-  phone: z.string(),
+  phone: z.string().nullable().optional(),
 });
 export type ClientLoginStart = z.infer<typeof ClientLoginStart>;
 
@@ -266,7 +327,9 @@ export const ClientSessionView = z.object({
   client_id: z.string(),
   email: z.string().nullable().optional(),
   email_verified: z.boolean().optional(),
+  locked: z.boolean().optional(),
   phone: z.string(),
+  pin_set: z.boolean().optional(),
   restricted_until: z.string().nullable(),
 });
 export type ClientSessionView = z.infer<typeof ClientSessionView>;
@@ -297,10 +360,11 @@ export const DestinationOut = z.object({
   holder_name: z.string(),
   id: z.string(),
   kind: z.enum(["mobile_money", "bank"]),
+  name_check: z.enum(["checking", "not_answered", "limit_reached", "waiting_for_id"]).nullable().optional(),
   network: z.enum(["mtn", "airtel"]).nullable(),
   payable_from: z.string().nullable(),
   proof_kind: z.enum(["bank_statement", "bank_letter", "bank_card", "network_registered_name"]).nullable(),
-  rejection_reason: z.enum(["name_different", "proof_unreadable", "proof_too_old", "proof_wrong_account", "proof_wrong_document", "suspected_fraud"]).nullable(),
+  rejection_reason: z.enum(["name_different", "proof_unreadable", "proof_too_old", "proof_wrong_account", "proof_wrong_document", "suspected_fraud", "network_name_unavailable"]).nullable(),
   status: z.enum(["awaiting_code", "awaiting_proof", "in_review", "approved", "rejected"]),
 });
 export type DestinationOut = z.infer<typeof DestinationOut>;
@@ -577,7 +641,7 @@ export type LimitsOut = z.infer<typeof LimitsOut>;
 
 export const LinkView = z.object({
   id: z.string(),
-  kind: z.enum(["deposit", "payout", "investment", "identity_check", "payout_destination", "statement", "security", "conversation", "complaint"]),
+  kind: z.enum(["deposit", "payout", "investment", "identity_check", "payout_destination", "statement", "security", "conversation", "complaint", "goal"]),
 });
 export type LinkView = z.infer<typeof LinkView>;
 
@@ -684,6 +748,39 @@ export const NewSaving = z.object({
 });
 export type NewSaving = z.infer<typeof NewSaving>;
 
+export const Relationship = z.enum(["spouse", "child", "parent", "sibling", "other_relative", "friend", "other"]);
+export type Relationship = z.infer<typeof Relationship>;
+
+export const PersonBody = z.object({
+  full_name: z.string(),
+  id_number: z.string(),
+  phone: z.string(),
+  relationship: Relationship,
+  share_bps: z.number().int(),
+});
+export type PersonBody = z.infer<typeof PersonBody>;
+
+export const NextOfKinBody = z.object({
+  people: z.array(PersonBody),
+});
+export type NextOfKinBody = z.infer<typeof NextOfKinBody>;
+
+export const KycProfileApiPersonView = z.object({
+  full_name: z.string(),
+  id: z.string(),
+  id_number: z.string(),
+  phone: z.string(),
+  relationship: Relationship,
+  share_bps: z.number().int(),
+});
+export type KycProfileApiPersonView = z.infer<typeof KycProfileApiPersonView>;
+
+export const NextOfKinView = z.object({
+  people: z.array(KycProfileApiPersonView),
+  updated_at: z.string().nullable(),
+});
+export type NextOfKinView = z.infer<typeof NextOfKinView>;
+
 export const NotificationItem = z.object({
   body: z.string(),
   category: z.enum(["money", "investments", "earnings", "account", "security", "support", "news"]),
@@ -702,6 +799,11 @@ export const NotificationPage = z.object({
   unread: z.number().int(),
 });
 export type NotificationPage = z.infer<typeof NotificationPage>;
+
+export const OptionView = z.object({
+  code: z.string(),
+});
+export type OptionView = z.infer<typeof OptionView>;
 
 export const PasskeyItem = z.object({
   created_at: z.string(),
@@ -762,6 +864,17 @@ export const PayoutOut = z.object({
   status: z.enum(["in_review", "processing", "paid", "failed", "cancelled"]),
 });
 export type PayoutOut = z.infer<typeof PayoutOut>;
+
+export const PinBody = z.object({
+  pin: z.string(),
+});
+export type PinBody = z.infer<typeof PinBody>;
+
+export const PinChecked = z.object({
+  tries_left: z.number().int(),
+  unlocked: z.boolean(),
+});
+export type PinChecked = z.infer<typeof PinChecked>;
 
 export const PlanDetails = z.object({
   amount_minor: z.number().int(),
@@ -863,6 +976,12 @@ export const PushDeviceToken = z.object({
 });
 export type PushDeviceToken = z.infer<typeof PushDeviceToken>;
 
+export const QuestionView = z.object({
+  code: z.string(),
+  options: z.array(OptionView),
+});
+export type QuestionView = z.infer<typeof QuestionView>;
+
 export const QuoteOut = z.object({
   amount_minor: z.number().int(),
   currency: Currency,
@@ -873,6 +992,13 @@ export const QuoteOut = z.object({
   total_minor: z.number().int().nullable(),
 });
 export type QuoteOut = z.infer<typeof QuoteOut>;
+
+export const RecoveryAsk = z.object({
+  contact_phone: z.string(),
+  phone: z.string(),
+  reason: z.enum(["lost_phone", "new_number", "no_codes", "other"]),
+});
+export type RecoveryAsk = z.infer<typeof RecoveryAsk>;
 
 export const Rename = z.object({
   display_name: z.string(),
@@ -900,6 +1026,13 @@ export const ResetStarted = z.object({
   challenge_id: z.string(),
 });
 export type ResetStarted = z.infer<typeof ResetStarted>;
+
+export const RiskProfileView = z.object({
+  due: z.boolean(),
+  latest: AnswersView.nullable(),
+  questions: z.array(QuestionView),
+});
+export type RiskProfileView = z.infer<typeof RiskProfileView>;
 
 export const SavePreferences = z.object({
   categories: z.array(PreferenceChange),
@@ -977,6 +1110,41 @@ export type WithdrawalRequest = z.infer<typeof WithdrawalRequest>;
 
 /** Every route, by method and path, with what it takes and what it answers. */
 export const operations = {
+  "GET /client/account-closure": {
+    method: "GET",
+    path: "/client/account-closure",
+    params: z.object({}),
+    query: z.object({}),
+    body: null,
+    bodyKind: null,
+    idempotent: false,
+    status: 200,
+    response: ClientClosureView,
+  },
+  "POST /client/account-closure": {
+    method: "POST",
+    path: "/client/account-closure",
+    params: z.object({}),
+    query: z.object({}),
+    body: AskBody,
+    bodyKind: "json",
+    idempotent: false,
+    status: 201,
+    response: ClientClosureView,
+  },
+  "POST /client/account-closure/{request_id}/cancellation": {
+    method: "POST",
+    path: "/client/account-closure/{request_id}/cancellation",
+    params: z.object({
+    request_id: z.string(),
+  }),
+    query: z.object({}),
+    body: null,
+    bodyKind: null,
+    idempotent: false,
+    status: 200,
+    response: ClientClosureView,
+  },
   "GET /client/authenticator": {
     method: "GET",
     path: "/client/authenticator",
@@ -1267,6 +1435,17 @@ export const operations = {
     idempotent: false,
     status: 200,
     response: ClientComplaint,
+  },
+  "GET /client/data-export": {
+    method: "GET",
+    path: "/client/data-export",
+    params: z.object({}),
+    query: z.object({}),
+    body: null,
+    bodyKind: null,
+    idempotent: false,
+    status: 200,
+    response: null,
   },
   "GET /client/documents": {
     method: "GET",
@@ -1852,6 +2031,28 @@ export const operations = {
     status: 200,
     response: LoginStarted,
   },
+  "GET /client/next-of-kin": {
+    method: "GET",
+    path: "/client/next-of-kin",
+    params: z.object({}),
+    query: z.object({}),
+    body: null,
+    bodyKind: null,
+    idempotent: false,
+    status: 200,
+    response: NextOfKinView,
+  },
+  "PUT /client/next-of-kin": {
+    method: "PUT",
+    path: "/client/next-of-kin",
+    params: z.object({}),
+    query: z.object({}),
+    body: NextOfKinBody,
+    bodyKind: "json",
+    idempotent: false,
+    status: 200,
+    response: NextOfKinView,
+  },
   "GET /client/notification-preferences": {
     method: "GET",
     path: "/client/notification-preferences",
@@ -2067,6 +2268,19 @@ export const operations = {
     status: 200,
     response: DestinationOut,
   },
+  "POST /client/payout-destinations/{destination_id}/name-check": {
+    method: "POST",
+    path: "/client/payout-destinations/{destination_id}/name-check",
+    params: z.object({
+    destination_id: z.string(),
+  }),
+    query: z.object({}),
+    body: null,
+    bodyKind: null,
+    idempotent: false,
+    status: 200,
+    response: DestinationOut,
+  },
   "POST /client/payout-destinations/{destination_id}/proof": {
     method: "POST",
     path: "/client/payout-destinations/{destination_id}/proof",
@@ -2117,6 +2331,28 @@ export const operations = {
     status: 201,
     response: PayoutOut,
   },
+  "PUT /client/pin": {
+    method: "PUT",
+    path: "/client/pin",
+    params: z.object({}),
+    query: z.object({}),
+    body: PinBody,
+    bodyKind: "json",
+    idempotent: false,
+    status: 204,
+    response: null,
+  },
+  "POST /client/pin/unlock": {
+    method: "POST",
+    path: "/client/pin/unlock",
+    params: z.object({}),
+    query: z.object({}),
+    body: PinBody,
+    bodyKind: "json",
+    idempotent: false,
+    status: 200,
+    response: PinChecked,
+  },
   "GET /client/products": {
     method: "GET",
     path: "/client/products",
@@ -2164,6 +2400,39 @@ export const operations = {
     idempotent: false,
     status: 204,
     response: null,
+  },
+  "POST /client/recovery-requests": {
+    method: "POST",
+    path: "/client/recovery-requests",
+    params: z.object({}),
+    query: z.object({}),
+    body: RecoveryAsk,
+    bodyKind: "json",
+    idempotent: false,
+    status: 202,
+    response: z.record(z.string(), z.unknown()),
+  },
+  "GET /client/risk-profile": {
+    method: "GET",
+    path: "/client/risk-profile",
+    params: z.object({}),
+    query: z.object({}),
+    body: null,
+    bodyKind: null,
+    idempotent: false,
+    status: 200,
+    response: RiskProfileView,
+  },
+  "PUT /client/risk-profile": {
+    method: "PUT",
+    path: "/client/risk-profile",
+    params: z.object({}),
+    query: z.object({}),
+    body: AnswersBody,
+    bodyKind: "json",
+    idempotent: false,
+    status: 200,
+    response: RiskProfileView,
   },
   "GET /client/second-steps": {
     method: "GET",

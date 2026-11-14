@@ -1,36 +1,41 @@
 """Payout destination steps: a client adds a number, proves it, and staff check the name."""
 
 from app.modules.payouts import destinations
-from app.modules.payouts.domain.destinations import MobileMoneyNumber, ProofKind
+from app.modules.payouts.domain.destinations import MobileMoneyNumber
 from tests.support.journey import Person, World
+from tests.support.payouts import name_from_network
 
 
-async def add_number(world: World, client: Person, number: str, holder_name: str) -> str:
-    """The client adds a mobile money number, confirms the texted code and uploads proof.
+async def add_number(
+    world: World, client: Person, number: str, holder_name: str, network_name: str
+) -> str:
+    """The client adds a mobile money number and confirms the texted code, and the network
+    answers the lookup with `network_name`.
 
-    Payouts have no routes yet, so this calls the payouts service as the client. Returns the
-    destination's ID, now waiting for staff.
+    Calls the payouts service as the client, and answers the lookup as the worker would from
+    ioTec. Returns the destination's ID: waiting for staff if the name matches the ID,
+    refused if not.
     """
     async with world.api_database.actor_transaction(client.actor) as session:
         view = await destinations.add_destination(
             session, client.actor, MobileMoneyNumber.parse(number), holder_name, world.clock
         )
         await destinations.confirm_code(session, client.actor, view.id, world.clock)
-        await destinations.submit_proof(
-            session,
-            client.actor,
-            view.id,
-            ProofKind.NETWORK_REGISTERED_NAME,
-            f"proof-{view.id}",
-            world.clock,
-        )
+    await name_from_network(
+        world.api_database,
+        view.id,
+        world.clock,
+        registered_name=network_name,
+        worker=world.worker_database,
+    )
     return view.id
 
 
 async def check_name(
-    world: World, checker: Person, destination_id: str, proof_name: str
+    world: World, checker: Person, destination_id: str, proof_name: str | None = None
 ) -> destinations.DestinationView:
-    """Staff compare the name the network holds for the number with the name on the ID.
+    """Staff check an account: a number with the name its network gave (no `proof_name`), a
+    bank account with the name they read on the proof.
 
     The service reads the ID name KYC verified itself, as the console route does.
     """

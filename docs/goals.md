@@ -43,6 +43,17 @@ The client can change the name, what it is for, the target and the date. A new t
 
 Closing a goal is final. Its investments carry on as the client's ordinary investments, because they are the client's own and closing moves no money. A closed goal takes no saving.
 
+## Reminders
+
+The worker runs `goals.send_reminders` every morning at 08:00 Kampala time, so no text arrives at night. It reads every active goal and raises two notices through the notifications contract, with the goal as the link:
+
+- **`goal_top_up_due`**, three days before a monthly saving is due. Savings fall on the day of the month the goal was set up, the 28th at the latest, as the plan assumes. Only a goal with a date has a plan, so a goal with no date gets no reminder. There is none once the goal is reached, none for a saving on or after the goal's date, and none if the client saved towards the goal since the last saving date. A rollover is not a saving. Each saving date is keyed (`goal-top-up:<goal>:<date>`), so a second run tells nobody twice and a missed morning is caught up the next one, while the saving is still ahead.
+- **`goal_reached`**, the first morning the goal's value, after tax, is at its target. Keyed by the goal and its target, so a client is told once even if the value later dips and comes back, and told again when they reach a target they raised after reaching the first.
+
+The words name the goal and the date, never an amount. The rule is in `domain/reminders.py`.
+
+The morning run (`goals.send_reminders`) reads 200 active goals per job. Each page is its own transaction, and a full page queues the next one, after its last goal, in that same transaction. A run over many goals never holds one long transaction, and a crash repeats one page at most.
+
 ## Rolling over
 
 A saving that rolls over at maturity becomes a new investment for the proceeds, principal and interest after tax. The investments module publishes `investments.rolled_over` with the consumer `goals.follow_rollover` (named in `goals/events.py`, so investing imports nothing else of goals). The worker then links the new investment to the same goal, so the goal's value carries on. Only running investments count towards the value, so the matured one stays in the list as a record and is not counted twice.
@@ -113,6 +124,6 @@ Client responses carry net figures and the yearly rate after tax as a label. No 
 
 ## Not built yet
 
-- Saving rules: a monthly saving collected on a set day, with a mobile money prompt sent by the worker.
+- Saving rules: a monthly saving collected on a set day, with a mobile money prompt sent by the worker. When a goal is saved by an automatic plan, `goal_top_up_due` should skip it, since nothing needs paying by hand.
 - Connecting the console's Goals screen, goals and group goals alike, to the staff routes. It shows sample data under `pnpm dev` and says it is not connected in a normal build.
 - Withdrawing from a goal before its date, which waits for early withdrawal.

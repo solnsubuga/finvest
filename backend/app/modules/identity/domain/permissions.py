@@ -28,6 +28,10 @@ Permission = Literal[
     # Proposing or deciding to lock or unlock a client's account. Seeing clients is
     # `clients.view`. Not a screen.
     "clients.lock",
+    # Preparing a client's request to close their account, approving someone else's
+    # preparation, which closes it, or declining a request. Seeing clients is `clients.view`.
+    # Closing always takes two people. Not a screen.
+    "clients.close",
     "money_movement.view",
     "reconciliation.view",
     # Importing a statement, pairing a line with a movement by hand, preparing, approving or
@@ -55,6 +59,11 @@ Permission = Literal[
     # Not a screen: the console's own list gains it with the rates screen.
     "rates.change",
     "compliance.view",
+    # Proposing how to close a compliance case (a possible sanctions or politically exposed
+    # person match, or a transaction monitoring alert), approving or sending back someone
+    # else's proposal, withdrawing your own, and asking for a client to be screened again.
+    # Seeing cases is `compliance.view`. Closing a case always takes a second person.
+    "compliance_cases.change",
     "team.view",
     # Proposing or deciding a change to the team: an invite, a new role, deactivating or
     # reactivating someone, or a new set-up link. Seeing the team is `team.view`. Admin only.
@@ -129,6 +138,7 @@ ROLE_PERMISSIONS: dict[Role, frozenset[Permission]] = {
             "clients.view",
             "email_suppressions.lift",
             "clients.lock",
+            "clients.close",
             "money_movement.view",
             "reconciliation.view",
             "investments.view",
@@ -186,7 +196,9 @@ ROLE_PERMISSIONS: dict[Role, frozenset[Permission]] = {
             "complaints.close",
             "clients.view",
             "clients.lock",
+            "clients.close",
             "compliance.view",
+            "compliance_cases.change",
             "reports.view",
             "audit.view",
             "payout_accounts.change",

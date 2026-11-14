@@ -5,6 +5,7 @@ import {
   Device,
   LoginChallenge,
   Passkey,
+  PinCheck,
   SecondStep,
   Session,
   SignupChallenge,
@@ -12,6 +13,7 @@ import {
   SignupStart,
   SignupTicket,
 } from "./types";
+import { MAX_WRONG_PINS, pinProblem } from "./pin";
 
 /**
  * An in-memory stand-in for the sign-in API, so the screens can be built and
@@ -172,6 +174,7 @@ export function createStubAuthClient(options: StubOptions = {}): AuthClient {
   const emailLinks = new Map<string, string>();
   /** Reset challenges and the number each was for. A number with no account gets one too. */
   const resets = new Map<string, string>();
+  const recoveryAsks = new Map<string, number>();
   /** A set-up that was started and not yet confirmed, for this session only. */
   let pendingAuthenticatorAt: number | null = null;
   let signedInAt = 0;
@@ -181,6 +184,9 @@ export function createStubAuthClient(options: StubOptions = {}): AuthClient {
   /** The number of whoever is signed in, as the server would know from the session. */
   let signedIn: string | null = null;
   let counter = 0;
+  /** This session's app PIN, and the wrong tries in a row against it. */
+  let pin: string | null = null;
+  let wrongPins = 0;
 
   const nextId = (prefix: string) => `${prefix}_${(counter += 1)}`;
   const wait = () =>
@@ -191,6 +197,9 @@ export function createStubAuthClient(options: StubOptions = {}): AuthClient {
     signedIn = phone;
     signedInAt = now();
     pendingAuthenticatorAt = null;
+    // A PIN belongs to one session, so a new log in starts without one.
+    pin = null;
+    wrongPins = 0;
     const account = accounts.get(phone);
     return {
       phone,
@@ -198,6 +207,8 @@ export function createStubAuthClient(options: StubOptions = {}): AuthClient {
       restricted,
       email: account?.email ?? null,
       emailVerified: account?.emailVerified ?? false,
+      pinSet: false,
+      locked: false,
     };
   };
 
@@ -232,6 +243,8 @@ export function createStubAuthClient(options: StubOptions = {}): AuthClient {
             restricted: signedInRestricted,
             email: account.email,
             emailVerified: account.emailVerified,
+            pinSet: pin !== null,
+            locked: false,
           }
         : null;
     },
@@ -287,15 +300,21 @@ export function createStubAuthClient(options: StubOptions = {}): AuthClient {
       return sessionFor(signup.phone, false);
     },
 
-    async startLogin(phone, password): Promise<LoginChallenge> {
+    async startLogin(identifier, password): Promise<LoginChallenge> {
       await wait();
-      const account = accounts.get(phone);
-      if (!account || account.password !== password) {
-        throw new AuthError("invalid_credentials");
+      const byEmail = "email" in identifier;
+      const email = byEmail ? identifier.email.trim().toLowerCase() : null;
+      // Like the API, only a proved address finds an account.
+      const phone = byEmail
+        ? [...accounts].find(([, held]) => held.emailVerified && held.email === email)?.[0]
+        : identifier.phone;
+      const account = phone ? accounts.get(phone) : undefined;
+      if (!phone || !account || account.password !== password) {
+        throw new AuthError(byEmail ? "invalid_email_credentials" : "invalid_credentials");
       }
       const loginId = nextId("login");
       logins.set(loginId, phone);
-      return { loginId, phone, methods: methodsFor(account) };
+      return { loginId, phone: byEmail ? null : phone, email, methods: methodsFor(account) };
     },
 
     async verifyWithPasskey(loginId): Promise<Session> {
@@ -323,7 +342,31 @@ export function createStubAuthClient(options: StubOptions = {}): AuthClient {
       return sessionFor(phone, false);
     },
 
-    async sendLoginCode(loginId): Promise<void> {
+    async setPin(next): Promise<void> {
+      await wait();
+      recentAccount();
+      if (pinProblem(next)) throw new AuthError("pin_too_simple");
+      pin = next;
+      wrongPins = 0;
+    },
+
+    async unlockWithPin(tried): Promise<PinCheck> {
+      await wait();
+      currentAccount();
+      if (tried === pin) {
+        wrongPins = 0;
+        return { unlocked: true, triesLeft: MAX_WRONG_PINS };
+      }
+      wrongPins += 1;
+      if (wrongPins >= MAX_WRONG_PINS) {
+        signedIn = null;
+        pin = null;
+        throw new AuthError("signed_out");
+      }
+      return { unlocked: false, triesLeft: MAX_WRONG_PINS - wrongPins };
+    },
+
+    async sendLoginCode(loginId, _channel): Promise<void> {
       await wait();
       if (!logins.has(loginId)) {
         throw new AuthError("expired");
@@ -382,6 +425,16 @@ export function createStubAuthClient(options: StubOptions = {}): AuthClient {
       }
       pendingAuthenticatorAt = null;
       account.hasAuthenticator = true;
+    },
+
+    async requestRecovery({ phone }): Promise<void> {
+      await wait();
+      // As on the server: two asks for one number every fifteen minutes.
+      const asked = (recoveryAsks.get(phone) ?? 0) + 1;
+      if (asked > 2) {
+        throw new AuthError("rate_limited");
+      }
+      recoveryAsks.set(phone, asked);
     },
 
     async startPasswordReset(phone): Promise<PasswordReset> {

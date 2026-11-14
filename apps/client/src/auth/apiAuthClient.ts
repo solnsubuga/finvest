@@ -65,6 +65,8 @@ type SessionView = {
   restricted_until: string | null;
   email?: string | null;
   email_verified?: boolean;
+  pin_set?: boolean;
+  locked?: boolean;
 };
 
 export function toSession(view: SessionView, now: number = Date.now()): Session {
@@ -76,6 +78,8 @@ export function toSession(view: SessionView, now: number = Date.now()): Session 
     restricted: Number.isFinite(until) && until > now,
     email: view.email ?? null,
     emailVerified: Boolean(view.email && view.email_verified),
+    pinSet: Boolean(view.pin_set),
+    locked: Boolean(view.locked),
   };
 }
 
@@ -117,10 +121,23 @@ export function createApiAuthClient(): AuthClient {
     completeSignup: (ticket, password) =>
       wrap(async () => signedIn(await api("POST /client/signup/complete", { body: { ticket, password } }))),
 
-    startLogin: (phone, password) =>
+    startLogin: (identifier, password) =>
       wrap(async () => {
-        const result = await api("POST /client/login/start", { body: { phone, password } });
-        return { loginId: result.login_id, phone, methods: usable(result.methods) };
+        const byEmail = "email" in identifier;
+        try {
+          const result = await api("POST /client/login/start", {
+            body: byEmail ? { email: identifier.email.trim(), password } : { phone: identifier.phone, password },
+          });
+          return {
+            loginId: result.login_id,
+            phone: byEmail ? null : identifier.phone,
+            email: byEmail ? identifier.email.trim() : null,
+            methods: usable(result.methods),
+          };
+        } catch (error) {
+          const refused = toAuthError(error);
+          throw byEmail && refused.code === "invalid_credentials" ? new AuthError("invalid_email_credentials") : refused;
+        }
       }),
 
     verifyWithPasskey: (loginId) =>
@@ -135,9 +152,34 @@ export function createApiAuthClient(): AuthClient {
         signedIn(await api("POST /client/login/authenticator/verify", { body: { login_id: loginId, code } })),
       ),
 
-    sendLoginCode: (loginId) =>
+    setPin: (pin) =>
       wrap(async () => {
-        await api("POST /client/login/code/send", { body: { login_id: loginId, channel: "sms" } });
+        try {
+          await api("PUT /client/pin", { body: { pin } });
+        } catch (error) {
+          if (error instanceof ApiError && error.code === "validation_failed") throw new AuthError("pin_too_simple");
+          throw error;
+        }
+      }),
+
+    unlockWithPin: (pin) =>
+      wrap(async () => {
+        try {
+          const result = await api("POST /client/pin/unlock", { body: { pin } });
+          return { unlocked: result.unlocked, triesLeft: result.tries_left };
+        } catch (error) {
+          // The fifth wrong PIN ended the session on the server.
+          if (error instanceof ApiError && error.code === "unauthorized") {
+            await saveToken(null);
+            throw new AuthError("signed_out");
+          }
+          throw error;
+        }
+      }),
+
+    sendLoginCode: (loginId, channel) =>
+      wrap(async () => {
+        await api("POST /client/login/code/send", { body: { login_id: loginId, channel } });
       }),
 
     verifyWithCode: (loginId, code) =>
@@ -166,6 +208,13 @@ export function createApiAuthClient(): AuthClient {
     confirmAuthenticatorSetup: (code) =>
       wrap(async () => {
         await api("POST /client/authenticator", { body: { code } });
+      }),
+
+    requestRecovery: ({ phone, contactPhone, reason }) =>
+      wrap(async () => {
+        await api("POST /client/recovery-requests", {
+          body: { phone, contact_phone: contactPhone, reason },
+        });
       }),
 
     startPasswordReset: (phone) =>

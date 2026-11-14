@@ -1,12 +1,14 @@
 """A downgrade must never delete the books, the issued numbers, the audit trail, the job history,
-the receipts that stop a command running twice, the identity records, the payout destinations
-and their two-person checks, the withdrawal limits, the payouts, their send attempts, their
-resolutions and their bank batches, the migration checks, the imported statements, the day
-closes and their recorded matches, the pot transfers, the help chat, the complaints register,
-the goals, the email delivery records, the unclaimed accounts, the complaint outcomes, the
-suppression lifts, the client locks, the announcements, the team changes, Finvest's own money in
-the buffer, the payments of tax to URA, the payments moved to the right client or who set the
-bank account clients pay into."""
+the receipts that stop a command running twice, the identity records, the payout destinations,
+their two-person checks and network name lookups, the withdrawal limits, the payouts, their send
+attempts, their resolutions and their bank batches, the migration checks, the imported
+statements, the day closes and their recorded matches, the pot transfers, the help chat, the
+complaints register, the goals, the email delivery records, the unclaimed accounts, the
+complaint outcomes, the suppression lifts, the client locks, the announcements, the team
+changes, Finvest's own money in the buffer, the payments of tax to URA, the payments moved to
+the right client, next of kin, the answers to the investing questions, the requests to close an
+account, the journals sent to the accounting system or who set the bank account clients
+pay into."""
 
 import os
 from collections.abc import Iterator
@@ -19,6 +21,32 @@ from tests.support.database import TestDatabase
 pytestmark = pytest.mark.integration
 
 ROWS = {
+    "0182_transaction_monitoring": (
+        "BEGIN; SELECT set_config('finvest.actor_kind', 'system', true); "
+        "INSERT INTO monitoring_transactions (id, client_id, kind, source_id, currency, "
+        "amount_minor, occurred_at, recorded_at) VALUES ('-Nabc0000000000000A1', "
+        "'-Nabc0000000000000B1', 'deposit', '-Nabc0000000000000C1', 'UGX', 1000, now(), now()); "
+        "COMMIT",
+        "refusing to drop the monitoring record",
+    ),
+    "0181_payout_screening": (
+        "INSERT INTO payout_destinations (id, client_id, kind, network, account_number, "
+        "holder_name, status, created_at, updated_at) VALUES ('-Nabc0000000000000D1', "
+        "'-Nabc0000000000000B1', 'mobile_money', 'mtn', '256772000000', 'Test', "
+        "'awaiting_code', now(), now()); "
+        "INSERT INTO payouts (id, client_id, destination_id, kind, amount_minor, currency, "
+        "status, business_date, source_account_id, source_reference, in_flight_account_id, "
+        "request_key, created_at, updated_at) VALUES ('-Nabc0000000000000A1', "
+        "'-Nabc0000000000000B1', '-Nabc0000000000000D1', 'mobile_money', 1000, 'UGX', "
+        "'screening', DATE '2026-11-10', '-Nabc0000000000000E1', 'investment-1', "
+        "'-Nabc0000000000000F1', 'request-key-1', now(), now())",
+        "refusing to downgrade while payouts wait for screening",
+    ),
+    "0180_screening": (
+        "INSERT INTO screening_runs (id, client_id, reason, requested_at, idempotency_key) "
+        "VALUES ('-Nabc0000000000000A1', '-Nabc0000000000000B1', 'rescreen', now(), 'k-0001')",
+        "refusing to drop the screening and compliance record",
+    ),
     "0010_ledger": (
         "INSERT INTO ledger_accounts (id, code, kind, currency, name, created_at) "
         "VALUES ('-Nabc0000000000000A1', 'test.cash', 'asset', 'UGX', 'Cash', now())",
@@ -226,6 +254,14 @@ ROWS = {
         "'confirmed', 'reassignment')",
         "refusing to drop the record of reassigned deposits",
     ),
+    "0250_finance_journal_exports": (
+        "BEGIN; SELECT set_config('finvest.actor_kind', 'staff', true); "
+        "SELECT set_config('finvest.actor_id', '-Nabc0000000000000B1', true); "
+        "INSERT INTO finance_journal_exports (id, currency, date_from, date_to, lines, "
+        "debit_total_minor, exported_by, exported_at) VALUES ('-Nabc0000000000000A1', 'UGX', "
+        "DATE '2026-11-12', DATE '2026-11-12', 4, 100000, '-Nabc0000000000000B1', now()); COMMIT",
+        "refusing to drop journal export records",
+    ),
     "0087_dealing_buffer_capital": (
         "BEGIN; SELECT set_config('finvest.actor_kind', 'staff', true); "
         "SELECT set_config('finvest.actor_id', '-Nabc0000000000000B1', true); "
@@ -306,6 +342,16 @@ ROWS = {
         "'-Nabc0000000000000B1', 'mobile_money', 'mtn', '256772000000', 'Test', "
         "'awaiting_code', now(), now())",
         "refusing to drop payout destinations",
+    ),
+    "0190_payout_name_lookups": (
+        "INSERT INTO payout_destinations (id, client_id, kind, network, account_number, "
+        "holder_name, status, created_at, updated_at) VALUES ('-Nabc0000000000000A1', "
+        "'-Nabc0000000000000B1', 'mobile_money', 'mtn', '256772000000', 'Test', "
+        "'awaiting_proof', now(), now()); "
+        "INSERT INTO payout_name_lookups (id, destination_id, number, status, created_at, "
+        "updated_at) VALUES ('-Nabc0000000000000C1', '-Nabc0000000000000A1', 1, 'queued', "
+        "now(), now())",
+        "refusing to drop the network name lookups of payout destinations",
     ),
     "0031_payouts": (
         "INSERT INTO withdrawal_limits (id, effective_from, currency, mobile_money_per_payout, "
@@ -787,6 +833,42 @@ ROWS = {
         "decode(repeat('00', 32), 'hex'), 'passkey', 'cookie', now(), now(), now(), now(), "
         "now())",
         "refusing to drop staff re-confirmations",
+    ),
+    "0230_kyc_next_of_kin": (
+        "INSERT INTO kyc_next_of_kin_lists (client_id, people, updated_at) "
+        "VALUES ('-Nabc0000000000000B1', 0, now())",
+        "refusing to drop next of kin",
+    ),
+    "0231_kyc_risk_answers": (
+        "INSERT INTO kyc_risk_answers (id, client_id, answers, score, profile, answered_at) "
+        "VALUES ('-Nabc0000000000000A1', '-Nabc0000000000000B1', '{}', 0, 'careful', now())",
+        "refusing to drop the answers clients gave",
+    ),
+    "0232_account_closures": (
+        "BEGIN; SELECT set_config('finvest.actor_kind', 'client', true); "
+        "SELECT set_config('finvest.actor_id', '-Nabc0000000000000B1', true); "
+        "INSERT INTO closure_requests (id, client_id, requested_at) "
+        "VALUES ('-Nabc0000000000000A1', '-Nabc0000000000000B1', now()); COMMIT",
+        "refusing to drop closure_requests",
+    ),
+    "0221_identity_app_pins": (
+        "INSERT INTO identity_clients (id, phone, status, created_at) VALUES "
+        "('-Nabc0000000000000B1', '+256772123456', 'unclaimed', now()); "
+        "INSERT INTO identity_sessions (id, actor_kind, actor_id, token_hash, second_step, "
+        "transport, created_at, last_seen_at, idle_expires_at, absolute_expires_at) "
+        "VALUES ('-Nabc0000000000000A1', 'client', '-Nabc0000000000000B1', "
+        "decode(repeat('00', 32), 'hex'), 'passkey', 'token', now(), now(), now(), now()); "
+        "INSERT INTO identity_app_pins (session_id, pin_hash, created_at) "
+        "VALUES ('-Nabc0000000000000A1', 'x', now())",
+        "refusing to drop app PINs that are in use",
+    ),
+    "0222_identity_recovery_requests": (
+        "INSERT INTO identity_clients (id, phone, status, created_at) VALUES "
+        "('-Nabc0000000000000B1', '+256772123456', 'unclaimed', now()); "
+        "INSERT INTO identity_recovery_requests (id, client_id, contact_phone, reason, status, "
+        "created_at) VALUES ('-Nabc0000000000000A1', '-Nabc0000000000000B1', '+256701555013', "
+        "'lost_phone', 'open', now())",
+        "refusing to drop recovery requests staff have not closed",
     ),
     "0260_payment_bank_accounts": (
         # The guard admits only staff proposing in their own name.

@@ -47,6 +47,9 @@ def rate_change(actor: AuditActor, resource_id: str, **changes: object) -> Audit
 async def test_staff_record_and_read_what_they_did(
     app_database: Database, fake_clock: FakeClock
 ) -> None:
+    # The newest events of any kind are read below, and the test database is shared, so this
+    # test's events are dated after anything another test records.
+    fake_clock.advance(days=3650)
     maker, product = staff(), push_id()
     async with app_database.actor_transaction(maker) as session:
         saved = await audit.record(session, rate_change(as_audit(maker), product), fake_clock)

@@ -337,6 +337,8 @@ async def running_world(
         HASHER,
         collections=collections,
         storage=storage,
+        # The journeys answer lookups as the worker would, so they run with names on.
+        payout_names=True,
     )
     # The real worker's handlers, built by the real worker's code. Only the providers it
     # would read from its environment are swapped for the stand-ins.

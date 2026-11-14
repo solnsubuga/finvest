@@ -23,10 +23,21 @@ export function isPayable(account: Pick<PayoutAccount, "status" | "payableFrom">
 
 export type Tone = "lime" | "warning" | "danger" | "neutral";
 
-export function accountStatusPill(account: Pick<PayoutAccount, "status" | "payableFrom" | "kind">, nowMs: number): { label: string; tone: Tone } {
+export function accountStatusPill(
+  account: Pick<PayoutAccount, "status" | "payableFrom" | "kind"> & { nameCheck?: PayoutAccount["nameCheck"] },
+  nowMs: number,
+): { label: string; tone: Tone } {
+  const numberWaits =
+    account.nameCheck === "not_answered"
+      ? { label: "Check again", tone: "warning" as const }
+      : account.nameCheck === "waiting_for_id"
+        ? { label: "Waiting for ID", tone: "neutral" as const }
+        : account.nameCheck === "limit_reached"
+        ? { label: "Not checked", tone: "warning" as const }
+        : { label: "Checking", tone: "neutral" as const };
   const pills: Record<AccountStatus, { label: string; tone: Tone }> = {
     awaiting_code: { label: "Enter the code", tone: "warning" },
-    awaiting_proof: account.kind === "bank" ? { label: "Send proof", tone: "warning" } : { label: "Checking", tone: "neutral" },
+    awaiting_proof: account.kind === "bank" ? { label: "Send proof", tone: "warning" } : numberWaits,
     in_review: { label: "Checking", tone: "neutral" },
     approved: isPayable(account, nowMs) ? { label: "Ready", tone: "lime" } : { label: "Ready soon", tone: "neutral" },
     rejected: { label: "Not approved", tone: "danger" },
@@ -48,11 +59,15 @@ export const rejectionCopy: Record<RejectionReason, string> = {
   proof_wrong_account: "The proof was for a different account number. Send proof for this account.",
   proof_wrong_document: "That document does not prove the account is yours. Send a statement, a bank letter or a photo of the card.",
   suspected_fraud: "This account cannot be used. Talk to us in Help if you think this is a mistake.",
+  network_name_unavailable:
+    "The network could not give us a name for this number, so we cannot check it is yours. Use a number registered in your name.",
 };
 
 /** Whether the client can send new proof after this refusal. A different name and suspected fraud are final. */
 export function canProveAgain(reason: RejectionReason | null): boolean {
-  return reason !== null && reason !== "name_different" && reason !== "suspected_fraud";
+  return (
+    reason !== null && reason !== "name_different" && reason !== "suspected_fraud" && reason !== "network_name_unavailable"
+  );
 }
 
 export const payoutStatusCopy: Record<PayoutStatus, { label: string; tone: Tone; detail: string }> = {

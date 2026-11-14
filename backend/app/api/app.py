@@ -20,11 +20,14 @@ from app.infrastructure.storage import FileStorage, StorageSettings
 from app.modules.approvals import api as approvals_api
 from app.modules.audit import api as audit_api
 from app.modules.autoinvest import api as autoinvest_api
+from app.modules.client_data import api as client_data_api
+from app.modules.closures import api as closures_api
 from app.modules.console import api as console_api
 from app.modules.dealing import allocations_api as dealing_allocations_api
 from app.modules.dealing import api as dealing_api
 from app.modules.dealing import buffer_api as dealing_buffer_api
 from app.modules.documents import api as documents_api
+from app.modules.finance import api as finance_api
 from app.modules.goals import api as goals_api
 from app.modules.identity import api as identity_api
 from app.modules.identity import (
@@ -33,6 +36,8 @@ from app.modules.identity import (
     passkeys_api,
     people_api,
     phone_changes_api,
+    pins_api,
+    recovery_api,
     sessions_api,
     team_api,
 )
@@ -43,11 +48,14 @@ from app.modules.identity.email_checks import EmailCheckService
 from app.modules.identity.hashing import PasswordHasher
 from app.modules.identity.passkeys import PasskeyService
 from app.modules.identity.phone_changes import PhoneChangeService
+from app.modules.identity.pins import PinService
+from app.modules.identity.recovery import RecoveryService
 from app.modules.identity.service import IdentityService
 from app.modules.insights import api as insights_api
 from app.modules.investments import api as investments_api
 from app.modules.kyc import api as kyc_api
 from app.modules.kyc import claims_api as kyc_claims_api
+from app.modules.kyc import profile_api as kyc_profile_api
 from app.modules.kyc.domain.liveness import LivenessProvider
 from app.modules.kyc.domain.provider import IdentityProvider
 from app.modules.kyc.settings import KycSettings
@@ -71,10 +79,13 @@ from app.modules.payouts import (
     staff_payouts_api,
     staff_returns_api,
 )
+from app.modules.payouts.wiring import PayoutNameSettings
 from app.modules.reconciliation import api as reconciliation_api
 from app.modules.reconciliation import transfers_api as pot_transfers_api
 from app.modules.reconciliation.domain.wallet import WalletBalances
 from app.modules.reconciliation.wiring import wallet_balances
+from app.modules.screening import api as screening_api
+from app.modules.screening.settings import ScreeningSettings
 from app.modules.support import api as support_api
 from app.modules.tax import api as tax_api
 from app.shared.clock import Clock, SystemClock
@@ -95,6 +106,7 @@ def create_app(
     identity_liveness: LivenessProvider | None = None,
     email_hash: EmailHashSettings | None = None,
     iotec_wallet: WalletBalances | None = None,
+    payout_names: bool | None = None,
 ) -> FastAPI:
     owned = database is None
     database = database or Database(settings)
@@ -134,6 +146,11 @@ def create_app(
     app.state.email_hash_key = email_hash_key
     app.state.storage = storage
     app.state.iotec_wallet = iotec_wallet
+    # The worker reads payout names only when a provider is set. Without one the API asks for
+    # none, so a number does not use up its lookups on requests nobody would send.
+    if payout_names is None:
+        payout_names = PayoutNameSettings().payout_name_provider != "none"
+    app.state.payout_names_on = payout_names
     hasher = hasher or PasswordHasher(
         memory_kib=settings.password_memory_kib, time_cost=settings.password_time_cost
     )
@@ -148,6 +165,8 @@ def create_app(
     app.state.migration_sealer = identity_sealer
     # A migrated client hands their identity step in through the claim routes, in one transaction.
     app.state.identity_provider = identity_provider
+    app.state.pins = PinService(database, clock, hasher)
+    app.state.recovery = RecoveryService(database, clock)
     app.state.email_checks = EmailCheckService(
         database,
         clock,
@@ -185,6 +204,8 @@ def create_app(
         *codes_api.routers,
         *phone_changes_api.routers,
         *email_checks_api.routers,
+        *pins_api.routers,
+        *recovery_api.routers,
         *sessions_api.routers,
         *team_api.routers,
         *people_api.routers,
@@ -203,6 +224,7 @@ def create_app(
         *staff_returns_api.routers,
         *reconciliation_api.routers,
         *pot_transfers_api.routers,
+        *closures_api.routers,
     ):
         app.include_router(router)
     app.include_router(payments_api.create_router(collections))
@@ -226,8 +248,13 @@ def create_app(
         app.include_router(router)
     for router in kyc_claims_api.create_routers(storage):
         app.include_router(router)
+    for router in kyc_profile_api.create_routers(identity_sealer):
+        app.include_router(router)
     app.include_router(dealing_api.router)
     app.include_router(dealing_buffer_api.router)
     app.include_router(dealing_allocations_api.router)
     app.include_router(tax_api.create_router(identity_sealer))
+    app.include_router(finance_api.create_router())
+    app.include_router(client_data_api.create_router(identity_sealer))
+    app.include_router(screening_api.create_router(ScreeningSettings().screening_provider))
     return app

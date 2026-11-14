@@ -10,6 +10,7 @@ from sqlalchemy import text
 
 from app.api.app import create_app
 from app.infrastructure.database import Database
+from app.infrastructure.sealing import Sealer
 from app.infrastructure.storage import FileStorage
 from app.modules.identity.api import COOKIES
 from app.modules.identity.hashing import PasswordHasher
@@ -87,6 +88,8 @@ async def running_api(
     *,
     storage: FileStorage | None = None,
     iotec_wallet: WalletBalances | None = None,
+    identity_sealer: Sealer | None = None,
+    payout_names: bool = True,
 ) -> AsyncIterator[Api]:
     settings = test_database.settings("finvest_app").model_copy(
         update={
@@ -95,7 +98,16 @@ async def running_api(
         }
     )
     clock = FakeClock()
-    app = create_app(settings, database, clock, HASHER, storage=storage, iotec_wallet=iotec_wallet)
+    app = create_app(
+        settings,
+        database,
+        clock,
+        HASHER,
+        storage=storage,
+        iotec_wallet=iotec_wallet,
+        identity_sealer=identity_sealer,
+        payout_names=payout_names,
+    )
     transport = httpx.ASGITransport(app=app, raise_app_exceptions=False, client=("127.0.0.1", 1))
     async with httpx.AsyncClient(transport=transport, base_url="https://api") as http:
         yield Api(http, app.state.identity, clock, database)

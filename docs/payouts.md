@@ -9,7 +9,7 @@ A client is paid only to their own mobile money number or bank account. A new de
 | Step | Who | Status after |
 | --- | --- | --- |
 | Add it and confirm the SMS code | Client | Awaiting proof |
-| Upload proof of ownership | Client | In review |
+| Upload proof of ownership. For a mobile money number, the worker reads the name its network holds instead (see [Mobile money numbers](#mobile-money-numbers)) | Client, or the worker for a number | In review, or refused for good if a number's name differs or there is none |
 | Check the proof against the name on the ID | One member of staff | Still in review, with the check recorded, or rejected with a reason |
 | Approve the check | A different member of staff | Approved |
 | Wait 24 hours from the approval | Nobody | Payable |
@@ -23,7 +23,7 @@ A rejected destination can be proved again with a better document, unless it was
 | Destination | Proof accepted |
 | --- | --- |
 | Bank account | A statement dated within the last three calendar months, a letter from the bank, or a photo of the bank card showing the name |
-| Mobile money number | The name the network holds for the number, read through the payment provider |
+| Mobile money number | The name the network holds for the number, read through ioTec Verify. Nobody uploads or types it |
 
 ### The name lock
 
@@ -36,6 +36,29 @@ The name on the proof is compared with the name on the client's ID. Case, accent
 | Different | Anything else | Never |
 
 The comparison is made on the server from the ID name and the name the staff member read on the proof. It is never taken from the request, and it never approves a destination by itself. A different name is refused outright, for a bank account and for a mobile money number alike. No member of staff and no pair of staff can override it.
+
+### Mobile money numbers
+
+A mobile money number is proved by the name its network holds for it, read through ioTec Verify's phone number verification (`app/modules/payouts/name_lookups.py`, the worker's side in `name_lookup_jobs.py`, the adapter in `providers/iotec_names.py`, the shared ioTec Verify connection in `app/infrastructure/iotec_verify.py`). The lookup is asked for in the transaction that spends the code texted to the number, and the worker sends it after that transaction commits.
+
+| The network's answer | What happens |
+| --- | --- |
+| The names on the client's ID, in any order | The number goes to staff (`in_review`), with that name recorded as the proof. Two people check and approve it as for a bank account, but nobody types a name: the check uses the network's |
+| The ID's names with one left out, at least two agreeing | The same, as a partial match that only a person can accept |
+| Any other name, including one spelt differently | Refused at once, `name_different`. Final |
+| No name, or the number is barred | Refused at once, `network_name_unavailable`. Final |
+| No answer: ioTec refused, failed or expired the request, or a send may have arrived and cannot be read back | The number waits. `name_check` shows `not_answered` and the client may ask again |
+
+How a lookup is sent, by the rules for provider calls:
+
+* A send that certainly never arrived (a connect failure, 401, 403 or 429) is tried once more at once, and then again by the job, up to five times.
+* A send that may have arrived is never sent again by the worker. ioTec Verify cannot look a request up by our reference, so the lookup is marked unanswered. The client may ask for a new one with `POST /client/payout-destinations/{id}/name-check`. That is a person asking, not a blind retry, and a lookup moves no money.
+* A number has at most three lookups, because each costs a fee. A lookup still unanswered an hour after it was asked for counts as unanswered.
+* A name found while the client's identity check is not yet approved is kept, and the number waits (`waiting_for_id`). Once the ID is approved, the client asks again and the worker decides from the same answer, without asking ioTec again. From that ask until the worker has decided, `name_check` is `checking`.
+
+The lookup's ID is the `referenceId` ioTec is sent and, once decided, the number's `proof_document_id`. Nothing is logged with the number or the name. Refusals from the network's answer are written to the audit trail as approvals made by the system, with the reason.
+
+Set `FINVEST_PAYOUT_NAME_PROVIDER=iotec` for the worker to read names, with the identity checks' ioTec Verify credentials (`FINVEST_IOTEC_VERIFY_CLIENT_ID`, `FINVEST_IOTEC_VERIFY_API_KEY`, optional `FINVEST_IOTEC_VERIFY_BASE_URL`). With the default, `none`, the API asks for no lookups, because no worker would send them. A number waits at `awaiting_proof` with `name_check` `checking`, asking again is refused with `name_check_in_progress`, and none of its three lookups are used up. Once a provider is set, a waiting number with no lookup shows `not_answered`, so the client can ask for its first one. The API reads the same `FINVEST_PAYOUT_NAME_PROVIDER` at start-up, so set it for both processes.
 
 ### What the database enforces
 
@@ -54,6 +77,9 @@ Migration 0030 adds `payout_destinations`. These hold even if application code i
 | One account, one client | An account approved for one client cannot be approved for another (migration 0032). The check is made at approval, so a client learns nothing about anyone else's accounts. Staff see `account_in_use` and look at both. |
 | The approval time is real | An approval must be stamped within five minutes of the database clock, so the 24 hour wait cannot be shortened by a wrong time |
 | Suspected fraud is final | A destination rejected for suspected fraud cannot be proved again, only removed |
+| A number is proved by its network | The client's proof steps are for bank accounts only. Only the worker moves a number on, and only from one of its own lookups that answered: to staff with exactly the name the network gave, or refused for a different name or none (migration 0190) |
+| Staff check a number with the network's name | A check of a number cannot change the name or the match the worker recorded |
+| A lookup is the client's own and final once answered | A client asks only for their own number while it waits for its name, at most three times. Only the worker records an answer, which never changes. Lookups are never deleted |
 | Clients are fenced | Row policies show a client only their own destinations |
 
 Every step writes an audit event in the same transaction. Account numbers never enter the audit trail.
@@ -80,12 +106,15 @@ A new version is inserted by the staff member who approves it, names a different
 
 An amount over the mobile money limit is refused with a code that tells the app to offer a bank account instead. Daily limits count every payout of the day that was not cancelled and did not fail. Amounts are never converted: a payout in another currency than the limits is refused.
 
+Every payout created is also read by screening's transaction monitoring (`screening.contract.watch_payout`, [screening.md](screening.md#transaction-monitoring)). A monitoring case does not hold the payout.
+
 ## The life of a payout
 
 The money leaves the client's holding when the payout is created and sits in a "payout in flight" ledger account for that client until the provider's answer is known.
 
 | Status | Meaning |
 | --- | --- |
+| Screening | Waiting for the client to be screened against sanctions and politically exposed person lists. Moves on by itself once they are clear; staff may decline it. The client sees it as processing. See [screening.md](screening.md#before-a-payout). |
 | Held | Waiting for staff to approve a large withdrawal |
 | Queued | Ready for the worker. Nothing has reached the provider. |
 | Sent | The provider accepted it and has not said how it ended |
@@ -149,7 +178,7 @@ Settle is refused by the ledger if the pot does not hold the money, because an a
 
 | Rule | How |
 | --- | --- |
-| Status follows the table above | A trigger repeats the transition table per actor: a client may only cancel a held payout, staff may only approve or decline one, the worker reports the provider |
+| Status follows the table above | A trigger repeats the transition table per actor: a client may only cancel a held payout, staff may only approve or decline one (or decline one waiting for screening), the worker reports the provider and releases a payout from screening only for a client who is clear (migration 0181) |
 | A payout that may have left is never queued again | No actor has a step from sent or uncertain back to queued |
 | A finished payout never changes, and none is deleted | The same trigger, for every role including the table owner |
 | The terms never change | Client, destination, amount, currency, source and request key are fixed at creation |
@@ -169,7 +198,8 @@ In `backend/app/modules/payouts/api.py`. Every route needs a signed-in client an
 | `POST /client/payout-destinations` | Add one: `{kind: "mobile_money", phone, holder_name}` or `{kind: "bank", bank_code, account_number, holder_name}`. 201, awaiting the SMS code. 409 if it is already saved, or `too_many_unconfirmed_accounts` when the client already has five awaiting their code. 422 `bank_unknown` on `bank_code` for a bank not in the list |
 | `GET /client/payout-destinations/{id}` | One account |
 | `POST /client/payout-destinations/{id}/code` | Text the code for an account that is `awaiting_code`. 204. A new code replaces the one before. 429 past three in 15 minutes for the account, five for the client, three to the number texted, or ten for the client in a day |
-| `POST /client/payout-destinations/{id}/code/verify` | `{code}`. Moves the account to `awaiting_proof`. 401 `invalid_code` for a wrong code, 410 `expired` when none is left |
+| `POST /client/payout-destinations/{id}/code/verify` | `{code}`. Moves the account to `awaiting_proof`, and for a mobile money number asks for the name its network holds in the same transaction. 401 `invalid_code` for a wrong code, 410 `expired` when none is left |
+| `POST /client/payout-destinations/{id}/name-check` | A mobile money number whose `name_check` is `not_answered`, or `waiting_for_id` once the ID is approved: ask again. 409 `name_check_in_progress`, `name_check_limit_reached`, `client_not_verified`, `destination_not_awaiting_proof` or `name_check_not_for_this_account` |
 | `DELETE /client/payout-destinations/{id}` | Remove it for good. 204 |
 | `POST /client/payout-destinations/{id}/proof` | Bank accounts only. A form with `proof_kind` (`bank_statement`, `bank_letter` or `bank_card`) and `file` (PDF, JPEG or PNG, at most 10 MiB). Sends it to staff |
 | `GET /client/payouts` | The client's payouts, newest first, at most 50 |
@@ -184,7 +214,7 @@ A proof file is checked by its first bytes, stored under `payouts/<destination i
 
 No route creates a payout. The module whose money is paid out creates it: an investment that matures, or an early withdrawal.
 
-A new account moves from `awaiting_code` to `awaiting_proof` when the client enters a code texted for it: to the mobile money number itself, or for a bank account to the client's own number. The identity module issues and spends the code (purpose `payout_account`, migration 0034), and the account moves on in the same transaction that spends it. A wrong code still counts as one of the five tries. A mobile money account then waits at `awaiting_proof` until Finvest can read the name the network holds for the number, which is not built yet.
+A new account moves from `awaiting_code` to `awaiting_proof` when the client enters a code texted for it: to the mobile money number itself, or for a bank account to the client's own number. The identity module issues and spends the code (purpose `payout_account`, migration 0034), and the account moves on in the same transaction that spends it. A wrong code still counts as one of the five tries. A mobile money account then waits at `awaiting_proof` while the worker reads the name its network holds for the number (see [Mobile money numbers](#mobile-money-numbers)).
 
 ## Client screens
 
@@ -200,7 +230,7 @@ In `apps/client`: the data layer in `src/payouts` (`apiPayoutsClient.ts` for the
 | When the term ends (`/investment/maturity/{id}`) | Roll over or pay out, and to which approved account. An account in its first day can be chosen, because it will be payable by maturity. Up to the day before maturity |
 | Choose where to be paid (`/investment/pay-out/{id}`) | A matured investment waiting for an account: choose one past its first day and send it. The same account asked twice is the same payout, so a lost answer is tried again as it was, with the account locked |
 
-The app names banks from `GET /client/banks`, read once per session. If the list cannot be read, an account still shows as "Bank" and the add screen offers to try again. Adding an account takes no idempotency key: a second try after a lost answer gets 409 for the same account, which the screen explains as already saved. A mobile money number stays at "Checking" after its code until Finvest can read the name the network holds for it (ioTec Verify, not built).
+The app names banks from `GET /client/banks`, read once per session. If the list cannot be read, an account still shows as "Bank" and the add screen offers to try again. Adding an account takes no idempotency key: a second try after a lost answer gets 409 for the same account, which the screen explains as already saved. A mobile money number stays at "Checking" after its code while the worker reads the name its network holds. The app does not yet show `name_check` or offer to ask again; that is a follow-up.
 
 ## Staff routes
 
@@ -210,7 +240,7 @@ In `backend/app/modules/payouts/staff_api.py`. Seeing the queue and opening an a
 | --- | --- |
 | `GET /staff/payout-destinations` | Accounts in review, oldest first. `check` is null until the first person checks one; with a check it waits for a second person |
 | `GET /staff/payout-destinations/{id}` | Open one: the whole account number, the name on the client's verified ID (`id_name`, null without an approved identity check) and a link to the proof that works for five minutes. Writes a `payouts.destination_opened` access event |
-| `POST /staff/payout-destinations/{id}/check` | `{proof_name, statement_date?, reason}`. Records the check. 422 `name_different` on `proof_name`, `statement_date_required` or `statement_too_old` on `statement_date`; 409 `client_not_verified` |
+| `POST /staff/payout-destinations/{id}/check` | `{proof_name, statement_date?, reason}`. Records the check. For a mobile money number leave `proof_name` out: the check uses `network_name`, the name the network gave. 422 `name_different`, `proof_name_required` or `proof_name_from_network` on `proof_name`, `statement_date_required` or `statement_too_old` on `statement_date`; 409 `client_not_verified` |
 | `POST /staff/payout-destinations/{id}/approve` | `{reason}`. Approves someone else's check; the account can be paid 24 hours later. 403 `checked_by_you`; 409 `destination_not_checked` or `account_in_use` |
 | `POST /staff/payout-destinations/{id}/reject` | `{rejection_reason, reason}`. One person refuses the proof |
 | `POST /staff/payout-destinations/{id}/remove` | `{reason}`. Takes the account out of use for good, as an operator control |

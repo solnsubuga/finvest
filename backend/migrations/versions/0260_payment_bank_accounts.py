@@ -1,7 +1,7 @@
 """Keep the bank account clients pay into by transfer, set by two people on Settings.
 
 Revision ID: 0260_payment_bank_accounts
-Revises: 0200_kyc_liveness
+Revises: 0222_identity_recovery_requests
 
 Until now the account came from the `FINVEST_BANK_TRANSFER_ACCOUNTS` setting of each deploy.
 Now staff set it on the console's Settings screen. `payment_bank_accounts` holds every proposed
@@ -17,7 +17,7 @@ from collections.abc import Sequence
 from alembic import op
 
 revision: str = "0260_payment_bank_accounts"
-down_revision: str | None = "0200_kyc_liveness"
+down_revision: str | None = "0222_identity_recovery_requests"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 

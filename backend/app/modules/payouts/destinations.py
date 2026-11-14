@@ -226,7 +226,7 @@ async def check(
     staff: Actor,
     destination_id: str,
     *,
-    proof_name: str,
+    proof_name: str | None,
     statement_date: date | None,
     reason: str,
     clock: Clock,
@@ -237,6 +237,9 @@ async def check(
     client's verified ID, read from the identity checks module, never from the request. A
     different name is refused whoever asks; the account then waits for a refusal. A check made
     again replaces the one before it.
+
+    A mobile money number is checked with the name its network gave, as the worker recorded it.
+    Nobody types it: `proof_name` must be left out for one.
     """
     if staff.id is None:
         raise ApplicationError("forbidden")
@@ -246,7 +249,16 @@ async def check(
     id_name = await kyc.verified_name(session, view.client_id)
     if id_name is None:
         raise rules.DestinationError("client_not_verified")
-    read = proof_name.strip()[:120]
+    if view.proof_kind is ProofKind.NETWORK_REGISTERED_NAME:
+        if proof_name is not None:
+            raise rules.DestinationError("proof_name_from_network")
+        if view.proof_name is None:
+            raise rules.DestinationError("destination_not_in_review")
+        read = view.proof_name
+    elif proof_name is None:
+        raise rules.DestinationError("proof_name_required")
+    else:
+        read = proof_name.strip()[:120]
     match = rules.compare_names(id_name, read)
     now = clock.now()
     after = rules.record_check(
@@ -272,6 +284,82 @@ async def check(
         category="approval",
         reason=reason,
         details={"name_match": match.value, "proof_kind": view.proof_kind.value},
+    )
+    return await get_destination(session, destination_id)
+
+
+async def network_name_matches(
+    session: AsyncSession,
+    actor: Actor,
+    destination_id: str,
+    lookup_id: str,
+    registered_name: str,
+    match: NameMatch,
+    clock: Clock,
+) -> DestinationView:
+    """The name the network holds for a number matches the ID: send it to staff. Worker only.
+
+    The caller holds the row lock and has checked the number still waits for its name.
+    """
+    view = await _locked(session, destination_id)
+    after = rules.network_name_matches(view.state)
+    await _save(
+        session,
+        view,
+        after,
+        clock,
+        proof_kind=ProofKind.NETWORK_REGISTERED_NAME,
+        proof_document_id=lookup_id,
+        proof_name=registered_name,
+        name_match=match,
+    )
+    await _audit(
+        session,
+        actor,
+        "payouts.destination_network_name_matched",
+        destination_id,
+        clock,
+        details={"name_match": match.value},
+    )
+    return await get_destination(session, destination_id)
+
+
+async def refuse_by_network(
+    session: AsyncSession,
+    actor: Actor,
+    destination_id: str,
+    lookup_id: str,
+    registered_name: str | None,
+    rejection: RejectionReason,
+    clock: Clock,
+) -> DestinationView:
+    """The network's answer refuses a number: a different name, or none. Final. Worker only."""
+    view = await _locked(session, destination_id)
+    after = rules.refuse_by_network(view.state, rejection)
+    different = rejection is RejectionReason.NAME_DIFFERENT
+    await _save(
+        session,
+        view,
+        after,
+        clock,
+        proof_kind=ProofKind.NETWORK_REGISTERED_NAME,
+        proof_document_id=lookup_id,
+        proof_name=registered_name if different else None,
+        name_match=NameMatch.DIFFERENT if different else None,
+    )
+    await _audit(
+        session,
+        actor,
+        "payouts.destination_refused_by_network",
+        destination_id,
+        clock,
+        category="approval",
+        reason=(
+            "The name the network holds for the number is not the name on the ID"
+            if different
+            else "The network holds no name for the number"
+        ),
+        details={"rejection_reason": rejection.value},
     )
     return await get_destination(session, destination_id)
 
@@ -464,6 +552,11 @@ async def checks_awaiting_approval(
     first. Empty outside a staff transaction."""
     rows = await session.execute(_CHECKED, {"limit": max(1, min(limit, MAX_QUEUE_PAGE))})
     return [_view(row) for row in rows.all()]
+
+
+async def locked(session: AsyncSession, destination_id: str) -> DestinationView:
+    """The destination, locked for the rest of the transaction. `not_found` if it is hidden."""
+    return await _locked(session, destination_id)
 
 
 async def _locked(session: AsyncSession, destination_id: str) -> DestinationView:
