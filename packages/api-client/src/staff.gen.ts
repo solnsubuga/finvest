@@ -1370,6 +1370,7 @@ export const StaffCheck = z.object({
   account_number: z.string().nullable(),
   allowed: z.array(z.enum(["approve", "reject", "ask_for_photos", "escalate"])),
   automatic_checks: z.array(Outcome),
+  carried_over: z.boolean(),
   client_id: z.string(),
   client_message: z.string().nullable(),
   date_of_birth: z.string().nullable(),

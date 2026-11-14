@@ -47,6 +47,16 @@ A provider is asked for three things: that the document is genuine and not expir
 
 The 10-digit [account number](account-numbers.md) is issued in the transaction that approves the client. If the approval fails, the number is not kept. An approved check always has a personal account number (starting with 10) from the registry, and no other check has one. The database enforces this.
 
+## Carried over from Finvest 1.0
+
+At the switch (see [migration.md](migration.md)), a client whose identity Finvest 1.0 checked, on a document that has not expired, is carried over already approved. The migration module calls `record_carried_over_check(session, sealer, SYSTEM, *, client_id, document_type, document_country, details, legacy_reference, reason, clock)` in the worker, in the switch's own transaction. It issues a new personal account number and records `kyc.check.carried_over` in the audit trail with the reason and the Finvest 1.0 reference.
+
+- The check has `source = finvest1` and the client's Finvest 1.0 reference, which is used once. It was never submitted and has no photos, no provider and no automatic checks. Staff see it marked `carried_over`.
+- Finvest 1.0 did not always record when a document expires, so the expiry may be unknown. An expired document is refused with `document_expired`: that client does the full check when they claim.
+- Calling it again with the same reference for the same client returns the same check and issues nothing. The same reference for another client, a client who already has a check, and a document an approved client already holds are refused.
+- The client is not told at the switch. They hear when they claim the account.
+- Only the system on the worker's connection may insert such a check, and only approved and with no staff member as the decider. Clients still insert only their own drafts and can never set the source. Like every decided check, it never changes.
+
 ## Personal details are sealed
 
 The document number, date of birth and TIN are encrypted before they are saved (`app/infrastructure/sealing.py`, AES-256-GCM). The database, its backups and anyone reading a table see only sealed bytes.

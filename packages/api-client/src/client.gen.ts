@@ -124,6 +124,16 @@ export const ClientChat = z.object({
 });
 export type ClientChat = z.infer<typeof ClientChat>;
 
+export const ClientDetails = z.object({
+  date_of_birth: z.string(),
+  document_expires_on: z.string().nullable(),
+  document_number: z.string(),
+  given_names: z.string(),
+  surname: z.string(),
+  tin: z.string().nullable(),
+});
+export type ClientDetails = z.infer<typeof ClientDetails>;
+
 export const PhotoKind = z.enum(["front", "back", "selfie"]);
 export type PhotoKind = z.infer<typeof PhotoKind>;
 
@@ -134,23 +144,13 @@ export const ClientPhoto = z.object({
 });
 export type ClientPhoto = z.infer<typeof ClientPhoto>;
 
-export const DetailsBody = z.object({
-  date_of_birth: z.string(),
-  document_expires_on: z.string(),
-  document_number: z.string(),
-  given_names: z.string(),
-  surname: z.string(),
-  tin: z.string().nullable().optional(),
-});
-export type DetailsBody = z.infer<typeof DetailsBody>;
-
 export const DocumentType = z.enum(["national_id", "passport", "driving_permit", "refugee_id"]);
 export type DocumentType = z.infer<typeof DocumentType>;
 
 export const ClientCheck = z.object({
   account_number: z.string().nullable(),
   client_message: z.string().nullable(),
-  details: DetailsBody.nullable(),
+  details: ClientDetails.nullable(),
   details_confirmed: z.boolean(),
   document_country: z.string(),
   document_type: DocumentType,
@@ -271,6 +271,16 @@ export const DestinationOut = z.object({
   status: z.enum(["awaiting_code", "awaiting_proof", "in_review", "approved", "rejected"]),
 });
 export type DestinationOut = z.infer<typeof DestinationOut>;
+
+export const DetailsBody = z.object({
+  date_of_birth: z.string(),
+  document_expires_on: z.string(),
+  document_number: z.string(),
+  given_names: z.string(),
+  surname: z.string(),
+  tin: z.string().nullable().optional(),
+});
+export type DetailsBody = z.infer<typeof DetailsBody>;
 
 export const DeviceSessionView = z.object({
   current: z.boolean(),

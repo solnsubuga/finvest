@@ -160,6 +160,11 @@ def test_a_client_is_an_adult_on_their_eighteenth_birthday_and_an_id_is_good_on_
     assert detail_problems(replace(GOOD, document_expires_on=TODAY), TODAY) == []
 
 
+def test_an_unknown_expiry_is_not_a_problem() -> None:
+    # Only a check carried over from Finvest 1.0 has one: a client always gives the date.
+    assert detail_problems(replace(GOOD, document_expires_on=None), TODAY) == []
+
+
 def passed(*checks: AutomaticCheck) -> tuple[CheckOutcome, ...]:
     return tuple(CheckOutcome(check, Verdict.PASS) for check in checks)
 

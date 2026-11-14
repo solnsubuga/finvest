@@ -128,7 +128,8 @@ class IdentityDetails:
     given_names: str
     document_number: str
     date_of_birth: date
-    document_expires_on: date
+    # Unknown only on a check carried over from Finvest 1.0, which did not always record it.
+    document_expires_on: date | None
     tin: str | None = None
 
     def normalised(self) -> IdentityDetails:
@@ -161,7 +162,7 @@ def detail_problems(details: IdentityDetails, today: date) -> list[DetailProblem
         problems.append(DetailProblem("date_of_birth", "in_the_future"))
     elif _years_between(details.date_of_birth, today) < MINIMUM_AGE:
         problems.append(DetailProblem("date_of_birth", "under_age"))
-    if details.document_expires_on < today:
+    if details.document_expires_on is not None and details.document_expires_on < today:
         problems.append(DetailProblem("document_expires_on", "document_expired"))
     if details.tin is not None and _TIN.fullmatch(details.tin) is None:
         problems.append(DetailProblem("tin", "invalid_tin"))

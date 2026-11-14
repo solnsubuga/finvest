@@ -1383,7 +1383,7 @@
           "details": {
             "anyOf": [
               {
-                "$ref": "#/components/schemas/DetailsBody"
+                "$ref": "#/components/schemas/ClientDetails"
               },
               {
                 "type": "null"
@@ -1611,6 +1611,62 @@
           "complaints"
         ],
         "title": "ClientComplaints",
+        "type": "object"
+      },
+      "ClientDetails": {
+        "additionalProperties": false,
+        "description": "The details as the client confirmed them, or as Finvest 1.0 held them.",
+        "properties": {
+          "date_of_birth": {
+            "format": "date",
+            "title": "Date Of Birth",
+            "type": "string"
+          },
+          "document_expires_on": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Document Expires On"
+          },
+          "document_number": {
+            "title": "Document Number",
+            "type": "string"
+          },
+          "given_names": {
+            "title": "Given Names",
+            "type": "string"
+          },
+          "surname": {
+            "title": "Surname",
+            "type": "string"
+          },
+          "tin": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tin"
+          }
+        },
+        "required": [
+          "surname",
+          "given_names",
+          "document_number",
+          "date_of_birth",
+          "document_expires_on",
+          "tin"
+        ],
+        "title": "ClientDetails",
         "type": "object"
       },
       "ClientInvestmentOut": {
@@ -9702,6 +9758,10 @@
             "title": "Automatic Checks",
             "type": "array"
           },
+          "carried_over": {
+            "title": "Carried Over",
+            "type": "boolean"
+          },
           "client_id": {
             "maxLength": 20,
             "minLength": 20,
@@ -9871,6 +9931,7 @@
           "client_message",
           "account_number",
           "decided_at",
+          "carried_over",
           "allowed"
         ],
         "title": "StaffCheck",
