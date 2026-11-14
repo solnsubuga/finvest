@@ -791,6 +791,13 @@ export const ClientPageView = z.object({
 });
 export type ClientPageView = z.infer<typeof ClientPageView>;
 
+export const ClientRequest = z.object({
+  body: z.string(),
+  created_at: z.string(),
+  id: z.string(),
+});
+export type ClientRequest = z.infer<typeof ClientRequest>;
+
 export const ClientScreeningOut = z.object({
   cases: z.array(CaseOut),
   client: ClientOut,
@@ -1818,6 +1825,16 @@ export const PasskeyOptions = z.object({
   public_key: z.record(z.string(), z.unknown()),
 });
 export type PasskeyOptions = z.infer<typeof PasskeyOptions>;
+
+export const PayableAccount = z.object({
+  bank_code: z.string().nullable(),
+  holder_name: z.string(),
+  id: z.string(),
+  kind: z.string(),
+  masked_account: z.string(),
+  network: z.string().nullable(),
+});
+export type PayableAccount = z.infer<typeof PayableAccount>;
 
 export const IdentityPeopleApiPersonView = z.object({
   id: z.string(),
@@ -2931,6 +2948,23 @@ export const WalletOut = z.object({
 });
 export type WalletOut = z.infer<typeof WalletOut>;
 
+export const WithdrawableInvestment = z.object({
+  currency: z.string(),
+  id: z.string(),
+  maturity_date: z.string().nullable(),
+  product_name: z.string(),
+  value_minor: z.number().int(),
+});
+export type WithdrawableInvestment = z.infer<typeof WithdrawableInvestment>;
+
+export const WithdrawalOptions = z.object({
+  accounts: z.array(PayableAccount),
+  investments: z.array(WithdrawableInvestment),
+  open: z.boolean(),
+  requests: z.array(ClientRequest),
+});
+export type WithdrawalOptions = z.infer<typeof WithdrawalOptions>;
+
 export const WordingView = z.object({
   category: z.enum(["money", "investments", "earnings", "account", "security", "support", "news"]),
   changed_at: z.string().nullable(),
@@ -3348,6 +3382,19 @@ export const operations = {
     idempotent: false,
     status: 200,
     response: StaffProfileView,
+  },
+  "GET /staff/clients/{client_id}/withdrawal-options": {
+    method: "GET",
+    path: "/staff/clients/{client_id}/withdrawal-options",
+    params: z.object({
+    client_id: z.string(),
+  }),
+    query: z.object({}),
+    body: null,
+    bodyKind: null,
+    idempotent: false,
+    status: 200,
+    response: WithdrawalOptions,
   },
   "GET /staff/closures": {
     method: "GET",

@@ -18,8 +18,11 @@ from app.modules.console import actions, notes
 from app.modules.identity.api import require_confirmed, require_permission
 from app.modules.identity.client_locks import client_status
 from app.modules.identity.service import StaffSession
-from app.modules.payouts import payouts
+from app.modules.investments import holdings
+from app.modules.payouts import destinations, payouts
+from app.modules.payouts.domain.destinations import DestinationStatus
 from app.modules.payouts.domain.limits import ClientLimits, WithdrawalLimits, for_client
+from app.modules.support import conversations
 from app.shared.business_day import business_date
 from app.shared.clock import Clock
 from app.shared.contracts import Contract, PushId
@@ -35,6 +38,7 @@ _REFUSALS: dict[int | str, dict[str, object]] = {
 router = APIRouter(prefix="/staff/clients", tags=["staff clients"], responses=_REFUSALS)
 
 ClientViewer = Annotated[StaffSession, Depends(require_permission("clients.view"))]
+WithdrawalStarter = Annotated[StaffSession, Depends(require_permission("client_withdrawals.start"))]
 NoteWriter = Annotated[StaffSession, Depends(require_permission("client_notes.write"))]
 # Deciding needs a passkey or app code from the last few minutes. The kind's own permission is
 # checked once the action is read.
@@ -115,6 +119,42 @@ class WithdrawalIn(Contract):
     destination_id: PushId
     # The client's message in their help chat asking for it, from the last seven days.
     message_id: PushId
+
+
+class WithdrawableInvestment(Contract):
+    id: PushId
+    product_name: str
+    # What the client would be paid if asked today: principal and interest so far, after tax.
+    value_minor: int
+    currency: str
+    maturity_date: date | None
+
+
+class PayableAccount(Contract):
+    id: PushId
+    kind: str
+    network: str | None
+    bank_code: str | None
+    masked_account: str
+    holder_name: str
+
+
+class ClientRequest(Contract):
+    id: PushId
+    body: str
+    created_at: datetime
+
+
+class WithdrawalOptions(Contract):
+    """What a staff withdrawal for the client can name today."""
+
+    investments: list[WithdrawableInvestment]
+    # Approved accounts of the client's own, past their first day's wait.
+    accounts: list[PayableAccount]
+    # The client's own help chat messages from the last seven days, newest first.
+    requests: list[ClientRequest]
+    # Early withdrawal is switched on.
+    open: bool
 
 
 class ClientLimitsView(Contract):
@@ -263,6 +303,60 @@ async def client_withdrawal_limits(
         own=_limits(own) if own is not None else None,
         applied=_limits(applied),
         can_change="client_limits.change" in staff.permissions,
+    )
+
+
+@router.get("/{client_id}/withdrawal-options")
+async def withdrawal_options(
+    client_id: PushId,
+    staff: WithdrawalStarter,
+    database: Db,
+    clock: Time,
+    request: Request,
+) -> WithdrawalOptions:
+    """The investments, accounts and written requests a staff withdrawal can name today."""
+    now = clock.now()
+    async with database.actor_transaction(staff.actor) as session:
+        if await client_status(session, client_id) is None:
+            raise ApplicationError("not_found")
+        found = await holdings.withdrawable_for_client(session, client_id, business_date(now))
+        accounts = [
+            item
+            for item in await destinations.destinations_for_client(session, client_id)
+            if item.status is DestinationStatus.APPROVED
+            and item.payable_from is not None
+            and item.payable_from <= now
+        ]
+        messages, _ = await conversations.messages_for_client(session, client_id, limit=50)
+    since = now - actions.REQUEST_FRESH
+    return WithdrawalOptions(
+        investments=[
+            WithdrawableInvestment(
+                id=item.id,
+                product_name=item.product_name,
+                value_minor=(item.terms.principal + item.accrued_net).minor,
+                currency=item.terms.principal.currency.value,
+                maturity_date=item.maturity_date,
+            )
+            for item in found
+        ],
+        accounts=[
+            PayableAccount(
+                id=item.id,
+                kind=item.kind.value,
+                network=item.network,
+                bank_code=item.bank_code,
+                masked_account=item.masked_account,
+                holder_name=item.holder_name,
+            )
+            for item in accounts
+        ],
+        requests=[
+            ClientRequest(id=item.id, body=item.body, created_at=item.created_at)
+            for item in reversed(messages)
+            if item.author_kind == "client" and item.created_at >= since
+        ],
+        open=_withdrawals_open(request),
     )
 
 

@@ -4180,6 +4180,34 @@
         "title": "ClientPhoto",
         "type": "object"
       },
+      "ClientRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "body": {
+            "title": "Body",
+            "type": "string"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "id": {
+            "maxLength": 20,
+            "minLength": 20,
+            "pattern": "^[-0-9A-Z_a-z]{20}$",
+            "title": "Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "body",
+          "created_at"
+        ],
+        "title": "ClientRequest",
+        "type": "object"
+      },
       "ClientScreeningOut": {
         "additionalProperties": false,
         "properties": {
@@ -10921,6 +10949,62 @@
           "destination_id"
         ],
         "title": "PayOutRequest",
+        "type": "object"
+      },
+      "PayableAccount": {
+        "additionalProperties": false,
+        "properties": {
+          "bank_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Bank Code"
+          },
+          "holder_name": {
+            "title": "Holder Name",
+            "type": "string"
+          },
+          "id": {
+            "maxLength": 20,
+            "minLength": 20,
+            "pattern": "^[-0-9A-Z_a-z]{20}$",
+            "title": "Id",
+            "type": "string"
+          },
+          "kind": {
+            "title": "Kind",
+            "type": "string"
+          },
+          "masked_account": {
+            "title": "Masked Account",
+            "type": "string"
+          },
+          "network": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Network"
+          }
+        },
+        "required": [
+          "id",
+          "kind",
+          "network",
+          "bank_code",
+          "masked_account",
+          "holder_name"
+        ],
+        "title": "PayableAccount",
         "type": "object"
       },
       "PayeeOut": {
@@ -20388,6 +20472,51 @@
         "title": "WalletOut",
         "type": "object"
       },
+      "WithdrawableInvestment": {
+        "additionalProperties": false,
+        "properties": {
+          "currency": {
+            "title": "Currency",
+            "type": "string"
+          },
+          "id": {
+            "maxLength": 20,
+            "minLength": 20,
+            "pattern": "^[-0-9A-Z_a-z]{20}$",
+            "title": "Id",
+            "type": "string"
+          },
+          "maturity_date": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Maturity Date"
+          },
+          "product_name": {
+            "title": "Product Name",
+            "type": "string"
+          },
+          "value_minor": {
+            "title": "Value Minor",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "product_name",
+          "value_minor",
+          "currency",
+          "maturity_date"
+        ],
+        "title": "WithdrawableInvestment",
+        "type": "object"
+      },
       "WithdrawalIn": {
         "additionalProperties": false,
         "description": "An early withdrawal for the client, from their own written request in help chat.",
@@ -20420,6 +20549,45 @@
           "message_id"
         ],
         "title": "WithdrawalIn",
+        "type": "object"
+      },
+      "WithdrawalOptions": {
+        "additionalProperties": false,
+        "description": "What a staff withdrawal for the client can name today.",
+        "properties": {
+          "accounts": {
+            "items": {
+              "$ref": "#/components/schemas/PayableAccount"
+            },
+            "title": "Accounts",
+            "type": "array"
+          },
+          "investments": {
+            "items": {
+              "$ref": "#/components/schemas/WithdrawableInvestment"
+            },
+            "title": "Investments",
+            "type": "array"
+          },
+          "open": {
+            "title": "Open",
+            "type": "boolean"
+          },
+          "requests": {
+            "items": {
+              "$ref": "#/components/schemas/ClientRequest"
+            },
+            "title": "Requests",
+            "type": "array"
+          }
+        },
+        "required": [
+          "investments",
+          "accounts",
+          "requests",
+          "open"
+        ],
+        "title": "WithdrawalOptions",
         "type": "object"
       },
       "WithdrawalRequest": {
@@ -36718,6 +36886,92 @@
         "summary": "Client Profile",
         "tags": [
           "client profile"
+        ]
+      }
+    },
+    "/staff/clients/{client_id}/withdrawal-options": {
+      "get": {
+        "description": "The investments, accounts and written requests a staff withdrawal can name today.",
+        "operationId": "withdrawal_options_staff_clients__client_id__withdrawal_options_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "client_id",
+            "required": true,
+            "schema": {
+              "maxLength": 20,
+              "minLength": 20,
+              "pattern": "^[-0-9A-Z_a-z]{20}$",
+              "title": "Client Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WithdrawalOptions"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          }
+        },
+        "summary": "Withdrawal Options",
+        "tags": [
+          "staff clients"
         ]
       }
     },
