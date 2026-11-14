@@ -4,7 +4,7 @@ import { MemoryRouter } from "react-router";
 import { describe, expect, it, vi } from "vitest";
 import { createHttp } from "@/api/http.ts";
 import { ActionsSection } from "./Actions.tsx";
-import { ACTION_KINDS, createHttpActionsApi, notConnectedActionsApi, type ActionKind, type ActionsApi } from "./actions.ts";
+import { ACTION_KINDS, ActionError, createHttpActionsApi, notConnectedActionsApi, type ActionKind, type ActionsApi } from "./actions.ts";
 import { createStubActionsApi } from "./actionsStub.ts";
 
 const ME = { id: "stub-operations", name: "Opio Peter" };
@@ -106,6 +106,37 @@ describe("acting for a client", () => {
     expect(within(card).getByText(/From 1 Sept 2026 to 31 Oct 2026|From .*2026 to .*2026/)).toBeInTheDocument();
   });
 
+  it("sends the same key again when a proposal is retried, and a new one for the next", async () => {
+    const stub = createStubActionsApi(ME, ACTION_KINDS, "empty", () => NOW, 0);
+    const keys: string[] = [];
+    let fail = true;
+    const api: ActionsApi = {
+      ...stub,
+      propose: (clientId, proposal, key) => {
+        keys.push(key);
+        if (fail) {
+          fail = false;
+          return Promise.reject(new ActionError("unavailable"));
+        }
+        return stub.propose(clientId, proposal, key);
+      },
+    };
+    let next = 0;
+    render(
+      <MemoryRouter>
+        <ActionsSection api={api} clientId={CLIENT} canRefund newKey={() => `key-${String(++next)}`} />
+      </MemoryRouter>,
+    );
+    const user = userEvent.setup();
+    await user.click(await screen.findByRole("button", { name: "Reset app PIN" }));
+    await user.type(screen.getByLabelText(/Why/), "Client called from their number");
+    await user.click(screen.getByRole("button", { name: "Send for approval" }));
+    expect(await screen.findByText(/could not reach Finvest/)).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Send for approval" }));
+    await screen.findByRole("article", { name: "Reset the app PIN, waiting" });
+    expect(keys).toEqual(["key-1", "key-1"]);
+  });
+
   it("shows when acting for a client is not connected", async () => {
     renderActions(notConnectedActionsApi);
     expect(await screen.findByRole("alert")).toHaveTextContent("not connected to the Finvest service yet");
@@ -165,10 +196,16 @@ describe("client actions over HTTP", () => {
   it("sends each kind's details under its own name, and decides on the decision path", async () => {
     const fetch = vi.fn<typeof globalThis.fetch>(() => reply(201, ACTION));
     const api = apiWith(fetch);
-    await api.propose(CLIENT, { kind: "pin_reset", reason: "Forgot PIN" });
-    await api.propose(CLIENT, { kind: "statement", reason: "Loan", statement: { from: "2026-09-01", to: "2026-10-31" } });
-    await api.propose(CLIENT, { kind: "withdrawal", reason: "Asked", withdrawal: { investmentId: "-Ni", destinationId: "-Nd", messageId: "-Nm" } });
-    await api.decide(ACTION.id, "approved", "Checked");
+    await api.propose(CLIENT, { kind: "pin_reset", reason: "Forgot PIN" }, "key-propose-1");
+    await api.propose(CLIENT, { kind: "statement", reason: "Loan", statement: { from: "2026-09-01", to: "2026-10-31" } }, "key-propose-2");
+    await api.propose(CLIENT, { kind: "withdrawal", reason: "Asked", withdrawal: { investmentId: "-Ni", destinationId: "-Nd", messageId: "-Nm" } }, "key-propose-3");
+    await api.decide(ACTION.id, "approved", "Checked", "key-decide-1");
+    expect(fetch.mock.calls.map(([, init]) => new Headers(init?.headers).get("Idempotency-Key"))).toEqual([
+      "key-propose-1",
+      "key-propose-2",
+      "key-propose-3",
+      "key-decide-1",
+    ]);
     expect(fetch.mock.calls.map(([url, init]) => [String(url), init?.body ? JSON.parse(String(init.body)) : null])).toEqual([
       [`https://api.test/staff/clients/${CLIENT}/actions`, { kind: "pin_reset", reason: "Forgot PIN" }],
       [`https://api.test/staff/clients/${CLIENT}/actions`, { kind: "statement", reason: "Loan", statement: { date_from: "2026-09-01", date_to: "2026-10-31" } }],
@@ -192,7 +229,7 @@ describe("client actions over HTTP", () => {
     [403, "forbidden", [], "forbidden"],
   ])("turns a %i %s on a proposal into %s", async (status, code, fields, expected) => {
     const fetch = vi.fn<typeof globalThis.fetch>(() => refusal(status, code, fields));
-    await expect(apiWith(fetch).propose(CLIENT, { kind: "pin_reset", reason: "x" })).rejects.toMatchObject({ code: expected });
+    await expect(apiWith(fetch).propose(CLIENT, { kind: "pin_reset", reason: "x" }, "key-refused")).rejects.toMatchObject({ code: expected });
   });
 
   it.each([
@@ -201,6 +238,6 @@ describe("client actions over HTTP", () => {
     [403, "confirm_it_is_you", "not_confirmed"],
   ])("turns a %i %s on a decision into %s", async (status, code, expected) => {
     const fetch = vi.fn<typeof globalThis.fetch>(() => refusal(status, code));
-    await expect(apiWith(fetch).decide(ACTION.id, "approved", "x")).rejects.toMatchObject({ code: expected });
+    await expect(apiWith(fetch).decide(ACTION.id, "approved", "x", "key-refused")).rejects.toMatchObject({ code: expected });
   });
 });
