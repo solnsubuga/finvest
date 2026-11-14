@@ -40,7 +40,8 @@ class StaffRun:
 
 _COUNTS = text(
     "SELECT count(*) FILTER (WHERE status = 'active') AS active, "
-    "count(*) FILTER (WHERE status = 'paused') AS paused FROM autoinvest_plans"
+    "count(*) FILTER (WHERE status = 'paused') AS paused FROM autoinvest_plans "
+    "WHERE CAST(:product_code AS text) IS NULL OR product_code = :product_code"
 )
 _RUNS = text(
     "SELECT r.id, r.plan_id, r.client_id, r.due_on, r.status, r.attempt, r.retry_on, "
@@ -59,10 +60,13 @@ def _staff_only(staff: Actor) -> None:
         raise ApplicationError("forbidden")
 
 
-async def plan_counts(session: AsyncSession, staff: Actor) -> PlanCounts:
-    """How many plans are running and paused. Stopped plans are not counted."""
+async def plan_counts(
+    session: AsyncSession, staff: Actor, *, product_code: str | None = None
+) -> PlanCounts:
+    """How many plans are running and paused, into one product if named. Stopped plans are not
+    counted."""
     _staff_only(staff)
-    row = (await session.execute(_COUNTS)).one()
+    row = (await session.execute(_COUNTS, {"product_code": product_code})).one()
     return PlanCounts(active=row.active, paused=row.paused)
 
 
