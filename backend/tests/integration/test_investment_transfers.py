@@ -765,7 +765,47 @@ async def test_a_client_who_asked_to_close_cannot_send(
             await number_of(app_database, recipient),
             ugx(1_000_000),
         )
-    assert refused.value.fields[0].code == "closure_requested"
+    assert (refused.value.fields[0].field_path, refused.value.fields[0].code) == (
+        ["account"],
+        "closing",
+    )
     # Leave no open request behind for the staff queue other tests read.
     async with app_database.actor_transaction(sender) as session:
         await closures.cancel(session, sender, request_id, PRESENT)
+
+
+async def test_nothing_is_sent_to_a_client_whose_request_to_close_waits(
+    app_database: Database, worker_database: Database
+) -> None:
+    sender, _ = await person(app_database)
+    recipient, _ = await person(app_database)
+    source = await running(app_database, worker_database, sender)
+    to = await number_of(app_database, recipient)
+    asked = await send(app_database, sender, source.id, to, ugx(1_000_000))
+    # The recipient asks to close before the money moves: a waiting request, saved straight
+    # away, as in the test above.
+    request_id = push_id()
+    async with app_database.actor_transaction(recipient) as session:
+        await session.execute(
+            text(
+                "INSERT INTO closure_requests (id, client_id, requested_at) "
+                "VALUES (:id, :client_id, now())"
+            ),
+            {"id": request_id, "client_id": recipient.id},
+        )
+    failed = await carry_out(worker_database, asked.id)
+    assert (failed.status, failed.failure_code) == (
+        TransferStatus.FAILED,
+        "recipient_not_available",
+    )
+    assert (await investment(worker_database, source.id)).status is InvestmentStatus.ACTIVE
+    assert await account_balance(worker_database, source, HOLDING) == 5_000_000
+    # A new send to them is refused as if there were no such client.
+    with pytest.raises(ApplicationError) as refused:
+        await send(app_database, sender, source.id, to, ugx(1_000_000))
+    assert (refused.value.fields[0].field_path, refused.value.fields[0].code) == (
+        ["to"],
+        "no_such_client",
+    )
+    async with app_database.actor_transaction(recipient) as session:
+        await closures.cancel(session, recipient, request_id, PRESENT)
