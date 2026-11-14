@@ -16,7 +16,7 @@
 | Bank | A bank adapter with two modes: statement file import now, and a partner bank API when a partner is signed | No bank partner yet, so nothing depends on one, and adding one later needs no change to the core. |
 | Identity checks | A provider such as Smile ID for ID lookup and selfie liveness (confirm coverage and pricing for Uganda) | Building document reading and liveness in-house is not worth it. |
 | Email | Resend | Decided. |
-| SMS | ioTec Messaging for now, with the FINVEST sender name | Sits behind the notifications interface, so the provider can change. |
+| SMS | Africa's Talking, with ioTec Messaging as the fallback when Africa's Talking is down or refuses a message, both with the FINVEST sender name | Sits behind the notifications interface, so the provider can change. |
 | Phone number verification | ioTec Verify for now | Confirms that the person owns the number at sign up, when a number changes, and when a mobile money payout number is added. |
 | Push notifications | Expo push, which uses Firebase and Apple underneath | Comes with the app framework. |
 | Files | Private object storage with short-lived signed links | For ID photos, receipts and statements. Never public. |

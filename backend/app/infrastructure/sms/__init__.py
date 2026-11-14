@@ -1,6 +1,8 @@
 """Outgoing text messages behind one small interface, so the provider can change.
 
-ioTec Messaging is the provider (`iotec`, in `iotec.py`). `none` fails closed, and
+Africa's Talking is the first provider (`africastalking`, in `africastalking.py`) and ioTec
+Messaging (`iotec`, in `iotec.py`) the fallback, tried only when Africa's Talking certainly did
+not take a message (`fallback.py`). Either can also run alone. `none` fails closed, and
 `local-console` prints messages for local development.
 """
 
@@ -110,7 +112,15 @@ class SmsSettings(BaseSettings):
         env_prefix="FINVEST_SMS_", extra="ignore", hide_input_in_errors=True
     )
 
-    backend: Literal["none", "local-console", "iotec"] = "none"
+    backend: Literal["none", "local-console", "africastalking", "iotec"] = "none"
+    # The provider tried when the first one could not take a message.
+    fallback: Literal["none", "iotec", "africastalking"] = "none"
+    # From the Africa's Talking dashboard: the app's username and its API key (Settings, API
+    # Key). The sender name is the registered alphanumeric sender id, if Finvest has one.
+    africastalking_username: str | None = None
+    africastalking_api_key: SecretStr | None = None
+    africastalking_sender_id: str | None = None
+    africastalking_base_url: str = "https://api.africastalking.com"
     # From the ioTec Messaging portal: Management, Settings, Configuration.
     iotec_client_id: str | None = None
     iotec_api_key: SecretStr | None = None
@@ -124,16 +134,50 @@ class SmsSettings(BaseSettings):
         # is personal data in a log. A name this code does not know counts as deployed.
         if self.backend == "local-console" and self.environment not in (None, "", "local"):
             raise ValueError("The local-console SMS backend may only run on a developer's machine")
-        if self.backend == "iotec" and not (
+        if self.fallback != "none":
+            if self.backend not in ("africastalking", "iotec"):
+                raise ValueError("An SMS fallback needs a real first provider")
+            if self.fallback == self.backend:
+                raise ValueError("The SMS fallback must differ from FINVEST_SMS_BACKEND")
+        used = {self.backend, self.fallback}
+        if "iotec" in used and not (
             self.iotec_client_id and self.iotec_api_key and self.iotec_api_key.get_secret_value()
         ):
-            raise ValueError("The iotec SMS backend needs FINVEST_SMS_IOTEC_CLIENT_ID and _API_KEY")
+            raise ValueError("ioTec SMS needs FINVEST_SMS_IOTEC_CLIENT_ID and _API_KEY")
+        if "africastalking" in used:
+            if not (
+                self.africastalking_username
+                and self.africastalking_api_key
+                and self.africastalking_api_key.get_secret_value()
+            ):
+                raise ValueError(
+                    "Africa's Talking SMS needs FINVEST_SMS_AFRICASTALKING_USERNAME and _API_KEY"
+                )
+            # The sandbox delivers nothing to real phones, so production refuses it.
+            sandbox = self.africastalking_username == "sandbox" or (
+                "sandbox" in self.africastalking_base_url
+            )
+            if sandbox and (self.environment or "").lower() == "production":
+                raise ValueError("The Africa's Talking sandbox may not run in production")
         if not self.iotec_base_url.startswith("https://"):
             raise ValueError("The ioTec address must use https")
+        if not self.africastalking_base_url.startswith("https://"):
+            raise ValueError("The Africa's Talking address must use https")
         return self
 
     def transport(self) -> SmsTransport:
-        if self.backend == "iotec":
+        first = self._provider(self.backend)
+        if first is None:
+            return ConsoleSms() if self.backend == "local-console" else DisabledSms()
+        second = self._provider(self.fallback)
+        if second is None:
+            return first
+        from app.infrastructure.sms.fallback import FallbackSms
+
+        return FallbackSms(first, second)
+
+    def _provider(self, name: str) -> SmsTransport | None:
+        if name == "iotec":
             from app.infrastructure.sms.iotec import IotecSms
 
             assert self.iotec_client_id is not None and self.iotec_api_key is not None
@@ -142,7 +186,22 @@ class SmsSettings(BaseSettings):
                 api_key=self.iotec_api_key,
                 base_url=self.iotec_base_url,
             )
-        return ConsoleSms() if self.backend == "local-console" else DisabledSms()
+        if name == "africastalking":
+            from app.infrastructure.sms.africastalking import SANDBOX_BASE_URL, AfricasTalkingSms
+
+            assert self.africastalking_username is not None
+            assert self.africastalking_api_key is not None
+            base_url = self.africastalking_base_url
+            if self.africastalking_username == "sandbox" and "sandbox" not in base_url:
+                # Africa's Talking's own SDKs send the sandbox username to the sandbox host.
+                base_url = SANDBOX_BASE_URL
+            return AfricasTalkingSms(
+                username=self.africastalking_username,
+                api_key=self.africastalking_api_key,
+                sender_id=self.africastalking_sender_id,
+                base_url=base_url,
+            )
+        return None
 
 
 __all__ = [

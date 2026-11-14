@@ -239,6 +239,11 @@ def prepare(output: Path, env: Mapping[str, str]) -> None:
         "FINVEST_EMAIL_RESEND_API_KEY",
         # SMS goes out from the worker only (backend app/infrastructure/sms).
         "FINVEST_SMS_BACKEND",
+        "FINVEST_SMS_FALLBACK",
+        "FINVEST_SMS_AFRICASTALKING_USERNAME",
+        "FINVEST_SMS_AFRICASTALKING_API_KEY",
+        "FINVEST_SMS_AFRICASTALKING_SENDER_ID",
+        "FINVEST_SMS_AFRICASTALKING_BASE_URL",
         "FINVEST_SMS_IOTEC_CLIENT_ID",
         "FINVEST_SMS_IOTEC_API_KEY",
         "FINVEST_SMS_IOTEC_BASE_URL",

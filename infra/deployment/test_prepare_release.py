@@ -179,7 +179,12 @@ class PrepareRelease(unittest.TestCase):
 
     def test_sms_settings_reach_the_worker_only(self):
         sms = {
-            "FINVEST_SMS_BACKEND": "iotec",
+            "FINVEST_SMS_BACKEND": "africastalking",
+            "FINVEST_SMS_FALLBACK": "iotec",
+            "FINVEST_SMS_AFRICASTALKING_USERNAME": "finvest",
+            "FINVEST_SMS_AFRICASTALKING_API_KEY": "a" * 64,
+            "FINVEST_SMS_AFRICASTALKING_SENDER_ID": "FINVEST",
+            "FINVEST_SMS_AFRICASTALKING_BASE_URL": "https://api.africastalking.com",
             "FINVEST_SMS_IOTEC_CLIENT_ID": "client",
             "FINVEST_SMS_IOTEC_API_KEY": "k" * 32,
             "FINVEST_SMS_IOTEC_BASE_URL": "https://messaging-api.iotec.io",
