@@ -641,6 +641,8 @@ async def carry_out(session: AsyncSession, transfer_id: str, clock: Clock) -> Tr
         },
     )
     done = await _transfer(session, transfer.id)
+    # Transaction monitoring reads it for both clients: money out for one, money in for the other.
+    await screening.watch_transfer(session, transfer.id, now)
     await publish(
         session,
         topic=TRANSFERRED_TOPIC,
