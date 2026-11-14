@@ -21,6 +21,7 @@ from app.modules.payouts.domain.destinations import (
     approve,
     compare_names,
     confirm_code,
+    network_name_matches,
     payable_from,
     proof_fits,
     record_check,
@@ -37,10 +38,11 @@ LETTER = ProofCheck(ProofKind.BANK_LETTER, NameMatch.EXACT)
 
 
 def in_review(kind: DestinationKind = DestinationKind.BANK) -> Destination:
-    proof = (
-        ProofKind.BANK_LETTER if kind is DestinationKind.BANK else ProofKind.NETWORK_REGISTERED_NAME
-    )
-    return submit_proof(confirm_code(Destination.new(kind)), proof)
+    waiting = confirm_code(Destination.new(kind))
+    if kind is DestinationKind.MOBILE_MONEY:
+        # A number reaches staff when the name its network holds matches the ID.
+        return network_name_matches(waiting)
+    return submit_proof(waiting, ProofKind.BANK_LETTER)
 
 
 CHECKER, APPROVER = "-Nabc0000000000000S1", "-Nabc0000000000000S2"

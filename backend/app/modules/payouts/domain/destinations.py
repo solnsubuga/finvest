@@ -232,6 +232,14 @@ class RejectionReason(StrEnum):
     PROOF_WRONG_ACCOUNT = "proof_wrong_account"
     PROOF_WRONG_DOCUMENT = "proof_wrong_document"
     SUSPECTED_FRAUD = "suspected_fraud"
+    # The network holds no name for a mobile money number, or has barred it.
+    NETWORK_NAME_UNAVAILABLE = "network_name_unavailable"
+
+
+# Refusals the worker makes from the network's answer, with no member of staff. Both are final.
+NETWORK_REFUSALS = frozenset(
+    {RejectionReason.NAME_DIFFERENT, RejectionReason.NETWORK_NAME_UNAVAILABLE}
+)
 
 
 class DestinationError(Exception):
@@ -279,15 +287,42 @@ def submit_proof(destination: Destination, proof: ProofKind) -> Destination:
     """The client uploaded proof, or uploaded a better one after a rejection."""
     if destination.status not in (DestinationStatus.AWAITING_PROOF, DestinationStatus.REJECTED):
         raise DestinationError("destination_not_awaiting_proof")
-    if destination.rejection_reason is RejectionReason.SUSPECTED_FRAUD:
-        # Final. A better document does not answer a suspicion of fraud.
+    if destination.rejection_reason is RejectionReason.SUSPECTED_FRAUD or (
+        destination.rejection_reason in NETWORK_REFUSALS
+        and destination.kind is DestinationKind.MOBILE_MONEY
+    ):
+        # Final. A better document does not answer a suspicion of fraud, and the network's
+        # answer for a number is the only proof there is.
         raise DestinationError("destination_rejected_final")
+    if destination.kind is DestinationKind.MOBILE_MONEY:
+        # A number is proved by the name its network holds, read by the worker, never by
+        # anything the client sends.
+        raise DestinationError("proof_kind_not_accepted")
     if not proof_fits(destination.kind, proof):
         raise DestinationError("proof_kind_not_accepted")
     # New proof is checked afresh: nothing of an earlier check carries over.
     return replace(
         destination, status=DestinationStatus.IN_REVIEW, rejection_reason=None, checked_by=None
     )
+
+
+def network_name_matches(destination: Destination) -> Destination:
+    """The name the network holds for a mobile money number matches the ID. Staff check it next.
+
+    The worker's step: the number never waits for proof from the client.
+    """
+    _require(destination, DestinationStatus.AWAITING_PROOF)
+    if destination.kind is not DestinationKind.MOBILE_MONEY:
+        raise DestinationError("proof_kind_not_accepted")
+    return replace(destination, status=DestinationStatus.IN_REVIEW, checked_by=None)
+
+
+def refuse_by_network(destination: Destination, reason: RejectionReason) -> Destination:
+    """The network's answer refuses a mobile money number: a different name, or none. Final."""
+    _require(destination, DestinationStatus.AWAITING_PROOF)
+    if destination.kind is not DestinationKind.MOBILE_MONEY or reason not in NETWORK_REFUSALS:
+        raise DestinationError("proof_kind_not_accepted")
+    return replace(destination, status=DestinationStatus.REJECTED, rejection_reason=reason)
 
 
 def record_check(

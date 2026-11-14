@@ -358,10 +358,11 @@ export const DestinationOut = z.object({
   holder_name: z.string(),
   id: z.string(),
   kind: z.enum(["mobile_money", "bank"]),
+  name_check: z.enum(["checking", "not_answered", "limit_reached", "waiting_for_id"]).nullable().optional(),
   network: z.enum(["mtn", "airtel"]).nullable(),
   payable_from: z.string().nullable(),
   proof_kind: z.enum(["bank_statement", "bank_letter", "bank_card", "network_registered_name"]).nullable(),
-  rejection_reason: z.enum(["name_different", "proof_unreadable", "proof_too_old", "proof_wrong_account", "proof_wrong_document", "suspected_fraud"]).nullable(),
+  rejection_reason: z.enum(["name_different", "proof_unreadable", "proof_too_old", "proof_wrong_account", "proof_wrong_document", "suspected_fraud", "network_name_unavailable"]).nullable(),
   status: z.enum(["awaiting_code", "awaiting_proof", "in_review", "approved", "rejected"]),
 });
 export type DestinationOut = z.infer<typeof DestinationOut>;
@@ -2243,6 +2244,19 @@ export const operations = {
     query: z.object({}),
     body: CodeAnswer,
     bodyKind: "json",
+    idempotent: false,
+    status: 200,
+    response: DestinationOut,
+  },
+  "POST /client/payout-destinations/{destination_id}/name-check": {
+    method: "POST",
+    path: "/client/payout-destinations/{destination_id}/name-check",
+    params: z.object({
+    destination_id: z.string(),
+  }),
+    query: z.object({}),
+    body: null,
+    bodyKind: null,
     idempotent: false,
     status: 200,
     response: DestinationOut,

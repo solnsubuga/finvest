@@ -3,12 +3,14 @@ past its wait, a funded pot for the provider to pay from) and a scripted provide
 
 import asyncio
 import secrets
+import uuid
 from datetime import UTC, date, datetime, timedelta
 
 import pytest
 
 from app.infrastructure.database import Database
 from app.infrastructure.jobs import RetryPolicy, Worker, WorkerConfig
+from app.infrastructure.settings import Settings
 from app.modules.kyc import service as kyc
 from app.modules.ledger import service as ledger
 from app.modules.ledger.domain.entries import EntryDraft, credit, debit
@@ -19,7 +21,7 @@ from app.modules.payments.domain.outcomes import (
     Uncertain,
     UncertainReason,
 )
-from app.modules.payouts import destinations, jobs, payouts
+from app.modules.payouts import destinations, jobs, name_lookups, payouts
 from app.modules.payouts.domain import posting
 from app.modules.payouts.domain.destinations import (
     BankAccount,
@@ -27,6 +29,7 @@ from app.modules.payouts.domain.destinations import (
     MobileMoneyNumber,
     ProofKind,
 )
+from app.modules.payouts.domain.name_lookups import Found, NoName
 from app.modules.payouts.domain.payouts import PayoutEvent, PayoutStatus
 from app.modules.payouts.domain.provider import DisbursementRequest
 from app.modules.payouts.domain.sending import AttemptOutcome
@@ -37,6 +40,7 @@ from app.shared.clock import Clock
 from app.shared.money import Currency
 from app.shared.push_ids import push_id
 from tests.support.clock import FakeClock
+from tests.support.database import PASSWORDS
 from tests.support.kyc import VERIFIED_NAME, verify
 from tests.support.ledger import key, staff, ugx
 
@@ -48,6 +52,53 @@ _SEND_OUTCOMES = {
     PayoutEvent.SEND_REJECTED: AttemptOutcome.REJECTED,
     PayoutEvent.SEND_UNCERTAIN: AttemptOutcome.UNCERTAIN,
 }
+
+
+def as_worker(database: Database) -> Database:
+    """The worker's connection to the same test database as `database`, which may be the API's.
+    Close it when done."""
+    url = database.engine.url.set(username="finvest_worker", password=PASSWORDS["finvest_worker"])
+    return Database(
+        Settings(
+            database_url=url.render_as_string(hide_password=False), database_ssl_mode="disable"
+        )
+    )
+
+
+async def name_from_network(
+    database: Database,
+    destination_id: str,
+    clock: Clock,
+    *,
+    registered_name: str | None = VERIFIED_NAME,
+    worker: Database | None = None,
+) -> destinations.DestinationView:
+    """A mobile money number whose code was confirmed is looked up, and the network answers
+    with `registered_name` (None: the network holds no name for it).
+
+    Asked for as the client, as the code route does, and answered as the worker, as ioTec
+    would. The client is taken through an identity check first if they have not passed one,
+    so the name is compared at once.
+    """
+    async with database.actor_transaction(staff()) as session:
+        view = await destinations.get_destination(session, destination_id)
+        id_name = await kyc.verified_name(session, view.client_id)
+    owner = Actor("client", view.client_id)
+    if id_name is None:
+        await verify(database, owner, clock)
+    async with database.actor_transaction(owner) as session:
+        lookup = await name_lookups.ask(session, owner, view, clock)
+    answering = worker or as_worker(database)
+    try:
+        async with answering.actor_transaction(SYSTEM) as session:
+            await name_lookups.note_sent(session, lookup.id, str(uuid.uuid4()), clock)
+            answer: Found | NoName = NoName() if registered_name is None else Found(registered_name)
+            await name_lookups.record_answer(session, SYSTEM, lookup.id, answer, clock)
+    finally:
+        if worker is None:
+            await answering.close()
+    async with database.actor_transaction(staff()) as session:
+        return await destinations.get_destination(session, destination_id)
 
 
 async def approve_by_two(
@@ -71,11 +122,15 @@ async def approve_by_two(
     if name is None:
         await verify(database, Actor("client", client_id), clock)
     async with database.actor_transaction(checker) as session:
+        network = (
+            await destinations.get_destination(session, destination_id)
+        ).proof_kind is ProofKind.NETWORK_REGISTERED_NAME
         await destinations.check(
             session,
             checker,
             destination_id,
-            proof_name=proof_name,
+            # A number is checked with the name its network gave, never a typed one.
+            proof_name=None if network else proof_name,
             statement_date=statement_date,
             reason="Checked",
             clock=clock,
@@ -145,9 +200,12 @@ class World:
                 session, self.client, account, "Sarah Nakato", self.clock
             )
             await destinations.confirm_code(session, self.client, view.id, self.clock)
-            await destinations.submit_proof(
-                session, self.client, view.id, proof, "doc-1", self.clock
-            )
+            if not mobile:
+                await destinations.submit_proof(
+                    session, self.client, view.id, proof, "doc-1", self.clock
+                )
+        if mobile:
+            await name_from_network(self.app, view.id, self.clock, worker=self.worker)
         # An approval is stamped against the database clock, whatever time the test is at.
         approved_at = FakeClock(datetime.now(UTC))
         await approve_by_two(self.app, view.id, approved_at)

@@ -37,6 +37,8 @@ _FIELD_REFUSALS = {
     "statement_date_required": "statement_date",
     "statement_too_old": "statement_date",
     "proof_kind_not_accepted": "proof_name",
+    "proof_name_required": "proof_name",
+    "proof_name_from_network": "proof_name",
 }
 _REFUSALS: dict[int | str, dict[str, object]] = {
     401: {"model": ErrorEnvelope},
@@ -82,6 +84,8 @@ Rejection = Literal[
     "proof_wrong_document",
     "suspected_fraud",
 ]
+# What an account may show: staff choices, and the worker's refusal of a number with no name.
+RejectionShown = Rejection | Literal["network_name_unavailable"]
 Reason = Annotated[str, Field(min_length=1, max_length=500)]
 
 
@@ -110,8 +114,11 @@ class StaffDestinationOut(Contract):
     proof_kind: (
         Literal["bank_statement", "bank_letter", "bank_card", "network_registered_name"] | None
     )
+    # For a mobile money number: the name its network holds, as ioTec Verify gave it. A check
+    # of a number is recorded with this name, never a typed one. None for a bank account.
+    network_name: str | None
     check: CheckOut | None
-    rejection_reason: Rejection | None
+    rejection_reason: RejectionShown | None
     approved_by: PushId | None
     approved_at: datetime | None
     payable_from: datetime | None
@@ -136,7 +143,9 @@ class StaffDestinationDetail(StaffDestinationOut):
 class NewCheck(Contract):
     """What the first person read on the proof. The name is compared on the server."""
 
-    proof_name: Annotated[str, Field(min_length=1, max_length=120)]
+    # Required for a bank account. Left out for a mobile money number, which is checked with
+    # the name its network gave.
+    proof_name: Annotated[str | None, Field(min_length=1, max_length=120)] = None
     # The date printed on a bank statement. Required for a statement, ignored otherwise.
     # Not strict, so the ISO date in the JSON body is read as a date.
     statement_date: Annotated[date | None, Field(strict=False)] = None
@@ -186,6 +195,9 @@ def _fields(view: DestinationView) -> dict[str, object]:
         "holder_name": view.holder_name,
         "status": view.status.value,
         "proof_kind": view.proof_kind.value if view.proof_kind else None,
+        "network_name": view.proof_name
+        if view.proof_kind is not None and view.proof_kind.value == "network_registered_name"
+        else None,
         "check": check,
         "rejection_reason": view.rejection_reason.value if view.rejection_reason else None,
         "approved_by": view.approved_by,
@@ -269,7 +281,9 @@ async def check_destination(
     """Record what you read on the proof. The account then waits for a different person.
 
     422 `name_different` when the name on the proof is not the client's; refuse the proof
-    instead. 409 `client_not_verified` when the client has no approved identity check.
+    instead. 422 `proof_name_required` when it is left out for a bank account, and
+    `proof_name_from_network` when it is given for a mobile money number, which is checked with
+    `network_name`. 409 `client_not_verified` when the client has no approved identity check.
     """
     try:
         async with database.actor_transaction(staff.actor) as session:
