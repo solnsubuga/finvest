@@ -72,7 +72,11 @@ export default function Receipt() {
         <>
           <Button label="Share receipt" variant="secondary" onPress={share} testID="receipt-share" />
           <Button label="Done" onPress={done} testID="receipt-done" />
-          <TextLink label="Something wrong with this?" onPress={() => router.push("/help")} />
+          <TextLink
+            label="Something wrong with this?"
+            onPress={() => router.push({ pathname: "/support/complaints/new", params: { payment: deposit.reference } })}
+            testID="receipt-complain"
+          />
         </>
       }
     >

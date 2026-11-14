@@ -78,17 +78,28 @@ describe("Invest on a wide screen", () => {
 });
 
 describe("Activity on a wide screen", () => {
+  it("opens a complaint about a payment from its details", async () => {
+    await logIn();
+    await visit("/activity");
+    await fireEvent.changeText(await screen.findByTestId("activity-search"), "bank transfer");
+    expect(within(screen.getByTestId("activity-detail")).getByText("Payment for 182 Day Treasury Bill")).toBeTruthy();
+    await fireEvent.press(screen.getByTestId("detail-help"));
+    expect(
+      await screen.findByText("This complaint is about your payment with Finvest reference demo-activity-pay-3. We add the reference for you."),
+    ).toBeTruthy();
+  });
+
   it("shows a table with the chosen row's details, searches it, and saves what is shown as CSV", async () => {
     await logIn();
     await visit("/activity");
     const table = await screen.findByTestId("activity-table");
-    expect(within(table).getByText("Payment for 182 day Treasury bill")).toBeTruthy();
+    expect(within(table).getByText("Payment for 182 Day Treasury Bill")).toBeTruthy();
     expect(within(table).getByText("Payout")).toBeTruthy();
     // The newest row is shown beside the table to start with.
     expect(screen.getByTestId("activity-detail")).toBeTruthy();
 
     await fireEvent.changeText(screen.getByTestId("activity-search"), "payout");
-    expect(within(screen.getByTestId("activity-table")).queryByText("Payment for 182 day Treasury bill")).toBeNull();
+    expect(within(screen.getByTestId("activity-table")).queryByText("Payment for 182 Day Treasury Bill")).toBeNull();
     expect(within(screen.getByTestId("activity-detail")).getByText("Payout")).toBeTruthy();
 
     await fireEvent.press(screen.getByTestId("activity-csv"));
