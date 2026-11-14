@@ -19,6 +19,7 @@ import {
   quickPeriod,
   QuickPick,
   receiptReference,
+  taxYearLabel,
 } from "@/documents/periods";
 import { STATEMENT_POLL_LIMIT, STATEMENT_POLL_MS } from "@/documents/poll";
 import { DocumentItem, DocumentsError } from "@/documents/types";
@@ -48,8 +49,9 @@ type Request =
 
 /**
  * Documents: ask for a statement of any period up to a year, and download
- * statements and receipts. Every figure is in the PDF, after tax, from the
- * ledger. The screen shows no amounts of its own.
+ * statements, receipts and yearly tax certificates. Every figure is in the
+ * PDF, from the ledger: statements after tax, and the tax certificate with
+ * the tax withheld. The screen shows no amounts of its own.
  */
 export default function Documents() {
   const client = useDocuments();
@@ -154,7 +156,7 @@ export default function Documents() {
 
   if (wide) {
     return (
-      <AppPage title="Documents" subtitle="Statements and receipts for your investments, after tax.">
+      <AppPage title="Documents" subtitle="Statements, receipts and tax certificates for your investments.">
         <View style={styles.columns}>
           <View style={{ flex: 1, gap: 20 }}>{lists}</View>
           <View style={styles.side}>{panel}</View>
@@ -472,6 +474,9 @@ function DocumentLists({ items }: { items: DocumentItem[] }) {
   const requested = items.filter((item) => item.kind === "requested_statement");
   const monthly = items.filter((item) => item.kind === "monthly_statement" && item.status === "ready");
   const receipts = items.filter((item) => item.kind === "receipt" && item.status === "ready");
+  const certificates = items.filter(
+    (item) => item.kind === "tax_certificate" && item.status === "ready",
+  );
 
   return (
     <View style={{ gap: 20 }}>
@@ -493,6 +498,11 @@ function DocumentLists({ items }: { items: DocumentItem[] }) {
       {monthly.length > 0 ? (
         <Section title="Monthly statements">
           <Rows items={monthly} />
+        </Section>
+      ) : null}
+      {certificates.length > 0 ? (
+        <Section title="Tax certificates">
+          <Rows items={certificates} />
         </Section>
       ) : null}
       <Section title="Receipts">
@@ -535,6 +545,12 @@ function rowText(document: DocumentItem): { title: string; subtitle: string } {
     return {
       title: reference ? `Receipt ${reference}` : "Receipt",
       subtitle: `Payment confirmed on ${formatDateTime(document.requestedAt)}`,
+    };
+  }
+  if (document.kind === "tax_certificate" && document.dateFrom && document.dateTo) {
+    return {
+      title: `Tax year ${taxYearLabel(document.dateFrom)}`,
+      subtitle: `${periodLabel(document.dateFrom, document.dateTo)}. Shows the tax withheld from your interest.`,
     };
   }
   if (document.kind === "monthly_statement" && document.dateFrom) {
