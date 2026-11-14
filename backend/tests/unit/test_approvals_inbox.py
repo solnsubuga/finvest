@@ -85,6 +85,18 @@ def test_a_payout_resolution_is_decided_by_those_who_change_reconciliation() -> 
     assert inbox([waiting("payout_resolution")], "me", permissions_for("support")) == []
 
 
+def test_a_payout_release_is_decided_by_those_who_check_payout_accounts() -> None:
+    for role in ("admin", "operations", "compliance"):
+        [item] = inbox([waiting("payout_release")], "me", permissions_for(role))
+        assert item.can_decide is True
+    # Finance sees the review queue but does not check payout accounts.
+    [seen] = inbox([waiting("payout_release")], "me", permissions_for("finance"))
+    assert seen.can_decide is False
+    assert inbox([waiting("payout_release")], "me", permissions_for("support")) == []
+    [mine] = inbox([waiting("payout_release", proposer="me")], "me", permissions_for("admin"))
+    assert (mine.yours, mine.can_decide) == (True, False)
+
+
 def test_items_the_reader_cannot_see_are_left_out() -> None:
     items = [waiting("wording_change"), waiting("dealing_order")]
     assert inbox(items, "me", permissions_for("compliance")) == []

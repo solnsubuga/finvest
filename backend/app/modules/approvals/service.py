@@ -21,7 +21,7 @@ from app.modules.ledger import corrections
 from app.modules.migration import service as migration
 from app.modules.notifications import announcements, suppression_lifts, wording_store
 from app.modules.payments import bank_transfers, reassignments
-from app.modules.payouts import destinations, resolutions
+from app.modules.payouts import destinations, resolutions, reviews
 from app.modules.reconciliation import day_close, transfers
 from app.modules.support import complaints
 from app.modules.tax import service as tax
@@ -72,6 +72,8 @@ async def waiting_for(session: AsyncSession, staff: StaffSession, now: datetime)
         found += await _tax_remittances(session)
     if "deposit_reassignment" in kinds:
         found += await _reassignments(session)
+    if "payout_release" in kinds:
+        found += await _payout_releases(session)
     return inbox(found, staff.staff_id, staff.permissions)
 
 
@@ -294,4 +296,12 @@ async def _reassignments(session: AsyncSession) -> list[Waiting]:
     return [
         Waiting("deposit_reassignment", r.id, r.deposit_id, r.proposed_by, r.proposed_at)
         for r in await reassignments.proposals_awaiting_approval(session)
+    ]
+
+
+async def _payout_releases(session: AsyncSession) -> list[Waiting]:
+    # The subject is the payout's ID, never the client, the account or the amount.
+    return [
+        Waiting("payout_release", r.id, r.payout_id, r.proposed_by, r.proposed_at)
+        for r in await reviews.waiting(session)
     ]

@@ -30,6 +30,8 @@ describe("overview inbox", () => {
     expect(within(lock).getByRole("link", { name: /Review/ })).toHaveAttribute("href", "/clients?client=-NstubClient00000042");
     const team = within(decide).getByText("Role change").closest("li") as HTMLElement;
     expect(within(team).getByRole("link")).toHaveAttribute("href", "/team");
+    const release = within(decide).getAllByText(/Large payout to release/)[0]?.closest("li") as HTMLElement;
+    expect(within(release).getByRole("link")).toHaveAttribute("href", "/review-queue?tab=held&payout=-NstubPayout00000017");
     const mine = screen.getByRole("list", { name: "Yours, waiting for someone else" });
     expect(within(mine).getByText("Christmas opening hours")).toBeInTheDocument();
     expect(mine).toHaveTextContent(/Proposed by you/);
