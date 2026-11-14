@@ -12,7 +12,6 @@ variables {
   deploy_ssh_public_key = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIEx deploy"
   ssh_source_addresses  = ["203.0.113.1/32"]
   admin_access_emails   = ["staff@example.com"]
-  cloudflare_account_id = "account"
 }
 
 run "environment_file_plans" {

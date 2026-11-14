@@ -10,7 +10,7 @@ from datetime import datetime
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, Request, Response
-from pydantic import Field
+from pydantic import Field, model_validator
 
 from app.infrastructure.settings import Settings
 from app.modules.identity.domain.permissions import Permission, Role
@@ -170,8 +170,17 @@ Password = Annotated[str, Field(min_length=1, max_length=1024)]
 
 
 class ClientLoginStart(Contract):
-    phone: Annotated[str, Field(min_length=1, max_length=32)]
+    """The mobile number, or an email address the client has proved, with the password."""
+
+    phone: Annotated[str, Field(min_length=1, max_length=32)] | None = None
+    email: Annotated[str, Field(min_length=1, max_length=254)] | None = None
     password: Password
+
+    @model_validator(mode="after")
+    def one_identifier(self) -> "ClientLoginStart":
+        if (self.phone is None) == (self.email is None):
+            raise ValueError("Send either phone or email")
+        return self
 
 
 class StaffLoginStart(Contract):
@@ -222,10 +231,15 @@ async def staff_view(identity: IdentityService, staff: StaffSession) -> StaffSes
 async def client_login_start(
     body: ClientLoginStart, request: Request, identity: Identity
 ) -> LoginStarted:
-    """Check the mobile number and password. Never opens a session by itself."""
+    """Check the mobile number or proved email, and the password. Never opens a session."""
     check_origin(request, "client", required=False)
+    by_email = body.email is not None
     challenge = await identity.start_login(
-        "client", body.phone, body.password, address=caller_address(request)
+        "client",
+        body.email if body.email is not None else (body.phone or ""),
+        body.password,
+        address=caller_address(request),
+        by_email=by_email,
     )
     return LoginStarted(login_id=challenge.id, methods=challenge.methods)
 

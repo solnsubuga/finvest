@@ -679,3 +679,14 @@ def _deposit(row: Row[Any]) -> Deposit:
         sent_at=row.sent_at,
         settled_at=row.settled_at,
     )
+
+
+_OPEN_FOR_CLIENT = text(
+    "SELECT count(*) FROM payment_deposits WHERE client_id = :client_id "
+    "AND status NOT IN ('confirmed', 'failed')"
+)
+
+
+async def open_deposit_count(session: AsyncSession, client_id: str) -> int:
+    """How many of the client's deposits have not ended, including any whose outcome is unclear."""
+    return int(await session.scalar(_OPEN_FOR_CLIENT, {"client_id": client_id}) or 0)

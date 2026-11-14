@@ -1,7 +1,7 @@
 """Keep a record of each daily journal sent to the accounting system.
 
 Revision ID: 0250_finance_journal_exports
-Revises: 0076_migration_carry_resolutions
+Revises: 0220_identity_email_login
 
 The Finance screen exports the ledger, added up by account code, one journal per day, for days
 the ledger is closed through. Each export is a row here, so the screen can say what was last
@@ -21,7 +21,7 @@ from collections.abc import Sequence
 from alembic import op
 
 revision: str = "0250_finance_journal_exports"
-down_revision: str | None = "0076_migration_carry_resolutions"
+down_revision: str | None = "0220_identity_email_login"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 

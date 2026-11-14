@@ -121,6 +121,7 @@ export function Review({ check, busy, error, onDecide, onShowNumber, canDecide =
               {doubt && selfie.score !== null ? (
                 <strong className="text-warning-text">Face match {selfie.score}%</strong>
               ) : null}
+              {photo.live ? <strong className="text-success">Taken live</strong> : null}
               {asked ? <strong className="text-warning-text">New photo asked for</strong> : null}
             </figure>
           );

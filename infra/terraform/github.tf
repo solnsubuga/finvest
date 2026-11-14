@@ -2,6 +2,9 @@
 # copied by hand. Terraform owns these names: change them here, not in GitHub.
 
 locals {
+  # The GitHub environments are named prod and dev.
+  github_environment = var.environment == "production" ? "prod" : "dev"
+
   github_variables = {
     SITE_DOMAINS = join(",", var.site_domains)
     APP_DOMAIN   = var.app_domain
@@ -54,7 +57,7 @@ resource "random_password" "database" {
 resource "github_actions_environment_variable" "deploy" {
   for_each      = local.github_variables
   repository    = var.github_repository
-  environment   = var.environment
+  environment   = local.github_environment
   variable_name = each.key
   value         = each.value
 }
@@ -62,7 +65,7 @@ resource "github_actions_environment_variable" "deploy" {
 resource "github_actions_environment_secret" "deploy" {
   for_each        = local.github_secret_names
   repository      = var.github_repository
-  environment     = var.environment
+  environment     = local.github_environment
   secret_name     = each.key
   plaintext_value = local.github_secrets[each.key]
 }

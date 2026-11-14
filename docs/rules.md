@@ -19,7 +19,7 @@ These rules are not preferences. A change that breaks one is wrong even if it wo
 
 ## Security
 
-- Client sign-in is never a texted code alone. A new device or the web needs the mobile number and password, then a second step. The second step is any one of the methods the client has set up: a passkey, an authenticator app, or a code sent by SMS or email. The strongest one is offered first and the client can choose another.
+- Client sign-in is never a texted code alone. A new device or the web needs the mobile number, or an email address the client has proved, and the password, then a second step. The second step is any one of the methods the client has set up: a passkey, an authenticator app, or a code sent by SMS or email. The strongest one is offered first and the client can choose another.
 - On a phone that is already signed in, the app PIN or fingerprint opens the app and approves payments. The PIN never signs in a new device.
 - Passwords are at least 10 characters, checked against leaked password lists, and stored with Argon2id.
 - Passkeys use WebAuthn, so the server keeps only a public key.

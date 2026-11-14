@@ -1,5 +1,6 @@
 """Identity provider adapters. The provider is not chosen yet; see docs/identity-checks.md."""
 
+from app.modules.kyc.domain.liveness import Live, NotLive, NotStarted, Started, StillOpen
 from app.modules.kyc.domain.provider import (
     Accepted,
     AutomaticCheck,
@@ -62,3 +63,24 @@ class DevelopmentStubProvider:
                 CheckOutcome(AutomaticCheck.SCREENING, Verdict.PASS),
             )
         )
+
+
+# The smallest JPEG header the photo check accepts. Not a picture: the stub captures nothing.
+STUB_CAPTURE = b"\xff\xd8\xff\xe0 development stub capture"
+
+
+class DevelopmentStubLiveness:
+    """Pretends to run a liveness check, for local development only. It checks nothing.
+
+    The page it hands out is a placeholder, and the first read says a live person was seen,
+    with a stand-in capture. Paired only with `DevelopmentStubProvider`, so it is refused in
+    production and never approves a client.
+    """
+
+    name = "development-stub"
+
+    async def start(self, key: str) -> Started | NotStarted:
+        return Started(request_id=key, url=f"https://liveness.invalid/{key}")
+
+    async def result(self, request_id: str) -> StillOpen | Live | NotLive:
+        return Live(photo=STUB_CAPTURE, content_type="image/jpeg")

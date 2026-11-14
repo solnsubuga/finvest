@@ -19,6 +19,7 @@ class StubDatabase:
 DECISIONS = {
     "POST /staff/team/changes/{change_id}/decision",
     "POST /staff/phone-changes/{change_id}/approval",
+    "POST /staff/closures/{request_id}/approval",
     "POST /staff/notification-wordings/proposals/{proposal_id}/decision",
     "POST /staff/announcements/{announcement_id}/decision",
     "POST /staff/email-suppressions/lifts/{lift_id}/decision",

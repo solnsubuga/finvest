@@ -5,8 +5,9 @@ resolutions and their bank batches, the migration checks, the imported statement
 closes and their recorded matches, the pot transfers, the help chat, the complaints register,
 the goals, the email delivery records, the unclaimed accounts, the complaint outcomes, the
 suppression lifts, the client locks, the announcements, the team changes, Finvest's own money in
-the buffer, the payments of tax to URA, the payments moved to the right client or the journals
-sent to the accounting system."""
+the buffer, the payments of tax to URA, the payments moved to the right client, next of kin, the
+answers to the investing questions, the requests to close an account or the journals sent to the
+accounting system."""
 
 import os
 from collections.abc import Iterator
@@ -712,6 +713,14 @@ ROWS = {
         "'-Nabc0000000000000W1', '1', 1, 'close', 'Same person', '-Nabc0000000000000S1', now())",
         "refusing to drop how the switch resolved the clients it could not carry",
     ),
+    "0200_kyc_liveness": (
+        "INSERT INTO kyc_checks (id, client_id, document_type, document_country, created_at, "
+        "updated_at) VALUES ('-Nabc0000000000000A1', '-Nabc0000000000000B1', 'national_id', "
+        "'UG', now(), now()); "
+        "INSERT INTO kyc_liveness (id, check_id, provider, created_at, updated_at) VALUES "
+        "('-Nabc0000000000000L1', '-Nabc0000000000000A1', 'iotec-faces', now(), now())",
+        "refusing to drop liveness records",
+    ),
     "0152_client_locks": (
         "BEGIN; SELECT set_config('finvest.actor_kind', 'staff', true); "
         "SELECT set_config('finvest.actor_id', '-Nabc0000000000000S1', true); "
@@ -787,6 +796,23 @@ ROWS = {
         "decode(repeat('00', 32), 'hex'), 'passkey', 'cookie', now(), now(), now(), now(), "
         "now())",
         "refusing to drop staff re-confirmations",
+    ),
+    "0230_kyc_next_of_kin": (
+        "INSERT INTO kyc_next_of_kin_lists (client_id, people, updated_at) "
+        "VALUES ('-Nabc0000000000000B1', 0, now())",
+        "refusing to drop next of kin",
+    ),
+    "0231_kyc_risk_answers": (
+        "INSERT INTO kyc_risk_answers (id, client_id, answers, score, profile, answered_at) "
+        "VALUES ('-Nabc0000000000000A1', '-Nabc0000000000000B1', '{}', 0, 'careful', now())",
+        "refusing to drop the answers clients gave",
+    ),
+    "0232_account_closures": (
+        "BEGIN; SELECT set_config('finvest.actor_kind', 'client', true); "
+        "SELECT set_config('finvest.actor_id', '-Nabc0000000000000B1', true); "
+        "INSERT INTO closure_requests (id, client_id, requested_at) "
+        "VALUES ('-Nabc0000000000000A1', '-Nabc0000000000000B1', now()); COMMIT",
+        "refusing to drop closure_requests",
     ),
 }
 

@@ -478,3 +478,14 @@ def run_from_row(row: Row[Any]) -> Run:
         created_at=row.created_at,
         updated_at=row.updated_at,
     )
+
+
+_LIVE_FOR_CLIENT = text(
+    "SELECT count(*) FROM autoinvest_plans WHERE client_id = :client_id "
+    "AND status IN ('active', 'paused')"
+)
+
+
+async def live_plan_count(session: AsyncSession, client_id: str) -> int:
+    """How many of the client's plans are not stopped, so may still ask for a payment."""
+    return int(await session.scalar(_LIVE_FOR_CLIENT, {"client_id": client_id}) or 0)

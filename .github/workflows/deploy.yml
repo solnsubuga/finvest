@@ -33,7 +33,8 @@ concurrency:
 jobs:
   deploy:
     runs-on: ubuntu-latest
-    environment: ${{ inputs.environment }}
+    # GitHub environment names: prod for production, dev for staging.
+    environment: ${{ inputs.environment == 'production' && 'prod' || 'dev' }}
     timeout-minutes: 40
     env:
       REVISION: ${{ inputs.revision }}
@@ -145,8 +146,8 @@ jobs:
           FINVEST_BANK_TRANSFER_ACCOUNTS: ${{ vars.FINVEST_BANK_TRANSFER_ACCOUNTS }}
           FINVEST_EMAIL_BACKEND: ${{ vars.FINVEST_EMAIL_BACKEND }}
           FINVEST_EMAIL_FROM: ${{ vars.FINVEST_EMAIL_FROM }}
-          FINVEST_EMAIL_RESEND_API_KEY: ${{ secrets.FINVEST_EMAIL_RESEND_API_KEY }}
-          FINVEST_EMAIL_FIDIBA_ENVIRONMENT: ${{ vars.FINVEST_EMAIL_FIDIBA_ENVIRONMENT }}
+          # The owner names the secret FINVEST_RESEND_API_KEY; the worker reads FINVEST_EMAIL_RESEND_API_KEY.
+          FINVEST_EMAIL_RESEND_API_KEY: ${{ secrets.FINVEST_RESEND_API_KEY }}
           FINVEST_PAYMENTS_PROVIDER: ${{ vars.FINVEST_PAYMENTS_PROVIDER }}
           FINVEST_IOTEC_CURRENCY_CODE: ${{ vars.FINVEST_IOTEC_CURRENCY_CODE }}
           FINVEST_IOTEC_CLIENT_ID: ${{ vars.FINVEST_IOTEC_CLIENT_ID }}
@@ -160,6 +161,7 @@ jobs:
           FINVEST_IOTEC_VERIFY_CLIENT_ID: ${{ secrets.FINVEST_IOTEC_VERIFY_CLIENT_ID }}
           FINVEST_IOTEC_VERIFY_API_KEY: ${{ secrets.FINVEST_IOTEC_VERIFY_API_KEY }}
           FINVEST_IOTEC_VERIFY_BASE_URL: ${{ vars.FINVEST_IOTEC_VERIFY_BASE_URL }}
+          FINVEST_PAYOUT_NAME_PROVIDER: ${{ vars.FINVEST_PAYOUT_NAME_PROVIDER }}
           FINVEST_SMS_BACKEND: ${{ vars.FINVEST_SMS_BACKEND }}
           FINVEST_SMS_IOTEC_CLIENT_ID: ${{ vars.FINVEST_SMS_IOTEC_CLIENT_ID }}
           FINVEST_SMS_IOTEC_API_KEY: ${{ secrets.FINVEST_SMS_IOTEC_API_KEY }}
@@ -169,7 +171,7 @@ jobs:
         run: python3 infra/deployment/prepare_release.py "$RUNNER_TEMP/finvest-release"
       - name: Admit this run to SSH
         env:
-          DIGITALOCEAN_TOKEN: ${{ secrets.DEPLOY_FIREWALL_TOKEN }}
+          DIGITALOCEAN_TOKEN: ${{ secrets.TERRAFORM_DIGITALOCEAN_TOKEN }}
           FIREWALL_ID: ${{ vars.DEPLOY_FIREWALL_ID }}
         run: |
           set -euo pipefail
@@ -200,7 +202,7 @@ jobs:
       - name: Close SSH to this run
         if: always() && env.SSH_RULE != ''
         env:
-          DIGITALOCEAN_TOKEN: ${{ secrets.DEPLOY_FIREWALL_TOKEN }}
+          DIGITALOCEAN_TOKEN: ${{ secrets.TERRAFORM_DIGITALOCEAN_TOKEN }}
           FIREWALL_ID: ${{ vars.DEPLOY_FIREWALL_ID }}
         run: |
           set -euo pipefail

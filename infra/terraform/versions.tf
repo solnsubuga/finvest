@@ -38,7 +38,7 @@ terraform {
   }
 }
 
-# Reads DIGITALOCEAN_TOKEN, SPACES_ACCESS_KEY_ID and SPACES_SECRET_ACCESS_KEY from the environment.
+# Reads DIGITALOCEAN_TOKEN (from the TERRAFORM_DIGITALOCEAN_TOKEN secret), SPACES_ACCESS_KEY_ID and SPACES_SECRET_ACCESS_KEY from the environment.
 provider "digitalocean" {}
 
 # Reads CLOUDFLARE_API_TOKEN from the environment.

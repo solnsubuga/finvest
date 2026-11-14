@@ -11,6 +11,11 @@ mock_provider "cloudflare" {
       ipv6_cidrs = ["2400:cb00::/32"]
     }
   }
+  mock_data "cloudflare_zone" {
+    defaults = {
+      account = { id = "account" }
+    }
+  }
 }
 
 variables {
@@ -75,7 +80,7 @@ run "deploy_settings_reach_github" {
     environment = "staging"
   }
   assert {
-    condition     = length(github_actions_environment_secret.deploy) == 8 && alltrue([for s in github_actions_environment_secret.deploy : s.environment == "staging"])
+    condition     = length(github_actions_environment_secret.deploy) == 8 && alltrue([for s in github_actions_environment_secret.deploy : s.environment == "dev"])
     error_message = "Every deploy secret is written to the environment's own GitHub environment."
   }
 }
@@ -91,12 +96,19 @@ run "production_requires_access" {
 run "production_with_access" {
   command = plan
   variables {
-    environment           = "production"
-    admin_access_emails   = ["staff@example.com"]
-    cloudflare_account_id = "account"
+    environment         = "production"
+    admin_access_emails = ["staff@example.com"]
   }
   assert {
     condition     = length(cloudflare_zero_trust_access_application.admin) == 1
     error_message = "Production puts the back office behind Cloudflare Access."
+  }
+  assert {
+    condition     = cloudflare_zero_trust_access_policy.admin_staff[0].account_id == "account"
+    error_message = "Access uses the zone's own Cloudflare account."
+  }
+  assert {
+    condition     = alltrue([for s in github_actions_environment_secret.deploy : s.environment == "prod"])
+    error_message = "Production settings go to the prod GitHub environment."
   }
 }

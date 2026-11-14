@@ -66,6 +66,9 @@ _SPECS = (
     ),
     _event("investment_withdrawal_paid", Category.INVESTMENTS, "investments", "amount", "product"),
     _event("interest_earned", Category.EARNINGS, "investments", "amount", "count"),
+    # Goals. The goal's name is the client's own words. Never an amount.
+    _event("goal_top_up_due", Category.INVESTMENTS, "goals", "goal", "date"),
+    _event("goal_reached", Category.INVESTMENTS, "goals", "goal"),
     # The account.
     _event("kyc_approved", Category.ACCOUNT, "kyc"),
     _event("kyc_retake_requested", Category.ACCOUNT, "kyc"),
