@@ -119,6 +119,11 @@ class ProviderJobs:
         if isinstance(answer, Pending):
             raise RetryableJobError(code="provider_pending")
         outcomes = answer.outcomes
+        async with self.database.actor_transaction(SYSTEM) as session:
+            # The screening module screens alongside. Its answer is part of the decision, so
+            # the result waits for it; one that never comes leaves the check to the sweep.
+            if await kyc.screening_running(session, check_id):
+                raise RetryableJobError(code="screening_pending")
 
         async def record(session: AsyncSession) -> Mapping[str, object]:
             view = await kyc.record_provider_result(
