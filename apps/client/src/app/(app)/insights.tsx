@@ -385,9 +385,16 @@ function UpcomingRow({ item, first }: { item: Upcoming; first: boolean }) {
               : "Rolls over and keeps earning"}
         </Txt>
       </View>
-      <Txt size={14} weight="bold">
-        {formatMoney(item.amount)}
-      </Txt>
+      <View style={{ alignItems: "flex-end" }}>
+        <Txt size={14} weight="bold">
+          {formatMoney(item.amount)}
+        </Txt>
+        {item.atMaturity === "pay_interest" ? (
+          <Txt size={11} color={colors.muted}>
+            Total, interest included
+          </Txt>
+        ) : null}
+      </View>
     </View>
   );
 }
