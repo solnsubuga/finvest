@@ -12,6 +12,10 @@ import { DealingError, dealingErrorMessage, notConnectedDealingApi, type Dealing
 import { OrderCard, PrepareForm, type OrderCommand } from "./Orders.tsx";
 import { BufferRules, Figures, PositionTable } from "./Position.tsx";
 import { AllocationSection } from "./Allocations.tsx";
+import { AuctionSection } from "./Auctions.tsx";
+import { notConnectedAuctionsApi, type AuctionsApi } from "./auctions.ts";
+import { createHttpAuctionsApi } from "./auctionsHttp.ts";
+import { createStubAuctionsApi } from "./auctionsStub.ts";
 import { notConnectedAllocationsApi, type AllocationsApi } from "./allocations.ts";
 import { createHttpAllocationsApi } from "./allocationsHttp.ts";
 import { createStubAllocationsApi } from "./allocationsStub.ts";
@@ -33,11 +37,13 @@ interface DealingDeskScreenProps {
   newKey?: () => string;
   /** The Kampala business day, as a calendar date. */
   today?: () => string;
+  /** The auction calendar, shown under the position when given. */
+  auctions?: AuctionsApi;
 }
 
 const kampalaToday = () => new Intl.DateTimeFormat("en-CA", { timeZone: "Africa/Kampala" }).format(new Date());
 
-export function DealingDeskScreen({ api, newKey = () => crypto.randomUUID(), today = kampalaToday }: DealingDeskScreenProps) {
+export function DealingDeskScreen({ api, newKey = () => crypto.randomUUID(), today = kampalaToday, auctions }: DealingDeskScreenProps) {
   const [load, setLoad] = useState<Load>({ state: "loading" });
   const [preparing, setPreparing] = useState(false);
   const [busy, setBusy] = useState<string | null>(null);
@@ -204,6 +210,20 @@ export function DealingDeskScreen({ api, newKey = () => crypto.randomUUID(), tod
           ))}
         </aside>
       </div>
+      {auctions ? (
+        <AuctionSection
+          api={auctions}
+          products={desk.positions.filter((p) => p.discountOnly).map((p) => ({ code: p.productCode, name: p.productName }))}
+          today={today()}
+          newKey={newKey}
+          // A new or cancelled date can change a bill's next auction, so the desk is read again.
+          onChanged={() =>
+            void fetchDesk().then((fresh) => {
+              if (fresh.state === "ready") setLoad(fresh);
+            })
+          }
+        />
+      ) : null}
     </>
   );
 }
@@ -236,6 +256,18 @@ export default function DealingDeskPage() {
     const http = createHttp(base);
     return { api: createHttpBufferApi(http), directory: createHttpDirectory(http) };
   });
+  // The auction calendar too, with an empty calendar and offline under the stub.
+  const [auctions] = useState<AuctionsApi>(() => {
+    if (isStubAuth() && session) {
+      const sample = new URLSearchParams(window.location.search).get("sample");
+      if (sample === "offline") return notConnectedAuctionsApi;
+      return createStubAuctionsApi({ name: session.name }, sample === "empty" ? "empty" : "sample", kampalaToday);
+    }
+    const base = apiBaseUrl();
+    if (!base) return notConnectedAuctionsApi;
+    const http = createHttp(base);
+    return createHttpAuctionsApi(http, createHttpDirectory(http));
+  });
   // The allocation report is on the real API too, with the same samples under the stub.
   const [allocations] = useState<AllocationsApi>(() => {
     if (isStubAuth() && session) {
@@ -248,7 +280,7 @@ export default function DealingDeskPage() {
   });
   return (
     <>
-      <DealingDeskScreen api={api} />
+      <DealingDeskScreen api={api} auctions={auctions} />
       {session ? (
         <BufferSection
           api={buffer.api}

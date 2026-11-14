@@ -62,8 +62,8 @@ export async function toDesk(json: DeskJson, directory: Directory): Promise<Desk
       onOrder: p.on_order,
       faceHeld: p.face_held,
       cover: p.cover,
-      // The API does not send auction dates yet, so a Treasury bill shows "Not set" rather than a date.
-      nextAuction: null,
+      // The earliest standing date in the auction calendar. A Treasury bill with none shows "Not set".
+      nextAuction: p.next_auction,
     })),
     orders: json.orders.map((o) => ({
       id: o.id,

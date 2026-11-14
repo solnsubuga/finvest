@@ -35,6 +35,7 @@ const json: DeskJson = {
       on_order: ugx(0),
       face_held: ugx(20_000_000),
       cover: "bid_needed",
+      next_auction: "2026-11-18",
     },
   ],
   orders: [
@@ -67,7 +68,7 @@ describe("the dealing desk over the API", () => {
     expect(request).toHaveBeenCalledWith("GET", "/staff/dealing/desk?currency=UGX");
     expect(answer.moneyToPlace).toEqual(ugx(5_000_000));
     expect(answer.buffer.fromBufferUpTo).toEqual(ugx(500_000));
-    expect(answer.positions[0]).toMatchObject({ productCode: "TREA-91", toBuy: ugx(5_000_000), cover: "bid_needed", nextAuction: null });
+    expect(answer.positions[0]).toMatchObject({ productCode: "TREA-91", toBuy: ugx(5_000_000), cover: "bid_needed", nextAuction: "2026-11-18" });
     expect(answer.orders[0]).toMatchObject({ preparedBy: "Olga Ops", resultRecordedBy: "-Nstaffunknown000000", allowed: ["approve", "send_back"] });
   });
 
