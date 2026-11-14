@@ -9,7 +9,8 @@ so nothing a person typed can add markup or a link.
 
 This file owns only the messages that carry a secret or guard an account: sign-in, signup,
 reset and claim codes, the notices of a new sign-in and of a changed number, the link that
-proves an email address, and the staff set-up link. They are fixed in code so that nobody can
+proves an email address, the link that invites a Finvest 1.0 client to claim their account, and
+the staff set-up link. They are fixed in code so that nobody can
 edit them into a phishing message, and so that they work before anything else is set up. Every
 other client notice is worded in `domain/wording.py`, which staff edit with a second person
 approving. Neither file adds text of the other kind.
@@ -30,6 +31,7 @@ Template = Literal[
     "email_verification",
     "new_sign_in",
     "staff_enrolment",
+    "claim_invitation",
     "client_notice",
 ]
 TEMPLATES: tuple[Template, ...] = get_args(Template)
@@ -44,6 +46,8 @@ _VARIABLES: dict[Template, frozenset[str]] = {
     "email_verification": frozenset({"link", "hours"}),
     "new_sign_in": frozenset({"device", "when"}),
     "staff_enrolment": frozenset({"name", "link", "hours"}),
+    # The one-time link a client carried over from Finvest 1.0 claims their account with.
+    "claim_invitation": frozenset({"link", "hours"}),
     # A notification's words, already filled in: the title and body for an email.
     "client_notice": frozenset({"title", "body"}),
 }
@@ -95,15 +99,33 @@ _SMS: dict[str, str] = {
     "not you, change your password now.",
     "phone_changed": "The mobile number on your Finvest account was changed to one ending "
     "{ending}. If you did not ask for this, contact Finvest support now.",
+    "claim_invitation": "Finvest has a new app, and your investments are in it. Claim your "
+    "account with this link: {link} It works once, for {hours} hours. Finvest staff will never "
+    "ask for this link.",
 }
 
 
-def render_sms(template: str, variables: Mapping[str, object]) -> str:
-    """The text of an SMS. Short enough for two message parts, and plain GSM characters."""
+def render_sms(
+    template: str, variables: Mapping[str, object], *, link_origins: Sequence[str] | None = None
+) -> str:
+    """The text of an SMS. Short enough for two message parts, and plain GSM characters.
+
+    `link_origins` holds a link in the message to Finvest's own sites, as for an email.
+    """
     values = check(template, variables, sms=True)
     if template not in _SMS:
         raise InvalidTemplate("This template is not sent by SMS")
+    _check_link(values.get("link"), link_origins)
     return _SMS[template].format(**values)
+
+
+def _check_link(link: str | None, link_origins: Sequence[str] | None) -> None:
+    if (
+        link is not None
+        and link_origins is not None
+        and not any(link.startswith(f"{origin}/") for origin in link_origins)
+    ):
+        raise InvalidTemplate("The link does not point to a Finvest site")
 
 
 def render(
@@ -116,13 +138,7 @@ def render(
     email that links anywhere else.
     """
     values = check(template, variables)
-    link = values.get("link")
-    if (
-        link is not None
-        and link_origins is not None
-        and not any(link.startswith(f"{origin}/") for origin in link_origins)
-    ):
-        raise InvalidTemplate("The link does not point to a Finvest site")
+    _check_link(values.get("link"), link_origins)
     if template in ("signup_code", "claim_code", "payout_account_code"):
         raise InvalidTemplate("This template is not sent by email")
     if template == "sign_in_code":
@@ -175,6 +191,20 @@ def render(
                 "money can be paid out only to accounts you already use.",
                 "If you did not ask for this, contact Finvest support now.",
             ],
+        )
+    if template == "claim_invitation":
+        return _message(
+            "Claim your account on the new Finvest",
+            [
+                "Finvest has moved to a new app, and your account and investments are already "
+                "in it. Open this link to claim your account:",
+                values["link"],
+                f"The link works once, for {values['hours']} hours. You will confirm your "
+                "mobile number with a code we text you and choose a password. Finvest staff "
+                "will never ask you for that code.",
+                "If you were not a Finvest client, you can ignore this email.",
+            ],
+            link=values["link"],
         )
     if template == "password_reset_code":
         return _message(
