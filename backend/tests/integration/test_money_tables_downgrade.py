@@ -20,6 +20,11 @@ from tests.support.database import TestDatabase
 pytestmark = pytest.mark.integration
 
 ROWS = {
+    "0180_screening": (
+        "INSERT INTO screening_runs (id, client_id, reason, requested_at, idempotency_key) "
+        "VALUES ('-Nabc0000000000000A1', '-Nabc0000000000000B1', 'rescreen', now(), 'k-0001')",
+        "refusing to drop the screening and compliance record",
+    ),
     "0010_ledger": (
         "INSERT INTO ledger_accounts (id, code, kind, currency, name, created_at) "
         "VALUES ('-Nabc0000000000000A1', 'test.cash', 'asset', 'UGX', 'Cash', now())",
