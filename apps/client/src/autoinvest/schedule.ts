@@ -139,6 +139,8 @@ export function runReason(code: string | null, attempt: number, status: RunStatu
       return "The last payment was still being checked, so we did not send a second prompt.";
     case "late":
       return "We could not send the prompt on the day, so we skipped it rather than collect late.";
+    case "closing_account":
+      return "Your request to close your account was being checked, so nothing was collected.";
     default:
       return "Skipped. Nothing was collected.";
   }
