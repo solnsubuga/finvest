@@ -69,19 +69,22 @@ INDEXES = [
 
 # Staff propose and decide, as the person signed in, and a run is never asked for a day that
 # has not come by the database's own clock. Nothing changes after a decision, and nothing is
-# deleted.
+# deleted or truncated, by anyone.
 GUARD = """
-CREATE FUNCTION finvest_investment_run_requests_guard() RETURNS trigger
-    LANGUAGE plpgsql SET search_path = pg_catalog, public, pg_temp
+CREATE FUNCTION public.finvest_investment_run_requests_guard() RETURNS trigger
+    LANGUAGE plpgsql SET search_path = pg_catalog, pg_temp
     AS $$
     DECLARE
         today date := (clock_timestamp() AT TIME ZONE 'Africa/Kampala')::date;
     BEGIN
-        IF finvest_actor_kind() IS DISTINCT FROM 'staff' THEN
+        IF TG_OP IN ('DELETE', 'TRUNCATE') THEN
+            RAISE EXCEPTION 'a run request is never deleted' USING ERRCODE = '42501';
+        END IF;
+        IF public.finvest_actor_kind() IS DISTINCT FROM 'staff' THEN
             RAISE EXCEPTION 'only staff ask for a run again' USING ERRCODE = '42501';
         END IF;
         IF TG_OP = 'INSERT' THEN
-            IF NEW.status <> 'proposed' OR NEW.proposed_by <> finvest_actor_id()
+            IF NEW.status <> 'proposed' OR NEW.proposed_by <> public.finvest_actor_id()
                 OR NEW.job_id IS NOT NULL OR NEW.run_date > today THEN
                 RAISE EXCEPTION 'a run request starts as proposed, by the person signed in'
                     USING ERRCODE = '42501';
@@ -92,7 +95,7 @@ CREATE FUNCTION finvest_investment_run_requests_guard() RETURNS trigger
             RAISE EXCEPTION 'a decided run request never changes' USING ERRCODE = '42501';
         END IF;
         IF NEW.status NOT IN ('approved', 'declined', 'withdrawn')
-            OR NEW.decided_by IS DISTINCT FROM finvest_actor_id()
+            OR NEW.decided_by IS DISTINCT FROM public.finvest_actor_id()
             OR (to_jsonb(NEW) - '{status,decided_by,decided_at,decision_note,job_id}'::text[])
                 <> (to_jsonb(OLD) - '{status,decided_by,decided_at,decision_note,job_id}'::text[])
         THEN
@@ -105,10 +108,13 @@ CREATE FUNCTION finvest_investment_run_requests_guard() RETURNS trigger
 """
 
 RULES = [
-    "REVOKE ALL ON FUNCTION finvest_investment_run_requests_guard() FROM PUBLIC",
-    "CREATE TRIGGER investment_run_requests_guard BEFORE INSERT OR UPDATE "
+    "REVOKE ALL ON FUNCTION public.finvest_investment_run_requests_guard() FROM PUBLIC",
+    "CREATE TRIGGER investment_run_requests_guard BEFORE INSERT OR UPDATE OR DELETE "
     "ON investment_run_requests FOR EACH ROW "
-    "EXECUTE FUNCTION finvest_investment_run_requests_guard()",
+    "EXECUTE FUNCTION public.finvest_investment_run_requests_guard()",
+    "CREATE TRIGGER investment_run_requests_no_truncate BEFORE TRUNCATE "
+    "ON investment_run_requests FOR EACH STATEMENT "
+    "EXECUTE FUNCTION public.finvest_investment_run_requests_guard()",
     "REVOKE ALL ON investment_run_requests FROM PUBLIC",
     f"GRANT SELECT, INSERT, UPDATE (status, decided_by, decided_at, decision_note, job_id) "
     f"ON investment_run_requests TO {APP_ROLE}",
@@ -142,4 +148,4 @@ def downgrade() -> None:
     # Who asked for a run that moved money is part of the books' story.
     op.execute(EMPTY_GUARD)
     op.execute("DROP TABLE investment_run_requests")
-    op.execute("DROP FUNCTION finvest_investment_run_requests_guard()")
+    op.execute("DROP FUNCTION public.finvest_investment_run_requests_guard()")
