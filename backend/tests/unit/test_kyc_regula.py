@@ -447,3 +447,27 @@ def test_regula_needs_its_addresses_and_approves_clean_results(
     assert not off.automatic_approval
     # Liveness stays with the camera selfie until Regula's liveness is wired.
     assert settings.liveness() is None and settings.face_matcher(MemoryStorage()) is None
+
+
+def test_regulas_demo_services_are_refused_in_production() -> None:
+    key = "A" * 43
+    for document_reader, face in (
+        ("https://api.regulaforensics.com", "https://faceapi.example.com"),
+        ("https://docreader.example.com", "https://NIGHTLY-FACEAPI.regulaforensics.com/"),
+    ):
+        with pytest.raises(ValidationError, match="demo services"):
+            KycSettings(
+                identity_data_key=key,
+                identity_provider="regula",
+                regula_document_reader_url=document_reader,
+                regula_face_url=face,
+                environment="production",
+            )
+        # Trying it out elsewhere is fine.
+        KycSettings(
+            identity_data_key=key,
+            identity_provider="regula",
+            regula_document_reader_url=document_reader,
+            regula_face_url=face,
+            environment="staging",
+        )
