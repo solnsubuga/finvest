@@ -124,6 +124,10 @@ export type DealingErrorCode =
   | "over_the_order"
   | "above_face"
   | "settles_in_the_future"
+  | "longer_than_term"
+  | "not_enough_cash"
+  | "day_closed"
+  | "invalid"
   | "forbidden"
   | "not_connected"
   | "unavailable";
@@ -147,6 +151,10 @@ const MESSAGES: Record<DealingErrorCode, string> = {
   over_the_order: "The result is larger than the order that was approved.",
   above_face: "A Treasury bill never costs or fetches more than its face value. Check the cash amount.",
   settles_in_the_future: "A result is recorded on or after its settlement date.",
+  longer_than_term: "A bill bought for this product cannot mature after the product's term. Check the maturity date.",
+  not_enough_cash: "The trust account does not hold enough client money for this purchase yet. Move the collected money into it on Reconciliation, then confirm again.",
+  day_closed: "That settlement date is in a day that is already closed. Reject the result and record it on an open day.",
+  invalid: "Something in this order or result is not right. Check it and try again.",
   forbidden: "You are not allowed to work on the dealing desk.",
   not_connected: "The dealing desk is not connected to the Finvest service yet.",
   unavailable: "We could not reach Finvest. Check your connection and try again.",

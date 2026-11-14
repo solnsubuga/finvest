@@ -71,7 +71,7 @@ export function PositionTable({ desk }: { desk: Desk }) {
               <td className="px-3 py-3">{formatShort(position.clientsOwed, false)}</td>
               <td className="px-3 py-3">{formatShort(position.billsHeld, false)}</td>
               <td className="px-3 py-3">{formatShort(position.toBuy, false)}</td>
-              <td className="px-3 py-3">{position.nextAuction ? formatAuctionDay(position.nextAuction) : "On demand"}</td>
+              <td className="px-3 py-3">{position.nextAuction ? formatAuctionDay(position.nextAuction) : position.discountOnly ? "Not set" : "On demand"}</td>
               <td className="px-3 py-3">
                 <span className={cn("rounded-pill px-2.5 py-1 text-xs font-bold whitespace-nowrap", COVER_STYLES[position.cover])}>
                   {COVER_LABELS[position.cover]}
