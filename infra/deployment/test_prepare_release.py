@@ -236,13 +236,15 @@ class PrepareRelease(unittest.TestCase):
         self.assertEqual(files["api"]["FINVEST_IOTEC_CALLBACK_TOKEN"], "c" * 43)
         for service in ("worker", "scheduler"):
             self.assertNotIn("FINVEST_IOTEC_CALLBACK_TOKEN", files[service])
-        self.assertFalse([name for name in files["migrate"] if "IOTEC" in name or "PROVIDER" in name])
+        self.assertFalse(
+            [name for name in files["migrate"] if any(k in name for k in ("IOTEC", "PROVIDER", "SIGMA360"))]
+        )
 
     def test_iotec_settings_are_left_out_when_unset(self):
         pr.prepare(self.out, settings())
         for service in ("api", "worker", "scheduler"):
             found = read_env(self.out / "runtime" / f"{service}.env")
-            self.assertFalse([name for name in found if "IOTEC" in name or "PROVIDER" in name])
+            self.assertFalse([name for name in found if any(k in name for k in ("IOTEC", "PROVIDER", "SIGMA360"))])
 
     def test_identity_data_key_reaches_the_api_and_worker_only(self):
         pr.prepare(self.out, settings(FINVEST_IDENTITY_DATA_KEY="d" * 43))
