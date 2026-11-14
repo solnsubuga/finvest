@@ -12094,6 +12094,11 @@
             "minLength": 10,
             "title": "To Account Number",
             "type": "string"
+          },
+          "whole": {
+            "default": false,
+            "title": "Whole",
+            "type": "boolean"
           }
         },
         "required": [

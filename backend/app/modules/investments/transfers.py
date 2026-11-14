@@ -267,12 +267,15 @@ async def send_investment(
     restricted_until: datetime | None,
     idempotency_key: str,
     clock: Clock,
+    whole: bool = False,
 ) -> Transfer:
     """Ask to send `amount` of a running investment to the client with this account number.
 
-    A retry with the same key returns the same transfer, and the same key for anything else is
-    refused. Refused while the client's sign-in is restricted after a code or a password reset,
-    because the money goes to someone else.
+    With `whole`, everything is sent: the value at the request, whatever interest was added
+    since the client saw `amount`, and the interest added before it moves. A retry with the same
+    key returns the same transfer, and the same key for anything else is refused. Refused
+    while the client's sign-in is restricted after a code or a password reset, because the
+    money goes to someone else.
     """
     sender_id = _client(client)
     now = clock.now()
@@ -287,7 +290,15 @@ async def send_investment(
 
     async def command() -> Receipt:
         transfer_id = await _ask(
-            session, client, sender_id, investment_id, to_account_number, amount, cleaned, clock
+            session,
+            client,
+            sender_id,
+            investment_id,
+            to_account_number,
+            amount,
+            cleaned,
+            clock,
+            whole=whole,
         )
         return Receipt(201, {"transfer_id": transfer_id})
 
@@ -302,6 +313,7 @@ async def send_investment(
             "amount_minor": amount.minor,
             "currency": amount.currency.value,
             "message": cleaned,
+            "whole": whole,
         },
         now=now,
         command=command,
@@ -661,6 +673,8 @@ async def _ask(
     amount: Money,
     message: str | None,
     clock: Clock,
+    *,
+    whole: bool = False,
 ) -> str:
     row = (await session.execute(_INVESTMENT_LOCKED, {"id": investment_id})).one_or_none()
     if row is None or row.client_id != sender_id:
@@ -682,6 +696,11 @@ async def _ask(
     today = business_date(now)
     product = product_from_row(await product_row(session, investment.product_code))
     value = investment.amount + investment.accrued_net
+    if whole:
+        if amount.currency is not value.currency:
+            raise invalid("amount_minor", TransferRefusal.CURRENCY.value)
+        # Everything, as it is worth now: interest may have been added since the client saw it.
+        amount = value
     refusal = check_transfer(
         running=investment.status is InvestmentStatus.ACTIVE,
         withdrawal_requested=investment.withdrawal_requested_at is not None,

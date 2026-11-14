@@ -95,6 +95,7 @@ async def send(
     *,
     idempotency_key: str | None = None,
     restricted_until: object = None,
+    whole: bool = False,
 ) -> transfers.Transfer:
     async with app_database.actor_transaction(client) as session:
         return await transfers.send_investment(
@@ -107,6 +108,7 @@ async def send(
             restricted_until=restricted_until,  # type: ignore[arg-type]
             idempotency_key=idempotency_key or key(),
             clock=PRESENT,
+            whole=whole,
         )
 
 
@@ -233,6 +235,25 @@ async def test_sending_the_whole_value_leaves_the_sender_nothing(
     assert done.kept_investment_id is None and done.received_investment_id is not None
     received = await investment(worker_database, done.received_investment_id)
     assert received.amount == value
+
+
+async def test_sending_everything_includes_interest_added_since_the_client_looked(
+    app_database: Database, worker_database: Database
+) -> None:
+    sender, _ = await person(app_database)
+    recipient, _ = await person(app_database)
+    started = await running(app_database, worker_database, sender)
+    # The client saw the principal alone; interest was added before they confirmed.
+    seen = started.amount
+    source = await earn(worker_database, started.id)
+    assert source.accrued_net.is_positive
+
+    asked = await send(
+        app_database, sender, source.id, await number_of(app_database, recipient), seen, whole=True
+    )
+    assert asked.whole and asked.amount == source.amount + source.accrued_net
+    done = await carry_out(worker_database, asked.id)
+    assert done.kept_investment_id is None
 
 
 async def test_a_large_transfer_waits_for_two_members_of_staff(
