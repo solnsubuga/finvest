@@ -5,6 +5,7 @@ import { useRouter } from "expo-router";
 import { useActivity } from "@/activity/ActivityProvider";
 import { shortDay as activityDay } from "@/activity/build";
 import { useAuth } from "@/auth/AuthProvider";
+import { EmailProofBanner } from "@/auth/EmailProofBanner";
 import { useSecondSteps } from "@/auth/useSecondSteps";
 import { AppPage } from "@/components/AppPage";
 import { Bell } from "@/components/Bell";
@@ -167,6 +168,7 @@ export default function Home() {
         </Notice>
       ) : null}
       {moving ? <ClaimCard claim={moving.claim} /> : null}
+      <EmailProofBanner />
       {onlySms ? (
         <Pressable
           accessibilityRole="link"

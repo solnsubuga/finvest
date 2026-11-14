@@ -85,8 +85,12 @@ def wrong(right: str) -> str:
     return "000000" if right != "000000" else "111111"
 
 
-async def sign_up(api: Api, phone: str, headers: dict[str, str] | None = None) -> httpx.Response:
-    started = await api.http.post("/client/signup/start", json={"phone": phone}, headers=headers)
+async def sign_up(
+    api: Api, phone: str, headers: dict[str, str] | None = None, email: str | None = None
+) -> httpx.Response:
+    started = await api.http.post(
+        "/client/signup/start", json={"phone": phone, "email": email}, headers=headers
+    )
     assert started.status_code == 200, started.text
     confirmed = await api.http.post(
         "/client/signup/confirm",
@@ -138,6 +142,54 @@ async def test_a_client_signs_up_with_a_texted_code_and_a_password(api: Api) -> 
         json={"ticket": confirmed.json()["ticket"], "password": PASSWORD, "accepted_terms": True},
     )
     assert (again.status_code, code(again)) == (410, "expired")
+
+
+async def verification_links(api: Api, recipient: str) -> list[str]:
+    async with api.worker.transaction() as session:
+        rows = await session.execute(
+            text(
+                "SELECT variables->>'link' AS link FROM notification_messages "
+                "WHERE recipient = :r AND template = 'email_verification' ORDER BY id"
+            ),
+            {"r": recipient},
+        )
+        return [row.link for row in rows]
+
+
+async def test_signing_up_emails_a_link_to_prove_the_address(api: Api) -> None:
+    address = f"new.{a_phone()[4:]}@example.com"
+    completed = await sign_up(api, a_phone(), email=address)
+    assert completed.status_code == 200, completed.text
+    # The account works straight away; the address waits for the link.
+    assert completed.json()["session"]["email_verified"] is False
+    [link] = await verification_links(api, address)
+    assert "/verify-email#" in link
+    confirmed = await api.http.post(
+        "/client/email/verification/confirm", json={"token": link.split("#", 1)[1]}
+    )
+    assert confirmed.status_code == 204, confirmed.text
+    bearer = {"Authorization": f"Bearer {completed.json()['token']}"}
+    assert (await api.http.get("/client/session", headers=bearer)).json()["email_verified"] is True
+
+
+async def verification_count(api: Api) -> int:
+    async with api.worker.transaction() as session:
+        return int(
+            await session.scalar(
+                text(
+                    "SELECT count(*) FROM notification_messages "
+                    "WHERE template = 'email_verification'"
+                )
+            )
+            or 0
+        )
+
+
+async def test_signing_up_without_an_address_sends_no_link(api: Api) -> None:
+    before = await verification_count(api)
+    completed = await sign_up(api, a_phone())
+    assert completed.status_code == 200, completed.text
+    assert await verification_count(api) == before
 
 
 async def test_signing_up_in_a_browser_sets_a_cookie(api: Api) -> None:

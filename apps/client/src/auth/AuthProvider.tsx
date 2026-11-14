@@ -76,6 +76,7 @@ export type ReturnTo =
   | "/account/close"
   | "/account/language"
   | "/setup/pin"
+  | "/setup/email"
   | "/setup/passkey";
 
 /** The return address is for logging in again right away, not for a later visit. */

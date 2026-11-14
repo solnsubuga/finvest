@@ -144,19 +144,22 @@ describe("signing up", () => {
     await fireEvent.changeText(await screen.findByTestId("code-input"), DEMO_CODE);
     await fireEvent.press(screen.getByTestId("code-submit"));
     await screen.findByText("Create a password");
-    expect(screen.getByText("2 of 4")).toBeTruthy();
+    expect(screen.getByText("2 of 5")).toBeTruthy();
     await fireEvent.changeText(screen.getByTestId("password-input"), "green matooke sunday");
     await fireEvent.changeText(screen.getByTestId("password-confirm-input"), "green matooke sunday");
     await fireEvent.press(screen.getByTestId("password-submit"));
 
+    await screen.findByText("Check your email");
+    expect(screen.getByText("3 of 5")).toBeTruthy();
+    await fireEvent.press(screen.getByTestId("email-step-continue"));
     await screen.findByText("Create a 5 digit PIN");
-    expect(screen.getByText("3 of 4")).toBeTruthy();
+    expect(screen.getByText("4 of 5")).toBeTruthy();
     expect(screen.getByText("Next you can add a passkey for your second step.")).toBeTruthy();
     await typePin("48151");
     await typePin("48151");
 
     await screen.findByRole("header", { name: "Add a passkey" });
-    expect(screen.getByText("4 of 4")).toBeTruthy();
+    expect(screen.getByText("5 of 5")).toBeTruthy();
     await fireEvent.press(screen.getByTestId("offer-not-now"));
     await waitFor(() => expect(screen.getByTestId("home")).toBeTruthy());
   });

@@ -393,6 +393,12 @@ export function createStubAuthClient(options: StubOptions = {}): AuthClient {
         emailVerified: false,
       });
       confirmedWith = "signup";
+      if (signup.email.trim()) {
+        // Sign up emails the link that proves the address, as the server does.
+        const token = `${nextId("email_link")}_demo_link_token`;
+        emailLinks.set(token, signup.phone);
+        options.onEmailLink?.(token);
+      }
       return sessionFor(signup.phone, false);
     },
 
