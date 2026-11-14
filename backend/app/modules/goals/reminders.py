@@ -3,7 +3,9 @@
 The worker runs `send_reminders` once a day, as the system. It reads every active goal a page at
 a time and raises `goal_top_up_due` or `goal_reached` through the notifications contract. Each
 is keyed so that a second run on the same day, or a run after a missed day, tells nobody twice:
-a top-up reminder by the goal and its saving date, a goal reached by the goal alone.
+a top-up reminder by the goal and its saving date, a goal reached by the goal and its target.
+A client who reaches a goal and then raises its target is told again when they reach the new
+one, and a value that dips below the same target and comes back tells nobody twice.
 
 The words name the goal and the date, never an amount. The app shows the figures.
 """
@@ -36,6 +38,11 @@ _OWN_SAVINGS = text(
 _NOT_SAVED = frozenset({InvestmentStatus.CANCELLED, InvestmentStatus.UNWOUND})
 
 
+def reached_key(goal_id: str, target_minor: int) -> str:
+    """The key that tells a client once that a goal reached this target."""
+    return f"goal-reached:{goal_id}:{target_minor}"
+
+
 async def send_reminders(session: AsyncSession, clock: Clock) -> dict[str, int]:
     """Raise today's goal notifications. Returns how many of each were new."""
     now = clock.now()
@@ -58,7 +65,7 @@ async def send_reminders(session: AsyncSession, clock: Clock) -> dict[str, int]:
                 session,
                 event_name="goal_reached",
                 client_id=goal.client_id,
-                idempotency_key=f"goal-reached:{goal.id}",
+                idempotency_key=reached_key(goal.id, goal.target.minor),
                 variables={"goal": goal.name},
                 link=link,
                 now=now,

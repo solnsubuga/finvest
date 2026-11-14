@@ -815,10 +815,41 @@ async def test_a_reached_goal_is_told_once(
     await remind(worker_database, DAY + timedelta(days=1))
     seen = await told(worker_database, client)
     assert [(event, k, link) for event, k, link, _ in seen] == [
-        ("goal_reached", f"goal-reached:{goal.id}", "goal")
+        ("goal_reached", f"goal-reached:{goal.id}:1000000", "goal")
     ]
     assert "New roof" in seen[0][3]
     assert "UGX" not in seen[0][3]
+
+
+async def test_a_raised_target_is_told_again_when_it_is_reached(
+    app_database: Database, worker_database: Database
+) -> None:
+    client = await approved_client(app_database, NOW)
+    goal = await new_goal(app_database, client, name="New roof", target=ugx(1_000_000))
+    await started_saving(app_database, worker_database, client, goal.id, ugx(1_000_000))
+    await remind(worker_database, DAY)
+    async with app_database.actor_transaction(client) as session:
+        await goals.update_goal(
+            session,
+            client,
+            goal.id,
+            name=goal.name,
+            category=goal.category,
+            target=ugx(2_000_000),
+            target_date=goal.target_date,
+            clock=NOW,
+        )
+    # Not reached yet: nothing new.
+    await remind(worker_database, DAY + timedelta(days=1))
+    assert len(await told(worker_database, client)) == 1
+    await started_saving(app_database, worker_database, client, goal.id, ugx(1_000_000))
+    await remind(worker_database, DAY + timedelta(days=2))
+    await remind(worker_database, DAY + timedelta(days=3))
+    seen = await told(worker_database, client)
+    assert [k for event, k, _, _ in seen if event == "goal_reached"] == [
+        f"goal-reached:{goal.id}:1000000",
+        f"goal-reached:{goal.id}:2000000",
+    ]
 
 
 async def test_a_saving_due_in_three_days_is_reminded_once(
