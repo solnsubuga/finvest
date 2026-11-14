@@ -280,4 +280,4 @@ ioTec's test numbers: `011177777x` succeed, `011177799x` fail, `011177778x` stay
 - Trying the adapter against ioTec's test wallet, which needs the credentials and a staging deploy.
 - Paying for a goal over HTTP. The routes take investments only.
 - Provider limits and fees.
-- The receivable correction commands, for a mistaken credit whose money has already left. A running investment is unwound through investment corrections, and moving a transfer credited to the wrong client is built.
+- The commands for a mistaken credit: reversing a deposit whose money is still in `client.awaiting_start`, and the receivable for one whose money has already left. There is no staff route for either yet, though the ledger's two-person corrections they would use are built. A running investment is unwound through investment corrections, and moving a transfer credited to the wrong client is built.
