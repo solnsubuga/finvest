@@ -13,6 +13,7 @@ from fastapi import APIRouter, Depends, Request
 from pydantic import Field
 
 from app.infrastructure.database import Database
+from app.infrastructure.settings import Settings
 from app.modules.console import actions, notes
 from app.modules.identity.api import require_confirmed, require_permission
 from app.modules.identity.client_locks import client_status
@@ -106,6 +107,16 @@ class StatementPeriod(Contract):
     date_to: IsoDate
 
 
+class WithdrawalIn(Contract):
+    """An early withdrawal for the client, from their own written request in help chat."""
+
+    investment_id: PushId
+    # An approved payout account of the client's own, past its first day's wait.
+    destination_id: PushId
+    # The client's message in their help chat asking for it, from the last seven days.
+    message_id: PushId
+
+
 class ClientLimitsView(Contract):
     # The limits for every client today.
     shared: LimitsView
@@ -133,6 +144,8 @@ class ActionView(Contract):
     limits: LimitsView | None
     # For `statement`, the days it covers.
     statement: StatementPeriod | None
+    # For `withdrawal`, the investment, the account and the client's message.
+    withdrawal: WithdrawalIn | None
     # The proposer can withdraw it. Anyone else who holds the kind's permission decides it.
     yours: bool
 
@@ -150,6 +163,8 @@ class ProposeAction(Contract):
     limits: LimitsIn | None = None
     # Required for `statement`, and only there.
     statement: StatementPeriod | None = None
+    # Required for `withdrawal`, and only there.
+    withdrawal: WithdrawalIn | None = None
 
 
 class DecideAction(Contract):
@@ -188,11 +203,18 @@ async def client_actions(client_id: PushId, staff: ClientViewer, database: Db) -
 
 @router.post("/{client_id}/actions", status_code=201)
 async def propose_action(
-    client_id: PushId, body: ProposeAction, staff: ClientViewer, database: Db, clock: Time
+    client_id: PushId,
+    body: ProposeAction,
+    staff: ClientViewer,
+    database: Db,
+    clock: Time,
+    request: Request,
 ) -> ActionView:
     """Ask to act for the client. A different member of staff decides."""
     if body.kind not in _allowed(staff):
         raise ApplicationError("forbidden")
+    if body.kind == "withdrawal" and not _withdrawals_open(request):
+        raise ApplicationError("conflict")
     async with database.actor_transaction(staff.actor) as session:
         action = await actions.propose(
             session, staff.actor, client_id, body.kind, body.reason, clock, _details(body)
@@ -202,7 +224,12 @@ async def propose_action(
 
 @router.post("/actions/{action_id}/decision")
 async def decide_action(
-    action_id: PushId, body: DecideAction, staff: ActionDecider, database: Db, clock: Time
+    action_id: PushId,
+    body: DecideAction,
+    staff: ActionDecider,
+    database: Db,
+    clock: Time,
+    request: Request,
 ) -> ActionView:
     """Approve or reject someone else's proposal, or withdraw your own."""
     async with database.actor_transaction(staff.actor) as session:
@@ -214,6 +241,7 @@ async def decide_action(
             body.reason,
             clock,
             permissions=staff.permissions,
+            withdrawals_open=_withdrawals_open(request),
         )
     return _action(action, staff)
 
@@ -240,8 +268,16 @@ async def client_withdrawal_limits(
 
 def _details(body: ProposeAction) -> dict[str, Any]:
     """The details of the kind, which must be the only details sent."""
-    given = {"limits": body.limits, "statement": body.statement}
-    wanted = {"withdrawal_limits": "limits", "statement": "statement"}.get(body.kind)
+    given: dict[str, Contract | None] = {
+        "limits": body.limits,
+        "statement": body.statement,
+        "withdrawal": body.withdrawal,
+    }
+    wanted = {
+        "withdrawal_limits": "limits",
+        "statement": "statement",
+        "withdrawal": "withdrawal",
+    }.get(body.kind)
     for name, value in given.items():
         if name != wanted and value is not None:
             raise ApplicationError(
@@ -270,6 +306,13 @@ def _limits(limits: WithdrawalLimits | ClientLimits) -> LimitsView:
         bank_per_day=minor(limits.bank_per_day),
         review_above=minor(limits.review_above),
     )
+
+
+def _withdrawals_open(request: Request) -> bool:
+    """Early withdrawal is off until both halves that pay it are wired (`early_withdrawal_open`),
+    for staff as for the client."""
+    settings: Settings = request.app.state.settings
+    return settings.early_withdrawal_open
 
 
 def _allowed(staff: StaffSession) -> list[actions.Kind]:
@@ -306,6 +349,9 @@ def _action(action: actions.ClientAction, staff: StaffSession) -> ActionView:
         else None,
         statement=StatementPeriod.model_validate(action.details)
         if action.kind == "statement"
+        else None,
+        withdrawal=WithdrawalIn.model_validate(action.details)
+        if action.kind == "withdrawal"
         else None,
         yours=action.proposed_by == staff.staff_id,
     )

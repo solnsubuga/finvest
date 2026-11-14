@@ -15,12 +15,18 @@ Each kind needs its own permission (`PERMISSIONS`) and has its own effect (`_app
 - `statement`, with `client_statements.send`: asks documents for a statement of the period in
   `details` (`date_from`, `date_to`), which the worker builds, puts in the app and emails to
   the client's proved address (`documents.staff_statement`).
+- `withdrawal`, with `client_withdrawals.start`: asks to withdraw a running investment early for
+  the client, as the owner decided (2026-11-14): only when the client asked for it in their own
+  help chat. `details` names the investment, an approved payout account of the client's own and
+  the client's message, written in the last `REQUEST_FRESH`. One message backs one withdrawal.
+  The checks are the client's own (`investments.request_withdrawal_for_client`), and the client
+  is told by SMS and email.
 """
 
 import json
 from collections.abc import Collection
 from dataclasses import dataclass
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from typing import Any, Literal, get_args
 
 import structlog
@@ -35,8 +41,13 @@ from app.modules.documents.domain.statements import Period, PeriodRefused, reque
 from app.modules.identity import pin_resets
 from app.modules.identity.client_locks import client_status
 from app.modules.identity.domain.permissions import Permission
+from app.modules.identity.service import client_contact
+from app.modules.investments import holdings
+from app.modules.investments import withdrawal as investments
+from app.modules.notifications.service import Channel, queue_message
 from app.modules.payouts import payouts
 from app.modules.payouts.domain.limits import ClientLimits, InvalidLimits
+from app.modules.support import conversations
 from app.shared.actors import Actor
 from app.shared.business_day import business_date
 from app.shared.clock import Clock
@@ -46,7 +57,7 @@ from app.shared.push_ids import push_id
 
 RESOURCE = "client_action"
 MAX_REASON = 500
-Kind = Literal["pin_reset", "withdrawal_limits", "statement"]
+Kind = Literal["pin_reset", "withdrawal_limits", "statement", "withdrawal"]
 KINDS: tuple[Kind, ...] = get_args(Kind)
 Decision = Literal["approved", "rejected", "withdrawn"]
 Status = Literal["proposed", "approved", "rejected", "withdrawn"]
@@ -57,7 +68,11 @@ PERMISSIONS: dict[Kind, Permission] = {
     "pin_reset": "client_pins.reset",
     "withdrawal_limits": "client_limits.change",
     "statement": "client_statements.send",
+    "withdrawal": "client_withdrawals.start",
 }
+# How recent the client's written request must be when staff propose a withdrawal from it.
+REQUEST_FRESH = timedelta(days=7)
+WITHDRAWAL_FIELDS = ("investment_id", "destination_id", "message_id")
 LIMIT_FIELDS = (
     "mobile_money_per_payout",
     "mobile_money_per_day",
@@ -132,6 +147,8 @@ async def propose(
         await _check_limits(session, details, clock)
     elif kind == "statement":
         statement_period(details, clock.now())
+    elif kind == "withdrawal":
+        await _check_withdrawal(session, client_id, details, clock.now())
     elif details:
         raise ApplicationError(
             "validation_failed",
@@ -173,6 +190,7 @@ async def decide(
     reason: str,
     clock: Clock,
     permissions: Collection[str],
+    withdrawals_open: bool = True,
 ) -> ClientAction:
     """Approve or reject someone else's proposal, or withdraw your own.
 
@@ -191,6 +209,8 @@ async def decide(
     now = clock.now()
     if decision == "approved":
         _check_client(str(await client_status(session, action.client_id)))
+        if action.kind == "withdrawal" and not withdrawals_open:
+            raise ApplicationError("conflict")
     await session.execute(
         text(
             "UPDATE console_client_actions SET status = :status, decided_by = :staff, "
@@ -209,12 +229,13 @@ async def decide(
         clock,
     )
     if decision == "approved":
-        await _apply(session, action, now)
+        await _apply(session, action, clock, staff)
         logger.info("client_action_applied", kind=action.kind, action_id=action_id)
     return await _by_id(session, action_id)
 
 
-async def _apply(session: AsyncSession, action: ClientAction, now: datetime) -> None:
+async def _apply(session: AsyncSession, action: ClientAction, clock: Clock, staff: Actor) -> None:
+    now = clock.now()
     if action.kind == "pin_reset":
         await pin_resets.end_phone_sessions(session, action.client_id, now, action_id=action.id)
     elif action.kind == "withdrawal_limits":
@@ -225,6 +246,16 @@ async def _apply(session: AsyncSession, action: ClientAction, now: datetime) -> 
             action_id=action.id,
             now=now,
         )
+    elif action.kind == "withdrawal":
+        await investments.request_withdrawal_for_client(
+            session,
+            staff,
+            str(action.details["investment_id"]),
+            client_id=action.client_id,
+            destination_id=str(action.details["destination_id"]),
+            clock=clock,
+        )
+        await _tell_withdrawal(session, action, now)
     elif action.kind == "statement":
         await documents.staff_statement(
             session,
@@ -233,6 +264,76 @@ async def _apply(session: AsyncSession, action: ClientAction, now: datetime) -> 
             action_id=action.id,
             now=now,
         )
+
+
+async def _check_withdrawal(
+    session: AsyncSession, client_id: str, details: dict[str, Any], now: datetime
+) -> None:
+    """The client's message is theirs and recent, and the investment and account are theirs.
+
+    Whether the investment can still be withdrawn, and the account paid, is checked again when
+    the second person approves, exactly as when the client asks.
+    """
+    if set(details) != set(WITHDRAWAL_FIELDS) or not all(
+        isinstance(details[name], str) for name in WITHDRAWAL_FIELDS
+    ):
+        raise ApplicationError(
+            "validation_failed",
+            fields=[FieldProblem(field_path=["body", "withdrawal"], code="required")],
+        )
+    message = await conversations.client_message(session, client_id, details["message_id"])
+    if message is None:
+        raise ApplicationError(
+            "validation_failed",
+            fields=[
+                FieldProblem(field_path=["body", "withdrawal", "message_id"], code="not_found")
+            ],
+        )
+    if message.created_at < now - REQUEST_FRESH:
+        raise ApplicationError(
+            "validation_failed",
+            fields=[FieldProblem(field_path=["body", "withdrawal", "message_id"], code="too_old")],
+        )
+    try:
+        investment = await holdings.get_investment(session, details["investment_id"])
+    except ApplicationError:
+        investment = None
+    if investment is None or investment.client_id != client_id:
+        raise ApplicationError(
+            "validation_failed",
+            fields=[
+                FieldProblem(field_path=["body", "withdrawal", "investment_id"], code="not_found")
+            ],
+        )
+    await investments.check_payable_destination(
+        session,
+        client_id,
+        details["destination_id"],
+        investment.terms.principal + investment.accrued_net,
+        now,
+    )
+
+
+async def _tell_withdrawal(session: AsyncSession, action: ClientAction, now: datetime) -> None:
+    """Tell the client by SMS and by email, if proved, that staff started it for them."""
+    contact = await client_contact(session, action.client_id)
+    if contact is None:
+        return
+    sends: tuple[tuple[Channel, str | None], ...] = (
+        ("sms", contact.phone),
+        ("email", contact.email if contact.email_verified else None),
+    )
+    for channel, recipient in sends:
+        if recipient:
+            await queue_message(
+                session,
+                channel=channel,
+                recipient=recipient,
+                template="staff_withdrawal_started",
+                variables={},
+                idempotency_key=f"staff-withdrawal:{action.id}:{channel}",
+                now=now,
+            )
 
 
 def statement_period(details: dict[str, Any], now: datetime) -> Period:

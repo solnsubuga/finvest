@@ -169,7 +169,8 @@
             "enum": [
               "pin_reset",
               "withdrawal_limits",
-              "statement"
+              "statement",
+              "withdrawal"
             ],
             "title": "Kind",
             "type": "string"
@@ -224,6 +225,16 @@
             "title": "Status",
             "type": "string"
           },
+          "withdrawal": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/WithdrawalIn"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "yours": {
             "title": "Yours",
             "type": "boolean"
@@ -244,6 +255,7 @@
           "decision_reason",
           "limits",
           "statement",
+          "withdrawal",
           "yours"
         ],
         "title": "ActionView",
@@ -264,7 +276,8 @@
               "enum": [
                 "pin_reset",
                 "withdrawal_limits",
-                "statement"
+                "statement",
+                "withdrawal"
               ],
               "type": "string"
             },
@@ -665,7 +678,8 @@
               "bank_account_change",
               "client_pin_reset",
               "client_limits",
-              "client_statement"
+              "client_statement",
+              "client_withdrawal"
             ],
             "title": "Kind",
             "type": "string"
@@ -12148,7 +12162,8 @@
             "enum": [
               "pin_reset",
               "withdrawal_limits",
-              "statement"
+              "statement",
+              "withdrawal"
             ],
             "title": "Kind",
             "type": "string"
@@ -12173,6 +12188,16 @@
             "anyOf": [
               {
                 "$ref": "#/components/schemas/StatementPeriod"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "withdrawal": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/WithdrawalIn"
               },
               {
                 "type": "null"
@@ -14664,7 +14689,8 @@
                 "client_notes.write",
                 "client_pins.reset",
                 "client_limits.change",
-                "client_statements.send"
+                "client_statements.send",
+                "client_withdrawals.start"
               ],
               "type": "string"
             },
@@ -18538,7 +18564,8 @@
                 "client_notes.write",
                 "client_pins.reset",
                 "client_limits.change",
-                "client_statements.send"
+                "client_statements.send",
+                "client_withdrawals.start"
               ],
               "type": "string"
             },
@@ -20359,6 +20386,40 @@
           "read_at"
         ],
         "title": "WalletOut",
+        "type": "object"
+      },
+      "WithdrawalIn": {
+        "additionalProperties": false,
+        "description": "An early withdrawal for the client, from their own written request in help chat.",
+        "properties": {
+          "destination_id": {
+            "maxLength": 20,
+            "minLength": 20,
+            "pattern": "^[-0-9A-Z_a-z]{20}$",
+            "title": "Destination Id",
+            "type": "string"
+          },
+          "investment_id": {
+            "maxLength": 20,
+            "minLength": 20,
+            "pattern": "^[-0-9A-Z_a-z]{20}$",
+            "title": "Investment Id",
+            "type": "string"
+          },
+          "message_id": {
+            "maxLength": 20,
+            "minLength": 20,
+            "pattern": "^[-0-9A-Z_a-z]{20}$",
+            "title": "Message Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "investment_id",
+          "destination_id",
+          "message_id"
+        ],
+        "title": "WithdrawalIn",
         "type": "object"
       },
       "WithdrawalRequest": {
