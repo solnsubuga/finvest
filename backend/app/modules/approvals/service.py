@@ -69,6 +69,8 @@ async def waiting_for(session: AsyncSession, staff: StaffSession, now: datetime)
         found += await _payout_accounts(session)
     if "investment_correction" in kinds:
         found += await _investment_corrections(session, staff)
+    if "investment_run" in kinds:
+        found += await _investment_runs(session, staff)
     if "payout_resolution" in kinds:
         found += await _payout_resolutions(session)
     if "tax_remittance" in kinds:
@@ -212,6 +214,20 @@ async def _investment_corrections(session: AsyncSession, staff: StaffSession) ->
         for c in await investments.list_corrections(
             session, staff.actor, status=investments.CorrectionStatus.PROPOSED, limit=200
         )
+    ]
+
+
+async def _investment_runs(session: AsyncSession, staff: StaffSession) -> list[Waiting]:
+    # The subject is the run and its day, such as "interest 2026-11-13".
+    return [
+        Waiting(
+            "investment_run",
+            r.id,
+            f"{r.kind.value} {r.run_date.isoformat()}",
+            r.proposed_by,
+            r.proposed_at,
+        )
+        for r in await investments.list_runs(session, staff.actor, status="proposed", limit=200)
     ]
 
 

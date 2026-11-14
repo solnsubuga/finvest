@@ -8,7 +8,7 @@ complaint outcomes, the suppression lifts, the client locks, the announcements, 
 changes, Finvest's own money in the buffer, the payments of tax to URA, the payments moved to
 the right client, next of kin, the answers to the investing questions, the requests to close an
 account, the journals sent to the accounting system, who set the bank account clients pay
-into or why a payout send waited."""
+into, why a payout send waited or the runs staff asked for again."""
 
 import os
 from collections.abc import Iterator
@@ -966,6 +966,14 @@ ROWS = {
         "expires_at) VALUES ('-Nabc0000000000000C1', '-Nabc0000000000000A1', 'withdrawal', "
         "decode(repeat('11', 32), 'hex'), now(), now() + interval '3 minutes')",
         "refusing to drop PIN confirmations that are not used yet",
+    ),
+    "0330_investment_run_requests": (
+        "BEGIN; SELECT set_config('finvest.actor_kind', 'staff', true); "
+        "SELECT set_config('finvest.actor_id', '-Nabc0000000000000S1', true); "
+        "INSERT INTO investment_run_requests (id, kind, run_date, reason, proposed_by, "
+        "proposed_at) VALUES ('-Nabc0000000000000A1', 'interest', DATE '2026-11-10', "
+        "'The run stopped part way', '-Nabc0000000000000S1', now()); COMMIT",
+        "refusing to drop the record of runs staff asked for again",
     ),
 }
 

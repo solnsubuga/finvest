@@ -31,6 +31,7 @@ Kind = Literal[
     "announcement",
     "payout_account",
     "investment_correction",
+    "investment_run",
     "payout_resolution",
     "tax_remittance",
     "deposit_reassignment",
@@ -77,6 +78,8 @@ SOURCES: dict[Kind, Source] = {
     "payout_resolution": Source("reconciliation.view", "reconciliation.change"),
     "payout_account": Source("review_queue.view", "payout_accounts.change"),
     "investment_correction": Source("investments.view", "investment_corrections.change"),
+    # Running a day's interest again, or today's maturities, decided as corrections are.
+    "investment_run": Source("investments.view", "investment_corrections.change"),
     "tax_remittance": Source("finance.view", "tax_remittances.change"),
     "deposit_reassignment": Source("reconciliation.view", "deposit_reassignments.change"),
     # Releasing a payout held because it is large, decided where it is held: the review queue.
