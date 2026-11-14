@@ -14,6 +14,7 @@ export const STATUS_LABELS: Record<CheckStatus, string> = {
   awaiting_client: "Waiting for client",
   approved: "Approved",
   rejected: "Rejected",
+  superseded: "Replaced by a full check",
 };
 
 export const CHECK_LABELS: Record<AutomaticCheckName, string> = {

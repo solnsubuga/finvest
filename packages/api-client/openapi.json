@@ -3077,7 +3077,8 @@
           "with_compliance",
           "awaiting_client",
           "approved",
-          "rejected"
+          "rejected",
+          "superseded"
         ],
         "title": "CheckStatus",
         "type": "string"

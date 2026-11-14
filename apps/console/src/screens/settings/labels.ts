@@ -34,6 +34,7 @@ const EVENT_LABELS: Record<string, string> = {
   kyc_approved: "Identity check approved",
   kyc_retake_requested: "Identity photo needed again",
   kyc_rejected: "Identity check not approved",
+  kyc_full_check_needed: "Full identity check needed",
   payout_destination_approved: "Payout account approved",
   payout_destination_refused: "Payout account not approved",
   statement_ready: "Statement ready",

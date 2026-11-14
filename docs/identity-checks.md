@@ -19,7 +19,7 @@ Photos are JPEG, PNG or WebP, at most 10 MB each. The files live in private obje
 
 ## Lifecycle
 
-Each client has one check. It moves through these states.
+Each client has one live check. It moves through these states. A client can also have a superseded check beside it ([Photos that do not match](#photos-that-do-not-match)).
 
 | State | Meaning | Who moves it on |
 | --- | --- | --- |
@@ -30,6 +30,7 @@ Each client has one check. It moves through these states.
 | `awaiting_client` | Staff asked for named photos again, with a message | The client, by retaking those photos and submitting |
 | `approved` | Final. The account number is issued. | Nobody |
 | `rejected` | Final | Nobody |
+| `superseded` | Final. A check carried over from Finvest 1.0 whose claim photos did not match. It keeps the account number. | Nobody |
 
 Staff can approve, reject, ask for photos again or escalate. One member of staff decides alone (the owner's decision, an exception to the maker and checker rule). Every staff decision needs a reason and is written to the audit trail in the same transaction. A client who is asked for a photo retakes only that photo and does not start again. Their check lists the photos asked for in `retake_photos` and, of those, the ones already taken again in `retaken`, so the app knows what is left after a restart.
 
@@ -46,7 +47,7 @@ A provider is asked for three things: that the document is genuine and not expir
 
 ## Account number
 
-The 10-digit [account number](account-numbers.md) is issued in the transaction that approves the client. If the approval fails, the number is not kept. An approved check always has a personal account number (starting with 10) from the registry, and no other check has one. The database enforces this.
+The 10-digit [account number](account-numbers.md) is issued in the transaction that approves the client. If the approval fails, the number is not kept. An approved check always has a personal account number (starting with 10) from the registry, and no other live check has one. A superseded check keeps the number it had, and the client's next approved check is given that same number again instead of a new one. A number is never given to another client. The database enforces all of this.
 
 ## Carried over from Finvest 1.0
 
@@ -56,7 +57,7 @@ At the switch (see [migration.md](migration.md)), a client whose identity Finves
 - Finvest 1.0 did not always record when a document expires, so the expiry may be unknown. An expired document is refused with `document_expired`: that client does the full check when they claim.
 - Calling it again with the same reference for the same client returns the same check and issues nothing. The same reference for another client, a client who already has a check, and a document an approved client already holds are refused.
 - The client is not told at the switch. They hear when they claim the account.
-- Only the system on the worker's connection may insert such a check, and only approved and with no staff member as the decider. Clients still insert only their own drafts and can never set the source. Like every decided check, it never changes.
+- Only the system on the worker's connection may insert such a check, and only approved and with no staff member as the decider. Clients still insert only their own drafts and can never set the source. Like every decided check, it never changes, except that it is superseded when the claim photos do not match.
 
 ## Claim checks
 
@@ -66,7 +67,7 @@ A carried-over check has no photos. So when the client claims their account, the
 - Only a client whose own approved check was carried over can start one. The photos are stored and kept exactly as identity photos are, under `kyc-claims/<claim check>/<photo>`.
 - The decision is published as `kyc.claim_check_decided`, with the client, the claim check and `matched`, in the decision's own transaction. The migration module moves the claim on from that in the worker, by adding its consumer to `claims.DECIDED_CONSUMERS`. This module never writes the migration tables.
 - When staff send photos back, the client gets the same `kyc_retake_requested` notice as for an identity check, once for each hand-in. It carries no link, because notification links have no kind for a claim; the app opens the claim.
-- `not_matched` is final, and a client has one claim check. A client refused in error is not reopened here. The migration module moves their claim to staff follow-up, and staff contact the client and check their identity outside the app, as for any other claim problem (step 7 in [migration.md](migration.md)).
+- `not_matched` is final, and a client has one claim check. It supersedes the carried-over check in the same transaction, and the client does the full ID check ([Photos that do not match](#photos-that-do-not-match)).
 - A trigger holds the same transitions and the columns each actor may change. The worker only reads.
 
 | Route | What it does |
@@ -96,10 +97,22 @@ Handing a check in also asks the screening module for a sanctions and PEP screen
 
 `approved_client_ids(session, after=, limit=)` pages through approved clients, carried-over ones included, ordered by client id. It is for the screening module's rescreening sweep, in a worker transaction.
 
+### Photos that do not match
+
+When staff mark a claim check `not_matched`, the client does the full ID check, as a new client would (the owner's decision). In the same transaction, `claims.decide` calls `supersede_carried_over`, which moves the carried-over check from `approved` to `superseded` (migration 0371).
+
+- The superseded check stays on record. It records when, which member of staff, and the claim check (`superseded_at`, `superseded_by`, `superseded_by_claim`). The audit trail has `kyc.check.superseded` with the claim check; the reason is on the claim check's own decision.
+- It no longer counts as approved. `verified_name`, `account_holder`, `tax_numbers`, `transfer_recipient` and `approved_client_ids` stop answering for the client until a new check is approved. `GET /client/identity-check` answers `null`, so the app starts the full check from choosing a document.
+- Staff still find the client: `check_summary` gives the superseded check until the client starts the new one, `identities` keeps the account number with no verified name, and `client_for_account_number` still finds the client.
+- The account number stays with the client. When the full check is approved, by staff or by the worker, it is given the same number. The same identity document may be used, because a superseded check does not hold it.
+- The client gets the `kyc_full_check_needed` notice, linked to the identity check.
+- The migration module hears `kyc.claim_check_decided` with `matched` false and sends the claim's identity step to the full check. When the full check is decided, it hears `kyc.check_decided` as for any other client.
+- Only staff supersede, only a carried-over approved check, and only when that check's claim check is `not_matched` in the same transaction. A superseded check never changes again. A client has at most one check that is not superseded: the unique indexes on the client and on the account number leave superseded checks out.
+
 ## What the database enforces
 
 - The transition table above is repeated in a trigger. A client's transaction cannot approve or reject, and cannot change a check that is with staff. The system's transitions also need the worker's database role, so the API cannot approve by naming itself the system.
-- An approved or rejected check never changes.
+- An approved, rejected or superseded check never changes, except that an approved carried-over check is superseded when its claim photos do not match.
 - The trigger also names the columns each actor may change. A client writes the document and details of their own draft and nothing else, and hands in a check only with no provider answer on it. Staff move a check from one state to the next and never edit it in place or alter what the client confirmed. The worker writes the provider's reference and answer, never the details.
 - A client's transaction sees only that client's check and photos. Staff transactions see every check. Which staff may review is a permission checked in the application.
 - Only the client adds or replaces photos, and only while the check is a draft or staff asked for that photo again. A replaced photo stays replaced, so what staff saw during a review cannot be swapped afterwards.
@@ -228,7 +241,7 @@ The review queue, under `/staff/identity-checks`. Reading needs the permission `
 
 The API stores each photo in the shared private storage (`app.infrastructure.storage`) under `kyc/<check>/<photo>`, never the browser. Everything that can refuse a photo runs first: the check must take a photo of that kind now, the type and size must be allowed, and the file must start the way a file of its type does. Then the file is stored, outside any transaction, and only then is its row saved with its size and SHA-256. If saving the row fails, the file is deleted. Every photo is kept, replaced ones too, so a check holds at most 30 in all: one more is refused with `too_many_photos` before anything is stored. Read links are never stored or logged.
 
-The client is told, in the same transaction as the decision, when their check is approved (by staff or by the worker), rejected, or sent back for new photos: the events `kyc_approved`, `kyc_rejected` and `kyc_retake_requested`, linked to the check. The approval and rejection are keyed by the check, and a request for photos by the check and its submission, so a check sent back twice tells the client twice. Escalating a check, or sending it to a person, tells the client nothing.
+The client is told, in the same transaction as the decision, when their check is approved (by staff or by the worker), rejected, or sent back for new photos: the events `kyc_approved`, `kyc_rejected` and `kyc_retake_requested`, linked to the check. A carried-over check superseded by a claim check that did not match sends `kyc_full_check_needed`. The approval and rejection are keyed by the check, and a request for photos by the check and its submission, so a check sent back twice tells the client twice. Escalating a check, or sending it to a person, tells the client nothing.
 
 In the same transaction, an approval or rejection is published as `kyc.check_decided`, keyed by the check, with the client, the check and `approved`. A module that needs to hear, such as migration for a client claiming an account who redoes the full check, adds its consumer to `service.DECIDED_CONSUMERS`.
 

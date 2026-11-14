@@ -71,6 +71,7 @@ Nothing personal goes into a job payload or a log. The words live in the `notifi
 | `kyc_approved` | Identity checks | none | Account |
 | `kyc_retake_requested` | Identity checks | none | Account |
 | `kyc_rejected` | Identity checks | none | Account |
+| `kyc_full_check_needed` | Identity checks, when claim photos do not match the check carried over | none | Account |
 | `organisation_invited` | Organisations, from the worker | `person` (never the organisation's name, which staff have not seen yet) | Account |
 | `organisation_returned` | Organisations | `organisation` | Account |
 | `organisation_rejected` | Organisations | `organisation` | Account |

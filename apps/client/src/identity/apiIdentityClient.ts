@@ -29,6 +29,8 @@ const FIELD_NAMES: Record<string, DetailField> = {
 };
 
 export function toCheck(view: ClientCheck): IdentityCheck {
+  // The API never hands the client a superseded check: it answers null until a new one starts.
+  if (view.status === "superseded") throw new Error("A superseded identity check is not the client's");
   const details = view.details;
   return {
     id: view.id,
@@ -126,7 +128,7 @@ export function createApiIdentityClient(): IdentityClient {
     async getCheck() {
       try {
         const { check } = await api("GET /client/identity-check", {});
-        return check ? toCheck(check) : null;
+        return check && check.status !== "superseded" ? toCheck(check) : null;
       } catch (error) {
         throw toIdentityError(error, "read");
       }

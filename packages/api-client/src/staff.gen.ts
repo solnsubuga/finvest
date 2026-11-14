@@ -692,7 +692,7 @@ export const CheckOut = z.object({
 });
 export type CheckOut = z.infer<typeof CheckOut>;
 
-export const CheckStatus = z.enum(["draft", "submitted", "needs_review", "with_compliance", "awaiting_client", "approved", "rejected"]);
+export const CheckStatus = z.enum(["draft", "submitted", "needs_review", "with_compliance", "awaiting_client", "approved", "rejected", "superseded"]);
 export type CheckStatus = z.infer<typeof CheckStatus>;
 
 export const ClaimCheckStatus = z.enum(["draft", "needs_review", "awaiting_client", "matched", "not_matched"]);

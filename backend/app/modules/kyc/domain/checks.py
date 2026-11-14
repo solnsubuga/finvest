@@ -36,9 +36,12 @@ class CheckStatus(StrEnum):
     AWAITING_CLIENT = "awaiting_client"  # staff asked for new photos
     APPROVED = "approved"  # final; the account number is issued
     REJECTED = "rejected"  # final
+    # Final. A check carried over from Finvest 1.0 whose claim photos did not match: the client
+    # does the full check, and keeps the account number.
+    SUPERSEDED = "superseded"
 
 
-FINAL = frozenset({CheckStatus.APPROVED, CheckStatus.REJECTED})
+FINAL = frozenset({CheckStatus.APPROVED, CheckStatus.REJECTED, CheckStatus.SUPERSEDED})
 # States in which the client may still change photos and details.
 CLIENT_EDITABLE = frozenset({CheckStatus.DRAFT, CheckStatus.AWAITING_CLIENT})
 
