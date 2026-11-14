@@ -4,7 +4,11 @@ Rules in `domain/phone_names.py`; the worker's side in `phone_name_jobs.py`. The
 is the payouts module's ioTec Verify adapter (`RegisteredNamesProvider`).
 
 A lookup is asked for in the transaction that hands the check in, with its job, so a check is
-never handed in and its lookup lost. Only the worker records what ioTec said.
+never handed in and its lookup lost. Only the worker records what ioTec said. Each lookup is for
+the number on the client's account at the time, so a client who changes their number to one in
+their own name gets it looked up when they hand the check in again.
+
+A different name on the client's current number blocks approval (`blocks_approval`).
 
 Nothing here logs or audits the number or the name the network gave.
 """
@@ -36,6 +40,7 @@ class Lookup:
     id: str
     check_id: str
     number: int
+    phone: str
     status: LookupStatus
     request_id: str | None
     registered_name: str | None
@@ -51,19 +56,35 @@ class PhoneNameView:
     status: PhoneName
     registered_name: str | None
     answered_at: datetime | None
+    # False once the client's number has changed since: the result is about an earlier number.
+    current_number: bool
+
+    @property
+    def blocks_approval(self) -> bool:
+        """The client's own number is registered to someone else (the owner's decision)."""
+        return self.current_number and self.status is PhoneName.DIFFERENT
 
 
 _COLUMNS = (
-    "id, check_id, number, status, request_id, registered_name, name_match, created_at, answered_at"
+    "id, check_id, number, phone, status, request_id, registered_name, name_match, "
+    "created_at, answered_at"
 )
 _INSERT = text(
-    "INSERT INTO kyc_phone_names (id, check_id, number, status, created_at, updated_at) "
-    "VALUES (:id, :check_id, :number, 'queued', :now, :now)"
+    "INSERT INTO kyc_phone_names "
+    "(id, check_id, number, phone, status, created_at, updated_at) "
+    "VALUES (:id, :check_id, :number, :phone, 'queued', :now, :now)"
 )
 _GET = text(f"SELECT {_COLUMNS} FROM kyc_phone_names WHERE id = :id")  # noqa: S608
 _LATEST = text(
     f"SELECT {_COLUMNS} FROM kyc_phone_names "  # noqa: S608 - constant column list
     "WHERE check_id = :check_id ORDER BY number DESC LIMIT 1"
+)
+_LATEST_FOR_PHONE = text(
+    f"SELECT {_COLUMNS} FROM kyc_phone_names "  # noqa: S608 - constant column list
+    "WHERE check_id = :check_id AND phone = :phone ORDER BY number DESC LIMIT 1"
+)
+_COUNT_FOR_PHONE = text(
+    "SELECT count(*) FROM kyc_phone_names WHERE check_id = :check_id AND phone = :phone"
 )
 _CHECK = text("SELECT client_id, surname, given_names FROM kyc_checks WHERE id = :id")
 _SENT = text(
@@ -83,15 +104,25 @@ async def ask_at_hand_in(
     """Ask for a lookup of the client's phone as their check is handed in, when one is due.
 
     The client's transaction, which holds the check's row lock. Nothing is asked for a number
-    that is not Ugandan, or once the network has answered for this check.
+    that is not Ugandan, or once the network has answered for this number.
     """
     contact = await client_contact(session, client_id)
     if contact is None or msisdn(contact.phone) is None:
         return None
-    latest = await latest_lookup(session, check_id)
+    phone = contact.phone
     now = clock.now()
-    if latest is not None and not ask_again(latest.status, latest.created_at, latest.number, now):
+    same = (
+        await session.execute(_LATEST_FOR_PHONE, {"check_id": check_id, "phone": phone})
+    ).one_or_none()
+    count = int(await session.scalar(_COUNT_FOR_PHONE, {"check_id": check_id, "phone": phone}) or 0)
+    if not ask_again(
+        None if same is None else LookupStatus(same.status),
+        None if same is None else same.created_at,
+        count,
+        now,
+    ):
         return None
+    latest = await latest_lookup(session, check_id)
     lookup_id = push_id(clock)
     await session.execute(
         _INSERT,
@@ -99,6 +130,7 @@ async def ask_at_hand_in(
             "id": lookup_id,
             "check_id": check_id,
             "number": 1 if latest is None else latest.number + 1,
+            "phone": phone,
             "now": now,
         },
     )
@@ -120,10 +152,13 @@ async def phone_name_for_check(session: AsyncSession, check_id: str) -> PhoneNam
     latest = await latest_lookup(session, check_id)
     if latest is None:
         return None
+    check = (await session.execute(_CHECK, {"id": check_id})).one()
+    contact = await client_contact(session, check.client_id)
     return PhoneNameView(
         status=phone_name(latest.status, latest.name_match),
         registered_name=latest.registered_name,
         answered_at=latest.answered_at,
+        current_number=contact is not None and contact.phone == latest.phone,
     )
 
 
@@ -145,9 +180,7 @@ async def number_to_look_up(session: AsyncSession, lookup_id: str) -> str | None
     lookup = await get_lookup(session, lookup_id)
     if lookup is None or lookup.status is not LookupStatus.QUEUED:
         return None
-    check = (await session.execute(_CHECK, {"id": lookup.check_id})).one()
-    contact = await client_contact(session, check.client_id)
-    return None if contact is None else msisdn(contact.phone)
+    return msisdn(lookup.phone)
 
 
 async def note_sent(session: AsyncSession, lookup_id: str, request_id: str, clock: Clock) -> bool:
@@ -221,6 +254,7 @@ def _lookup(row: Row[Any]) -> Lookup:
         id=row.id,
         check_id=row.check_id,
         number=int(row.number),
+        phone=row.phone,
         status=LookupStatus(row.status),
         request_id=None if row.request_id is None else str(row.request_id),
         registered_name=row.registered_name,

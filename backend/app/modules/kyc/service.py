@@ -1073,6 +1073,13 @@ async def approve(
     # The document was valid when the client confirmed it. It must still be valid today.
     if row.document_expires_on < clock.now().date():
         raise _invalid("document_expires_on", "document_expired")
+    # The client's own number is registered to someone else: never approved (the owner's rule).
+    phone = await phone_lookups.phone_name_for_check(session, row.id)
+    if phone is not None and phone.blocks_approval:
+        raise ApplicationError(
+            "conflict",
+            fields=[FieldProblem(field_path=["phone_name"], code="phone_name_different")],
+        )
     approved = await _approve(
         session,
         row,
