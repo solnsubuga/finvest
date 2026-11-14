@@ -735,6 +735,7 @@ export const PayoutOut = z.object({
   destination_id: z.string(),
   id: z.string(),
   kind: z.enum(["mobile_money", "bank"]),
+  resent_as: z.string().nullable().optional(),
   returned_at: z.string().nullable().optional(),
   status: z.enum(["in_review", "processing", "paid", "failed", "cancelled"]),
 });

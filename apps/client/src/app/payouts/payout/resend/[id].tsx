@@ -52,7 +52,7 @@ export default function ResendPayout() {
   const [locked, setLocked] = useState(false);
 
   const read = loaded.state === "ready" ? loaded.value : null;
-  const returned = read !== null && read.payout.returnedAt !== null;
+  const returned = read !== null && read.payout.returnedAt !== null && read.payout.resentAs === null;
   const destinationId = chosen ?? (read ? firstChoosable(read.choices) : null);
   const canSend = returned && destinationId !== null;
 
@@ -91,6 +91,16 @@ export default function ResendPayout() {
         <View style={{ marginTop: 20 }}>
           <LoadFailed message={loaded.message} onRetry={retry} />
         </View>
+      ) : loaded.value.payout.resentAs ? (
+        <View style={{ marginTop: 20, gap: 16 }}>
+          <Notice tone="neutral">You already sent this payout again. The new payout has the money now.</Notice>
+          <Button
+            label="Open the new payout"
+            variant="secondary"
+            onPress={() => router.replace(`/payouts/payout/${loaded.value.payout.resentAs}`)}
+            testID="resend-open-new"
+          />
+        </View>
       ) : !returned ? (
         <View style={{ marginTop: 20 }}>
           <Notice tone="neutral">{describePayoutsError(new PayoutsError("not_returned"))}</Notice>
@@ -118,8 +128,7 @@ export default function ResendPayout() {
           </View>
           {error ? <Notice tone="danger">{error}</Notice> : null}
           <Txt size={fontSizes.xs} color={colors.muted}>
-            It can be sent again once. If you already chose an account, choosing the same one shows that payout. We will
-            tell you when it arrives.
+            It can be sent again once. We will tell you when it arrives.
           </Txt>
         </View>
       )}

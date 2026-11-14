@@ -318,6 +318,15 @@ async def approved_for(session: AsyncSession, payout_ids: list[str]) -> dict[str
     return {row.payout_id: _view(row) for row in rows.all()}
 
 
+async def resent_as(
+    session: AsyncSession, client_id: str, returned: dict[str, ReturnView]
+) -> dict[str, str]:
+    """The payout each of these payouts that came back was sent again as, by its payout ID."""
+    payout_by_key = {view.resend_key: payout_id for payout_id, view in returned.items()}
+    found = await payouts.ids_by_request_keys(session, client_id, list(payout_by_key))
+    return {payout_by_key[key]: new_id for key, new_id in found.items()}
+
+
 def _check(staff: Actor, reason: str) -> None:
     if staff.kind != "staff" or staff.id is None:
         raise ApplicationError("forbidden")

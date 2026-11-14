@@ -294,6 +294,7 @@ async def test_the_client_sees_it_came_back_and_sends_it_again(
         seen = await http.get(f"/client/payouts/{payout.id}")
         assert seen.status_code == 200, seen.text
         assert (seen.json()["status"], seen.json()["returned_at"] is not None) == ("paid", True)
+        assert seen.json()["resent_as"] is None
 
         body = {"destination_id": world.destination_id}
         sent = await http.post(f"/client/payouts/{payout.id}/resend", json=body)
@@ -302,6 +303,13 @@ async def test_the_client_sees_it_came_back_and_sends_it_again(
         assert again.json()["id"] == sent.json()["id"]
         assert sent.json()["amount"]["minor"] == AMOUNT
         assert sent.json()["status"] == "processing"
+        assert sent.json()["resent_as"] is None
+        # The payout that came back now points at the one it was sent again as.
+        after = await http.get(f"/client/payouts/{payout.id}")
+        assert after.json()["resent_as"] == sent.json()["id"]
+        listed = {item["id"]: item for item in (await http.get("/client/payouts")).json()}
+        assert listed[payout.id]["resent_as"] == sent.json()["id"]
+        assert listed[sent.json()["id"]]["resent_as"] is None
 
         other = await http.post(f"/client/payouts/{push_id()}/resend", json=body)
         assert other.status_code == 404

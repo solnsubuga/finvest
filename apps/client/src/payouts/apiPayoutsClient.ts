@@ -45,6 +45,7 @@ export function toPayout(view: PayoutOut): Payout {
     businessDate: view.business_date,
     createdAt: view.created_at,
     returnedAt: view.returned_at ?? null,
+    resentAs: view.resent_as ?? null,
   };
 }
 
