@@ -12,7 +12,7 @@ These rules are not preferences. A change that breaks one is wrong even if it wo
 - Provider calls never happen inside a database transaction. The intent is saved as a job in the same transaction and a worker sends it.
 - An uncertain provider outcome goes to reconciliation. It is never retried blindly. A provider callback is a hint, and the status is read back from the provider before the ledger changes.
 - Interest is principal times rate times days over 365, posted once a day as ledger entries, so the client total always ties to the ledger.
-- Tax is calculated and held in its own ledger account. Clients see net figures only. Tax rates are never shown in the client app.
+- Tax is calculated and held in its own ledger account. Clients see net figures only. Tax rates are never shown in the client app. The one exception, confirmed by the owner, is the yearly withholding tax certificate, which shows interest before tax and the tax withheld, but never a rate.
 - Every change to rates, fees and limits has an effective date, a proposer and an approver.
 - There is no wallet. No spendable client balance exists. The only place client money can sit is a "payout pending" ledger account after a failed payout, and it should be cleared within a day.
 - Overpayments and unmatched deposits are refunded or matched by staff. They are never kept as credit.
