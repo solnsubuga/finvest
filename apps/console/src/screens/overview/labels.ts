@@ -27,6 +27,8 @@ export const KIND_INFO: Record<Kind, KindInfo> = {
   team_change: { label: "Team change", path: at("/team") },
   // The subject is "lock <client ID>" or "unlock <client ID>".
   client_lock: { label: "Client lock", path: (item) => `/clients?client=${encodeURIComponent(item.subject.split(" ").pop() ?? "")}` },
+  // The subject is the client's ID.
+  account_closure: { label: "Account closure", path: (item) => `/clients?client=${encodeURIComponent(item.subject)}` },
   suppression_lift: { label: "Email suppression lift", path: at("/clients") },
   complaint_outcome: { label: "Complaint outcome", path: at("/complaints") },
   payout_account: { label: "Payout account check", path: at("/review-queue") },
@@ -59,7 +61,7 @@ export function describeSubject(item: ApprovalItem): string {
     return `${kind === "unlock" ? "Unlock" : "Lock"} client ${client ?? ""}`.trim();
   }
   if (item.kind === "suppression_lift") return `Address ${item.subject}…`;
-  if (item.kind === "phone_change") return `Client ${item.subject}`;
+  if (item.kind === "phone_change" || item.kind === "account_closure") return `Client ${item.subject}`;
   return SUBJECT_WORDS[item.subject] ?? item.subject;
 }
 
