@@ -1,6 +1,6 @@
 # Goals
 
-How a client saves towards something: school fees, land, an emergency fund. The code is in `backend/app/modules/goals`, and the database side is migrations 0110 to 0112.
+How a client saves towards something: school fees, land, an emergency fund. The code is in `backend/app/modules/goals`, and the database side is migrations 0110 to 0112, with 0301 for saving rules.
 
 ## A goal holds no money
 
@@ -54,6 +54,23 @@ The words name the goal and the date, never an amount. The rule is in `domain/re
 
 The morning run (`goals.send_reminders`) reads 200 active goals per job. Each page is its own transaction, and a full page queues the next one, after its last goal, in that same transaction. A run over many goals never holds one long transaction, and a crash repeats one page at most.
 
+## Saving rules
+
+A saving rule saves a set amount towards a goal on a set day of every month, by itself. The code is `saving_rules.py`, and the database side is migration 0301.
+
+- **It is an automatic investing plan.** Setting a rule up makes a monthly plan in the goal's product for the amount and day, paid from the number on the client's account, rolling over at maturity ([automatic-investing.md](automatic-investing.md)). The plan's checks apply: whole shillings, at most UGX 5,000,000 and at least the product's minimum, and a day from 1 to 31 (the month's last day in a shorter month). Its first saving is on the first such day after today.
+- **The worker sends the prompt.** On the day, the automatic investing worker saves the investment and the mobile money deposit, and the client's phone is prompted for the amount. A failed payment is tried once more the next day, and the client is told, as for any plan.
+- **Each run's investment is a saving towards the goal.** The run publishes `autoinvest.run_requested` with the consumer `goals.link_plan_run`, and the worker records the investment in `goal_savings` with the rule that made it. It shows as awaiting payment until paid, and counts in the goal's value once it starts, like a saving made by hand. A plan that is no goal's rule is ignored.
+- **One rule per goal.** A second is refused with `conflict` until the first ends. Ending a rule stops its plan. Savings already made, and a prompt already sent, carry on. Closing a goal ends its rule. A plan stopped from the automatic investing screens ends the rule too, so the goal can have a new one.
+- **No reminder to pay by hand.** `goal_top_up_due` is not sent for a goal with a rule.
+- The plan also shows in the client's automatic investing list, since it is one.
+
+The database holds these:
+
+- A client sets up a rule only for their own active goal, and a goal has one rule that has not ended. A plan saves towards one goal.
+- A rule only ever ends, once, by its client. Nothing is deleted.
+- Only the worker records a rule's saving, as the system, and a composite foreign key ties it to a rule of the same goal. A client's own saving never names a rule.
+
 ## Rolling over
 
 A saving that rolls over at maturity becomes a new investment for the proceeds, principal and interest after tax. The investments module publishes `investments.rolled_over` with the consumer `goals.follow_rollover` (named in `goals/events.py`, so investing imports nothing else of goals). The worker then links the new investment to the same goal, so the goal's value carries on. Only running investments count towards the value, so the matured one stays in the list as a record and is not counted twice.
@@ -106,6 +123,8 @@ The database holds these, in migration 0112:
 | `GET /client/goals`, `GET /client/goals/{id}` | The client's goals with progress, plan and savings |
 | `PUT /client/goals/{id}` | Change the name, what it is for, the target or the date |
 | `POST /client/goals/{id}/close` | Close it |
+| `POST /client/goals/{id}/saving-rule` | Set up the monthly saving rule from `amount_minor`, `currency`, `day` and `network` (`mtn` or `airtel`). Takes an `Idempotency-Key`. Answers 201 with the goal, whose `saving_rule` has `plan_id`, `amount_minor`, `currency`, `day`, `network`, `payer_msisdn`, `status`, `next_run_on` and `created_at`. |
+| `POST /client/goals/{id}/saving-rule/stop` | End the rule and stop its plan. Sending it again changes nothing. |
 | `POST /client/goals/{id}/savings` | Confirm a saving: returns the new investment awaiting payment. Takes an `Idempotency-Key`. Pay for it with the investment's ID as the purpose. |
 | `GET /staff/goals`, `GET /staff/goals/{id}` | Staff with `goals.view` |
 | `POST /client/goal-groups` | Set up a group goal, with the client's own part. Takes an `Idempotency-Key`. |
@@ -124,6 +143,5 @@ Client responses carry net figures and the yearly rate after tax as a label. No 
 
 ## Not built yet
 
-- Saving rules: a monthly saving collected on a set day, with a mobile money prompt sent by the worker. When a goal is saved by an automatic plan, `goal_top_up_due` should skip it, since nothing needs paying by hand.
 - Connecting the console's Goals screen, goals and group goals alike, to the staff routes. It shows sample data under `pnpm dev` and says it is not connected in a normal build.
 - Withdrawing from a goal before its date, which waits for early withdrawal.

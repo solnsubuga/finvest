@@ -57,6 +57,7 @@ const goal = {
   created_at: "2026-11-13T10:00:00Z",
   progress: { value_minor: 0, interest_minor: 0, awaiting_payment_minor: 300000, percent: 0, standing: "on_track" },
   plan,
+  saving_rule: null,
   savings: [saving],
 };
 
