@@ -20,6 +20,12 @@ export const AuthenticatorState = z.object({
 });
 export type AuthenticatorState = z.infer<typeof AuthenticatorState>;
 
+export const BankOut = z.object({
+  code: z.string(),
+  name: z.string(),
+});
+export type BankOut = z.infer<typeof BankOut>;
+
 export const MoneyView = z.object({
   currency: z.enum(["UGX", "USD"]),
   minor: z.number().int(),
@@ -1032,6 +1038,17 @@ export const operations = {
     idempotent: false,
     status: 200,
     response: AutoinvestApiPlanView,
+  },
+  "GET /client/banks": {
+    method: "GET",
+    path: "/client/banks",
+    params: z.object({}),
+    query: z.object({}),
+    body: null,
+    bodyKind: null,
+    idempotent: false,
+    status: 200,
+    response: z.array(BankOut),
   },
   "GET /client/claim": {
     method: "GET",

@@ -163,7 +163,7 @@ In `backend/app/modules/payouts/api.py`. Every route needs a signed-in client an
 | Route | What it does |
 | --- | --- |
 | `GET /client/payout-destinations` | The client's payout accounts that are not removed, newest first |
-| `POST /client/payout-destinations` | Add one: `{kind: "mobile_money", phone, holder_name}` or `{kind: "bank", bank_code, account_number, holder_name}`. 201, awaiting the SMS code. 409 if it is already saved, or `too_many_unconfirmed_accounts` when the client already has five awaiting their code |
+| `POST /client/payout-destinations` | Add one: `{kind: "mobile_money", phone, holder_name}` or `{kind: "bank", bank_code, account_number, holder_name}`. 201, awaiting the SMS code. 409 if it is already saved, or `too_many_unconfirmed_accounts` when the client already has five awaiting their code. 422 `bank_unknown` on `bank_code` for a bank not in the list |
 | `GET /client/payout-destinations/{id}` | One account |
 | `POST /client/payout-destinations/{id}/code` | Text the code for an account that is `awaiting_code`. 204. A new code replaces the one before. 429 past three in 15 minutes for the account, five for the client, three to the number texted, or ten for the client in a day |
 | `POST /client/payout-destinations/{id}/code/verify` | `{code}`. Moves the account to `awaiting_proof`. 401 `invalid_code` for a wrong code, 410 `expired` when none is left |
@@ -172,6 +172,7 @@ In `backend/app/modules/payouts/api.py`. Every route needs a signed-in client an
 | `GET /client/payouts` | The client's payouts, newest first, at most 50 |
 | `GET /client/payouts/{id}` | One payout |
 | `GET /client/withdrawal-limits` | The limits in force today, without the review threshold |
+| `GET /client/banks` | The banks a client may be paid to, as `{code, name}`, from `domain/banks.py`: 22 banks licensed by the Bank of Uganda, taken from the client app's list. The app and the console name banks from this list |
 
 An account shows only its last digits. A payout's status is `in_review` (held for staff), `processing` (queued, sent or uncertain), `paid`, `failed` or `cancelled`. The client is never shown whether we are still finding out what the provider did.
 
