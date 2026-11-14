@@ -36,6 +36,10 @@ UPGRADE = [
     "kind <> 'investment_note' OR idempotency_key = 'started:' || source_id)",
     "CREATE UNIQUE INDEX uq_documents_investment_note ON documents (idempotency_key) "
     "WHERE kind = 'investment_note'",
+    # An investment staff undid before its note was built gets none: `empty`, never shown.
+    "ALTER TABLE documents DROP CONSTRAINT ck_documents_empty",
+    "ALTER TABLE documents ADD CONSTRAINT ck_documents_empty CHECK (status <> 'empty' "
+    "OR kind IN ('monthly_statement', 'tax_certificate', 'investment_note'))",
 ]
 
 EMPTY_GUARD = """
@@ -49,6 +53,9 @@ $$
 """
 
 DOWNGRADE = [
+    "ALTER TABLE documents DROP CONSTRAINT ck_documents_empty",
+    "ALTER TABLE documents ADD CONSTRAINT ck_documents_empty CHECK (status <> 'empty' "
+    "OR kind IN ('monthly_statement', 'tax_certificate'))",
     "DROP INDEX uq_documents_investment_note",
     "ALTER TABLE documents DROP CONSTRAINT ck_documents_investment_note",
     "ALTER TABLE documents DROP CONSTRAINT ck_documents_shape",
