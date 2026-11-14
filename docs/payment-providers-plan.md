@@ -1,8 +1,70 @@
-# Plan: mobile money through Yo! Payments, cards through Pesapal
+# Plan: how Finvest takes mobile money and card payments
 
-**Status: a plan, not built.** Decided by the owner on 14 November 2026: mobile money moves to Yo! Payments ("For now for MM let us integrate Yo payments"), and Visa and Mastercard card payments come through Pesapal. Pesapal is not used for mobile money. The owner asked for the screens to be redesigned before anything is built ([the designs](#the-designs)). Facts about Yo! and Pesapal come from their public documentation and official code libraries, read on 14 November 2026. Items marked "confirm" are not documented publicly and must be checked with the provider before anyone relies on them.
+**Status: a plan, not built. Paused by the owner on 14 November 2026 ("Let us pause and first plan").** Nothing here is decided until the owner approves it. The owner's latest leaning is mobile money on Yo! Payments and cards on Pesapal, and the owner has asked whether Finvest can connect to MTN and Airtel directly instead. This plan sets out the options, recommends an order, and then describes each piece in detail. Facts about each provider come from public documentation and official code libraries, read on 14 November 2026. Items marked "confirm" must be checked with the provider before anyone relies on them.
 
-## In short
+## The options
+
+What Finvest needs from a mobile money provider, from [rules.md](rules.md) and how payments work today ([payments.md](payments.md)):
+
+1. A prompt straight to the client's own number from inside the app, so the client pays only from their own number and automatic investing can ask for a payment by itself.
+2. A way to read a payment back by our own reference, so an unclear answer is settled by asking, never by sending again.
+3. Payouts to mobile money.
+4. A Bank of Uganda licence, and a statement each day for reconciliation.
+
+| Option | 1. Prompt to own number | 2. Read back by our reference | 3. Payouts | 4. Licence and statement | Cost | Effort and time |
+| --- | --- | --- | --- | --- | --- | --- |
+| **ioTec Pay** (built, live) | Yes | By ioTec's ID; by ours when the send's answer was lost | Yes | Says licensed (confirm); statement uploaded | Not published | None: running today |
+| **Yo! Payments** | Yes | Yes | Yes (needs an access letter, maybe signed requests) | BoU PSO licence (2022, confirm current); statement by API | Old public rates 3% in, UGX 250 to 1,000 per payout; negotiable | One adapter for both networks. Days to build, then Yo!'s business sign-up |
+| **MTN MoMo Open API, direct** | Yes (`RequestToPay`) | Yes: we choose the `X-Reference-Id` | Yes (`Disbursement`), to MTN numbers only | MTN is licensed; statements from MTN's merchant portal (confirm an API) | Lowest: the network's own rate (about 1.5% in, an estimate) | One adapter. MTN's business onboarding before live keys, usually weeks |
+| **Airtel Money Open API, direct** | Yes (USSD push) | Yes, by our transaction ID | Yes, to Airtel numbers only; each payout carries a PIN encrypted with Airtel's key | Airtel is licensed; statements from Airtel (confirm) | Lowest, as MTN | One adapter. Airtel's onboarding, usually weeks |
+| **Pesapal** | No: a hosted page where the payer types any number | No for a lost send | No payout API | BoU PSO and PSP licences | Not published | Not suitable for mobile money |
+| **Pegasus, pawaPay, Flutterwave** | Pegasus and pawaPay yes; Flutterwave adds a redirect in Uganda | pawaPay yes; others unconfirmed | Yes | Pegasus licensed; pawaPay's Uganda licence not found | pawaPay about 1% plus the network's fee | Alternatives to Yo! if its terms are poor |
+
+For cards there is one practical choice today: **Pesapal's hosted page**, which keeps card numbers away from Finvest (PCI DSS SAQ A).
+
+### Going direct with MTN and Airtel
+
+- **What it gives:** the lowest fees, no third party holding the money, and on MTN the best possible read back, since we choose each payment's reference before sending.
+- **What it costs:** two contracts and two onboardings, two wallets to keep funded for payouts, two statements in the daily close, two sweeps to the trust account, and Airtel's encrypted payout PIN to keep as a secret. MTN's callbacks are not known to be signed, which is fine because callbacks are only hints here.
+- **Code:** the payments and payouts ports already take one adapter per provider, and the first design had separate MTN and Airtel adapters. A network can be switched on its own, so MTN and Airtel can move at different times.
+
+## Recommended order
+
+| Step | What | Why |
+| --- | --- | --- |
+| 0 | Keep ioTec running as it is | It is built and deployed. Nothing changes for clients until a replacement is live. |
+| 1 | Start the sign-ups now: Yo! Payments, MTN MoMo Open API, Airtel Money Open API and Pesapal | Onboarding is the slowest part and runs in parallel with everything else. |
+| 2 | Build the Yo! adapter for money in and payouts, and switch mobile money to Yo! | One adapter covers both networks and gets off ioTec quickly. |
+| 3 | Build cards on Pesapal | A new way to pay, independent of mobile money. |
+| 4 | Move MTN to direct when MTN gives live access, then Airtel when Airtel does | Lower fees. Clients see no change, because the prompt looks the same. |
+
+If the owner prefers to skip Yo!, step 2 becomes "wait for MTN and Airtel", and ioTec stays until both are live. If Yo!'s terms are poor, Pegasus or pawaPay can take its place in step 2 behind the same adapter port.
+
+### What to ask MTN and Airtel
+
+1. The business onboarding list for the Open API's collections and disbursements products in Uganda, and how long it takes.
+2. Their rates for money in and payouts, and any monthly fee.
+3. Limits per payment and per day for a business wallet.
+4. How settlement to the trust account works, how fast, and at what cost.
+5. Whether a daily statement can be pulled by API.
+6. Whether callbacks can be signed, and from which addresses they come.
+7. For Airtel: how the payout PIN and its encryption key are issued and rotated.
+
+## Decisions for the owner
+
+Each is put to the owner on a decision card.
+
+| Decision | Recommended |
+| --- | --- |
+| Mobile money route | Yo! now, MTN and Airtel direct later, one network at a time |
+| Yo! for payouts too | Yes, so money in pays money out from one account |
+| Cards | Pesapal's hosted page |
+| Who pays the card charge | The client, shown in shillings before paying, if Pesapal allows it |
+| Card limits and refunds to the card | As in [Limits for cards](#limits-for-cards), each needing the owner's own yes |
+
+The sections below describe Yo! and Pesapal in detail. A direct MTN or Airtel adapter follows the same steps as Yo!, with the network's own calls.
+
+## In short, if the recommended order is approved
 
 - **Mobile money (MTN and Airtel) goes through Yo! Payments.** The prompt goes straight to the number on the client's account from inside the app, as it does with ioTec today. The client never leaves the app or types a number, so the rule that a client pays only from their own number holds before any money moves.
 - **Cards (Visa and Mastercard) go through Pesapal's hosted page.** Card numbers are typed only on Pesapal's page. Finvest's servers and apps never see them, which keeps Finvest in the smallest card security scope (PCI DSS SAQ A, confirm).
