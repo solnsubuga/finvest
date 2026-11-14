@@ -290,4 +290,39 @@ describe("the sign-in client for the real API", () => {
     expect(toAuthError(new ApiError("validation_failed")).code).toBe("not_accepted");
     expect(toAuthError(new Error("boom")).code).toBe("unavailable");
   });
+
+  it("sends the self-service changes in the API's shape and says when a passkey or app is wanted", async () => {
+    const seen = serve({
+      "PUT /client/password": { status: 204 },
+      "POST /client/phone-change": { status: 201, body: { challenge_id: ID } },
+      [`POST /client/phone-change/${ID}/confirmation`]: { status: 200, body: { phone: "+256701555013" } },
+      "PUT /client/email": { status: 200, body: { email: "amara@example.com" } },
+      "POST /client/session/confirmation/authenticator": { status: 200, body: { confirmed_until: "2026-11-14T12:00:00Z" } },
+    });
+    const client = createApiAuthClient();
+    await client.confirmWithAuthenticator("123456");
+    await client.changePassword("old-one-here", "lantern-meadow-quartz");
+    expect(await client.startPhoneChange("+256701555013")).toBe(ID);
+    expect(await client.confirmPhoneChange(ID, "482913")).toBe("+256701555013");
+    expect(await client.changeEmail("amara@example.com")).toBe("amara@example.com");
+    expect(seen.map((call) => call.body)).toEqual([
+      { code: "123456" },
+      { current_password: "old-one-here", new_password: "lantern-meadow-quartz" },
+      { phone: "+256701555013" },
+      { code: "482913" },
+      { email: "amara@example.com" },
+    ]);
+
+    serve({ "PUT /client/email": refused(403, "confirm_it_is_you") });
+    expect(await createApiAuthClient().changeEmail("b@example.com").catch((e: AuthError) => e.code)).toBe(
+      "confirm_it_is_you",
+    );
+    serve({
+      "PUT /client/email": {
+        status: 422,
+        body: { request_id: RID, error: { code: "validation_failed", message: "x", fields: [{ field_path: ["body", "email"], code: "same_as_now" }] } },
+      },
+    });
+    expect(await createApiAuthClient().changeEmail("b@example.com").catch((e: AuthError) => e.code)).toBe("same_as_now");
+  });
 });

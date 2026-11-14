@@ -79,7 +79,8 @@ class PinConfirmed(Contract):
 
 @router.put("", status_code=204)
 async def set_pin(body: PinBody, request: Request, client: CurrentClient) -> None:
-    """Set or replace the PIN for this phone. Needs a log in from the last ten minutes."""
+    """Set or replace the PIN for this phone. Needs a log in, or a passkey or app confirmation,
+    from the last ten minutes."""
     await _service(request).set_pin(client, body.pin)
 
 

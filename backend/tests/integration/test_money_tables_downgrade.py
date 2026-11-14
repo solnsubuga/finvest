@@ -936,6 +936,13 @@ ROWS = {
         "now())",
         "refusing to drop staff re-confirmations",
     ),
+    "0236_client_own_changes": (
+        "INSERT INTO identity_codes (id, purpose, channel, phone, actor_id, bound_to, "
+        "code_hash, created_at, expires_at) VALUES ('-Nabc0000000000000A1', 'phone_change', "
+        "'sms', '+256772123456', '-Nabc0000000000000B1', '-Nabc0000000000000C1', "
+        "decode(repeat('00', 32), 'hex'), now(), now())",
+        "refusing to drop number change codes",
+    ),
     "0235_client_freezes": (
         "INSERT INTO identity_clients (id, phone, password_hash, password_changed_at, status, "
         "created_at) VALUES ('-Nabc0000000000000B1', '+256772123456', 'x', now(), 'active', "

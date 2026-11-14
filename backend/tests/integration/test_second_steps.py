@@ -757,6 +757,33 @@ async def test_a_client_adds_an_authenticator_app_and_signs_in_with_it(api: Api)
     assert verified.json()["token"]
 
 
+async def test_a_client_confirms_it_is_them_with_their_app_before_a_sign_in_change(
+    api: Api,
+) -> None:
+    _, _, token = await a_signed_in_client(api)
+    bearer = {"Authorization": f"Bearer {token}"}
+    secret = await add_app(api, token)
+    change = {"email": "amara@example.com"}
+    # The sign up code is not a passkey or an app, so it never counts.
+    refused = await api.http.put("/client/email", json=change, headers=bearer)
+    assert (refused.status_code, code(refused)) == (403, "confirm_it_is_you")
+    wrong = await api.http.post(
+        "/client/session/confirmation/authenticator", json={"code": "000000"}, headers=bearer
+    )
+    assert (wrong.status_code, code(wrong)) == (401, "invalid_code")
+    api.clock.advance(seconds=31)
+    right = await api.http.post(
+        "/client/session/confirmation/authenticator",
+        json={"code": app_code(api, secret)},
+        headers=bearer,
+    )
+    assert right.status_code == 200, right.text
+    assert (await api.http.put("/client/email", json=change, headers=bearer)).status_code == 200
+    api.clock.advance(minutes=11)
+    late = await api.http.put("/client/email", json={"email": "b@example.com"}, headers=bearer)
+    assert code(late) == "confirm_it_is_you"
+
+
 async def test_a_client_app_is_not_on_until_a_code_confirms_it(api: Api) -> None:
     phone, _, token = await a_signed_in_client(api)
     bearer = {"Authorization": f"Bearer {token}"}
