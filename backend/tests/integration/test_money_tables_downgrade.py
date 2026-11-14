@@ -1,11 +1,11 @@
-"""A downgrade must never delete the books, the issued numbers, the audit trail, the job
-history, the receipts that stop a command running twice, the identity records, the payout
-destinations and their two-person checks, the withdrawal limits, the payouts, their send
-attempts and their resolutions, the migration checks, the imported statements, the day closes
-and their recorded matches, the pot transfers, the help chat, the complaints register, the
-goals, the email delivery records, the unclaimed accounts, the complaint outcomes, the
-suppression lifts, the client locks, the announcements, the team changes, Finvest's own money
-in the buffer, the payments of tax to URA or the payments moved to the right client."""
+"""A downgrade must never delete the books, the issued numbers, the audit trail, the job history,
+the receipts that stop a command running twice, the identity records, the payout destinations
+and their two-person checks, the withdrawal limits, the payouts, their send attempts, their
+resolutions and their bank batches, the migration checks, the imported statements, the day
+closes and their recorded matches, the pot transfers, the help chat, the complaints register,
+the goals, the email delivery records, the unclaimed accounts, the complaint outcomes, the
+suppression lifts, the client locks, the announcements, the team changes, Finvest's own money in
+the buffer, the payments of tax to URA or the payments moved to the right client."""
 
 import os
 from collections.abc import Iterator
@@ -423,6 +423,14 @@ ROWS = {
         "VALUES ('-Nabc0000000000000R1', '-Nabc0000000000000A1', 'Checked', 'proposed', "
         "'-Nabc0000000000000S1', now())",
         "refusing to drop the releases of payouts",
+    ),
+    "0039_payout_bank_batches": (
+        # The guard admits only a member of staff preparing in their own name, now.
+        "ALTER TABLE payout_bank_batches DISABLE TRIGGER payout_bank_batches_guard; "
+        "INSERT INTO payout_bank_batches (id, currency, reason, status, prepared_by, "
+        "prepared_at) VALUES ('-Nabc0000000000000A1', 'UGX', 'Today', 'prepared', "
+        "'-Nabc0000000000000S1', now())",
+        "refusing to drop the batches of bank payouts",
     ),
     "0051_kyc_sealed_details": (
         "INSERT INTO kyc_checks (id, client_id, document_type, document_country, "

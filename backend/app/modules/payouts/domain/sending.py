@@ -28,6 +28,7 @@ from app.modules.payments.domain.outcomes import (
     Unavailable,
     Uncertain,
 )
+from app.modules.payouts.domain.banks import find_bank
 from app.modules.payouts.domain.payouts import PayoutEvent
 from app.shared.money import Money
 
@@ -135,3 +136,9 @@ _LABELS = {"mtn": "MTN Mobile Money", "airtel": "Airtel Money"}
 def destination_label(network: str) -> str:
     """How a client's messages name where the money went. Never the number itself."""
     return _LABELS.get(network, "your mobile money number")
+
+
+def bank_label(bank_code: str | None) -> str:
+    """How a client's messages name the bank account the money went to. Never the number."""
+    bank = find_bank(bank_code or "")
+    return "your bank account" if bank is None else f"your {bank.name} account"
