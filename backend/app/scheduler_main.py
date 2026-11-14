@@ -30,6 +30,7 @@ from app.modules.payments import service as payments
 from app.modules.payments.settings import PaymentsSettings
 from app.modules.payments.wiring import ensure_allowed
 from app.modules.payouts import payouts
+from app.modules.screening.service import RESCREEN_KIND
 from app.shared.business_day import KAMPALA
 from app.shared.clock import SystemClock
 
@@ -108,6 +109,14 @@ def schedules() -> list[Schedule]:
             name="documents.monthly_statements",
             trigger=CronTrigger(hour=6, minute=0, timezone=KAMPALA),
             kind=MONTHLY_KIND,
+            max_age=timedelta(hours=20),
+        ),
+        # Screens again every approved client whose last screen is a month old, and gives up on
+        # screens the provider never answered. One run covers any day it missed.
+        Schedule(
+            name="screening.rescreen_due",
+            trigger=CronTrigger(hour=2, minute=15, timezone=KAMPALA),
+            kind=RESCREEN_KIND,
             max_age=timedelta(hours=20),
         ),
     ]

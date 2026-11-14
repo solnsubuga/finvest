@@ -11,6 +11,7 @@
 | [investing.md](investing.md) | Products, rates and their approval, the interest formula, tax, rounding and what clients see |
 | [dealing-desk.md](dealing-desk.md) | Placing client money into real bills, orders and who approves them, allocation, bills held and the liquidity buffer |
 | [reconciliation.md](reconciliation.md) | Statements, matching against the ledger, exceptions and the two-person day close |
+| [screening.md](screening.md) | Sanctions and politically exposed person screening, rescreening, and the compliance cases staff close with two people |
 | [identity-checks.md](identity-checks.md) | What a client hands in, the lifecycle of a check, automatic checks, and what the database enforces |
 | [payments.md](payments.md) | How a deposit by mobile money is sent, confirmed and posted, what happens when the provider's answer is unclear, and how a mistaken credit is corrected |
 | [goals.md](goals.md) | Goals as targets attached to investments, the monthly plan and how a goal's progress is labelled |

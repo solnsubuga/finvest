@@ -54,6 +54,7 @@ DECISIONS = {
     "POST /staff/dealing/buffer/rules/{proposal_id}/approve",
     "POST /staff/dealing/buffer/capital/{movement_id}/approve",
     "POST /staff/tax/remittances/{remittance_id}/approve",
+    "POST /staff/compliance/proposals/{proposal_id}/approve",
 }
 # A staff route whose path ends like this approves or decides something, so it must ask.
 DECIDING_ENDINGS = ("approve", "approval", "decision", "confirmation", "confirm-result")

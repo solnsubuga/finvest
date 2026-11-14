@@ -7,6 +7,8 @@ the system happens here, never in the API and never inside a database transactio
 import asyncio
 from datetime import timedelta
 
+from sqlalchemy.ext.asyncio import AsyncSession
+
 from app.infrastructure.database import Database
 from app.infrastructure.database.roles import WORKER, check_role
 from app.infrastructure.email import EmailSettings
@@ -40,6 +42,10 @@ from app.modules.payments.settings import PaymentsSettings
 from app.modules.payments.wiring import collections_provider
 from app.modules.payouts.jobs import PayoutJobs
 from app.modules.payouts.wiring import disbursements_provider
+from app.modules.screening.domain.provider import ScreeningSubject
+from app.modules.screening.jobs import ScreeningJobs
+from app.modules.screening.settings import ScreeningSettings
+from app.modules.screening.wiring import approved_clients, subjects_from_identity_checks
 from app.shared.clock import Clock, SystemClock
 
 
@@ -90,6 +96,22 @@ def handlers(
                 automatic_approval=identity.identity_automatic_approval,
             ).handlers()
         )
+    screening = ScreeningSettings().provider()
+    if screening is not None and identity.identity_data_key is None:
+        # The date of birth a screen sends is sealed with the identity data key.
+        raise ValueError("A screening provider needs FINVEST_IDENTITY_DATA_KEY")
+    # Runs with no provider too, so every screen asked for is recorded as not run.
+    kinds.update(
+        ScreeningJobs(
+            database,
+            screening,
+            subjects_from_identity_checks(identity.sealer())
+            if identity.identity_data_key is not None
+            else _no_subjects,
+            approved_clients(),
+            clock,
+        ).handlers()
+    )
     # Bank transfers are settled from a staff review and call no provider, so they run even
     # where mobile money is turned off.
     kinds.update(BankTransferJobs(database, clock).handlers())
@@ -118,6 +140,11 @@ def handlers(
     )
     kinds.update(AnnouncementJobs(database, clock).handlers())
     return kinds
+
+
+async def _no_subjects(session: AsyncSession, client_id: str) -> ScreeningSubject | None:
+    """Without the identity data key nobody can be screened; only used with no provider."""
+    return None
 
 
 async def run(settings: Settings, stop: asyncio.Event | None = None) -> None:
