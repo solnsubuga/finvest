@@ -11,7 +11,8 @@ account, the journals sent to the accounting system, who set the bank account cl
 into, why a payout send waited, the account code maps, the deposits taken back as mistakes,
 what clients owe for them, the runs staff asked for again, staff notes and actions on a
 client, the account freezes, why an investment was sent to another client, the platform
-settings, the withdrawal limit changes or the paydays clients named."""
+settings, the withdrawal limit changes, the paydays clients named or the custodian statement
+checks."""
 
 import os
 from collections.abc import Iterator
@@ -1258,6 +1259,15 @@ ROWS = {
         "proposed_at) VALUES ('-Nabc0000000000000R1', current_date - 1, current_date - 1, "
         "'The emails failed that day', '-Nabc0000000000000S1', now()); COMMIT",
         "refusing to drop the record of notes staff sent again",
+    ),
+    "0410_custodian_statement_checks": (
+        "BEGIN; SELECT set_config('finvest.actor_kind', 'staff', true); "
+        "SELECT set_config('finvest.actor_id', '-Nabc0000000000000S1', true); "
+        "INSERT INTO reconciliation_custodian_checks (id, statement_date, file_key, "
+        "file_sha256, file_content_type, file_bytes, uploaded_by, uploaded_at, updated_at) "
+        "VALUES ('-Nabc0000000000000C1', current_date - 1, 'custodian/a/b', repeat('ab', 32), "
+        "'text/csv', 10, '-Nabc0000000000000S1', now(), now()); COMMIT",
+        "refusing to drop custodian statement checks",
     ),
 }
 

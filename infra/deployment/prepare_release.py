@@ -287,6 +287,8 @@ def prepare(output: Path, env: Mapping[str, str]) -> None:
             (
                 "FINVEST_CUSTODIAN_READER",
                 "FINVEST_ANTHROPIC_API_KEY",
+                "FINVEST_OPENAI_API_KEY",
+                "FINVEST_GEMINI_API_KEY",
                 "FINVEST_CUSTODIAN_READER_MODEL",
             ),
             (api, worker),
