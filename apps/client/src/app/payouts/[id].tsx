@@ -138,10 +138,7 @@ function NextStep({ account, nowMs, codeSent, onChanged }: NextProps & { nowMs: 
       return account.kind === "bank" ? (
         <SendProof account={account} onChanged={onChanged} />
       ) : (
-        <Notice tone="neutral">
-          We are checking the name the network holds for this number against the name on your ID. We will tell you when
-          it is approved.
-        </Notice>
+        <NameCheckStep account={account} onChanged={onChanged} />
       );
     case "in_review":
       return (
@@ -169,6 +166,70 @@ function NextStep({ account, nowMs, codeSent, onChanged }: NextProps & { nowMs: 
             <SendProof account={account} onChanged={onChanged} again />
           ) : null}
         </View>
+      );
+  }
+}
+
+/** A mobile money number waiting for the name its network holds to be read and compared. */
+function NameCheckStep({ account, onChanged }: Omit<NextProps, "codeSent">) {
+  const client = usePayouts();
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const again = async () => {
+    setBusy(true);
+    setError(null);
+    try {
+      onChanged(await client.checkNameAgain(account.id));
+    } catch (caught) {
+      if (await movedOn(caught, client, account.id, onChanged)) return;
+      setError(describePayoutsError(caught));
+    }
+    setBusy(false);
+  };
+
+  switch (account.nameCheck) {
+    case "not_answered":
+      return (
+        <Card>
+          <View style={{ gap: 14 }} testID="name-check-not-answered">
+            <Txt weight="bold">The network did not answer</Txt>
+            <Txt size={fontSizes.sm} color={colors.muted}>
+              We asked the network for the name this number is registered in, but no answer came. Check again and we will
+              ask once more.
+            </Txt>
+            {error ? <Notice tone="danger">{error}</Notice> : null}
+            <Button label="Check again" onPress={again} loading={busy} testID="name-check-again" />
+          </View>
+        </Card>
+      );
+    case "waiting_for_id":
+      return (
+        <Card>
+          <View style={{ gap: 14 }} testID="name-check-waiting-for-id">
+            <Txt weight="bold">Waiting for your ID check</Txt>
+            <Txt size={fontSizes.sm} color={colors.muted}>
+              The network told us the name on this number. We compare it with the name on your ID once your ID check is
+              approved. When it is, come back and check again.
+            </Txt>
+            {error ? <Notice tone="danger">{error}</Notice> : null}
+            <Button label="Check again" onPress={again} loading={busy} testID="name-check-again" />
+          </View>
+        </Card>
+      );
+    case "limit_reached":
+      return (
+        <Notice tone="warning">
+          We have asked the network for this number&apos;s name several times and no answer came. Remove the number and add
+          it again later, or use another account.
+        </Notice>
+      );
+    default:
+      return (
+        <Notice tone="neutral">
+          We are checking the name the network holds for this number against the name on your ID. We will tell you when
+          it is approved.
+        </Notice>
       );
   }
 }

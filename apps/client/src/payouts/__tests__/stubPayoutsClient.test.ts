@@ -124,3 +124,40 @@ it("lets a new account take a payout that came back once its first day has passe
   // The bank account is past its first day now, so it can take it.
   expect((await api.resend(RETURNED_DEMO_PAYOUT, "demo-account-bank")).kind).toBe("bank");
 });
+
+describe("the demo name check for a mobile money number", () => {
+  it("starts checking once the code is entered, and a bank account has none", async () => {
+    const api = client();
+    const number = await api.addAccount(mobile);
+    await api.sendCode(number.id);
+    const confirmed = await api.verifyCode(number.id, DEMO_PAYOUT_CODE);
+    expect(confirmed).toMatchObject({ status: "awaiting_proof", nameCheck: "checking" });
+    expect(await code(api.checkNameAgain(number.id))).toBe("name_check_in_progress");
+    const account = await api.addAccount(bank);
+    await api.sendCode(account.id);
+    expect((await api.verifyCode(account.id, DEMO_PAYOUT_CODE)).nameCheck).toBeNull();
+    expect(await code(api.checkNameAgain(account.id))).toBe("moved_on");
+  });
+
+  it("asks again after no answer, up to the limit", async () => {
+    const api = createStubPayoutsClient({ sample: "empty", delayMs: 0, now: () => NOW, nameCheck: "not_answered" });
+    const number = (await api.listAccounts())[0]!;
+    expect(number).toMatchObject({ id: "demo-account-airtel", nameCheck: "not_answered" });
+    expect((await api.checkNameAgain(number.id)).nameCheck).toBe("checking");
+
+    const spent = createStubPayoutsClient({ sample: "empty", delayMs: 0, now: () => NOW, nameCheck: "limit_reached" });
+    const last = (await spent.listAccounts())[0]!;
+    expect(await code(spent.checkNameAgain(last.id))).toBe("name_check_limit_reached");
+  });
+
+  it("compares a name that waited for the ID, and shows a number with no name as refused for good", async () => {
+    const api = createStubPayoutsClient({ sample: "empty", delayMs: 0, now: () => NOW, nameCheck: "waiting_for_id" });
+    const number = (await api.listAccounts())[0]!;
+    expect(await api.checkNameAgain(number.id)).toMatchObject({ status: "in_review", nameCheck: null });
+
+    const refused = createStubPayoutsClient({ sample: "empty", delayMs: 0, now: () => NOW, nameCheck: "no_name" });
+    const none = (await refused.listAccounts())[0]!;
+    expect(none).toMatchObject({ status: "rejected", rejectionReason: "network_name_unavailable" });
+    expect(canProveAgain(none.rejectionReason)).toBe(false);
+  });
+});
