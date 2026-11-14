@@ -224,6 +224,12 @@ async def test_the_database_holds_everyone_to_their_part(
                 text("UPDATE investment_run_requests SET status = 'withdrawn' WHERE id = :id"),
                 {"id": proposed.id},
             )
+    # Nobody deletes one.
+    with pytest.raises(DBAPIError, match="permission denied"):
+        async with app_database.actor_transaction(other) as session:
+            await session.execute(
+                text("DELETE FROM investment_run_requests WHERE id = :id"), {"id": proposed.id}
+            )
     async with app_database.actor_transaction(other) as session:
         declined = await investments.decline_run(session, other, proposed.id, "No", PRESENT)
     # A decided request never changes again.
@@ -251,5 +257,21 @@ async def test_a_client_reads_no_request(app_database: Database) -> None:
         async with app_database.actor_transaction(client) as session:
             await run_requests.list_runs(session, client)
     assert refused.value.code == "forbidden"
+    async with app_database.actor_transaction(maker) as session:
+        await investments.withdraw_run(session, maker, proposed.id, PRESENT)
+
+
+async def test_not_even_the_owner_deletes_or_truncates_a_request(
+    app_database: Database, migrator_database: Database
+) -> None:
+    maker = new_staff()
+    proposed = await propose(app_database, maker, Kind.INTEREST, 10)
+    for statement in (
+        "DELETE FROM investment_run_requests WHERE id = :id",
+        "TRUNCATE investment_run_requests",
+    ):
+        with pytest.raises(DBAPIError, match="never deleted"):
+            async with migrator_database.transaction() as session:
+                await session.execute(text(statement), {"id": proposed.id})
     async with app_database.actor_transaction(maker) as session:
         await investments.withdraw_run(session, maker, proposed.id, PRESENT)
