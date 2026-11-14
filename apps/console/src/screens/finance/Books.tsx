@@ -292,9 +292,9 @@ export function BooksSection({ api, currency, today, save }: BooksSectionProps) 
               <p className="m-0 rounded-lg bg-surface-sunken p-3 text-sm leading-normal text-muted">{cannot}</p>
             ) : option && option.unmapped.length > 0 ? (
               <p className="m-0 rounded-lg bg-warning-surface p-3 text-sm leading-normal text-warning-text">
-                {option.unmapped.length === 1 ? "1 account has" : `${option.unmapped.length} accounts have`} no {option.name} account yet:{" "}
+                {option.unmapped.length === 1 ? "1 Finvest account has" : `${option.unmapped.length} Finvest accounts have`} no {option.name} code yet:{" "}
                 {option.unmapped.join(", ")}. A day that moved {option.unmapped.length === 1 ? "it" : "one of them"} cannot be downloaded for {option.name} until
-                an admin names {option.unmapped.length === 1 ? "it" : "them"} in Settings.
+                an admin adds {option.unmapped.length === 1 ? "its code" : "their codes"} in Settings.
               </p>
             ) : null}
             {books.nextExport ? (
