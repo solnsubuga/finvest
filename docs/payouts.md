@@ -352,7 +352,7 @@ What the database enforces:
 | The worker never moves a bank payout | The payouts guard refuses every worker step for one |
 | Nothing changes afterwards | A decided batch or settlement never changes, and nothing is deleted. Only staff and the worker can read them |
 
-Not built yet: a bank that debits a whole batch as one statement line (each payout needs its own line for now), matching the settle entries with their lines in the day close automatically, and the console screen.
+Not built yet: a bank that debits a whole batch as one statement line (each payout needs its own line for now), and matching the settle entries with their lines in the day close automatically. The console's Money movement screen prepares, approves and settles batches and downloads the file.
 
 ## A payout that came back
 
@@ -385,4 +385,4 @@ What the database enforces:
 | Once | One open or approved return per payout, and a statement line takes back one payout |
 | Nothing changes afterwards | A decided return never changes, and nothing is deleted. A client sees only their own approved returns |
 
-Not built yet: the console screen for returns, and the client app's resend screen.
+The console's Money movement screen proposes and decides returns. Not built yet: the client app's resend screen.
