@@ -23,7 +23,9 @@ import structlog
 from sqlalchemy import Row, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.infrastructure.jobs import publish
 from app.modules.autoinvest.domain.plans import RunStatus, after_failure, may_prompt_at
+from app.modules.goals.events import LINK_PLAN_RUN
 from app.modules.identity import service as identity
 from app.modules.investments import service as investments
 from app.modules.investments.domain.investments import AtMaturity, InvestmentStatus
@@ -42,6 +44,7 @@ from app.shared.errors import ApplicationError
 from app.shared.money import Currency, Money
 
 SOURCE_TYPE = "autoinvest_run"
+RUN_REQUESTED_TOPIC = "autoinvest.run_requested"
 SETTLE_BATCH = 200
 # A run still due this long after it was opened lost its request job. It is missed, never sent
 # late: the client was expecting the prompt on its day.
@@ -179,6 +182,25 @@ async def request_run(session: AsyncSession, run_id: str, *, provider: str, cloc
     await session.execute(
         _REQUESTED,
         {"id": row.id, "investment_id": investment.id, "deposit_id": deposit_id, "now": now},
+    )
+    # Goals links the investment to the goal whose saving rule this plan is, and ignores other
+    # plans. Keyed by the run, so a retry, which asks for the same investment, publishes nothing.
+    await publish(
+        session,
+        topic=RUN_REQUESTED_TOPIC,
+        idempotency_key=row.id,
+        payload={
+            "run_id": row.id,
+            "plan_id": row.plan_id,
+            "client_id": row.client_id,
+            "investment_id": investment.id,
+            "product_code": row.product_code,
+            "amount_minor": amount.minor,
+            "currency": amount.currency.value,
+            "run_date": row.due_on.isoformat(),
+        },
+        consumers=[LINK_PLAN_RUN],
+        now=now,
     )
     logger.info("autoinvest_run_requested", run_id=row.id)
     return "requested"

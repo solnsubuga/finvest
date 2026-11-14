@@ -6272,6 +6272,16 @@
           "progress": {
             "$ref": "#/components/schemas/ProgressView"
           },
+          "saving_rule": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SavingRuleView"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "savings": {
             "items": {
               "$ref": "#/components/schemas/SavingView"
@@ -6311,7 +6321,8 @@
           "created_at",
           "progress",
           "plan",
-          "savings"
+          "savings",
+          "saving_rule"
         ],
         "title": "GoalView",
         "type": "object"
@@ -8932,6 +8943,37 @@
           "amount_minor"
         ],
         "title": "NewSaving",
+        "type": "object"
+      },
+      "NewSavingRule": {
+        "additionalProperties": false,
+        "properties": {
+          "amount_minor": {
+            "exclusiveMinimum": 0.0,
+            "maximum": 1000000000000000.0,
+            "title": "Amount Minor",
+            "type": "integer"
+          },
+          "currency": {
+            "$ref": "#/components/schemas/Currency",
+            "default": "UGX"
+          },
+          "day": {
+            "maximum": 31.0,
+            "minimum": 1.0,
+            "title": "Day",
+            "type": "integer"
+          },
+          "network": {
+            "$ref": "#/components/schemas/Network"
+          }
+        },
+        "required": [
+          "amount_minor",
+          "day",
+          "network"
+        ],
+        "title": "NewSavingRule",
         "type": "object"
       },
       "NextOfKinBody": {
@@ -13724,6 +13766,70 @@
           "body"
         ],
         "title": "SavedReplyItem",
+        "type": "object"
+      },
+      "SavingRuleView": {
+        "additionalProperties": false,
+        "description": "The monthly saving collected by itself, by a mobile money prompt on its day.",
+        "properties": {
+          "amount_minor": {
+            "title": "Amount Minor",
+            "type": "integer"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "currency": {
+            "$ref": "#/components/schemas/Currency"
+          },
+          "day": {
+            "title": "Day",
+            "type": "integer"
+          },
+          "network": {
+            "$ref": "#/components/schemas/Network"
+          },
+          "next_run_on": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Run On"
+          },
+          "payer_msisdn": {
+            "title": "Payer Msisdn",
+            "type": "string"
+          },
+          "plan_id": {
+            "maxLength": 20,
+            "minLength": 20,
+            "pattern": "^[-0-9A-Z_a-z]{20}$",
+            "title": "Plan Id",
+            "type": "string"
+          },
+          "status": {
+            "$ref": "#/components/schemas/PlanStatus"
+          }
+        },
+        "required": [
+          "plan_id",
+          "amount_minor",
+          "currency",
+          "day",
+          "network",
+          "payer_msisdn",
+          "status",
+          "next_run_on",
+          "created_at"
+        ],
+        "title": "SavingRuleView",
         "type": "object"
       },
       "SavingView": {
@@ -23548,6 +23654,206 @@
           }
         },
         "summary": "Close Goal",
+        "tags": [
+          "goals"
+        ]
+      }
+    },
+    "/client/goals/{goal_id}/saving-rule": {
+      "post": {
+        "description": "Save the amount towards the goal on that day of every month, by itself.\n\nOn each day the client's own number gets a mobile money prompt for the amount, which they\napprove as for any payment. 409 if the goal already has a rule or is closed. Answers with\nthe goal, which carries the rule.",
+        "operationId": "set_up_saving_rule_client_goals__goal_id__saving_rule_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "goal_id",
+            "required": true,
+            "schema": {
+              "maxLength": 20,
+              "minLength": 20,
+              "pattern": "^[-0-9A-Z_a-z]{20}$",
+              "title": "Goal Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "A value the caller chooses once per intended action and sends again on every retry of it. Pattern: `[A-Za-z0-9._:-]{8,128}`.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "A value the caller chooses once per intended action and sends again on every retry of it. Pattern: `[A-Za-z0-9._:-]{8,128}`.",
+              "title": "Idempotency-Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NewSavingRule"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GoalView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          }
+        },
+        "summary": "Set Up Saving Rule",
+        "tags": [
+          "goals"
+        ]
+      }
+    },
+    "/client/goals/{goal_id}/saving-rule/stop": {
+      "post": {
+        "description": "End the goal's monthly saving. Savings already made carry on. Sending it again changes\nnothing.",
+        "operationId": "stop_saving_rule_client_goals__goal_id__saving_rule_stop_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "goal_id",
+            "required": true,
+            "schema": {
+              "maxLength": 20,
+              "minLength": 20,
+              "pattern": "^[-0-9A-Z_a-z]{20}$",
+              "title": "Goal Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GoalView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          }
+        },
+        "summary": "Stop Saving Rule",
         "tags": [
           "goals"
         ]
