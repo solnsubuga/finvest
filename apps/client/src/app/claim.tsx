@@ -31,7 +31,7 @@ function Top() {
   );
 }
 
-/** Step 1: what this is, and a code to the number Finvest 1.0 had. */
+/** Step 1: what this is, and a code to the number on the paper record. */
 function Start({ token, onSent }: { token: string; onSent: (challenge: ClaimChallenge) => void }) {
   const router = useRouter();
   const { client } = useAuth();
@@ -51,13 +51,14 @@ function Start({ token, onSent }: { token: string; onSent: (challenge: ClaimChal
 
   return (
     <Screen footer={<Button label="Text me a code" onPress={send} loading={busy} testID="claim-start" />}>
-      <Stack.Screen options={{ title: "Your account has moved" }} />
+      <Stack.Screen options={{ title: "Your Finvest account" }} />
       <Top />
       <View style={{ marginTop: 32, gap: 10 }}>
-        <Title>Your account has moved to Finvest 2.0</Title>
+        <Title>Your Finvest investments are now in the app</Title>
         <Txt color={colors.muted}>
-          We carried your Finvest 1.0 investments over. To open your account, we will text a 6 digit
-          code to the mobile number we have for you, and you will choose a new password.
+          We copied your investments from our paper records into the Finvest app. To open your
+          account, we will text a 6 digit code to the mobile number we have for you, and you will
+          choose a password.
         </Txt>
       </View>
       <View style={{ marginTop: 20, gap: 14 }}>
@@ -69,10 +70,10 @@ function Start({ token, onSent }: { token: string; onSent: (challenge: ClaimChal
               1. Enter the code and choose a password.
             </Txt>
             <Txt size={fontSizes.sm} color={colors.muted}>
-              2. Confirm it is you, with a selfie or an ID check.
+              2. Confirm it is you, with an ID check, as everyone who joins does.
             </Txt>
             <Txt size={fontSizes.sm} color={colors.muted}>
-              3. Check the investments we carried over, and tell us if anything is wrong.
+              3. Check the investments we copied from our paper records, and tell us if anything is wrong.
             </Txt>
           </View>
         </Card>
@@ -155,7 +156,7 @@ function Finish({
       <View style={{ marginTop: 32, gap: 10 }}>
         <Title>Enter the code and choose a password</Title>
         <Txt color={colors.muted}>
-          We texted a 6 digit code to the mobile number Finvest 1.0 had for you.
+          We texted a 6 digit code to the mobile number we have for you.
         </Txt>
       </View>
       <View style={{ marginTop: 20, gap: 14 }}>
@@ -201,8 +202,7 @@ function Finish({
           </View>
         </Card>
         <Txt size={fontSizes.sm} color={colors.muted}>
-          Your Finvest 1.0 password does not carry over. We never ask for your password or this code
-          by phone, SMS or WhatsApp. If someone does, do not share it.
+          We never ask for your password or this code by phone, SMS or WhatsApp. If someone does, do not share it.
         </Txt>
       </View>
     </Screen>
@@ -221,7 +221,7 @@ function SignedInAlready() {
   };
   return (
     <Screen footer={<Button label="Log out and continue" onPress={signOut} loading={busy} testID="claim-sign-out" />}>
-      <Stack.Screen options={{ title: "Your account has moved" }} />
+      <Stack.Screen options={{ title: "Your Finvest account" }} />
       <Top />
       <View style={{ marginTop: 32, gap: 10 }}>
         <Title>Log out first</Title>
@@ -235,7 +235,7 @@ function SignedInAlready() {
 }
 
 /**
- * The page the link to a moved Finvest 1.0 account opens:
+ * The page the link to an account moved from paper records opens:
  * https://app.finvestug.com/claim#<token>. Not signed in: the code and the new
  * password make the account the client's and open their first session.
  */
@@ -263,7 +263,7 @@ export default function Claim() {
   if (token === null) {
     return (
       <Screen>
-        <Stack.Screen options={{ title: "Your account has moved" }} />
+        <Stack.Screen options={{ title: "Your Finvest account" }} />
         <Top />
         <View style={{ marginTop: 32, gap: 14 }}>
           <Title>Open the link from our message</Title>

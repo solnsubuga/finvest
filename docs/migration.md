@@ -1,22 +1,22 @@
 # Moving existing clients onto the new Finvest
 
-Clients do nothing until they are invited. Staff move the records, and each client then claims their account.
+Every existing client record is on paper: there was never an earlier Finvest system (the owner, 2026-11-14). Clients do nothing until they are invited. Staff type the paper records into two CSV files and import them in bulk, and each client then claims their account.
 
 | Step | Who | What happens |
 | --- | --- | --- |
-| 1. Gather the records | Staff | Export clients and investments from Finvest 1.0. Anything kept by hand, in spreadsheets or on paper, goes into one import spreadsheet with a fixed set of columns. |
+| 1. Gather the records | Staff | Type each client and each investment from the paper files into the import spreadsheet, which has a fixed set of columns. |
 | 2. Trial import | Staff | The console loads the data into a test copy and lists every problem: missing phone numbers, duplicate people, investments with no client, totals that do not add up. This is repeated until it is clean. |
-| 3. Check the money | Finance | Client totals, interest to date and holdings are compared with the old system and the custodian statement. Every difference is fixed or signed off with a reason. |
-| 4. Switch | Staff | The old system is frozen, the final import runs, and each investment is opened in the ledger with its original start date, rate and interest earned so far. Each client gets a new account number, and the old one keeps working as a bank reference. |
+| 3. Check the money | Finance | Client totals, interest to date and holdings are compared with the paper books and the custodian statement. Every difference is fixed or signed off with a reason. |
+| 4. Switch | Staff | The paper books are closed, the final import runs, and each investment is opened in the ledger with its original start date, rate and interest earned so far. Each client gets an account number when their ID check is approved. |
 | 5. Invite | System | Every client gets an SMS and email with a personal one-time link. |
-| 6. Claim | Client | They confirm their phone by code, create a password and a PIN, add a passkey, take a selfie and a photo of the front of their ID that staff compare with the ID on file (see identity-checks.md, "Claim checks"), and then see their investments and confirm that they are right. |
+| 6. Claim | Client | They confirm their phone by code, create a password and a PIN, add a passkey, take the full ID check as every new client does (the owner's choice, 2026-11-14: a check made by hand on paper cannot be verified now), and then see their investments and confirm that they are right. |
 | 7. Follow up | Staff | The console shows who has claimed, who reported a problem and who has not responded. Unclaimed accounts keep earning and mature as before. Staff can call a client, update a changed phone number after checking identity, and send a fresh link. |
 
-Clients whose identity documents are missing or out of date are asked to redo the ID check during step 6. A single client can also be added by hand in the console, with a second person approving the opening balance.
+A single client can also be added by hand in the console, with a second person approving the opening balance.
 
 ## The import spreadsheet
 
-One format covers Finvest 1.0 exports and records kept by hand. It is two sheets, each saved as CSV (in Excel, "CSV UTF-8"): one row per client and one row per investment. The rules are in `backend/app/modules/migration/domain/sheet.py`.
+One format covers every paper record. It is two sheets, each saved as CSV (in Excel, "CSV UTF-8"): one row per client and one row per investment. The rules are in `backend/app/modules/migration/domain/sheet.py`.
 
 - References are compared without regard to case, so `c1` and `C1` are the same client.
 - The columns are fixed and can come in any order. A missing, unknown or repeated column refuses the whole sheet.
@@ -29,7 +29,7 @@ One format covers Finvest 1.0 exports and records kept by hand. It is two sheets
 
 | Column | Needed | What it holds |
 | --- | --- | --- |
-| `legacy_client_ref` | Yes | The client's ID in Finvest 1.0, or a reference staff choose for a hand-kept record, such as `PAPER-0012`. Used once. |
+| `legacy_client_ref` | Yes | The reference of the client's paper file, such as `PAPER-0012`. Used once. |
 | `source` | Yes | `finvest1` or `manual`. |
 | `surname`, `given_names` | Yes | As printed on the identity document. |
 | `phone` | No | Any usual way of writing it. Stored as `+256772123456`. Without it the client cannot be invited until staff add one. |
@@ -38,15 +38,15 @@ One format covers Finvest 1.0 exports and records kept by hand. It is two sheets
 | `id_type` | If verified | `national_id`, `passport`, `driving_permit` or `refugee_id`. |
 | `id_number` | If verified | |
 | `id_expires_on` | No | An expired document means the client redoes the ID check when they claim. |
-| `id_verified` | Yes | `yes` if Finvest 1.0 checked this person's identity document, otherwise `no`. |
-| `legacy_account_number` | No | The old account number, kept as a bank reference. |
+| `id_verified` | Yes | `yes` if the paper file shows the identity document was checked, otherwise `no`. Kept for the finance check's count only: every client takes the full ID check when they claim. |
+| `legacy_account_number` | No | Leave empty: paper clients have no account number (the owner, 2026-11-14). The column goes in a later change. |
 | `next_of_kin_name`, `next_of_kin_phone` | No | |
 
 ### Investments sheet
 
 | Column | Needed | What it holds |
 | --- | --- | --- |
-| `legacy_investment_ref` | Yes | The investment or order ID in Finvest 1.0, or a chosen reference. Used once. |
+| `legacy_investment_ref` | Yes | The reference of the investment or order on paper, such as `INV/2025/118`. Used once. |
 | `legacy_client_ref` | Yes | Must match a row in the clients sheet. |
 | `product_code` | Yes | `TREA-91`, `TREA-182` or `USD-BOND`. |
 | `status` | Yes | `running` for an investment that is paid for and earning. `pending_payment` for an order whose payment was not yet confirmed. |
@@ -60,7 +60,7 @@ One format covers Finvest 1.0 exports and records kept by hand. It is two sheets
 
 For a `pending_payment` row every column after `principal` stays blank.
 
-Only running investments and pending orders are imported. Investments that were already redeemed stay in Finvest 1.0, which is kept read-only.
+Only running investments and pending orders are imported. Investments that were already redeemed stay on paper, which is kept.
 
 ## The trial import
 
@@ -71,7 +71,7 @@ An **error** must be fixed in the spreadsheet, and the final import is refused w
 | Errors | Warnings |
 | --- | --- |
 | A needed cell is empty, or a date, amount, rate, phone number or email cannot be read | No phone number |
-| A reference used twice | Identity not verified in 1.0, document expired, or no expiry date on file |
+| A reference used twice | Identity not verified on paper, document expired, or no expiry date on file |
 | Two clients with the same phone number, the same identity document or the same old account number | Two clients sharing an email address, or a name and date of birth |
 | An investment whose client is not in the clients sheet | A client with no investments |
 | An unknown product, an amount of zero, a rate outside 0 to 50% | An amount below today's minimum for the product |
@@ -92,7 +92,7 @@ The switch cannot be scheduled while the import has an error, or while any total
 
 ### What is kept
 
-Every trial run is kept in `migration_trials`: the "as of" date, a fingerprint of each file, the counts, the totals, the investments that differ with the sheet row and currency of each, and the list of problems. The overview shows that row and currency beside each investment, so finance can find it in Finvest 1.0 and read its figures. A trial run before the row was kept shows none. The files themselves and their cell values are not kept, so the record holds no personal data. The newest run is the one the checks read. The old system's totals are kept in `migration_control_totals` each time finance enters them. The newest entry for a date is the one that counts, and only once a different member of staff has confirmed it in `migration_control_totals_confirmations`. Until then no total line is compared and the switch is blocked. So one person can never change what the trial is compared with, which would otherwise make a difference disappear without a sign-off.
+Every trial run is kept in `migration_trials`: the "as of" date, a fingerprint of each file, the counts, the totals, the investments that differ with the sheet row and currency of each, and the list of problems. The overview shows that row and currency beside each investment, so finance can find it in the paper files and read its figures. A trial run before the row was kept shows none. The files themselves and their cell values are not kept, so the record holds no personal data. The newest run is the one the checks read. The old system's totals are kept in `migration_control_totals` each time finance enters them. The newest entry for a date is the one that counts, and only once a different member of staff has confirmed it in `migration_control_totals_confirmations`. Until then no total line is compared and the switch is blocked. So one person can never change what the trial is compared with, which would otherwise make a difference disappear without a sign-off.
 
 A sign-off is two rows. `migration_sign_offs` holds the proposal with the figures read from the newest trial, never figures sent by the browser. `migration_sign_off_decisions` holds the approval or rejection. The database refuses a decision by the person who proposed it, a second decision, a confirmation of totals by the person who entered them, and any change or deletion of these rows. A rejection needs a reason. The overview keeps showing a rejected sign-off, with that reason, until someone proposes it again, so the person who proposed it can see why. Only an approved sign-off clears a difference. The code is in `backend/app/modules/migration/service.py`.
 
@@ -120,7 +120,7 @@ The switch is proposed by one member of staff and approved by a different one, t
 
 - **Proposing.** Operations send the two sheets of the latest trial again. They must be the same files byte for byte, checked by fingerprint, and nothing may block the switch. The trial's "as of" day must be over, because interest is opened up to that day. Every client must have a phone number, because the phone is how a client claims the account. A client without one holds the switch until staff add the number to the sheet and run the trial again. Only one proposal waits at a time.
 - **Keeping the sheets.** The sheets are kept sealed with the identity data key in `migration_switch_files`, for the approval and for the worker that carries the investments over. The worker removes them when it is done. No other migration table holds anything from a sheet.
-- **Approving.** Finance check everything again: the same trial is still the latest, nothing blocks it, and the sheets read the same with today's products and tax rates. The approval then creates every client's account, with no password, in the approver's transaction. It records each Finvest 1.0 reference with its new account in `migration_carried_clients`. Either every client gets an account or none does. A phone number that already has an account in Finvest 2.0 refuses the whole approval, names the clients sheet rows, and keeps nothing. A rejection needs a reason, and the switch can then be proposed again.
+- **Approving.** Finance check everything again: the same trial is still the latest, nothing blocks it, and the sheets read the same with today's products and tax rates. The approval then creates every client's account, with no password, in the approver's transaction. It records each paper reference with its new account in `migration_carried_clients`. Either every client gets an account or none does. A phone number that already has an account refuses the whole approval, names the clients sheet rows, and keeps nothing. A rejection needs a reason, and the switch can then be proposed again.
 - **What the database holds it to.** The decision is by someone other than the proposer. At most one switch is ever approved. A client is carried over only in the transaction that approved the switch, by the person who approved it. Each of these tables is insert-only, except that the worker deletes the sealed sheets.
 
 The overview shows the newest proposal under `switch`, with its state, who decided it and how many accounts it created. Orders still awaiting payment are counted by the trial and never opened: the client places the order again after claiming.
@@ -129,11 +129,11 @@ The overview shows the newest proposal under `switch`, with its state, who decid
 
 The approval queues one job, `migration.carry_over`, and the worker carries each client over in a transaction of its own, acting as the system (`backend/app/modules/migration/carry_over.py`):
 
-1. **Identity.** When Finvest 1.0 checked a document that has not expired, it is recorded as an approved check with a new account number. A document that expired since the trial, or one that was never checked, means the client does the full ID check when they claim.
+1. **Identity.** Nothing is carried over. Every client takes the full ID check when they claim, as a new client does, and gets their account number when it is approved.
 2. **Investments.** Each running investment is opened with its original start date, rate and tax, and the interest earned up to the trial's "as of" day, against the opening balances account of its currency. That interest must equal what the finance check showed. If it does not, nothing of the client is kept.
 3. **Claim and link.** The client's claim is created and a one-time link is sent by text and, when there is an address, by email. The link points to the client app's `/claim` page with the token after `#`. The message expires with the link, so an invitation is never sent after the link stops working.
 
-A client whose claim exists is done, so a run that stops part way carries on where it was. When any step is refused, for example an identity document that already belongs to a Finvest 2.0 client, nothing of that client is kept. The code is noted in `migration_carry_problems` and the run moves on. The overview lists those clients under `switch.not_carried`, by Finvest 1.0 reference, code and attempt, with where resolving them stands. The sealed sheets stay while any client is noted, since they are the only copy of that client's identity and investments in Finvest 2.0. The worker removes them only once every client is carried over or closed.
+A client whose claim exists is done, so a run that stops part way carries on where it was. When any step is refused, for example an investment reference that is already taken, nothing of that client is kept. The code is noted in `migration_carry_problems` and the run moves on. The overview lists those clients under `switch.not_carried`, by paper reference, code and attempt, with where resolving them stands. The sealed sheets stay while any client is noted, since they are the only copy of that client's identity and investments in the system. The worker removes them only once every client is carried over or closed.
 
 Staff resolve a noted client with two people (`backend/app/modules/migration/resolutions.py`, migration `0076_migration_carry_resolutions`). Someone with `migration.import` puts the cause right by hand, then proposes one of two actions with a reason through `POST /staff/migration/switch/{switch_id}/resolutions`. Someone else with `migration.sign_off`, confirmed in the last few minutes, approves or rejects it through `POST /staff/migration/switch/resolutions/{resolution_id}/decision`.
 
@@ -146,7 +146,7 @@ At the switch each investment is opened with one ledger entry: the principal to 
 
 ## Claiming an account
 
-Each migrated client has one claim in `migration_claims`, created by the switch. It holds the client's ID, their Finvest 1.0 reference, whether they redo the full ID check, the step they have reached, and the reminders sent. It never holds a name, phone number or document: those stay with the identity module. The steps, and who may take each, are in `backend/app/modules/migration/domain/claim.py`. A trigger holds the database to the same table, so a step is never skipped or taken by the wrong kind of actor. The service is `backend/app/modules/migration/claims.py`.
+Each migrated client has one claim in `migration_claims`, created by the switch. It holds the client's ID, their paper reference, whether they take the full ID check (always, for a switch from paper), the step they have reached, and the reminders sent. It never holds a name, phone number or document: those stay with the identity module. The steps, and who may take each, are in `backend/app/modules/migration/domain/claim.py`. A trigger holds the database to the same table, so a step is never skipped or taken by the wrong kind of actor. The service is `backend/app/modules/migration/claims.py`.
 
 | Step | Moved by |
 | --- | --- |
@@ -168,11 +168,11 @@ The routes are in `backend/app/modules/migration/claims_api.py`. The first two n
 | `POST /client/claim/start` | Opens the link and texts a code to the phone on file. It changes nothing. |
 | `POST /client/claim/complete` | Checks the link again, then the code. It sets the password, makes the account the client's, signs them in and moves the claim to signed in. |
 | `GET /client/claim` | The signed-in client's step and which identity check they need. |
-| `POST /client/claim/identity` | Hands in the identity step: the claim check's selfie and ID front, or the full ID check, in the same transaction as moving the claim to identity submitted. The photos and details are taken first with the identity checks module's own routes (`/client/claim-check` or `/client/identity-check`). |
+| `POST /client/claim/identity` | Hands in the full ID check, in the same transaction as moving the claim to identity submitted. The photos and details are taken first with the identity checks module's own routes (`/client/identity-check`). |
 | `POST /client/claim/confirm` | The client says the investments shown are right. Final. |
 | `POST /client/claim/problem` | The client says something carried over is wrong. |
 
-A bad link, a spent one, an expired one and an account that is already claimed all get the same `not_found`, so a link tells a visitor nothing about anyone else. A link that expires between the two steps is refused before the code is checked. Signing in commits in the identity module's own transaction. If moving the claim fails after that, the client stays signed in and the claim stays at invited. The reminder run skips a client whose account is no longer unclaimed. The identity checks module publishes each decision (`kyc.claim_check_decided`, `kyc.check_decided`), and the worker moves the claim on (`backend/app/modules/migration/jobs.py`): a match confirms who the client is, anything else sends them back to signed in. A decision for anyone whose claim is not waiting for it changes nothing. A claim check that does not match is final in the identity checks module, so staff follow that client up by hand for now (see the Open list in decisions.md).
+A bad link, a spent one, an expired one and an account that is already claimed all get the same `not_found`, so a link tells a visitor nothing about anyone else. A link that expires between the two steps is refused before the code is checked. Signing in commits in the identity module's own transaction. If moving the claim fails after that, the client stays signed in and the claim stays at invited. The reminder run skips a client whose account is no longer unclaimed. The identity checks module publishes each decision (`kyc.check_decided`), and the worker moves the claim on (`backend/app/modules/migration/jobs.py`): an approval confirms who the client is, a rejection or a request for new photos sends them back to signed in. A decision for anyone whose claim is not waiting for it changes nothing.
 
 ### Reminders
 
@@ -180,8 +180,4 @@ Every morning at 09:00 Kampala time the scheduler queues `migration.claim_remind
 
 ### In the client app
 
-The link opens `apps/client/src/app/claim.tsx`, which reads the token after `#`, wipes it from the address bar, and asks for the texted code and a new password on one screen, as the server checks them together. A link that no longer works says so and offers a call back. Signed in, the client is led by `/moving` (`apps/client/src/app/moving`), and Home shows a card for it until the investments are confirmed, in place of the ID check card. The selfie step takes the ID front and a selfie with `/client/claim-check`, then hands them in with `POST /client/claim/identity`. A client who takes the full ID check uses the usual ID check screens, and the last step there hands the check in through `POST /client/claim/identity` instead of the identity check's own submit, so the claim moves with it (`apps/client/src/claim/handInIdCheck.ts`). Photos staff ask for again are sent with `POST /client/claim-check/submit`, since the claim is already waiting. A claim check that does not match tells the client we will contact them.
-
-## What Finvest 1.0 was
-
-For reference when writing the import: a Django and Django REST Framework backend with Celery, and a React, Vite and shadcn frontend. The flow was KYC, pick a product, create an order with a bank slip upload or mobile money, an admin verifies the deposit, the order becomes an investment, interest accrues daily, and redemption and transfer need admin approval. Its code is no longer in this repository or its history, so the column names above come from this description and not from the old database. They must be checked against a real export before the first trial.
+The link opens `apps/client/src/app/claim.tsx`, which reads the token after `#`, wipes it from the address bar, and asks for the texted code and a new password on one screen, as the server checks them together. A link that no longer works says so and offers a call back. Signed in, the client is led by `/moving` (`apps/client/src/app/moving`), and Home shows a card for it until the investments are confirmed, in place of the ID check card. The client takes the full ID check on the usual ID check screens, and the last step there hands the check in through `POST /client/claim/identity` instead of the identity check's own submit, so the claim moves with it (`apps/client/src/claim/handInIdCheck.ts`).

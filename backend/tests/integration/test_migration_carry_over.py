@@ -3,6 +3,7 @@
 Each test has a database of its own, since at most one switch is ever approved.
 """
 
+from datetime import date
 from typing import Any
 
 import pytest
@@ -11,12 +12,12 @@ from sqlalchemy import text
 from app.infrastructure.database import Database
 from app.infrastructure.jobs import Worker
 from app.modules.identity.service import create_unclaimed_client
-from app.modules.kyc import service as kyc
-from app.modules.kyc.domain.checks import DocumentType, IdentityDetails
+from app.modules.investments import carried_over
 from app.modules.migration import carry_over
 from app.modules.migration.jobs import MigrationJobs
 from app.shared.actors import SYSTEM, Actor
-from tests.integration.test_migration_api import NOW, Console
+from app.shared.money import Currency
+from tests.integration.test_migration_api import Console
 from tests.integration.test_migration_switch import (
     SEALER,
     cleared,
@@ -27,6 +28,7 @@ from tests.integration.test_migration_switch import (
     test_database,
 )
 from tests.support.investments import PRESENT
+from tests.support.ledger import ugx
 from tests.unit.test_migration_sheet import clients
 
 pytestmark = pytest.mark.integration
@@ -60,13 +62,37 @@ async def rows(database: Database, sql: str, **values: Any) -> list[Any]:
     return await table(database, sql, **values)
 
 
+async def take_first_investment(console: Console, worker_database: Database) -> None:
+    """Someone in Finvest 2.0 already holds the first client's investment reference, so the
+    worker cannot carry that client over."""
+    staff = Actor("staff", await console.sign_in("operations"))
+    async with console.database.actor_transaction(staff) as session:
+        other = await create_unclaimed_client(
+            session, PRESENT, staff, phone="+256772999999", email=None
+        )
+    async with worker_database.actor_transaction(SYSTEM) as session:
+        await carried_over.open_existing_investment(
+            session,
+            SYSTEM,
+            client_id=other,
+            product_code="TREA-91",
+            principal=ugx(1_000_000),
+            start_date=date(2026, 7, 29),
+            annual_rate_bps=1250,
+            tax_bps=1500,
+            interest_through=date(2026, 9, 1),
+            opened_on=PRESENT.now().date(),
+            legacy_reference="INV-1",
+            opening_account=carry_over.opening_account(Currency.UGX),
+            clock=PRESENT,
+        )
+
+
 async def test_the_worker_carries_every_client_over_once(
     console: Console, worker_database: Database, migrator_database: Database
 ) -> None:
-    files = sheets(2) | {
-        # The second client was never checked by Finvest 1.0, so they do the full check.
-        "clients_csv": clients(person("1"), person("2", id_verified="no")),
-    }
+    # Whatever the sheet says of a check on paper, every client takes the full ID check.
+    files = sheets(2) | {"clients_csv": clients(person("1"), person("2", id_verified="no"))}
     switch_id = await approved(console, files, 2, verified=1)
     [job] = await rows(
         migrator_database, "SELECT kind, payload FROM jobs WHERE kind LIKE 'migration.%'"
@@ -81,11 +107,11 @@ async def test_the_worker_carries_every_client_over_once(
         "ORDER BY c.legacy_client_ref",
     )
     assert [(c.legacy_client_ref, c.status, c.needs_id_check) for c in claims] == [
-        ("1", "invited", False),
+        ("1", "invited", True),
         ("2", "invited", True),
     ]
-    checks = await rows(migrator_database, "SELECT legacy_reference, status FROM kyc_checks")
-    assert [(c.legacy_reference, c.status) for c in checks] == [("1", "approved")]
+    # No identity is carried over: each client starts the ID check as a new client would.
+    assert await rows(migrator_database, "SELECT id FROM kyc_checks") == []
 
     # Each investment is opened with its original terms and the interest the check showed.
     opened = await rows(
@@ -147,47 +173,25 @@ async def test_a_client_who_cannot_be_carried_over_is_noted_and_the_rest_go_on(
 ) -> None:
     files = sheets(2)
     switch_id = await approved(console, files, 2)
-    # Someone in Finvest 2.0 already holds the first client's identity document.
-    staff = Actor("staff", await console.sign_in("operations"))
-    async with console.database.actor_transaction(staff) as session:
-        other = await create_unclaimed_client(
-            session, PRESENT, staff, phone="+256772999999", email=None
-        )
-    first = person("1")
-    async with worker_database.actor_transaction(SYSTEM) as session:
-        await kyc.record_carried_over_check(
-            session,
-            SEALER,
-            SYSTEM,
-            client_id=other,
-            document_type=DocumentType.NATIONAL_ID,
-            document_country="UG",
-            details=IdentityDetails(
-                surname="Other",
-                given_names="Person",
-                document_number=first["id_number"],
-                date_of_birth=NOW.date().replace(year=1990),
-                document_expires_on=None,
-            ),
-            legacy_reference="OTHER-1",
-            reason="Set-up for the test",
-            clock=PRESENT,
-        )
+    await take_first_investment(console, worker_database)
 
     result = await carry_over.carry_over(
         worker_database, SEALER, PRESENT, switch_id, client_app=CLIENT_APP
     )
     assert (result.carried, result.problems) == (1, 1)
     # Nothing of the first client is kept: no investment, no claim, no link.
-    opened = await rows(migrator_database, "SELECT legacy_reference FROM investments")
-    assert [i.legacy_reference for i in opened] == ["INV-2"]
+    opened = await rows(
+        migrator_database, "SELECT legacy_reference FROM investments ORDER BY legacy_reference"
+    )
+    # INV-1 is the other account's, opened before the run.
+    assert [i.legacy_reference for i in opened] == ["INV-1", "INV-2"]
     claims = await rows(migrator_database, "SELECT legacy_client_ref FROM migration_claims")
     assert [c.legacy_client_ref for c in claims] == ["2"]
     seen = await console.overview()
     [noted] = seen["switch"]["not_carried"]
     assert (noted["legacy_client_ref"], noted["code"], noted["attempt"], noted["state"]) == (
         "1",
-        "document_taken",
+        "investment_conflict",
         1,
         "noted",
     )

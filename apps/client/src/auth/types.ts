@@ -114,7 +114,7 @@ export type SignupChallenge = { challengeId: string; phone: string };
 export type SignupTicket = { ticket: string; phone: string };
 /** A password reset in progress: the texted code is checked only when the new password is set. */
 export type PasswordReset = { challengeId: string; phone: string };
-/** Claiming a Finvest 1.0 account from its link: a code was texted to the number on file. */
+/** Claiming an account moved from paper records, from its link: a code was texted to the number on file. */
 export type ClaimChallenge = { challengeId: string };
 
 /**
@@ -196,7 +196,7 @@ export interface AuthClient {
   completeSignup(ticket: string, password: string): Promise<Session>;
 
   /**
-   * Claiming an account moved from Finvest 1.0, step 1: the token from the
+   * Claiming an account moved from paper records, step 1: the token from the
    * link we sent. Texts a code to the number on file. A link that is used,
    * replaced by a newer one or too old fails with `not_found`.
    */

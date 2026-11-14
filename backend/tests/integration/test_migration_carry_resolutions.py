@@ -8,18 +8,18 @@ import asyncio
 import pytest
 
 from app.infrastructure.database import Database
-from app.modules.identity.service import create_unclaimed_client
-from app.modules.kyc import service as kyc
-from app.modules.kyc.domain.checks import DocumentType, IdentityDetails
 from app.modules.migration import resolutions
-from app.shared.actors import SYSTEM, Actor
+from app.shared.actors import Actor
 from app.shared.errors import ApplicationError
-from tests.integration.test_migration_api import NOW, Console, code
-from tests.integration.test_migration_carry_over import approved, rows, worker
+from tests.integration.test_migration_api import Console, code
+from tests.integration.test_migration_carry_over import (
+    approved,
+    rows,
+    take_first_investment,
+    worker,
+)
 from tests.integration.test_migration_switch import (
-    SEALER,
     console,
-    person,
     sheets,
     test_database,
 )
@@ -33,31 +33,7 @@ __all__ = ["console", "test_database"]  # the fixtures, shared with the switch t
 async def noted(console: Console, worker_database: Database) -> str:
     """An approved switch of two clients, whose first client the worker could not carry over."""
     switch_id = await approved(console, sheets(2), 2)
-    # Someone in Finvest 2.0 already holds the first client's identity document.
-    staff = Actor("staff", await console.sign_in("operations"))
-    async with console.database.actor_transaction(staff) as session:
-        other = await create_unclaimed_client(
-            session, PRESENT, staff, phone="+256772999999", email=None
-        )
-    async with worker_database.actor_transaction(SYSTEM) as session:
-        await kyc.record_carried_over_check(
-            session,
-            SEALER,
-            SYSTEM,
-            client_id=other,
-            document_type=DocumentType.NATIONAL_ID,
-            document_country="UG",
-            details=IdentityDetails(
-                surname="Other",
-                given_names="Person",
-                document_number=person("1")["id_number"],
-                date_of_birth=NOW.date().replace(year=1990),
-                document_expires_on=None,
-            ),
-            legacy_reference="OTHER-1",
-            reason="Set-up for the test",
-            clock=PRESENT,
-        )
+    await take_first_investment(console, worker_database)
     assert await worker(worker_database).run_once() == 1
     return switch_id
 
@@ -96,10 +72,10 @@ async def test_a_retry_refused_again_is_noted_as_the_next_attempt(
     [shown] = await not_carried(console)
     assert shown["state"] == "retrying"
 
-    # The document is still taken, so the worker notes the client again as the second attempt.
+    # The reference is still taken, so the worker notes the client again as the second attempt.
     assert await worker(worker_database).run_once() == 1
     [shown] = await not_carried(console)
-    assert (shown["code"], shown["attempt"], shown["state"]) == ("document_taken", 2, "noted")
+    assert (shown["code"], shown["attempt"], shown["state"]) == ("investment_conflict", 2, "noted")
     attempts = await rows(
         migrator_database,
         "SELECT attempt FROM migration_carry_problems WHERE legacy_client_ref = '1' "
@@ -108,7 +84,8 @@ async def test_a_retry_refused_again_is_noted_as_the_next_attempt(
     assert [a.attempt for a in attempts] == [1, 2]
     # The client is still only in the sheets, so they stay.
     assert len(await rows(migrator_database, "SELECT switch_id FROM migration_switch_files")) == 1
-    assert len(await rows(migrator_database, "SELECT id FROM investments")) == 1
+    # The second client's, and the other account's that holds the reference.
+    assert len(await rows(migrator_database, "SELECT id FROM investments")) == 2
 
 
 async def test_closing_the_last_noted_client_removes_the_sheets(

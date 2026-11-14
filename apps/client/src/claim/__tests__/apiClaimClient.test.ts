@@ -28,7 +28,7 @@ function refused(status: number, code: string, fields: { field_path: string[]; c
   return { status, body: { request_id: RID, error: { code, message: "x", fields } } };
 }
 
-const state = (status: string, step = "selfie") => ({
+const state = (status: string, step = "full_id_check") => ({
   status: 200,
   body: { status, identity_step: step, problem_reported: status === "problem_reported" },
 });
@@ -36,45 +36,16 @@ const state = (status: string, step = "selfie") => ({
 afterEach(() => setFetch(null));
 
 describe("the claim client for the real API", () => {
-  it("reads the claim, and no claim for a client who signed up in Finvest 2.0", async () => {
+  it("reads the claim, and no claim for a client who signed up in the app", async () => {
     serve({ "GET /client/claim": state("signed_in", "full_id_check") });
     expect(await createApiClaimClient().getClaim()).toEqual({ status: "signed_in", identityStep: "full_id_check" });
     serve({ "GET /client/claim": refused(404, "not_found") });
     expect(await createApiClaimClient().getClaim()).toBeNull();
   });
 
-  it("reads the claim check's photos, what is missing and what staff asked for", async () => {
-    serve({
-      "GET /client/claim-check": {
-        status: 200,
-        body: {
-          check: {
-            id: "C1",
-            status: "awaiting_client",
-            photos: [{ kind: "front", content_type: "image/jpeg", byte_size: 10 }],
-            missing: [],
-            retake_photos: ["selfie"],
-            retaken: [],
-            client_message: "Again, please",
-            submitted_at: "2026-11-14T09:00:00Z",
-          },
-        },
-      },
-    });
-    expect(await createApiClaimClient().getCheck()).toEqual({
-      id: "C1",
-      status: "awaiting_client",
-      photos: ["front"],
-      missing: [],
-      retakePhotos: ["selfie"],
-      retaken: [],
-      clientMessage: "Again, please",
-    });
-  });
-
   it("names what is missing when handing in, and a step out of turn as moved on", async () => {
-    serve({ "POST /client/claim/identity": refused(422, "validation_failed", [{ field_path: ["selfie"], code: "missing" }]) });
-    await expect(createApiClaimClient().handIn()).rejects.toMatchObject({ code: "incomplete", missing: ["selfie"] });
+    serve({ "POST /client/claim/identity": refused(422, "validation_failed", [{ field_path: ["details"], code: "missing" }]) });
+    await expect(createApiClaimClient().handIn()).rejects.toMatchObject({ code: "incomplete", missing: ["details"] });
     serve({ "POST /client/claim/confirm": refused(409, "conflict") });
     await expect(createApiClaimClient().confirm()).rejects.toMatchObject({ code: "cannot_change" });
   });

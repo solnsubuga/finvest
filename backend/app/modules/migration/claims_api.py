@@ -34,7 +34,6 @@ from app.modules.identity.passkeys_api import (
     client_signed_in,
     client_transport,
 )
-from app.modules.kyc import claims as claim_checks
 from app.modules.kyc import service as identity_checks
 from app.modules.kyc.domain.provider import IdentityProvider
 from app.modules.migration import claims
@@ -182,10 +181,10 @@ def _identity(request: Request) -> tuple[Sealer, IdentityProvider]:
 
 @router.post("/identity")
 async def hand_in_identity(request: Request, client: CurrentClient) -> ClaimStateView:
-    """Hand in the identity step: the claim check's photos, or the full ID check.
+    """Hand in the identity step: the full ID check, which every client takes.
 
     `conflict` unless the claim is waiting for it. Answers which photos or details are missing,
-    as the identity check routes do, and then nothing changes.
+    as the ID check routes do, and then nothing changes.
     """
     check_origin(request, "client", required=False)
     database, clock, _ = _state(request)
@@ -195,11 +194,9 @@ async def hand_in_identity(request: Request, client: CurrentClient) -> ClaimStat
             raise ApplicationError("not_found")
         if claim.status is not ClaimStatus.SIGNED_IN:
             raise ApplicationError("conflict")
-        if claim.identity_step is IdentityStep.SELFIE:
-            await claim_checks.submit(session, client.actor, clock)
-        else:
-            sealer, provider = _identity(request)
-            await identity_checks.submit(session, sealer, client.actor, provider, clock)
+        # Every client takes the full ID check (the owner, 2026-11-14), so this hands it in.
+        sealer, provider = _identity(request)
+        await identity_checks.submit(session, sealer, client.actor, provider, clock)
         view = await claims.submit_identity(session, client.actor, clock)
     return _view(view)
 
