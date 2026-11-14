@@ -148,10 +148,13 @@ _HELD_UP = text(
     "(SELECT min(a.started_at) FROM payout_send_attempts a WHERE a.payout_id = payouts.id) "
     "AS first_tried_at, "
     "(SELECT max(a.started_at) FROM payout_send_attempts a WHERE a.payout_id = payouts.id) "
-    "AS last_tried_at FROM payouts WHERE status = 'queued' AND kind = 'mobile_money' "
+    "AS last_tried_at, (SELECT a.deferred_for FROM payout_send_attempts a "
+    "WHERE a.payout_id = payouts.id ORDER BY a.attempt DESC LIMIT 1) AS waiting_for "
+    "FROM payouts WHERE status = 'queued' AND kind = 'mobile_money' "
     "AND NOT EXISTS (SELECT FROM payout_send_attempts a WHERE a.payout_id = payouts.id "
     "AND (a.outcome IS NULL OR a.outcome <> 'deferred'))) AS queued "
-    "WHERE first_tried_at <= :since ORDER BY first_tried_at, id LIMIT :limit"
+    "WHERE first_tried_at <= :since OR waiting_for IS NOT NULL "
+    "ORDER BY first_tried_at, id LIMIT :limit"
 )
 _FOR_CLIENT = text(
     f"SELECT {_COLUMNS} FROM payouts WHERE client_id = :client_id "  # noqa: S608
@@ -593,25 +596,32 @@ async def held_for_review(session: AsyncSession, *, limit: int = 50) -> list[Pay
 
 @dataclass(frozen=True, slots=True)
 class HeldUpPayout:
-    """A queued payout first tried `HELD_UP_AFTER` or more ago, and taken by nothing since."""
+    """A queued payout first tried `HELD_UP_AFTER` or more ago, and taken by nothing since, or
+    one whose last send waited on something staff must fix, however recent."""
 
     payout: PayoutView
     first_tried_at: datetime
     last_tried_at: datetime
     # Sends tried so far. Each one ended with the provider saying it took nothing.
     tries: int
+    # Why the last send took nothing, when it is ours to fix: `wallet_short` means Finvest's
+    # own ioTec wallet does not hold enough to pay. None when the provider gave no such reason.
+    waiting_for: str | None = None
 
 
 async def held_up(session: AsyncSession, now: datetime, *, limit: int = 50) -> list[HeldUpPayout]:
     """Payouts held up at the provider, longest first. Empty outside a staff transaction.
 
-    The sweep keeps sending them; this is for a person to see and find out why.
+    The sweep keeps sending them; this is for a person to see and find out why. A payout
+    waiting on Finvest's own wallet is listed from its first deferral, not after two hours.
     """
     rows = await session.execute(
         _HELD_UP, {"since": now - HELD_UP_AFTER, "limit": max(1, min(limit, 100))}
     )
     return [
-        HeldUpPayout(_view(row), row.first_tried_at, row.last_tried_at, int(row.tries))
+        HeldUpPayout(
+            _view(row), row.first_tried_at, row.last_tried_at, int(row.tries), row.waiting_for
+        )
         for row in rows.all()
     ]
 
