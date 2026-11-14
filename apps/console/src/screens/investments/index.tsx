@@ -91,16 +91,16 @@ function ExportPositions({ api, save }: { api: InvestmentsApi; save: (file: Posi
     }
   }
   return (
-    <div className="flex max-w-[360px] flex-col items-end gap-1.5">
+    <div className="flex max-w-[360px] flex-col items-start gap-1.5 sm:items-end">
       <Button variant="secondary" disabled={busy} onClick={() => void run()}>
         {busy ? "Preparing the positions" : "Export positions"}
       </Button>
       {error ? (
-        <p role="alert" className="m-0 text-right text-sm font-bold text-danger">
+        <p role="alert" className="m-0 text-sm font-bold text-danger sm:text-right">
           {error}
         </p>
       ) : (
-        <p className="m-0 text-right text-sm text-muted">Every running investment, as a CSV file.</p>
+        <p className="m-0 text-sm text-muted sm:text-right">Every running investment, as a CSV file.</p>
       )}
     </div>
   );
