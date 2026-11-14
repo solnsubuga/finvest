@@ -124,7 +124,7 @@ export default function LoginVerify() {
       footer={
         <TextLink
           label="I cannot use any of these"
-          onPress={() => router.push({ pathname: "/unavailable", params: { topic: "locked-out" } })}
+          onPress={() => router.push("/recover")}
         />
       }
     >

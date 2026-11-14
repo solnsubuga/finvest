@@ -181,6 +181,24 @@ test("five wrong PINs sign the phone out, and the client logs in again", async (
   await expect(page.getByText("Welcome back")).toBeVisible();
 });
 
+test("a client who lost their phone asks to be called back", async ({ page }) => {
+  await page.goto("/");
+  await page.getByText("Log in", { exact: true }).first().click();
+  await page.getByText("I changed my number or cannot get in").click();
+  await expect(page.getByText("Get back into your account").last()).toBeVisible();
+  await id(page, "recover-phone").click();
+
+  await shown(page, "call-back-submit").click();
+  await expect(page.getByText("Enter the number on your account, like 772 123 456.")).toBeVisible();
+  await shown(page, "reason-new_number").click();
+  await shown(page, "account-phone-input").fill(DEMO_PHONE);
+  await shown(page, "contact-phone-input").fill("701555013");
+  await shown(page, "call-back-submit").click();
+
+  await expect(page.getByText("We will call you").last()).toBeVisible();
+  await expect(page.getByText(/If that number has a Finvest account/)).toBeVisible();
+});
+
 // A 1 by 1 pixel PNG: the browser reads it as a picture, and the demo takes any photo.
 const PHOTO = Buffer.from(
   "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==",

@@ -84,12 +84,22 @@ type PhoneFieldProps = {
   hint?: string;
   error?: string | null;
   autoFocus?: boolean;
+  label?: string;
+  testID?: string;
 };
 
 /** Mobile number with the fixed +256 prefix. Digits are grouped as they are typed. */
-export function PhoneField({ value, onChangeText, hint, error, autoFocus }: PhoneFieldProps) {
+export function PhoneField({
+  value,
+  onChangeText,
+  hint,
+  error,
+  autoFocus,
+  label = "Mobile number",
+  testID = "phone-input",
+}: PhoneFieldProps) {
   return (
-    <Field label="Mobile number" hint={hint} error={error}>
+    <Field label={label} hint={hint} error={error}>
       <View style={styles.phoneRow}>
         <View style={styles.prefix}>
           <Txt size={fontSizes.lg} weight="bold">
@@ -98,7 +108,7 @@ export function PhoneField({ value, onChangeText, hint, error, autoFocus }: Phon
         </View>
         <View style={{ flex: 1 }}>
           <Input
-            label="Mobile number"
+            label={label}
             invalid={Boolean(error)}
             value={formatNational(value)}
             onChangeText={(text) => onChangeText(formatNational(text))}
@@ -108,7 +118,7 @@ export function PhoneField({ value, onChangeText, hint, error, autoFocus }: Phon
             placeholder="772 123 456"
             autoFocus={autoFocus}
             maxLength={11}
-            testID="phone-input"
+            testID={testID}
           />
         </View>
       </View>

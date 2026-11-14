@@ -8,10 +8,6 @@ import { Title, Txt } from "@/components/Txt";
 import { colors } from "@/theme";
 
 const topics: Record<string, { title: string; body: string }> = {
-  "locked-out": {
-    title: "Get back into your account",
-    body: "Account recovery in the app is not ready yet.",
-  },
   group: {
     title: "Company and group accounts",
     body: "Opening an account for a company, SACCO or group in the app is not ready yet.",
