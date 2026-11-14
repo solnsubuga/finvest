@@ -258,7 +258,9 @@ export default function ClientsPage() {
       };
     }
     const base = apiBaseUrl();
-    if (!base) return { api: notConnectedClientsApi, suppressions: notConnectedSuppressionsApi, phones: null };
+    if (!base) {
+      return { api: notConnectedClientsApi, suppressions: notConnectedSuppressionsApi, phones: canChangePhones ? notConnectedPhoneChangesApi : null };
+    }
     const http = createHttp(base);
     return {
       api: createHttpClientsApi(http),

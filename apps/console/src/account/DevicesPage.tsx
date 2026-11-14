@@ -145,12 +145,12 @@ function DeviceList({
       ) : confirming ? (
         <section aria-label="Sign out every other device" className="flex flex-col gap-3 rounded-xl border-2 border-warning bg-surface p-[15px]">
           <p className="m-0 text-md leading-normal font-bold">
-            Sign out {others.length === 1 ? "the other device" : `all ${others.length} other devices`}? Anyone using them must sign in again with your password and
+            Sign out {others.length === 1 ? "the other device" : `all ${others.length} other devices`}? Anyone using {others.length === 1 ? "it" : "them"} must sign in again with your password and
             passkey or authenticator app.
           </p>
           <div className="flex flex-wrap gap-2">
             <Button disabled={busy !== null} onClick={onSignOutOthers}>
-              {busy === "others" ? "Signing out" : "Sign them out"}
+              {busy === "others" ? "Signing out" : others.length === 1 ? "Sign it out" : "Sign them out"}
             </Button>
             <Button variant="secondary" onClick={() => onConfirm(false)}>
               Cancel

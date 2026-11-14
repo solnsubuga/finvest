@@ -31,6 +31,18 @@ describe("your devices", () => {
     expect(screen.getByText("You are signed in on this browser only.")).toBeInTheDocument();
   });
 
+  it("speaks of one other device as it", async () => {
+    const user = userEvent.setup();
+    render(<DevicesScreen api={createStubDevicesApi("sample", () => NOW, 0)} />);
+    const list = await screen.findByRole("list", { name: "Signed-in devices" });
+    await user.click(within(within(list).getAllByRole("listitem")[1]!).getByRole("button", { name: "Sign out" }));
+    await screen.findByText("Safari on Mac is signed out.");
+    await user.click(screen.getByRole("button", { name: "Sign out every other device" }));
+    const confirm = screen.getByRole("region", { name: "Sign out every other device" });
+    expect(confirm).toHaveTextContent("Sign out the other device? Anyone using it must sign in again");
+    expect(within(confirm).getByRole("button", { name: "Sign it out" })).toBeInTheDocument();
+  });
+
   it("says so when the list cannot be read", async () => {
     render(<DevicesScreen api={createStubDevicesApi("error", () => NOW, 0)} />);
     expect(await screen.findByRole("alert")).toHaveTextContent("We could not reach Finvest");
