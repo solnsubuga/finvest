@@ -1177,6 +1177,9 @@ export const HeldAmountOut = z.object({
 });
 export type HeldAmountOut = z.infer<typeof HeldAmountOut>;
 
+export const HeldFor = z.enum(["size", "screening"]);
+export type HeldFor = z.infer<typeof HeldFor>;
+
 export const ReleaseOut = z.object({
   decided_at: z.string().nullable(),
   decided_by: z.string().nullable(),
@@ -2395,6 +2398,7 @@ export const StaffTransferOut = z.object({
   failure_code: z.string().nullable(),
   finished_at: z.string().nullable(),
   held: z.boolean(),
+  held_for: HeldFor.nullable(),
   id: z.string(),
   investment_id: z.string(),
   kept_investment_id: z.string().nullable(),

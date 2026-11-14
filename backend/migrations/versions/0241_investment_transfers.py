@@ -60,8 +60,10 @@ CREATE TABLE investment_transfers (
     -- A few words for the recipient, from the sender.
     message varchar(140),
     status varchar(16) NOT NULL,
-    -- Whether it was held for staff when it was asked for.
+    -- Whether it was held for staff when it was asked for, and why: `size` (large) or
+    -- `screening` (the sender was on a screening hold). The client is never told which.
     held boolean NOT NULL,
+    held_for varchar(10),
     requested_at timestamptz NOT NULL,
     -- A held transfer: the first person's proposal to let it through, the second person who
     -- approved it, or the one person who declined it. Staff IDs in the identity module.
@@ -110,6 +112,8 @@ CREATE TABLE investment_transfers (
         (released_by IS NULL) = (released_at IS NULL)
         AND (released_by IS NULL OR (held AND release_proposed_by IS NOT NULL
             AND released_by <> release_proposed_by))),
+    CONSTRAINT ck_investment_transfers_held_for CHECK (
+        held = (held_for IS NOT NULL) AND (held_for IS NULL OR held_for IN ('size', 'screening'))),
     CONSTRAINT ck_investment_transfers_held CHECK (
         held OR (release_proposed_by IS NULL AND declined_by IS NULL AND cancelled_at IS NULL)),
     CONSTRAINT ck_investment_transfers_through CHECK (
@@ -166,6 +170,9 @@ CREATE FUNCTION finvest_investment_transfers_guard() RETURNS trigger
                     NEW.recipient_client_id))
                 OR num_nonnulls(NEW.release_proposed_by, NEW.released_by, NEW.declined_by,
                     NEW.cancelled_at, NEW.finished_at, NEW.entry_id) > 0
+                -- A sender on a screening hold is always held for staff (migration 0181).
+                OR (NOT NEW.held AND screening_payout_clearance(NEW.sender_client_id,
+                    clock_timestamp()) IN ('wait', 'blocked'))
             THEN
                 RAISE EXCEPTION 'a transfer is asked for by the client signed in, from their own running investment, now'
                     USING ERRCODE = '42501';
@@ -174,10 +181,11 @@ CREATE FUNCTION finvest_investment_transfers_guard() RETURNS trigger
         END IF;
         IF (NEW.id, NEW.investment_id, NEW.sender_client_id, NEW.recipient_client_id,
             NEW.sender_name, NEW.recipient_name, NEW.currency, NEW.amount_minor, NEW.whole,
-            NEW.message, NEW.held, NEW.requested_at)
+            NEW.message, NEW.held, NEW.held_for, NEW.requested_at)
             IS DISTINCT FROM (OLD.id, OLD.investment_id, OLD.sender_client_id,
             OLD.recipient_client_id, OLD.sender_name, OLD.recipient_name, OLD.currency,
-            OLD.amount_minor, OLD.whole, OLD.message, OLD.held, OLD.requested_at) THEN
+            OLD.amount_minor, OLD.whole, OLD.message, OLD.held, OLD.held_for,
+            OLD.requested_at) THEN
             RAISE EXCEPTION 'what a transfer sends never changes' USING ERRCODE = '42501';
         END IF;
         IF OLD.status = 'held' AND NEW.status = 'release_proposed' THEN
@@ -196,6 +204,13 @@ CREATE FUNCTION finvest_investment_transfers_guard() RETURNS trigger
                 RAISE EXCEPTION 'a release is approved by a second member of staff'
                     USING ERRCODE = '42501';
             END IF;
+            IF screening_payout_clearance(NEW.sender_client_id, clock_timestamp())
+                IN ('wait', 'blocked')
+                OR screening_payout_clearance(NEW.recipient_client_id, clock_timestamp())
+                IN ('wait', 'blocked') THEN
+                RAISE EXCEPTION 'a transfer is not let through while either client is held by screening'
+                    USING ERRCODE = '42501';
+            END IF;
         ELSIF OLD.status IN ('held', 'release_proposed') AND NEW.status = 'declined' THEN
             IF actor IS DISTINCT FROM 'staff' OR NEW.declined_by IS DISTINCT FROM who THEN
                 RAISE EXCEPTION 'a transfer is declined by the member of staff signed in'
@@ -208,6 +223,14 @@ CREATE FUNCTION finvest_investment_transfers_guard() RETURNS trigger
         ELSIF OLD.status = 'waiting' AND NEW.status IN ('done', 'failed') THEN
             IF NOT is_worker THEN
                 RAISE EXCEPTION 'only the worker records what a transfer did'
+                    USING ERRCODE = '42501';
+            END IF;
+            IF NEW.status = 'done' AND (
+                screening_payout_clearance(NEW.sender_client_id, clock_timestamp())
+                IN ('wait', 'blocked')
+                OR screening_payout_clearance(NEW.recipient_client_id, clock_timestamp())
+                IN ('wait', 'blocked')) THEN
+                RAISE EXCEPTION 'a transfer is not made while either client is held by screening'
                     USING ERRCODE = '42501';
             END IF;
         ELSE

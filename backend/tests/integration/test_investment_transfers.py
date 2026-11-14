@@ -14,9 +14,10 @@ from app.modules.audit import service as audit
 from app.modules.investments import accrual, transfers
 from app.modules.investments import service as investments
 from app.modules.investments.domain.investments import InvestmentStatus
-from app.modules.investments.domain.transfers import TransferStatus
+from app.modules.investments.domain.transfers import NOT_POSSIBLE, HeldFor, TransferStatus
 from app.modules.investments.holdings import HOLDING
 from app.modules.ledger import service as ledger
+from app.modules.screening import contract as screening
 from app.shared.actors import SYSTEM, Actor
 from app.shared.errors import ApplicationError
 from app.shared.money import Money
@@ -545,3 +546,122 @@ async def test_the_database_fences_who_does_what(
                     "recipient": recipient.id,
                 },
             )
+
+
+async def hold(worker_database: Database, client: Actor) -> None:
+    """Put the client on a screening hold: a screen asked for and not yet back."""
+    async with worker_database.actor_transaction(SYSTEM) as session:
+        assert await screening.request_screening(
+            session,
+            client_id=str(client.id),
+            reason=screening.Reason.RESCREEN,
+            idempotency_key=key(),
+            now=PRESENT.now(),
+        )
+
+
+async def test_a_sender_on_a_screening_hold_is_held_for_staff_and_told_nothing_more(
+    app_database: Database, worker_database: Database
+) -> None:
+    sender, _ = await person(app_database)
+    recipient, _ = await person(app_database)
+    source = await running(app_database, worker_database, sender)
+    await hold(worker_database, sender)
+
+    asked = await send(
+        app_database, sender, source.id, await number_of(app_database, recipient), ugx(1_000_000)
+    )
+    # Small, but held, and the sender hears what they would for a large one.
+    assert (asked.status, asked.held, asked.held_for) == (
+        TransferStatus.HELD,
+        True,
+        HeldFor.SCREENING,
+    )
+    assert await jobs_for(worker_database, asked.id) == 0
+    assert len(await notices(app_database, sender, "investment_transfer_held")) == 1
+
+    first, second = new_staff(), new_staff()
+    async with app_database.actor_transaction(first) as session:
+        await transfers.propose_release(session, first, asked.id, "Looks fine", PRESENT)
+    async with app_database.actor_transaction(second) as session:
+        with pytest.raises(ApplicationError) as refused:
+            await transfers.approve_release(session, second, asked.id, "Checked", PRESENT)
+    assert refused.value.fields[0].code == "screening_hold"
+    # Nor around the service.
+    async with app_database.actor_transaction(second) as session:
+        with pytest.raises(DBAPIError, match="held by screening"):
+            await session.execute(
+                text(
+                    "UPDATE investment_transfers SET status = 'waiting', released_by = :me, "
+                    "released_at = now() WHERE id = :id"
+                ),
+                {"me": second.id, "id": asked.id},
+            )
+    async with app_database.actor_transaction(second) as session:
+        declined = await transfers.decline_transfer(
+            session, second, asked.id, "Compliance hold", PRESENT
+        )
+    assert declined.status is TransferStatus.DECLINED
+
+
+async def test_a_sender_on_hold_cannot_insert_an_unheld_transfer(
+    app_database: Database, worker_database: Database
+) -> None:
+    sender, _ = await person(app_database)
+    recipient, _ = await person(app_database)
+    source = await running(app_database, worker_database, sender)
+    await hold(worker_database, sender)
+    async with app_database.actor_transaction(sender) as session:
+        with pytest.raises(DBAPIError, match="asked for by the client signed in"):
+            await session.execute(
+                text(
+                    "INSERT INTO investment_transfers (id, investment_id, sender_client_id, "
+                    "recipient_client_id, sender_name, recipient_name, currency, amount_minor, "
+                    "whole, status, held, requested_at) VALUES (:id, :investment, :sender, "
+                    ":recipient, 'Amara N.', 'Brian K.', 'UGX', 1000000, false, 'waiting', "
+                    "false, clock_timestamp())"
+                ),
+                {
+                    "id": push_id(),
+                    "investment": source.id,
+                    "sender": sender.id,
+                    "recipient": recipient.id,
+                },
+            )
+
+
+async def test_a_recipient_on_a_screening_hold_fails_the_transfer_without_saying_why(
+    app_database: Database, worker_database: Database
+) -> None:
+    sender, _ = await person(app_database)
+    recipient, _ = await person(app_database)
+    source = await running(app_database, worker_database, sender)
+    asked = await send(
+        app_database, sender, source.id, await number_of(app_database, recipient), ugx(1_000_000)
+    )
+    assert asked.status is TransferStatus.WAITING
+    await hold(worker_database, recipient)
+    async with worker_database.actor_transaction(SYSTEM) as session:
+        assert await transfers.for_monitoring(session, asked.id) is None
+    failed = await carry_out(worker_database, asked.id)
+    assert (failed.status, failed.failure_code) == (TransferStatus.FAILED, NOT_POSSIBLE)
+    assert (await investment(worker_database, source.id)).status is InvestmentStatus.ACTIVE
+    assert len(await notices(app_database, sender, "investment_transfer_failed")) == 1
+
+
+async def test_monitoring_reads_a_transfer_once_it_is_made(
+    app_database: Database, worker_database: Database
+) -> None:
+    sender, _ = await person(app_database)
+    recipient, _ = await person(app_database)
+    source = await running(app_database, worker_database, sender)
+    asked = await send(
+        app_database, sender, source.id, await number_of(app_database, recipient), ugx(1_000_000)
+    )
+    done = await carry_out(worker_database, asked.id)
+    async with worker_database.actor_transaction(SYSTEM) as session:
+        seen = await transfers.for_monitoring(session, asked.id)
+    assert seen is not None
+    assert (seen.sender_client_id, seen.recipient_client_id) == (sender.id, recipient.id)
+    assert (seen.amount_minor, seen.currency.value) == (1_000_000, "UGX")
+    assert seen.finished_at == done.finished_at

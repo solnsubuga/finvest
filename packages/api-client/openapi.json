@@ -6353,6 +6353,15 @@
         "title": "HeldAmountOut",
         "type": "object"
       },
+      "HeldFor": {
+        "description": "Why a transfer waits for two members of staff. Staff see it; the client never does.",
+        "enum": [
+          "size",
+          "screening"
+        ],
+        "title": "HeldFor",
+        "type": "string"
+      },
       "HeldPayoutOut": {
         "additionalProperties": false,
         "description": "A payout waiting for a member of staff, because it is above the review threshold.",
@@ -16264,6 +16273,16 @@
             "title": "Held",
             "type": "boolean"
           },
+          "held_for": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/HeldFor"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "id": {
             "maxLength": 20,
             "minLength": 20,
@@ -16439,6 +16458,7 @@
           "message",
           "status",
           "held",
+          "held_for",
           "requested_at",
           "release_proposed_by",
           "release_proposed_at",

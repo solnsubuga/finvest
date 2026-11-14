@@ -48,6 +48,8 @@ from app.modules.investments.domain.investments import InvestmentStatus, pay_by
 from app.modules.investments.domain.transfers import (
     COUNTED,
     MAX_MESSAGE_LENGTH,
+    NOT_POSSIBLE,
+    HeldFor,
     TransferRefusal,
     TransferStatus,
     check_transfer,
@@ -70,6 +72,7 @@ from app.modules.ledger import service as ledger
 from app.modules.ledger.domain.entries import EntryDraft, credit
 from app.modules.notifications import contract as notifications
 from app.modules.payouts import payouts
+from app.modules.screening import contract as screening
 from app.shared.actors import Actor
 from app.shared.business_day import business_date
 from app.shared.clock import Clock
@@ -112,6 +115,8 @@ class Transfer:
     message: str | None
     status: TransferStatus
     held: bool
+    # Why it was held. Staff only: the client is never told.
+    held_for: HeldFor | None
     requested_at: datetime
     release_proposed_by: str | None
     release_proposed_at: datetime | None
@@ -154,7 +159,8 @@ class ClientTransfer:
 
 _COLUMNS = (
     "id, investment_id, sender_client_id, recipient_client_id, sender_name, recipient_name, "
-    "currency, amount_minor, whole, message, status, held, requested_at, release_proposed_by, "
+    "currency, amount_minor, whole, message, status, held, held_for, requested_at, "
+    "release_proposed_by, "
     "release_proposed_at, release_reason, released_by, released_at, declined_by, declined_at, "
     "decision_reason, cancelled_at, finished_at, sent_minor, received_investment_id, "
     "kept_investment_id, entry_id, failure_code"
@@ -189,9 +195,9 @@ _SENT_TODAY = text(
 _INSERT = text(
     "INSERT INTO investment_transfers (id, investment_id, sender_client_id, "
     "recipient_client_id, sender_name, recipient_name, currency, amount_minor, whole, message, "
-    "status, held, requested_at) VALUES (:id, :investment_id, :sender, :recipient, "
+    "status, held, held_for, requested_at) VALUES (:id, :investment_id, :sender, :recipient, "
     ":sender_name, :recipient_name, :currency, :amount_minor, :whole, :message, :status, "
-    ":held, clock_timestamp())"
+    ":held, :held_for, clock_timestamp())"
 )
 _PROPOSE = text(
     "UPDATE investment_transfers SET status = 'release_proposed', release_proposed_by = :by, "
@@ -446,6 +452,13 @@ async def approve_release(
     if transfer.release_proposed_by == staff_id:
         raise ApplicationError("forbidden")
     now = clock.now()
+    if await _on_hold(session, transfer.sender_client_id, now) or await _on_hold(
+        session, transfer.recipient_client_id, now
+    ):
+        # Compliance decides the hold first. Staff may still decline the transfer.
+        raise ApplicationError(
+            "conflict", fields=[FieldProblem(field_path=["status"], code="screening_hold")]
+        )
     await session.execute(_RELEASE, {"id": transfer.id, "by": staff_id, "now": now})
     await _queue(session, transfer.id, now)
     released = await _transfer(session, transfer.id)
@@ -476,6 +489,34 @@ async def decline_transfer(
     return declined
 
 
+@dataclass(frozen=True, slots=True)
+class MonitoredTransfer:
+    """A finished transfer as transaction monitoring reads it: who, how much and when."""
+
+    sender_client_id: str
+    recipient_client_id: str
+    currency: Currency
+    # What the recipient got, in the smallest unit.
+    amount_minor: int
+    finished_at: datetime
+
+
+async def for_monitoring(session: AsyncSession, transfer_id: str) -> MonitoredTransfer | None:
+    """A transfer that was made, for screening's transaction monitoring. None if it was not
+    made (yet), or there is no such transfer. For the worker."""
+    transfer = await _transfer(session, transfer_id)
+    if transfer.status is not TransferStatus.DONE or transfer.sent is None:
+        return None
+    assert transfer.finished_at is not None
+    return MonitoredTransfer(
+        sender_client_id=transfer.sender_client_id,
+        recipient_client_id=transfer.recipient_client_id,
+        currency=transfer.sent.currency,
+        amount_minor=transfer.sent.minor,
+        finished_at=transfer.finished_at,
+    )
+
+
 # The worker -------------------------------------------------------------------------------------
 
 
@@ -492,7 +533,7 @@ async def carry_out(session: AsyncSession, transfer_id: str, clock: Clock) -> Tr
     investment = investment_from_row(row)
     now = clock.now()
     today = business_date(now)
-    failure = await _why_not(session, transfer, investment, today)
+    failure = await _why_not(session, transfer, investment, today, now)
     value = investment.amount + investment.accrued_net
     if failure is None:
         # The interest due up to today first, so the value split is all the sender earned.
@@ -730,7 +771,13 @@ async def _ask(
         ),
         amount.currency,
     )
-    held = needs_review(amount, sent_today, await _review_above(session, amount.currency, today))
+    # A sender on a screening hold is held for staff like a large transfer, and told the same.
+    held_for: HeldFor | None = None
+    if await _on_hold(session, sender_id, now):
+        held_for = HeldFor.SCREENING
+    elif needs_review(amount, sent_today, await _review_above(session, amount.currency, today)):
+        held_for = HeldFor.SIZE
+    held = held_for is not None
     transfer_id = push_id()
     try:
         async with session.begin_nested():
@@ -749,6 +796,7 @@ async def _ask(
                     "message": message,
                     "status": (TransferStatus.HELD if held else TransferStatus.WAITING).value,
                     "held": held,
+                    "held_for": held_for.value if held_for else None,
                 },
             )
     except IntegrityError as error:
@@ -760,12 +808,21 @@ async def _ask(
         await _tell_sender(session, transfer, "investment_transfer_held", now)
     else:
         await _queue(session, transfer_id, now)
-    logger.info("investment_transfer_requested", transfer_id=transfer_id, held=held)
+    logger.info(
+        "investment_transfer_requested",
+        transfer_id=transfer_id,
+        held=held,
+        held_for=held_for.value if held_for else None,
+    )
     return transfer_id
 
 
 async def _why_not(
-    session: AsyncSession, transfer: Transfer, investment: Investment, today: date
+    session: AsyncSession,
+    transfer: Transfer,
+    investment: Investment,
+    today: date,
+    clock_now: datetime,
 ) -> str | None:
     if investment.status is not InvestmentStatus.ACTIVE:
         return TransferRefusal.NOT_RUNNING.value
@@ -776,6 +833,10 @@ async def _why_not(
     recipient = await kyc.transfer_recipient(session, client_id=transfer.recipient_client_id)
     if recipient is None or await client_status(session, transfer.recipient_client_id) != "active":
         return "recipient_not_available"
+    if await _on_hold(session, transfer.sender_client_id, clock_now) or await _on_hold(
+        session, transfer.recipient_client_id, clock_now
+    ):
+        return NOT_POSSIBLE
     return None
 
 
@@ -818,6 +879,16 @@ async def _open(
         },
     )
     return new_id
+
+
+async def _on_hold(session: AsyncSession, client_id: str, now: datetime) -> bool:
+    """Whether screening holds the client: a screen under way, an open case or a sanctions
+    match. A missing recent screen does not hold a transfer, as it would a payout: the value
+    never leaves Finvest, and every client is screened at approval and every 30 days."""
+    return await screening.payout_clearance(session, client_id, now) in (
+        screening.Clearance.WAIT,
+        screening.Clearance.BLOCKED,
+    )
 
 
 async def _review_above(session: AsyncSession, currency: Currency, today: date) -> Money | None:
@@ -895,6 +966,7 @@ async def _audit(
                 "investment_id": transfer.investment_id,
                 "status": transfer.status.value,
                 "held": transfer.held,
+                "held_for": transfer.held_for.value if transfer.held_for else None,
                 "failure_code": transfer.failure_code,
             },
         ),
@@ -930,6 +1002,7 @@ def _from_row(row: Row[Any]) -> Transfer:
         message=row.message,
         status=TransferStatus(row.status),
         held=row.held,
+        held_for=HeldFor(row.held_for) if row.held_for else None,
         requested_at=row.requested_at,
         release_proposed_by=row.release_proposed_by,
         release_proposed_at=row.release_proposed_at,

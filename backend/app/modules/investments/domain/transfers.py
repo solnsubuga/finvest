@@ -51,6 +51,19 @@ class TransferStatus(StrEnum):
     CANCELLED = "cancelled"
 
 
+class HeldFor(StrEnum):
+    """Why a transfer waits for two members of staff. Staff see it; the client never does."""
+
+    SIZE = "size"
+    # The sender is on a screening hold: a screen under way, an open case or a sanctions match.
+    SCREENING = "screening"
+
+
+# A transfer the worker could not make because a client is held by screening. Deliberately the
+# same words to the sender as any other change, so nobody is tipped off.
+NOT_POSSIBLE = "not_possible"
+
+
 OPEN = frozenset({TransferStatus.WAITING, TransferStatus.HELD, TransferStatus.RELEASE_PROPOSED})
 # What counts towards the day's total for the review threshold: anything not refused.
 COUNTED = OPEN | {TransferStatus.DONE}

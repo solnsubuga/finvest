@@ -36,7 +36,7 @@ from app.infrastructure.throttling import reserve_attempts, throttle_key
 from app.modules.identity.api import CurrentClient, require_confirmed, require_permission
 from app.modules.identity.service import StaffSession
 from app.modules.investments import transfers
-from app.modules.investments.domain.transfers import MAX_MESSAGE_LENGTH, TransferStatus
+from app.modules.investments.domain.transfers import MAX_MESSAGE_LENGTH, HeldFor, TransferStatus
 from app.shared.clock import Clock
 from app.shared.contracts import Contract, PushId
 from app.shared.errors import ErrorEnvelope
@@ -131,6 +131,8 @@ class StaffTransferOut(Contract):
     message: str | None
     status: TransferStatus
     held: bool
+    # Why it was held: `size` or `screening`. Never shown to either client.
+    held_for: HeldFor | None
     requested_at: datetime
     release_proposed_by: PushId | None
     release_proposed_at: datetime | None
@@ -184,6 +186,7 @@ def _staff_out(transfer: transfers.Transfer) -> StaffTransferOut:
         message=transfer.message,
         status=transfer.status,
         held=transfer.held,
+        held_for=transfer.held_for,
         requested_at=transfer.requested_at,
         release_proposed_by=transfer.release_proposed_by,
         release_proposed_at=transfer.release_proposed_at,
