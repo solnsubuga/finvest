@@ -77,6 +77,7 @@ describe("investments over HTTP", () => {
       "awaiting_payment",
       "cancelled",
       "matured",
+      "unwound",
       "withdrawn",
     ]);
     expect(all.map((investment) => investment.id)).toEqual([newer.id, INVESTMENT.id, older.id]);

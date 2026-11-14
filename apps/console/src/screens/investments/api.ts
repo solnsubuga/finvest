@@ -12,10 +12,11 @@ import type { Amount, Currency } from "../products/api.ts";
 
 export type { Amount, Currency } from "../products/api.ts";
 
-export type InvestmentStatus = "awaiting_payment" | "active" | "matured" | "withdrawn" | "cancelled";
+/** `unwound`: undone by two people after a mistake, see "Undoing a mistake" in docs/investing.md. */
+export type InvestmentStatus = "awaiting_payment" | "active" | "matured" | "withdrawn" | "unwound" | "cancelled";
 
 /** Every status, so a list of all investments can ask for each in turn. */
-export const INVESTMENT_STATUSES: readonly InvestmentStatus[] = ["awaiting_payment", "active", "matured", "withdrawn", "cancelled"];
+export const INVESTMENT_STATUSES: readonly InvestmentStatus[] = ["awaiting_payment", "active", "matured", "withdrawn", "unwound", "cancelled"];
 export type AtMaturity = "roll_over" | "pay_out";
 
 export interface Investment {

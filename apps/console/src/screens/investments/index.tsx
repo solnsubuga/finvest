@@ -26,6 +26,7 @@ const TABS: readonly { status: InvestmentStatus; label: string; empty: string }[
   { status: "awaiting_payment", label: "Awaiting payment", empty: "Nobody is waiting to pay for an investment." },
   { status: "matured", label: "Matured", empty: "No investment has matured yet." },
   { status: "withdrawn", label: "Withdrawn early", empty: "No investment has been withdrawn early." },
+  { status: "unwound", label: "Undone", empty: "No investment has been undone." },
   { status: "cancelled", label: "Cancelled", empty: "No investment has been cancelled." },
 ];
 
@@ -230,13 +231,16 @@ function InvestmentTable({ investments, status, cards }: InvestmentTableProps) {
 function LastColumn({ investment }: { investment: Investment }) {
   if (investment.status === "awaiting_payment") return <span className="whitespace-nowrap">{formatStamp(investment.payBy)}</span>;
   if (investment.status === "cancelled") return <span className="text-muted">Not paid in time</span>;
-  if (investment.status === "withdrawn") return <span>{investment.payoutId ? "Paid out early" : "Being paid out early"}</span>;
+  // The early withdrawal's payout is followed on Money Movement: this view does not carry it.
+  if (investment.status === "withdrawn") return <span>Withdrawn early</span>;
+  if (investment.status === "unwound") return <span className="text-muted">Undone, the money waits with the client</span>;
   if (investment.status === "matured") {
     if (investment.rolledIntoId) return <span>Rolled over into a new term</span>;
     if (investment.payoutRefusal) {
       return <span className="font-bold text-warning-text">{REFUSAL_LABELS[investment.payoutRefusal] ?? `Held in payouts: ${investment.payoutRefusal}`}</span>;
     }
-    return <span>{investment.payoutId ? "Paid out" : "Being paid out"}</span>;
+    // A payout ID means the payout was created, not that the money has arrived.
+    return <span>{investment.payoutId ? "Payout created" : "Being paid out"}</span>;
   }
   return <span>{investment.atMaturity ? AT_MATURITY_LABELS[investment.atMaturity] : "Paid monthly"}</span>;
 }
