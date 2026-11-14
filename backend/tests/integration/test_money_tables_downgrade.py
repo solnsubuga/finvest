@@ -1002,6 +1002,14 @@ ROWS = {
         "deferred_for = 'wallet_short' WHERE payout_id = '-Nabc0000000000000A1'; COMMIT",
         "refusing to drop why payout sends were deferred",
     ),
+    "0321_finance_month_closes": (
+        "BEGIN; SELECT set_config('finvest.actor_kind', 'staff', true); "
+        "SELECT set_config('finvest.actor_id', '-Nabc0000000000000S1', true); "
+        "INSERT INTO finance_month_closes (id, month, books, books_sha256, reason, status, "
+        "proposed_by, proposed_at) VALUES ('-Nabc0000000000000A1', '2026-10-01', '[]', "
+        "repeat('a', 64), 'Test', 'proposed', '-Nabc0000000000000S1', now()); COMMIT",
+        "refusing to drop month closes",
+    ),
     "0320_report_schedules": (
         "BEGIN; SELECT set_config('finvest.actor_kind', 'staff', true); "
         "SELECT set_config('finvest.actor_id', '-Nabc0000000000000S1', true); "
