@@ -127,6 +127,8 @@ Money that waits shows in the payouts console queue. The client sends it on with
 
 The run publishes `investments.rolled_over` or `investments.matured`. The goals module follows `investments.rolled_over` (consumer `goals.follow_rollover`) to keep a rolled-over saving in its goal. A matured investment carries its maturity entry and exactly one of: the investment it rolled into, the payout, or the reason the money is waiting.
 
+The console's Maturities screen reads `GET /staff/maturities` (`investments/maturities.py`). It is worked out from the investments themselves, never from the jobs table, so it is right however the run went. For each maturity date from a week back to two weeks ahead, in each currency, it gives the number of terms and their principal, how many were rolled over, paid out or held, and how many are still open by what the client chose. It also lists every running investment past its maturity date (the run failed it or has not run) and every matured one whose money waits for the client, with the reason. It only reads: the run closes terms by itself, and only the client can send waiting money on.
+
 ## HTTP routes
 
 The code is `backend/app/modules/investments/api.py`. Amounts are integers in the smallest unit (`amount_minor`), and a request that sends one as text or with a fraction is refused. Client and public responses are built only from after-tax figures, and a unit test checks that no field of those contracts names tax, a gross figure or basis points.
@@ -144,6 +146,7 @@ The code is `backend/app/modules/investments/api.py`. Amounts are integers in th
 | `GET /staff/rate-proposals?status=` | `rates.view` | Rate changes and their state. |
 | `POST /staff/rate-proposals`, `POST /staff/rate-proposals/{id}/approve`, `/send-back`, `/withdraw` | `rates.change` | Proposing and deciding rate changes, with the second person enforced in the database. |
 | `GET /staff/investments?status=&limit=`, `GET /staff/investments/{id}`, `GET /staff/interest-runs` | `investments.view` | Every investment with its tax, and the record of daily runs. |
+| `GET /staff/maturities` | `maturities.view` | The maturity run around today, terms it has not closed, and money held for clients. |
 | `GET /staff/investment-corrections?status=&investment_id=&limit=` | `investments.view` | Unwinds and refunds and their state. |
 | `POST /staff/investment-corrections`, `POST /staff/investment-corrections/{id}/approve`, `/send-back`, `/withdraw` | `investment_corrections.change`, `Idempotency-Key` | Proposing and deciding an unwind or a refund. See [Undoing a mistake](#undoing-a-mistake). |
 

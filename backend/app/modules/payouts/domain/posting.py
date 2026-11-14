@@ -11,6 +11,9 @@ made from the payout's ID, so posting the same step twice posts once.
 | park    | payout in flight         | the client's payout pending              |
 | release | payout in flight         | the handover account                     |
 
+A paid payout that comes back gets one more, `returned`: debit the pot it was paid from, credit
+the handover account, so it can be sent again.
+
 Every account but the wallet or bank is a liability to the same client, so until the provider
 confirms, the total owed to the client does not change. Only settle reduces it.
 """
@@ -115,6 +118,26 @@ def finish(
     if effect is LedgerEffect.RELEASE and to_account_id != terms.source_account_id:
         raise ValueError("A released payout goes back where it came from")
     return _entry(terms, effect.value, effective_date, terms.in_flight_account_id, to_account_id)
+
+
+def returned(
+    terms: PayoutTerms, effective_date: date, *, pot_account_id: str, funding_account_id: str
+) -> EntryDraft:
+    """A paid payout that came back: the money is in the pot again, and owed to the client again
+    in the handover account it was first paid from, so it can be sent from there once more.
+
+    The payout itself stays paid. This is the only entry that undoes a settle, and it has its
+    own fixed key, so a payout comes back at most once."""
+    if funding_account_id != terms.source_account_id:
+        raise ValueError("A returned payout goes back to the handover it was paid from")
+    return EntryDraft(
+        entry_type="payout.returned",
+        effective_date=effective_date,
+        lines=(debit(pot_account_id, terms.amount), credit(funding_account_id, terms.amount)),
+        idempotency_key=f"payout:{terms.payout_id}:returned",
+        source_type="payout",
+        source_id=terms.payout_id,
+    )
 
 
 def _entry(

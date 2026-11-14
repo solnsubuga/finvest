@@ -182,6 +182,41 @@ async def test_months_add_up_what_started_what_was_earned_and_what_was_paid_out(
     )
 
 
+async def test_a_payout_that_came_back_comes_off_paid_out_in_the_month_it_came_back(
+    app_database: Database, worker_database: Database
+) -> None:
+    client = new_client()
+    assert client.id is not None
+    await post(
+        worker_database,
+        client_id=client.id,
+        code="client.payout_in_flight",
+        entry_type="payout.reserve",
+        amount=80_000,
+        on=end_of(LAST_MONTH, 1),
+    )
+    await post(
+        worker_database,
+        client_id=client.id,
+        code="client.payout_in_flight",
+        entry_type="payout.settle",
+        amount=80_000,
+        on=end_of(LAST_MONTH),
+        direction="debit",
+    )
+    # The bank sent it back this month: owed to the client again in their pending account.
+    await post(
+        worker_database,
+        client_id=client.id,
+        code="client.payout_pending",
+        entry_type="payout.returned",
+        amount=80_000,
+        on=TODAY,
+    )
+    _, last, this = (await read(app_database, client)).months
+    assert (last.paid_out, this.paid_out) == (ugx(80_000), ugx(-80_000))
+
+
 async def test_a_reversed_entry_nets_out_in_the_month_it_is_reversed(
     app_database: Database, worker_database: Database
 ) -> None:

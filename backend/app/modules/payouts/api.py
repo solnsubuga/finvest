@@ -27,7 +27,7 @@ from app.modules.payments.domain.bank_transfers import (
     InvalidReceipt,
     check_receipt_bytes,
 )
-from app.modules.payouts import destinations, payouts
+from app.modules.payouts import destinations, payouts, returns
 from app.modules.payouts.destinations import DestinationView
 from app.modules.payouts.domain.banks import BANKS
 from app.modules.payouts.domain.destinations import (
@@ -158,6 +158,13 @@ class PayoutOut(Contract):
     status: Literal["in_review", "processing", "paid", "failed", "cancelled"]
     business_date: date
     created_at: datetime
+    # Set when a paid payout came back from the bank or network. The money is safe with us, and
+    # the client can send it again (`POST /client/payouts/{id}/resend`).
+    returned_at: datetime | None = None
+
+
+class ResendIn(Contract):
+    destination_id: PushId
 
 
 class LimitsOut(Contract):
@@ -200,7 +207,7 @@ def _destination_out(view: DestinationView) -> DestinationOut:
     )
 
 
-def _payout_out(view: PayoutView) -> PayoutOut:
+def _payout_out(view: PayoutView, returned: returns.ReturnView | None = None) -> PayoutOut:
     return PayoutOut.model_validate(
         {
             "id": view.id,
@@ -210,6 +217,7 @@ def _payout_out(view: PayoutView) -> PayoutOut:
             "status": _CLIENT_STATUS[view.status],
             "business_date": view.business_date,
             "created_at": view.created_at,
+            "returned_at": None if returned is None else returned.decided_at,
         }
     )
 
@@ -431,15 +439,40 @@ async def list_payouts(client: CurrentClient, database: Db) -> list[PayoutOut]:
     """The client's payouts, newest first, at most 50."""
     async with database.actor_transaction(client.actor) as session:
         views = await payouts.payouts_for_client(session, client.client_id)
-    return [_payout_out(view) for view in views]
+        returned = await returns.approved_for(session, [view.id for view in views])
+    return [_payout_out(view, returned.get(view.id)) for view in views]
 
 
 @client_router.get("/payouts/{payout_id}")
 async def get_payout(payout_id: PushId, client: CurrentClient, database: Db) -> PayoutOut:
     async with database.actor_transaction(client.actor) as session:
         view = await payouts.get_payout(session, payout_id)
+        returned = await returns.approved_for(session, [view.id])
     if view.client_id != client.client_id:
         raise ApplicationError("not_found")
+    return _payout_out(view, returned.get(view.id))
+
+
+@client_router.post("/payouts/{payout_id}/resend", status_code=201)
+async def resend(
+    payout_id: PushId, body: ResendIn, client: CurrentClient, database: Db, clock: Time
+) -> PayoutOut:
+    """Send a payout that came back again, to an approved account. A new payout, returned here.
+
+    Asking again is the same payout, so a lost answer can be tried again as it was. 409
+    `payout_not_returned`; 422 on `destination_id` with the refusal codes of a new payout, such
+    as `destination_not_approved`, `destination_in_safety_wait` or `over_mobile_money_limit`;
+    422 `idempotency_key_reused` when it was already sent again to another account.
+    """
+    try:
+        async with database.actor_transaction(client.actor) as session:
+            view = await returns.resend(
+                session, client.actor, payout_id, destination_id=body.destination_id, clock=clock
+            )
+    except returns.ReturnRefused as error:
+        raise _refused(error.code) from None
+    except payouts.PayoutRefused as refused:
+        raise _problem("destination_id", refused.code) from None
     return _payout_out(view)
 
 

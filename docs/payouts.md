@@ -137,6 +137,9 @@ A payout is funded from one place only: the client's own `client.payout_pending`
 | `payout.settle` | Payout in flight | `iotec.wallet` (reference the network) for mobile money, `bank.trust` for a bank account | `payout:<id>:settle` |
 | `payout.park` | Payout in flight | `client.payout_pending` | `payout:<id>:park` |
 | `payout.release` | Payout in flight | `client.payout_pending`, reference the investment | `payout:<id>:release` |
+| `payout.returned` | `iotec.wallet` (reference the network) or `bank.trust`, the pot it was paid from | `client.payout_pending`, reference the investment | `payout:<id>:returned` |
+
+A bank payout settles and parks with the same entries, posted when two members of staff settle it from the trust statement (see "Paying bank payouts").
 
 Every account but the wallet and the bank is a liability to the same client, so what Finvest owes the client does not change until the provider confirms. The fixed keys mean no step can post twice.
 
@@ -170,7 +173,8 @@ In `backend/app/modules/payouts/api.py`. Every route needs a signed-in client an
 | `DELETE /client/payout-destinations/{id}` | Remove it for good. 204 |
 | `POST /client/payout-destinations/{id}/proof` | Bank accounts only. A form with `proof_kind` (`bank_statement`, `bank_letter` or `bank_card`) and `file` (PDF, JPEG or PNG, at most 10 MiB). Sends it to staff |
 | `GET /client/payouts` | The client's payouts, newest first, at most 50 |
-| `GET /client/payouts/{id}` | One payout |
+| `GET /client/payouts/{id}` | One payout. `returned_at` is set when a paid payout came back |
+| `POST /client/payouts/{id}/resend` | `{destination_id}`. Send a payout that came back again, to an approved account: a new payout for the same amount from the same handover, 201. Asking again is the same payout. 409 `payout_not_returned`; 422 on `destination_id` with a new payout's refusal codes; 422 `idempotency_key_reused` once it was sent again to another account |
 | `GET /client/withdrawal-limits` | The limits in force today, without the review threshold |
 | `GET /client/banks` | The banks a client may be paid to, as `{code, name}`, from `domain/banks.py`: 22 banks licensed by the Bank of Uganda, taken from the client app's list. The app and the console name banks from this list |
 
@@ -255,7 +259,7 @@ A sweep runs every minute. It marks attempts that never got their answer saved a
 
 The client is told `payout_processing` when the payout is sent or uncertain, `payout_sent` when it is paid and `payout_failed` when it fails. A message names the network, such as "MTN Mobile Money", never the number.
 
-Bank payouts are not sent by the worker. They wait for staff to pay them from the trust account. Until that path records its own send attempt, a bank payout cannot leave `queued` at all, and the database refuses marking one paid by hand.
+Bank payouts are not sent by the worker. They wait for staff to pay them from the trust account, in batches (below). The worker takes no step for a bank payout, and the database refuses one.
 
 What the database enforces:
 
@@ -269,7 +273,7 @@ What the database enforces:
 
 The sandbox provider (`FINVEST_PAYMENTS_PROVIDER=sandbox`, local and staging only) pays nobody. The last two digits of the number choose what happens: 01 refused, 02 fails after accepting, 04 uncertain with no record, 05 deferred, 06 confirmed for another amount, anything else paid after 5 seconds.
 
-Not built yet: the two-person settlement of a stranded payout, and paying a bank payout from the trust account. Both follow.
+Both follow below: the two-person settlement of a stranded payout, and paying a bank payout from the trust account.
 
 ## Settling a payout the provider never answered for
 
@@ -302,3 +306,83 @@ Open proposals wait in the approvals inbox as `payout_resolution`, with the outc
 | Nothing changes afterwards | Only a decision is written, a decided resolution never changes, and nothing is deleted |
 
 Only the worker writes a destination's note of its first payout, so a payout settled as paid by hand queues a job for it.
+
+## Paying bank payouts
+
+The worker sends mobile money only. A queued bank payout is paid by staff from the trust bank account, by uploading a transfer file in the bank's portal (`backend/app/modules/payouts/bank_payouts.py`, routes in `staff_bank_api.py`, migration 0039). Every step that moves money takes two people, from the owner's standing rule.
+
+1. **Prepare.** One member of staff chooses queued bank payouts in one currency, at most 200, and puts them in a batch with a reason. Nothing leaves.
+2. **Approve.** A different member of staff approves the batch. In the same transaction every payout in it moves from queued to sent, and each client is told `payout_processing`, naming the bank, never the number. The preparer may withdraw the batch instead, and anyone else may decline it; either way its payouts stay queued and are free for another batch.
+3. **Upload.** The approved batch's transfer file is downloaded and uploaded in the bank's portal. It is a CSV with `Reference` (the payout ID, which the bank is asked to carry), `Beneficiary name`, `Bank`, `Account number`, `Amount` (whole shillings, no separators), `Currency` and `Narrative`. It holds whole account numbers, so it exists only for an approved batch, is never stored, and every download writes a `payouts.bank_batch_file_downloaded` access event.
+4. **Settle.** Once the trust statement is imported, one member of staff proposes how each payout ended and a different one approves it. Paid settles the money from `bank.trust` (`payout.settle`), and the client is told `payout_sent`. Failed parks it in the client's "payout pending" account (`payout.park`, `failure_code=bank_refused`), and the client is told `payout_failed`. The proposer may withdraw, and anyone else may decline; the payout stays sent, to be proposed again.
+
+| Outcome | Evidence |
+| --- | --- |
+| Paid | The trust statement line that took the money: going out, for the payout's amount and currency, dated on or after the day the batch was approved, and named by no other open or approved settlement. One line per payout |
+| Failed | A trust statement dated at least two days after the batch was approved. Every day from the approval to it must be imported, and none may hold a line going out for the payout's amount that no approved settlement accounts for. A payout that did leave is never parked, so it can never be paid twice |
+
+Seeing needs `money_movement.view` (admin, operations and finance). Every step needs `bank_payouts.change` (admin and finance). Approving and declining need the second step in the last ten minutes (403 `confirm_it_is_you`). Every step needs a reason. Preparing, approving and declining a batch, and proposing and approving a settlement, take an `Idempotency-Key`: a retried request returns what the first one did, and a key reused for a different request is refused with `idempotency_key_reused`.
+
+| Route | What it does |
+| --- | --- |
+| `GET /staff/payouts/bank/waiting?currency=UGX` | Queued bank payouts in no prepared or approved batch, oldest first, at most 200 |
+| `GET /staff/payout-bank-batches?status=prepared&status=approved` | Batches in those statuses, newest first, at most 100, each with its payouts and total |
+| `GET /staff/payout-bank-batches/{id}` | One batch |
+| `POST /staff/payout-bank-batches` | `{currency, payout_ids, reason}`. 201, prepared. 422 `batch_payouts_invalid` for a payout named twice; 409 `payout_not_bank`, `payout_not_queued` or `payout_in_another_batch` |
+| `POST /staff/payout-bank-batches/{id}/approve` | `{reason}`. Sends every payout in it. 403 `prepared_by_you`; 409 `batch_already_decided` |
+| `POST /staff/payout-bank-batches/{id}/decline` | `{reason}`. 403 `prepared_by_you`; 409 `batch_already_decided` |
+| `POST /staff/payout-bank-batches/{id}/withdraw` | `{reason}`, by the preparer only (403 `not_prepared_by_you`) |
+| `GET /staff/payout-bank-batches/{id}/file` | The transfer file, `text/csv`. Needs `bank_payouts.change`. 409 `batch_not_approved` |
+| `GET /staff/payouts/bank/sent` | Bank payouts sent and not yet settled, oldest first, at most 100, each with its batch, when it was sent and any open settlement |
+| `POST /staff/payouts/{id}/bank-settlements` | `{outcome, statement_line_id?, statement_id?, reason}`. 201. 422 `statement_line_required` or `statement_required`; 409 `payout_not_bank`, `payout_not_sent`, `settlement_already_proposed`, `statement_line_in_use`, `statement_line_not_this_payout` or `statement_not_enough` |
+| `POST /staff/payout-bank-settlements/{id}/approve` | `{reason}`. The payout is paid or failed. 403 `proposed_by_you`; 409 `settlement_already_decided` or `payout_not_sent` |
+| `POST /staff/payout-bank-settlements/{id}/decline` | `{reason}`. 403 `proposed_by_you` |
+| `POST /staff/payout-bank-settlements/{id}/withdraw` | `{reason}`, by the proposer only (403 `not_proposed_by_you`) |
+
+What the database enforces:
+
+| Rule | How |
+| --- | --- |
+| Two people send a batch | A batch is decided by the signed-in member of staff, now; approving or declining by someone other than its preparer, withdrawing only by its preparer |
+| The batch moves with the approval | The payouts guard admits a staff step from queued to sent for a bank payout only in a batch the same person approved, and an approved batch with a payout still queued cannot commit |
+| An approver approves what was prepared | Items are added only in the transaction that prepared their batch, by its preparer, and are never changed or deleted |
+| One batch at a time | A payout joins a batch only while queued, a bank payout in the batch's currency, and in no other prepared or approved batch. Its row is locked, so two batches cannot both take it |
+| Settled from the statement | A settlement's evidence is checked at proposal and again at approval, and the payouts guard admits sent to paid or failed for a bank payout only with an approved settlement for that outcome by the same person |
+| One line, one payout | A statement line is named by at most one open or approved settlement |
+| The worker never moves a bank payout | The payouts guard refuses every worker step for one |
+| Nothing changes afterwards | A decided batch or settlement never changes, and nothing is deleted. Only staff and the worker can read them |
+
+Not built yet: a bank that debits a whole batch as one statement line (each payout needs its own line for now), matching the settle entries with their lines in the day close automatically, and the console screen.
+
+## A payout that came back
+
+A payout the provider or bank confirmed can still come back: a bank account closed after the transfer left, or a mobile money reversal. The statement shows the money coming in again, and Finvest owes it to the client again (`backend/app/modules/payouts/returns.py`, routes in `staff_returns_api.py`, migration 0044). A paid payout never changes, so the return is a record of its own, and the ledger entry is never deleted or reversed: the return is an entry of its own.
+
+1. One member of staff proposes it with a reason, naming the statement line that brought the money back: on the pot the payout was paid from (the trust account for a bank payout, the network's ioTec wallet for mobile money), coming in, for the payout's amount and currency, dated on or after the day it was paid, and named by no other open or approved return.
+2. A different member of staff approves it. In the same transaction the ledger posts `payout.returned` (debit the pot, credit the client's "payout pending" account for the payout's source), and the client is told `payout_returned`, naming where it was sent, never the amount or the number. They may instead decline it, or the proposer may withdraw it; nothing is posted and it can be proposed again.
+3. The client sees `returned_at` on the payout and sends it again to an approved account of theirs (`POST /client/payouts/{id}/resend`). It is a new payout under the request key `return:<return id>`, so a lost answer can be tried again, and the client sends a returned payout again once. If that one fails, its money is parked for staff like any failed payout. If it is held for review and declined, its money goes back to "payout pending", and the client cannot send it again from the return, because the key is used: staff handle it from the pending queue. Until the client sends it, the money waits in "payout pending" and shows in the staff queue of non-empty pending accounts.
+
+Insights take a returned payout off "paid out" in the month it came back ([insights.md](insights.md)).
+
+Seeing returns needs `money_movement.view`. Proposing and deciding need `bank_payouts.change`, and approving and declining need the second step in the last ten minutes. Proposing and approving take an `Idempotency-Key`.
+
+| Route | What it does |
+| --- | --- |
+| `GET /staff/payout-returns` | Returns waiting for a second person, oldest first, at most 100 |
+| `GET /staff/payout-returns/{id}` | One return, with the entry its approval posted |
+| `POST /staff/payouts/{id}/returns` | `{statement_line_id, reason}`. 201. 409 `payout_not_paid`, `return_already_recorded`, `statement_line_in_use` or `statement_line_not_this_payout` |
+| `POST /staff/payout-returns/{id}/approve` | `{reason}`. Posts the return and tells the client. 403 `proposed_by_you`; 409 `return_already_decided` |
+| `POST /staff/payout-returns/{id}/decline` | `{reason}`. 403 `proposed_by_you`; 409 `return_already_decided` |
+| `POST /staff/payout-returns/{id}/withdraw` | `{reason}`, by the proposer only (403 `not_proposed_by_you`) |
+
+What the database enforces:
+
+| Rule | How |
+| --- | --- |
+| The statement is the evidence | The line is checked against the payout's pot, direction, amount, currency and paid date at the proposal and again at approval |
+| Two people | A different signed-in member of staff approves or declines; only the proposer withdraws |
+| The approval carries its entry | An approved return must name the `payout.returned` entry with this payout's fixed key that credits the client's pending account for the payout's source with its amount, and only an approved return names an entry |
+| Once | One open or approved return per payout, and a statement line takes back one payout |
+| Nothing changes afterwards | A decided return never changes, and nothing is deleted. A client sees only their own approved returns |
+
+Not built yet: the console screen for returns, and the client app's resend screen.

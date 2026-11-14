@@ -88,6 +88,11 @@ Permission = Literal[
     # check, refusing the proof, or removing an account. Seeing the queue is
     # `review_queue.view`. Not a screen.
     "payout_accounts.change",
+    # Preparing a batch of bank payouts to pay from the trust account, approving or declining
+    # someone else's batch, withdrawing your own, and proposing or deciding how a bank payout
+    # ended from the trust statement. Approving moves money, so it always takes a second
+    # person. Seeing them is `money_movement.view`. Not a screen.
+    "bank_payouts.change",
     "migration.import",
     "migration.sign_off",
     # Proposing a new mobile number for a client, or approving someone else's proposal. The
@@ -156,6 +161,7 @@ ROLE_PERMISSIONS: dict[Role, frozenset[Permission]] = {
             "reports.view",
             "bank_transfers.change",
             "deposit_reassignments.change",
+            "bank_payouts.change",
             "migration.view",
             "migration.sign_off",
             "investment_corrections.change",

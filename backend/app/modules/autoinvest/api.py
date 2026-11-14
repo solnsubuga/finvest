@@ -7,15 +7,17 @@ the smallest unit with their currency, never decimals, and no tax rate appears.
 from datetime import date, datetime
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, Request
+from fastapi import APIRouter, Depends, Query, Request
 from pydantic import Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.idempotency import IdempotencyKey
 from app.infrastructure.database import Database
+from app.modules.audit import service as audit
+from app.modules.audit.domain.events import AuditActor, AuditEvent
 from app.modules.autoinvest import service
-from app.modules.identity.api import CurrentClient
-from app.modules.identity.service import ClientSession
+from app.modules.identity.api import CurrentClient, require_permission
+from app.modules.identity.service import ClientSession, StaffSession
 from app.modules.investments import service as investments
 from app.modules.investments.domain.investments import AtMaturity
 from app.modules.payments.domain.deposits import Network
@@ -279,4 +281,122 @@ async def stop_plan(
         return await _detail(session, plan, clock)
 
 
-routers: list[APIRouter] = [router]
+# Staff ------------------------------------------------------------------------------------------
+
+staff_router = APIRouter(prefix="/staff/autoinvest", tags=["staff autoinvest"], responses=_REFUSALS)
+AutoinvestViewer = Annotated[StaffSession, Depends(require_permission("automatic_investing.view"))]
+# A week of runs is what the console shows; a quarter is the most one request may span.
+MAX_RANGE_DAYS = 92
+
+
+class PlanCountsView(Contract):
+    active: int
+    paused: int
+
+
+class StaffRunView(Contract):
+    """A run and its plan's terms now. The client is an ID: the console names them."""
+
+    run_id: PushId
+    plan_id: PushId
+    client_id: PushId
+    due_on: date
+    status: service.RunStatus
+    attempt: int
+    retry_on: date | None
+    code: str | None
+    investment_id: PushId | None
+    product_code: str
+    product_name: str
+    currency: Currency
+    amount_minor: int
+    frequency: service.Frequency
+    day: int
+    network: Network
+
+
+class StaffRunList(Contract):
+    runs: list[StaffRunView]
+    # Pass as `before_id` for the next page. None on the last page.
+    next_before_id: PushId | None
+
+
+async def _all_names(session: AsyncSession, clock: Clock) -> dict[str, str]:
+    """Every product's name, paused and closed ones too, as a plan may outlive its product."""
+    return {
+        view.product.code: view.product.name
+        for view in await investments.list_products(session, clock)
+    }
+
+
+@staff_router.get("/plans/counts")
+async def staff_plan_counts(staff: AutoinvestViewer, database: DatabaseDep) -> PlanCountsView:
+    async with database.actor_transaction(staff.actor) as session:
+        counts = await service.plan_counts(session, staff.actor)
+    return PlanCountsView(active=counts.active, paused=counts.paused)
+
+
+@staff_router.get("/runs")
+async def staff_runs(
+    staff: AutoinvestViewer,
+    database: DatabaseDep,
+    clock: ClockDep,
+    date_from: date,
+    date_to: date,
+    status: Annotated[service.RunStatus | None, Query()] = None,
+    before_id: Annotated[str | None, Query(max_length=40)] = None,
+    limit: Annotated[int, Query(ge=1, le=200)] = 200,
+) -> StaffRunList:
+    """Runs due from `date_from` to `date_to`, newest first. Reading them is audited."""
+    if date_to < date_from or (date_to - date_from).days > MAX_RANGE_DAYS:
+        raise _invalid("date_to")
+    async with database.actor_transaction(staff.actor) as session:
+        runs = await service.staff_runs(
+            session,
+            staff.actor,
+            date_from=date_from,
+            date_to=date_to,
+            status=status,
+            before_id=before_id,
+            limit=limit,
+        )
+        names = await _all_names(session, clock)
+        await audit.record(
+            session,
+            AuditEvent(
+                category="access",
+                action="autoinvest.runs_viewed",
+                resource_type="autoinvest_runs",
+                resource_id=f"{date_from.isoformat()}:{date_to.isoformat()}",
+                actor=AuditActor.staff(staff.staff_id),
+                details={"runs": len(runs)},
+            ),
+            clock,
+        )
+    return StaffRunList(
+        runs=[
+            StaffRunView(
+                run_id=item.run.id,
+                plan_id=item.run.plan_id,
+                client_id=item.run.client_id,
+                due_on=item.run.due_on,
+                status=item.run.status,
+                attempt=item.run.attempt,
+                retry_on=item.run.retry_on,
+                code=item.run.code,
+                investment_id=item.run.investment_id,
+                product_code=item.product_code,
+                product_name=names.get(item.product_code, item.product_code),
+                currency=item.amount.currency,
+                amount_minor=item.amount.minor,
+                frequency=item.frequency,
+                day=item.day,
+                network=item.network,
+            )
+            for item in runs
+        ],
+        next_before_id=runs[-1].run.id if len(runs) == limit else None,
+    )
+
+
+routers: list[APIRouter] = [router, staff_router]

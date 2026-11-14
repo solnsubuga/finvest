@@ -29,6 +29,7 @@ const ACTIONS: readonly { permission: Permission; label: string; under: ScreenPe
   { permission: "identity_checks.review", label: "Decide identity checks", under: "identity_checks.view" },
   { permission: "deposit_reassignments.change", label: "Move payments credited to the wrong client", under: "reconciliation.view" },
   { permission: "payout_accounts.change", label: "Check payout accounts", under: "review_queue.view" },
+  { permission: "bank_payouts.change", label: "Pay and settle bank payouts", under: "money_movement.view" },
   { permission: "dealing_orders.change", label: "Deal and settle orders", under: "dealing_desk.view" },
   { permission: "tax_remittances.change", label: "Pay withholding tax to URA", under: "finance.view" },
   { permission: "rates.change", label: "Change rates", under: "rates.view" },
