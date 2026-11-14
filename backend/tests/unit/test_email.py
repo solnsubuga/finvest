@@ -16,7 +16,7 @@ from app.infrastructure.email import (
     ResendTransport,
     Sender,
 )
-from app.modules.notifications.domain.templates import InvalidTemplate, render
+from app.modules.notifications.domain.templates import InvalidTemplate, render, render_sms
 
 API_KEY = "re_test_not_a_real_key"
 ADDRESS = "ada@example.com"
@@ -250,3 +250,26 @@ def test_a_link_must_point_to_a_finvest_site() -> None:
             render("staff_enrolment", enrolment(link), link_origins=console)
     with pytest.raises(InvalidTemplate):
         render("staff_enrolment", enrolment(good), link_origins=[])
+
+
+def test_the_claim_invitation_links_once_by_email_and_by_text() -> None:
+    link = "https://app.finvestug.com/claim#" + "A" * 43
+    client_app = ["https://app.finvestug.com"]
+    variables = {"link": link, "hours": 72}
+
+    email = render("claim_invitation", variables, link_origins=client_app)
+    assert email.subject == "Claim your account on the new Finvest"
+    assert email.html.count(f'<a href="{link}">') == 1
+    assert "72 hours" in email.text
+
+    sms = render_sms("claim_invitation", variables, link_origins=client_app)
+    assert link in sms and "72 hours" in sms
+    # Two message parts at most, in plain GSM characters.
+    assert len(sms) <= 306 and sms.isascii()
+
+
+def test_a_link_in_a_text_message_must_point_to_a_finvest_site() -> None:
+    client_app = ["https://app.finvestug.com"]
+    for link in ("https://evil.example/claim#token", "https://app.finvestug.com.evil.example/c"):
+        with pytest.raises(InvalidTemplate, match="Finvest site"):
+            render_sms("claim_invitation", {"link": link, "hours": 72}, link_origins=client_app)
