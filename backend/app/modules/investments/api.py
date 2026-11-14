@@ -251,6 +251,30 @@ class StaffInvestmentOut(Contract):
     payout_refusal: str | None
 
 
+class MaturityDayOut(Contract):
+    day: date
+    currency: Currency
+    investments: int
+    principal_minor: int
+    rolled_over: int
+    paid_out: int
+    held: int
+    # Not closed yet, by what the client chose.
+    open_roll_over: int
+    open_pay_out: int
+
+
+class MaturitiesOut(Contract):
+    """The maturity run around `today` (Kampala), and every term that needs a person."""
+
+    today: date
+    days: list[MaturityDayOut]
+    # Past their maturity date and still running: the run failed them or has not run.
+    not_closed: list[StaffInvestmentOut]
+    # Matured, and the money waits in payouts for the client. `payout_refusal` says why.
+    held: list[StaffInvestmentOut]
+
+
 class InterestRunOut(Contract):
     run_date: date
     currency: Currency
@@ -291,6 +315,7 @@ RatesChanger = Annotated[StaffSession, Depends(require_permission("rates.change"
 # Deciding needs a passkey or app code from the last few minutes.
 RatesApprover = Annotated[StaffSession, Depends(require_confirmed("rates.change"))]
 InvestmentsViewer = Annotated[StaffSession, Depends(require_permission("investments.view"))]
+MaturitiesViewer = Annotated[StaffSession, Depends(require_permission("maturities.view"))]
 CorrectionsChanger = Annotated[
     StaffSession, Depends(require_permission("investment_corrections.change"))
 ]
@@ -917,6 +942,34 @@ async def staff_interest_runs(request: Request, staff: InvestmentsViewer) -> lis
     async with _transaction(request, staff.actor) as session:
         runs = await service.interest_runs(session, staff.actor)
     return [_run_out(run) for run in runs]
+
+
+@staff_router.get("/maturities")
+async def staff_maturities(
+    request: Request, staff: MaturitiesViewer, clock: AppClock
+) -> MaturitiesOut:
+    """The last week and next two weeks of maturities, and the terms that need a person."""
+    async with _transaction(request, staff.actor) as session:
+        found = await service.maturities(session, staff.actor, clock)
+    return MaturitiesOut(
+        today=found.today,
+        days=[
+            MaturityDayOut(
+                day=day.day,
+                currency=day.currency,
+                investments=day.investments,
+                principal_minor=day.principal.minor,
+                rolled_over=day.rolled_over,
+                paid_out=day.paid_out,
+                held=day.held,
+                open_roll_over=day.open_roll_over,
+                open_pay_out=day.open_pay_out,
+            )
+            for day in found.days
+        ],
+        not_closed=[_staff_investment_out(investment) for investment in found.not_closed],
+        held=[_staff_investment_out(investment) for investment in found.held],
+    )
 
 
 routers = (public_router, client_router, staff_router)

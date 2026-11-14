@@ -41,12 +41,12 @@ Every console screen is built, but eight of them only work on the sample sign-in
 | Dealing Desk | Sample data only; the buffer tab is being connected | `/staff/dealing/desk`, `/staff/dealing/orders` (seven) | Dealing desk thread (PRs #262, #265) |
 | Automatic Investing | Sample data only | None: the staff routes are not built ([automatic-investing.md](automatic-investing.md)) | Phase 4 |
 
-Four screens are still the placeholder page. The Review Queue is connected to `/staff/payout-destinations` and the held payout routes (`/staff/payouts/held`, `.../approve`, `.../decline`).
+Four screens were still the placeholder page. The Review Queue is connected to `/staff/payout-destinations` and the held payout routes (`/staff/payouts/held`, `.../approve`, `.../decline`).
 
 | Screen | What it needs | Routes |
 | --- | --- | --- |
 | Money Movement | Payouts that are held up or stranded, and deposits under way | `GET /staff/payouts/held-up`; stranded payouts in PR #263 (payouts thread) |
-| Maturities | The daily maturity run and its exceptions | `GET /staff/interest-runs` covers interest only; a maturity run read route is needed |
+| ~~Maturities~~ | ~~The daily maturity run and its exceptions~~ Closed by the Maturities screen PR. | `GET /staff/maturities` |
 | Finance | Day close, fee income, withholding tax owed and the accounting export | Reconciliation routes below; tax in the tax certificates thread |
 | Compliance | Screening results and monitoring alerts | Nothing built (see below) |
 
