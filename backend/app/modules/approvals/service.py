@@ -85,6 +85,8 @@ async def waiting_for(session: AsyncSession, staff: StaffSession, now: datetime)
         found += await _investment_corrections(session, staff)
     if "investment_run" in kinds:
         found += await _investment_runs(session, staff)
+    if "investment_booking" in kinds:
+        found += await _investment_bookings(session, staff)
     if "payout_resolution" in kinds:
         found += await _payout_resolutions(session)
     if "tax_remittance" in kinds:
@@ -288,6 +290,14 @@ async def _investment_runs(session: AsyncSession, staff: StaffSession) -> list[W
             r.proposed_at,
         )
         for r in await investments.list_runs(session, staff.actor, status="proposed", limit=200)
+    ]
+
+
+async def _investment_bookings(session: AsyncSession, staff: StaffSession) -> list[Waiting]:
+    # The subject is the product code, such as "TREA-91". Never the client or the amount.
+    return [
+        Waiting("investment_booking", b.id, b.product_code, b.proposed_by, b.proposed_at)
+        for b in await investments.list_bookings(session, staff.actor, status="proposed", limit=200)
     ]
 
 

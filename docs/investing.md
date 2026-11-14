@@ -161,6 +161,17 @@ Audit events on resource `investment_run_request`: `investments.run_request.prop
 ### Reminders before maturity
 
 Every morning at 08:30 Kampala time the worker runs `investments.remind_maturing` (`investments/reminders.py`). It reads how many days before maturity to remind from Settings (7 days and 1 day unless staff changed it, [platform-settings.md](platform-settings.md)) and raises `investment_maturing` for every active investment maturing on one of those days, naming the product and the date, never an amount. Each reminder is keyed by the investment, its maturity date and the number of days, so a second run tells nobody twice. A morning the run missed is not made up: the next reminder day sends its own.
+## Booking for a client
+
+When a client asks Finvest to set up an investment for them, by phone, in the help chat or at the office, staff book it (`investments/bookings.py`, table `investment_bookings`, migration 0334). The owner decided this on 2026-11-14: staff book it and the client pays as usual. One member of staff books the client, the product, the amount and the choice at maturity with a reason. A different one approves it, or sends it back with a note. Only the one who booked it withdraws it. Booking and withdrawing need `investment_corrections.change`; approving and sending back need the same and a second step from the last few minutes. Each waiting booking shows in the approvals inbox as `investment_booking`.
+
+Booking checks what a client's own request would: an approved client (404 otherwise), a live product (404), the amount (422 on `amount`, such as `below_minimum`) and the choice at maturity (422 on `at_maturity`). No payout account is named: the client chooses one in the app, as for their own.
+
+Approving queues `investments.carry_out_booking`, keyed `booking:<booking id>`. The worker saves the investment through the same code as a client's request (`holdings.create_booked`), unpaid, on the product's rate and tax of that day, with the usual 72-hour payment window. The investment names its booking in `source_type = 'investment_booking'` and `source_id`, so a booking saves at most one. The client is told (`investment_booked`) and pays for it in the app like any other. If a rule refuses it by then, the booking ends `failed` with the client's own refusal as `failure_code`: `too_many_unpaid` when the client already has five unpaid investments, `closing` while two people check their account is clear to close, `client_not_able` when they are no longer approved, `product_not_open` when the product no longer takes money, `below_minimum` and the like for the amount, or `not_found` when the product has no rate for the day. Nothing is saved, and staff may book again. Running the job twice changes nothing.
+
+The database refuses a decision by the one who booked it, any change to what was booked, any change after a decision except the worker finishing an approved booking, and finishing it as done with an investment other than the one saved for that client, product and amount from that booking. Only staff read the table on the API's role. Nothing is deleted.
+
+Audit events on resource `investment_booking`: `investments.booking.proposed`, `.approved`, `.sent_back`, `.withdrawn`, `.done` and `.failed`. The investment's own `investments.requested` names the booking and is recorded for the system.
 
 ## HTTP routes
 
@@ -192,6 +203,8 @@ The code is `backend/app/modules/investments/api.py`. Amounts are integers in th
 | `GET /staff/investment-corrections?status=&investment_id=&limit=` | `investments.view` | Unwinds and refunds and their state. |
 | `POST /staff/investment-corrections`, `POST /staff/investment-corrections/{id}/approve`, `/send-back`, `/withdraw` | `investment_corrections.change`, `Idempotency-Key` | Proposing and deciding an unwind, a refund or a pay out of held money. See [Undoing a mistake](#undoing-a-mistake). |
 | `GET /staff/investment-run-requests?status=&limit=` | `investments.view` | Requests to run interest or maturities again, newest first. |
+| `GET /staff/investment-bookings?status=&client_id=` | `investments.view` | Bookings for clients, newest first. |
+| `POST /staff/investment-bookings`, `POST /staff/investment-bookings/{id}/approve`, `/send-back`, `/withdraw` | `investment_corrections.change`, `Idempotency-Key` | `{client_id, product_code, amount_minor, currency, at_maturity, reason}`: booking an investment for a client, and deciding it. See [Booking for a client](#booking-for-a-client). |
 | `POST /staff/investment-run-requests`, `POST /staff/investment-run-requests/{id}/approve`, `/decline`, `/withdraw` | `investment_corrections.change`, `Idempotency-Key` | `{kind, run_date, reason}`: asking for the interest run (`interest`) or the maturity run (`maturity`) again, and deciding it. See [Running a day again](#running-a-day-again). |
 
 Seeing rates needs `rates.view`. Proposing, approving, sending back and withdrawing a rate change need `rates.change`, held by admin and finance for now. Product changes need `products.change`, held by the same two roles. A rate still never takes effect without a second person.

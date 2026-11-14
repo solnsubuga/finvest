@@ -162,7 +162,7 @@ export type Approval = z.infer<typeof Approval>;
 export const ApprovalItemOut = z.object({
   can_decide: z.boolean(),
   id: z.string(),
-  kind: z.enum(["wording_change", "ledger_correction", "pot_transfer", "bank_transfer_match", "day_close", "dealing_order", "dealing_result", "buffer_rules", "buffer_capital", "rate_change", "product_change", "migration_totals", "migration_sign_off", "phone_change", "team_change", "client_lock", "suppression_lift", "complaint_outcome", "announcement", "payout_account", "investment_correction", "investment_run", "payout_resolution", "tax_remittance", "deposit_reassignment", "payout_release", "investment_transfer", "organisation", "account_closure", "compliance_case", "bank_account_change", "account_code_map", "deposit_reversal", "deposit_receivable", "client_pin_reset", "client_limits", "client_statement", "client_withdrawal", "payment_channels_change", "calendar_change", "staff_security_change", "statement_layout_change", "withdrawal_limits_change"]),
+  kind: z.enum(["wording_change", "ledger_correction", "pot_transfer", "bank_transfer_match", "day_close", "dealing_order", "dealing_result", "buffer_rules", "buffer_capital", "rate_change", "product_change", "migration_totals", "migration_sign_off", "phone_change", "team_change", "client_lock", "suppression_lift", "complaint_outcome", "announcement", "payout_account", "investment_correction", "investment_run", "investment_booking", "payout_resolution", "tax_remittance", "deposit_reassignment", "payout_release", "investment_transfer", "organisation", "account_closure", "compliance_case", "bank_account_change", "account_code_map", "deposit_reversal", "deposit_receivable", "client_pin_reset", "client_limits", "client_statement", "client_withdrawal", "payment_channels_change", "calendar_change", "staff_security_change", "statement_layout_change", "withdrawal_limits_change"]),
   proposed_at: z.string(),
   proposed_by: z.string(),
   proposed_by_name: z.string().nullable(),
@@ -429,6 +429,37 @@ export const BookLineOut = z.object({
   opening: AmountOut,
 });
 export type BookLineOut = z.infer<typeof BookLineOut>;
+
+export const BookingIn = z.object({
+  amount_minor: z.number().int(),
+  at_maturity: AtMaturity.nullable().optional(),
+  client_id: z.string(),
+  currency: Currency,
+  product_code: z.string(),
+  reason: z.string(),
+});
+export type BookingIn = z.infer<typeof BookingIn>;
+
+export const BookingOut = z.object({
+  amount_minor: z.number().int(),
+  at_maturity: AtMaturity.nullable(),
+  client_id: z.string(),
+  currency: Currency,
+  decided_at: z.string().nullable(),
+  decided_by: z.string().nullable(),
+  decision_note: z.string().nullable(),
+  failure_code: z.string().nullable(),
+  finished_at: z.string().nullable(),
+  id: z.string(),
+  investment_id: z.string().nullable(),
+  product_code: z.string(),
+  product_name: z.string(),
+  proposed_at: z.string(),
+  proposed_by: z.string(),
+  reason: z.string(),
+  status: z.enum(["proposed", "approved", "sent_back", "withdrawn", "done", "failed"]),
+});
+export type BookingOut = z.infer<typeof BookingOut>;
 
 export const BufferLevel = z.enum(["on_target", "under_target", "below_floor"]);
 export type BufferLevel = z.infer<typeof BufferLevel>;
@@ -4905,6 +4936,71 @@ export const operations = {
     idempotent: false,
     status: 200,
     response: z.array(InterestRunOut),
+  },
+  "GET /staff/investment-bookings": {
+    method: "GET",
+    path: "/staff/investment-bookings",
+    params: z.object({}),
+    query: z.object({
+    status: z.enum(["proposed", "approved", "sent_back", "withdrawn", "done", "failed"]).nullable().optional(),
+    client_id: z.string().nullable().optional(),
+    limit: z.number().int().optional(),
+  }),
+    body: null,
+    bodyKind: null,
+    idempotent: false,
+    status: 200,
+    response: z.array(BookingOut),
+  },
+  "POST /staff/investment-bookings": {
+    method: "POST",
+    path: "/staff/investment-bookings",
+    params: z.object({}),
+    query: z.object({}),
+    body: BookingIn,
+    bodyKind: "json",
+    idempotent: true,
+    status: 201,
+    response: BookingOut,
+  },
+  "POST /staff/investment-bookings/{booking_id}/approve": {
+    method: "POST",
+    path: "/staff/investment-bookings/{booking_id}/approve",
+    params: z.object({
+    booking_id: z.string(),
+  }),
+    query: z.object({}),
+    body: null,
+    bodyKind: null,
+    idempotent: true,
+    status: 200,
+    response: BookingOut,
+  },
+  "POST /staff/investment-bookings/{booking_id}/send-back": {
+    method: "POST",
+    path: "/staff/investment-bookings/{booking_id}/send-back",
+    params: z.object({
+    booking_id: z.string(),
+  }),
+    query: z.object({}),
+    body: SendBack,
+    bodyKind: "json",
+    idempotent: true,
+    status: 200,
+    response: BookingOut,
+  },
+  "POST /staff/investment-bookings/{booking_id}/withdraw": {
+    method: "POST",
+    path: "/staff/investment-bookings/{booking_id}/withdraw",
+    params: z.object({
+    booking_id: z.string(),
+  }),
+    query: z.object({}),
+    body: null,
+    bodyKind: null,
+    idempotent: true,
+    status: 200,
+    response: BookingOut,
   },
   "GET /staff/investment-corrections": {
     method: "GET",

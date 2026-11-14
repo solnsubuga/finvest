@@ -240,6 +240,8 @@ _INSERT = text(
 _BY_SOURCE = text(
     f"SELECT {_COLUMNS} {_FROM} WHERE i.source_type = :source_type AND i.source_id = :source_id"
 )
+# What `source_type` says of an investment two members of staff booked for a client.
+BOOKING_SOURCE = "investment_booking"
 _START = text(
     "UPDATE investments SET status = 'active', start_date = :start_date, "
     "maturity_date = :maturity_date, started_at = :now, start_entry_id = :entry_id, "
@@ -332,6 +334,31 @@ async def request_system_investment(
         source=(source_type, source_id),
     )
     return await get_investment(session, investment_id)
+
+
+async def create_booked(
+    session: AsyncSession,
+    booking_id: str,
+    client_id: str,
+    product_code: str,
+    amount: Money,
+    at_maturity: AtMaturity | None,
+    clock: Clock,
+) -> str:
+    """Save the investment a booking two members of staff agreed. Worker only.
+
+    Every rule of a client's own request holds, on the terms of the day it is saved, and the
+    client pays for it as for any other. Raises as `request_investment` does.
+    """
+    return await _create(
+        session,
+        client_id,
+        product_code,
+        amount,
+        at_maturity,
+        clock,
+        source=(BOOKING_SOURCE, booking_id),
+    )
 
 
 async def _by_source(session: AsyncSession, source_type: str, source_id: str) -> Investment | None:
