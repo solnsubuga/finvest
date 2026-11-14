@@ -271,12 +271,12 @@ test("sending an investment to someone meets WCAG 2.1 AA at every step", async (
   expect(found).toEqual([]);
 });
 
-// The demo's account moved from Finvest 1.0 (apps/client/src/claim/demo.ts).
-const DEMO_CLAIM_TOKEN = "demo-claim-selfie-link-not-a-real-token";
+// The demo's account moved from paper records (apps/client/src/claim/demo.ts).
+const DEMO_CLAIM_TOKEN = "demo-claim-link-not-a-real-token";
 
-test("claiming an account moved from Finvest 1.0 meets WCAG 2.1 AA", async ({ page }) => {
+test("claiming an account moved from paper records meets WCAG 2.1 AA", async ({ page }) => {
   await page.goto(`/claim#${DEMO_CLAIM_TOKEN}`);
-  await expect(page.getByText("Your account has moved to Finvest 2.0")).toBeVisible();
+  await expect(page.getByText("Your Finvest investments are now in the app")).toBeVisible();
   expect(await violations(page), "claim link").toEqual([]);
   await page.getByTestId("claim-start").click();
   await expect(page.getByText("Enter the code and choose a password")).toBeVisible();
@@ -292,11 +292,8 @@ test("claiming an account moved from Finvest 1.0 meets WCAG 2.1 AA", async ({ pa
   await expect(page.getByTestId("home-claim")).toBeVisible();
   expect(await violations(page), "home with the move").toEqual([]);
   await visit(page, "/moving");
-  await expect(page.getByTestId("claim-photos-start").filter({ visible: true })).toBeVisible();
-  expect(await violations(page), "moving: confirm it is you").toEqual([]);
-  await page.getByTestId("claim-photos-start").filter({ visible: true }).click();
-  await expect(page.getByTestId("photo-take").filter({ visible: true })).toBeVisible();
-  expect(await violations(page), "moving: photo of the ID").toEqual([]);
+  await expect(page.getByTestId("claim-id-check").filter({ visible: true })).toBeVisible();
+  expect(await violations(page), "moving: confirm who you are").toEqual([]);
 });
 
 test("a claim link that no longer works meets WCAG 2.1 AA", async ({ page }) => {
