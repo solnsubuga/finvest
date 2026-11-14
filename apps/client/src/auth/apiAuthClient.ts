@@ -65,6 +65,8 @@ type SessionView = {
   restricted_until: string | null;
   email?: string | null;
   email_verified?: boolean;
+  pin_set?: boolean;
+  locked?: boolean;
 };
 
 export function toSession(view: SessionView, now: number = Date.now()): Session {
@@ -76,6 +78,8 @@ export function toSession(view: SessionView, now: number = Date.now()): Session 
     restricted: Number.isFinite(until) && until > now,
     email: view.email ?? null,
     emailVerified: Boolean(view.email && view.email_verified),
+    pinSet: Boolean(view.pin_set),
+    locked: Boolean(view.locked),
   };
 }
 
@@ -147,6 +151,31 @@ export function createApiAuthClient(): AuthClient {
       wrap(async () =>
         signedIn(await api("POST /client/login/authenticator/verify", { body: { login_id: loginId, code } })),
       ),
+
+    setPin: (pin) =>
+      wrap(async () => {
+        try {
+          await api("PUT /client/pin", { body: { pin } });
+        } catch (error) {
+          if (error instanceof ApiError && error.code === "validation_failed") throw new AuthError("pin_too_simple");
+          throw error;
+        }
+      }),
+
+    unlockWithPin: (pin) =>
+      wrap(async () => {
+        try {
+          const result = await api("POST /client/pin/unlock", { body: { pin } });
+          return { unlocked: result.unlocked, triesLeft: result.tries_left };
+        } catch (error) {
+          // The fifth wrong PIN ended the session on the server.
+          if (error instanceof ApiError && error.code === "unauthorized") {
+            await saveToken(null);
+            throw new AuthError("signed_out");
+          }
+          throw error;
+        }
+      }),
 
     sendLoginCode: (loginId, channel) =>
       wrap(async () => {
