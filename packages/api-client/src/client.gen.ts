@@ -1268,10 +1268,15 @@ export const SendMessage = z.object({
 });
 export type SendMessage = z.infer<typeof SendMessage>;
 
+export const TransferPurpose = z.enum(["family_support", "gift", "loan_repayment", "business", "other"]);
+export type TransferPurpose = z.infer<typeof TransferPurpose>;
+
 export const SendRequest = z.object({
   amount_minor: z.number().int(),
   currency: Currency,
   message: z.string().nullable().optional(),
+  purpose: TransferPurpose,
+  purpose_note: z.string().nullable().optional(),
   to_account_number: z.string(),
   whole: z.boolean().optional(),
 });
