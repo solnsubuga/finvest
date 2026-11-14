@@ -35,7 +35,7 @@ await notifications.notify(
 - **It cannot fail your transaction over words.** Whatever the wording and the values, the texts are cut to what the table holds. Only a programming error raises: an unknown event, the wrong set of variables, a float or an empty value.
 - **Net figures only.** An amount shown to a client is after tax. No event carries a rate.
 - **No amounts in the words.** Push alerts and SMS show on a locked phone, and email sits in an inbox others may read, so no default title, body or SMS names the amount. Push and email send the in-app words, so the notification centre does not name it either. The amount is shown on the screen the notification links to. Events still carry `amount`, so the words can use it if the owner decides otherwise. A unit test holds every default to this.
-- **Link.** Optional. It names the screen the app opens when the notification is tapped, by kind and ID: `deposit`, `payout`, `investment`, `identity_check`, `payout_destination`, `statement`, `security`, `conversation`, `complaint`.
+- **Link.** Optional. It names the screen the app opens when the notification is tapped, by kind and ID: `deposit`, `payout`, `investment`, `identity_check`, `payout_destination`, `statement`, `security`, `conversation`, `complaint`, `goal`, `autoinvest_plan`.
 - **Who may call.** The transaction must act for that client, for a member of staff, or for the system in the worker. The API is never trusted as the system, so a route with nobody signed in cannot notify.
 
 Nothing personal goes into a job payload or a log. The words live in the `notifications` table, which a row policy fences to the client they belong to.
@@ -58,6 +58,9 @@ Nothing personal goes into a job payload or a log. The words live in the `notifi
 | `interest_earned` | Investments | `amount`, `count` | Daily earnings |
 | `goal_top_up_due` | Goals | `goal`, `date` | Investments |
 | `goal_reached` | Goals | `goal` | Investments |
+| `autoinvest_run_retrying` | Automatic investing | `date` | Investments |
+| `autoinvest_run_failed` | Automatic investing | `date` | Investments |
+| `autoinvest_run_missed` | Automatic investing | `date` | Investments |
 | `kyc_approved` | Identity checks | none | Account |
 | `kyc_retake_requested` | Identity checks | none | Account |
 | `kyc_rejected` | Identity checks | none | Account |

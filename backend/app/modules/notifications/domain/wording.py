@@ -159,6 +159,27 @@ DEFAULTS: dict[str, Wording] = {
         "mature, and you choose what happens then in the app.",
         "Finvest: well done, {goal} has reached its target. See it in the app.",
     ),
+    "autoinvest_run_retrying": Wording(
+        "Automatic investment not paid yet",
+        "We could not collect your automatic investment due on {date}. We will send the "
+        "mobile money prompt again tomorrow.",
+        "Finvest: we could not collect your automatic investment due on {date}. We will "
+        "prompt your phone again tomorrow.",
+    ),
+    "autoinvest_run_failed": Wording(
+        "Automatic investment not made",
+        "We could not collect your automatic investment due on {date}, so nothing was "
+        "invested this time. See why in the app.",
+        "Finvest: we could not collect your automatic investment due on {date}. Nothing was "
+        "invested. See why in the app.",
+    ),
+    "autoinvest_run_missed": Wording(
+        "Automatic investment missed",
+        "Your automatic investment due on {date} was missed and nothing was taken. Your plan "
+        "carries on from its next date.",
+        "Finvest: your automatic investment due on {date} was missed and nothing was taken. "
+        "Your plan carries on.",
+    ),
     "kyc_approved": Wording(
         "Identity check approved",
         "Your account is fully open. You can now invest.",

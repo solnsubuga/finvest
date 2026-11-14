@@ -7402,7 +7402,8 @@
               "security",
               "conversation",
               "complaint",
-              "goal"
+              "goal",
+              "autoinvest_plan"
             ],
             "title": "Kind",
             "type": "string"

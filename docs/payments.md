@@ -82,7 +82,7 @@ Client routes, signed in as the client. Each `POST` needs an `Idempotency-Key`.
 | `GET /client/payments` | The client's own payments, newest first, 50 a page, for the Activity list. Each is the same shape as below without its `receipt`. Pass `next_before` back as `before` for the next page; it is null on the last. |
 | `GET /client/payments/{id}` | One payment, the client's own only. |
 
-Every payment leaves a trail in the audit log. A client asking to pay, by mobile money or by bank receipt, writes `payments.deposit_requested` as the client, with the method. When the deposit settles, the system writes `payments.deposit_confirmed` or `payments.deposit_failed`, with the method, what settled it (such as `status_read` or `staff_review`) and, for a failure, the failure code. Amounts and phone numbers are not put in these events: the deposit holds them.
+Every payment leaves a trail in the audit log. A client asking to pay, by mobile money or by bank receipt, writes `payments.deposit_requested` as the client, with the method. A deposit the worker asks for on the client's behalf, for an automatic investing run, writes the same event as the system. When the deposit settles, the system writes `payments.deposit_confirmed` or `payments.deposit_failed`, with the method, what settled it (such as `status_read` or `staff_review`) and, for a failure, the failure code. Amounts and phone numbers are not put in these events: the deposit holds them.
 
 
 Seeing transfers needs `reconciliation.view`. Matching, refusing and approving need `bank_transfers.change`, because they confirm money. Admin, operations and finance hold both for now. Opening a transfer writes a `payments.bank_transfer_opened` access event to the audit trail, because the receipt and the bank's narrative can name the client and the sender.
@@ -139,6 +139,7 @@ The database enforces the same rules: only staff write the table and only as the
 - A deposit is `confirmed` exactly when it points at its ledger entry.
 - The status history (`payment_deposit_events`) and the callback record (`payment_provider_notices`) are insert only for every role.
 - A client transaction sees and creates only that client's deposits. The API cannot change a deposit. Only the worker can, and only its status fields.
+- The worker saves a deposit only at the start of a mobile money payment for an investment, for an automatic investing run (`request_system_deposit`, migration 0300): `created`, MTN or Airtel, with no provider reference, ledger entry or settlement. The payer must still be the number on the client's account. See [automatic-investing.md](automatic-investing.md#asking-for-a-run).
 - A bank transfer starts `in_review` and moves only to `confirmed` or `failed`. A mobile money deposit is never `in_review`. A bank transfer has no payer number and its provider is `bank`; every other deposit has a payer number (migration 0022).
 - A bank transfer's receipt and its staff review are insert only for every role, one of each per deposit. A client adds a receipt only to their own transfer in review. Only staff add a review, in their own name, of a transfer in review.
 - A statement line is used by one review at most.
