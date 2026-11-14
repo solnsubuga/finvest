@@ -1,8 +1,9 @@
+import { renderHook, waitFor } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import type { Http } from "@/api/http.ts";
 import { STUB_ROLE_PERMISSIONS } from "@/auth/stub.ts";
 import type { Role, StaffSession } from "@/auth/types.ts";
-import { badge, createHttpMenuCountsApi, createStubMenuCountsApi } from "./counts.ts";
+import { badge, createHttpMenuCountsApi, createStubMenuCountsApi, type MenuCountsApi, useMenuCounts } from "./counts.ts";
 import { NAV_ITEMS } from "./nav.ts";
 
 function sessionFor(role: Role): StaffSession {
@@ -19,7 +20,12 @@ describe("menu counts", () => {
   });
 
   it("reads the counts the API sends", async () => {
-    const request = vi.fn().mockResolvedValue({ counts: { "review-queue": 7, rates: 0 } });
+    const request = vi.fn().mockResolvedValue({
+      counts: [
+        { screen: "review-queue", count: 7 },
+        { screen: "rates", count: 0 },
+      ],
+    });
     const http = { request, download: vi.fn() } as unknown as Http;
     expect(await createHttpMenuCountsApi(http).load()).toEqual({ "review-queue": 7, rates: 0 });
     expect(request).toHaveBeenCalledWith("GET", "/staff/menu-counts");
@@ -34,6 +40,17 @@ describe("menu counts", () => {
         expect(item && session.permissions.includes(item.permission)).toBe(true);
       }
     }
-    expect(await createStubMenuCountsApi(sessionFor("admin")).load()).toMatchObject({ "review-queue": 7, compliance: 6 });
+    expect(await createStubMenuCountsApi(sessionFor("admin")).load()).toMatchObject({ "review-queue": 8, compliance: 6 });
+  });
+
+  it("starts from no counts when someone else signs in, before their first read answers", async () => {
+    const first: MenuCountsApi = { load: () => Promise.resolve({ "review-queue": 7 }) };
+    const second: MenuCountsApi = { load: () => new Promise(() => undefined) };
+    const { result, rerender } = renderHook(({ api }) => useMenuCounts(api, "/overview"), {
+      initialProps: { api: first },
+    });
+    await waitFor(() => expect(result.current).toEqual({ "review-queue": 7 }));
+    rerender({ api: second });
+    expect(result.current).toEqual({});
   });
 });

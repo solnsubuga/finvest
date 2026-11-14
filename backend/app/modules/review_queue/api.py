@@ -51,10 +51,17 @@ class ReviewQueueOut(Contract):
     oldest_waiting_since: datetime | None
 
 
+class MenuCount(Contract):
+    # The screen's menu path in the console.
+    screen: Screen
+    # At most 100.
+    count: int
+
+
 class MenuCountsOut(Contract):
-    # One count for each screen this member of staff may open that can carry one, at most
-    # 100. A screen they may not open is left out, not shown as zero.
-    counts: dict[Screen, int]
+    # One count for each screen this member of staff may open that can carry one, in menu
+    # order. A screen they may not open is left out, not shown as zero.
+    counts: list[MenuCount]
 
 
 router = APIRouter(
@@ -101,4 +108,6 @@ async def menu_counts(request: Request, staff: CurrentStaff) -> MenuCountsOut:
     database: Database = request.app.state.database
     async with database.actor_transaction(staff.actor) as session:
         counts = await menu.counts(session, staff, request.app.state.clock)
-    return MenuCountsOut(counts=counts)
+    return MenuCountsOut(
+        counts=[MenuCount(screen=screen, count=count) for screen, count in counts.items()]
+    )

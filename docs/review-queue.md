@@ -33,7 +33,7 @@ Identity checks waiting for the client, and checks the automatic checks are stil
 
 ## Counts on the menu
 
-The console menu shows how much work waits beside the screens that have some, as drawn on the AdminNav canvas ("Review Queue 7"). `GET /staff/menu-counts` needs only a signed-in member of staff and returns `counts`, one number for each screen below that the reader may open. A screen they may not open is left out, not sent as zero, so the menu never hints at another team's work. Each source is read no further than 100, and the console shows "99+" past 99 and nothing at zero. The console asks when the menu appears, every minute, and on each move to another screen, so a decision just made shows at once. It reads only and writes nothing to the audit trail.
+The console menu shows how much work waits beside the screens that have some, as drawn on the AdminNav canvas ("Review Queue 7"). `GET /staff/menu-counts` needs only a signed-in member of staff and returns `counts`, a list of `{screen, count}` in menu order, one for each screen below that the reader may open. A screen they may not open is left out, not sent as zero, so the menu never hints at another team's work. Each source is read no further than 100, and the console shows "99+" past 99 and nothing at zero. The console asks when the menu appears, every minute, and on each move to another screen, so a decision just made shows at once. It reads only and writes nothing to the audit trail.
 
 | Screen | Needs | Counts |
 | --- | --- | --- |

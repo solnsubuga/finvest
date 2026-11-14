@@ -1,6 +1,6 @@
 # Menu counts screenshots
 
-From the console's sample build (`VITE_STUB_API=true`). The sample counts are the canvas's (AdminNav), so they do not match the sample lists on each screen. See docs/review-queue.md, "Counts on the menu".
+From the console's sample build (`VITE_STUB_API=true`). The sample counts are the canvas's (AdminNav), except the review queue, which matches its own sample list. See docs/review-queue.md, "Counts on the menu".
 
 ## Admin: a count beside every screen that has work (wide)
 

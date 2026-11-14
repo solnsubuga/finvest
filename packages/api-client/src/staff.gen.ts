@@ -1948,8 +1948,14 @@ export const MaturityRemindersProposal = z.object({
 });
 export type MaturityRemindersProposal = z.infer<typeof MaturityRemindersProposal>;
 
+export const MenuCount = z.object({
+  count: z.number().int(),
+  screen: z.enum(["review-queue", "identity-checks", "maturities", "support", "complaints", "reconciliation", "rates", "compliance"]),
+});
+export type MenuCount = z.infer<typeof MenuCount>;
+
 export const MenuCountsOut = z.object({
-  counts: z.record(z.string(), z.unknown()),
+  counts: z.array(MenuCount),
 });
 export type MenuCountsOut = z.infer<typeof MenuCountsOut>;
 

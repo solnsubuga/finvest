@@ -97,8 +97,10 @@ async def test_each_role_reads_only_the_kinds_it_may_see(api: Api) -> None:
 async def counts(api: Api) -> dict[str, int]:
     response = await api.http.get("/staff/menu-counts")
     assert response.status_code == 200, response.text
-    body: dict[str, int] = response.json()["counts"]
-    return body
+    listed: list[dict[str, Any]] = response.json()["counts"]
+    screens = [each["screen"] for each in listed]
+    assert len(set(screens)) == len(screens)
+    return {each["screen"]: each["count"] for each in listed}
 
 
 async def test_the_menu_counts_what_the_review_queue_shows(api: Api, world: World) -> None:

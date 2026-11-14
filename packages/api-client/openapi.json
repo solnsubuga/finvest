@@ -11317,27 +11317,44 @@
         "title": "MemberView",
         "type": "object"
       },
+      "MenuCount": {
+        "additionalProperties": false,
+        "properties": {
+          "count": {
+            "title": "Count",
+            "type": "integer"
+          },
+          "screen": {
+            "enum": [
+              "review-queue",
+              "identity-checks",
+              "maturities",
+              "support",
+              "complaints",
+              "reconciliation",
+              "rates",
+              "compliance"
+            ],
+            "title": "Screen",
+            "type": "string"
+          }
+        },
+        "required": [
+          "screen",
+          "count"
+        ],
+        "title": "MenuCount",
+        "type": "object"
+      },
       "MenuCountsOut": {
         "additionalProperties": false,
         "properties": {
           "counts": {
-            "additionalProperties": {
-              "type": "integer"
-            },
-            "propertyNames": {
-              "enum": [
-                "review-queue",
-                "identity-checks",
-                "maturities",
-                "support",
-                "complaints",
-                "reconciliation",
-                "rates",
-                "compliance"
-              ]
+            "items": {
+              "$ref": "#/components/schemas/MenuCount"
             },
             "title": "Counts",
-            "type": "object"
+            "type": "array"
           }
         },
         "required": [

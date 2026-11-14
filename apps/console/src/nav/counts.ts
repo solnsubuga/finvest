@@ -1,3 +1,4 @@
+import type { MenuCountsOut } from "@finvest/api-client/staff";
 import { useEffect, useState } from "react";
 import { apiBaseUrl, createHttp, type Http } from "@/api/http.ts";
 import { isStubAuth } from "@/auth/index.ts";
@@ -27,15 +28,18 @@ export function badge(count: number | undefined): string | null {
 export function createHttpMenuCountsApi(http: Http): MenuCountsApi {
   return {
     async load() {
-      const body = await http.request<{ counts: Record<string, number> }>("GET", "/staff/menu-counts");
-      return body.counts;
+      const body = await http.request<MenuCountsOut>("GET", "/staff/menu-counts");
+      return Object.fromEntries(body.counts.map((each) => [each.screen, each.count]));
     },
   };
 }
 
-/** The canvas's numbers for `pnpm dev` and previews, for the screens this person may open. */
+/**
+ * Sample numbers for `pnpm dev` and previews, for the screens this person may open. The canvas's,
+ * except the review queue, which matches that screen's own sample list.
+ */
 const SAMPLE: Readonly<Record<string, number>> = {
-  "review-queue": 7,
+  "review-queue": 8,
   "identity-checks": 2,
   maturities: 2,
   support: 4,
@@ -67,17 +71,19 @@ export function createMenuCountsApi(session: StaffSession): MenuCountsApi | null
 
 /**
  * The counts, read when the menu appears, every minute after, and when `refreshKey` changes.
- * A failed read keeps the last counts: the menu still works without them.
+ * A failed read keeps the last counts: the menu still works without them. A new api, such as
+ * after someone else signs in, starts from none, so nobody sees the last person's counts.
  */
 export function useMenuCounts(api: MenuCountsApi | null, refreshKey: string): MenuCounts {
-  const [counts, setCounts] = useState<MenuCounts>({});
+  const [counts, setCounts] = useState<{ api: MenuCountsApi | null; found: MenuCounts }>({ api, found: {} });
+  if (counts.api !== api) setCounts({ api, found: {} });
   useEffect(() => {
     if (!api) return;
     let live = true;
     const read = () => {
       api.load().then(
         (found) => {
-          if (live) setCounts(found);
+          if (live) setCounts({ api, found });
         },
         () => undefined,
       );
@@ -89,5 +95,5 @@ export function useMenuCounts(api: MenuCountsApi | null, refreshKey: string): Me
       clearInterval(timer);
     };
   }, [api, refreshKey]);
-  return counts;
+  return counts.api === api ? counts.found : {};
 }
