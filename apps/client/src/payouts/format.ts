@@ -2,51 +2,17 @@ import { networkName } from "@/payments/format";
 
 import { AccountStatus, PayoutAccount, PayoutStatus, ProofKind, RejectionReason } from "./types";
 
-/**
- * The banks a client can be paid to, by the code the API stores. The backend checks only
- * the code's shape, so this list is where the codes are set. Commercial banks licensed by
- * the Bank of Uganda, by the name clients know them by.
- */
-export const BANKS: readonly { code: string; name: string }[] = [
-  { code: "absa", name: "Absa Bank" },
-  { code: "bank_of_africa", name: "Bank of Africa" },
-  { code: "bank_of_baroda", name: "Bank of Baroda" },
-  { code: "centenary", name: "Centenary Bank" },
-  { code: "citibank", name: "Citibank" },
-  { code: "dfcu", name: "dfcu Bank" },
-  { code: "diamond_trust", name: "Diamond Trust Bank" },
-  { code: "ecobank", name: "Ecobank" },
-  { code: "equity", name: "Equity Bank" },
-  { code: "exim", name: "Exim Bank" },
-  { code: "finance_trust", name: "Finance Trust Bank" },
-  { code: "gtbank", name: "Guaranty Trust Bank" },
-  { code: "housing_finance", name: "Housing Finance Bank" },
-  { code: "i_and_m", name: "I&M Bank" },
-  { code: "kcb", name: "KCB Bank" },
-  { code: "ncba", name: "NCBA Bank" },
-  { code: "opportunity", name: "Opportunity Bank" },
-  { code: "pride", name: "Pride Bank" },
-  { code: "stanbic", name: "Stanbic Bank" },
-  { code: "standard_chartered", name: "Standard Chartered" },
-  { code: "tropical", name: "Tropical Bank" },
-  { code: "uba", name: "United Bank for Africa" },
-];
-
-export function bankName(code: string | null): string {
-  return BANKS.find((bank) => bank.code === code)?.name ?? "Bank";
-}
-
 /** "MTN Mobile Money" or "Stanbic Bank": what the account is, without its number. */
-export function accountProvider(account: Pick<PayoutAccount, "kind" | "network" | "bankCode">): string {
+export function accountProvider(account: Pick<PayoutAccount, "kind" | "network" | "bankName">): string {
   if (account.kind === "mobile_money") {
     return account.network ? `${networkName[account.network]} Mobile Money` : "Mobile money";
   }
-  return bankName(account.bankCode);
+  return account.bankName ?? "Bank";
 }
 
 /** "MTN +256 77• ••• 456", "Stanbic Bank •••• 4821". The number arrives masked. */
-export function accountLabel(account: Pick<PayoutAccount, "kind" | "network" | "bankCode" | "account">): string {
-  const name = account.kind === "mobile_money" ? (account.network ? networkName[account.network] : "Mobile money") : bankName(account.bankCode);
+export function accountLabel(account: Pick<PayoutAccount, "kind" | "network" | "bankName" | "account">): string {
+  const name = account.kind === "mobile_money" ? (account.network ? networkName[account.network] : "Mobile money") : (account.bankName ?? "Bank");
   return `${name} ${account.account}`;
 }
 

@@ -189,14 +189,14 @@ In `apps/client`: the data layer in `src/payouts` (`apiPayoutsClient.ts` for the
 | Screen | What it does |
 | --- | --- |
 | Payout accounts (`/payouts`) | Every account not removed, with where it is: enter the code, send proof, checking, ready soon (approved, inside the 24 hour wait), ready, or not approved. Links to Payouts |
-| Add a payout account (`/payouts/add`) | Mobile money (the client's own number filled in) or a bank account from the list in `src/payouts/format.ts`, and the name on the account. Saving texts the code at once |
+| Add a payout account (`/payouts/add`) | Mobile money (the client's own number filled in) or a bank account from the backend's list (`GET /client/banks`), and the name on the account. Saving texts the code at once |
 | One account (`/payouts/{id}`) | The four steps, then the next one: the texted code, the proof for a bank account (statement, bank letter or card photo, PDF, JPG or PNG up to 10 MB), or what we are doing. A refusal says why; new proof is offered unless the name differs or fraud is suspected, which are final. Remove asks once on the page, never in a dialog |
 | Payouts (`/payouts/history`) | The client's payouts, newest first, and today's withdrawal limits. Never the review threshold |
 | One payout (`/payouts/payout/{id}`) | Amount, account and status. `in_review` reads "Checking", `processing` "On its way" (never "paid" until the provider confirms), `failed` "Not sent" with the money safe with us |
 | When the term ends (`/investment/maturity/{id}`) | Roll over or pay out, and to which approved account. An account in its first day can be chosen, because it will be payable by maturity. Up to the day before maturity |
 | Choose where to be paid (`/investment/pay-out/{id}`) | A matured investment waiting for an account: choose one past its first day and send it. The same account asked twice is the same payout, so a lost answer is tried again as it was, with the account locked |
 
-The backend checks only the shape of a bank code, so the app's bank list is where the codes are set. Adding an account takes no idempotency key: a second try after a lost answer gets 409 for the same account, which the screen explains as already saved. A mobile money number stays at "Checking" after its code until Finvest can read the name the network holds for it (ioTec Verify, not built).
+The app names banks from `GET /client/banks`, read once per session. If the list cannot be read, an account still shows as "Bank" and the add screen offers to try again. Adding an account takes no idempotency key: a second try after a lost answer gets 409 for the same account, which the screen explains as already saved. A mobile money number stays at "Checking" after its code until Finvest can read the name the network holds for it (ioTec Verify, not built).
 
 ## Staff routes
 

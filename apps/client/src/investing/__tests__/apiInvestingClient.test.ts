@@ -1,5 +1,6 @@
 import { API_URL } from "@/api/config";
 import { setFetch } from "@/api/http";
+import { forgetBanks } from "@/payouts/banks";
 
 import { createApiInvestingClient } from "../apiInvestingClient";
 import { resolveInvestingClient } from "../resolveInvesting";
@@ -86,7 +87,10 @@ function refusal(code: string, fields: { field_path: string[]; code: string }[] 
   return { request_id: "R".repeat(20), error: { code, message: "x", fields } };
 }
 
-afterEach(() => setFetch(null));
+afterEach(() => {
+  setFetch(null);
+  forgetBanks();
+});
 
 describe("the investing client for the real API", () => {
   it("lists products with the rate after tax, as sent", async () => {
@@ -276,16 +280,22 @@ describe("early withdrawal through the real API", () => {
   };
 
   it("lists only approved accounts, named as the client knows them", async () => {
-    const seen = serve(200, [
+    const views = [
       account,
-      { ...account, id: "BBBBBBBBBBBBBBBBBBBB", kind: "bank", network: null, bank_code: "SBIC", account: "****4821" },
+      { ...account, id: "BBBBBBBBBBBBBBBBBBBB", kind: "bank", network: null, bank_code: "stanbic", account: "****4821" },
       { ...account, id: "RRRRRRRRRRRRRRRRRRRR", status: "in_review" },
-    ]);
+    ];
+    const seen: string[] = [];
+    setFetch(async (url) => {
+      const path = String(url).replace(API_URL, "");
+      seen.push(path);
+      return new Response(JSON.stringify(path === "/client/banks" ? [{ code: "stanbic", name: "Stanbic Bank" }] : views), { status: 200 });
+    });
     const accounts = await createApiInvestingClient().listPayoutAccounts();
-    expect(seen[0]!.path).toBe("/client/payout-destinations");
+    expect(seen.sort()).toEqual(["/client/banks", "/client/payout-destinations"]);
     expect(accounts).toEqual([
       { id: account.id, kind: "mobile_money", label: "MTN 0772 *** 456", payableFrom: "2026-11-01T09:00:00Z", ready: true },
-      { id: "BBBBBBBBBBBBBBBBBBBB", kind: "bank", label: "Bank ****4821", payableFrom: "2026-11-01T09:00:00Z", ready: true },
+      { id: "BBBBBBBBBBBBBBBBBBBB", kind: "bank", label: "Stanbic Bank ****4821", payableFrom: "2026-11-01T09:00:00Z", ready: true },
     ]);
   });
 

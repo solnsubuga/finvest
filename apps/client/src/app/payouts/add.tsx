@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useCallback, useState } from "react";
 import { Pressable, StyleSheet, View } from "react-native";
 import { Stack, useRouter } from "expo-router";
 
@@ -8,9 +8,11 @@ import { BackButton } from "@/components/BackButton";
 import { Notice } from "@/components/Blocks";
 import { Button } from "@/components/Button";
 import { Field, PhoneField, TextField } from "@/components/Field";
+import { LoadFailed } from "@/components/Loading";
 import { Screen } from "@/components/Screen";
 import { Title, Txt } from "@/components/Txt";
-import { BANKS } from "@/payouts/format";
+import { Loading } from "@/payments/Parts";
+import { useFocusLoaded } from "@/payouts/Parts";
 import { usePayouts } from "@/payouts/PayoutsProvider";
 import { AccountKind, describePayoutsError, PayoutsError, PayoutsErrorCode } from "@/payouts/types";
 import { colors, fontSizes, radii } from "@/theme";
@@ -42,6 +44,8 @@ export default function AddPayoutAccount() {
   const [problems, setProblems] = useState<Problems>({});
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  // The banks come from the backend, which refuses a code it does not list.
+  const [banks, retryBanks] = useFocusLoaded(useCallback(() => client.listBanks(), [client]));
 
   const check = (): Problems => {
     const found: Problems = {};
@@ -138,25 +142,31 @@ export default function AddPayoutAccount() {
         ) : (
           <>
             <Field label="Bank" error={problems.bank}>
-              <View style={styles.banks} accessibilityRole="radiogroup">
-                {BANKS.map((bank) => {
-                  const on = bank.code === bankCode;
-                  return (
-                    <Pressable
-                      key={bank.code}
-                      accessibilityRole="radio"
-                      accessibilityState={{ checked: on }}
-                      onPress={() => setBankCode(bank.code)}
-                      style={[styles.bank, on && styles.bankOn]}
-                      testID={`bank-${bank.code}`}
-                    >
-                      <Txt size={fontSizes.sm} weight="semibold" color={on ? colors.white : colors.ink}>
-                        {bank.name}
-                      </Txt>
-                    </Pressable>
-                  );
-                })}
-              </View>
+              {banks.state === "loading" ? (
+                <Loading label="Loading the banks" />
+              ) : banks.state === "failed" ? (
+                <LoadFailed message={banks.message} onRetry={retryBanks} />
+              ) : (
+                <View style={styles.banks} accessibilityRole="radiogroup">
+                  {banks.value.map((bank) => {
+                    const on = bank.code === bankCode;
+                    return (
+                      <Pressable
+                        key={bank.code}
+                        accessibilityRole="radio"
+                        accessibilityState={{ checked: on }}
+                        onPress={() => setBankCode(bank.code)}
+                        style={[styles.bank, on && styles.bankOn]}
+                        testID={`bank-${bank.code}`}
+                      >
+                        <Txt size={fontSizes.sm} weight="semibold" color={on ? colors.white : colors.ink}>
+                          {bank.name}
+                        </Txt>
+                      </Pressable>
+                    );
+                  })}
+                </View>
+              )}
             </Field>
             <TextField
               label="Account number"
