@@ -1,9 +1,9 @@
 /**
  * The console's view of client investments and the daily interest run.
  *
- * A stand-in for the generated client in packages/api-client. The shapes
- * follow `/staff/investments` and `/staff/interest-runs` in
- * backend/app/modules/investments/api.py. Staff see interest before tax and
+ * `http.ts` calls `/staff/investments` and `/staff/interest-runs` in
+ * backend/app/modules/investments/api.py; `stub.ts` stands in for them under
+ * `pnpm dev` and previews. Staff see interest before tax and
  * the tax withheld. Every figure comes from the backend: the screen adds
  * nothing up.
  */
@@ -12,7 +12,11 @@ import type { Amount, Currency } from "../products/api.ts";
 
 export type { Amount, Currency } from "../products/api.ts";
 
-export type InvestmentStatus = "awaiting_payment" | "active" | "matured" | "cancelled";
+/** `unwound`: undone by two people after a mistake, see "Undoing a mistake" in docs/investing.md. */
+export type InvestmentStatus = "awaiting_payment" | "active" | "matured" | "withdrawn" | "unwound" | "cancelled";
+
+/** Every status, so a list of all investments can ask for each in turn. */
+export const INVESTMENT_STATUSES: readonly InvestmentStatus[] = ["awaiting_payment", "active", "matured", "withdrawn", "unwound", "cancelled"];
 export type AtMaturity = "roll_over" | "pay_out";
 
 export interface Investment {
@@ -57,7 +61,7 @@ export interface InterestRun {
 }
 
 export interface InvestmentsApi {
-  /** Newest first, at most 200. */
+  /** Newest first, at most 200 of each status. */
   listInvestments(status?: InvestmentStatus): Promise<readonly Investment[]>;
   /** Newest run first. */
   interestRuns(): Promise<readonly InterestRun[]>;

@@ -46,6 +46,7 @@ from app.modules.kyc.domain.provider import (
     Verdict,
     decide,
 )
+from app.modules.notifications import contract as notifications
 from app.shared.actors import Actor
 from app.shared.clock import Clock
 from app.shared.errors import ApplicationError, FieldProblem
@@ -651,6 +652,27 @@ async def identities(session: AsyncSession, client_ids: list[str]) -> dict[str, 
     }
 
 
+_TAX_NUMBERS = text(
+    "SELECT id, client_id, tin_sealed FROM kyc_checks "
+    "WHERE client_id = ANY(CAST(:ids AS text[])) AND status = 'approved' "
+    "AND tin_sealed IS NOT NULL"
+)
+
+
+async def tax_numbers(
+    session: AsyncSession, sealer: Sealer, client_ids: list[str]
+) -> dict[str, str]:
+    """The tax identification number each of these approved clients gave, in one query.
+
+    A client who gave none is left out. For staff and the worker, such as the tax module's report
+    for URA and the yearly tax certificate. The caller records the access on the audit trail.
+    """
+    if not client_ids:
+        return {}
+    rows = await session.execute(_TAX_NUMBERS, {"ids": list(dict.fromkeys(client_ids))})
+    return {row.client_id: _open(sealer, row.id, "tin", row.tin_sealed) for row in rows}
+
+
 @dataclass(frozen=True, slots=True)
 class AccountHolder:
     """Who an approved account belongs to, as printed on a statement or a receipt."""
@@ -776,6 +798,7 @@ async def reject(
             "now": clock.now(),
         },
     )
+    await _tell(session, row, "kyc_rejected", row.id, clock)
     await _audit(session, staff, "approval", "kyc.check.rejected", row.id, clock, reason=reason)
     return await _view_by_id(session, sealer, row.id)
 
@@ -804,6 +827,8 @@ async def ask_for_photos(
             "now": clock.now(),
         },
     )
+    # A check can be sent back more than once, but only once for each submission.
+    await _tell(session, row, "kyc_retake_requested", f"{row.id}:{row.submission}", clock)
     # The message to the client can name them, so only the photo kinds reach the trail.
     await _audit(
         session,
@@ -944,7 +969,24 @@ async def _approve(
         if "uq_kyc_checks_approved_document" not in str(error.orig):
             raise
         return False
+    # A check is approved once, so its ID is the key.
+    await _tell(session, row, "kyc_approved", row.id, clock)
     return True
+
+
+async def _tell(
+    session: AsyncSession, row: Row[Any], event_name: str, key: str, clock: Clock
+) -> None:
+    """Tell the client about a decision on their check, in the decision's transaction."""
+    await notifications.notify(
+        session,
+        event_name=event_name,
+        client_id=row.client_id,
+        idempotency_key=key,
+        variables={},
+        link=notifications.Link("identity_check", row.id),
+        now=clock.now(),
+    )
 
 
 async def _audit(

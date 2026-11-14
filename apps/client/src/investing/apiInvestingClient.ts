@@ -1,6 +1,7 @@
 import type { ClientInvestmentOut, DestinationOut, ProductOut, QuoteOut } from "@finvest/api-client/client";
 
 import { api, ApiError } from "@/api/http";
+import { accountLabel } from "@/payouts/format";
 
 import { Amount, Currency, Investment, InvestingClient, InvestingError, PayoutAccount, Product, Quote } from "./types";
 
@@ -52,6 +53,7 @@ export function toInvestment(view: ClientInvestmentOut): Investment {
     ratePercent: view.client_rate_percent,
     termDays: view.term_days,
     atMaturity: view.at_maturity,
+    payoutDestinationId: view.payout_destination_id,
     canChangeMaturity: view.can_change_maturity,
     payBy: view.pay_by,
     startDate: view.start_date,
@@ -70,15 +72,12 @@ export function toInvestment(view: ClientInvestmentOut): Investment {
   };
 }
 
-const NETWORKS: Record<"mtn" | "airtel", string> = { mtn: "MTN", airtel: "Airtel" };
-
 /** An approved account, named the way the client knows it. The number arrives masked. */
 export function toPayoutAccount(view: DestinationOut, nowMs: number): PayoutAccount {
-  const name = view.kind === "mobile_money" ? (view.network ? NETWORKS[view.network] : "Mobile money") : "Bank";
   return {
     id: view.id,
     kind: view.kind,
-    label: `${name} ${view.account}`,
+    label: accountLabel({ kind: view.kind, network: view.network, bankCode: view.bank_code, account: view.account }),
     payableFrom: view.payable_from,
     ready: view.payable_from !== null && Date.parse(view.payable_from) <= nowMs,
   };
@@ -92,7 +91,14 @@ export function toPayoutAccount(view: DestinationOut, nowMs: number): PayoutAcco
  * been saved": it keeps the same key and the same choices, so trying again cannot invest twice.
  */
 /** Which call failed, where the same refusal means different things. */
-type Call = "withdraw" | "other";
+type Call = "withdraw" | "maturity" | "pay_out" | "other";
+
+const CONFLICT: Record<Call, InvestingError["code"]> = {
+  withdraw: "cannot_withdraw",
+  maturity: "cannot_change_maturity",
+  pay_out: "already_sent",
+  other: "too_many_unpaid",
+};
 
 export function toInvestingError(error: unknown, call: Call = "other"): InvestingError {
   if (error instanceof InvestingError) return error;
@@ -109,12 +115,20 @@ export function toInvestingError(error: unknown, call: Call = "other"): Investin
     case "conflict":
       // Withdrawing: not running, already asked for, too close to maturity, or switched off.
       // Investing: the most investments waiting for payment at once.
-      return new InvestingError(call === "withdraw" ? "cannot_withdraw" : "too_many_unpaid");
+      // Changing the maturity choice: too close to maturity. Paying out: already sent or rolled over.
+      return new InvestingError(CONFLICT[call]);
     case "validation_failed": {
       const codes = error.fields.map((field) => field.code);
-      if (codes.includes("not_usable") || codes.includes("destination_in_safety_wait")) {
+      if (
+        codes.includes("not_usable") ||
+        codes.includes("destination_in_safety_wait") ||
+        codes.includes("destination_not_approved") ||
+        codes.includes("destination_not_known_yet")
+      ) {
         return new InvestingError("account_not_ready");
       }
+      if (codes.includes("over_mobile_money_limit")) return new InvestingError("over_mobile_money_limit");
+      if (codes.includes("over_daily_limit") || codes.includes("over_bank_limit")) return new InvestingError("over_limit");
       if (codes.includes("below_minimum")) return new InvestingError("below_minimum");
       if (codes.includes("product_not_open")) return new InvestingError("product_not_open");
       // Still a definite refusal: nothing was saved, so the next try may take a new key.
@@ -191,6 +205,30 @@ export function createApiInvestingClient(): InvestingClient {
             }),
           ),
         "withdraw",
+      ),
+
+    chooseAtMaturity: (choice) =>
+      wrap(
+        async () =>
+          toInvestment(
+            await api("PUT /client/investments/{investment_id}/at-maturity", {
+              params: { investment_id: choice.investmentId },
+              body: { at_maturity: choice.atMaturity, destination_id: choice.destinationId },
+            }),
+          ),
+        "maturity",
+      ),
+
+    payOutMatured: (request) =>
+      wrap(
+        async () =>
+          toInvestment(
+            await api("POST /client/investments/{investment_id}/pay-out", {
+              params: { investment_id: request.investmentId },
+              body: { destination_id: request.destinationId },
+            }),
+          ),
+        "pay_out",
       ),
   };
 }

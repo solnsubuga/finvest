@@ -3,6 +3,7 @@ import { Redirect, Tabs } from "expo-router";
 import { useAuth } from "@/auth/AuthProvider";
 import { destinations } from "@/navigation/destinations";
 import { Sidebar } from "@/navigation/Sidebar";
+import { usePushRegistration } from "@/push/usePushRegistration";
 import { TabBar } from "@/navigation/TabBar";
 import { colors } from "@/theme";
 import { useIsWide } from "@/theme/useIsWide";
@@ -15,6 +16,7 @@ import { useIsWide } from "@/theme/useIsWide";
 export default function AppLayout() {
   const { session } = useAuth();
   const wide = useIsWide();
+  usePushRegistration();
 
   if (!session) {
     return <Redirect href="/welcome" />;

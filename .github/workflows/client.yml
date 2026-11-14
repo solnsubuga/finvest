@@ -100,3 +100,8 @@ jobs:
             echo "The demo investing was bundled into a production build" >&2
             exit 1
           fi
+          # Nor the demo payout accounts and payouts.
+          if grep -rIl -e "demo-payout-" -e "DEMO_PAYOUT_CODE" -e "3100045567190" dist; then
+            echo "The demo payouts were bundled into a production build" >&2
+            exit 1
+          fi

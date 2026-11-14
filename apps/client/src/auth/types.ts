@@ -15,6 +15,10 @@ export type Session = {
    * A passkey or an authenticator app opens a full session.
    */
   restricted: boolean;
+  /** The address statements and receipts go to, once proved. Null when the account has none. */
+  email: string | null;
+  /** True once the client opened the link we emailed to that address. */
+  emailVerified: boolean;
 };
 
 export type AuthErrorCode =
@@ -28,6 +32,7 @@ export type AuthErrorCode =
   | "passkey_failed"
   | "passkey_unsupported"
   | "rate_limited"
+  | "not_found"
   | "not_accepted"
   | "offline"
   | "unavailable";
@@ -72,6 +77,28 @@ export type AuthenticatorSetup = {
   key: string;
   /** The same key as an otpauth:// address, for the QR code and for opening an app. */
   uri: string;
+};
+
+/** A device signed in to this account: a browser with the cookie, or the app with its token. */
+export type Device = {
+  id: string;
+  /** A fixed label from the server, such as "Chrome on Android". */
+  label: string;
+  /** The app on a phone, or a browser. */
+  kind: "app" | "browser";
+  /** How that log in was confirmed. "signup" is the session that sign up opened. */
+  confirmedWith: SecondStep | "signup";
+  signedInAt: string;
+  lastSeenAt: string;
+  /** The device asking. It is signed out with "Log out", not from the list. */
+  current: boolean;
+};
+
+export type Passkey = {
+  id: string;
+  name: string;
+  createdAt: string;
+  lastUsedAt: string | null;
 };
 
 export interface AuthClient {
@@ -144,6 +171,33 @@ export interface AuthClient {
    */
   completePasswordReset(challengeId: string, code: string, password: string): Promise<void>;
 
+  /** The devices signed in to this account, most recently used first. */
+  listDevices(): Promise<Device[]>;
+  /** Signs out one other device. One already gone fails with `not_found`. */
+  signOutDevice(id: string): Promise<void>;
+  /** Signs out every device but this one, and says how many were signed out. */
+  signOutOtherDevices(): Promise<number>;
+
+  /** The passkeys saved to this account, on any device. */
+  listPasskeys(): Promise<Passkey[]>;
+  /**
+   * Removing a passkey or turning off the authenticator app needs a session
+   * opened in the last few minutes, like adding one, else `sign_in_again`.
+   */
+  removePasskey(id: string): Promise<void>;
+  turnOffAuthenticator(): Promise<void>;
+
+  /**
+   * Emails a one-time link to the account's address, to prove it is theirs.
+   * "proved" when it already is, so nothing was sent.
+   */
+  sendEmailProof(): Promise<"sent" | "proved">;
+  /**
+   * Spends the token from the link. Works signed in or not, on any device.
+   * Fails with `expired` for any link that is old, used or not ours.
+   */
+  confirmEmail(token: string): Promise<void>;
+
   signOut(): Promise<void>;
 }
 
@@ -161,6 +215,7 @@ const messages: Record<AuthErrorCode, string> = {
   passkey_unsupported:
     "Passkeys are not available in this app yet. Use an authenticator app or an SMS code for now.",
   rate_limited: "Too many tries. Wait a few minutes and try again.",
+  not_found: "That has already gone. The list below is up to date.",
   not_accepted: "Something in that was not accepted. Check what you entered and try again.",
   offline: "You seem to be offline. Check your connection and try again.",
   unavailable: "We could not reach Finvest. Check your connection and try again.",

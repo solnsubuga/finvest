@@ -22,10 +22,17 @@ export function resolveInvestingClient(stub: StubModule | null = loadStub()): In
   return stub ? stub.createStubInvestingClient({ sample: demoSample(), ...demoWithdrawal() }) : createApiInvestingClient();
 }
 
-/** On the web, `?accounts=none` has no approved accounts and `?withdraw=lost` loses the first withdrawal's answer. */
-function demoWithdrawal(): { accounts: "default" | "none"; loseFirstWithdrawal: boolean } {
+/**
+ * On the web, `?accounts=none` has no approved accounts, `?withdraw=lost` loses the first
+ * withdrawal's answer, and `?matured=waiting` adds matured money waiting for an account.
+ */
+function demoWithdrawal(): { accounts: "default" | "none"; loseFirstWithdrawal: boolean; maturedWaiting: boolean } {
   const search = typeof window !== "undefined" ? (window.location?.search ?? "") : "";
-  return { accounts: search.includes("accounts=none") ? "none" : "default", loseFirstWithdrawal: search.includes("withdraw=lost") };
+  return {
+    accounts: search.includes("accounts=none") ? "none" : "default",
+    loseFirstWithdrawal: search.includes("withdraw=lost"),
+    maturedWaiting: search.includes("matured=waiting"),
+  };
 }
 
 /** On the web, opening the demo at `/?sample=empty` starts as a new client with no investments. */

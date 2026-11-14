@@ -1,5 +1,8 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { apiBaseUrl, createHttp } from "@/api/http.ts";
 import { isStubAuth } from "@/auth/index.ts";
+import { emptyDirectory, type ClientCard, type Directory } from "@/directory/api.ts";
+import { createHttpDirectory } from "@/directory/http.ts";
 import { Button } from "@/components/ui/button.tsx";
 import { cn } from "@/lib.ts";
 import { PageHeader } from "@/pages/PageHeader.tsx";
@@ -13,6 +16,8 @@ import {
   type InvestmentStatus,
   type InvestmentsApi,
 } from "./api.ts";
+import { CorrectionsPanel } from "./corrections/index.tsx";
+import { createHttpInvestmentsApi } from "./http.ts";
 import { createStubInvestmentsApi } from "./stub.ts";
 
 const SUMMARY = "Client investments, what they have earned so far, and the daily interest run.";
@@ -21,6 +26,8 @@ const TABS: readonly { status: InvestmentStatus; label: string; empty: string }[
   { status: "active", label: "Running", empty: "No investments are running." },
   { status: "awaiting_payment", label: "Awaiting payment", empty: "Nobody is waiting to pay for an investment." },
   { status: "matured", label: "Matured", empty: "No investment has matured yet." },
+  { status: "withdrawn", label: "Withdrawn early", empty: "No investment has been withdrawn early." },
+  { status: "unwound", label: "Undone", empty: "No investment has been undone." },
   { status: "cancelled", label: "Cancelled", empty: "No investment has been cancelled." },
 ];
 
@@ -38,6 +45,8 @@ type Load =
 
 interface InvestmentsScreenProps {
   api: InvestmentsApi;
+  /** Names each client. Without it, a client shows as their ID. */
+  directory?: Directory;
   /** The Kampala business day, as a calendar date. */
   today?: () => string;
 }
@@ -50,18 +59,36 @@ function addDays(isoDate: string, days: number): string {
   return date.toISOString().slice(0, 10);
 }
 
-export function InvestmentsScreen({ api, today = kampalaToday }: InvestmentsScreenProps) {
+export function InvestmentsScreen({ api, directory = emptyDirectory, today = kampalaToday }: InvestmentsScreenProps) {
   const [tab, setTab] = useState<InvestmentStatus>("active");
   const [load, setLoad] = useState<Load>({ state: "loading" });
+  const [cards, setCards] = useState<Record<string, ClientCard | null>>({});
+  const asked = useRef(new Set<string>());
+
+  // Every client asked for in the same moment goes in one request (directory/http.ts batches them).
+  const lookUp = useCallback(
+    (clientIds: readonly string[]) => {
+      for (const clientId of new Set(clientIds)) {
+        if (asked.current.has(clientId)) continue;
+        asked.current.add(clientId);
+        void directory.client(clientId).then(
+          (card) => setCards((known) => ({ ...known, [clientId]: card })),
+          () => setCards((known) => ({ ...known, [clientId]: null })),
+        );
+      }
+    },
+    [directory],
+  );
 
   const fetchAll = useCallback(async (): Promise<Load> => {
     try {
       const [investments, runs] = await Promise.all([api.listInvestments(), api.interestRuns()]);
+      lookUp(investments.map((investment) => investment.clientId));
       return { state: "ready", investments, runs };
     } catch (error) {
       return { state: "failed", message: investmentsErrorMessage(error) };
     }
-  }, [api]);
+  }, [api, lookUp]);
 
   useEffect(() => {
     let current = true;
@@ -138,7 +165,7 @@ export function InvestmentsScreen({ api, today = kampalaToday }: InvestmentsScre
             <p className="m-0 text-md leading-normal text-muted">Investments appear here once a client reviews and confirms one in the app.</p>
           </section>
         ) : (
-          <InvestmentTable investments={shown} status={tab} />
+          <InvestmentTable investments={shown} status={tab} cards={cards} />
         )}
       </div>
       <RunHistory runs={load.runs} />
@@ -146,7 +173,14 @@ export function InvestmentsScreen({ api, today = kampalaToday }: InvestmentsScre
   );
 }
 
-function InvestmentTable({ investments, status }: { investments: readonly Investment[]; status: InvestmentStatus }) {
+interface InvestmentTableProps {
+  investments: readonly Investment[];
+  status: InvestmentStatus;
+  /** Each client's card once it is read. Null when it cannot be. */
+  cards: Readonly<Record<string, ClientCard | null>>;
+}
+
+function InvestmentTable({ investments, status, cards }: InvestmentTableProps) {
   const last = status === "awaiting_payment" ? "Pay by" : status === "matured" ? "What happened" : "At maturity";
   return (
     <div role="tabpanel" className="overflow-x-auto rounded-xl border border-border bg-surface">
@@ -164,8 +198,8 @@ function InvestmentTable({ investments, status }: { investments: readonly Invest
         <tbody>
           {investments.map((investment) => (
             <tr key={investment.id} className="border-t border-divider align-top tabular-nums">
-              <th scope="row" className="px-3 py-3 text-left font-mono text-sm font-bold whitespace-nowrap">
-                {investment.clientId}
+              <th scope="row" className="px-3 py-3 text-left font-normal">
+                <ClientName clientId={investment.clientId} card={cards[investment.clientId]} />
               </th>
               <td className="px-3 py-3">
                 <div className="font-bold whitespace-nowrap">{investment.productName}</div>
@@ -198,12 +232,16 @@ function InvestmentTable({ investments, status }: { investments: readonly Invest
 function LastColumn({ investment }: { investment: Investment }) {
   if (investment.status === "awaiting_payment") return <span className="whitespace-nowrap">{formatStamp(investment.payBy)}</span>;
   if (investment.status === "cancelled") return <span className="text-muted">Not paid in time</span>;
+  // The early withdrawal's payout is followed on Money Movement: this view does not carry it.
+  if (investment.status === "withdrawn") return <span>Withdrawn early</span>;
+  if (investment.status === "unwound") return <span className="text-muted">Undone, the money is waiting to start or to be refunded</span>;
   if (investment.status === "matured") {
     if (investment.rolledIntoId) return <span>Rolled over into a new term</span>;
     if (investment.payoutRefusal) {
       return <span className="font-bold text-warning-text">{REFUSAL_LABELS[investment.payoutRefusal] ?? `Held in payouts: ${investment.payoutRefusal}`}</span>;
     }
-    return <span>{investment.payoutId ? "Paid out" : "Being paid out"}</span>;
+    // A payout ID means the payout was created, not that the money has arrived.
+    return <span>{investment.payoutId ? "Payout created" : "Being paid out"}</span>;
   }
   return <span>{investment.atMaturity ? AT_MATURITY_LABELS[investment.atMaturity] : "Paid monthly"}</span>;
 }
@@ -307,6 +345,17 @@ function RunHistory({ runs }: { runs: readonly InterestRun[] }) {
   );
 }
 
+/** The client's name and account number, or their ID until the card is read or when it cannot be. */
+function ClientName({ clientId, card }: { clientId: string; card: ClientCard | null | undefined }) {
+  if (!card) return <span className="font-mono text-sm font-bold whitespace-nowrap">{clientId}</span>;
+  return (
+    <>
+      <div className="font-bold whitespace-nowrap">{card.name}</div>
+      <div className="text-xs text-muted">{card.accountNumber ?? "No account number yet"}</div>
+    </>
+  );
+}
+
 function Row({ name, value, warn = false }: { name: string; value: string; warn?: boolean }) {
   return (
     <div className="flex justify-between gap-3 border-t border-divider pt-2.5 text-md">
@@ -317,11 +366,21 @@ function Row({ name, value, warn = false }: { name: string; value: string; warn?
 }
 
 export default function InvestmentsPage() {
-  // Sample investments under `pnpm dev` or a preview build. `?sample=empty` shows a new system.
-  const [api] = useState<InvestmentsApi>(() =>
-    isStubAuth()
-      ? createStubInvestmentsApi(new URLSearchParams(window.location.search).get("sample") === "empty" ? "empty" : "default")
-      : notConnectedInvestmentsApi,
+  // Sample investments under `pnpm dev` or a preview build, otherwise the real API. `?sample=empty` shows a new system.
+  const [{ api, directory }] = useState<{ api: InvestmentsApi; directory: Directory }>(() => {
+    if (isStubAuth()) {
+      const sample = new URLSearchParams(window.location.search).get("sample") === "empty" ? "empty" : "default";
+      return { api: createStubInvestmentsApi(sample), directory: emptyDirectory };
+    }
+    const base = apiBaseUrl();
+    if (!base) return { api: notConnectedInvestmentsApi, directory: emptyDirectory };
+    const http = createHttp(base);
+    return { api: createHttpInvestmentsApi(http), directory: createHttpDirectory(http) };
+  });
+  return (
+    <>
+      <InvestmentsScreen api={api} directory={directory} />
+      <CorrectionsPanel />
+    </>
   );
-  return <InvestmentsScreen api={api} />;
 }
