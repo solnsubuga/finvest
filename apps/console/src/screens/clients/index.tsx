@@ -3,7 +3,7 @@ import { useSearchParams } from "react-router";
 import { apiBaseUrl, createHttp } from "@/api/http.ts";
 import { useAuth } from "@/auth/context.ts";
 import { isStubAuth } from "@/auth/index.ts";
-import { can } from "@/auth/types.ts";
+import { can, type Permission } from "@/auth/types.ts";
 import { Button } from "@/components/ui/button.tsx";
 import { createHttpDirectory } from "@/directory/http.ts";
 import { PageHeader } from "@/pages/PageHeader.tsx";
@@ -14,6 +14,11 @@ import { PhoneSection } from "./Phone.tsx";
 import { createHttpPhoneChangesApi, createStubPhoneChangesApi, notConnectedPhoneChangesApi, type PhoneChangesApi } from "./phone.ts";
 import { ClosureQueue, ClosureSection } from "./Closures.tsx";
 import { createHttpClosuresApi, createStubClosuresApi, notConnectedClosuresApi, type ClosuresApi } from "./closures.ts";
+import { ActionsSection } from "./Actions.tsx";
+import { createHttpActionsApi, notConnectedActionsApi, type ActionKind, type ActionsApi } from "./actions.ts";
+import { createStubActionsApi } from "./actionsStub.ts";
+import { NotesSection } from "./Notes.tsx";
+import { createHttpNotesApi, createStubNotesApi, notConnectedNotesApi, type NotesApi } from "./notes.ts";
 import { ProfileSection } from "./Profile.tsx";
 import { createHttpProfileApi, createStubProfileApi, notConnectedProfileApi, type ProfileApi } from "./profile.ts";
 import { RecoverySection } from "./Recovery.tsx";
@@ -41,9 +46,26 @@ interface ClientsScreenProps {
   profiles?: ProfileApi | null;
   /** Null without `client_phones.change`: the requests for a call back are not shown. */
   recovery?: RecoveryApi | null;
+  /** Staff notes on the client. Null leaves the section out. */
+  notes?: NotesApi | null;
+  /** Acting for the client with two people. Null leaves the section out. */
+  actions?: ActionsApi | null;
+  /** `investment_corrections.change`: the actions point to refunds on Investments. */
+  canRefund?: boolean;
 }
 
-export function ClientsScreen({ api, suppressions, canLift, phones = null, closures = null, profiles = null, recovery = null }: ClientsScreenProps) {
+export function ClientsScreen({
+  api,
+  suppressions,
+  canLift,
+  phones = null,
+  closures = null,
+  profiles = null,
+  recovery = null,
+  notes = null,
+  actions = null,
+  canRefund = false,
+}: ClientsScreenProps) {
   const [params, setParams] = useSearchParams();
   const clientId = params.get("client");
   const [query, setQuery] = useState("");
@@ -106,7 +128,19 @@ export function ClientsScreen({ api, suppressions, canLift, phones = null, closu
         ) : null}
       </form>
       {clientId ? (
-        <ClientView key={clientId} api={api} clientId={clientId} suppressions={suppressions} canLift={canLift} phones={phones} closures={closures} profiles={profiles} />
+        <ClientView
+          key={clientId}
+          api={api}
+          clientId={clientId}
+          suppressions={suppressions}
+          canLift={canLift}
+          phones={phones}
+          closures={closures}
+          profiles={profiles}
+          notes={notes}
+          actions={actions}
+          canRefund={canRefund}
+        />
       ) : (
         <>
           <p className="m-0 max-w-[720px] rounded-xl border border-border bg-surface p-5 text-md text-muted">
@@ -129,6 +163,9 @@ function ClientView({
   phones,
   closures,
   profiles,
+  notes,
+  actions,
+  canRefund,
 }: {
   api: ClientsApi;
   clientId: string;
@@ -137,6 +174,9 @@ function ClientView({
   phones: PhoneChangesApi | null;
   closures: ClosuresApi | null;
   profiles: ProfileApi | null;
+  notes: NotesApi | null;
+  actions: ActionsApi | null;
+  canRefund: boolean;
 }) {
   const [load, setLoad] = useState<Load>({ state: "loading" });
   const [busy, setBusy] = useState(false);
@@ -242,6 +282,8 @@ function ClientView({
       {page.account.email ? <ClientEmailStatus api={suppressions} email={page.account.email} canLift={canLift} /> : null}
       <ClientDetails page={page} />
       {profiles ? <ProfileSection api={profiles} clientId={page.account.id} /> : null}
+      {notes ? <NotesSection api={notes} clientId={page.account.id} /> : null}
+      {actions && page.account.status !== "closed" ? <ActionsSection api={actions} clientId={page.account.id} canRefund={canRefund} /> : null}
       {phones && page.account.status !== "closed" ? (
         <PhoneSection
           api={phones}
@@ -258,22 +300,34 @@ function ClientView({
   );
 }
 
+/** Which permission each action needs, as the backend's `actions.PERMISSIONS` says. Only the sample reads it. */
+const STUB_ACTION_PERMISSIONS: [ActionKind, Permission][] = [
+  ["pin_reset", "client_pins.reset"],
+  ["withdrawal_limits", "client_limits.change"],
+  ["statement", "client_statements.send"],
+  ["withdrawal", "client_withdrawals.start"],
+];
+
 export default function ClientsPage() {
   const { session } = useAuth();
   const canLift = session ? can(session, "email_suppressions.lift") : false;
   const canChangePhones = session ? can(session, "client_phones.change") : false;
   const canClose = session ? can(session, "clients.close") : false;
-  const [{ api, suppressions, phones, closures, profiles, recovery }] = useState<{
+  const canRefund = session ? can(session, "investment_corrections.change") : false;
+  const [{ api, suppressions, phones, closures, profiles, recovery, notes, actions }] = useState<{
     api: ClientsApi;
     suppressions: SuppressionsApi;
     phones: PhoneChangesApi | null;
     closures: ClosuresApi | null;
     profiles: ProfileApi;
     recovery: RecoveryApi | null;
+    notes: NotesApi;
+    actions: ActionsApi;
   }>(() => {
     if (isStubAuth() && session) {
       // Under the stub, `?sample=offline` shows the screen as if Finvest could not be reached.
-      if (new URLSearchParams(window.location.search).get("sample") === "offline") {
+      const sample = new URLSearchParams(window.location.search).get("sample");
+      if (sample === "offline") {
         return {
           api: notConnectedClientsApi,
           suppressions: notConnectedSuppressionsApi,
@@ -281,6 +335,8 @@ export default function ClientsPage() {
           closures: canClose ? notConnectedClosuresApi : null,
           profiles: notConnectedProfileApi,
           recovery: canChangePhones ? notConnectedRecoveryApi : null,
+          notes: notConnectedNotesApi,
+          actions: notConnectedActionsApi,
         };
       }
       const me = { id: session.staffId, name: session.name };
@@ -296,6 +352,13 @@ export default function ClientsPage() {
         closures: canClose ? createStubClosuresApi(me, Date.now, (id) => clients.closeAccount(id)) : null,
         profiles: createStubProfileApi(),
         recovery: canChangePhones ? createStubRecoveryApi() : null,
+        // `?sample=empty` shows a client with no notes, nothing proposed and no written request.
+        notes: createStubNotesApi(me, can(session, "client_notes.write"), sample === "empty" ? "empty" : "sample"),
+        actions: createStubActionsApi(
+          me,
+          STUB_ACTION_PERMISSIONS.filter(([, permission]) => can(session, permission)).map(([kind]) => kind),
+          sample === "empty" ? "empty" : "sample",
+        ),
       };
     }
     const base = apiBaseUrl();
@@ -307,6 +370,8 @@ export default function ClientsPage() {
         closures: canClose ? notConnectedClosuresApi : null,
         profiles: notConnectedProfileApi,
         recovery: canChangePhones ? notConnectedRecoveryApi : null,
+        notes: notConnectedNotesApi,
+        actions: notConnectedActionsApi,
       };
     }
     const http = createHttp(base);
@@ -317,9 +382,22 @@ export default function ClientsPage() {
       closures: canClose ? createHttpClosuresApi(http) : null,
       profiles: createHttpProfileApi(http),
       recovery: canChangePhones ? createHttpRecoveryApi(http) : null,
+      notes: createHttpNotesApi(http),
+      actions: createHttpActionsApi(http),
     };
   });
   return (
-    <ClientsScreen api={api} suppressions={suppressions} canLift={canLift} phones={phones} closures={closures} profiles={profiles} recovery={recovery} />
+    <ClientsScreen
+      api={api}
+      suppressions={suppressions}
+      canLift={canLift}
+      phones={phones}
+      closures={closures}
+      profiles={profiles}
+      recovery={recovery}
+      notes={notes}
+      actions={actions}
+      canRefund={canRefund}
+    />
   );
 }

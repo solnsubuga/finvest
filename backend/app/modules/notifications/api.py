@@ -393,6 +393,22 @@ def _announcement(item: announcements.Announcement, staff: StaffSession) -> Anno
     )
 
 
+class AnnouncementReach(Contract):
+    # Active clients, who all get it in the app, and by push where they have the app.
+    clients: int
+    # Of those, how many also get it by SMS and by email, as each chose for news.
+    sms: int
+    email: int
+
+
+@staff_router.get("/announcements/reach")
+async def announcement_reach(staff: SettingsStaff, database: Db) -> AnnouncementReach:
+    """How many clients an announcement approved now reaches, and how many by SMS and email."""
+    async with database.actor_transaction(staff.actor) as session:
+        found = await announcements.reach(session)
+    return AnnouncementReach(clients=found.clients, sms=found.sms, email=found.email)
+
+
 @staff_router.get("/announcements")
 async def list_announcements(staff: SettingsStaff, database: Db) -> AnnouncementList:
     """The latest announcements, newest first, with any waiting for a second person."""

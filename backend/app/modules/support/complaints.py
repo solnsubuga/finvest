@@ -115,6 +115,19 @@ class OutcomeProposal:
 
 
 @dataclass(frozen=True, slots=True)
+class RejectedOutcome:
+    """The latest outcome proposed for a complaint, when a second person rejected it."""
+
+    outcome: Outcome
+    resolution: str
+    client_accepted: bool
+    decided_by: str
+    decided_at: datetime
+    # What the second person asked to change.
+    reason: str
+
+
+@dataclass(frozen=True, slots=True)
 class Summary:
     open: int
     overdue: int
@@ -365,6 +378,29 @@ async def pending_outcome(session: AsyncSession, complaint_id: str) -> OutcomePr
     return _proposal(row) if row is not None else None
 
 
+# The latest proposal, if it is the one rejected. Anything newer, pending or decided, wins.
+_LAST_PROPOSAL = text(
+    "SELECT outcome, resolution, client_accepted, status, decided_by, decided_at, "
+    "decision_reason FROM complaint_outcome_proposals WHERE complaint_id = :id "
+    "ORDER BY proposed_at DESC, id DESC LIMIT 1"
+)
+
+
+async def last_rejected(session: AsyncSession, complaint_id: str) -> RejectedOutcome | None:
+    """The outcome a second person rejected last, so the next proposal can start from it."""
+    row = (await session.execute(_LAST_PROPOSAL, {"id": complaint_id})).one_or_none()
+    if row is None or row.status != "rejected":
+        return None
+    return RejectedOutcome(
+        outcome=row.outcome,
+        resolution=row.resolution,
+        client_accepted=row.client_accepted,
+        decided_by=row.decided_by,
+        decided_at=row.decided_at,
+        reason=row.decision_reason,
+    )
+
+
 async def propose_outcome(
     session: AsyncSession, staff: Actor, complaint_id: str, closure: Closure, clock: Clock
 ) -> OutcomeProposal:
@@ -485,6 +521,24 @@ async def summary(session: AsyncSession, clock: Clock) -> Summary:
             (sum(days) * 20 + len(days)) // (2 * len(days)) if days else None
         ),
     )
+
+
+_IN_PERIOD = text(
+    f"SELECT {_COLUMNS} FROM complaints "  # noqa: S608 - constant column list
+    "WHERE (received_at >= :since AND received_at < :until) "
+    "OR (closed_at >= :since AND closed_at < :until) "
+    "OR (received_at < :until AND (closed_at IS NULL OR closed_at >= :until)) "
+    "ORDER BY received_at, id"
+)
+
+
+async def in_period(
+    session: AsyncSession, *, since: datetime, until: datetime, today: date
+) -> list[ComplaintView]:
+    """Every complaint received, closed or still open in the period from `since` up to
+    `until`: what a period's return to the regulator counts. Staff only."""
+    rows = await session.execute(_IN_PERIOD, {"since": since, "until": until})
+    return [_view(row, today) for row in rows.all()]
 
 
 def _same_complaint(saved: Row[Any], client_id: str, new: NewComplaint) -> None:

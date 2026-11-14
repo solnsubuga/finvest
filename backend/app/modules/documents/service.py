@@ -43,6 +43,8 @@ class DocumentKind(StrEnum):
     # Uganda's tax year, 1 July to 30 June, keyed by its label (`2026-27`). The only document
     # that shows tax withheld, and never a rate.
     TAX_CERTIFICATE = "tax_certificate"
+    # The note that confirms an investment started, keyed `started:<investment id>`.
+    INVESTMENT_NOTE = "investment_note"
 
 
 class DocumentStatus(StrEnum):
@@ -161,6 +163,26 @@ async def request_statement(
     return view
 
 
+async def staff_statement(
+    session: AsyncSession, client_id: str, period: Period, *, action_id: str, now: datetime
+) -> DocumentView:
+    """Ask for a statement two members of staff agreed to send the client.
+
+    Called only by the console module, in the staff transaction that approved the action.
+    Migration 0353 refuses the row anywhere else. It is built, put in the app and emailed
+    exactly as one the client asked for, so the client's limit of statements a day is not
+    charged.
+    """
+    return await ask(
+        session,
+        client_id=client_id,
+        kind=DocumentKind.REQUESTED_STATEMENT,
+        key=f"staff:{action_id}",
+        period=period,
+        now=now,
+    )
+
+
 async def ask(
     session: AsyncSession,
     *,
@@ -259,6 +281,22 @@ async def _by_key(
 async def monthly_asked(session: AsyncSession, label: str) -> bool:
     """Whether the monthly run for `label` (`2026-10`) has started asking."""
     return bool((await session.execute(_MONTH_ASKED, {"label": label})).scalar_one())
+
+
+_MONTHLY_FOR = text(
+    f"SELECT {_COLUMNS} FROM documents "  # noqa: S608 - constant column list
+    "WHERE kind = 'monthly_statement' AND idempotency_key = :label "
+    "ORDER BY client_id, id LIMIT :limit"
+)
+
+
+async def monthly_statements(
+    session: AsyncSession, label: str, *, limit: int
+) -> list[DocumentView]:
+    """Every client's monthly statement for `label` (`2026-10`), by client, at most `limit`.
+    Staff and the worker only: a client sees their own."""
+    rows = await session.execute(_MONTHLY_FOR, {"label": label, "limit": max(1, limit)})
+    return [_view(row) for row in rows.all()]
 
 
 def _view(row: Row[Any]) -> DocumentView:

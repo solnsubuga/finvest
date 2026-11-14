@@ -98,6 +98,18 @@ async def test_a_client_plans_sets_up_reads_and_closes_a_goal(api: Api) -> None:
     assert changed.json()["name"] == "Fees for Term 2"
     assert changed.json()["plan"] is None
 
+    # A goal with no date cannot be locked.
+    refused = await api.http.post(f"/client/goals/{goal['goal_id']}/lock", headers=headers)
+    assert refused.status_code == 422
+    dated = await api.http.put(f"/client/goals/{goal['goal_id']}", json=GOAL, headers=headers)
+    assert (dated.json()["locked_until"], dated.json()["unlock_requested_at"]) == (None, None)
+    locked = await api.http.post(f"/client/goals/{goal['goal_id']}/lock", headers=headers)
+    assert locked.status_code == 200
+    assert locked.json()["locked_until"] == "2027-11-13"
+    unlocked = await api.http.post(f"/client/goals/{goal['goal_id']}/unlock", headers=headers)
+    assert unlocked.status_code == 200
+    assert unlocked.json()["unlock_requested_at"] is not None
+
     closed = await api.http.post(f"/client/goals/{goal['goal_id']}/close", headers=headers)
     assert closed.json()["status"] == "closed"
 

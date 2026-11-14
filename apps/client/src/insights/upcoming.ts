@@ -21,7 +21,11 @@ export function upcomingWords(item: Upcoming): { title: string; detail: string }
       return {
         title: `${item.productName} matures`,
         detail:
-          item.atMaturity === "pay_out" ? "Pays out to your account" : "Rolls over and keeps earning",
+          item.atMaturity === "pay_out"
+            ? "Pays out to your account"
+            : item.atMaturity === "pay_interest"
+              ? "Pays the interest, keeps the rest invested"
+              : "Rolls over and keeps earning",
       };
     case "goal_saving":
       return {

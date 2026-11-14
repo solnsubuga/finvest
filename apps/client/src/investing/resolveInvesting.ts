@@ -24,14 +24,24 @@ export function resolveInvestingClient(stub: StubModule | null = loadStub()): In
 
 /**
  * On the web, `?accounts=none` has no approved accounts, `?withdraw=lost` loses the first
- * withdrawal's answer, and `?matured=waiting` adds matured money waiting for an account.
+ * withdrawal's answer, `?matured=waiting` adds matured money waiting for an account,
+ * `?transfers=none` starts with nothing sent or received, and `?review=low` holds any send
+ * over UGX 1,000,000 for staff, to show that state.
  */
-function demoWithdrawal(): { accounts: "default" | "none"; loseFirstWithdrawal: boolean; maturedWaiting: boolean } {
+function demoWithdrawal(): {
+  accounts: "default" | "none";
+  loseFirstWithdrawal: boolean;
+  maturedWaiting: boolean;
+  transfers: "default" | "none";
+  reviewAbove?: number;
+} {
   const search = typeof window !== "undefined" ? (window.location?.search ?? "") : "";
   return {
     accounts: search.includes("accounts=none") ? "none" : "default",
     loseFirstWithdrawal: search.includes("withdraw=lost"),
     maturedWaiting: search.includes("matured=waiting"),
+    transfers: search.includes("transfers=none") ? "none" : "default",
+    ...(search.includes("review=low") ? { reviewAbove: 1_000_000 } : {}),
   };
 }
 

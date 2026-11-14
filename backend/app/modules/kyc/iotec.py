@@ -14,15 +14,15 @@ client goes to a person. Nothing here is logged, and no error quotes what ioTec 
 because its answers carry the client's details.
 """
 
-import asyncio
 import re
 from collections.abc import Mapping
 from dataclasses import dataclass
-from enum import StrEnum
 
 import httpx
 from pydantic import SecretStr
 
+from app.infrastructure import iotec_verify
+from app.infrastructure.iotec_verify import IotecVerifyClient, Sent, VerifyUnavailable
 from app.infrastructure.storage import FileStorage, StorageError
 from app.modules.kyc.domain.checks import DocumentType, PhotoKind
 from app.modules.kyc.domain.provider import (
@@ -39,7 +39,7 @@ from app.modules.kyc.domain.provider import (
     Verdict,
 )
 
-BASE_URL = "https://verify-api.iotec.io"
+BASE_URL = iotec_verify.BASE_URL
 # A face match at or above this confidence, and called identical by ioTec, passes. Below it,
 # or not identical, it is unsure rather than failed: a person looks either way.
 FACE_MATCH_PASS = 80
@@ -52,17 +52,13 @@ _REFERENCE = re.compile(
     r"iotec:idv=(?P<idv>[0-9a-f-]{36}|-),face=(?P<face>[0-9a-f-]{36}|-),"
     r"aml=(?P<aml>[0-9a-f-]{36}|-)"
 )
-_REQUEST_ID = re.compile(r"[0-9a-fA-F]{8}-(?:[0-9a-fA-F]{4}-){3}[0-9a-fA-F]{12}")
 # Request states shared by every ioTec Verify request.
 _WAITING = frozenset({"Pending", "Processing"})
 _DONE = frozenset({"Completed", "Success"})
 
 
-class _Sent(StrEnum):
-    ACCEPTED = "accepted"
-    REFUSED = "refused"  # ioTec answered and will not run it
-    NOT_RECEIVED = "not_received"  # certainly never reached ioTec
-    UNCERTAIN = "uncertain"  # may have reached ioTec
+# How a send went, sorted the same way for every ioTec Verify caller.
+_Sent = Sent
 
 
 @dataclass(frozen=True, slots=True)
@@ -86,18 +82,16 @@ class IotecVerifyProvider:
         client: httpx.AsyncClient | None = None,
         retry_pause: float = 1.0,
     ) -> None:
-        if not client_id or not api_key.get_secret_value():
-            raise ValueError("ioTec Verify needs a client ID and an API key")
-        if not base_url.startswith("https://"):
-            # The key and the client's details travel in every request.
-            raise ValueError("ioTec Verify is only reached over https")
-        self._client_id = client_id
-        self._api_key = api_key
+        # The shared connection holds the headers, https only, and how a send is sorted.
+        self._verify = IotecVerifyClient(
+            client_id=client_id,
+            api_key=api_key,
+            base_url=base_url,
+            timeout=timeout,
+            http=client,
+            retry_pause=retry_pause,
+        )
         self._storage = storage
-        self._base_url = base_url.rstrip("/")
-        self._timeout = timeout
-        self._client = client
-        self._retry_pause = retry_pause
 
     # Sending ---------------------------------------------------------------------------------
 
@@ -200,44 +194,13 @@ class IotecVerifyProvider:
         data: Mapping[str, str] | None = None,
         files: Mapping[str, tuple[str, bytes, str]] | None = None,
     ) -> _Attempt:
-        attempt = await self._post_once(path, json=json, data=data, files=files)
-        if attempt.sent is _Sent.NOT_RECEIVED:
-            # Certainly never arrived, so one more try is safe. Without it a dropped connection
-            # would leave a check, such as the screening, out of the submission.
-            await asyncio.sleep(self._retry_pause)
-            attempt = await self._post_once(path, json=json, data=data, files=files)
-        return attempt
-
-    async def _post_once(
-        self,
-        path: str,
-        *,
-        json: Mapping[str, object] | None,
-        data: Mapping[str, str] | None,
-        files: Mapping[str, tuple[str, bytes, str]] | None,
-    ) -> _Attempt:
-        try:
-            response = await self._request("POST", path, json=json, data=data, files=files)
-        except (httpx.ConnectError, httpx.ConnectTimeout):
-            return _Attempt(_Sent.NOT_RECEIVED)
-        except httpx.HTTPError:
-            # A read timeout or a dropped connection: it may have arrived.
-            return _Attempt(_Sent.UNCERTAIN)
-        status = response.status_code
-        if 200 <= status < 300:
-            request_id = _request_id(response)
-            # Accepted, but with nothing to read it back by: treat it as possibly held.
-            return (
-                _Attempt(_Sent.UNCERTAIN)
-                if request_id is None
-                else _Attempt(_Sent.ACCEPTED, request_id)
-            )
-        if status in (401, 403, 429):
-            # Refused before it ran: wrong credentials, or too many requests.
-            return _Attempt(_Sent.NOT_RECEIVED)
-        if status >= 500 or status == 408:
-            return _Attempt(_Sent.UNCERTAIN)
-        return _Attempt(_Sent.REFUSED)
+        # A request that certainly never arrived is sent once more by the shared client, so a
+        # dropped connection does not leave a check, such as the screening, out.
+        if files is not None:
+            result = await self._verify.send_form(path, data or {}, files)
+        else:
+            result = await self._verify.send(path, json or {})
+        return _Attempt(result.sent, result.request_id if result.sent is Sent.ACCEPTED else None)
 
     # Reading ---------------------------------------------------------------------------------
 
@@ -264,46 +227,10 @@ class IotecVerifyProvider:
 
     async def _read(self, path: str) -> Mapping[str, object]:
         try:
-            response = await self._request("GET", path)
-        except httpx.HTTPError:
+            return await self._verify.read(path)
+        except VerifyUnavailable:
             # Reading changes nothing at ioTec, so the worker simply reads again later.
-            raise ProviderDeferred("ioTec Verify is unreachable") from None
-        if response.status_code != 200:
-            raise ProviderDeferred(f"ioTec Verify answered {response.status_code}")
-        body = _json(response)
-        if body is None:
-            raise ProviderDeferred("ioTec Verify answered with something that is not JSON")
-        return body
-
-    async def _request(
-        self,
-        method: str,
-        path: str,
-        *,
-        json: Mapping[str, object] | None = None,
-        data: Mapping[str, str] | None = None,
-        files: Mapping[str, tuple[str, bytes, str]] | None = None,
-    ) -> httpx.Response:
-        headers = {
-            "Client-Id": self._client_id,
-            "X-Api-Key": self._api_key.get_secret_value(),
-            "User-Agent": "finvest",
-        }
-        url = self._base_url + path
-        if self._client is not None:
-            return await self._client.request(
-                method,
-                url,
-                headers=headers,
-                json=json,
-                data=data,
-                files=files,
-                timeout=self._timeout,
-            )
-        async with httpx.AsyncClient(timeout=self._timeout) as client:
-            return await client.request(
-                method, url, headers=headers, json=json, data=data, files=files
-            )
+            raise ProviderDeferred("ioTec Verify could not be read") from None
 
 
 # Turning answers into outcomes. Unknown or missing values are unsure, never a pass. ----------
@@ -357,17 +284,3 @@ def _aml_outcome(answer: Mapping[str, object]) -> CheckOutcome | None:
 
 def _lower(value: object) -> str | None:
     return value.strip().lower() if isinstance(value, str) else None
-
-
-def _json(response: httpx.Response) -> Mapping[str, object] | None:
-    try:
-        body = response.json()
-    except ValueError:
-        return None
-    return body if isinstance(body, dict) else None
-
-
-def _request_id(response: httpx.Response) -> str | None:
-    body = _json(response)
-    found = None if body is None else body.get("id")
-    return found.lower() if isinstance(found, str) and _REQUEST_ID.fullmatch(found) else None

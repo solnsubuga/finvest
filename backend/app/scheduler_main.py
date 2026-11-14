@@ -24,7 +24,12 @@ from app.modules.autoinvest.jobs import SETTLE_KIND as AUTOINVEST_SETTLE_KIND
 from app.modules.dealing.jobs import ALLOCATE_KIND, MATURITIES_KIND, RELEASE_KIND
 from app.modules.documents.service import EXPIRE_EMAILS_KIND, MONTHLY_KIND
 from app.modules.goals.jobs import REFRESH_GROUPS_KIND, SEND_REMINDERS_KIND
-from app.modules.investments.jobs import ACCRUE_KIND, CANCEL_UNPAID_KIND, MATURE_KIND
+from app.modules.investments.jobs import (
+    ACCRUE_KIND,
+    CANCEL_UNPAID_KIND,
+    MATURE_KIND,
+    REMIND_MATURING_KIND,
+)
 from app.modules.kyc.service import SWEEP_UNANSWERED
 from app.modules.notifications.keyed_backfill import KEY_HASHES
 from app.modules.notifications.service import PURGE_MESSAGES
@@ -111,6 +116,14 @@ def schedules() -> list[Schedule]:
             name="goals.send_reminders",
             trigger=CronTrigger(hour=8, minute=0, timezone=KAMPALA),
             kind=SEND_REMINDERS_KIND,
+            max_age=timedelta(hours=10),
+        ),
+        # Investments maturing in as many days as Settings says (7 and 1 unless changed), in
+        # the morning so no text arrives at night. Each reminder is sent once.
+        Schedule(
+            name="investments.remind_maturing",
+            trigger=CronTrigger(hour=8, minute=30, timezone=KAMPALA),
+            kind=REMIND_MATURING_KIND,
             max_age=timedelta(hours=10),
         ),
         # Last month's statement for every client. It runs every morning and asks for a month

@@ -143,3 +143,71 @@ def check_withdrawal(
     return WithdrawalDecision(
         needs_review=limits.review_above is not None and amount > limits.review_above
     )
+
+
+@dataclass(frozen=True, slots=True)
+class ClientLimits:
+    """Stricter limits staff set for one client with two people. `None` adds nothing.
+
+    They only ever tighten the limits in force for everyone: `for_client` takes the lower of the
+    two for each sort, so a later cut in the shared limits still applies to this client.
+    """
+
+    mobile_money_per_payout: Money | None = None
+    mobile_money_per_day: Money | None = None
+    bank_per_payout: Money | None = None
+    bank_per_day: Money | None = None
+    review_above: Money | None = None
+
+    def __post_init__(self) -> None:
+        for limit in self.values():
+            if limit.currency is not Currency.UGX:
+                raise InvalidLimits("A client's limits are in Uganda shillings")
+            if not limit.is_positive:
+                raise InvalidLimits("A limit is a positive amount")
+
+    def values(self) -> tuple[Money, ...]:
+        found = (
+            self.mobile_money_per_payout,
+            self.mobile_money_per_day,
+            self.bank_per_payout,
+            self.bank_per_day,
+            self.review_above,
+        )
+        return tuple(limit for limit in found if limit is not None)
+
+    @property
+    def empty(self) -> bool:
+        return not self.values()
+
+
+def _lower(first: Money | None, second: Money | None) -> Money | None:
+    if first is None:
+        return second
+    if second is None:
+        return first
+    return min(first, second)
+
+
+def for_client(limits: WithdrawalLimits, client: ClientLimits | None) -> WithdrawalLimits:
+    """The limits for one client: the lower of the shared limit and theirs, for each sort.
+
+    A daily limit set below the limit for one payout also lowers the limit for one payout, so
+    the result never contradicts itself.
+    """
+    if client is None or client.empty:
+        return limits
+    if any(limit.currency is not limits.currency for limit in client.values()):
+        raise InvalidLimits("A client's limits are in the currency of the shared limits")
+    mobile_day = _lower(limits.mobile_money_per_day, client.mobile_money_per_day)
+    bank_day = _lower(limits.bank_per_day, client.bank_per_day)
+    mobile_payout = _lower(limits.mobile_money_per_payout, client.mobile_money_per_payout)
+    assert mobile_payout is not None
+    return WithdrawalLimits(
+        effective_from=limits.effective_from,
+        mobile_money_per_payout=_lower(mobile_payout, mobile_day) or mobile_payout,
+        mobile_money_per_day=mobile_day,
+        bank_per_payout=_lower(_lower(limits.bank_per_payout, client.bank_per_payout), bank_day),
+        bank_per_day=bank_day,
+        review_above=_lower(limits.review_above, client.review_above),
+    )

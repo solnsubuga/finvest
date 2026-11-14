@@ -31,6 +31,7 @@ Kind = Literal[
     "announcement",
     "payout_account",
     "investment_correction",
+    "investment_run",
     "payout_resolution",
     "tax_remittance",
     "deposit_reassignment",
@@ -40,6 +41,18 @@ Kind = Literal[
     "account_closure",
     "compliance_case",
     "bank_account_change",
+    "account_code_map",
+    "deposit_reversal",
+    "deposit_receivable",
+    "client_pin_reset",
+    "client_limits",
+    "client_statement",
+    "client_withdrawal",
+    "payment_channels_change",
+    "calendar_change",
+    "staff_security_change",
+    "statement_layout_change",
+    "withdrawal_limits_change",
 ]
 
 
@@ -77,6 +90,8 @@ SOURCES: dict[Kind, Source] = {
     "payout_resolution": Source("reconciliation.view", "reconciliation.change"),
     "payout_account": Source("review_queue.view", "payout_accounts.change"),
     "investment_correction": Source("investments.view", "investment_corrections.change"),
+    # Running a day's interest again, or today's maturities, decided as corrections are.
+    "investment_run": Source("investments.view", "investment_corrections.change"),
     "tax_remittance": Source("finance.view", "tax_remittances.change"),
     "deposit_reassignment": Source("reconciliation.view", "deposit_reassignments.change"),
     # Releasing a payout held because it is large, decided where it is held: the review queue.
@@ -91,6 +106,24 @@ SOURCES: dict[Kind, Source] = {
     "compliance_case": Source("compliance.view", "compliance_cases.change"),
     # The bank account clients pay into by transfer, on Settings.
     "bank_account_change": Source("settings.view", "bank_accounts.change"),
+    # Which accounting system account each ledger code is posted to, changed in Settings.
+    "account_code_map": Source("settings.view", "account_codes.change"),
+    # Taking back a payment credited by mistake, decided as reassignments are.
+    "deposit_reversal": Source("reconciliation.view", "deposit_reassignments.change"),
+    # Recording, recovering or writing off what a client owes for a mistaken payment.
+    "deposit_receivable": Source("reconciliation.view", "deposit_reassignments.change"),
+    # Acting for a client from their page (console `actions`), one kind per permission.
+    "client_pin_reset": Source("clients.view", "client_pins.reset"),
+    "client_limits": Source("clients.view", "client_limits.change"),
+    "client_statement": Source("clients.view", "client_statements.send"),
+    "client_withdrawal": Source("clients.view", "client_withdrawals.start"),
+    # The platform's other settings, on Settings, one kind per section of the screen.
+    "payment_channels_change": Source("settings.view", "payment_channels.change"),
+    "calendar_change": Source("settings.view", "calendar.change"),
+    "staff_security_change": Source("settings.view", "staff_security.change"),
+    "statement_layout_change": Source("settings.view", "statement_layouts.change"),
+    # The withdrawal limits and the review threshold, on Settings.
+    "withdrawal_limits_change": Source("settings.view", "withdrawal_limits.change"),
 }
 
 

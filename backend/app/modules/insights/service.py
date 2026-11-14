@@ -4,7 +4,8 @@ Every figure comes from the ledger or from the investments module's client views
 always agree with the books. Nothing here shows a tax rate, a tax amount or a rate before tax:
 interest is read from the client's interest account, which holds interest after tax.
 
-Other modules import from here. A client-facing route may call only `client_insights`.
+Other modules import from here. A client-facing route may call only `client_insights` and
+`client_portfolio`.
 """
 
 from dataclasses import dataclass
@@ -17,6 +18,7 @@ from app.modules.autoinvest import service as autoinvest
 from app.modules.goals import saving_rules
 from app.modules.goals import service as goals
 from app.modules.insights.domain.months import DEFAULT_MONTHS, month_end, months_ending
+from app.modules.insights.domain.shares import whole_percentages
 from app.modules.investments import service as investments
 from app.modules.investments.domain.investments import AtMaturity, InvestmentStatus
 from app.modules.ledger import statements
@@ -220,6 +222,152 @@ async def _coming_savings(
         if goal.target_date is not None and goal.target_date >= today
     )
     return coming
+
+
+@dataclass(frozen=True, slots=True)
+class Holding:
+    """A part of what is invested: the client's own investments, or those saved to goals."""
+
+    worth: Money
+    count: int
+
+
+@dataclass(frozen=True, slots=True)
+class ProductShare:
+    """What is invested in one product, and its whole-number share of everything invested."""
+
+    product_code: str
+    product_name: str
+    worth: Money
+    count: int
+    percent: int
+
+
+@dataclass(frozen=True, slots=True)
+class NextMaturity:
+    """The running investment that matures soonest."""
+
+    investment_id: str
+    product_name: str
+    on: date
+    at_maturity: AtMaturity | None
+    term_days: int
+    days_earned: int
+    days_left: int
+
+
+@dataclass(frozen=True, slots=True)
+class ClientPortfolio:
+    """The totals on Home and Portfolio, in one currency, after tax.
+
+    Only running investments count. One waiting for payment has earned nothing and may lapse,
+    so it is only counted in `awaiting_payment`.
+    """
+
+    currency: Currency
+    # The principal put in, what it is worth today, and the interest it has earned so far.
+    invested: Money
+    worth: Money
+    interest_so_far: Money
+    # What the running investments add in one more day of interest.
+    earning_per_day: Money
+    # Added by today's run, once it has run.
+    interest_today: Money
+    active_count: int
+    awaiting_payment_count: int
+    # `worth` split by where it sits: saved to an open goal, or not. The two add up to `worth`.
+    outside_goals: Holding
+    in_goals: Holding
+    # Open goals, whether or not anything is saved to them yet.
+    open_goals: int
+    # Biggest first. The percentages add up to 100 when anything is invested.
+    products: tuple[ProductShare, ...]
+    next_maturity: NextMaturity | None
+
+
+async def client_portfolio(
+    session: AsyncSession, client: Actor, clock: Clock, *, currency: Currency = Currency.UGX
+) -> ClientPortfolio:
+    """A client's own totals for Home and Portfolio.
+
+    `session` is the client's own transaction. Every figure is the sum of the investments
+    module's client views, so it agrees to the shilling with the investments the client sees.
+    """
+    if client.kind != "client" or client.id is None:
+        raise ApplicationError("forbidden")
+    today = business_date(clock.now())
+    held = [
+        item
+        for item in await investments.client_investments(session, client, clock)
+        if item.amount.currency is currency
+    ]
+    running = [item for item in held if item.status is InvestmentStatus.ACTIVE]
+    saved = await goals.open_goal_savings(session, client.id)
+    zero = Money(0, currency)
+
+    def total(items: list[investments.ClientInvestment]) -> Money:
+        return sum((item.value for item in items), zero)
+
+    in_goals = [item for item in running if item.id in saved]
+    outside = [item for item in running if item.id not in saved]
+
+    by_product: dict[str, list[investments.ClientInvestment]] = {}
+    for item in running:
+        by_product.setdefault(item.product_code, []).append(item)
+    # Biggest first; the code breaks a tie so the order never changes between reads.
+    groups = sorted(
+        by_product.values(), key=lambda items: (-total(items).minor, items[0].product_code)
+    )
+    shares = whole_percentages([total(items).minor for items in groups])
+
+    maturing = sorted(
+        (
+            item
+            for item in running
+            if item.maturity_date is not None
+            and item.term_days is not None
+            and item.maturity_date >= today
+            and item.withdrawal_requested_at is None
+        ),
+        key=lambda item: (item.maturity_date, item.id),
+    )
+    first = maturing[0] if maturing else None
+    return ClientPortfolio(
+        currency=currency,
+        invested=sum((item.amount for item in running), zero),
+        worth=total(running),
+        interest_so_far=sum((item.interest_so_far for item in running), zero),
+        earning_per_day=sum((item.earning_per_day for item in running), zero),
+        interest_today=sum((item.interest_today for item in running), zero),
+        active_count=len(running),
+        awaiting_payment_count=sum(
+            1 for item in held if item.status is InvestmentStatus.AWAITING_PAYMENT
+        ),
+        outside_goals=Holding(total(outside), len(outside)),
+        in_goals=Holding(total(in_goals), len(in_goals)),
+        open_goals=await goals.open_goal_count(session, client.id),
+        products=tuple(
+            ProductShare(
+                product_code=items[0].product_code,
+                product_name=items[0].product_name,
+                worth=total(items),
+                count=len(items),
+                percent=percent,
+            )
+            for items, percent in zip(groups, shares, strict=True)
+        ),
+        next_maturity=None
+        if first is None or first.maturity_date is None or first.term_days is None
+        else NextMaturity(
+            investment_id=first.id,
+            product_name=first.product_name,
+            on=first.maturity_date,
+            at_maturity=first.at_maturity,
+            term_days=first.term_days,
+            days_earned=first.days_earned,
+            days_left=(first.maturity_date - today).days,
+        ),
+    )
 
 
 async def _monthly(

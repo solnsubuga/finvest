@@ -15,6 +15,7 @@ from app.modules.payouts.domain.destinations import (
 )
 from app.modules.payouts.domain.payouts import IllegalTransition, PayoutEvent, PayoutStatus
 from app.modules.payouts.payouts import PayoutRefused, PayoutView
+from app.modules.platform_settings.domain.catalogue import CHANNELS
 from app.shared.actors import SYSTEM, Actor
 from app.shared.business_day import business_date
 from app.shared.errors import ApplicationError
@@ -23,6 +24,7 @@ from app.shared.push_ids import push_id
 from tests.support.clock import FakeClock
 from tests.support.ledger import key, staff, ugx
 from tests.support.payouts import World
+from tests.support.settings import clear_settings, set_setting
 
 pytestmark = pytest.mark.integration
 
@@ -747,3 +749,34 @@ async def test_racing_decisions_on_a_held_payout_leave_one_outcome(
     else:
         assert (final.status, closed.status) == (S.CANCELLED, reviews.ReleaseStatus.DECLINED)
         assert await world.balance(world.holding) == 30_000_000
+
+
+async def test_a_paused_channel_refuses_a_clients_payout_but_not_a_maturity(
+    world: World, app_database: Database, migrator_database: Database
+) -> None:
+    channels = dict.fromkeys(CHANNELS, True)
+    await set_setting(
+        app_database, "payment_channels", channels | {"mtn_payout": False}, world.clock
+    )
+    try:
+        assert await world.refused(100_000) == "channel_paused"
+        # The system's payout for a maturity is made and queued as always.
+        async with world.worker.actor_transaction(SYSTEM) as session:
+            matured = await payouts.create_payout(
+                session,
+                SYSTEM,
+                client_id=world.client_id,
+                destination_id=world.destination_id,
+                amount=ugx(100_000),
+                source_reference=world.handover,
+                request_key=f"maturity:{push_id()}",
+                clock=world.clock,
+            )
+        assert matured.status is S.QUEUED
+        # Airtel being paused says nothing about this MTN number.
+        await set_setting(
+            app_database, "payment_channels", channels | {"airtel_payout": False}, world.clock
+        )
+        assert (await world.request(100_000)).status is S.QUEUED
+    finally:
+        await clear_settings(migrator_database)

@@ -5,7 +5,7 @@ returns a login challenge. It never opens a session. A second step, a passkey or
 code, turns the challenge into a session with `open_session`.
 """
 
-from collections.abc import Collection
+from collections.abc import Collection, Sequence
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from typing import Literal
@@ -37,6 +37,8 @@ from app.modules.identity.domain.sessions import (
 )
 from app.modules.identity.hashing import PasswordHasher
 from app.modules.notifications.service import Channel, queue_message
+from app.modules.platform_settings import service as platform_settings
+from app.modules.platform_settings.domain.catalogue import StaffIdleMinutes
 from app.shared.actors import Actor
 from app.shared.clock import Clock
 from app.shared.errors import ApplicationError, ErrorCode, FieldProblem
@@ -346,9 +348,9 @@ class IdentityService:
         """Open a session inside the caller's transaction, so it commits with what proved it."""
         if actor.kind not in ("client", "staff"):
             raise ValueError("Only a client or a staff member has a session")
-        policy = self._policies.get((actor.kind, transport))
-        if policy is None:
+        if (actor.kind, transport) not in self._policies:
             raise ApplicationError("validation_failed")  # staff use the web console only
+        policy = await self._policy(session, actor.kind, transport, now)
         idle, absolute = policy.expiry(now, now)
         token = new_token()
         session_id = push_id(self.clock)
@@ -437,8 +439,28 @@ class IdentityService:
                 now=now,
             )
 
-    async def _touch(self, token: str, kind: AccountKind):  # type: ignore[no-untyped-def]
-        """Find a live session by token and push its idle expiry forward."""
+    async def _policy(
+        self, session: AsyncSession, kind: AccountKind, transport: Transport, now: datetime
+    ) -> SessionPolicy:
+        """The lifetime of a session. A staff session's idle time is set on Settings once two
+        people have approved one; until then it is the deploy's `staff_session_idle_minutes`."""
+        policy = self._policies[(kind, transport)]
+        if kind != "staff":
+            return policy
+        approved = await platform_settings.approved(session, "staff_idle_minutes")
+        if not isinstance(approved, StaffIdleMinutes):
+            return policy
+        return SessionPolicy(
+            min(timedelta(minutes=approved.minutes), policy.absolute), policy.absolute
+        )
+
+    async def _touch(  # type: ignore[no-untyped-def]
+        self, token: str, kind: AccountKind, address: str | None = None
+    ):
+        """Find a live session by token and push its idle expiry forward.
+
+        A staff session is refused, untouched, from outside the office networks set on Settings.
+        """
         now = self.clock.now()
         async with self.database.transaction() as session:
             row = (
@@ -456,7 +478,20 @@ class IdentityService:
             ).one_or_none()
             if row is None:
                 return None, None
-            idle, _ = self._policies[(kind, row.transport)].expiry(row.created_at, now)
+            policy = await self._policy(session, kind, row.transport, now)
+            if row.last_seen_at + policy.idle <= now:
+                # Idle for longer than a shorter idle time approved since it was last used.
+                return None, None
+            if kind == "staff":
+                networks = await platform_settings.office_networks(session, now)
+                if not networks.allows(address):
+                    raise ApplicationError(
+                        "forbidden",
+                        fields=[
+                            FieldProblem(field_path=["network"], code="outside_office_network")
+                        ],
+                    )
+            idle, _ = policy.expiry(row.created_at, now)
             # Judged before this request counts as use. A locked session stays locked, and its
             # idle time keeps running, until the PIN opens it.
             locked = is_locked(pin_set=row.pin_set, last_seen_at=row.last_seen_at, now=now)
@@ -500,8 +535,11 @@ class IdentityService:
             ),
         )
 
-    async def staff_session(self, token: str) -> StaffSession | None:
-        row, account = await self._touch(token, "staff")
+    async def staff_session(self, token: str, address: str | None = None) -> StaffSession | None:
+        """The signed-in member of staff, or None. `address` is where the request came from,
+        checked against the office networks: outside them, or unknown while networks are set,
+        is `forbidden`."""
+        row, account = await self._touch(token, "staff", address)
         if row is None or account is None:
             return None
         return StaffSession(
@@ -701,6 +739,25 @@ async def active_client_ids(session: AsyncSession, *, after: str | None, limit: 
         {"after": after, "limit": limit},
     )
     return [row.id for row in rows]
+
+
+async def count_active_clients(session: AsyncSession, among: Sequence[str] | None = None) -> int:
+    """How many clients `active_client_ids` would list, of all or of `among` only.
+
+    Other modules call this instead of reading identity tables, to say before a message to every
+    client how many it reaches.
+    """
+    return int(
+        (
+            await session.execute(
+                text(
+                    "SELECT count(*) FROM identity_clients WHERE status = 'active' "
+                    "AND (CAST(:among AS text[]) IS NULL OR id = ANY(CAST(:among AS text[])))"
+                ),
+                {"among": None if among is None else list(among)},
+            )
+        ).scalar_one()
+    )
 
 
 def _staff_only(actor: Actor) -> None:

@@ -4,15 +4,15 @@ What a client tells Finvest about themselves beyond the identity check: who to c
 
 ## Next of kin
 
-A client names up to five people. For each: their full name as on their ID, the relationship (`spouse`, `child`, `parent`, `sibling`, `other_relative`, `friend` or `other`), a mobile number and an ID number, and a share of what the client holds.
+A client names up to five people. For each: their full name as on their ID, the relationship (`spouse`, `child`, `parent`, `sibling`, `other_relative`, `friend` or `other`), a mobile number and an ID number. Next of kin are contacts only, with no share of what the client holds (the owner's decision, 2026-11-14).
 
-- **Shares are whole basis points.** 10,000 is 100%. The shares of everyone named add up to exactly 10,000, so there is never a fraction or a rounding question. A list may be empty, which removes everyone.
+- A list may be empty, which removes everyone.
 - **A save replaces the whole list.** The app sends every person each time. Nobody is named twice (by ID number), and a client cannot name their own mobile number.
-- **Sealed.** Name, mobile number and ID number are sealed with the identity data key (`app/infrastructure/sealing.py`), each bound to its row and column. The database and its backups hold no readable copy. Relationship and share are readable. Without `FINVEST_IDENTITY_DATA_KEY` the routes answer `unavailable`.
-- **What the database enforces** (migration `0230_kyc_next_of_kin`): a constraint trigger checks at commit that the shares add up to 10,000 or the list is empty, and that the list's own count matches. A save first locks the client's list row, so two saves from two devices run one after the other and never mix. A client reads and changes only their own list; staff read every list and change none; the worker sees nothing.
+- **Sealed.** Name, mobile number and ID number are sealed with the identity data key (`app/infrastructure/sealing.py`), each bound to its row and column. The database and its backups hold no readable copy. The relationship is readable. Without `FINVEST_IDENTITY_DATA_KEY` the routes answer `unavailable`.
+- **What the database enforces** (migrations `0230_kyc_next_of_kin` and `0234_kyc_next_of_kin_contacts`, which dropped the shares): a constraint trigger checks at commit that the list's own count matches the people in it. A save first locks the client's list row, so two saves from two devices run one after the other and never mix. A client reads and changes only their own list; staff read every list and change none; the worker sees nothing.
 - **On the record.** `kyc.next_of_kin.saved` records how many people were saved, never who. Staff opening a client's next of kin is recorded as `kyc.next_of_kin.viewed`, and staff see ID numbers masked.
 
-The shares say who Finvest would speak to first and in what proportion the client wishes their holdings to go. They are a record of the client's wishes, not a legal will, and paying anything out to a next of kin is a manual process for compliance with the documents the law requires.
+Naming someone gives them nothing the client holds. Paying anything out after a client dies is a manual process for compliance, with the documents the law requires.
 
 ## The investing questions
 
@@ -40,10 +40,27 @@ There are no wrong answers and the profile refuses nothing: it is used to sugges
 | Route | Who | Use |
 | --- | --- | --- |
 | `GET /client/next-of-kin` | Client | The people named, in order, with `updated_at` (null before the first save). |
-| `PUT /client/next-of-kin` | Client | Replace the whole list: `{"people": [{full_name, relationship, phone, id_number, share_bps}]}`. Every problem is reported at once, by `field_path` `["body", "people", index, field]`, or `["body", "people"]` with `shares_must_total_100` or `too_many`. |
+| `PUT /client/next-of-kin` | Client | Replace the whole list: `{"people": [{full_name, relationship, phone, id_number}]}`. Every problem is reported at once, by `field_path` `["body", "people", index, field]`, or `["body", "people"]` with `too_many`. A `share_bps` field is refused. |
 | `GET /client/risk-profile` | Client | The question and answer codes, the latest answers with their profile and `longest_term_days`, and `due`. |
 | `PUT /client/risk-profile` | Client | Answer every question: `{"answers": {"purpose": "...", ...}}`. |
 | `GET /staff/clients/{id}/profile` | `clients.view` | Next of kin with ID numbers masked (null without the data key), and every set of answers, newest first. |
+
+## Freezing the account
+
+A client who loses their phone, or thinks someone else knows their password, freezes their own account from Profile, Freeze my account. It takes effect at once:
+
+- The account moves from `active` to `locked`, so nobody can log in, the client included, and every session the client holds ends (`revoked_reason = 'frozen'`).
+- Nothing in the ledger moves. Investments and automatic plans carry on as they would under a staff lock.
+- No fresh sign-in is asked for: freezing only protects the account, and someone who has just lost their phone may not have their second step.
+- No message is sent, because Finvest sends a locked client no messages ([client-accounts.md](client-accounts.md#locking)).
+
+Unfreezing is never done from the app. The client gets in touch, and staff use the existing two-person unlock: one person checks it is really them and proposes the unlock, a different person approves it ([client-accounts.md](client-accounts.md)). The client page shows the freeze, with the client's reason, above the lock section.
+
+Migration `0235_client_freezes` adds `identity_client_freezes`, one row each time a client froze their account, never changed or removed. The only way in is `identity_freeze_client`, a SECURITY DEFINER function that takes the client from the actor settings, so a client freezes only themselves; the API holds no write on the table. It records the freeze and locks the client in the same transaction, and the status guard on `identity_clients` accepts `active` to `locked` only with a freeze recorded in that transaction. Freezing an account that is already locked, closed or not yet claimed is refused with `conflict`. Each freeze is the audit event `identity.client.frozen`.
+
+| Route | Who | Use |
+| --- | --- | --- |
+| `POST /client/account-freeze` | Client | `{"reason": "..." or null}`, at most 500 characters. Answers 201 with `frozen_at`. The session that asked has ended by the time the answer arrives. |
 
 ## Not built yet
 

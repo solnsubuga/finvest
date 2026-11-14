@@ -81,6 +81,11 @@ class Settings(BaseSettings):
     # ever made that nothing would pay (docs/investing.md).
     early_withdrawal_open: bool = False
 
+    # Client routes answer `maintenance` (503) while this is on, so the app shows its
+    # maintenance screen instead of errors. Staff, webhook and health routes keep working, so
+    # operations can carry on and providers' callbacks are still taken (docs/architecture.md).
+    client_maintenance: bool = False
+
     # `/docs` and `/openapi.json`. Off unless turned on: a deployed API hands no route catalogue
     # to anonymous visitors.
     api_docs: bool = False

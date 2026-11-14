@@ -151,6 +151,14 @@ export default function Profile() {
           />
           <View style={styles.divider} />
           <Row
+            icon="portfolio"
+            title="Company and group accounts"
+            detail="Open one for a business, savings group or SACCO"
+            onPress={() => router.push("/account/organisations")}
+            testID="profile-organisations"
+          />
+          <View style={styles.divider} />
+          <Row
             icon="profile"
             title="Next of kin"
             detail="Who we contact if something happens to you"
@@ -196,6 +204,14 @@ export default function Profile() {
             <TextLink label="Documents" onPress={() => router.navigate("/documents")} />
           </View>
         )}
+        <Button
+          label="Freeze my account"
+          icon="lock"
+          variant="secondary"
+          height={52}
+          onPress={() => router.push("/account/freeze")}
+          testID="profile-freeze"
+        />
         <Button label="Log out" onPress={signOut} loading={busy} testID="sign-out" />
         <View style={{ alignSelf: "center" }}>
           <TextLink label="Close my account" onPress={() => router.push("/account/close")} testID="profile-close" />

@@ -70,6 +70,12 @@ describe("payouts that came back", () => {
     const user = renderSection(api);
     const card = await screen.findByRole("article", { name: "Return of payout -OdBankPay00000000P1" });
     expect(card).toHaveTextContent("A colleague proposed");
+    // The second person sees what they approve: the payout, where it went, and the line itself.
+    expect(card).toHaveTextContent("UGX 1,200,000");
+    expect(card).toHaveTextContent("Paid to Stanbic Bank •••• 7731, held by Joan Namutebi");
+    const line = within(card).getByRole("region", { name: "The line that brought it back" });
+    expect(line).toHaveTextContent("RTN 0412 FINVEST -OdBankPay00000000P1");
+    expect(line).toHaveTextContent("Returned: account closed");
     await user.type(within(card).getByLabelText("Your reason"), "Opened the line");
     await user.click(within(card).getByRole("button", { name: "Approve as second person" }));
     expect(approve).toHaveBeenCalledWith("key-1", "-OdReturn00000000001", "Opened the line");

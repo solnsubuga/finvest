@@ -20,6 +20,10 @@ import { DayClose } from "./dayclose/DayClose.tsx";
 import { createHttpDayCloseApi } from "./dayclose/http.ts";
 import { createStubDayCloseApi, type DayCloseStubCase } from "./dayclose/stub.ts";
 import { createHttpBankTransfersApi } from "./http.ts";
+import { notConnectedMistakenPaymentsApi, type MistakenPaymentsApi } from "./mistaken/api.ts";
+import { createHttpMistakenPaymentsApi } from "./mistaken/http.ts";
+import { MistakenPayments } from "./mistaken/MistakenPayments.tsx";
+import { createStubMistakenPaymentsApi } from "./mistaken/stub.ts";
 import { notConnectedReassignmentsApi, type ReassignmentsApi } from "./reassignments/api.ts";
 import { createHttpReassignmentsApi } from "./reassignments/http.ts";
 import { Reassignments } from "./reassignments/Reassignments.tsx";
@@ -260,6 +264,15 @@ export default function ReconciliationPage() {
     const base = apiBaseUrl();
     return base ? createHttpDayCloseApi(createHttp(base), session.staffId) : notConnectedDayCloseApi;
   });
+  // Payments credited by mistake: sample steps under the stub, the real routes otherwise.
+  const [mistaken] = useState<MistakenPaymentsApi>(() => {
+    if (isStubAuth() && session) {
+      const which = stubCase();
+      return createStubMistakenPaymentsApi(session.staffId, 150, which === "unsorted" ? "sample" : which);
+    }
+    const base = apiBaseUrl();
+    return base ? createHttpMistakenPaymentsApi(createHttp(base)) : notConnectedMistakenPaymentsApi;
+  });
   // Transfers between pots: sample pots under the stub, the real routes otherwise.
   const [potTransfers] = useState<PotTransfersApi>(() => {
     if (!session) return notConnectedPotTransfersApi;
@@ -275,6 +288,7 @@ export default function ReconciliationPage() {
       <BankTransfersScreen api={api} canDecide={session ? can(session, "bank_transfers.change") : false} />
       <DayClose api={days} canAct={session ? can(session, "reconciliation.change") : false} />
       <Reassignments api={moves} canChange={session ? can(session, "deposit_reassignments.change") : false} />
+      <MistakenPayments api={mistaken} canChange={session ? can(session, "deposit_reassignments.change") : false} />
       <PotTransfers api={potTransfers} me={session?.staffId ?? ""} canChange={session ? can(session, "reconciliation.change") : false} />
     </>
   );

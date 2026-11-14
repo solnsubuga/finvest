@@ -1,4 +1,4 @@
-import type { AutomaticCheckName, CheckStatus, DocumentType, PhotoKind, Verdict } from "./api.ts";
+import type { AutomaticCheckName, CheckStatus, DocumentType, PhoneName, PhotoKind, Verdict } from "./api.ts";
 
 export const DOCUMENT_LABELS: Record<DocumentType, string> = {
   national_id: "National ID",
@@ -22,6 +22,23 @@ export const CHECK_LABELS: Record<AutomaticCheckName, string> = {
   screening: "Sanctions and political exposure",
   liveness: "Selfie taken live",
 };
+
+export const PHONE_NAME_LABEL = "Phone registered to this name";
+
+const PHONE_NAME_VERDICTS: Record<PhoneName["status"], string> = {
+  checking: "Checking",
+  matches: "Matches",
+  partly_matches: "Partly matches",
+  different: "Different name",
+  no_name: "No name on the number",
+  not_answered: "Network did not answer",
+};
+
+/** The result, in words. The network's name is shown when it is not the same as the ID's. */
+export function phoneNameVerdict(phone: PhoneName): string {
+  const verdict = PHONE_NAME_VERDICTS[phone.status];
+  return phone.registeredName && phone.status !== "matches" ? `${verdict}: ${phone.registeredName}` : verdict;
+}
 
 const VERDICT_LABELS: Record<AutomaticCheckName, Record<Verdict, string>> = {
   document_genuine: { pass: "Pass", fail: "Fail", unsure: "Unsure" },
@@ -57,6 +74,7 @@ const FLAG_LABELS: Record<string, string> = {
   provider_refused: "Provider refused the check",
   provider_not_received: "Provider never received the check",
   provider_no_answer: "Provider did not answer",
+  phone_name_not_confirmed: "Phone name not confirmed",
 };
 
 /** The first reason a person is needed, in words. */

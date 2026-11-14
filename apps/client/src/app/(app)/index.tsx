@@ -9,6 +9,9 @@ import { Notice } from "@/components/Blocks";
 import { Icon } from "@/components/Icon";
 import { LinkCard } from "@/components/LinkCard";
 import { Txt } from "@/components/Txt";
+import { ClaimCard } from "@/claim/ClaimCard";
+import { claimOpen } from "@/claim/types";
+import { useClaim } from "@/claim/useClaim";
 import { IdCheckCard } from "@/identity/IdCheckCard";
 import { colors } from "@/theme";
 import { useIsWide } from "@/theme/useIsWide";
@@ -26,6 +29,10 @@ export default function Home() {
   const { session } = useAuth();
   const wide = useIsWide();
   const steps = useSecondSteps();
+  const claim = useClaim();
+  // A client moved from Finvest 1.0 is led by their move, which takes in the ID check.
+  const moving =
+    claim.status === "ready" && claimOpen(claim.claim) ? { claim: claim.claim, check: claim.check } : null;
   // Shown only when we know SMS is the one second step. If the list cannot be
   // loaded, Home stays quiet about it: Sign in and security reports the error.
   const onlySms = steps.status === "ready" && steps.methods.length === 1;
@@ -46,7 +53,11 @@ export default function Home() {
           accounts you have used before.
         </Notice>
       ) : null}
-      <IdCheckCard />
+      {moving ? (
+        <ClaimCard claim={moving.claim} check={moving.check} />
+      ) : (
+        <IdCheckCard />
+      )}
       {onlySms ? (
         <Pressable
           accessibilityRole="link"

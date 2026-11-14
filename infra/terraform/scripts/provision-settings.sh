@@ -10,7 +10,7 @@ case $mode in
   check)
     names=(DIGITALOCEAN_TOKEN SPACES_ACCESS_KEY_ID SPACES_SECRET_ACCESS_KEY CLOUDFLARE_API_TOKEN TERRAFORM_STATE_BUCKET)
     if [[ $TARGET != shared ]]; then
-      names+=(GITHUB_TOKEN SSH_SOURCE_ADDRESSES DEPLOY_SSH_KEY)
+      names+=(GITHUB_TOKEN DEPLOY_SSH_KEY)
     fi
     if [[ $TARGET == production ]]; then
       names+=(ADMIN_ACCESS_EMAILS)
@@ -48,6 +48,7 @@ json.dump({
     "deploy_ssh_public_key": os.environ.get("DEPLOY_SSH_PUBLIC_KEY", "").strip(),
     "ssh_source_addresses": items("SSH_SOURCE_ADDRESSES"),
     "admin_access_emails": items("ADMIN_ACCESS_EMAILS"),
+    "admin_office_networks": items("ADMIN_OFFICE_NETWORKS"),
     "alert_emails": items("ALERT_EMAILS"),
     "client_app_public": os.environ.get("CLIENT_APP_PUBLIC", "") == "true",
 }, __import__("sys").stdout)

@@ -5,7 +5,7 @@
  */
 
 import type { Amount, Currency } from "./api.ts";
-import { BooksError, type BookLine, type Books, type BooksApi, type Days, type JournalExport } from "./books.ts";
+import { BooksError, type BookLine, type Books, type BooksApi, type Days, type FormatOption, type JournalExport, type JournalFormat } from "./books.ts";
 import { journalFilename } from "./booksHttp.ts";
 
 interface Reader {
@@ -61,6 +61,7 @@ export function createStubBooksApi(reader: Reader, options: BooksStubOptions = {
           exportedBy: "stub-grace",
           exportedByName: "Grace Atim",
           exportedAt: `${shift(today, -3)}T06:12:00Z`,
+          format: "quickbooks",
         },
         {
           id: "stub-export-1",
@@ -71,8 +72,19 @@ export function createStubBooksApi(reader: Reader, options: BooksStubOptions = {
           exportedBy: "stub-grace",
           exportedByName: "Grace Atim",
           exportedAt: `${shift(today, -4)}T06:05:00Z`,
+          format: "csv",
         },
       ];
+
+  // QuickBooks is mapped, Xero is missing one account, and Sage and Zoho Books have no map yet.
+  const allCodes = UGX_BOOKS.map(([code]) => code);
+  const formats: FormatOption[] = [
+    { format: "csv", name: "Finvest CSV", ready: true, unmapped: [], currencies: ["UGX", "USD"] },
+    { format: "quickbooks", name: "QuickBooks Online", ready: !options.empty, unmapped: options.empty ? allCodes : [], currencies: ["UGX"] },
+    { format: "xero", name: "Xero", ready: !options.empty, unmapped: options.empty ? allCodes : ["fees.provider.iotec"], currencies: ["UGX"] },
+    { format: "sage", name: "Sage Accounting", ready: false, unmapped: allCodes, currencies: ["UGX"] },
+    { format: "zoho", name: "Zoho Books", ready: false, unmapped: allCodes, currencies: ["UGX"] },
+  ];
 
   function books(currency: Currency, month: string): Books {
     const amount = (minor: number): Amount => ({ minor, currency });
@@ -116,6 +128,7 @@ export function createStubBooksApi(reader: Reader, options: BooksStubOptions = {
       sentThrough,
       nextExport,
       exports: mine,
+      formats,
     };
   }
 
@@ -124,9 +137,12 @@ export function createStubBooksApi(reader: Reader, options: BooksStubOptions = {
       if (month > today.slice(0, 7)) return Promise.reject(new BooksError("month_in_future"));
       return Promise.resolve(books(currency, month));
     },
-    exportJournal(currency, days: Days) {
+    exportJournal(currency, days: Days, format: JournalFormat) {
       if (days.dateTo < days.dateFrom) return Promise.reject(new BooksError("days_backwards"));
       if (!closedThrough || days.dateTo > closedThrough) return Promise.reject(new BooksError("day_not_closed"));
+      const option = formats.find((f) => f.format === format);
+      if (option && !option.currencies.includes(currency)) return Promise.reject(new BooksError("currency_not_supported"));
+      if (option && option.unmapped.length > 0) return Promise.reject(new BooksError("codes_not_mapped", option.unmapped));
       exports.unshift({
         id: `stub-export-${exports.length + 1}`,
         ...days,
@@ -135,9 +151,10 @@ export function createStubBooksApi(reader: Reader, options: BooksStubOptions = {
         exportedBy: reader.id,
         exportedByName: reader.name,
         exportedAt: new Date().toISOString(),
+        format,
       });
       const content = "Date,Journal,Account code,Account name,Kind,Currency,Debit,Credit\r\n";
-      return Promise.resolve({ file: new Blob([content], { type: "text/csv" }), filename: journalFilename(currency, days) });
+      return Promise.resolve({ file: new Blob([content], { type: "text/csv" }), filename: journalFilename(currency, days, format) });
     },
   };
 }

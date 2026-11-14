@@ -32,8 +32,8 @@ export type LinkKind =
   | "conversation"
   | "complaint"
   | "goal"
-  | "autoinvest_plan"
-  | "organisation";
+  | "organisation"
+  | "autoinvest_plan";
 
 export type Notification = {
   id: string;

@@ -61,11 +61,13 @@ export const kindLabel: Record<Product["kind"], string> = {
 export const atMaturityLabel: Record<AtMaturity, string> = {
   roll_over: "Roll over",
   pay_out: "Pay out",
+  pay_interest: "Pay me the interest",
 };
 
 export const atMaturityDetail: Record<AtMaturity, string> = {
   roll_over: "Start a new term with everything, at the rate on that day.",
   pay_out: "Send everything to your mobile money or bank account.",
+  pay_interest: "Keep what you put in invested for another term, and send the interest to your mobile money or bank account. Every term, until you change it.",
 };
 
 export const statusLabel: Record<InvestmentStatus, string> = {

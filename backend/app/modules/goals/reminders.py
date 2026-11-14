@@ -20,7 +20,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.modules.goals import saving_rules, service
 from app.modules.goals.domain.goals import GoalStatus
-from app.modules.goals.domain.reminders import top_up_to_remind
+from app.modules.goals.domain.reminders import payday_to_remind, top_up_to_remind
 from app.modules.investments import service as investments
 from app.modules.investments.domain.investments import InvestmentStatus
 from app.modules.notifications import contract as notifications
@@ -49,7 +49,7 @@ def reached_key(goal_id: str, target_minor: int) -> str:
 async def send_reminders(session: AsyncSession, clock: Clock) -> dict[str, int]:
     """Raise today's goal notifications for every goal, in one transaction. Returns how many
     of each were new. The worker pages through them with `send_page` instead."""
-    told = {"top_up_due": 0, "reached": 0}
+    told = {"top_up_due": 0, "reached": 0, "payday": 0}
     after = ""
     while True:
         page = await send_page(session, clock, after=after)
@@ -77,7 +77,7 @@ async def send_page(
     limit = limit or BATCH
     now = clock.now()
     today = business_date(now)
-    told = {"top_up_due": 0, "reached": 0}
+    told = {"top_up_due": 0, "reached": 0, "payday": 0}
     goal_ids = list(
         (await session.execute(_ACTIVE, {"after": after, "limit": limit})).scalars().all()
     )
@@ -99,6 +99,25 @@ async def send_page(
             now=now,
         ):
             told["reached"] += 1
+        if goal.id not in ruled and goal.payday is not None:
+            payday = payday_to_remind(
+                payday=goal.payday,
+                target_date=goal.target_date,
+                today=today,
+                reached=reached,
+                saved_on=await _saved_on(session, goal.id),
+            )
+            if payday is not None and await notifications.notify(
+                session,
+                event_name="goal_payday",
+                client_id=goal.client_id,
+                idempotency_key=f"goal-payday:{goal.id}:{payday.isoformat()}",
+                variables={"goal": goal.name},
+                link=link,
+                now=now,
+            ):
+                told["payday"] += 1
+            continue
         due = (
             None
             if goal.id in ruled
