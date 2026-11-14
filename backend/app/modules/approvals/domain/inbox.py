@@ -40,6 +40,10 @@ Kind = Literal[
     "account_closure",
     "compliance_case",
     "bank_account_change",
+    "payment_channels_change",
+    "calendar_change",
+    "staff_security_change",
+    "statement_layout_change",
 ]
 
 
@@ -91,6 +95,11 @@ SOURCES: dict[Kind, Source] = {
     "compliance_case": Source("compliance.view", "compliance_cases.change"),
     # The bank account clients pay into by transfer, on Settings.
     "bank_account_change": Source("settings.view", "bank_accounts.change"),
+    # The platform's other settings, on Settings, one kind per section of the screen.
+    "payment_channels_change": Source("settings.view", "payment_channels.change"),
+    "calendar_change": Source("settings.view", "calendar.change"),
+    "staff_security_change": Source("settings.view", "staff_security.change"),
+    "statement_layout_change": Source("settings.view", "statement_layouts.change"),
 }
 
 

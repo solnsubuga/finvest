@@ -83,6 +83,19 @@ Permission = Literal[
     # Proposing or deciding to email again an address that bounced for good or complained.
     # Seeing the suppression list is `clients.view`. Not a screen.
     "email_suppressions.lift",
+    # Proposing or deciding which ways of paying in and paying out are open, on the Settings
+    # screen. Seeing them is `settings.view`. Not a screen.
+    "payment_channels.change",
+    # Proposing or deciding the public holidays, the bank payout cut-off and the maturity
+    # reminders, on the Settings screen. Seeing them is `settings.view`. Not a screen.
+    "calendar.change",
+    # Proposing or deciding the office networks staff may use the console from and how long an
+    # idle staff session lasts. Admin only: a wrong value can lock every member of staff out.
+    # Not a screen.
+    "staff_security.change",
+    # Proposing or deciding the column layouts of providers' statement exports, on the Settings
+    # screen. Seeing them is `settings.view`. Not a screen.
+    "statement_layouts.change",
     # Proposing or deciding an announcement to every active client. A bigger act than changing
     # a wording, so it is a permission of its own and can be given to fewer people. Seeing
     # announcements is `settings.view`.
@@ -162,6 +175,11 @@ ROLE_PERMISSIONS: dict[Role, frozenset[Permission]] = {
             "organisations.review",
             "migration.import",
             "client_phones.change",
+            # Operations runs the day: it pauses a payment channel during an outage and keeps
+            # the calendar. The rest of Settings is read only for it.
+            "settings.view",
+            "payment_channels.change",
+            "calendar.change",
         }
     ),
     "finance": frozenset(
@@ -191,9 +209,13 @@ ROLE_PERMISSIONS: dict[Role, frozenset[Permission]] = {
             "migration.sign_off",
             "investment_corrections.change",
             # The trust account clients pay into is finance's to keep right. Settings is where
-            # it is set, so finance can open Settings, read only apart from that account.
+            # it is set, so finance can open Settings. Finance also keeps the payment channels,
+            # the calendar and the statement layouts, but not staff security.
             "settings.view",
             "bank_accounts.change",
+            "payment_channels.change",
+            "calendar.change",
+            "statement_layouts.change",
         }
     ),
     "compliance": frozenset(

@@ -145,8 +145,31 @@ def test_a_bank_account_change_is_decided_by_finance_or_admin_and_never_its_prop
     for role in ("admin", "finance"):
         [item] = inbox([waiting("bank_account_change")], "me", permissions_for(role))
         assert item.can_decide is True
-    others: tuple[Role, ...] = ("operations", "compliance", "support")
+    # Operations opens Settings for the channels and the calendar, so it sees the change, but
+    # never decides where clients send money.
+    [seen] = inbox([waiting("bank_account_change")], "me", permissions_for("operations"))
+    assert seen.can_decide is False
+    others: tuple[Role, ...] = ("compliance", "support")
     for role in others:
         assert inbox([waiting("bank_account_change")], "me", permissions_for(role)) == []
     [mine] = inbox([waiting("bank_account_change", proposer="me")], "me", permissions_for("admin"))
     assert (mine.yours, mine.can_decide) == (True, False)
+
+
+def test_each_section_of_settings_is_decided_by_whoever_may_change_it() -> None:
+    deciders: dict[str, set[Role]] = {
+        "payment_channels_change": {"admin", "operations", "finance"},
+        "calendar_change": {"admin", "operations", "finance"},
+        "staff_security_change": {"admin"},
+        "statement_layout_change": {"admin", "finance"},
+    }
+    for kind, roles in deciders.items():
+        for role in ("admin", "operations", "finance", "compliance", "support"):
+            shown = inbox([waiting(kind)], "me", permissions_for(role))
+            can = [item.can_decide for item in shown]
+            if role in roles:
+                assert can == [True], (kind, role)
+            elif role in ("compliance", "support"):
+                assert can == [], (kind, role)
+            else:
+                assert can == [False], (kind, role)

@@ -328,8 +328,10 @@ async def test_only_staff_who_may_change_the_account_propose_or_decide(api: Api)
             },
             "reason": "Why",
         }
+        # Operations opens Settings, so it reads the account, but never changes it.
+        assert (await support.get("/staff/payments/bank-accounts")).status_code == 403
+        assert (await operations.get("/staff/payments/bank-accounts")).status_code == 200
         for http in (support, operations):
-            assert (await http.get("/staff/payments/bank-accounts")).status_code == 403
             assert (
                 await http.post("/staff/payments/bank-accounts/UGX/proposals", json=body)
             ).status_code == 403

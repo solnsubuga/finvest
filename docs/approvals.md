@@ -42,6 +42,10 @@ The inbox only reads. Deciding happens on the owning module's own route, which c
 | `complaint_outcome` | support `complaints.pending_outcomes`. The subject is the complaint's reference. | `complaints.view` | `complaints.close` |
 | `announcement` | notifications `announcements.list_announcements`, proposed | `settings.view` | `announcements.send` |
 | `bank_account_change` | payments `bank_accounts.list_accounts`, a change waiting. The subject is the currency, never the account details. | `settings.view` | `bank_accounts.change` |
+| `payment_channels_change` | platform_settings `waiting`, a change to `payment_channels`. The subject is the setting's key. | `settings.view` | `payment_channels.change` |
+| `calendar_change` | the same, for `public_holidays`, `bank_payout_cutoff` or `maturity_reminders` | `settings.view` | `calendar.change` |
+| `staff_security_change` | the same, for `staff_idle_minutes` or `office_networks` | `settings.view` | `staff_security.change` |
+| `statement_layout_change` | the same, for `statement_layouts` | `settings.view` | `statement_layouts.change` |
 | `payout_resolution` | payouts `resolutions.waiting` | `reconciliation.view` | `reconciliation.change` |
 | `deposit_reassignment` | payments `reassignments.proposals_awaiting_approval`. The subject is the deposit's ID. | `reconciliation.view` | `deposit_reassignments.change` |
 | `payout_account` | payouts `destinations.checks_awaiting_approval`: a check recorded, not yet approved | `review_queue.view` | `payout_accounts.change` |
