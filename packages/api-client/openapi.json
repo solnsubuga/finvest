@@ -12767,6 +12767,44 @@
         "title": "ReturnIn",
         "type": "object"
       },
+      "ReturnLineOut": {
+        "additionalProperties": false,
+        "description": "A statement line coming in that could be the payout coming back.",
+        "properties": {
+          "amount": {
+            "$ref": "#/components/schemas/MoneyView"
+          },
+          "id": {
+            "maxLength": 20,
+            "minLength": 20,
+            "pattern": "^[-0-9A-Z_a-z]{20}$",
+            "title": "Id",
+            "type": "string"
+          },
+          "narrative": {
+            "title": "Narrative",
+            "type": "string"
+          },
+          "reference": {
+            "title": "Reference",
+            "type": "string"
+          },
+          "value_date": {
+            "format": "date",
+            "title": "Value Date",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "value_date",
+          "amount",
+          "reference",
+          "narrative"
+        ],
+        "title": "ReturnLineOut",
+        "type": "object"
+      },
       "ReturnOut": {
         "additionalProperties": false,
         "properties": {
@@ -12891,6 +12929,85 @@
           "ledger_entry_id"
         ],
         "title": "ReturnOut",
+        "type": "object"
+      },
+      "ReturnablePayoutOut": {
+        "additionalProperties": false,
+        "description": "A paid payout that could have come back. The account is masked.",
+        "properties": {
+          "amount": {
+            "$ref": "#/components/schemas/MoneyView"
+          },
+          "bank_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Bank Name"
+          },
+          "client_id": {
+            "maxLength": 20,
+            "minLength": 20,
+            "pattern": "^[-0-9A-Z_a-z]{20}$",
+            "title": "Client Id",
+            "type": "string"
+          },
+          "holder_name": {
+            "title": "Holder Name",
+            "type": "string"
+          },
+          "id": {
+            "maxLength": 20,
+            "minLength": 20,
+            "pattern": "^[-0-9A-Z_a-z]{20}$",
+            "title": "Id",
+            "type": "string"
+          },
+          "kind": {
+            "enum": [
+              "bank",
+              "mobile_money"
+            ],
+            "title": "Kind",
+            "type": "string"
+          },
+          "masked_account": {
+            "title": "Masked Account",
+            "type": "string"
+          },
+          "network": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Network"
+          },
+          "paid_at": {
+            "format": "date-time",
+            "title": "Paid At",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "client_id",
+          "kind",
+          "amount",
+          "paid_at",
+          "bank_name",
+          "network",
+          "masked_account",
+          "holder_name"
+        ],
+        "title": "ReturnablePayoutOut",
         "type": "object"
       },
       "ReviewIn": {
@@ -44445,6 +44562,115 @@
         ]
       }
     },
+    "/staff/payout-returns/returnable": {
+      "get": {
+        "description": "Paid payouts from the last 120 days with no open or approved return, newest paid first,\nat most 100. With `amount_minor`, only payouts of that amount in `currency`.",
+        "operationId": "returnable_staff_payout_returns_returnable_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "amount_minor",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "exclusiveMinimum": 0,
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Amount Minor"
+            }
+          },
+          {
+            "in": "query",
+            "name": "currency",
+            "required": false,
+            "schema": {
+              "default": "UGX",
+              "enum": [
+                "UGX",
+                "USD"
+              ],
+              "title": "Currency",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/ReturnablePayoutOut"
+                  },
+                  "title": "Response Returnable Staff Payout Returns Returnable Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          }
+        },
+        "summary": "Returnable",
+        "tags": [
+          "staff payouts"
+        ]
+      }
+    },
     "/staff/payout-returns/{return_id}": {
       "get": {
         "operationId": "get_return_staff_payout_returns__return_id__get",
@@ -45683,6 +45909,96 @@
           }
         },
         "summary": "Propose Resolution",
+        "tags": [
+          "staff payouts"
+        ]
+      }
+    },
+    "/staff/payouts/{payout_id}/return-lines": {
+      "get": {
+        "description": "Statement lines that could be this paid payout coming back, named by no open or approved\nreturn. 409 `payout_not_paid`.",
+        "operationId": "return_lines_staff_payouts__payout_id__return_lines_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "payout_id",
+            "required": true,
+            "schema": {
+              "maxLength": 20,
+              "minLength": 20,
+              "pattern": "^[-0-9A-Z_a-z]{20}$",
+              "title": "Payout Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/ReturnLineOut"
+                  },
+                  "title": "Response Return Lines Staff Payouts  Payout Id  Return Lines Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          }
+        },
+        "summary": "Return Lines",
         "tags": [
           "staff payouts"
         ]
