@@ -19,7 +19,7 @@ See docs/investing.md.
 
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
-from datetime import date, datetime, timedelta
+from datetime import date, datetime
 
 import structlog
 from sqlalchemy import text
@@ -69,9 +69,6 @@ from app.shared.push_ids import push_id
 MATURED_TOPIC = "investments.matured"
 ROLLED_OVER_TOPIC = "investments.rolled_over"
 BATCH = 100
-# How long before its maturity date a client is told an investment is ending, so there is time
-# to change what happens at maturity. The choice closes the day before.
-MATURING_NOTICE = timedelta(days=7)
 logger = structlog.get_logger()
 
 
@@ -88,11 +85,6 @@ _DUE = select_investments(
     "WHERE i.status = 'active' AND i.withdrawal_requested_at IS NULL "
     "AND i.maturity_date <= :run_date AND i.id > :after "
     "ORDER BY i.id LIMIT :limit FOR UPDATE OF i SKIP LOCKED"
-)
-_MATURING_SOON = select_investments(
-    "WHERE i.status = 'active' AND i.withdrawal_requested_at IS NULL "
-    "AND i.maturity_date > :run_date AND i.maturity_date <= :until AND i.id > :after "
-    "ORDER BY i.id LIMIT :limit"
 )
 _CHOOSE = text(
     "UPDATE investments SET at_maturity = :at_maturity, payout_destination_id = :destination_id, "
@@ -251,58 +243,6 @@ async def mature_batch(
             continue
         matured += 1
     return Batch(last_id=rows[-1].id if rows else None, matured=matured, failed=failed)
-
-
-@dataclass(frozen=True, slots=True)
-class Told:
-    last_id: str | None
-    told: int
-
-
-async def tell_maturing_batch(
-    session: AsyncSession, run_date: date, clock: Clock, *, after: str = "", limit: int = BATCH
-) -> Told:
-    """Tell the next clients whose investment matures within `MATURING_NOTICE` of `run_date`,
-    after it and while they can still change what happens. Worker only.
-
-    Each investment is told once, keyed by its ID, so a day the run missed is caught up by the
-    next without telling anyone twice. A late start inside the window is told at once.
-    """
-    rows = (
-        await session.execute(
-            _MATURING_SOON,
-            {
-                "run_date": run_date,
-                "until": run_date + MATURING_NOTICE,
-                "after": after,
-                "limit": limit,
-            },
-        )
-    ).all()
-    names: dict[str, str] = {}
-    told = 0
-    for row in rows:
-        investment = investment_from_row(row)
-        if investment.maturity_date is None:
-            continue
-        if investment.product_code not in names:
-            names[investment.product_code] = product_from_row(
-                await product_row(session, investment.product_code)
-            ).name
-        notice = await notifications.notify(
-            session,
-            event_name="investment_maturing",
-            client_id=investment.client_id,
-            idempotency_key=f"{investment.id}:maturing",
-            variables={
-                "product": names[investment.product_code],
-                "date": investment.maturity_date,
-            },
-            link=notifications.Link("investment", investment.id),
-            now=clock.now(),
-        )
-        told += notice is not None
-    return Told(last_id=rows[-1].id if rows else None, told=told)
 
 
 async def mature_investment(

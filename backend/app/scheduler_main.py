@@ -29,7 +29,6 @@ from app.modules.investments.jobs import (
     CANCEL_UNPAID_KIND,
     MATURE_KIND,
     REMIND_MATURING_KIND,
-    TELL_MATURING_KIND,
 )
 from app.modules.kyc.service import SWEEP_UNANSWERED
 from app.modules.notifications.keyed_backfill import KEY_HASHES
@@ -110,14 +109,6 @@ def schedules() -> list[Schedule]:
             trigger=CronTrigger(hour=1, minute=30, timezone=KAMPALA),
             kind=REFRESH_GROUPS_KIND,
             max_age=timedelta(days=1),
-        ),
-        # Investments maturing within the week, in the morning so no text arrives at night.
-        # Each is told once, so a missed morning is caught up the next.
-        Schedule(
-            name="investments.tell_maturing",
-            trigger=CronTrigger(hour=8, minute=15, timezone=KAMPALA),
-            kind=TELL_MATURING_KIND,
-            max_age=timedelta(hours=10),
         ),
         # Goal savings due in the next three days, and goals reached overnight, in the morning
         # so no text arrives at night. A missed day is caught up the next morning.
