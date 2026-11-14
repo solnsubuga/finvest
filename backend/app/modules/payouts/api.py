@@ -42,6 +42,8 @@ from app.modules.payouts.domain.destinations import (
 from app.modules.payouts.domain.name_lookups import NameCheck
 from app.modules.payouts.domain.payouts import PayoutStatus
 from app.modules.payouts.payouts import PayoutView
+from app.modules.platform_settings import service as platform_settings
+from app.modules.platform_settings.domain.catalogue import bank_payout_day
 from app.shared.business_day import business_date
 from app.shared.clock import Clock
 from app.shared.contracts import Contract, PushId
@@ -195,6 +197,9 @@ class LimitsOut(Contract):
     mobile_money_per_day: MoneyView | None
     bank_per_payout: MoneyView | None
     bank_per_day: MoneyView | None
+    # The day a bank payout asked for now is paid: today before the cut-off on a working day,
+    # otherwise the next working day, from the calendar on the console's Settings.
+    bank_payout_day: date
 
 
 _CLIENT_STATUS: dict[PayoutStatus, str] = {
@@ -549,7 +554,10 @@ async def resend(
 @client_router.get("/withdrawal-limits")
 async def withdrawal_limits(client: CurrentClient, database: Db, clock: Time) -> LimitsOut:
     async with database.actor_transaction(client.actor) as session:
-        limits = await payouts.current_limits(session, business_date(clock.now()))
+        now = clock.now()
+        limits = await payouts.current_limits(session, business_date(now))
+        cutoff = await platform_settings.bank_payout_cutoff(session, now)
+        holidays = await platform_settings.public_holidays(session, now)
 
     def optional(amount: Money | None) -> MoneyView | None:
         return None if amount is None else _money(amount)
@@ -560,4 +568,5 @@ async def withdrawal_limits(client: CurrentClient, database: Db, clock: Time) ->
         mobile_money_per_day=optional(limits.mobile_money_per_day),
         bank_per_payout=optional(limits.bank_per_payout),
         bank_per_day=optional(limits.bank_per_day),
+        bank_payout_day=bank_payout_day(now, cutoff, holidays),
     )

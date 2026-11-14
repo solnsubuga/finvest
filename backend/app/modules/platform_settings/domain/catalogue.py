@@ -19,6 +19,7 @@ from itertools import pairwise
 from typing import Any, Literal, get_args
 
 from app.modules.identity.domain.permissions import Permission
+from app.shared.business_day import KAMPALA
 
 Key = Literal[
     "payment_channels",
@@ -222,6 +223,21 @@ def _cutoff(value: Any) -> BankPayoutCutoff:
     if not EARLIEST_CUTOFF <= at <= LATEST_CUTOFF:
         raise _refuse(["value"], "outside_banking_hours")
     return BankPayoutCutoff(at)
+
+
+def bank_payout_day(moment: datetime, cutoff: BankPayoutCutoff, holidays: PublicHolidays) -> date:
+    """The day a bank payout asked for at `moment` is paid: today on a working day before the
+    cut-off, Kampala time, otherwise the next working day."""
+    if moment.utcoffset() is None:
+        raise ValueError("Times must be timezone-aware")
+    local = moment.astimezone(KAMPALA)
+    day = local.date()
+    if holidays.is_working_day(day) and local.time() < cutoff.at:
+        return day
+    day += timedelta(days=1)
+    while not holidays.is_working_day(day):
+        day += timedelta(days=1)
+    return day
 
 
 # Maturity reminders ----------------------------------------------------------------------------

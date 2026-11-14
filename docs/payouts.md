@@ -205,7 +205,7 @@ In `backend/app/modules/payouts/api.py`. Every route needs a signed-in client an
 | `GET /client/payouts` | The client's payouts, newest first, at most 50 |
 | `GET /client/payouts/{id}` | One payout. `returned_at` is set when a paid payout came back, and `resent_as` names the payout it was sent again as once the client sent it |
 | `POST /client/payouts/{id}/resend` | `{destination_id}`. Send a payout that came back again, to an approved account: a new payout for the same amount from the same handover, 201. Asking again is the same payout. 409 `payout_not_returned`; 422 on `destination_id` with a new payout's refusal codes; 422 `idempotency_key_reused` once it was sent again to another account |
-| `GET /client/withdrawal-limits` | The limits in force today, without the review threshold |
+| `GET /client/withdrawal-limits` | The limits in force today, without the review threshold, and `bank_payout_day`: the day a bank payout asked for now is paid, today before the cut-off on a working day, otherwise the next working day, from the calendar on Settings ([platform-settings.md](platform-settings.md)) |
 | `GET /client/banks` | The banks a client may be paid to, as `{code, name}`, from `domain/banks.py`: 22 banks licensed by the Bank of Uganda, taken from the client app's list. The app and the console name banks from this list |
 
 An account shows only its last digits. A payout's status is `in_review` (held for staff), `processing` (queued, sent or uncertain), `paid`, `failed` or `cancelled`. The client is never shown whether we are still finding out what the provider did.

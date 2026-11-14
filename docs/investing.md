@@ -129,6 +129,10 @@ The run publishes `investments.rolled_over` or `investments.matured`. The goals 
 
 The console's Maturities screen reads `GET /staff/maturities` (`investments/maturities.py`). It is worked out from the investments themselves, never from the jobs table, so it is right however the run went. For each maturity date from a week back to two weeks ahead, in each currency, it gives the number of terms and their principal, how many were rolled over, paid out or held, and how many are still open by what the client chose. It also lists every running investment past its maturity date (the run failed it or has not run) and every matured one whose money waits for the client, with the reason. It only reads: the run closes terms by itself, and only the client can send waiting money on.
 
+### Reminders before maturity
+
+Every morning at 08:30 Kampala time the worker runs `investments.remind_maturing` (`investments/reminders.py`). It reads how many days before maturity to remind from Settings (7 days and 1 day unless staff changed it, [platform-settings.md](platform-settings.md)) and raises `investment_maturing` for every active investment maturing on one of those days, naming the product and the date, never an amount. Each reminder is keyed by the investment, its maturity date and the number of days, so a second run tells nobody twice. A morning the run missed is not made up: the next reminder day sends its own.
+
 ## HTTP routes
 
 The code is `backend/app/modules/investments/api.py`. Amounts are integers in the smallest unit (`amount_minor`), and a request that sends one as text or with a fraction is refused. Client and public responses are built only from after-tax figures, and a unit test checks that no field of those contracts names tax, a gross figure or basis points.
