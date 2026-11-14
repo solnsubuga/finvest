@@ -29,9 +29,23 @@ A provider that does not answer raises `ProviderUnavailable` and the job asks ag
 
 | Setting | Values |
 | --- | --- |
-| `FINVEST_SCREENING_PROVIDER` | `none` (default): nothing is screened and each screen is recorded as not run. `development-stub`: for a developer's own machine; surname `SANCTIONED` matches a sanctions list and `POLITICIAN` a PEP list. Refused in production. The Sigma360 adapter adds `sigma360`. Set it on the API and the worker alike: the API reads it to decide whether a payout waits for a screen. |
+| `FINVEST_SCREENING_PROVIDER` | `none` (default): nothing is screened and each screen is recorded as not run. `development-stub`: for a developer's own machine; surname `SANCTIONED` matches a sanctions list and `POLITICIAN` a PEP list. Refused in production. `sigma360`: Sigma360, below. Set it on the API and the worker alike: the API reads it to decide whether a payout waits for a screen. |
+| `FINVEST_SIGMA360_API_KEY` | Secret. Needed for `sigma360`, on the API and the worker, which both refuse to start without it. Sent as it is in the `Authorization` header; a key that needs a scheme is set with it, such as `Bearer <key>`. |
+| `FINVEST_SIGMA360_FILTER_SET_ID` | Needed for `sigma360`: the number of the filter set made in Sigma360's console (Settings > Filter Sets). |
+| `FINVEST_SIGMA360_BASE_URL` | Optional. Defaults to `https://api.sigma360.com/external/v2`; must be https. |
 
 A provider needs `FINVEST_IDENTITY_DATA_KEY`, because the date of birth is sealed with it. The worker refuses to start without it.
+
+### Sigma360
+
+`sigma360.py`, built from Sigma360's published API description (`https://docs.sigma360.com/openapi.json`, v2.0.1) before an account existed, so it is to be tried against a test key first. One synchronous search per person, `POST /screening/full-single`:
+
+- Sent: the full name, `entityType: person`, the filter set, the date of birth and issuing country when known, `createAlerts: false`, and the screen's run ID as `customerKey` so staff can find the search in Sigma360's console. Never the ID number.
+- Each result row is one match: Sigma360's `sigmaID` for the entity, the matched name, the strength (`matchStrength` from 0 to 1, as a percentage), and the source names. Its category is the most severe found: `sanctions` for a sanctions indicator, then `pep` for a PEP indicator or political positions, then `adverse_media` for an adverse media indicator or news, otherwise `other`.
+- A strength missing or outside 0 to 1 is shown as 100, so it is never ranked as weak. A row, or an answer, that cannot be read makes the screen unavailable and it is asked again: it is never taken as clear.
+- 400 is refused (`sigma360_refused`). 401, 403, 429, a 5xx, a timeout or a lost answer are unavailable and asked again; a search only reads, so asking again is safe.
+- Ongoing monitoring and webhooks exist in Sigma360's API and are not used yet.
+- To confirm with Sigma360: coverage of Ugandan PEPs and the Financial Intelligence Authority's lists, the indicator category names (matched loosely here on "sanction", "pep" or "political", "media" or "news"), whether the key needs a scheme, and a test key.
 
 ## A screen
 
