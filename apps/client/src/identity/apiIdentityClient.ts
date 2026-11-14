@@ -113,7 +113,7 @@ export function toIdentityError(error: unknown, action: Action): IdentityError {
  * On the web the picker hands back a blob: or data: address, which a form cannot read, so the
  * file is fetched into a File first. On a phone, FormData reads `{ uri, name, type }` from disk.
  */
-async function uploadable(file: PhotoFile): Promise<Upload> {
+export async function uploadable(file: PhotoFile): Promise<Upload> {
   if (Platform.OS === "web") {
     const blob = await (await fetch(file.uri)).blob();
     return new File([blob], file.name, { type: file.mimeType });

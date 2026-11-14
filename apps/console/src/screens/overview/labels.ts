@@ -13,6 +13,7 @@ export const KIND_INFO: Record<Kind, KindInfo> = {
   announcement: { label: "Announcement to clients", path: at("/settings") },
   // The subject is the currency, such as "UGX". The details are shown on Settings.
   bank_account_change: { label: "Bank account clients pay into", path: at("/settings") },
+  account_code_map: { label: "Accounting system codes", path: at("/settings") },
   ledger_correction: { label: "Ledger correction", path: at("/finance") },
   pot_transfer: { label: "Transfer between pots", path: at("/reconciliation") },
   bank_transfer_match: { label: "Bank transfer match", path: at("/reconciliation") },
@@ -44,6 +45,11 @@ export const KIND_INFO: Record<Kind, KindInfo> = {
     label: "Large payout to release",
     path: (item) => `/review-queue?tab=held&payout=${encodeURIComponent(item.subject)}`,
   },
+  // A company or group application checked by one person, waiting for a second to open it.
+  organisation: {
+    label: "Company or group account to open",
+    path: (item) => `/review-queue?tab=organisations&organisation=${encodeURIComponent(item.id)}`,
+  },
   // Undoing, refunding or sending on a matured term's money, decided under Corrections.
   investment_correction: { label: "Investment correction", path: at("/investments") },
   // The subject is "interest 2026-11-13" or "maturity 2026-11-14".
@@ -61,6 +67,8 @@ const SUBJECT_WORDS: Record<string, string> = {
   reset_sign_in: "Reset sign-in",
   mobile_money: "Mobile money",
   bank: "Bank account",
+  company: "Company",
+  group: "Group or SACCO",
   unwind: "Undo an investment",
   refund: "Refund to the client",
   pay_out: "Send matured money on",

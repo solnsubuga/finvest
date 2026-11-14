@@ -12,7 +12,8 @@ from pydantic import Field
 
 from app.api.idempotency import IdempotencyKey
 from app.infrastructure.database import Database
-from app.modules.goals import groups, service
+from app.modules.autoinvest.domain.plans import PlanStatus
+from app.modules.goals import groups, saving_rules, service
 from app.modules.goals.domain.goals import (
     MAX_NAME_LENGTH,
     GoalCategory,
@@ -25,6 +26,7 @@ from app.modules.identity.api import CurrentClient, require_permission
 from app.modules.identity.service import StaffSession
 from app.modules.investments import service as investments
 from app.modules.investments.domain.investments import AtMaturity, InvestmentStatus
+from app.modules.payments.domain.deposits import Network
 from app.shared.clock import Clock
 from app.shared.contracts import Contract, PushId
 from app.shared.errors import ApplicationError, ErrorEnvelope, FieldProblem
@@ -95,6 +97,29 @@ class NewSaving(Contract):
     currency: CurrencyCode = Currency.UGX
 
 
+class NewSavingRule(Contract):
+    amount_minor: AmountMinor
+    currency: CurrencyCode = Currency.UGX
+    # The day of the month, 1 to 31. In a shorter month the saving is on its last day.
+    day: Annotated[int, Field(ge=1, le=31)]
+    network: Annotated[Network, Field(strict=False)]
+
+
+class SavingRuleView(Contract):
+    """The monthly saving collected by itself, by a mobile money prompt on its day."""
+
+    plan_id: PushId
+    amount_minor: int
+    currency: Currency
+    day: int
+    network: Network
+    payer_msisdn: str
+    status: PlanStatus
+    # The next day a saving is collected. None while paused.
+    next_run_on: date | None
+    created_at: datetime
+
+
 class PlanView(Contract):
     """An estimate at today's rates, after tax. Never a promise."""
 
@@ -151,6 +176,7 @@ class GoalView(Contract):
     progress: ProgressView
     plan: PlanView | None
     savings: list[SavingView]
+    saving_rule: SavingRuleView | None
 
 
 class GoalList(Contract):
@@ -250,6 +276,21 @@ def _goal_view(goal: service.ClientGoal) -> GoalView:
         progress=_progress_view(goal.progress),
         plan=None if goal.plan is None else _plan_view(goal.plan),
         savings=[_saving_view(s) for s in goal.savings],
+        saving_rule=None if goal.saving_rule is None else _rule_view(goal.saving_rule),
+    )
+
+
+def _rule_view(rule: saving_rules.ClientSavingRule) -> SavingRuleView:
+    return SavingRuleView(
+        plan_id=rule.plan_id,
+        amount_minor=rule.amount.minor,
+        currency=rule.amount.currency,
+        day=rule.day,
+        network=rule.network,
+        payer_msisdn=rule.payer_msisdn,
+        status=rule.status,
+        next_run_on=rule.next_run_on,
+        created_at=rule.created_at,
     )
 
 
@@ -383,6 +424,52 @@ async def save_to_goal(
             clock=clock,
         )
     return _saving_view(saving)
+
+
+@client_router.post(
+    "/{goal_id}/saving-rule", status_code=201, responses={422: {"model": ErrorEnvelope}}
+)
+async def set_up_saving_rule(
+    goal_id: PushId,
+    body: NewSavingRule,
+    client: CurrentClient,
+    database: DatabaseDep,
+    clock: ClockDep,
+    idempotency_key: IdempotencyKey,
+) -> GoalView:
+    """Save the amount towards the goal on that day of every month, by itself.
+
+    On each day the client's own number gets a mobile money prompt for the amount, which they
+    approve as for any payment. 409 if the goal already has a rule or is closed. Answers with
+    the goal, which carries the rule.
+    """
+    async with database.actor_transaction(client.actor) as session:
+        await saving_rules.set_up_rule(
+            session,
+            client.actor,
+            goal_id,
+            amount=_money(body.amount_minor, body.currency),
+            day=body.day,
+            network=body.network,
+            idempotency_key=idempotency_key,
+            account_phone=client.phone,
+            clock=clock,
+        )
+        goal = await service.client_goal(session, client.actor, goal_id, clock)
+    return _goal_view(goal)
+
+
+@client_router.post("/{goal_id}/saving-rule/stop")
+async def stop_saving_rule(
+    goal_id: PushId, client: CurrentClient, database: DatabaseDep, clock: ClockDep
+) -> GoalView:
+    """End the goal's monthly saving. Savings already made carry on. Sending it again changes
+    nothing."""
+    async with database.actor_transaction(client.actor) as session:
+        goal = await service.client_goal(session, client.actor, goal_id, clock)
+        await saving_rules.end_rule(session, client.actor, goal.id, clock)
+        goal = await service.client_goal(session, client.actor, goal_id, clock)
+    return _goal_view(goal)
 
 
 # Staff routes -----------------------------------------------------------------------------------

@@ -362,6 +362,34 @@ async def test_only_a_client_submits_a_receipt(
     assert error.value.code == "forbidden"
 
 
+async def test_a_client_stores_at_most_ten_receipts_a_day(
+    app_database: Database, fake_clock: FakeClock
+) -> None:
+    payer = client()
+    for _ in range(bank.MAX_RECEIPTS_PER_DAY):
+        await submit(app_database, fake_clock, amount(), actor=payer)
+    with pytest.raises(ApplicationError) as error:
+        await submit(app_database, fake_clock, amount(), actor=payer)
+    assert error.value.code == "rate_limited"
+    # The preflight refuses it too, before any file is stored.
+    async with app_database.actor_transaction(payer) as session:
+        with pytest.raises(ApplicationError) as early:
+            await bank.preflight_bank_receipt(
+                session,
+                payer,
+                BankTransferRequest(
+                    Purpose.INVESTMENT, push_id(), receipt_file(), details(amount())
+                ),
+                idempotency_key=f"key-{push_id()}",
+                clock=fake_clock,
+            )
+    assert early.value.code == "rate_limited"
+    # Another client is not affected, and a day later this one may send again.
+    await submit(app_database, fake_clock, amount())
+    fake_clock.advance(hours=24, seconds=1)
+    await submit(app_database, fake_clock, amount(), actor=payer)
+
+
 async def test_an_investment_takes_one_live_payment_whichever_way_it_is_paid(
     app_database: Database, fake_clock: FakeClock
 ) -> None:

@@ -523,7 +523,7 @@ export const DocumentItem = z.object({
   file_name: z.string().nullable(),
   finished_at: z.string().nullable(),
   id: z.string(),
-  kind: z.enum(["monthly_statement", "requested_statement", "receipt", "tax_certificate"]),
+  kind: z.enum(["monthly_statement", "requested_statement", "receipt", "tax_certificate", "investment_note"]),
   not_final_from: z.string().nullable(),
   requested_at: z.string(),
   status: z.enum(["pending", "ready", "failed"]),
@@ -575,6 +575,25 @@ export const ProgressView = z.object({
 });
 export type ProgressView = z.infer<typeof ProgressView>;
 
+export const Network = z.enum(["mtn", "airtel"]);
+export type Network = z.infer<typeof Network>;
+
+export const PlanStatus = z.enum(["active", "paused", "stopped"]);
+export type PlanStatus = z.infer<typeof PlanStatus>;
+
+export const SavingRuleView = z.object({
+  amount_minor: z.number().int(),
+  created_at: z.string(),
+  currency: Currency,
+  day: z.number().int(),
+  network: Network,
+  next_run_on: z.string().nullable(),
+  payer_msisdn: z.string(),
+  plan_id: z.string(),
+  status: PlanStatus,
+});
+export type SavingRuleView = z.infer<typeof SavingRuleView>;
+
 export const SavingView = z.object({
   amount_minor: z.number().int(),
   at_maturity: AtMaturity.nullable(),
@@ -617,6 +636,7 @@ export const GoalView = z.object({
   plan: GoalsApiPlanView.nullable(),
   product_code: z.string(),
   progress: ProgressView,
+  saving_rule: SavingRuleView.nullable(),
   savings: z.array(SavingView),
   status: GoalStatus,
   target_date: z.string().nullable(),
@@ -684,12 +704,19 @@ export const MonthView = z.object({
 });
 export type MonthView = z.infer<typeof MonthView>;
 
+export const UpcomingKind = z.enum(["maturity", "autoinvest_run", "goal_saving", "goal_date"]);
+export type UpcomingKind = z.infer<typeof UpcomingKind>;
+
 export const UpcomingView = z.object({
   amount_minor: z.number().int(),
   at_maturity: AtMaturity.nullable(),
-  investment_id: z.string(),
+  goal_id: z.string().nullable(),
+  goal_name: z.string().nullable(),
+  investment_id: z.string().nullable(),
+  kind: UpcomingKind,
   on: z.string(),
-  product_name: z.string(),
+  plan_id: z.string().nullable(),
+  product_name: z.string().nullable(),
 });
 export type UpcomingView = z.infer<typeof UpcomingView>;
 
@@ -762,7 +789,7 @@ export type LimitsOut = z.infer<typeof LimitsOut>;
 
 export const LinkView = z.object({
   id: z.string(),
-  kind: z.enum(["deposit", "payout", "investment", "identity_check", "payout_destination", "statement", "security", "conversation", "complaint", "goal", "organisation"]),
+  kind: z.enum(["deposit", "payout", "investment", "identity_check", "payout_destination", "statement", "security", "conversation", "complaint", "goal", "organisation", "autoinvest_plan"]),
 });
 export type LinkView = z.infer<typeof LinkView>;
 
@@ -834,9 +861,6 @@ export const MobileMoneyPayment = z.object({
 });
 export type MobileMoneyPayment = z.infer<typeof MobileMoneyPayment>;
 
-export const Network = z.enum(["mtn", "airtel"]);
-export type Network = z.infer<typeof Network>;
-
 export const NewDestination = z.object({
   account_number: z.string().nullable().optional(),
   bank_code: z.string().nullable().optional(),
@@ -870,6 +894,14 @@ export const NewSaving = z.object({
 });
 export type NewSaving = z.infer<typeof NewSaving>;
 
+export const NewSavingRule = z.object({
+  amount_minor: z.number().int(),
+  currency: Currency.optional(),
+  day: z.number().int(),
+  network: Network,
+});
+export type NewSavingRule = z.infer<typeof NewSavingRule>;
+
 export const Relationship = z.enum(["spouse", "child", "parent", "sibling", "other_relative", "friend", "other"]);
 export type Relationship = z.infer<typeof Relationship>;
 
@@ -878,7 +910,6 @@ export const PersonBody = z.object({
   id_number: z.string(),
   phone: z.string(),
   relationship: Relationship,
-  share_bps: z.number().int(),
 });
 export type PersonBody = z.infer<typeof PersonBody>;
 
@@ -893,7 +924,6 @@ export const KycProfileApiPersonView = z.object({
   id_number: z.string(),
   phone: z.string(),
   relationship: Relationship,
-  share_bps: z.number().int(),
 });
 export type KycProfileApiPersonView = z.infer<typeof KycProfileApiPersonView>;
 
@@ -1018,9 +1048,6 @@ export const PlanDetails = z.object({
 });
 export type PlanDetails = z.infer<typeof PlanDetails>;
 
-export const PlanStatus = z.enum(["active", "paused", "stopped"]);
-export type PlanStatus = z.infer<typeof PlanStatus>;
-
 export const RunStatus = z.enum(["due", "requested", "paid", "failed", "missed"]);
 export type RunStatus = z.infer<typeof RunStatus>;
 
@@ -1059,6 +1086,49 @@ export const PlanList = z.object({
   plans: z.array(AutoinvestApiPlanView),
 });
 export type PlanList = z.infer<typeof PlanList>;
+
+export const PortfolioMaturityView = z.object({
+  at_maturity: AtMaturity.nullable(),
+  days_earned: z.number().int(),
+  days_left: z.number().int(),
+  investment_id: z.string(),
+  on: z.string(),
+  product_name: z.string(),
+  term_days: z.number().int(),
+});
+export type PortfolioMaturityView = z.infer<typeof PortfolioMaturityView>;
+
+export const PortfolioPartView = z.object({
+  count: z.number().int(),
+  worth_minor: z.number().int(),
+});
+export type PortfolioPartView = z.infer<typeof PortfolioPartView>;
+
+export const PortfolioProductView = z.object({
+  count: z.number().int(),
+  percent: z.number().int(),
+  product_code: z.string(),
+  product_name: z.string(),
+  worth_minor: z.number().int(),
+});
+export type PortfolioProductView = z.infer<typeof PortfolioProductView>;
+
+export const PortfolioView = z.object({
+  active_count: z.number().int(),
+  awaiting_payment_count: z.number().int(),
+  currency: z.string(),
+  earning_per_day_minor: z.number().int(),
+  in_goals: PortfolioPartView,
+  interest_so_far_minor: z.number().int(),
+  interest_today_minor: z.number().int(),
+  invested_minor: z.number().int(),
+  next_maturity: PortfolioMaturityView.nullable(),
+  open_goals: z.number().int(),
+  outside_goals: PortfolioPartView,
+  products: z.array(PortfolioProductView),
+  worth_minor: z.number().int(),
+});
+export type PortfolioView = z.infer<typeof PortfolioView>;
 
 export const PreferenceChange = z.object({
   category: z.enum(["money", "investments", "earnings", "account", "security", "support", "news"]),
@@ -1879,6 +1949,32 @@ export const operations = {
     status: 200,
     response: GoalView,
   },
+  "POST /client/goals/{goal_id}/saving-rule": {
+    method: "POST",
+    path: "/client/goals/{goal_id}/saving-rule",
+    params: z.object({
+    goal_id: z.string(),
+  }),
+    query: z.object({}),
+    body: NewSavingRule,
+    bodyKind: "json",
+    idempotent: true,
+    status: 201,
+    response: GoalView,
+  },
+  "POST /client/goals/{goal_id}/saving-rule/stop": {
+    method: "POST",
+    path: "/client/goals/{goal_id}/saving-rule/stop",
+    params: z.object({
+    goal_id: z.string(),
+  }),
+    query: z.object({}),
+    body: null,
+    bodyKind: null,
+    idempotent: false,
+    status: 200,
+    response: GoalView,
+  },
   "POST /client/goals/{goal_id}/savings": {
     method: "POST",
     path: "/client/goals/{goal_id}/savings",
@@ -2637,6 +2733,19 @@ export const operations = {
     idempotent: false,
     status: 200,
     response: PinChecked,
+  },
+  "GET /client/portfolio": {
+    method: "GET",
+    path: "/client/portfolio",
+    params: z.object({}),
+    query: z.object({
+    currency: Currency.optional(),
+  }),
+    body: null,
+    bodyKind: null,
+    idempotent: false,
+    status: 200,
+    response: PortfolioView,
   },
   "GET /client/products": {
     method: "GET",

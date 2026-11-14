@@ -21,6 +21,21 @@ export interface PayoutReturn {
   status: "proposed" | "approved" | "declined" | "withdrawn";
   proposedBy: string;
   proposedAt: string;
+  /** What the second person checks: the payout and where it went, masked. */
+  payout: ReturnedPayout;
+  /** The line that brought it back. Null only if it is not on the statement of the pot the payout was paid from. */
+  line: ReturnLine | null;
+}
+
+/** The payout a return names and where it went. The account is masked. */
+export interface ReturnedPayout {
+  kind: "bank" | "mobile_money";
+  amount: Amount;
+  bankName: string | null;
+  /** `mtn` or `airtel` for mobile money. */
+  network: string | null;
+  maskedAccount: string;
+  holderName: string;
 }
 
 export interface Amount {

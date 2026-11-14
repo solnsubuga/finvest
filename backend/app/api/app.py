@@ -9,7 +9,11 @@ from uvicorn.middleware.proxy_headers import ProxyHeadersMiddleware
 
 from app.api import health
 from app.api.errors import UnexpectedErrorMiddleware, install_error_handlers
-from app.api.hardening import BodyLimitMiddleware, SecurityHeadersMiddleware
+from app.api.hardening import (
+    BodyLimitMiddleware,
+    MaintenanceMiddleware,
+    SecurityHeadersMiddleware,
+)
 from app.api.request_id import RequestIdMiddleware
 from app.api.request_log import RequestLogMiddleware
 from app.infrastructure.database import Database
@@ -67,8 +71,14 @@ from app.modules.notifications import hooks as notification_hooks
 from app.modules.notifications import suppressions_api
 from app.modules.notifications.settings import EmailHashSettings
 from app.modules.organisations import api as organisations_api
+from app.modules.overview import api as overview_api
 from app.modules.payments import api as payments_api
-from app.modules.payments import bank_account_routes, reassignment_routes
+from app.modules.payments import (
+    bank_account_routes,
+    reassignment_routes,
+    receivable_routes,
+    reversal_routes,
+)
 from app.modules.payments import routes as payment_routes
 from app.modules.payments.domain.provider import CollectionsProvider
 from app.modules.payments.settings import PaymentsSettings
@@ -87,6 +97,8 @@ from app.modules.reconciliation import api as reconciliation_api
 from app.modules.reconciliation import transfers_api as pot_transfers_api
 from app.modules.reconciliation.domain.wallet import WalletBalances
 from app.modules.reconciliation.wiring import wallet_balances
+from app.modules.reports import api as reports_api
+from app.modules.review_queue import api as review_queue_api
 from app.modules.screening import api as screening_api
 from app.modules.screening.settings import ScreeningSettings
 from app.modules.support import api as support_api
@@ -178,6 +190,8 @@ def create_app(
     )
     install_error_handlers(app)
     # The last middleware added is the outermost, so the request ID exists before anything runs.
+    # Inside CORS, so a browser can read the maintenance answer and show its screen.
+    app.add_middleware(MaintenanceMiddleware, on=settings.client_maintenance)
     origins = sorted({*settings.client_allowed_origins, *settings.staff_allowed_origins})
     if origins:
         # Browsers only. The exact origins, with cookies, and nothing else.
@@ -221,6 +235,9 @@ def create_app(
         *audit_api.routers,
         *payouts_api.routers,
         *approvals_api.routers,
+        *review_queue_api.routers,
+        *overview_api.routers,
+        *reports_api.routers,
         *payouts_staff_api.routers,
         *staff_payouts_api.routers,
         *staff_held_api.routers,
@@ -241,6 +258,10 @@ def create_app(
     for router in bank_account_routes.routers:
         app.include_router(router)
     for router in reassignment_routes.routers:
+        app.include_router(router)
+    for router in reversal_routes.routers:
+        app.include_router(router)
+    for router in receivable_routes.routers:
         app.include_router(router)
     app.include_router(migration_api.router)
     app.include_router(migration_claims_api.router)

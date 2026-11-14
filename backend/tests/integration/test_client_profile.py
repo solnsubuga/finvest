@@ -23,14 +23,12 @@ JOSEPH = {
     "relationship": "spouse",
     "phone": "0701 555 210",
     "id_number": "CM90012345ABCD",
-    "share_bps": 6000,
 }
 GRACE = {
     "full_name": "Grace Nakato",
     "relationship": "sibling",
     "phone": "+256772310448",
     "id_number": "CF91000000WXYZ",
-    "share_bps": 4000,
 }
 ANSWERS = {
     "purpose": "grow_savings",
@@ -69,7 +67,7 @@ async def test_a_client_names_their_next_of_kin_and_reads_them_back(api: Api) ->
     people = saved.json()["people"]
     assert [p["full_name"] for p in people] == ["Joseph Nakato", "Grace Nakato"]
     assert people[0]["phone"] == "+256701555210"
-    assert [p["share_bps"] for p in people] == [6000, 4000]
+    assert all("share_bps" not in p for p in people)
     assert (await api.http.get("/client/next-of-kin")).json()["people"] == people
 
     assert await audit_trail(api, str(client.id)) == [("kyc.next_of_kin.saved", "client")]
@@ -94,24 +92,31 @@ async def test_the_database_holds_no_readable_name_number_or_id(
 async def test_saving_replaces_the_whole_list_and_an_empty_one_removes_everyone(api: Api) -> None:
     await api.client()
     await api.http.put("/client/next-of-kin", json={"people": [JOSEPH, GRACE]})
-    alone = await api.http.put(
-        "/client/next-of-kin", json={"people": [{**GRACE, "share_bps": 10000}]}
-    )
+    alone = await api.http.put("/client/next-of-kin", json={"people": [GRACE]})
     assert [p["full_name"] for p in alone.json()["people"]] == ["Grace Nakato"]
     cleared = (await api.http.put("/client/next-of-kin", json={"people": []})).json()
     assert cleared["people"] == [] and cleared["updated_at"] is not None
 
 
-async def test_shares_that_do_not_add_up_are_refused_with_every_problem(api: Api) -> None:
+async def test_a_wrong_list_is_refused_with_every_problem(api: Api) -> None:
     await api.client()
     wrong = await api.http.put(
         "/client/next-of-kin",
-        json={"people": [JOSEPH, {**GRACE, "share_bps": 3000, "phone": "12"}]},
+        json={"people": [{**JOSEPH, "full_name": "Joseph"}, {**GRACE, "phone": "12"}]},
     )
     assert wrong.status_code == 422
     codes = {(tuple(f["field_path"]), f["code"]) for f in wrong.json()["error"]["fields"]}
+    assert (("body", "people", 0, "full_name"), "full_name_needed") in codes
     assert (("body", "people", 1, "phone"), "invalid_phone") in codes
-    assert (("body", "people"), "shares_must_total_100") in codes
+    assert (await api.http.get("/client/next-of-kin")).json()["people"] == []
+
+
+async def test_next_of_kin_carry_no_share(api: Api) -> None:
+    await api.client()
+    refused = await api.http.put(
+        "/client/next-of-kin", json={"people": [{**JOSEPH, "share_bps": 10000}]}
+    )
+    assert refused.status_code == 422
     assert (await api.http.get("/client/next-of-kin")).json()["people"] == []
 
 
@@ -122,28 +127,28 @@ async def test_a_client_cannot_name_themselves(api: Api) -> None:
             text("SELECT phone FROM identity_clients WHERE id = :id"), {"id": client.id}
         )
     response = await api.http.put(
-        "/client/next-of-kin", json={"people": [{**JOSEPH, "share_bps": 10000, "phone": phone}]}
+        "/client/next-of-kin", json={"people": [{**JOSEPH, "phone": phone}]}
     )
     assert response.status_code == 422
     assert response.json()["error"]["fields"][0]["code"] == "your_own_number"
 
 
-async def test_postgres_refuses_shares_that_do_not_add_up(api: Api) -> None:
+async def test_postgres_refuses_a_person_the_list_does_not_count(api: Api) -> None:
     client = await api.client()
-    with pytest.raises(DBAPIError, match="add up to 100"):
+    with pytest.raises(DBAPIError, match="how many people"):
         async with api.database.actor_transaction(client) as session:
             await session.execute(
                 text(
                     "INSERT INTO kyc_next_of_kin_lists (client_id, people, updated_at) "
-                    "VALUES (:id, 1, now())"
+                    "VALUES (:id, 0, now())"
                 ),
                 {"id": client.id},
             )
             await session.execute(
                 text(
                     "INSERT INTO kyc_next_of_kin (id, client_id, position, relationship, "
-                    "share_bps, full_name_sealed, phone_sealed, id_number_sealed, created_at) "
-                    "VALUES ('-Nabc0000000000000K1', :id, 0, 'spouse', 9999, :blob, :blob, "
+                    "full_name_sealed, phone_sealed, id_number_sealed, created_at) "
+                    "VALUES ('-Nabc0000000000000K1', :id, 0, 'spouse', :blob, :blob, "
                     ":blob, now())"
                 ),
                 {"id": client.id, "blob": b"\x02" * 40},
@@ -173,21 +178,23 @@ async def test_two_saves_at_once_leave_one_whole_list(api: Api) -> None:
             # Hold the transaction open so the two overlap.
             await asyncio.sleep(0.2)
 
-    one = [Person("Joseph Nakato", Relationship.SPOUSE, "+256701555210", "CM90012345ABCD", 10000)]
+    one = [Person("Joseph Nakato", Relationship.SPOUSE, "+256701555210", "CM90012345ABCD")]
     two = [
-        Person("Grace Nakato", Relationship.SIBLING, "+256772310448", "CF91000000WXYZ", 5000),
-        Person("Paul Nakato", Relationship.CHILD, "+256772310449", "CF91000000WXYA", 5000),
+        Person("Grace Nakato", Relationship.SIBLING, "+256772310448", "CF91000000WXYZ"),
+        Person("Paul Nakato", Relationship.CHILD, "+256772310449", "CF91000000WXYA"),
     ]
     await asyncio.gather(save(one), save(two))
     async with api.database.actor_transaction(client) as session:
         found = await next_of_kin.next_of_kin(session, SEALER, str(client.id))
-    assert sum(p.share_bps for p in found.people) == 10000
-    assert len(found.people) in (1, 2)
+    assert [p.full_name for p in found.people] in (
+        ["Joseph Nakato"],
+        ["Grace Nakato", "Paul Nakato"],
+    )
 
 
 async def test_another_client_never_sees_the_list(api: Api) -> None:
     owner = await api.client()
-    await api.http.put("/client/next-of-kin", json={"people": [{**JOSEPH, "share_bps": 10000}]})
+    await api.http.put("/client/next-of-kin", json={"people": [JOSEPH]})
     await api.client()
     assert (await api.http.get("/client/next-of-kin")).json()["people"] == []
     async with api.database.actor_transaction(await api.client()) as session:

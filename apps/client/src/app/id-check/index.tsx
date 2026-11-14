@@ -10,6 +10,9 @@ import { Icon } from "@/components/Icon";
 import { LoadFailed, Loading } from "@/components/Loading";
 import { Screen } from "@/components/Screen";
 import { Title, Txt } from "@/components/Txt";
+import { useClaimClient } from "@/claim/ClaimProvider";
+import { handInIdCheck } from "@/claim/handInIdCheck";
+import { ClaimError, describeClaimError } from "@/claim/types";
 import { useIdentity } from "@/identity/IdentityProvider";
 import { Badge, Progress, StatusLine } from "@/identity/Parts";
 import { hrefFor, nextStep, stepsFor } from "@/identity/steps";
@@ -44,6 +47,7 @@ function missingWords(check: IdentityCheck, missing: string[]): string {
 function Draft({ check, onSent }: { check: IdentityCheck; onSent: (check: IdentityCheck) => void }) {
   const router = useRouter();
   const { client } = useIdentity();
+  const claims = useClaimClient();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const next = nextStep(check);
@@ -52,12 +56,17 @@ function Draft({ check, onSent }: { check: IdentityCheck; onSent: (check: Identi
     setBusy(true);
     setError(null);
     try {
-      onSent(await client.submit());
+      const sent = await handInIdCheck(client, claims);
+      if (sent) onSent(sent);
     } catch (caught) {
+      const missing = caught instanceof IdentityError || caught instanceof ClaimError ? caught.missing : [];
+      const incomplete = (caught instanceof IdentityError || caught instanceof ClaimError) && caught.code === "incomplete";
       setError(
-        caught instanceof IdentityError && caught.code === "incomplete" && caught.missing.length > 0
-          ? missingWords(check, caught.missing)
-          : describeIdentityError(caught),
+        incomplete && missing.length > 0
+          ? missingWords(check, missing)
+          : caught instanceof ClaimError
+            ? describeClaimError(caught)
+            : describeIdentityError(caught),
       );
     } finally {
       setBusy(false);

@@ -1,7 +1,7 @@
 """Ask for the interest run or the maturity run again, by two people.
 
 Revision ID: 0330_investment_run_requests
-Revises: 0270_payout_wallet_short
+Revises: 0262_payment_receivables
 
 `investment_run_requests` keeps each request staff make to run a day's interest again, or to
 run today's maturities again. One member of staff proposes with a reason, a different one
@@ -16,7 +16,7 @@ from collections.abc import Sequence
 from alembic import op
 
 revision: str = "0330_investment_run_requests"
-down_revision: str | None = "0270_payout_wallet_short"
+down_revision: str | None = "0262_payment_receivables"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 

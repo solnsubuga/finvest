@@ -19,7 +19,7 @@ const view = {
   invested_now_minor: 500000,
   earned_so_far_minor: 4200,
   upcoming: [
-    { on: "2027-02-12", investment_id: "I".repeat(20), product_name: "91 Day Treasury Bill", at_maturity: "roll_over", amount_minor: 513000 },
+    { kind: "maturity", on: "2027-02-12", investment_id: "I".repeat(20), plan_id: null, goal_id: null, product_name: "91 Day Treasury Bill", goal_name: null, at_maturity: "roll_over", amount_minor: 513000 },
   ],
 };
 

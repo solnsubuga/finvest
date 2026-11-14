@@ -289,8 +289,12 @@ async def test_reading_when_iotec_is_down_is_tried_again_later() -> None:
     fake = FakeIotec()
     adapter, answer = await submitted(fake)
     assert isinstance(answer, Accepted)
-    broken = await provider(FakeIotec())
-    broken._client = httpx.AsyncClient(transport=httpx.MockTransport(timed_out))
+    broken = IotecVerifyProvider(
+        client_id="client-1",
+        api_key=SecretStr("IO-key"),
+        storage=MemoryStorage(),
+        client=httpx.AsyncClient(transport=httpx.MockTransport(timed_out)),
+    )
     with pytest.raises(ProviderDeferred):
         await broken.result(answer.reference)
     with pytest.raises(LookupError):

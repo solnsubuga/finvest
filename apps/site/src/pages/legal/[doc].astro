@@ -1,5 +1,5 @@
 ---
-import { legalDocuments, type LegalDocument } from "../../data/legal.ts";
+import { layoutOnlyNotice, legalDocuments, type LegalDocument } from "../../data/legal.ts";
 import Base from "../../layouts/Base.astro";
 
 export function getStaticPaths() {
@@ -39,14 +39,17 @@ const { document } = Astro.props;
               ))
             }
           </nav>
-          <button class="button button--outline" type="button" data-print hidden>
-            Print or save as PDF
-          </button>
+          <a
+            class="button button--outline"
+            href={`/legal/${document.slug}.pdf`}
+            download={`finvest-${document.slug}.pdf`}
+          >
+            Download as PDF
+          </a>
         </div>
         <article>
           <p class="legal__draft">
-            <strong>Layout only.</strong> The headings below show the structure. The wording must come
-            from Finvest's lawyers before launch.
+            <strong>Layout only.</strong> {layoutOnlyNotice}
           </p>
           {
             document.sections.map((section, index) => (
@@ -64,9 +67,3 @@ const { document } = Astro.props;
   </section>
 </Base>
 
-<script>
-  document.querySelectorAll<HTMLButtonElement>("[data-print]").forEach((button) => {
-    button.hidden = false;
-    button.addEventListener("click", () => window.print());
-  });
-</script>

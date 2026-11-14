@@ -60,8 +60,10 @@ from app.modules.investments.holdings import (
     get_investment,
     get_investments,
     list_investments,
+    lock_investment,
     payable_investment,
     request_investment,
+    request_system_investment,
     start_investment,
 )
 from app.modules.investments.maturities import Maturities, MaturityDay, maturities
@@ -152,6 +154,7 @@ __all__ = [
     "list_proposals",
     "list_runs",
     "list_transfers",
+    "lock_investment",
     "mature_investment",
     "maturing",
     "maturities",
@@ -166,6 +169,7 @@ __all__ = [
     "public_products",
     "rate_history",
     "request_investment",
+    "request_system_investment",
     "request_withdrawal",
     "running_investments",
     "send_back_correction",

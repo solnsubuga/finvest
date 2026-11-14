@@ -506,3 +506,134 @@ async def day_totals(
         )
         for row in rows.all()
     ]
+
+
+@dataclass(frozen=True, slots=True)
+class LedgerCode:
+    """One account code the ledger has opened an account under, in any currency."""
+
+    code: str
+    kind: str
+    name: str
+
+
+_SELECT_CODES = text(
+    "SELECT code, min(kind) AS kind, min(name) AS name FROM ledger_accounts "
+    "GROUP BY code ORDER BY code"
+)
+
+
+async def codes(session: AsyncSession) -> list[LedgerCode]:
+    """Every account code in the ledger, in code order, for naming them in an accounting
+    system. A client's accounts share their code, so the list names no client."""
+    rows = await session.execute(_SELECT_CODES)
+    return [LedgerCode(code=row.code, kind=row.kind, name=row.name) for row in rows.all()]
+
+
+# Figures for the console's Overview ------------------------------------------------------------
+
+
+_SELECT_CLIENT_LIABILITIES = text(
+    "SELECT account.code, coalesce(sum(balance.balance_minor), 0)::bigint AS total_minor, "
+    "count(DISTINCT account.owner_client_id) FILTER (WHERE balance.balance_minor > 0) "
+    "AS clients "
+    "FROM ledger_accounts AS account "
+    "JOIN ledger_balances AS balance ON balance.account_id = account.id "
+    "WHERE account.owner_client_id IS NOT NULL AND account.kind = 'liability' "
+    "AND account.currency = :currency "
+    "GROUP BY account.code ORDER BY account.code"
+)
+_SELECT_BY_REFERENCE = text(
+    "SELECT account.reference, coalesce(sum(balance.balance_minor), 0)::bigint AS total_minor "
+    "FROM ledger_accounts AS account "
+    "JOIN ledger_balances AS balance ON balance.account_id = account.id "
+    "WHERE account.owner_client_id IS NULL AND account.code = :code "
+    "AND account.currency = :currency "
+    "GROUP BY account.reference ORDER BY account.reference NULLS FIRST"
+)
+_SELECT_CASH_FLOWS = text(
+    "SELECT entry.effective_date, entry.source_type, "
+    "coalesce(sum(line.amount_minor) FILTER (WHERE line.amount_minor > 0), 0) AS debit_minor, "
+    "coalesce(-sum(line.amount_minor) FILTER (WHERE line.amount_minor < 0), 0) AS credit_minor "
+    "FROM ledger_lines AS line "
+    "JOIN ledger_journal_entries AS entry ON entry.id = line.entry_id "
+    "JOIN ledger_accounts AS account ON account.id = line.account_id "
+    "WHERE account.owner_client_id IS NULL AND account.code = ANY(CAST(:codes AS text[])) "
+    "AND line.currency = :currency AND entry.source_type = ANY(CAST(:source_types AS text[])) "
+    "AND entry.effective_date BETWEEN :date_from AND :date_to "
+    "GROUP BY entry.effective_date, entry.source_type "
+    "ORDER BY entry.effective_date, entry.source_type"
+)
+
+
+@dataclass(frozen=True, slots=True)
+class ClientCodeTotal:
+    """What Finvest owes clients on one account code, every client added together."""
+
+    code: str
+    total: Money
+    # Clients with something owed on this code.
+    clients: int
+
+
+@dataclass(frozen=True, slots=True)
+class DaySourceTotals:
+    """What entries of one source type did to a set of Finvest's own accounts on one day."""
+
+    effective_date: date
+    source_type: str
+    debits: Money  # zero or more
+    credits: Money  # zero or more
+
+
+async def client_liabilities(session: AsyncSession, currency: Currency) -> list[ClientCodeTotal]:
+    """Every client liability account in `currency`, added up per code, now. This is client
+    money: what Finvest owes its clients. Names no client. For staff and the worker."""
+    rows = await session.execute(_SELECT_CLIENT_LIABILITIES, {"currency": currency.value})
+    return [
+        ClientCodeTotal(row.code, Money(int(row.total_minor), currency), int(row.clients))
+        for row in rows.all()
+    ]
+
+
+async def balances_by_reference(
+    session: AsyncSession, code: str, currency: Currency
+) -> dict[str | None, Money]:
+    """The balances of Finvest's own accounts with this code, per reference, now, each in its
+    normal direction. The ioTec wallet, for example, is one account per network."""
+    rows = await session.execute(_SELECT_BY_REFERENCE, {"code": code, "currency": currency.value})
+    return {row.reference: Money(int(row.total_minor), currency) for row in rows.all()}
+
+
+async def day_source_totals(
+    session: AsyncSession,
+    *,
+    codes: list[str],
+    currency: Currency,
+    source_types: list[str],
+    date_from: date,
+    date_to: date,
+) -> list[DaySourceTotals]:
+    """Per day from `date_from` to `date_to` inclusive and per source type, the debits and
+    credits that entries of those source types made to Finvest's own accounts with these codes.
+    Days with nothing are left out. A reversal shows on the side it posts to, so a caller nets
+    debits against credits. For staff and the worker."""
+    rows = await session.execute(
+        _SELECT_CASH_FLOWS,
+        {
+            "codes": list(codes),
+            "currency": currency.value,
+            "source_types": list(source_types),
+            "date_from": date_from,
+            "date_to": date_to,
+        },
+    )
+    return [
+        DaySourceTotals(
+            effective_date=row.effective_date,
+            source_type=row.source_type,
+            debits=Money(int(row.debit_minor), currency),
+            credits=Money(int(row.credit_minor), currency),
+        )
+        for row in rows.all()
+    ]
