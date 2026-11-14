@@ -205,9 +205,13 @@ _COUNT_AWAITING = text(
 )
 _INSERT = text(
     "INSERT INTO investments (id, client_id, product_id, currency, principal_minor, "
-    "annual_rate_bps, tax_bps, term_days, at_maturity, created_at, pay_by, updated_at) VALUES "
+    "annual_rate_bps, tax_bps, term_days, at_maturity, created_at, pay_by, updated_at, "
+    "source_type, source_id) VALUES "
     "(:id, :client_id, :product_id, :currency, :principal_minor, :annual_rate_bps, :tax_bps, "
-    ":term_days, :at_maturity, :now, :pay_by, :now)"
+    ":term_days, :at_maturity, :now, :pay_by, :now, :source_type, :source_id)"
+)
+_BY_SOURCE = text(
+    f"SELECT {_COLUMNS} {_FROM} WHERE i.source_type = :source_type AND i.source_id = :source_id"
 )
 _START = text(
     "UPDATE investments SET status = 'active', start_date = :start_date, "
@@ -249,9 +253,7 @@ async def request_investment(
     client_id = client.id
 
     async def command() -> Receipt:
-        investment_id = await _create(
-            session, client, client_id, product_code, amount, at_maturity, clock
-        )
+        investment_id = await _create(session, client_id, product_code, amount, at_maturity, clock)
         return Receipt(201, {"investment_id": investment_id})
 
     outcome = await run_once(
@@ -271,14 +273,56 @@ async def request_investment(
     return await get_investment(session, str(outcome.receipt.response["investment_id"]))
 
 
+async def request_system_investment(
+    session: AsyncSession,
+    *,
+    client_id: str,
+    source_type: str,
+    source_id: str,
+    product_code: str,
+    amount: Money,
+    at_maturity: AtMaturity | None,
+    clock: Clock,
+) -> Investment:
+    """Save an investment a client set going ahead of time, such as an automatic investing run.
+
+    Worker only, as the system acting for the client, with the same checks as one the client
+    confirms by hand: an approved identity check, an account not closing, the product's terms
+    today and the cap on investments waiting for payment. `source_type` is `autoinvest_run` or
+    `goal_saving`, and `source_id` that module's own ID. Asking again for the same source
+    returns the investment already saved, whatever its status, and saves nothing.
+    """
+    found = await _by_source(session, source_type, source_id)
+    if found is not None:
+        return found
+    investment_id = await _create(
+        session,
+        client_id,
+        product_code,
+        amount,
+        at_maturity,
+        clock,
+        source=(source_type, source_id),
+    )
+    return await get_investment(session, investment_id)
+
+
+async def _by_source(session: AsyncSession, source_type: str, source_id: str) -> Investment | None:
+    row = (
+        await session.execute(_BY_SOURCE, {"source_type": source_type, "source_id": source_id})
+    ).one_or_none()
+    return None if row is None else investment_from_row(row)
+
+
 async def _create(
     session: AsyncSession,
-    client: Actor,
     client_id: str,
     product_code: str,
     amount: Money,
     at_maturity: AtMaturity | None,
     clock: Clock,
+    *,
+    source: tuple[str, str] | None = None,
 ) -> str:
     if await kyc.verified_name(session, client_id) is None:
         # Nobody invests before their identity check is approved.
@@ -319,6 +363,8 @@ async def _create(
             "at_maturity": at_maturity.value if at_maturity else None,
             "now": now,
             "pay_by": pay_by(now),
+            "source_type": source[0] if source else None,
+            "source_id": source[1] if source else None,
         },
     )
     await audit.record(
@@ -328,10 +374,11 @@ async def _create(
             action="investments.requested",
             resource_type=INVESTMENT_RESOURCE,
             resource_id=investment_id,
-            actor=AuditActor.client(client_id),
+            actor=AuditActor.system() if source else AuditActor.client(client_id),
             details={
                 "product": product.code,
                 "at_maturity": at_maturity.value if at_maturity else None,
+                **({"source": source[0]} if source else {}),
             },
         ),
         clock,
