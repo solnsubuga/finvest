@@ -609,6 +609,20 @@ class HeldUpPayout:
     waiting_for: str | None = None
 
 
+_PAID_WITHOUT_REVIEW = text(
+    "SELECT count(*) AS paid FROM payouts WHERE status = 'paid' AND kind = 'mobile_money' "
+    "AND reviewed_by IS NULL AND updated_at >= :since AND updated_at < :until"
+)
+
+
+async def paid_without_review(session: AsyncSession, *, since: datetime, until: datetime) -> int:
+    """Mobile money payouts that ended paid from `since` up to `until` without a member of
+    staff releasing them. For the review queue's figures. Bank payouts are always batched by
+    people, so they never count. Zero outside a staff transaction."""
+    row = (await session.execute(_PAID_WITHOUT_REVIEW, {"since": since, "until": until})).one()
+    return int(row.paid)
+
+
 async def held_up(session: AsyncSession, now: datetime, *, limit: int = 50) -> list[HeldUpPayout]:
     """Payouts held up at the provider, longest first. Empty outside a staff transaction.
 
