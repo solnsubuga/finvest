@@ -168,7 +168,7 @@ The entry is `payment.deposit_reversed`, source `payment.deposit_reversal` and t
 
 Seeing reversals needs `reconciliation.view`. Proposing and deciding need `deposit_reassignments.change`, the permission for putting a wrongly credited payment right. The database holds each person to their part: only the proposer withdraws, nobody decides their own, only the worker records the outcome, a done reversal must carry its own exact reversing entry, and a deposit's `reversal_id` is set once, by the worker, to a done reversal of it. Payments never writes to investments.
 
-The client is not told by message yet, and a start job queued by the original confirmation, if it runs after the reversal, fails for want of money and shows among the failed jobs.
+The client is told in the same transaction, `payment_reversed` linked to the payment, once per deposit: the words say a payment from that method was matched to their account by mistake and taken back, never the amount. A start job queued by the original confirmation, if it runs after the reversal, fails for want of money and shows among the failed jobs.
 
 **The investment has started and is still running.** Staff first unwind it with `/staff/investment-corrections` (see [investing.md](investing.md)), which moves the principal back to `client.awaiting_start`, takes back the interest so far and has the desk release the bills. The deposit is then reversed as above. An unwind is refused once the money has left: the investment matured and was paid out, it was withdrawn early, or a refund went out.
 

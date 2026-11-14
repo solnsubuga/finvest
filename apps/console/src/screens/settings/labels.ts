@@ -16,6 +16,7 @@ export const CATEGORIES = Object.keys(CATEGORY_LABELS) as Category[];
 const EVENT_LABELS: Record<string, string> = {
   payment_confirmed: "Payment received",
   payment_failed: "Payment failed",
+  payment_reversed: "Payment taken back",
   payout_processing: "Withdrawal being processed",
   payout_sent: "Withdrawal sent",
   payout_failed: "Withdrawal could not be sent",

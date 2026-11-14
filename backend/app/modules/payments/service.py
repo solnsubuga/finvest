@@ -715,6 +715,20 @@ async def _tell_client(
     )
 
 
+async def tell_client_reversed(session: AsyncSession, deposit: Deposit, now: datetime) -> None:
+    """Tell the client a payment credited to them by mistake was taken back, in the caller's
+    transaction. Once per deposit. The words name the method, never the amount."""
+    await notifications.notify(
+        session,
+        event_name="payment_reversed",
+        client_id=deposit.client_id,
+        idempotency_key=deposit.id,
+        variables={"amount": deposit.amount, "method": _METHOD_LABELS[deposit.method]},
+        link=notifications.Link("deposit", deposit.id),
+        now=now,
+    )
+
+
 async def publish_confirmed(session: AsyncSession, deposit: Deposit, now: datetime) -> None:
     """Tell other modules a deposit was confirmed at `now`, in the caller's transaction.
 
