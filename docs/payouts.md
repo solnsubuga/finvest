@@ -102,7 +102,22 @@ Limits are versioned by effective date. The version in force on the business day
 | Bank, one payout and per day | Not set |
 | Held for staff review above | UGX 10,000,000. A working default until the owner confirms it. |
 
-A new version is inserted by the staff member who approves it, names a different staff member as proposer, and is never edited afterwards. The launch version is seeded by migration 0031. The console screen for proposing and approving a change arrives with Settings.
+A new version is inserted by the staff member who approves it, names a different staff member as proposer, and is never edited afterwards. The launch version is seeded by migration 0031.
+
+### Changing the limits
+
+Staff change the limits on Settings, by two people (`payouts/limit_changes.py`, migration 0341):
+
+1. A member of staff with `withdrawal_limits.change` (admin, finance) proposes a whole new version and the day it starts, with a reason. The start is a later day than today, Kampala time, never today: a client's daily allowance is counted against one version for the whole day, and payouts already held or queued were judged by the version in force.
+2. A different member of staff with the same permission approves or rejects it, with a reason and a passkey or app code from the last ten minutes. The proposer may withdraw it instead. Approving inserts the version in `withdrawal_limits` in the approver's name and records it on the proposal, in one transaction.
+3. Only one change waits at a time, so an approver always approves the limits they read. Approving a change whose start day has already come is refused (409 `not_a_later_day`): propose it again for a later day.
+
+| Rule | How |
+| --- | --- |
+| Two people | A check constraint on `withdrawal_limit_changes`, and a trigger that both are the acting member of staff |
+| The approval and the version agree | The trigger refuses an approval unless it names a `withdrawal_limits` row with exactly the proposed limits, proposer and approver |
+| Decided once, nothing deleted | A decided change never changes. No role may delete. A downgrade refuses to drop the table while it holds rows |
+| Staff only | Clients never see proposals. The worker reads them |
 
 An amount over the mobile money limit is refused with a code that tells the app to offer a bank account instead. Daily limits count every payout of the day that was not cancelled and did not fail. Amounts are never converted: a payout in another currency than the limits is refused.
 
@@ -207,6 +222,14 @@ In `backend/app/modules/payouts/api.py`. Every route needs a signed-in client an
 | `POST /client/payouts/{id}/resend` | `{destination_id}`. Send a payout that came back again, to an approved account: a new payout for the same amount from the same handover, 201. Asking again is the same payout. 409 `payout_not_returned`; 422 on `destination_id` with a new payout's refusal codes; 422 `idempotency_key_reused` once it was sent again to another account |
 | `GET /client/withdrawal-limits` | The limits in force today, without the review threshold, and `bank_payout_day`: the day a bank payout asked for now is paid, today before the cut-off on a working day, otherwise the next working day, from the calendar on Settings ([platform-settings.md](platform-settings.md)) |
 | `GET /client/banks` | The banks a client may be paid to, as `{code, name}`, from `domain/banks.py`: 22 banks licensed by the Bank of Uganda, taken from the client app's list. The app and the console name banks from this list |
+
+The staff routes for the limits are in `backend/app/modules/payouts/limits_api.py`:
+
+| Route | What it does |
+| --- | --- |
+| `GET /staff/withdrawal-limits` | The limits in force today, versions approved for later days (`upcoming`), any change waiting, and `can_change`. Needs `settings.view` |
+| `POST /staff/withdrawal-limits/changes` | `{effective_from, mobile_money_per_payout_minor, mobile_money_per_day_minor, bank_per_payout_minor, bank_per_day_minor, review_above_minor, reason}`; a limit left out is not set. 201. 422 `limits_invalid` or `not_a_later_day`, 409 if a change is waiting or `day_taken` |
+| `POST /staff/withdrawal-limits/changes/{id}/decision` | `{decision: approved, rejected or withdrawn, reason}`. 403 for your own approval or someone else's withdrawal, `confirm_it_is_you` without a recent second step, 404 once decided, 409 `not_a_later_day` or `day_taken` |
 
 An account shows only its last digits. A payout's status is `in_review` (held for staff), `processing` (queued, sent or uncertain), `paid`, `failed` or `cancelled`. The client is never shown whether we are still finding out what the provider did.
 

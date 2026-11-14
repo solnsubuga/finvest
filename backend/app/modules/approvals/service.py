@@ -23,7 +23,7 @@ from app.modules.migration import service as migration
 from app.modules.notifications import announcements, suppression_lifts, wording_store
 from app.modules.organisations import service as organisations
 from app.modules.payments import bank_accounts, bank_transfers, reassignments
-from app.modules.payouts import destinations, resolutions, reviews
+from app.modules.payouts import destinations, limit_changes, resolutions, reviews
 from app.modules.platform_settings import service as platform_settings
 from app.modules.platform_settings.domain.catalogue import SECTIONS, Section
 from app.modules.reconciliation import day_close, transfers
@@ -89,6 +89,17 @@ async def waiting_for(session: AsyncSession, staff: StaffSession, now: datetime)
         found += await _compliance_cases(session)
     if "bank_account_change" in kinds:
         found += await _bank_accounts(session)
+    if "withdrawal_limits_change" in kinds and (change := await limit_changes.waiting(session)):
+        # The start day only. The limits are shown on Settings.
+        found.append(
+            Waiting(
+                "withdrawal_limits_change",
+                change.id,
+                change.limits.effective_from.isoformat(),
+                change.proposed_by,
+                change.proposed_at,
+            )
+        )
     if kinds & set(_SETTING_KINDS.values()):
         found += await _settings(session, kinds)
     return inbox(found, staff.staff_id, staff.permissions)

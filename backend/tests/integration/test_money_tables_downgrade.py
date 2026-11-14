@@ -955,6 +955,15 @@ ROWS = {
         "'-Nabc0000000000000S1', now())",
         "refusing to drop platform settings that hold records",
     ),
+    "0341_withdrawal_limit_changes": (
+        # The guard admits only staff proposing in their own name.
+        "ALTER TABLE withdrawal_limit_changes DISABLE TRIGGER withdrawal_limit_changes_guard; "
+        "INSERT INTO withdrawal_limit_changes (id, effective_from, currency, "
+        "mobile_money_per_payout, reason, proposed_by, proposed_at) VALUES "
+        "('-Nabc0000000000000A1', DATE '2090-01-01', 'UGX', 1000000, 'Lower limits', "
+        "'-Nabc0000000000000S1', now())",
+        "refusing to drop withdrawal limit changes that hold records",
+    ),
     "0224_identity_recovery_asks": (
         "INSERT INTO identity_clients (id, phone, status, created_at) VALUES "
         "('-Nabc0000000000000B1', '+256772123456', 'unclaimed', now()); "

@@ -487,7 +487,8 @@
               "payment_channels_change",
               "calendar_change",
               "staff_security_change",
-              "statement_layout_change"
+              "statement_layout_change",
+              "withdrawal_limits_change"
             ],
             "title": "Kind",
             "type": "string"
@@ -5396,6 +5397,32 @@
         "title": "DecideLift",
         "type": "object"
       },
+      "DecideLimits": {
+        "additionalProperties": false,
+        "properties": {
+          "decision": {
+            "enum": [
+              "approved",
+              "rejected",
+              "withdrawn"
+            ],
+            "title": "Decision",
+            "type": "string"
+          },
+          "reason": {
+            "maxLength": 500,
+            "minLength": 1,
+            "title": "Reason",
+            "type": "string"
+          }
+        },
+        "required": [
+          "decision",
+          "reason"
+        ],
+        "title": "DecideLimits",
+        "type": "object"
+      },
       "DecideLock": {
         "additionalProperties": false,
         "properties": {
@@ -8244,6 +8271,51 @@
         "title": "LiftView",
         "type": "object"
       },
+      "LimitsChangeView": {
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "maxLength": 20,
+            "minLength": 20,
+            "pattern": "^[-0-9A-Z_a-z]{20}$",
+            "title": "Id",
+            "type": "string"
+          },
+          "limits": {
+            "$ref": "#/components/schemas/LimitsView"
+          },
+          "proposed_at": {
+            "format": "date-time",
+            "title": "Proposed At",
+            "type": "string"
+          },
+          "proposed_by": {
+            "maxLength": 20,
+            "minLength": 20,
+            "pattern": "^[-0-9A-Z_a-z]{20}$",
+            "title": "Proposed By",
+            "type": "string"
+          },
+          "reason": {
+            "title": "Reason",
+            "type": "string"
+          },
+          "yours": {
+            "title": "Yours",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "id",
+          "limits",
+          "reason",
+          "proposed_by",
+          "proposed_at",
+          "yours"
+        ],
+        "title": "LimitsChangeView",
+        "type": "object"
+      },
       "LimitsOut": {
         "additionalProperties": false,
         "description": "The withdrawal limits in force today. A limit that is None is not set.",
@@ -8301,6 +8373,118 @@
           "bank_payout_day"
         ],
         "title": "LimitsOut",
+        "type": "object"
+      },
+      "LimitsScreen": {
+        "additionalProperties": false,
+        "properties": {
+          "can_change": {
+            "title": "Can Change",
+            "type": "boolean"
+          },
+          "change": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/LimitsChangeView"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "in_force": {
+            "$ref": "#/components/schemas/LimitsView"
+          },
+          "upcoming": {
+            "items": {
+              "$ref": "#/components/schemas/LimitsView"
+            },
+            "title": "Upcoming",
+            "type": "array"
+          }
+        },
+        "required": [
+          "in_force",
+          "upcoming",
+          "change",
+          "can_change"
+        ],
+        "title": "LimitsScreen",
+        "type": "object"
+      },
+      "LimitsView": {
+        "additionalProperties": false,
+        "description": "One version, in shillings. A limit that is None is not set.",
+        "properties": {
+          "bank_per_day_minor": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Bank Per Day Minor"
+          },
+          "bank_per_payout_minor": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Bank Per Payout Minor"
+          },
+          "currency": {
+            "const": "UGX",
+            "title": "Currency",
+            "type": "string"
+          },
+          "effective_from": {
+            "format": "date",
+            "title": "Effective From",
+            "type": "string"
+          },
+          "mobile_money_per_day_minor": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Mobile Money Per Day Minor"
+          },
+          "mobile_money_per_payout_minor": {
+            "title": "Mobile Money Per Payout Minor",
+            "type": "integer"
+          },
+          "review_above_minor": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Review Above Minor"
+          }
+        },
+        "required": [
+          "effective_from",
+          "currency",
+          "mobile_money_per_payout_minor",
+          "mobile_money_per_day_minor",
+          "bank_per_payout_minor",
+          "bank_per_day_minor",
+          "review_above_minor"
+        ],
+        "title": "LimitsView",
         "type": "object"
       },
       "LineOut": {
@@ -12536,6 +12720,87 @@
         "title": "ProposeLift",
         "type": "object"
       },
+      "ProposeLimits": {
+        "additionalProperties": false,
+        "properties": {
+          "bank_per_day_minor": {
+            "anyOf": [
+              {
+                "maximum": 10000000000.0,
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Bank Per Day Minor"
+          },
+          "bank_per_payout_minor": {
+            "anyOf": [
+              {
+                "maximum": 10000000000.0,
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Bank Per Payout Minor"
+          },
+          "effective_from": {
+            "format": "date",
+            "title": "Effective From",
+            "type": "string"
+          },
+          "mobile_money_per_day_minor": {
+            "anyOf": [
+              {
+                "maximum": 10000000000.0,
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Mobile Money Per Day Minor"
+          },
+          "mobile_money_per_payout_minor": {
+            "maximum": 5000000.0,
+            "minimum": 1.0,
+            "title": "Mobile Money Per Payout Minor",
+            "type": "integer"
+          },
+          "reason": {
+            "maxLength": 500,
+            "minLength": 1,
+            "title": "Reason",
+            "type": "string"
+          },
+          "review_above_minor": {
+            "anyOf": [
+              {
+                "maximum": 10000000000.0,
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Review Above Minor"
+          }
+        },
+        "required": [
+          "effective_from",
+          "mobile_money_per_payout_minor",
+          "reason"
+        ],
+        "title": "ProposeLimits",
+        "type": "object"
+      },
       "ProposeLock": {
         "additionalProperties": false,
         "properties": {
@@ -15105,6 +15370,7 @@
                 "bank_accounts.change",
                 "email_suppressions.lift",
                 "payment_channels.change",
+                "withdrawal_limits.change",
                 "calendar.change",
                 "staff_security.change",
                 "statement_layouts.change",
@@ -19234,6 +19500,7 @@
                 "bank_accounts.change",
                 "email_suppressions.lift",
                 "payment_channels.change",
+                "withdrawal_limits.change",
                 "calendar.change",
                 "staff_security.change",
                 "statement_layouts.change",
@@ -57760,6 +58027,256 @@
         "summary": "Decide Change",
         "tags": [
           "staff team"
+        ]
+      }
+    },
+    "/staff/withdrawal-limits": {
+      "get": {
+        "description": "The limits in force today, versions approved for later days, and any change waiting.",
+        "operationId": "limits_screen_staff_withdrawal_limits_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LimitsScreen"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          }
+        },
+        "summary": "Limits Screen",
+        "tags": [
+          "staff withdrawal limits"
+        ]
+      }
+    },
+    "/staff/withdrawal-limits/changes": {
+      "post": {
+        "description": "Put a whole new version of the limits forward, starting on a later day.\n\n422 `limits_invalid` for limits that contradict themselves (a daily limit below the one for\none payout), `not_a_later_day` for a start of today or before. 409 if a change is already\nwaiting, or `day_taken` if a version already starts that day.",
+        "operationId": "propose_limits_staff_withdrawal_limits_changes_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ProposeLimits"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LimitsChangeView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          }
+        },
+        "summary": "Propose Limits",
+        "tags": [
+          "staff withdrawal limits"
+        ]
+      }
+    },
+    "/staff/withdrawal-limits/changes/{change_id}/decision": {
+      "post": {
+        "description": "Approve or reject another person's change, or withdraw your own.\n\nApproving makes the version, which applies from its start day. 409 `not_a_later_day` once\nthat day has come, `day_taken` if another version took it.",
+        "operationId": "decide_limits_staff_withdrawal_limits_changes__change_id__decision_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "change_id",
+            "required": true,
+            "schema": {
+              "maxLength": 20,
+              "minLength": 20,
+              "pattern": "^[-0-9A-Z_a-z]{20}$",
+              "title": "Change Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DecideLimits"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LimitsChangeView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          }
+        },
+        "summary": "Decide Limits",
+        "tags": [
+          "staff withdrawal limits"
         ]
       }
     },

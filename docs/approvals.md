@@ -46,6 +46,7 @@ The inbox only reads. Deciding happens on the owning module's own route, which c
 | `calendar_change` | the same, for `public_holidays`, `bank_payout_cutoff` or `maturity_reminders` | `settings.view` | `calendar.change` |
 | `staff_security_change` | the same, for `staff_idle_minutes` or `office_networks` | `settings.view` | `staff_security.change` |
 | `statement_layout_change` | the same, for `statement_layouts` | `settings.view` | `statement_layouts.change` |
+| `withdrawal_limits_change` | payouts `limit_changes.waiting`. The subject is the start day, never the amounts | `settings.view` | `withdrawal_limits.change` |
 | `payout_resolution` | payouts `resolutions.waiting` | `reconciliation.view` | `reconciliation.change` |
 | `deposit_reassignment` | payments `reassignments.proposals_awaiting_approval`. The subject is the deposit's ID. | `reconciliation.view` | `deposit_reassignments.change` |
 | `payout_account` | payouts `destinations.checks_awaiting_approval`: a check recorded, not yet approved | `review_queue.view` | `payout_accounts.change` |
