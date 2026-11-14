@@ -27,7 +27,9 @@ from app.infrastructure.sms import (
 )
 
 DEFAULT_BASE_URL = "https://messaging-api.iotec.io"
-UGANDA_MOBILE = re.compile(r"^\+256(7[0-9]{8})$")
+# Ugandan mobile numbers: the 07 ranges, plus MTN 039 and Airtel 020, the same networks the
+# payouts module accepts (docs/decisions.md).
+UGANDA_MOBILE = re.compile(r"^\+256((?:7[0-9]|39|20)[0-9]{7})$")
 # ioTec's message ids are UUIDs. Anything else is not stored.
 MESSAGE_ID = re.compile(r"^[0-9a-fA-F-]{36}$")
 FAILED = frozenset({"Failed", "FailedDelivery"})
