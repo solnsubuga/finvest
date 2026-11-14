@@ -12,7 +12,7 @@ from pydantic import Field
 
 from app.infrastructure.database import Database
 from app.infrastructure.settings import Settings
-from app.modules.identity import team
+from app.modules.identity import staff_access, team
 from app.modules.identity.api import require_confirmed, require_permission
 from app.modules.identity.domain.permissions import ROLES, Permission, Role, permissions_for
 from app.modules.identity.domain.team import MAX_NAME, MAX_REASON, ChangeKind, StaffStatus
@@ -58,6 +58,20 @@ Time = Annotated[Clock, Depends(_clock)]
 ConsoleOrigin = Annotated[str | None, Depends(_console_origin)]
 
 
+AccessStateName = Literal["waiting", "in_access", "removed", "failed", "not_set_up"]
+
+
+class AccessSyncView(Contract):
+    """Where Cloudflare Access stands for one member of staff."""
+
+    state: AccessStateName
+    # Why the last attempt did not finish, as a code. Set while waiting to try again, or failed.
+    error_code: str | None
+    requested_at: datetime
+    # When the worker last saw Cloudflare's list say what the team says.
+    synced_at: datetime | None
+
+
 class TeamMemberView(Contract):
     id: PushId
     name: str
@@ -68,6 +82,8 @@ class TeamMemberView(Contract):
     has_authenticator: bool
     created_at: datetime
     last_signed_in_at: datetime | None
+    # None until a change, or the daily check, first asks for it.
+    access: AccessSyncView | None
 
 
 class ChangeView(Contract):
@@ -125,6 +141,17 @@ class DecideChange(Contract):
     reason: Reason
 
 
+def _access(status: staff_access.AccessStatus | None) -> AccessSyncView | None:
+    if status is None:
+        return None
+    return AccessSyncView(
+        state=status.state.value,
+        error_code=status.error_code,
+        requested_at=status.requested_at,
+        synced_at=status.synced_at,
+    )
+
+
 def _view(change: team.StaffChange, staff: StaffSession) -> ChangeView:
     return ChangeView(
         id=change.id,
@@ -165,6 +192,7 @@ async def get_team(staff: TeamViewer, database: Db) -> TeamView:
                 has_authenticator=member.has_authenticator,
                 created_at=member.created_at,
                 last_signed_in_at=member.last_signed_in_at,
+                access=_access(member.access),
             )
             for member in members
         ],
@@ -213,3 +241,16 @@ async def decide_change(
             console_origin=origin,
         )
     return _view(change, staff)
+
+
+@router.post("/members/{staff_id}/access-sync", status_code=202)
+async def request_access_sync(
+    staff_id: PushId, staff: TeamChanger, database: Db, clock: Time
+) -> AccessSyncView:
+    """Bring Cloudflare Access in line with the team again for one person, such as after it
+    failed. The worker does it shortly after."""
+    async with database.actor_transaction(staff.actor) as session:
+        status = await team.request_access_sync(session, staff.actor, staff_id, clock)
+    view = _access(status)
+    assert view is not None
+    return view

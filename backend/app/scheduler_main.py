@@ -24,6 +24,7 @@ from app.modules.autoinvest.jobs import SETTLE_KIND as AUTOINVEST_SETTLE_KIND
 from app.modules.dealing.jobs import ALLOCATE_KIND, MATURITIES_KIND, RELEASE_KIND
 from app.modules.documents.service import EXPIRE_EMAILS_KIND, MONTHLY_KIND
 from app.modules.goals.jobs import REFRESH_GROUPS_KIND, SEND_REMINDERS_KIND
+from app.modules.identity.staff_access import CHECK_KIND as STAFF_ACCESS_CHECK_KIND
 from app.modules.investments.jobs import ACCRUE_KIND, CANCEL_UNPAID_KIND, MATURE_KIND
 from app.modules.kyc.service import SWEEP_UNANSWERED
 from app.modules.notifications.keyed_backfill import KEY_HASHES
@@ -135,6 +136,14 @@ def schedules() -> list[Schedule]:
             name="screening.rescreen_due",
             trigger=CronTrigger(hour=2, minute=15, timezone=KAMPALA),
             kind=RESCREEN_KIND,
+            max_age=timedelta(hours=20),
+        ),
+        # Checks Cloudflare Access against the team for everyone, so a sync that failed, a
+        # member added before syncing existed, or a hand edit in Cloudflare is put right.
+        Schedule(
+            name="identity.staff_access_check",
+            trigger=CronTrigger(hour=5, minute=10, timezone=KAMPALA),
+            kind=STAFF_ACCESS_CHECK_KIND,
             max_age=timedelta(hours=20),
         ),
     ]

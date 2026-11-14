@@ -3,7 +3,7 @@ import { ROLE_LABELS, ROLES, type Role } from "@/auth/types.ts";
 import { Button } from "@/components/ui/button.tsx";
 import { cn } from "@/lib.ts";
 import type { Change, Decision, Member, NewChange, RolePermissions } from "./api.ts";
-import { describeChange, formatTime, KIND_LABELS, permissionRows, secondSteps, STATUS_LABELS } from "./labels.ts";
+import { accessLabel, describeChange, formatTime, KIND_LABELS, permissionRows, secondSteps, STATUS_LABELS, type AccessTone } from "./labels.ts";
 
 export const INPUT = "w-full rounded-lg border border-border-strong bg-surface px-3.5 py-3 text-md font-medium text-ink aria-invalid:border-danger";
 const roleLabel = (role: Role) => ROLE_LABELS[role];
@@ -118,6 +118,27 @@ export function ChangeCard({
   );
 }
 
+const ACCESS_TONES: Record<AccessTone, string> = {
+  good: "text-success",
+  waiting: "text-warning-text",
+  bad: "text-danger",
+  quiet: "text-muted",
+};
+
+/** Whether Cloudflare Access, in front of the console, lets this person through. */
+function AccessLine({ member }: { member: Member }) {
+  const label = accessLabel(member);
+  return (
+    <span className={cn("mt-0.5 flex items-center gap-1.5 text-xs font-bold", ACCESS_TONES[label.tone])}>
+      <span aria-hidden="true" className="inline-block size-1.5 shrink-0 rounded-full bg-current" />
+      <span>
+        <span className="sr-only">Cloudflare Access: </span>
+        {label.text}
+      </span>
+    </span>
+  );
+}
+
 type Action = "change_role" | "deactivate" | "reactivate" | "reset_sign_in";
 
 /** One person on the team, and, for an admin, a form to propose a change to them. */
@@ -129,6 +150,7 @@ export function MemberRow({
   busy,
   error,
   onPropose,
+  onSyncAccess,
 }: {
   member: Member;
   isMe: boolean;
@@ -138,6 +160,8 @@ export function MemberRow({
   busy: boolean;
   error: string | null;
   onPropose: (change: NewChange) => Promise<boolean>;
+  /** Ask for Cloudflare Access to be brought in line again. */
+  onSyncAccess: () => Promise<boolean>;
 }) {
   const [open, setOpen] = useState(false);
   const [action, setAction] = useState<Action>(member.status === "disabled" ? "reactivate" : "change_role");
@@ -146,6 +170,8 @@ export function MemberRow({
   const [tried, setTried] = useState(false);
   const actions: Action[] = member.status === "disabled" ? ["reactivate"] : ["change_role", "deactivate", "reset_sign_in"];
   const sameRole = action === "change_role" && role === member.role;
+  const access = accessLabel(member);
+  const mayAskAgain = canChange && (member.access === null || member.access.state === "failed");
   return (
     <li aria-label={member.name} className="flex flex-col gap-3 border-b border-divider py-3 last:border-b-0">
       <div className="flex flex-wrap items-center gap-x-5 gap-y-2 lg:grid lg:grid-cols-[minmax(200px,2fr)_110px_100px_minmax(170px,1.4fr)_minmax(150px,1.2fr)_170px]">
@@ -155,6 +181,7 @@ export function MemberRow({
             {isMe ? <span className="font-medium text-muted"> (you)</span> : null}
           </span>
           <span className="truncate text-sm text-muted">{member.email}</span>
+          <AccessLine member={member} />
         </div>
         <span className="flex-[1_1_110px] text-sm font-bold">{ROLE_LABELS[member.role]}</span>
         <span
@@ -181,6 +208,25 @@ export function MemberRow({
           ) : null}
         </span>
       </div>
+      {access.detail || mayAskAgain || (error && !open) ? (
+        <div className="flex max-w-[720px] flex-col gap-2">
+          {access.detail || mayAskAgain ? (
+            <div className={cn("flex flex-wrap items-center gap-x-3 gap-y-2 rounded-md px-3 py-2", access.tone === "bad" ? "bg-danger-surface" : "bg-surface-sunken")}>
+              {access.detail ? <p className={cn("m-0 flex-[1_1_260px] text-sm", access.tone === "bad" ? "font-semibold text-danger" : "text-muted")}>{access.detail}</p> : null}
+              {mayAskAgain ? (
+                <Button variant="secondary" disabled={busy} onClick={() => void onSyncAccess()}>
+                  {member.access === null ? "Check Access now" : "Try Access again"}
+                </Button>
+              ) : null}
+            </div>
+          ) : null}
+          {error && !open ? (
+            <p role="alert" className="m-0 rounded-md bg-danger-surface px-3 py-2.5 text-sm font-semibold text-danger">
+              {error}
+            </p>
+          ) : null}
+        </div>
+      ) : null}
       {open && !waiting ? (
         <form
           aria-label={`Propose a change for ${member.name}`}
