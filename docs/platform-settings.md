@@ -16,7 +16,7 @@ Only one change per setting waits at a time, so an approver always approves the 
 
 | Setting | Section | Default | What it means |
 | --- | --- | --- | --- |
-| `payment_channels` | Payment channels | All open | Which of MTN pay in, Airtel pay in, bank transfer pay in, MTN payout, Airtel payout and bank payout are open. A paused channel refuses new requests only; money already on its way finishes as it would have. |
+| `payment_channels` | Payment channels | All open | Which of MTN pay in, Airtel pay in, bank transfer pay in, MTN payout, Airtel payout and bank payout are open. A paused channel refuses new client requests. A mobile money payout not yet sent to the provider, such as a maturity payout, waits queued until its network reopens. Money already handed to the provider finishes as it would have. |
 | `public_holidays` | Calendar | Uganda's fixed-date holidays, Good Friday and Easter Monday, for this year and next | Days that are not working days, besides Saturday and Sunday, at most 60. The two Eid holidays follow the moon and are gazetted each year, so staff add them when announced. |
 | `bank_payout_cutoff` | Calendar | 14:00 | The Kampala time after which a bank payout is paid on the next working day. Between 08:00 and 17:00. |
 | `maturity_reminders` | Calendar | 7 days and 1 day before | How many days before an investment matures the client is reminded, up to three days between 1 and 30. Empty sends none. |
@@ -66,7 +66,7 @@ Migration `0340_platform_settings`:
 
 | Setting | Read by | Effect |
 | --- | --- | --- |
-| `payment_channels` | payments `request_deposit` and the bank transfer details route; payouts `create_payout` | A paused pay in refuses a new payment with 503 `channel_paused`. A paused payout refuses a client's new withdrawal with `channel_paused`; a maturity payout the system asks for is still made |
+| `payment_channels` | payments `request_deposit` and the bank transfer details route; payouts `create_payout` and the send worker | A paused pay in refuses a new payment with 503 `channel_paused`. A paused payout refuses a client's new withdrawal with `channel_paused`; a maturity payout the system asks for is accepted, and the send worker holds every unsent mobile money payout on that network until it reopens |
 | `staff_idle_minutes` | identity, on every staff request and when a staff session opens | Once approved, it replaces the deploy setting. A session idle for longer than a newly shortened time ends at its next request. It never stretches past the session's absolute limit |
 | `office_networks` | identity, on every staff request | A request from outside every listed network is refused with 403 and field code `outside_office_network`, and does not count as use of the session. The session goes on working from the office |
 | `public_holidays`, `bank_payout_cutoff` | payouts `GET /client/withdrawal-limits` | `bank_payout_day`, the day a bank payout asked for now is paid (`catalogue.bank_payout_day`) |
