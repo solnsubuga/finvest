@@ -95,6 +95,11 @@ export const BodyAddPhotoClientIdentityCheckPhotosKindPut = z.object({
 });
 export type BodyAddPhotoClientIdentityCheckPhotosKindPut = z.infer<typeof BodyAddPhotoClientIdentityCheckPhotosKindPut>;
 
+export const BodyAddPoseFrameClientIdentityCheckPosesPosePut = z.object({
+  photo: Upload,
+});
+export type BodyAddPoseFrameClientIdentityCheckPosesPosePut = z.infer<typeof BodyAddPoseFrameClientIdentityCheckPosesPosePut>;
+
 export const BodyPayByBankTransferClientInvestmentsInvestmentIdPaymentsBankTransferPost = z.object({
   amount_minor: z.number().int(),
   bank_name: z.string(),
@@ -209,6 +214,9 @@ export type ClientPhoto = z.infer<typeof ClientPhoto>;
 export const DocumentType = z.enum(["national_id", "passport", "driving_permit", "refugee_id"]);
 export type DocumentType = z.infer<typeof DocumentType>;
 
+export const Pose = z.enum(["left", "right", "up", "down"]);
+export type Pose = z.infer<typeof Pose>;
+
 export const ClientCheck = z.object({
   account_number: z.string().nullable(),
   client_message: z.string().nullable(),
@@ -216,9 +224,11 @@ export const ClientCheck = z.object({
   details_confirmed: z.boolean(),
   document_country: z.string(),
   document_type: DocumentType,
+  guided_selfie: z.boolean().optional(),
   id: z.string(),
   missing: z.array(z.string()),
   photos: z.array(ClientPhoto),
+  poses: z.array(Pose).optional(),
   retake_photos: z.array(PhotoKind),
   retaken: z.array(PhotoKind),
   status: CheckStatus,
@@ -2153,6 +2163,19 @@ export const operations = {
   }),
     query: z.object({}),
     body: BodyAddPhotoClientIdentityCheckPhotosKindPut,
+    bodyKind: "multipart",
+    idempotent: false,
+    status: 200,
+    response: ClientCheck,
+  },
+  "PUT /client/identity-check/poses/{pose}": {
+    method: "PUT",
+    path: "/client/identity-check/poses/{pose}",
+    params: z.object({
+    pose: Pose,
+  }),
+    query: z.object({}),
+    body: BodyAddPoseFrameClientIdentityCheckPosesPosePut,
     bodyKind: "multipart",
     idempotent: false,
     status: 200,
