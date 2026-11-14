@@ -52,6 +52,8 @@ The worker runs `goals.send_reminders` every morning at 08:00 Kampala time, so n
 
 The words name the goal and the date, never an amount. The rule is in `domain/reminders.py`.
 
+The morning run (`goals.send_reminders`) reads 200 active goals per job. Each page is its own transaction, and a full page queues the next one, after its last goal, in that same transaction. A run over many goals never holds one long transaction, and a crash repeats one page at most.
+
 ## Rolling over
 
 A saving that rolls over at maturity becomes a new investment for the proceeds, principal and interest after tax. The investments module publishes `investments.rolled_over` with the consumer `goals.follow_rollover` (named in `goals/events.py`, so investing imports nothing else of goals). The worker then links the new investment to the same goal, so the goal's value carries on. Only running investments count towards the value, so the matured one stays in the list as a record and is not counted twice.

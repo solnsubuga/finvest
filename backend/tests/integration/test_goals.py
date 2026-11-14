@@ -9,14 +9,14 @@ from sqlalchemy import text
 from sqlalchemy.exc import DBAPIError
 
 from app.infrastructure.database import Database
-from app.infrastructure.jobs import Worker, WorkerConfig
+from app.infrastructure.jobs import JobRequest, Worker, WorkerConfig, enqueue
 from app.modules.goals import reminders
 from app.modules.goals import service as goals
 from app.modules.goals.domain.goals import MAX_ACTIVE_GOALS, GoalCategory, GoalStatus, Standing
 from app.modules.goals.domain.plans import add_months
 from app.modules.goals.domain.reminders import next_due
 from app.modules.goals.events import FOLLOW_ROLLOVER_KIND
-from app.modules.goals.jobs import GoalJobs
+from app.modules.goals.jobs import SEND_REMINDERS_KIND, GoalJobs
 from app.modules.investments import service as investments
 from app.modules.investments.domain.investments import AtMaturity, InvestmentStatus
 from app.shared.actors import SYSTEM, Actor
@@ -850,6 +850,54 @@ async def test_a_raised_target_is_told_again_when_it_is_reached(
         f"goal-reached:{goal.id}:1000000",
         f"goal-reached:{goal.id}:2000000",
     ]
+
+
+async def test_the_reminder_run_goes_a_page_at_a_time(
+    app_database: Database, worker_database: Database, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    client = await approved_client(app_database, NOW)
+    made = [
+        await new_goal(app_database, client, name=f"Goal {n}", target=ugx(1_000_000))
+        for n in range(3)
+    ]
+    for goal in made:
+        await started_saving(app_database, worker_database, client, goal.id, ugx(1_000_000))
+    monkeypatch.setattr(reminders, "BATCH", 2)
+    first = min(goal.id for goal in made)
+    async with worker_database.actor_transaction(SYSTEM) as session:
+        # Start just before this test's goals, so the shared database's other goals are skipped.
+        await enqueue(
+            session,
+            JobRequest(
+                kind=SEND_REMINDERS_KIND, idempotency_key=key(), payload={"after": first[:-1]}
+            ),
+            now=at(DAY, hour=5).now(),
+        )
+    runner = Worker(
+        worker_database,
+        GoalJobs(worker_database, at(DAY, hour=5)).handlers(),
+        WorkerConfig(),
+        at(DAY, hour=5),
+    )
+    while await runner.run_once():
+        pass
+    async with worker_database.actor_transaction(SYSTEM) as session:
+        pages = (
+            await session.execute(
+                text(
+                    "SELECT status, payload ->> 'after' AS after FROM jobs WHERE kind = :kind "
+                    "AND payload ->> 'after' >= :first ORDER BY created_at"
+                ),
+                {"kind": SEND_REMINDERS_KIND, "first": first[:-1]},
+            )
+        ).all()
+    # Two goals on the first page, which queues the second, which has the last one.
+    assert [page.status for page in pages] == ["succeeded", "succeeded"]
+    assert pages[1].after == sorted(goal.id for goal in made)[1]
+    seen = await told(worker_database, client)
+    assert sorted(k for event, k, _, _ in seen if event == "goal_reached") == sorted(
+        f"goal-reached:{goal.id}:1000000" for goal in made
+    )
 
 
 async def test_a_saving_due_in_three_days_is_reminded_once(
