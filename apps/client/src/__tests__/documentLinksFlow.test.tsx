@@ -48,7 +48,7 @@ it("offers the note that confirms an investment started on its screen, and opens
   await fireEvent.changeText(screen.getByTestId("password-input"), DEMO_PASSWORD);
   await fireEvent.press(screen.getByTestId("login-submit"));
   await fireEvent.press(await screen.findByTestId("use-passkey"));
-  await screen.findByText("Welcome, Amara");
+  await screen.findByTestId("home");
 
   await act(async () => {
     router.push("/portfolio");
