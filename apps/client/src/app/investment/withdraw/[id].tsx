@@ -5,6 +5,7 @@ import { Stack, useLocalSearchParams, useRouter } from "expo-router";
 import { BackButton } from "@/components/BackButton";
 import { Notice } from "@/components/Blocks";
 import { Button } from "@/components/Button";
+import { usePinConfirmation } from "@/components/pin/ConfirmWithPin";
 import { Screen } from "@/components/Screen";
 import { Eyebrow, Title, Txt } from "@/components/Txt";
 import { AccountPicker, firstChoosable, NoAccount } from "@/investing/AccountPicker";
@@ -41,6 +42,7 @@ export default function Withdraw() {
   // definite refusal nothing was asked, so the next try gets a new key.
   const [idempotencyKey, setIdempotencyKey] = useState(newIdempotencyKey);
   const [locked, setLocked] = useState(false);
+  const { ask: askPin, screen: pinScreen } = usePinConfirmation();
 
   const accounts = loaded.state === "ready" ? loaded.value.accounts : [];
   const firstReady = firstChoosable(accounts);
@@ -53,8 +55,15 @@ export default function Withdraw() {
     }
     setBusy(true);
     setError(null);
+    // On a phone with a PIN, the withdrawal is confirmed with it too. A retry asks again: the
+    // server answers a repeat of the same key with its first result before it looks at the PIN.
+    const answer = await askPin("withdrawal");
+    if (answer === "cancelled") {
+      setBusy(false);
+      return;
+    }
     try {
-      await client.withdrawEarly({ investmentId: id, destinationId, idempotencyKey });
+      await client.withdrawEarly({ investmentId: id, destinationId, idempotencyKey, pinConfirmation: answer.confirmation });
       // Replace, so Back does not land on a confirm button for money already asked for.
       router.replace(`/investment/${id}`);
     } catch (caught) {
@@ -70,12 +79,14 @@ export default function Withdraw() {
     }
   };
 
+  if (pinScreen) return pinScreen;
+
   return (
     <Screen
       signedIn
       footer={
         canConfirm ? (
-          <Button label="Withdraw now" onPress={confirm} loading={busy} testID="confirm-withdraw" />
+          <Button label="Withdraw now" onPress={() => void confirm()} loading={busy} testID="confirm-withdraw" />
         ) : null
       }
     >

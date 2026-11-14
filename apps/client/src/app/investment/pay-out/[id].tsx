@@ -5,6 +5,7 @@ import { Stack, useLocalSearchParams, useRouter } from "expo-router";
 import { BackButton } from "@/components/BackButton";
 import { Notice } from "@/components/Blocks";
 import { Button } from "@/components/Button";
+import { usePinConfirmation } from "@/components/pin/ConfirmWithPin";
 import { Screen } from "@/components/Screen";
 import { Eyebrow, Title, Txt } from "@/components/Txt";
 import { AccountPicker, firstChoosable, NoAccount } from "@/investing/AccountPicker";
@@ -36,6 +37,7 @@ export default function PayOutMatured() {
   const [error, setError] = useState<string | null>(null);
   // After an unknown outcome the account stays put, so trying again asks for the same payout.
   const [locked, setLocked] = useState(false);
+  const { ask: askPin, screen: pinScreen } = usePinConfirmation();
 
   const accounts = loaded.state === "ready" ? loaded.value.accounts : [];
   const destinationId = chosen ?? firstChoosable(accounts);
@@ -46,8 +48,14 @@ export default function PayOutMatured() {
     if (!canSend || destinationId === null) return;
     setBusy(true);
     setError(null);
+    // On a phone with a PIN, the payout is confirmed with it too.
+    const answer = await askPin("withdrawal");
+    if (answer === "cancelled") {
+      setBusy(false);
+      return;
+    }
     try {
-      await client.payOutMatured({ investmentId: id, destinationId });
+      await client.payOutMatured({ investmentId: id, destinationId, pinConfirmation: answer.confirmation });
       router.replace(`/investment/${id}`);
     } catch (caught) {
       const unknown = !(caught instanceof InvestingError) || caught.code === "unavailable";
@@ -61,10 +69,12 @@ export default function PayOutMatured() {
     }
   };
 
+  if (pinScreen) return pinScreen;
+
   return (
     <Screen
       signedIn
-      footer={canSend ? <Button label="Send it to me" onPress={send} loading={busy} testID="pay-out-send" /> : null}
+      footer={canSend ? <Button label="Send it to me" onPress={() => void send()} loading={busy} testID="pay-out-send" /> : null}
     >
       <Stack.Screen options={{ title: "Choose where to be paid" }} />
       <BackButton fallback={`/investment/${id}`} />
