@@ -48,6 +48,7 @@ const SOURCES: Record<Kind, { view: Permission; decide: Permission }> = {
   client_limits: { view: "clients.view", decide: "client_limits.change" },
   client_statement: { view: "clients.view", decide: "client_statements.send" },
   client_withdrawal: { view: "clients.view", decide: "client_withdrawals.start" },
+  report_schedule: { view: "reports.view", decide: "reports.view" },
 };
 
 interface Reader {

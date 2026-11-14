@@ -38,6 +38,7 @@ from app.modules.payments import service as payments
 from app.modules.payments.settings import PaymentsSettings
 from app.modules.payments.wiring import ensure_allowed
 from app.modules.payouts import payouts
+from app.modules.reports.jobs import QUEUE_KIND as REPORT_SCHEDULES_KIND
 from app.modules.screening.service import RESCREEN_KIND
 from app.shared.business_day import KAMPALA
 from app.shared.clock import SystemClock
@@ -142,6 +143,14 @@ def schedules() -> list[Schedule]:
             trigger=CronTrigger(hour=6, minute=0, timezone=KAMPALA),
             kind=MONTHLY_KIND,
             max_age=timedelta(hours=20),
+        ),
+        # Scheduled reports due today: an email to each recipient with a link to download it.
+        # A missed morning is not caught up; the next sends the next period.
+        Schedule(
+            name="reports.send_scheduled",
+            trigger=CronTrigger(hour=7, minute=0, timezone=KAMPALA),
+            kind=REPORT_SCHEDULES_KIND,
+            max_age=timedelta(hours=10),
         ),
         # Closes document emails still queued a week after their document was ready, whose
         # job expired or failed, so the record says they were never sent.

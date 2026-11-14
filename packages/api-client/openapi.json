@@ -688,7 +688,8 @@
               "calendar_change",
               "staff_security_change",
               "statement_layout_change",
-              "withdrawal_limits_change"
+              "withdrawal_limits_change",
+              "report_schedule"
             ],
             "title": "Kind",
             "type": "string"
@@ -6240,6 +6241,22 @@
           "decision"
         ],
         "title": "DecideOutcome",
+        "type": "object"
+      },
+      "DecideScheduleIn": {
+        "additionalProperties": false,
+        "properties": {
+          "reason": {
+            "maxLength": 500,
+            "minLength": 1,
+            "title": "Reason",
+            "type": "string"
+          }
+        },
+        "required": [
+          "reason"
+        ],
+        "title": "DecideScheduleIn",
         "type": "object"
       },
       "DecideSetting": {
@@ -15239,6 +15256,69 @@
         "title": "ProposePublicHolidays",
         "type": "object"
       },
+      "ProposeScheduleIn": {
+        "additionalProperties": false,
+        "properties": {
+          "currency": {
+            "default": "UGX",
+            "enum": [
+              "UGX",
+              "USD"
+            ],
+            "title": "Currency",
+            "type": "string"
+          },
+          "frequency": {
+            "enum": [
+              "daily",
+              "weekly",
+              "monthly",
+              "quarterly"
+            ],
+            "title": "Frequency",
+            "type": "string"
+          },
+          "reason": {
+            "maxLength": 500,
+            "minLength": 1,
+            "title": "Reason",
+            "type": "string"
+          },
+          "recipients": {
+            "items": {
+              "maxLength": 20,
+              "minLength": 20,
+              "pattern": "^[-0-9A-Z_a-z]{20}$",
+              "type": "string"
+            },
+            "maxItems": 20,
+            "minItems": 1,
+            "title": "Recipients",
+            "type": "array"
+          },
+          "report_key": {
+            "enum": [
+              "daily_position",
+              "deposits_and_withdrawals",
+              "interest_and_tax",
+              "maturity_ladder",
+              "identity_and_risk",
+              "client_statements",
+              "complaints_quarterly"
+            ],
+            "title": "Report Key",
+            "type": "string"
+          }
+        },
+        "required": [
+          "report_key",
+          "frequency",
+          "recipients",
+          "reason"
+        ],
+        "title": "ProposeScheduleIn",
+        "type": "object"
+      },
       "ProposeStaffIdleMinutes": {
         "additionalProperties": false,
         "properties": {
@@ -16222,27 +16302,6 @@
           "byte_size"
         ],
         "title": "ReceiptView",
-        "type": "object"
-      },
-      "RecipientOut": {
-        "additionalProperties": false,
-        "description": "Who the client is about to send to: never their full name.",
-        "properties": {
-          "account_number": {
-            "pattern": "^\\d{10}$",
-            "title": "Account Number",
-            "type": "string"
-          },
-          "name": {
-            "title": "Name",
-            "type": "string"
-          }
-        },
-        "required": [
-          "account_number",
-          "name"
-        ],
-        "title": "RecipientOut",
         "type": "object"
       },
       "RecoveryAsk": {
@@ -18952,6 +19011,270 @@
           "maturity_date"
         ],
         "title": "SavingView",
+        "type": "object"
+      },
+      "ScheduleOut": {
+        "additionalProperties": false,
+        "properties": {
+          "currency": {
+            "anyOf": [
+              {
+                "enum": [
+                  "UGX",
+                  "USD"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Currency"
+          },
+          "decided_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Decided At"
+          },
+          "decided_by": {
+            "anyOf": [
+              {
+                "maxLength": 20,
+                "minLength": 20,
+                "pattern": "^[-0-9A-Z_a-z]{20}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Decided By"
+          },
+          "decision_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Decision Reason"
+          },
+          "frequency": {
+            "enum": [
+              "daily",
+              "weekly",
+              "monthly",
+              "quarterly"
+            ],
+            "title": "Frequency",
+            "type": "string"
+          },
+          "id": {
+            "maxLength": 20,
+            "minLength": 20,
+            "pattern": "^[-0-9A-Z_a-z]{20}$",
+            "title": "Id",
+            "type": "string"
+          },
+          "last_sent_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Sent At"
+          },
+          "proposed_at": {
+            "format": "date-time",
+            "title": "Proposed At",
+            "type": "string"
+          },
+          "proposed_by": {
+            "maxLength": 20,
+            "minLength": 20,
+            "pattern": "^[-0-9A-Z_a-z]{20}$",
+            "title": "Proposed By",
+            "type": "string"
+          },
+          "proposed_by_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Proposed By Name"
+          },
+          "reason": {
+            "title": "Reason",
+            "type": "string"
+          },
+          "recipient_names": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Recipient Names",
+            "type": "array"
+          },
+          "recipients": {
+            "items": {
+              "maxLength": 20,
+              "minLength": 20,
+              "pattern": "^[-0-9A-Z_a-z]{20}$",
+              "type": "string"
+            },
+            "title": "Recipients",
+            "type": "array"
+          },
+          "report_key": {
+            "enum": [
+              "daily_position",
+              "deposits_and_withdrawals",
+              "interest_and_tax",
+              "maturity_ladder",
+              "identity_and_risk",
+              "client_statements",
+              "complaints_quarterly"
+            ],
+            "title": "Report Key",
+            "type": "string"
+          },
+          "report_name": {
+            "title": "Report Name",
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "proposed",
+              "active",
+              "declined",
+              "withdrawn",
+              "stopped"
+            ],
+            "title": "Status",
+            "type": "string"
+          },
+          "stopped_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Stopped At"
+          },
+          "stopped_by": {
+            "anyOf": [
+              {
+                "maxLength": 20,
+                "minLength": 20,
+                "pattern": "^[-0-9A-Z_a-z]{20}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Stopped By"
+          },
+          "yours": {
+            "title": "Yours",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "id",
+          "report_key",
+          "report_name",
+          "frequency",
+          "currency",
+          "recipients",
+          "recipient_names",
+          "reason",
+          "status",
+          "proposed_by",
+          "proposed_by_name",
+          "proposed_at",
+          "decided_by",
+          "decided_at",
+          "decision_reason",
+          "stopped_by",
+          "stopped_at",
+          "last_sent_at",
+          "yours"
+        ],
+        "title": "ScheduleOut",
+        "type": "object"
+      },
+      "SchedulesOut": {
+        "additionalProperties": false,
+        "properties": {
+          "frequencies": {
+            "additionalProperties": {
+              "items": {
+                "enum": [
+                  "daily",
+                  "weekly",
+                  "monthly",
+                  "quarterly"
+                ],
+                "type": "string"
+              },
+              "type": "array"
+            },
+            "propertyNames": {
+              "enum": [
+                "daily_position",
+                "deposits_and_withdrawals",
+                "interest_and_tax",
+                "maturity_ladder",
+                "identity_and_risk",
+                "client_statements",
+                "complaints_quarterly"
+              ]
+            },
+            "title": "Frequencies",
+            "type": "object"
+          },
+          "people": {
+            "items": {
+              "$ref": "#/components/schemas/app__modules__reports__api__RecipientOut"
+            },
+            "title": "People",
+            "type": "array"
+          },
+          "schedules": {
+            "items": {
+              "$ref": "#/components/schemas/ScheduleOut"
+            },
+            "title": "Schedules",
+            "type": "array"
+          }
+        },
+        "required": [
+          "schedules",
+          "frequencies",
+          "people"
+        ],
+        "title": "SchedulesOut",
         "type": "object"
       },
       "SearchResult": {
@@ -26151,6 +26474,27 @@
         "title": "PersonView",
         "type": "object"
       },
+      "app__modules__investments__transfers_api__RecipientOut": {
+        "additionalProperties": false,
+        "description": "Who the client is about to send to: never their full name.",
+        "properties": {
+          "account_number": {
+            "pattern": "^\\d{10}$",
+            "title": "Account Number",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "account_number",
+          "name"
+        ],
+        "title": "RecipientOut",
+        "type": "object"
+      },
       "app__modules__kyc__api__Outcome": {
         "additionalProperties": false,
         "properties": {
@@ -26725,6 +27069,45 @@
           "name"
         ],
         "title": "PotOut",
+        "type": "object"
+      },
+      "app__modules__reports__api__RecipientOut": {
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "maxLength": 20,
+            "minLength": 20,
+            "pattern": "^[-0-9A-Z_a-z]{20}$",
+            "title": "Id",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "reports": {
+            "items": {
+              "enum": [
+                "daily_position",
+                "deposits_and_withdrawals",
+                "interest_and_tax",
+                "maturity_ladder",
+                "identity_and_risk",
+                "client_statements",
+                "complaints_quarterly"
+              ],
+              "type": "string"
+            },
+            "title": "Reports",
+            "type": "array"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "reports"
+        ],
+        "title": "RecipientOut",
         "type": "object"
       },
       "app__modules__screening__domain__standing__Outcome": {
@@ -39987,7 +40370,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/RecipientOut"
+                  "$ref": "#/components/schemas/app__modules__investments__transfers_api__RecipientOut"
                 }
               }
             },
@@ -65340,6 +65723,580 @@
         "summary": "Close Recovery Request",
         "tags": [
           "client numbers"
+        ]
+      }
+    },
+    "/staff/report-schedules": {
+      "get": {
+        "description": "Schedules for the reports this member of staff may download, and who may be sent each.",
+        "operationId": "list_schedules_staff_report_schedules_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SchedulesOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          }
+        },
+        "summary": "List Schedules",
+        "tags": [
+          "staff reports"
+        ]
+      },
+      "post": {
+        "description": "The first person proposes a schedule. A different person must approve it.",
+        "operationId": "propose_schedule_staff_report_schedules_post",
+        "parameters": [
+          {
+            "description": "A value the caller chooses once per intended action and sends again on every retry of it. Pattern: `[A-Za-z0-9._:-]{8,128}`.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "A value the caller chooses once per intended action and sends again on every retry of it. Pattern: `[A-Za-z0-9._:-]{8,128}`.",
+              "title": "Idempotency-Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ProposeScheduleIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ScheduleOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          }
+        },
+        "summary": "Propose Schedule",
+        "tags": [
+          "staff reports"
+        ]
+      }
+    },
+    "/staff/report-schedules/{schedule_id}/approve": {
+      "post": {
+        "description": "A different person approves the schedule, which starts it.",
+        "operationId": "approve_schedule_staff_report_schedules__schedule_id__approve_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "schedule_id",
+            "required": true,
+            "schema": {
+              "maxLength": 20,
+              "minLength": 20,
+              "pattern": "^[-0-9A-Z_a-z]{20}$",
+              "title": "Schedule Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "A value the caller chooses once per intended action and sends again on every retry of it. Pattern: `[A-Za-z0-9._:-]{8,128}`.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "A value the caller chooses once per intended action and sends again on every retry of it. Pattern: `[A-Za-z0-9._:-]{8,128}`.",
+              "title": "Idempotency-Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DecideScheduleIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ScheduleOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          }
+        },
+        "summary": "Approve Schedule",
+        "tags": [
+          "staff reports"
+        ]
+      }
+    },
+    "/staff/report-schedules/{schedule_id}/decline": {
+      "post": {
+        "description": "A different person declines it. Nothing is sent.",
+        "operationId": "decline_schedule_staff_report_schedules__schedule_id__decline_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "schedule_id",
+            "required": true,
+            "schema": {
+              "maxLength": 20,
+              "minLength": 20,
+              "pattern": "^[-0-9A-Z_a-z]{20}$",
+              "title": "Schedule Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DecideScheduleIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ScheduleOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          }
+        },
+        "summary": "Decline Schedule",
+        "tags": [
+          "staff reports"
+        ]
+      }
+    },
+    "/staff/report-schedules/{schedule_id}/stop": {
+      "post": {
+        "description": "Stops a running schedule. One person may, because it sends less.",
+        "operationId": "stop_schedule_staff_report_schedules__schedule_id__stop_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "schedule_id",
+            "required": true,
+            "schema": {
+              "maxLength": 20,
+              "minLength": 20,
+              "pattern": "^[-0-9A-Z_a-z]{20}$",
+              "title": "Schedule Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DecideScheduleIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ScheduleOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          }
+        },
+        "summary": "Stop Schedule",
+        "tags": [
+          "staff reports"
+        ]
+      }
+    },
+    "/staff/report-schedules/{schedule_id}/withdraw": {
+      "post": {
+        "description": "The proposer takes it back.",
+        "operationId": "withdraw_schedule_staff_report_schedules__schedule_id__withdraw_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "schedule_id",
+            "required": true,
+            "schema": {
+              "maxLength": 20,
+              "minLength": 20,
+              "pattern": "^[-0-9A-Z_a-z]{20}$",
+              "title": "Schedule Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DecideScheduleIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ScheduleOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          }
+        },
+        "summary": "Withdraw Schedule",
+        "tags": [
+          "staff reports"
         ]
       }
     },

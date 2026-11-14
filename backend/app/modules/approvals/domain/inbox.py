@@ -55,6 +55,7 @@ Kind = Literal[
     "staff_security_change",
     "statement_layout_change",
     "withdrawal_limits_change",
+    "report_schedule",
 ]
 
 
@@ -129,6 +130,9 @@ SOURCES: dict[Kind, Source] = {
     "statement_layout_change": Source("settings.view", "statement_layouts.change"),
     # The withdrawal limits and the review threshold, on Settings.
     "withdrawal_limits_change": Source("settings.view", "withdrawal_limits.change"),
+    # A report emailed on a schedule, on Reports. Only shown for a report the reader may
+    # download, and approving needs that too.
+    "report_schedule": Source("reports.view", "reports.view"),
 }
 
 
