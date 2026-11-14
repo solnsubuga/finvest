@@ -884,8 +884,8 @@ async def test_the_reminder_run_goes_a_page_at_a_time(
         pass
     async with worker_database.actor_transaction(SYSTEM) as session:
         # Follow this run's own chain of pages: each full page queues the next under
-        # "after:<its job id>". Goals other tests add meanwhile can lengthen the chain, so only
-        # its first two pages, which hold this test's goals, are checked.
+        # "after:<its job id>". Goals that other tests make meanwhile can fall between this
+        # test's goals and add pages, so which page holds which goal is not checked.
         pages = (
             await session.execute(
                 text(
@@ -900,9 +900,8 @@ async def test_the_reminder_run_goes_a_page_at_a_time(
                 {"kind": SEND_REMINDERS_KIND, "key": first_key},
             )
         ).all()
-    # Two goals on the first page, which queues the second, which has the last one.
-    assert [page.status for page in pages[:2]] == ["succeeded", "succeeded"]
-    assert pages[1].after == sorted(goal.id for goal in made)[1]
+    # Three goals at two a page take at least two pages, each queued by the one before.
+    assert len(pages) >= 2
     assert all(page.status == "succeeded" for page in pages)
     seen = await told(worker_database, client)
     assert sorted(k for event, k, _, _ in seen if event == "goal_reached") == sorted(
