@@ -49,8 +49,10 @@ from app.modules.investments.domain.investments import InvestmentStatus, pay_by
 from app.modules.investments.domain.transfers import (
     COUNTED,
     MAX_MESSAGE_LENGTH,
+    MAX_PURPOSE_NOTE_LENGTH,
     NOT_POSSIBLE,
     HeldFor,
+    TransferPurpose,
     TransferRefusal,
     TransferStatus,
     check_transfer,
@@ -114,6 +116,9 @@ class Transfer:
     amount: Money
     whole: bool
     message: str | None
+    # Why the sender sends it. None only on transfers asked for before reasons were asked.
+    purpose: TransferPurpose | None
+    purpose_note: str | None
     status: TransferStatus
     held: bool
     # Why it was held. Staff only: the client is never told.
@@ -160,8 +165,8 @@ class ClientTransfer:
 
 _COLUMNS = (
     "id, investment_id, sender_client_id, recipient_client_id, sender_name, recipient_name, "
-    "currency, amount_minor, whole, message, status, held, held_for, requested_at, "
-    "release_proposed_by, "
+    "currency, amount_minor, whole, message, purpose, purpose_note, status, held, held_for, "
+    "requested_at, release_proposed_by, "
     "release_proposed_at, release_reason, released_by, released_at, declined_by, declined_at, "
     "decision_reason, cancelled_at, finished_at, sent_minor, received_investment_id, "
     "kept_investment_id, entry_id, failure_code"
@@ -196,9 +201,9 @@ _SENT_TODAY = text(
 _INSERT = text(
     "INSERT INTO investment_transfers (id, investment_id, sender_client_id, "
     "recipient_client_id, sender_name, recipient_name, currency, amount_minor, whole, message, "
-    "status, held, held_for, requested_at) VALUES (:id, :investment_id, :sender, :recipient, "
-    ":sender_name, :recipient_name, :currency, :amount_minor, :whole, :message, :status, "
-    ":held, :held_for, clock_timestamp())"
+    "purpose, purpose_note, status, held, held_for, requested_at) VALUES (:id, :investment_id, "
+    ":sender, :recipient, :sender_name, :recipient_name, :currency, :amount_minor, :whole, "
+    ":message, :purpose, :purpose_note, :status, :held, :held_for, clock_timestamp())"
 )
 _PROPOSE = text(
     "UPDATE investment_transfers SET status = 'release_proposed', release_proposed_by = :by, "
@@ -271,6 +276,8 @@ async def send_investment(
     to_account_number: str,
     amount: Money,
     message: str | None,
+    purpose: TransferPurpose,
+    purpose_note: str | None,
     restricted_until: datetime | None,
     idempotency_key: str,
     clock: Clock,
@@ -294,6 +301,7 @@ async def send_investment(
     cleaned = (message or "").strip() or None
     if cleaned is not None and len(cleaned) > MAX_MESSAGE_LENGTH:
         raise invalid("message", "too_long")
+    note = _purpose_note(purpose, purpose_note)
 
     async def command() -> Receipt:
         transfer_id = await _ask(
@@ -305,6 +313,8 @@ async def send_investment(
             amount,
             cleaned,
             clock,
+            purpose=purpose,
+            purpose_note=note,
             whole=whole,
         )
         return Receipt(201, {"transfer_id": transfer_id})
@@ -320,6 +330,8 @@ async def send_investment(
             "amount_minor": amount.minor,
             "currency": amount.currency.value,
             "message": cleaned,
+            "purpose": purpose.value,
+            "purpose_note": note,
             "whole": whole,
         },
         now=now,
@@ -716,6 +728,8 @@ async def _ask(
     message: str | None,
     clock: Clock,
     *,
+    purpose: TransferPurpose,
+    purpose_note: str | None,
     whole: bool = False,
 ) -> str:
     row = (await session.execute(_INVESTMENT_LOCKED, {"id": investment_id})).one_or_none()
@@ -800,6 +814,8 @@ async def _ask(
                     "amount_minor": amount.minor,
                     "whole": amount == value,
                     "message": message,
+                    "purpose": purpose.value,
+                    "purpose_note": purpose_note,
                     "status": (TransferStatus.HELD if held else TransferStatus.WAITING).value,
                     "held": held,
                     "held_for": held_for.value if held_for else None,
@@ -1014,6 +1030,8 @@ def _from_row(row: Row[Any]) -> Transfer:
         amount=Money(row.amount_minor, currency),
         whole=row.whole,
         message=row.message,
+        purpose=TransferPurpose(row.purpose) if row.purpose else None,
+        purpose_note=row.purpose_note,
         status=TransferStatus(row.status),
         held=row.held,
         held_for=HeldFor(row.held_for) if row.held_for else None,
@@ -1052,6 +1070,20 @@ def _client_view(transfer: Transfer, client_id: str) -> ClientTransfer:
         kept_investment_id=transfer.kept_investment_id if sent else None,
         failure_code=transfer.failure_code if sent else None,
     )
+
+
+def _purpose_note(purpose: TransferPurpose, note: str | None) -> str | None:
+    """The sender's own words, wanted for `other` and only for it."""
+    cleaned = (note or "").strip() or None
+    if purpose is not TransferPurpose.OTHER:
+        if cleaned is not None:
+            raise invalid("purpose_note", "only_for_other")
+        return None
+    if cleaned is None:
+        raise invalid("purpose_note", "required")
+    if len(cleaned) > MAX_PURPOSE_NOTE_LENGTH:
+        raise invalid("purpose_note", "too_long")
+    return cleaned
 
 
 def _client(client: Actor) -> str:
