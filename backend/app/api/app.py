@@ -47,6 +47,7 @@ from app.modules.identity import (
     recovery_api,
     sessions_api,
     team_api,
+    terms_api,
 )
 from app.modules.identity.authenticators import AuthenticatorService
 from app.modules.identity.codes import CodeService
@@ -265,6 +266,7 @@ def create_app(
         *custodian_api.routers,
         *closures_api.routers,
         freeze_api.router,
+        terms_api.router,
         own_changes_api.router,
     ):
         app.include_router(router)

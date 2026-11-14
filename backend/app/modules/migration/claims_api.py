@@ -11,7 +11,7 @@ check and the claim's step move in one transaction. The decision comes back to t
 event. Last, the client confirms the investments shown, or says something is wrong.
 """
 
-from typing import Annotated
+from typing import Annotated, Literal
 
 import structlog
 from fastapi import APIRouter, Request, Response
@@ -70,6 +70,9 @@ class ClaimComplete(Contract):
     challenge_id: PushId
     code: Code
     password: Password
+    # The client agreed to the terms and privacy notice. The versions current now are
+    # recorded when the account is claimed.
+    accepted_terms: Literal[True]
 
 
 class ClaimStateView(Contract):

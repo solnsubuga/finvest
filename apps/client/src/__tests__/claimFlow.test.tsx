@@ -3,6 +3,7 @@ import { router } from "expo-router";
 import { renderRouter } from "expo-router/testing-library";
 
 import { DEMO_CLAIM } from "@/claim/demo";
+import { colors } from "@/theme";
 import { WARM_ROUTER_MS, warmRouter } from "@/testing/warmRouter";
 
 /** The address the app was opened with, as the link in our SMS or email would open it. */
@@ -82,6 +83,11 @@ async function claim(token: string) {
   // Not until both boxes match.
   expect(open.props.accessibilityState?.disabled).toBe(true);
   await fireEvent.changeText(screen.getByTestId("password-confirm-input"), "a long new password");
+  // Not until the terms are agreed to: the box turns red and nothing is sent.
+  await fireEvent.press(open);
+  expect(screen.getByText("I agree to the terms and the privacy notice.")).toHaveStyle({ color: colors.danger });
+  expect(screen.getByText("Enter the code and choose a password")).toBeTruthy();
+  await fireEvent.press(screen.getByTestId("terms-checkbox"));
   await fireEvent.press(open);
 }
 

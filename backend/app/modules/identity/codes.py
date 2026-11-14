@@ -25,7 +25,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.infrastructure.database import Database
 from app.infrastructure.throttling import reserve_attempts, throttle_key
-from app.modules.identity import notices, trail
+from app.modules.identity import notices, terms, trail
 from app.modules.identity.domain.accounts import InvalidIdentifier, normalize_email, normalize_phone
 from app.modules.identity.domain.passwords import password_problem
 from app.modules.identity.domain.sessions import RESTRICTION, Transport, new_token, token_digest
@@ -321,6 +321,7 @@ class CodeService:
                         "now": now,
                     },
                 )
+                await terms.record_current(session, client_id, "signup", now, self.clock)
                 await trail.note(
                     session,
                     self.clock,
@@ -677,6 +678,7 @@ class CodeService:
                     )
                 )
             if claimed:
+                await terms.record_current(session, account.id, "claim", now, self.clock)
                 await trail.note(
                     session,
                     self.clock,

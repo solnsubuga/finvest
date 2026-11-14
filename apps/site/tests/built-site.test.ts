@@ -34,6 +34,13 @@ describe("the built site", () => {
     expect(pages.length, "run `pnpm build` before `pnpm test:build`").toBeGreaterThan(0);
   });
 
+  it("keeps the PDF of each version of the terms and the privacy notice", () => {
+    for (const slug of ["terms", "privacy"]) {
+      const versioned = all.filter((path) => new RegExp(`legal/${slug}-\\d{4}-\\d{2}-\\d{2}\\.pdf$`).test(path));
+      expect(versioned.length, slug).toBeGreaterThan(0);
+    }
+  });
+
   it("never mentions the back office", () => {
     for (const path of all.filter((p) => /\.(html|js|css|txt|xml|json)$/.test(p))) {
       expect(read(path).toLowerCase(), name(path)).not.toMatch(/admin[.-]|\/admin\b/);

@@ -10,13 +10,38 @@ export const layoutOnlyNotice =
 export interface LegalDocument {
   slug: string;
   title: string;
+  /**
+   * For the documents a client agrees to (the terms and the privacy notice): the day this
+   * wording took effect, as YYYY-MM-DD. The API records it when a client signs up or claims an
+   * account (`backend/app/modules/identity/domain/terms.py`, which a backend test keeps equal
+   * to this), and the app links to this version's PDF at /legal/<slug>-<version>.pdf.
+   */
+  version?: string;
   sections: { heading: string; covers: string }[];
+}
+
+/**
+ * Earlier versions of the terms and the privacy notice, kept so the PDF a client agreed to
+ * stays at /legal/<slug>-<version>.pdf for good. When the lawyers change a document, move a
+ * copy of its old entry here, unchanged, and give the new entry its new version.
+ */
+export const earlierVersions: LegalDocument[] = [];
+
+/** "14 November 2026" for a YYYY-MM-DD version. */
+export function versionLabel(version: string): string {
+  const [year, month, day] = version.split("-").map(Number);
+  const months = [
+    "January", "February", "March", "April", "May", "June",
+    "July", "August", "September", "October", "November", "December",
+  ];
+  return `${day} ${months[(month ?? 1) - 1]} ${year}`;
 }
 
 export const legalDocuments: LegalDocument[] = [
   {
     slug: "terms",
     title: "Terms and conditions",
+    version: "2026-11-14",
     sections: [
       {
         heading: "Who we are",
@@ -61,6 +86,7 @@ export const legalDocuments: LegalDocument[] = [
   {
     slug: "privacy",
     title: "Privacy notice",
+    version: "2026-11-14",
     sections: [
       {
         heading: "Who is responsible for your data",

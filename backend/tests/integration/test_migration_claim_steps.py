@@ -70,6 +70,7 @@ async def signed_in(api: Api) -> tuple[Actor, dict[str, str]]:
         "challenge_id": started.json()["challenge_id"],
         "code": code,
         "password": PASSWORD,
+        "accepted_terms": True,
     }
     done = await api.http.post("/client/claim/complete", json=body)
     assert done.status_code == 200, done.text

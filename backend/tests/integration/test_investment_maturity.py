@@ -37,7 +37,7 @@ from tests.support.ledger import client as new_client
 from tests.support.ledger import staff as new_staff
 from tests.support.ledger import ugx
 
-pytestmark = pytest.mark.integration
+pytestmark = [pytest.mark.integration, pytest.mark.usefixtures("clear_of_midnight")]
 
 NOW = PRESENT
 MATURED, ACTIVE = InvestmentStatus.MATURED, InvestmentStatus.ACTIVE

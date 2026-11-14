@@ -1,6 +1,62 @@
 {
   "components": {
     "schemas": {
+      "AcceptanceView": {
+        "additionalProperties": false,
+        "description": "One document the client agreed to. The website keeps every version's PDF at\n`/legal/<document>-<version>.pdf`.",
+        "properties": {
+          "accepted_at": {
+            "format": "date-time",
+            "title": "Accepted At",
+            "type": "string"
+          },
+          "document": {
+            "enum": [
+              "terms",
+              "privacy"
+            ],
+            "title": "Document",
+            "type": "string"
+          },
+          "version": {
+            "title": "Version",
+            "type": "string"
+          },
+          "via": {
+            "enum": [
+              "signup",
+              "claim"
+            ],
+            "title": "Via",
+            "type": "string"
+          }
+        },
+        "required": [
+          "document",
+          "version",
+          "accepted_at",
+          "via"
+        ],
+        "title": "AcceptanceView",
+        "type": "object"
+      },
+      "AcceptancesView": {
+        "additionalProperties": false,
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/AcceptanceView"
+            },
+            "title": "Items",
+            "type": "array"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "title": "AcceptancesView",
+        "type": "object"
+      },
       "AccessSyncView": {
         "additionalProperties": false,
         "description": "Where Cloudflare Access stands for one member of staff.",
@@ -3657,6 +3713,11 @@
       "ClaimComplete": {
         "additionalProperties": false,
         "properties": {
+          "accepted_terms": {
+            "const": true,
+            "title": "Accepted Terms",
+            "type": "boolean"
+          },
           "challenge_id": {
             "maxLength": 20,
             "minLength": 20,
@@ -3687,7 +3748,8 @@
           "token",
           "challenge_id",
           "code",
-          "password"
+          "password",
+          "accepted_terms"
         ],
         "title": "ClaimComplete",
         "type": "object"
@@ -21519,6 +21581,11 @@
       "SignupComplete": {
         "additionalProperties": false,
         "properties": {
+          "accepted_terms": {
+            "const": true,
+            "title": "Accepted Terms",
+            "type": "boolean"
+          },
           "password": {
             "maxLength": 1024,
             "minLength": 1,
@@ -21534,7 +21601,8 @@
         },
         "required": [
           "ticket",
-          "password"
+          "password",
+          "accepted_terms"
         ],
         "title": "SignupComplete",
         "type": "object"
@@ -42486,6 +42554,48 @@
         "summary": "Client Read",
         "tags": [
           "client help"
+        ]
+      }
+    },
+    "/client/terms-acceptances": {
+      "get": {
+        "description": "The terms and privacy notice versions the client agreed to, newest first.",
+        "operationId": "my_acceptances_client_terms_acceptances_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AcceptancesView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          }
+        },
+        "summary": "My Acceptances",
+        "tags": [
+          "terms"
         ]
       }
     },

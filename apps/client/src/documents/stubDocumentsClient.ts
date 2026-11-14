@@ -1,7 +1,7 @@
 import { kampalaToday } from "@/autoinvest/schedule";
 
 import { monthLabel, periodProblem, taxYearLabel } from "./periods";
-import { DocumentItem, DocumentsClient, DocumentsError } from "./types";
+import { Agreement, DocumentItem, DocumentsClient, DocumentsError } from "./types";
 
 /**
  * An in-memory stand-in for the documents routes. Nothing here is real, and
@@ -188,9 +188,19 @@ export function createStubDocumentsClient(phone: string | null, options: Options
     return finished;
   }
 
+  // The demo accounts agreed to this version the day it was published; a new account agreed today.
+  const agreedAt = () => (phone && SEEDED.has(phone) ? morning("2026-11-14") : now().toISOString());
+
   const client: DocumentsClient & { asked: string[]; downloaded: string[] } = {
     asked,
     downloaded,
+    async listAgreements() {
+      await wait();
+      all();
+      return (["terms", "privacy"] as const).map(
+        (document): Agreement => ({ document, version: "2026-11-14", acceptedAt: agreedAt(), via: "signup" }),
+      );
+    },
     async listDocuments() {
       await wait();
       return all()

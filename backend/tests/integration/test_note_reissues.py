@@ -25,7 +25,7 @@ from tests.support.clock import AsyncBarrier
 from tests.support.investments import PRESENT, today
 from tests.support.ledger import staff as new_staff
 
-pytestmark = pytest.mark.integration
+pytestmark = [pytest.mark.integration, pytest.mark.usefixtures("clear_of_midnight")]
 
 REASON = "The client lost the email and asked for it again"
 
