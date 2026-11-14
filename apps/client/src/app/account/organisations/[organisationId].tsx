@@ -79,9 +79,14 @@ function signatoryDetail(person: Signatory): string {
 
 /** One company or group account: who signs, the withdrawal rule, its papers, and handing it in. */
 export default function OrganisationScreen() {
+  const { organisationId } = useLocalSearchParams<{ organisationId: string }>();
+  // Keyed, so opening another application starts the screen afresh.
+  return <OrganisationView key={organisationId} organisationId={organisationId} />;
+}
+
+function OrganisationView({ organisationId }: { organisationId: string }) {
   const organisations = useOrganisations();
   const router = useRouter();
-  const { organisationId } = useLocalSearchParams<{ organisationId: string }>();
   const [state, setState] = useState<State>({ status: "loading" });
   const [attempt, setAttempt] = useState(0);
   const [busy, setBusy] = useState<Busy>(null);
@@ -89,14 +94,6 @@ export default function OrganisationScreen() {
   const [adding, setAdding] = useState<{ to: string; role: string } | null>(null);
   const [addErrors, setAddErrors] = useState<Record<string, string>>({});
   const [documentErrors, setDocumentErrors] = useState<Partial<Record<DocumentKind, string>>>({});
-  // The same screen can open another application: start it afresh.
-  useEffect(() => {
-    setNote(null);
-    setAdding(null);
-    setDocumentErrors({});
-    setState({ status: "loading" });
-  }, [organisationId]);
-
   // The reader's own account number, to find their own row among the signatories.
   const { client: identity } = useIdentity();
   const [myNumber, setMyNumber] = useState<string | null>(null);
