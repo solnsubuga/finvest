@@ -21,6 +21,15 @@ export type PhotoKind = "front" | "back" | "selfie";
 export type Verdict = "pass" | "fail" | "unsure";
 export type AutomaticCheckName = "document_genuine" | "selfie_match" | "screening" | "liveness";
 
+/** Where the lookup of the name the network holds for the client's phone number stands. */
+export type PhoneNameStatus = "checking" | "matches" | "partly_matches" | "different" | "no_name" | "not_answered";
+
+export interface PhoneName {
+  status: PhoneNameStatus;
+  /** The name the network holds for the number, once it gave one. */
+  registeredName: string | null;
+}
+
 /** What the signed-in person may do to a check in its current state. The backend decides. */
 export type Decision = "approve" | "reject" | "ask_for_photos" | "escalate";
 
@@ -60,6 +69,8 @@ export interface CheckDetail extends QueueItem {
   documentExpiresOn: string | null;
   photos: readonly Photo[];
   automaticChecks: readonly AutomaticCheck[];
+  /** The network's name for the client's phone number beside the ID name. Null when it was not looked up. */
+  phoneName: PhoneName | null;
   /** Photos staff asked the client to take again. */
   retakePhotos: readonly PhotoKind[];
   clientMessage: string | null;
