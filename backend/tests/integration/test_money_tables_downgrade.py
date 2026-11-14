@@ -1,7 +1,7 @@
 """A downgrade must never delete the books, the issued numbers, the audit trail, the job history,
 the receipts that stop a command running twice, the identity records, the payout destinations,
 their two-person checks and network name lookups, the withdrawal limits, the payouts, their send
-attempts, their resolutions and their bank batches, the migration checks, the imported
+attempts, their resolutions, their bank batches and bulk debits, the migration checks, the imported
 statements, the day closes and their recorded matches, the pot transfers, the help chat, the
 complaints register, the goals, the email delivery records, the unclaimed accounts, the
 complaint outcomes, the suppression lifts, the client locks, the announcements, the team
@@ -478,6 +478,31 @@ ROWS = {
         "prepared_at) VALUES ('-Nabc0000000000000A1', 'UGX', 'Today', 'prepared', "
         "'-Nabc0000000000000S1', now())",
         "refusing to drop the batches of bank payouts",
+    ),
+    "0280_payout_bank_bulk_debits": (
+        "ALTER TABLE payout_bank_batches DISABLE TRIGGER payout_bank_batches_guard; "
+        "INSERT INTO payout_bank_batches (id, currency, reason, status, prepared_by, "
+        "prepared_at) VALUES ('-Nabc0000000000000A1', 'UGX', 'Today', 'prepared', "
+        "'-Nabc0000000000000S1', now()); "
+        "INSERT INTO reconciliation_statements (id, source, account_reference, business_date, "
+        "currency, opening_minor, closing_minor, line_count, file_sha256, imported_by, "
+        "imported_at) VALUES ('-Nabc0000000000000C1', 'bank', 'trust', DATE '2026-11-10', "
+        "'UGX', 1100, 100, 1, repeat('0', 64), '-Nabc0000000000000B1', now()); "
+        "INSERT INTO reconciliation_statement_lines (id, statement_id, line_no, value_date, "
+        "direction, amount_minor, reference, narrative, fingerprint) VALUES "
+        "('-Nabc0000000000000L1', '-Nabc0000000000000C1', 1, DATE '2026-11-10', 'out', 1000, "
+        "'r', 'n', repeat('0', 64)); "
+        # The guard admits only staff proposing for an approved batch, and the deferred check
+        # wants its payouts to add up to the line.
+        "ALTER TABLE payout_bank_bulk_settlements "
+        "DISABLE TRIGGER payout_bank_bulk_settlements_guard; "
+        "ALTER TABLE payout_bank_bulk_settlements "
+        "DISABLE TRIGGER payout_bank_bulk_settlements_adds_up; "
+        "INSERT INTO payout_bank_bulk_settlements (id, batch_id, statement_line_id, reason, "
+        "status, proposed_by, proposed_at) VALUES ('-Nabc0000000000000U1', "
+        "'-Nabc0000000000000A1', '-Nabc0000000000000L1', 'One debit', 'proposed', "
+        "'-Nabc0000000000000S1', now())",
+        "refusing to drop the bulk settlements of bank payouts",
     ),
     "0044_payout_returns": (
         "INSERT INTO payout_destinations (id, client_id, kind, network, account_number, "
