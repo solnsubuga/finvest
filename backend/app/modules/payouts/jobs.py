@@ -65,6 +65,8 @@ from app.modules.payouts.domain.sending import (
 )
 from app.modules.payouts.events import RELEASE_SCREENED_KIND
 from app.modules.payouts.payouts import PayoutView
+from app.modules.platform_settings import service as platform_settings
+from app.modules.platform_settings.domain.catalogue import PAYOUT_BY_NETWORK
 from app.shared.actors import SYSTEM
 from app.shared.clock import Clock
 
@@ -150,6 +152,14 @@ class PayoutJobs:
                 # An open attempt may have gone. The sweep settles it; it is not sent again.
                 return
             network, msisdn = await destinations.mobile_money_number(session, payout.destination_id)
+            channels = await platform_settings.payment_channels(session, self._clock.now())
+            if not channels.is_open(PAYOUT_BY_NETWORK[network]):
+                # Paused on Settings during an outage. Nothing is sent and no attempt is
+                # saved, so the payout stays queued with the client's money where it is. The
+                # sweep queues a fresh send every RESEND_AFTER, and the first one after the
+                # channel reopens sends it.
+                logger.info("payout_waiting_on_channel", payout_id=payout_id)
+                return
             attempt = (last.attempt if last is not None else 0) + 1
             await session.execute(
                 _START,
