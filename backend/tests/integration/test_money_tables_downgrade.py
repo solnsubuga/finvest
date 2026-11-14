@@ -8,7 +8,8 @@ complaint outcomes, the suppression lifts, the client locks, the announcements, 
 changes, Finvest's own money in the buffer, the payments of tax to URA, the payments moved to
 the right client, next of kin, the answers to the investing questions, the requests to close an
 account, the journals sent to the accounting system, who set the bank account clients pay
-into, why a payout send waited, the account code maps or the deposits taken back as mistakes."""
+into, why a payout send waited, the account code maps, the deposits taken back as mistakes or
+what clients owe for them."""
 
 import os
 from collections.abc import Iterator
@@ -983,6 +984,19 @@ ROWS = {
         "('-Nabc0000000000000D1', '-Nabc0000000000000A1', '-Nabc0000000000000B1', "
         "'-Nabc0000000000000C1', 'UGX', 1000, 'Never arrived', '-Nabc0000000000000S1', now())",
         "refusing to drop the record of reversed deposits",
+    ),
+    "0262_payment_receivables": (
+        # The guard admits only staff proposing in their own name, for a confirmed deposit.
+        "ALTER TABLE payment_receivable_steps DISABLE TRIGGER payment_receivable_steps_guard; "
+        "INSERT INTO payment_deposits (id, client_id, purpose_type, purpose_id, method, provider, "
+        "currency, amount_minor, status, created_at, updated_at) VALUES ('-Nabc0000000000000A1', "
+        "'-Nabc0000000000000B1', 'investment', '-Nabc0000000000000C1', 'bank_transfer', 'bank', "
+        "'UGX', 1000, 'in_review', now(), now()); "
+        "INSERT INTO payment_receivable_steps (id, deposit_id, kind, client_id, currency, "
+        "amount_minor, reason, proposed_by, proposed_at) VALUES ('-Nabc0000000000000D1', "
+        "'-Nabc0000000000000A1', 'open', '-Nabc0000000000000B1', 'UGX', 1000, 'Never arrived', "
+        "'-Nabc0000000000000S1', now())",
+        "refusing to drop the record of mistaken deposit receivables",
     ),
     "0224_identity_recovery_asks": (
         "INSERT INTO identity_clients (id, phone, status, created_at) VALUES "
