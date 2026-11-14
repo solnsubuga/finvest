@@ -43,7 +43,7 @@ from app.infrastructure.jobs import (
     is_active,
 )
 from app.infrastructure.sealing import Sealer
-from app.modules.documents import building, checks, locking, pdf, reissues, service
+from app.modules.documents import building, checks, locking, pdf, reissues, service, spreadsheet
 from app.modules.documents.domain.checks import new_code
 from app.modules.documents.domain.emails import (
     Rendered,
@@ -94,6 +94,12 @@ _FINISH = text(
     "WHERE id = :id AND status = 'pending'"
 )
 
+# The Excel copy, from the same drawn statement as the PDF, in the same transaction.
+_SPREADSHEET = text(
+    "INSERT INTO document_spreadsheets "
+    "(document_id, file_name, content, sha256, byte_size, created_at) "
+    "VALUES (:id, :file_name, :content, :sha256, :byte_size, :now)"
+)
 
 _QUEUE_EMAIL = text(
     "INSERT INTO document_emails (document_id, client_id, queued_at) "
@@ -143,6 +149,11 @@ def file_name(view: DocumentView) -> str:
         return f"Finvest investment {stage} {view.reference}.pdf"
     assert view.period is not None
     return f"Finvest statement {view.period.label}.pdf"
+
+
+def spreadsheet_name(view: DocumentView) -> str:
+    """ "Finvest statement October 2026.xlsx": the PDF's name, as a workbook."""
+    return file_name(view).removesuffix(".pdf") + ".xlsx"
 
 
 # How many days into a month the run waits quietly for the ledger to close the month before.
@@ -231,6 +242,19 @@ class DocumentJobs:
             )
             if statement is not None and statement.check_code is not None:
                 await checks.record(session, view.id, statement, self._clock.now())
+            if statement is not None and status is DocumentStatus.READY:
+                workbook = spreadsheet.statement_workbook(statement)
+                await session.execute(
+                    _SPREADSHEET,
+                    {
+                        "id": view.id,
+                        "file_name": spreadsheet_name(view),
+                        "content": workbook,
+                        "sha256": hashlib.sha256(workbook).digest(),
+                        "byte_size": len(workbook),
+                        "now": self._clock.now(),
+                    },
+                )
             if status is DocumentStatus.READY and view.kind in _STATEMENTS:
                 assert view.period is not None
                 await notifications.notify(

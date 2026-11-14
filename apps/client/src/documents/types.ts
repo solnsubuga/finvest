@@ -6,6 +6,7 @@
  * - `GET /client/documents`, newest first
  * - `GET /client/documents/{id}`, polled until a statement is ready
  * - `GET /client/documents/{id}/file`, the PDF
+ * - `GET /client/documents/{id}/spreadsheet`, a statement's Excel copy
  *
  * Figures are only ever in the PDF, after tax. The list carries none.
  */
@@ -22,6 +23,9 @@ export type DocumentKind =
   | "investment_note";
 export type DocumentStatus = "pending" | "ready" | "failed";
 
+/** The signed PDF, or a statement's Excel copy for the client's own records. */
+export type FileFormat = "pdf" | "xlsx";
+
 export type DocumentItem = {
   id: string;
   kind: DocumentKind;
@@ -35,6 +39,11 @@ export type DocumentItem = {
   /** "Finvest statement October 2026.pdf". Set once ready. */
   fileName: string | null;
   byteSize: number | null;
+  /**
+   * A ready statement's Excel copy, the same figures as its PDF. Null for every
+   * other kind, and for statements made before Excel copies existed.
+   */
+  spreadsheetByteSize: number | null;
   /**
    * For a statement reaching days the books have not closed yet: the first day
    * whose figures may still change. Null when every figure is final.
@@ -101,6 +110,6 @@ export interface DocumentsClient {
     dateTo: string,
     idempotencyKey: string,
   ): Promise<DocumentItem>;
-  /** Saves or opens the PDF on this device. */
-  download(document: DocumentItem): Promise<void>;
+  /** Saves or opens the PDF, or a statement's Excel copy, on this device. */
+  download(document: DocumentItem, format?: FileFormat): Promise<void>;
 }

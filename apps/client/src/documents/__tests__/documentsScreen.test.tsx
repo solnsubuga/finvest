@@ -89,6 +89,33 @@ describe("the Documents screen", () => {
     expect(client.downloaded).toEqual(["demo-asked-1"]);
   });
 
+  it("makes a statement in Excel, with the signed PDF beside it", async () => {
+    const client = await show("+256772123456");
+    await screen.findByText("Monthly statements");
+    expect(screen.getByText("All investments and goals")).toBeTruthy();
+    expect(screen.getByTestId("format-pdf")).toBeChecked();
+    await fireEvent.press(screen.getByTestId("format-xlsx"));
+    expect(screen.getByTestId("format-xlsx")).toBeChecked();
+    expect(screen.getByTestId("statement-format-note").props.children[0]).toMatch(/^The Excel file has the same figures/);
+    await fireEvent.press(screen.getByTestId("make-statement"));
+    expect(await screen.findByText("Your statement is ready")).toBeTruthy();
+    expect(screen.getByText("Download Excel")).toBeTruthy();
+    await fireEvent.press(screen.getByTestId("statement-download"));
+    await waitFor(() => expect(client.downloaded).toEqual(["demo-asked-1.xlsx"]));
+    await fireEvent.press(screen.getByText("Download the signed PDF"));
+    await waitFor(() => expect(client.downloaded).toEqual(["demo-asked-1.xlsx", "demo-asked-1"]));
+  });
+
+  it("offers Excel on statements that have it, and not on older ones or receipts", async () => {
+    const client = await show("+256772123456");
+    await screen.findByText("Monthly statements");
+    expect(screen.getByTestId("download-xlsx-demo-monthly-1")).toBeTruthy();
+    expect(screen.queryByTestId("download-xlsx-demo-monthly-3")).toBeNull();
+    expect(screen.queryByLabelText(/Receipt .* as Excel/)).toBeNull();
+    await fireEvent.press(screen.getByLabelText("Download October 2026 as Excel"));
+    await waitFor(() => expect(client.downloaded).toEqual(["demo-monthly-1.xlsx"]));
+  });
+
   it("says when a statement reaches days that are not final", async () => {
     await show("+256772123456");
     await screen.findByText("Monthly statements");

@@ -7423,6 +7423,17 @@
             "title": "Requested At",
             "type": "string"
           },
+          "spreadsheet_byte_size": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Spreadsheet Byte Size"
+          },
           "status": {
             "enum": [
               "pending",
@@ -7447,7 +7458,8 @@
           "investment_id",
           "deposit_id",
           "reference",
-          "note"
+          "note",
+          "spreadsheet_byte_size"
         ],
         "title": "DocumentItem",
         "type": "object"
@@ -31780,6 +31792,78 @@
           }
         },
         "summary": "Download Document",
+        "tags": [
+          "client documents"
+        ]
+      }
+    },
+    "/client/documents/{document_id}/spreadsheet": {
+      "get": {
+        "description": "A statement's Excel copy: the same figures as its PDF, for the client's own records.",
+        "operationId": "download_spreadsheet_client_documents__document_id__spreadsheet_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "document_id",
+            "required": true,
+            "schema": {
+              "maxLength": 20,
+              "minLength": 20,
+              "pattern": "^[-0-9A-Z_a-z]{20}$",
+              "title": "Document Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": {}
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          }
+        },
+        "summary": "Download Spreadsheet",
         "tags": [
           "client documents"
         ]

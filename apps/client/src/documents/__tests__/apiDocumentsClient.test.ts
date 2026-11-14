@@ -10,9 +10,11 @@ jest.mock("expo-secure-store", () => ({
   deleteItemAsync: jest.fn(async () => undefined),
 }));
 
-const saved: { path: string; name: string }[] = [];
+const saved: { path: string; name: string; type?: string }[] = [];
 jest.mock("../savePdf", () => ({
-  savePdf: jest.fn(async (path: string, name: string) => void saved.push({ path, name })),
+  savePdf: jest.fn(async (path: string, name: string, type?: { mimeType: string }) =>
+    void saved.push(type ? { path, name, type: type.mimeType } : { path, name }),
+  ),
 }));
 
 const ID = "Pq30vNa2AAAAAAAAAAAA";
@@ -26,6 +28,7 @@ const ITEM = {
   finished_at: null,
   file_name: null,
   byte_size: null,
+  spreadsheet_byte_size: null,
   not_final_from: null,
   investment_id: null,
   deposit_id: null,
@@ -119,6 +122,7 @@ it("downloads only a ready document, under a plain name", async () => {
     requestedAt: "2026-11-13T12:40:00Z",
     finishedAt: "2026-11-13T12:40:05Z",
     byteSize: 1000,
+    spreadsheetByteSize: null,
     notFinalFrom: null,
     reference: `RC-${ID}`,
     note: null,
@@ -129,4 +133,44 @@ it("downloads only a ready document, under a plain name", async () => {
   await client.download({ ...base, status: "ready", fileName: "Finvest receipt RC-Pq30vNa2.pdf" });
   expect(saved).toEqual([{ path: `/client/documents/${ID}/file`, name: "Finvest receipt RC-Pq30vNa2.pdf" }]);
   expect(safeFileName({ ...base, status: "ready", fileName: "../../evil\n.exe" })).toBe(`Finvest document ${ID}.pdf`);
+});
+
+it("downloads a statement's Excel copy only when it has one", async () => {
+  saved.length = 0;
+  const client = createApiDocumentsClient();
+  const statement = {
+    id: ID,
+    kind: "monthly_statement" as const,
+    status: "ready" as const,
+    dateFrom: "2026-10-01",
+    dateTo: "2026-10-31",
+    requestedAt: "2026-11-01T03:10:00Z",
+    finishedAt: "2026-11-01T03:10:05Z",
+    fileName: "Finvest statement October 2026.pdf",
+    byteSize: 48000,
+    spreadsheetByteSize: 9000,
+    notFinalFrom: null,
+    reference: `ST-${ID}`,
+    note: null,
+    investmentId: null,
+    depositId: null,
+  };
+  await client.download(statement, "xlsx");
+  expect(saved).toEqual([
+    {
+      path: `/client/documents/${ID}/spreadsheet`,
+      name: "Finvest statement October 2026.xlsx",
+      type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    },
+  ]);
+  await expect(client.download({ ...statement, spreadsheetByteSize: null }, "xlsx")).rejects.toMatchObject({
+    code: "not_found",
+  });
+  expect(saved).toHaveLength(1);
+});
+
+it("reads the size of the Excel copy from the list", async () => {
+  answer(200, { items: [{ ...ITEM, status: "ready", spreadsheet_byte_size: 9000 }] });
+  const [item] = await createApiDocumentsClient().listDocuments();
+  expect(item!.spreadsheetByteSize).toBe(9000);
 });

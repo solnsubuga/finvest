@@ -14,7 +14,7 @@ from app.api.idempotency import IdempotencyKey
 from app.infrastructure.database import Database
 from app.infrastructure.idempotency import Receipt, run_once
 from app.infrastructure.throttling import reserve_attempts, throttle_key
-from app.modules.documents import checks, reissues, service
+from app.modules.documents import checks, reissues, service, spreadsheet
 from app.modules.documents.service import DocumentKind, DocumentStatus, DocumentView
 from app.modules.identity.api import (
     CurrentClient,
@@ -99,6 +99,9 @@ class DocumentItem(Contract):
     # For an investment note, whether it confirms the investment started or ended. Null for
     # every other kind.
     note: Literal["started", "ended"] | None
+    # A ready statement's Excel copy: its size, to download from `.../spreadsheet`. Null for
+    # every other kind, and for statements made before Excel copies existed.
+    spreadsheet_byte_size: int | None
 
 
 class DocumentList(Contract):
@@ -123,6 +126,7 @@ def _item(view: DocumentView) -> DocumentItem:
         deposit_id=view.source_id if view.kind is DocumentKind.RECEIPT else None,
         reference=view.reference,
         note=view.note.value if view.note else None,
+        spreadsheet_byte_size=view.spreadsheet_byte_size,
     )
 
 
@@ -185,6 +189,28 @@ async def download_document(document_id: PushId, client: CurrentClient, database
     return Response(
         content=found.content,
         media_type="application/pdf",
+        headers={
+            "Content-Disposition": f"attachment; filename*=UTF-8''{quote(found.file_name)}",
+            "Cache-Control": "no-store",
+            "X-Content-Type-Options": "nosniff",
+        },
+    )
+
+
+@client_router.get(
+    "/documents/{document_id}/spreadsheet",
+    response_class=Response,
+    responses={200: {"content": {spreadsheet.MEDIA_TYPE: {}}}},
+)
+async def download_spreadsheet(
+    document_id: PushId, client: CurrentClient, database: Db
+) -> Response:
+    """A statement's Excel copy: the same figures as its PDF, for the client's own records."""
+    async with database.actor_transaction(client.actor) as session:
+        found = await service.client_spreadsheet(session, client.actor, document_id)
+    return Response(
+        content=found.content,
+        media_type=spreadsheet.MEDIA_TYPE,
         headers={
             "Content-Disposition": f"attachment; filename*=UTF-8''{quote(found.file_name)}",
             "Cache-Control": "no-store",

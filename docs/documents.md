@@ -89,6 +89,16 @@ On the website, [finvestug.com/check](../apps/site/src/pages/check.astro) asks `
 
 Receipts, tax certificates and investment notes do not carry a code yet. They still say to contact Finvest with their reference.
 
+## Excel copies
+
+Every statement built since migration `0433_document_spreadsheets` also has an Excel copy, for the client's own records. The worker writes it with openpyxl (`documents/spreadsheet.py`) from the same drawn statement as the PDF, in the same transaction, into `document_spreadsheets`, so the two always show the same figures. The row is insert only, written only by the worker for a statement, and read by the client it belongs to and by staff through the `documents` policy.
+
+The workbook has three sheets: Summary (the facts at the top of the PDF, the check code, and each currency's figures), Your investments, and What happened. Amounts are numbers in the major unit, written from `Money.to_major` as exact decimals and never through a float, with dates as Excel dates, so a client can sort and add them. Text from elsewhere, such as product names, is always written as text, so it can never become a formula. The workbook says that banks and embassies accept the signed PDF: it is not signed itself, and the email still carries only the PDF.
+
+In the app, the form has a Format choice, "PDF, signed" or "Excel". Every statement is made as both, and the choice only decides which file the ready card offers first. Statement rows with an Excel copy carry an Excel button beside the PDF download. A statement from before has only the PDF.
+
+"Include" always covers all investments and goals. A statement is one client's whole account, so its figures add up and its check code vouches for all of it. A statement of one goal only would be a new kind of document and is not offered.
+
 ## The PDFs
 
 `app/modules/documents/pdf.py` draws A4 pages with fpdf2, in black and lime with Plus Jakarta Sans embedded (SIL Open Font License, in `fonts/OFL.txt`). It is data in and bytes out: no network, no clock and no database. The same statement always gives the same bytes, because the creation date written into the file is the issue date. Long statements run onto more pages, with the table heading repeated, and every page carries the reference, the account number and the page count.
@@ -170,6 +180,7 @@ The PDF is kept in the row. A statement is a few tens of kilobytes, and keeping 
 | `GET /client/documents` | Client | Their statements and receipts, newest first |
 | `GET /client/documents/{id}` | Client | One document, to poll until it is `ready`. `not_final_from` is the first day whose figures may still change, or null. `reference` is what the PDF and its email call the document (`ST-`, `RC-`, `TC-` or `IN-` and its ID), and `note` says whether an investment note confirms the investment `started` or `ended` (null for other kinds), so the app never reads either from the file name. |
 | `GET /client/documents/{id}/file` | Client | The PDF, as a download, never cached |
+| `GET /client/documents/{id}/spreadsheet` | Client | A statement's Excel copy, as a download, never cached. `spreadsheet_byte_size` on the document is its size, or null when there is none. |
 | `GET /public/statement-checks/{code}` | Anyone | Whether a statement with this check code was issued. See [Checking a statement](#checking-a-statement). |
 | `GET /staff/note-reissues` | `investments.view` | Requests to send notes again, newest first, with how many notes each covers and how the copies went |
 | `GET /staff/note-reissues/count?issued_from=&issued_to=&client_id=` | `client_statements.send` | How many notes a request would send again |
