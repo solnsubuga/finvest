@@ -30,6 +30,7 @@ export const KIND_INFO: Record<Kind, KindInfo> = {
   suppression_lift: { label: "Email suppression lift", path: at("/clients") },
   complaint_outcome: { label: "Complaint outcome", path: at("/complaints") },
   payout_account: { label: "Payout account check", path: at("/review-queue") },
+  tax_remittance: { label: "Payment to URA", path: at("/finance") },
 };
 
 const SUBJECT_WORDS: Record<string, string> = {
