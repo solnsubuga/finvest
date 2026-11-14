@@ -9,7 +9,9 @@ changes, Finvest's own money in the buffer, the payments of tax to URA, the paym
 the right client, next of kin, the answers to the investing questions, the requests to close an
 account, the journals sent to the accounting system, who set the bank account clients pay
 into, why a payout send waited, the account code maps, the deposits taken back as mistakes,
-what clients owe for them or the runs staff asked for again."""
+what clients owe for them, the runs staff asked for again, staff notes and actions on a
+client, the account freezes, why an investment was sent to another client, the platform
+settings, the withdrawal limit changes or the paydays clients named."""
 
 import os
 from collections.abc import Iterator
