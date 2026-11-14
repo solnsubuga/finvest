@@ -26,7 +26,7 @@ type Load<T> = { state: "loading" } | { state: "failed"; message: string } | { s
 
 interface DayCloseProps {
   api: DayCloseApi;
-  /** Whether the signed-in person may import, match and sign. Seeing needs the same permission today. */
+  /** Whether the signed-in person holds `reconciliation.change`: import, pair and sign. Seeing needs less. */
   canAct: boolean;
   now?: () => Date;
 }
@@ -256,10 +256,16 @@ function CloseStatus({
       carried ? ` ${differences(carried)} ${carried === 1 ? "is" : "are"} carried to the next day.` : ""
     }`;
   } else if (close?.status === "prepared") {
-    title = close.preparedByYou ? "Prepared by you, waiting for a second person" : "Prepared, waiting for your approval";
+    title = close.preparedByYou
+      ? "Prepared by you, waiting for a second person"
+      : canAct
+        ? "Prepared, waiting for your approval"
+        : "Prepared, waiting for a second person";
     body = close.preparedByYou
       ? "A different person, who imported none of this day's statements, has to approve it. You can send it back until they do."
-      : "Another member of staff prepared this close. Check each pot below. Approving closes the ledger through this day, and you will be asked to confirm it is you.";
+      : canAct
+        ? "Another member of staff prepared this close. Check each pot below. Approving closes the ledger through this day, and you will be asked to confirm it is you."
+        : "Another member of staff prepared this close. Someone else who can change reconciliation, and who imported none of this day's statements, approves it.";
     if (canAct) actions = <Decide yours={close.preparedByYou} busy={busy} onApprove={onApprove} onSendBack={onSendBack} />;
   } else if (!ended) {
     title = "This day has not ended";
@@ -304,6 +310,11 @@ function CloseStatus({
           <p className="m-0 text-xs text-muted">Last day closed: {formatDay(day.lastClosed)}</p>
         ) : null}
       </div>
+      {!canAct && close?.status !== "closed" ? (
+        <p className="m-0 rounded-md bg-surface-sunken px-3.5 py-3 text-md leading-normal">
+          You can see this day. Importing statements, pairing lines and signing the close need the permission to change reconciliation.
+        </p>
+      ) : null}
       {notice ? (
         <p role="status" className="m-0 rounded-md bg-surface-sunken px-3.5 py-3 text-md leading-normal">
           {notice}

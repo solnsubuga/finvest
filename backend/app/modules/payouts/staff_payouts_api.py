@@ -2,8 +2,8 @@
 
 `GET /staff/payouts/stranded` lists sent or uncertain payouts whose status reads ended with no
 answer, and the `resolutions` routes let two staff members settle one from the ioTec statement:
-one proposes, a different one approves. Both need `reconciliation.view`, as the other two-person
-money steps there do.
+one proposes, a different one approves. Seeing them needs `reconciliation.view`, and every step
+of a settlement needs `reconciliation.change`, as the day close does.
 
 `GET /staff/payouts/held-up` lists queued mobile money payouts the provider has taken nothing of
 since their first try `HELD_UP_AFTER` or more ago. The sweep keeps sending them and never gives
@@ -54,9 +54,10 @@ def _clock(request: Request) -> Clock:
 Db = Annotated[Database, Depends(_database)]
 Time = Annotated[Clock, Depends(_clock)]
 Viewer = Annotated[StaffSession, Depends(require_permission("money_movement.view"))]
-Settler = Annotated[StaffSession, Depends(require_permission("reconciliation.view"))]
+Watcher = Annotated[StaffSession, Depends(require_permission("reconciliation.view"))]
+Settler = Annotated[StaffSession, Depends(require_permission("reconciliation.change"))]
 # Approving needs a passkey or app code from the last few minutes.
-Approver = Annotated[StaffSession, Depends(require_confirmed("reconciliation.view"))]
+Approver = Annotated[StaffSession, Depends(require_confirmed("reconciliation.change"))]
 Reason = Annotated[str, Field(min_length=1, max_length=500)]
 
 
@@ -164,7 +165,7 @@ def _amount(payout: PayoutView) -> MoneyView:
 
 
 @staff_router.get("/payouts/stranded")
-async def stranded(staff: Settler, database: Db, clock: Time) -> list[StrandedPayoutOut]:
+async def stranded(staff: Watcher, database: Db, clock: Time) -> list[StrandedPayoutOut]:
     """Payouts whose reads ended with no answer, longest first, at most 100."""
     async with database.actor_transaction(staff.actor) as session:
         found = await resolutions.stranded(session, clock.now())

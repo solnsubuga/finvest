@@ -1,7 +1,8 @@
 """Staff routes for reconciliation: statements, matching and the two-person day close.
 
-Everything here needs `reconciliation.view`. Approving a day close also needs the second step in
-the last few minutes. Nothing here moves money: a difference is put right by an entry made by
+Reading needs `reconciliation.view`. Importing, matching, refreshing and every step of a day close
+need `reconciliation.change`, and approving one also needs the second step in the last few
+minutes. Nothing here moves money: a difference is put right by an entry made by
 the owning module, which then shows up as a movement and is matched.
 
 A statement line's narrative carries names and phone numbers, so it is shown to staff only as
@@ -69,7 +70,9 @@ Db = Annotated[Database, Depends(_database)]
 Time = Annotated[Clock, Depends(_clock)]
 Staff = Annotated[StaffSession, Depends(require_permission("reconciliation.view"))]
 # The second signature needs a passkey or app code from the last few minutes.
-Approver = Annotated[StaffSession, Depends(require_confirmed("reconciliation.view"))]
+# Changing what reconciliation records. Seeing it is `Staff`.
+Changer = Annotated[StaffSession, Depends(require_permission("reconciliation.change"))]
+Approver = Annotated[StaffSession, Depends(require_confirmed("reconciliation.change"))]
 
 Source = Literal["iotec", "bank"]
 Reason = Annotated[str, Field(min_length=1, max_length=500)]
@@ -254,7 +257,7 @@ async def list_statements(
 
 @staff_router.post("/statements", status_code=201)
 async def import_statement(
-    staff: Staff,
+    staff: Changer,
     database: Db,
     clock: Time,
     source: Annotated[Source, Form()],
@@ -340,7 +343,7 @@ async def get_day(day: date, staff: Staff, database: Db, clock: Time) -> DayOut:
 
 
 @staff_router.post("/days/{day}/refresh", status_code=204)
-async def refresh(day: date, staff: Staff, database: Db, clock: Time) -> None:
+async def refresh(day: date, staff: Changer, database: Db, clock: Time) -> None:
     """Bring in the ledger's movements up to the day and pair what the records and references
     pair. Safe to run again."""
     if day >= business_date(clock.now()):
@@ -350,7 +353,7 @@ async def refresh(day: date, staff: Staff, database: Db, clock: Time) -> None:
 
 
 @staff_router.post("/matches", status_code=201)
-async def match_by_hand(body: MatchIn, staff: Staff, database: Db, clock: Time) -> None:
+async def match_by_hand(body: MatchIn, staff: Changer, database: Db, clock: Time) -> None:
     """A person pairs a line with a movement, with a reason. 409 `line_already_matched`,
     `movement_already_matched`, `match_not_found` or `match_not_same_money`."""
     try:
@@ -369,7 +372,7 @@ async def match_by_hand(body: MatchIn, staff: Staff, database: Db, clock: Time) 
 
 
 @staff_router.post("/days/{day}/prepare")
-async def prepare(day: date, staff: Staff, database: Db, clock: Time) -> CloseOut:
+async def prepare(day: date, staff: Changer, database: Db, clock: Time) -> CloseOut:
     """The first signature. 409 with the first thing that blocks the close."""
     try:
         async with database.actor_transaction(staff.actor) as session:
@@ -398,7 +401,7 @@ async def approve(day: date, staff: Approver, database: Db, clock: Time) -> Clos
 
 
 @staff_router.post("/days/{day}/send-back", status_code=204)
-async def send_back(day: date, body: ReasonIn, staff: Staff, database: Db, clock: Time) -> None:
+async def send_back(day: date, body: ReasonIn, staff: Changer, database: Db, clock: Time) -> None:
     """Decline or withdraw a prepared close, with a reason, so it can be prepared again."""
     try:
         async with database.actor_transaction(staff.actor) as session:
