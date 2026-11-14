@@ -768,6 +768,43 @@ async def verified_name(session: AsyncSession, client_id: str) -> str | None:
 
 
 @dataclass(frozen=True, slots=True)
+class ScreeningSubject:
+    """Who to screen against sanctions and politically exposed person lists. No ID number."""
+
+    surname: str
+    given_names: str
+    date_of_birth: date
+    document_type: DocumentType
+    # The country that issued the document: the nationality for a passport, and only where
+    # the client lives for a national ID. Nothing records nationality itself.
+    document_country: str
+
+
+async def screening_subject(
+    session: AsyncSession, sealer: Sealer, client_id: str
+) -> ScreeningSubject | None:
+    """The details on a client's handed-in or approved check, for the screening module.
+
+    None before the client hands in a check, and after a rejection. While staff have sent it
+    back for photos, these are the details as they stand. For worker and staff transactions.
+    """
+    row = (await session.execute(_BY_CLIENT, {"client_id": client_id})).one_or_none()
+    if row is None or row.status in (CheckStatus.DRAFT, CheckStatus.REJECTED):
+        return None
+    if row.date_of_birth_sealed is None:  # the database refuses a handed-in check without it
+        return None
+    return ScreeningSubject(
+        surname=row.surname,
+        given_names=row.given_names,
+        date_of_birth=date.fromisoformat(
+            _open(sealer, row.id, "date_of_birth", row.date_of_birth_sealed)
+        ),
+        document_type=DocumentType(row.document_type),
+        document_country=row.document_country,
+    )
+
+
+@dataclass(frozen=True, slots=True)
 class Identity:
     """What a client's check says about who they are, for a card that names them."""
 
