@@ -44,6 +44,7 @@ export function toPayout(view: PayoutOut): Payout {
     status: view.status,
     businessDate: view.business_date,
     createdAt: view.created_at,
+    returnedAt: view.returned_at ?? null,
   };
 }
 
@@ -64,6 +65,13 @@ const FIELD_CODES: Record<string, PayoutsError["code"]> = {
   // A code the backend's list of banks does not hold.
   bank_unknown: "bank_invalid",
   bank_account_number_invalid: "account_number_invalid",
+  // Sending a payout that came back again, to an account that cannot be paid as it stands.
+  destination_not_approved: "account_not_ready",
+  destination_in_safety_wait: "account_not_ready",
+  destination_not_known_yet: "account_not_ready",
+  over_mobile_money_limit: "over_mobile_money_limit",
+  over_bank_limit: "over_limit",
+  over_daily_limit: "over_limit",
 };
 
 /**
@@ -86,7 +94,12 @@ export function toPayoutsError(error: unknown): PayoutsError {
       return new PayoutsError("too_many_codes");
     case "payload_too_large":
       return new PayoutsError("file_not_accepted");
+    case "idempotency_key_reused":
+      // The only call that can be refused this way: a payout that came back, already sent again
+      // to another account.
+      return new PayoutsError("already_resent");
     case "conflict":
+      if (codes.includes("payout_not_returned")) return new PayoutsError("not_returned");
       if (codes.includes("too_many_unconfirmed_accounts")) return new PayoutsError("too_many_unconfirmed");
       // A conflict with no reason is the same account saved twice. Any other reason means the
       // account is no longer at the step the screen showed.
@@ -190,6 +203,16 @@ export function createApiPayoutsClient(): PayoutsClient {
 
     getPayout: (payoutId) =>
       wrap(async () => toPayout(await api("GET /client/payouts/{payout_id}", { params: { payout_id: payoutId } }))),
+
+    resend: (payoutId, destinationId) =>
+      wrap(async () =>
+        toPayout(
+          await api("POST /client/payouts/{payout_id}/resend", {
+            params: { payout_id: payoutId },
+            body: { destination_id: destinationId },
+          }),
+        ),
+      ),
 
     getLimits: () => wrap(async () => toLimits(await api("GET /client/withdrawal-limits", {}))),
   };

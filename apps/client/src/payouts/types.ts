@@ -74,6 +74,11 @@ export type Payout = {
   /** The Kampala business day it was asked for. YYYY-MM-DD. */
   businessDate: string;
   createdAt: string;
+  /**
+   * Set when a paid payout came back: the bank or network sent the money back to us. The
+   * client can send it again, once, to an approved account (`resend`). ISO 8601, UTC.
+   */
+  returnedAt: string | null;
 };
 
 /** The withdrawal limits in force today. Null is not set. Never the review threshold. */
@@ -103,6 +108,13 @@ export interface PayoutsClient {
   /** Newest first, at most 50. */
   listPayouts(): Promise<Payout[]>;
   getPayout(payoutId: string): Promise<Payout>;
+  /**
+   * Send a payout that came back again, to an approved account: a new payout for the same
+   * amount, returned. Asking again with the same account is the same payout, so a lost answer
+   * can be tried again as it was. It is sent again once only, so another account after that
+   * is refused with `already_resent`.
+   */
+  resend(payoutId: string, destinationId: string): Promise<Payout>;
   getLimits(): Promise<Limits>;
 }
 
@@ -120,6 +132,11 @@ export type PayoutsErrorCode =
   | "moved_on"
   | "file_not_accepted"
   | "not_found"
+  | "not_returned"
+  | "already_resent"
+  | "account_not_ready"
+  | "over_mobile_money_limit"
+  | "over_limit"
   | "invalid"
   | "unavailable";
 
@@ -147,6 +164,11 @@ const messages: Record<PayoutsErrorCode, string> = {
   moved_on: "This account has moved on since you opened it. Go back and open it again.",
   file_not_accepted: "We could not accept that file. Use a clear PDF, JPG or PNG under 10 MB.",
   not_found: "We could not find that account.",
+  not_returned: "This payout did not come back, so there is nothing to send again.",
+  already_resent: "You already sent this payout again to another account. Open your payouts to see it.",
+  account_not_ready: "That account cannot be paid yet. Choose another, or wait until it is ready.",
+  over_mobile_money_limit: "This is more than a mobile money payout can take. Choose a bank account instead.",
+  over_limit: "This is more than today's withdrawal limit for that account. Choose another account, or try tomorrow.",
   invalid: "We could not accept that. Check the details and try again.",
   unavailable: "We could not reach Finvest. Check your connection and try again.",
 };

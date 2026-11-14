@@ -385,4 +385,4 @@ What the database enforces:
 | Once | One open or approved return per payout, and a statement line takes back one payout |
 | Nothing changes afterwards | A decided return never changes, and nothing is deleted. A client sees only their own approved returns |
 
-Not built yet: the console screen for returns, and the client app's resend screen.
+The client app's payout screen shows a payout that came back and sends it again to an approved account. Not built yet: the console screen for returns.

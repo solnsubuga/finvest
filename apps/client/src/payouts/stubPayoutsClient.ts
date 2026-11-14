@@ -9,9 +9,13 @@ import { Bank, Limits, NewAccount, Payout, PayoutAccount, PayoutsClient, Payouts
  */
 
 export const DEMO_PAYOUT_CODE = "123456";
+/** The demo payout that came back, so its "send it again" screen can be opened. */
+export const RETURNED_DEMO_PAYOUT = "demo-payout-returned";
 const HOUR = 60 * 60 * 1000;
 const MAX_AWAITING_CODE = 5;
 const MAX_WRONG_CODES = 5;
+/** The demo's mobile money limit per payout, as `getLimits` answers it. */
+const MOBILE_MONEY_PER_PAYOUT = 5_000_000;
 const NETWORKS: Record<string, "mtn" | "airtel"> = { "76": "mtn", "77": "mtn", "78": "mtn", "39": "mtn", "70": "airtel", "74": "airtel", "75": "airtel", "20": "airtel" };
 
 /**
@@ -105,6 +109,7 @@ function seedPayouts(nowMs: number): Payout[] {
       status: "processing",
       businessDate: iso(nowMs).slice(0, 10),
       createdAt: iso(nowMs - 2 * HOUR),
+      returnedAt: null,
     },
     {
       id: "demo-payout-1",
@@ -114,6 +119,18 @@ function seedPayouts(nowMs: number): Payout[] {
       status: "paid",
       businessDate: iso(nowMs - 12 * 24 * HOUR).slice(0, 10),
       createdAt: iso(nowMs - 12 * 24 * HOUR),
+      returnedAt: null,
+    },
+    {
+      // Paid to a bank account since closed, and sent back by the bank. It waits to be sent again.
+      id: RETURNED_DEMO_PAYOUT,
+      destinationId: "demo-account-closed",
+      kind: "bank",
+      amount: { currency: "UGX", minor: 2_150_000 },
+      status: "paid",
+      businessDate: iso(nowMs - 20 * 24 * HOUR).slice(0, 10),
+      createdAt: iso(nowMs - 20 * 24 * HOUR),
+      returnedAt: iso(nowMs - 3 * 24 * HOUR),
     },
   ];
 }
@@ -140,6 +157,8 @@ export function createStubPayoutsClient(options: StubOptions = {}): PayoutsClien
   const accounts: Stored[] = options.sample === "empty" ? [] : seed(now());
   const payouts: Payout[] = options.sample === "empty" ? [] : seedPayouts(now());
   let next = 1;
+  // A payout that came back, by the payout it was sent again as. Sent again once only.
+  const resent = new Map<string, Payout>();
 
   const delayMs = options.delayMs ?? 250;
   const pause = () => (delayMs > 0 ? new Promise((resolve) => setTimeout(resolve, delayMs)) : Promise.resolve());
@@ -266,11 +285,43 @@ export function createStubPayoutsClient(options: StubOptions = {}): PayoutsClien
       return { ...payout };
     },
 
+    async resend(payoutId, destinationId) {
+      await reachable();
+      const payout = payouts.find((candidate) => candidate.id === payoutId);
+      if (!payout) throw new PayoutsError("not_found");
+      if (!payout.returnedAt) throw new PayoutsError("not_returned");
+      const before = resent.get(payoutId);
+      if (before) {
+        if (before.destinationId !== destinationId) throw new PayoutsError("already_resent");
+        return { ...before };
+      }
+      const account = accounts.find((candidate) => candidate.id === destinationId && !candidate.removed);
+      if (!account || account.status !== "approved" || !account.payableFrom || Date.parse(account.payableFrom) > now()) {
+        throw new PayoutsError("account_not_ready");
+      }
+      if (account.kind === "mobile_money" && payout.amount.minor > MOBILE_MONEY_PER_PAYOUT) {
+        throw new PayoutsError("over_mobile_money_limit");
+      }
+      const created: Payout = {
+        id: `demo-payout-resent-${next++}`,
+        destinationId,
+        kind: account.kind,
+        amount: { ...payout.amount },
+        status: "processing",
+        businessDate: iso(now()).slice(0, 10),
+        createdAt: iso(now()),
+        returnedAt: null,
+      };
+      payouts.unshift(created);
+      resent.set(payoutId, created);
+      return { ...created };
+    },
+
     async getLimits(): Promise<Limits> {
       await reachable();
       return {
         effectiveFrom: "2026-11-01",
-        mobileMoneyPerPayout: { currency: "UGX", minor: 5_000_000 },
+        mobileMoneyPerPayout: { currency: "UGX", minor: MOBILE_MONEY_PER_PAYOUT },
         mobileMoneyPerDay: null,
         bankPerPayout: null,
         bankPerDay: null,

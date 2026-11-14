@@ -1,6 +1,6 @@
 import { networkName } from "@/payments/format";
 
-import { AccountStatus, PayoutAccount, PayoutStatus, ProofKind, RejectionReason } from "./types";
+import { AccountStatus, Payout, PayoutAccount, PayoutStatus, ProofKind, RejectionReason } from "./types";
 
 /** "MTN Mobile Money" or "Stanbic Bank": what the account is, without its number. */
 export function accountProvider(account: Pick<PayoutAccount, "kind" | "network" | "bankName">): string {
@@ -74,3 +74,16 @@ export const payoutStatusCopy: Record<PayoutStatus, { label: string; tone: Tone;
   },
   cancelled: { label: "Cancelled", tone: "neutral", detail: "This payout was stopped before it was sent." },
 };
+
+/** A payout that came back is still "paid" by status, but the client needs to act on it. */
+export const returnedPayoutCopy = {
+  label: "Came back",
+  tone: "warning" as Tone,
+  detail:
+    "The bank or network sent this money back to us, so it is safe with us. Choose an account and we will send it again.",
+};
+
+/** How a payout stands, as its pill and note show it. */
+export function payoutCopy(payout: Pick<Payout, "status" | "returnedAt">): { label: string; tone: Tone; detail: string } {
+  return payout.returnedAt ? returnedPayoutCopy : payoutStatusCopy[payout.status];
+}
