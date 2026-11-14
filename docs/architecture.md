@@ -44,6 +44,10 @@ One codebase, four entry points, each with its own health check:
 
 Each can be restarted or scaled alone without splitting the code.
 
+### Client maintenance
+
+`FINVEST_CLIENT_MAINTENANCE=true` puts the client side of the API in maintenance. Every `/client/` and `/public/` route answers `503` with the error code `maintenance` and `Retry-After: 120`, and the client app shows its maintenance screen until a request succeeds again. Staff, webhook and health routes keep working, so operations can carry on and providers' callbacks are still taken. It is off by default. The app shows the same screen when the API answers 502, 503 or 504 without the envelope, which is what the edge sends while the API containers are stopped (as in [backup-and-restore.md](backup-and-restore.md)).
+
 ## Modules
 
 | Module | Owns |
