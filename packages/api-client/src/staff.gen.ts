@@ -2248,6 +2248,15 @@ export const TrialRequest = z.object({
 });
 export type TrialRequest = z.infer<typeof TrialRequest>;
 
+export const WalletOut = z.object({
+  connected: z.boolean(),
+  difference: MoneyOut.nullable(),
+  ledger_balance: MoneyOut,
+  read_at: z.string().nullable(),
+  wallet_balance: MoneyOut.nullable(),
+});
+export type WalletOut = z.infer<typeof WalletOut>;
+
 export const WordingView = z.object({
   category: z.enum(["money", "investments", "earnings", "account", "security", "support", "news"]),
   changed_at: z.string().nullable(),
@@ -4274,6 +4283,17 @@ export const operations = {
     idempotent: false,
     status: 204,
     response: null,
+  },
+  "GET /staff/reconciliation/iotec-wallet": {
+    method: "GET",
+    path: "/staff/reconciliation/iotec-wallet",
+    params: z.object({}),
+    query: z.object({}),
+    body: null,
+    bodyKind: null,
+    idempotent: false,
+    status: 200,
+    response: WalletOut,
   },
   "POST /staff/reconciliation/matches": {
     method: "POST",

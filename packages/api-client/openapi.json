@@ -15321,6 +15321,60 @@
         "title": "Verdict",
         "type": "string"
       },
+      "WalletOut": {
+        "additionalProperties": false,
+        "description": "Finvest's ioTec wallet now, beside what the ledger says the ioTec pots hold now.\n\n`wallet_balance` and `difference` are null when ioTec is not connected or could not be\nread. A difference is expected while a payment is on its way or a fee is not yet posted.",
+        "properties": {
+          "connected": {
+            "title": "Connected",
+            "type": "boolean"
+          },
+          "difference": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/MoneyOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "ledger_balance": {
+            "$ref": "#/components/schemas/MoneyOut"
+          },
+          "read_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Read At"
+          },
+          "wallet_balance": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/MoneyOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "connected",
+          "wallet_balance",
+          "ledger_balance",
+          "difference",
+          "read_at"
+        ],
+        "title": "WalletOut",
+        "type": "object"
+      },
       "WithdrawalRequest": {
         "additionalProperties": false,
         "properties": {
@@ -40932,6 +40986,78 @@
           }
         },
         "summary": "Send Back",
+        "tags": [
+          "staff reconciliation"
+        ]
+      }
+    },
+    "/staff/reconciliation/iotec-wallet": {
+      "get": {
+        "description": "The ioTec wallet's balance against the ledger. Reads only, and changes nothing.",
+        "operationId": "iotec_wallet_staff_reconciliation_iotec_wallet_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WalletOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          }
+        },
+        "summary": "Iotec Wallet",
         "tags": [
           "staff reconciliation"
         ]

@@ -9,7 +9,7 @@ A statement line's narrative carries names and phone numbers, so it is shown to 
 `counterparty_hint` and never logged.
 """
 
-from datetime import date
+from datetime import date, datetime
 from typing import Annotated, Literal
 
 from fastapi import APIRouter, Depends, File, Form, Query, Request, UploadFile
@@ -18,7 +18,7 @@ from pydantic import Field
 from app.infrastructure.database import Database
 from app.modules.identity.api import require_confirmed, require_permission
 from app.modules.identity.service import StaffSession
-from app.modules.reconciliation import day_close, statements
+from app.modules.reconciliation import day_close, statements, wallet
 from app.modules.reconciliation.domain.day_close import CloseError, PotPosition
 from app.modules.reconciliation.domain.formats import FORMATS
 from app.modules.reconciliation.domain.matching import (
@@ -35,6 +35,7 @@ from app.modules.reconciliation.domain.statements import (
     parse_amount,
     parse_csv,
 )
+from app.modules.reconciliation.domain.wallet import WalletBalances
 from app.shared.business_day import business_date
 from app.shared.clock import Clock
 from app.shared.contracts import Contract, PushId
@@ -66,7 +67,13 @@ def _clock(request: Request) -> Clock:
     return clock
 
 
+def _wallet(request: Request) -> WalletBalances | None:
+    found: WalletBalances | None = getattr(request.app.state, "iotec_wallet", None)
+    return found
+
+
 Db = Annotated[Database, Depends(_database)]
+Wallet = Annotated[WalletBalances | None, Depends(_wallet)]
 Time = Annotated[Clock, Depends(_clock)]
 Staff = Annotated[StaffSession, Depends(require_permission("reconciliation.view"))]
 # The second signature needs a passkey or app code from the last few minutes.
@@ -229,6 +236,34 @@ async def pots(staff: Staff, database: Db) -> list[PotOut]:
                 )
             )
     return found
+
+
+class WalletOut(Contract):
+    """Finvest's ioTec wallet now, beside what the ledger says the ioTec pots hold now.
+
+    `wallet_balance` and `difference` are null when ioTec is not connected or could not be
+    read. A difference is expected while a payment is on its way or a fee is not yet posted.
+    """
+
+    connected: bool
+    wallet_balance: MoneyOut | None
+    ledger_balance: MoneyOut
+    difference: MoneyOut | None
+    read_at: datetime | None
+
+
+@staff_router.get("/iotec-wallet")
+async def iotec_wallet(staff: Staff, database: Db, provider: Wallet) -> WalletOut:
+    """The ioTec wallet's balance against the ledger. Reads only, and changes nothing."""
+    found = await wallet.check(database, staff, provider)
+    difference = found.difference
+    return WalletOut(
+        connected=provider is not None,
+        wallet_balance=None if found.reading is None else _money(found.reading.balance),
+        ledger_balance=_money(found.ledger),
+        difference=None if difference is None else _money(difference),
+        read_at=None if found.reading is None else found.reading.read_at,
+    )
 
 
 @staff_router.get("/statements")
