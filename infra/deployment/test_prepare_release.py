@@ -1,6 +1,5 @@
 """Tests for prepare_release.py. Run with: python3 -m unittest discover -s infra/deployment"""
 
-import json
 import os
 import stat
 import tempfile
@@ -152,23 +151,11 @@ class PrepareRelease(unittest.TestCase):
         for service in ("worker", "scheduler", "migrate"):
             self.assertNotIn("FINVEST_CLIENT_SIGNUP_OPEN", read_env(self.out / "runtime" / f"{service}.env"))
 
-    def test_bank_transfer_accounts_reach_the_api_only_on_one_line(self):
-        accounts = '{\n  "UGX": {"bank_name": "Bank", "account_name": "Finvest Trust", "account_number": "0123", "branch": null}\n}'
-        pr.prepare(self.out, settings(FINVEST_BANK_TRANSFER_ACCOUNTS=accounts))
-        value = read_env(self.out / "runtime" / "api.env")["FINVEST_BANK_TRANSFER_ACCOUNTS"]
-        self.assertEqual(json.loads(value)["UGX"]["account_number"], "0123")
-        self.assertNotIn("\n", value)
-        for service in ("worker", "scheduler", "migrate"):
+    def test_bank_transfer_accounts_are_no_longer_passed(self):
+        # Staff set the account on console Settings (docs/payments.md), so a leftover variable is ignored.
+        pr.prepare(self.out, settings(FINVEST_BANK_TRANSFER_ACCOUNTS='{"UGX": {"account_number": "0123"}}'))
+        for service in ("api", "worker", "scheduler", "migrate"):
             self.assertNotIn("FINVEST_BANK_TRANSFER_ACCOUNTS", read_env(self.out / "runtime" / f"{service}.env"))
-
-    def test_bank_transfer_accounts_are_left_out_when_unset(self):
-        pr.prepare(self.out, settings())
-        self.assertNotIn("FINVEST_BANK_TRANSFER_ACCOUNTS", read_env(self.out / "runtime" / "api.env"))
-
-    def test_malformed_bank_transfer_accounts_are_refused(self):
-        for value in ("not json", "[]", "{}", '{"UGX": "x"}'):
-            with self.assertRaises(pr.SettingError):
-                pr.prepare(self.out, settings(FINVEST_BANK_TRANSFER_ACCOUNTS=value))
 
     def test_resend_hook_secret_reaches_the_api_only(self):
         pr.prepare(self.out, settings(RESEND_HOOK_SECRET="whsec_" + "h" * 32))
