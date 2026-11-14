@@ -69,12 +69,20 @@ async def test_contains_reads_every_page() -> None:
 
 async def test_add_and_remove_patch_the_list() -> None:
     seen: list[httpx.Request] = []
-    access = staff_list(answering(ok({}), ok({}), seen=seen))
+    access = staff_list(answering(ok({}), ok([]), ok({}), seen=seen))
     await access.add("ada@finvestug.com")
     await access.remove("ada@finvestug.com")
-    assert [(r.method, str(r.url)) for r in seen] == [("PATCH", LIST), ("PATCH", LIST)]
+    assert [r.method for r in seen] == ["PATCH", "GET", "PATCH"]
+    assert str(seen[0].url) == LIST and str(seen[2].url) == LIST
     assert json.loads(seen[0].content) == {"append": [{"value": "ada@finvestug.com"}]}
-    assert json.loads(seen[1].content) == {"remove": ["ada@finvestug.com"]}
+    assert json.loads(seen[2].content) == {"remove": ["ada@finvestug.com"]}
+
+
+async def test_remove_sends_the_address_as_the_list_spells_it() -> None:
+    seen: list[httpx.Request] = []
+    access = staff_list(answering(ok([{"value": "Ada@FinvestUG.com"}]), ok({}), seen=seen))
+    await access.remove("ada@finvestug.com")
+    assert json.loads(seen[1].content) == {"remove": ["Ada@FinvestUG.com"]}
 
 
 @pytest.mark.parametrize(
