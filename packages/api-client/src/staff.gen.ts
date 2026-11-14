@@ -427,6 +427,12 @@ export const BodyImportStatementStaffReconciliationStatementsPost = z.object({
 });
 export type BodyImportStatementStaffReconciliationStatementsPost = z.infer<typeof BodyImportStatementStaffReconciliationStatementsPost>;
 
+export const BodyUploadStaffReconciliationCustodianChecksPost = z.object({
+  file: Upload,
+  statement_date: z.string(),
+});
+export type BodyUploadStaffReconciliationCustodianChecksPost = z.infer<typeof BodyUploadStaffReconciliationCustodianChecksPost>;
+
 export const BookLineOut = z.object({
   closing: AmountOut,
   code: z.string(),
@@ -722,17 +728,88 @@ export const ChangeView = z.object({
 });
 export type ChangeView = z.infer<typeof ChangeView>;
 
-export const CheckOut = z.object({
-  checked_at: z.string(),
-  checked_by: z.string(),
-  name_match: z.enum(["exact", "partial"]),
-  proof_name: z.string(),
-  statement_date: z.string().nullable(),
+export const ItemOut = z.object({
+  currency: z.enum(["UGX", "USD"]).nullable(),
+  custodian_face_minor: z.number().int(),
+  difference_minor: z.number().int(),
+  finvest_face_minor: z.number().int(),
+  key: z.string(),
+  kind: z.enum(["match", "amount_differs", "missing_at_custodian", "not_in_finvest", "row_unreadable", "statement_date_differs", "statement_date_unread"]),
+  matures_on: z.string().nullable(),
+  needs_note: z.boolean(),
+  note: z.string().nullable(),
+  noted_by: z.string().nullable(),
+  problem: z.string().nullable(),
+  product_codes: z.array(z.string()),
+  row_ids: z.array(z.string()),
 });
-export type CheckOut = z.infer<typeof CheckOut>;
+export type ItemOut = z.infer<typeof ItemOut>;
+
+export const RowOut = z.object({
+  code: z.string().nullable(),
+  corrected_by: z.string().nullable(),
+  corrected_face_minor: z.number().int().nullable(),
+  corrected_matures_on: z.string().nullable(),
+  correction_reason: z.string().nullable(),
+  currency: z.enum(["UGX", "USD"]).nullable(),
+  currency_text: z.string().nullable(),
+  face_minor: z.number().int().nullable(),
+  face_value_text: z.string(),
+  id: z.string(),
+  instrument: z.string(),
+  left_out: z.boolean(),
+  line_no: z.number().int(),
+  location: z.string(),
+  matures_on: z.string().nullable(),
+  matures_on_text: z.string().nullable(),
+  problem: z.string().nullable(),
+  source_text: z.string(),
+});
+export type RowOut = z.infer<typeof RowOut>;
+
+export const ReconciliationCustodianApiCheckOut = z.object({
+  account_reference: z.string().nullable(),
+  allowed: z.array(z.enum(["correct", "note", "submit", "sign_off", "send_back"])),
+  amount_scale: z.enum(["one", "thousand", "million"]).nullable(),
+  custodian_name: z.string().nullable(),
+  failure_code: z.string().nullable(),
+  file_bytes: z.number().int(),
+  file_content_type: z.string(),
+  id: z.string(),
+  read_at: z.string().nullable(),
+  read_statement_date: z.string().nullable(),
+  reader: z.string().nullable(),
+  sent_back_by: z.string().nullable(),
+  sent_back_note: z.string().nullable(),
+  sign_off_note: z.string().nullable(),
+  signed_off_at: z.string().nullable(),
+  signed_off_by: z.string().nullable(),
+  statement_date: z.string(),
+  status: z.enum(["reading", "unreadable", "to_review", "waiting_sign_off", "signed_off"]),
+  submit_note: z.string().nullable(),
+  submitted_at: z.string().nullable(),
+  submitted_by: z.string().nullable(),
+  uploaded_at: z.string(),
+  uploaded_by: z.string(),
+});
+export type ReconciliationCustodianApiCheckOut = z.infer<typeof ReconciliationCustodianApiCheckOut>;
+
+export const CheckDetailOut = z.object({
+  check: ReconciliationCustodianApiCheckOut,
+  items: z.array(ItemOut),
+  rows: z.array(RowOut),
+  unexplained: z.number().int(),
+});
+export type CheckDetailOut = z.infer<typeof CheckDetailOut>;
 
 export const CheckStatus = z.enum(["draft", "submitted", "needs_review", "with_compliance", "awaiting_client", "approved", "rejected"]);
 export type CheckStatus = z.infer<typeof CheckStatus>;
+
+export const ChecksOut = z.object({
+  checks: z.array(ReconciliationCustodianApiCheckOut),
+  reading_on: z.boolean(),
+});
+export type ChecksOut = z.infer<typeof ChecksOut>;
 
 export const ClaimProgressView = z.object({
   cannot_be_invited: z.number().int(),
@@ -1038,14 +1115,6 @@ export type ConversationItem = z.infer<typeof ConversationItem>;
 
 export const CorrectionKind = z.enum(["unwind", "refund", "pay_out"]);
 export type CorrectionKind = z.infer<typeof CorrectionKind>;
-
-export const CorrectionIn = z.object({
-  destination_id: z.string().nullable().optional(),
-  investment_id: z.string(),
-  kind: CorrectionKind,
-  reason: z.string(),
-});
-export type CorrectionIn = z.infer<typeof CorrectionIn>;
 
 export const CorrectionStatus = z.enum(["proposed", "approved", "sent_back", "withdrawn", "done", "failed"]);
 export type CorrectionStatus = z.infer<typeof CorrectionStatus>;
@@ -1456,6 +1525,13 @@ export type Facets = z.infer<typeof Facets>;
 
 export const Figure = z.enum(["clients", "verified_identities", "running_investments", "pending_orders", "invested", "interest_before_tax"]);
 export type Figure = z.infer<typeof Figure>;
+
+export const FileLinkOut = z.object({
+  content_type: z.string(),
+  expires_at: z.string(),
+  url: z.string(),
+});
+export type FileLinkOut = z.infer<typeof FileLinkOut>;
 
 export const FillIn = z.object({
   amount_minor: z.number().int(),
@@ -2022,11 +2098,6 @@ export const NoteBody = z.object({
 });
 export type NoteBody = z.infer<typeof NoteBody>;
 
-export const NoteIn = z.object({
-  note: z.string(),
-});
-export type NoteIn = z.infer<typeof NoteIn>;
-
 export const NoteView = z.object({
   body: z.string(),
   client_id: z.string(),
@@ -2058,6 +2129,11 @@ export const OfficeNetworksProposal = z.object({
   yours: z.boolean(),
 });
 export type OfficeNetworksProposal = z.infer<typeof OfficeNetworksProposal>;
+
+export const OptionalNoteIn = z.object({
+  note: z.string().nullable().optional(),
+});
+export type OptionalNoteIn = z.infer<typeof OptionalNoteIn>;
 
 export const WeekOut = z.object({
   first_day: z.string(),
@@ -2556,11 +2632,6 @@ export const ReasonBody = z.object({
   reason: z.string(),
 });
 export type ReasonBody = z.infer<typeof ReasonBody>;
-
-export const ReasonIn = z.object({
-  reason: z.string(),
-});
-export type ReasonIn = z.infer<typeof ReasonIn>;
 
 export const ReassignmentOut = z.object({
   amount: MoneyView,
@@ -3230,13 +3301,22 @@ export const StaffClosureList = z.object({
 });
 export type StaffClosureList = z.infer<typeof StaffClosureList>;
 
+export const PayoutsStaffApiCheckOut = z.object({
+  checked_at: z.string(),
+  checked_by: z.string(),
+  name_match: z.enum(["exact", "partial"]),
+  proof_name: z.string(),
+  statement_date: z.string().nullable(),
+});
+export type PayoutsStaffApiCheckOut = z.infer<typeof PayoutsStaffApiCheckOut>;
+
 export const StaffDestinationDetail = z.object({
   account: z.string(),
   account_number: z.string(),
   approved_at: z.string().nullable(),
   approved_by: z.string().nullable(),
   bank_code: z.string().nullable(),
-  check: CheckOut.nullable(),
+  check: PayoutsStaffApiCheckOut.nullable(),
   client_id: z.string(),
   created_at: z.string(),
   holder_name: z.string(),
@@ -3258,7 +3338,7 @@ export const StaffDestinationOut = z.object({
   approved_at: z.string().nullable(),
   approved_by: z.string().nullable(),
   bank_code: z.string().nullable(),
-  check: CheckOut.nullable(),
+  check: PayoutsStaffApiCheckOut.nullable(),
   client_id: z.string(),
   created_at: z.string(),
   holder_name: z.string(),
@@ -3790,6 +3870,39 @@ export const WriteNote = z.object({
 });
 export type WriteNote = z.infer<typeof WriteNote>;
 
+export const DealingApiNoteIn = z.object({
+  note: z.string(),
+});
+export type DealingApiNoteIn = z.infer<typeof DealingApiNoteIn>;
+
+export const DealingBufferApiNoteIn = z.object({
+  note: z.string(),
+});
+export type DealingBufferApiNoteIn = z.infer<typeof DealingBufferApiNoteIn>;
+
+export const InvestmentsApiCorrectionIn = z.object({
+  destination_id: z.string().nullable().optional(),
+  investment_id: z.string(),
+  kind: CorrectionKind,
+  reason: z.string(),
+});
+export type InvestmentsApiCorrectionIn = z.infer<typeof InvestmentsApiCorrectionIn>;
+
+export const PayoutsStaffBankApiReasonIn = z.object({
+  reason: z.string(),
+});
+export type PayoutsStaffBankApiReasonIn = z.infer<typeof PayoutsStaffBankApiReasonIn>;
+
+export const PayoutsStaffBulkApiReasonIn = z.object({
+  reason: z.string(),
+});
+export type PayoutsStaffBulkApiReasonIn = z.infer<typeof PayoutsStaffBulkApiReasonIn>;
+
+export const PayoutsStaffReturnsApiReasonIn = z.object({
+  reason: z.string(),
+});
+export type PayoutsStaffReturnsApiReasonIn = z.infer<typeof PayoutsStaffReturnsApiReasonIn>;
+
 export const ReconciliationApiMatchIn = z.object({
   entry_id: z.string(),
   line_no: z.number().int(),
@@ -3807,6 +3920,34 @@ export const ReconciliationApiPotOut = z.object({
   source: z.enum(["iotec", "bank"]),
 });
 export type ReconciliationApiPotOut = z.infer<typeof ReconciliationApiPotOut>;
+
+export const ReconciliationApiReasonIn = z.object({
+  reason: z.string(),
+});
+export type ReconciliationApiReasonIn = z.infer<typeof ReconciliationApiReasonIn>;
+
+export const ReconciliationCustodianApiCorrectionIn = z.object({
+  face_minor: z.number().int().nullable().optional(),
+  left_out: z.boolean().optional(),
+  matures_on: z.string().nullable().optional(),
+  reason: z.string(),
+});
+export type ReconciliationCustodianApiCorrectionIn = z.infer<typeof ReconciliationCustodianApiCorrectionIn>;
+
+export const ReconciliationCustodianApiNoteIn = z.object({
+  note: z.string(),
+});
+export type ReconciliationCustodianApiNoteIn = z.infer<typeof ReconciliationCustodianApiNoteIn>;
+
+export const ReconciliationCustodianApiReasonIn = z.object({
+  reason: z.string(),
+});
+export type ReconciliationCustodianApiReasonIn = z.infer<typeof ReconciliationCustodianApiReasonIn>;
+
+export const ReconciliationTransfersApiReasonIn = z.object({
+  reason: z.string(),
+});
+export type ReconciliationTransfersApiReasonIn = z.infer<typeof ReconciliationTransfersApiReasonIn>;
 
 /** Every route, by method and path, with what it takes and what it answers. */
 export const operations = {
@@ -4556,7 +4697,7 @@ export const operations = {
     proposal_id: z.string(),
   }),
     query: z.object({}),
-    body: NoteIn,
+    body: DealingBufferApiNoteIn,
     bodyKind: "json",
     idempotent: true,
     status: 200,
@@ -4632,7 +4773,7 @@ export const operations = {
     order_id: z.string(),
   }),
     query: z.object({}),
-    body: NoteIn,
+    body: DealingApiNoteIn,
     bodyKind: "json",
     idempotent: true,
     status: 200,
@@ -4658,7 +4799,7 @@ export const operations = {
     order_id: z.string(),
   }),
     query: z.object({}),
-    body: NoteIn,
+    body: DealingApiNoteIn,
     bodyKind: "json",
     idempotent: true,
     status: 200,
@@ -5156,7 +5297,7 @@ export const operations = {
     path: "/staff/investment-corrections",
     params: z.object({}),
     query: z.object({}),
-    body: CorrectionIn,
+    body: InvestmentsApiCorrectionIn,
     bodyKind: "json",
     idempotent: true,
     status: 201,
@@ -6154,7 +6295,7 @@ export const operations = {
     batch_id: z.string(),
   }),
     query: z.object({}),
-    body: ReasonIn,
+    body: PayoutsStaffBankApiReasonIn,
     bodyKind: "json",
     idempotent: true,
     status: 200,
@@ -6193,7 +6334,7 @@ export const operations = {
     batch_id: z.string(),
   }),
     query: z.object({}),
-    body: ReasonIn,
+    body: PayoutsStaffBankApiReasonIn,
     bodyKind: "json",
     idempotent: true,
     status: 200,
@@ -6219,7 +6360,7 @@ export const operations = {
     batch_id: z.string(),
   }),
     query: z.object({}),
-    body: ReasonIn,
+    body: PayoutsStaffBankApiReasonIn,
     bodyKind: "json",
     idempotent: false,
     status: 200,
@@ -6256,7 +6397,7 @@ export const operations = {
     bulk_id: z.string(),
   }),
     query: z.object({}),
-    body: ReasonIn,
+    body: PayoutsStaffBulkApiReasonIn,
     bodyKind: "json",
     idempotent: true,
     status: 200,
@@ -6269,7 +6410,7 @@ export const operations = {
     bulk_id: z.string(),
   }),
     query: z.object({}),
-    body: ReasonIn,
+    body: PayoutsStaffBulkApiReasonIn,
     bodyKind: "json",
     idempotent: false,
     status: 200,
@@ -6282,7 +6423,7 @@ export const operations = {
     bulk_id: z.string(),
   }),
     query: z.object({}),
-    body: ReasonIn,
+    body: PayoutsStaffBulkApiReasonIn,
     bodyKind: "json",
     idempotent: false,
     status: 200,
@@ -6295,7 +6436,7 @@ export const operations = {
     settlement_id: z.string(),
   }),
     query: z.object({}),
-    body: ReasonIn,
+    body: PayoutsStaffBankApiReasonIn,
     bodyKind: "json",
     idempotent: true,
     status: 200,
@@ -6308,7 +6449,7 @@ export const operations = {
     settlement_id: z.string(),
   }),
     query: z.object({}),
-    body: ReasonIn,
+    body: PayoutsStaffBankApiReasonIn,
     bodyKind: "json",
     idempotent: false,
     status: 200,
@@ -6321,7 +6462,7 @@ export const operations = {
     settlement_id: z.string(),
   }),
     query: z.object({}),
-    body: ReasonIn,
+    body: PayoutsStaffBankApiReasonIn,
     bodyKind: "json",
     idempotent: false,
     status: 200,
@@ -6513,7 +6654,7 @@ export const operations = {
     return_id: z.string(),
   }),
     query: z.object({}),
-    body: ReasonIn,
+    body: PayoutsStaffReturnsApiReasonIn,
     bodyKind: "json",
     idempotent: true,
     status: 200,
@@ -6526,7 +6667,7 @@ export const operations = {
     return_id: z.string(),
   }),
     query: z.object({}),
-    body: ReasonIn,
+    body: PayoutsStaffReturnsApiReasonIn,
     bodyKind: "json",
     idempotent: false,
     status: 200,
@@ -6539,7 +6680,7 @@ export const operations = {
     return_id: z.string(),
   }),
     query: z.object({}),
-    body: ReasonIn,
+    body: PayoutsStaffReturnsApiReasonIn,
     bodyKind: "json",
     idempotent: false,
     status: 200,
@@ -6915,6 +7056,121 @@ export const operations = {
     status: 200,
     response: ProposalOut,
   },
+  "GET /staff/reconciliation/custodian-checks": {
+    method: "GET",
+    path: "/staff/reconciliation/custodian-checks",
+    params: z.object({}),
+    query: z.object({}),
+    body: null,
+    bodyKind: null,
+    idempotent: false,
+    status: 200,
+    response: ChecksOut,
+  },
+  "POST /staff/reconciliation/custodian-checks": {
+    method: "POST",
+    path: "/staff/reconciliation/custodian-checks",
+    params: z.object({}),
+    query: z.object({}),
+    body: BodyUploadStaffReconciliationCustodianChecksPost,
+    bodyKind: "multipart",
+    idempotent: true,
+    status: 201,
+    response: ReconciliationCustodianApiCheckOut,
+  },
+  "GET /staff/reconciliation/custodian-checks/{check_id}": {
+    method: "GET",
+    path: "/staff/reconciliation/custodian-checks/{check_id}",
+    params: z.object({
+    check_id: z.string(),
+  }),
+    query: z.object({}),
+    body: null,
+    bodyKind: null,
+    idempotent: false,
+    status: 200,
+    response: CheckDetailOut,
+  },
+  "GET /staff/reconciliation/custodian-checks/{check_id}/file": {
+    method: "GET",
+    path: "/staff/reconciliation/custodian-checks/{check_id}/file",
+    params: z.object({
+    check_id: z.string(),
+  }),
+    query: z.object({}),
+    body: null,
+    bodyKind: null,
+    idempotent: false,
+    status: 200,
+    response: FileLinkOut,
+  },
+  "PUT /staff/reconciliation/custodian-checks/{check_id}/notes/{item_key}": {
+    method: "PUT",
+    path: "/staff/reconciliation/custodian-checks/{check_id}/notes/{item_key}",
+    params: z.object({
+    check_id: z.string(),
+    item_key: z.string(),
+  }),
+    query: z.object({}),
+    body: ReconciliationCustodianApiNoteIn,
+    bodyKind: "json",
+    idempotent: false,
+    status: 200,
+    response: CheckDetailOut,
+  },
+  "PUT /staff/reconciliation/custodian-checks/{check_id}/rows/{row_id}": {
+    method: "PUT",
+    path: "/staff/reconciliation/custodian-checks/{check_id}/rows/{row_id}",
+    params: z.object({
+    check_id: z.string(),
+    row_id: z.string(),
+  }),
+    query: z.object({}),
+    body: ReconciliationCustodianApiCorrectionIn,
+    bodyKind: "json",
+    idempotent: false,
+    status: 200,
+    response: CheckDetailOut,
+  },
+  "POST /staff/reconciliation/custodian-checks/{check_id}/send-back": {
+    method: "POST",
+    path: "/staff/reconciliation/custodian-checks/{check_id}/send-back",
+    params: z.object({
+    check_id: z.string(),
+  }),
+    query: z.object({}),
+    body: ReconciliationCustodianApiReasonIn,
+    bodyKind: "json",
+    idempotent: true,
+    status: 200,
+    response: CheckDetailOut,
+  },
+  "POST /staff/reconciliation/custodian-checks/{check_id}/sign-off": {
+    method: "POST",
+    path: "/staff/reconciliation/custodian-checks/{check_id}/sign-off",
+    params: z.object({
+    check_id: z.string(),
+  }),
+    query: z.object({}),
+    body: OptionalNoteIn,
+    bodyKind: "json",
+    idempotent: true,
+    status: 200,
+    response: CheckDetailOut,
+  },
+  "POST /staff/reconciliation/custodian-checks/{check_id}/submit": {
+    method: "POST",
+    path: "/staff/reconciliation/custodian-checks/{check_id}/submit",
+    params: z.object({
+    check_id: z.string(),
+  }),
+    query: z.object({}),
+    body: OptionalNoteIn,
+    bodyKind: "json",
+    idempotent: true,
+    status: 200,
+    response: CheckDetailOut,
+  },
   "GET /staff/reconciliation/days/{day}": {
     method: "GET",
     path: "/staff/reconciliation/days/{day}",
@@ -6974,7 +7230,7 @@ export const operations = {
     day: z.string(),
   }),
     query: z.object({}),
-    body: ReasonIn,
+    body: ReconciliationApiReasonIn,
     bodyKind: "json",
     idempotent: false,
     status: 204,
@@ -7059,7 +7315,7 @@ export const operations = {
     transfer_id: z.string(),
   }),
     query: z.object({}),
-    body: ReasonIn,
+    body: ReconciliationTransfersApiReasonIn,
     bodyKind: "json",
     idempotent: true,
     status: 200,
