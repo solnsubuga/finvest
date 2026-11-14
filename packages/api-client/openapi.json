@@ -7684,7 +7684,9 @@
               "enum": [
                 "run_trial",
                 "enter_totals",
-                "sign_off"
+                "sign_off",
+                "propose_switch",
+                "decide_switch"
               ],
               "type": "string"
             },
@@ -7729,6 +7731,16 @@
             "title": "Lines",
             "type": "array"
           },
+          "switch": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SwitchView"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "totals": {
             "anyOf": [
               {
@@ -7761,6 +7773,7 @@
           "lines",
           "differences",
           "blockers",
+          "switch",
           "claims",
           "allowed"
         ],
@@ -14217,6 +14230,116 @@
           "open_lift"
         ],
         "title": "SuppressionView",
+        "type": "object"
+      },
+      "SwitchRequest": {
+        "additionalProperties": false,
+        "description": "The two sheets of the latest trial, exactly as that trial read them.",
+        "properties": {
+          "clients_csv": {
+            "maxLength": 40000000,
+            "title": "Clients Csv",
+            "type": "string"
+          },
+          "investments_csv": {
+            "maxLength": 40000000,
+            "title": "Investments Csv",
+            "type": "string"
+          }
+        },
+        "required": [
+          "clients_csv",
+          "investments_csv"
+        ],
+        "title": "SwitchRequest",
+        "type": "object"
+      },
+      "SwitchView": {
+        "additionalProperties": false,
+        "description": "The newest proposal to switch, and what was decided. Nothing from the sheets.",
+        "properties": {
+          "as_of": {
+            "format": "date",
+            "title": "As Of",
+            "type": "string"
+          },
+          "clients_carried": {
+            "title": "Clients Carried",
+            "type": "integer"
+          },
+          "decided_by": {
+            "anyOf": [
+              {
+                "maxLength": 20,
+                "minLength": 20,
+                "pattern": "^[-0-9A-Z_a-z]{20}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Decided By"
+          },
+          "decision_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Decision Reason"
+          },
+          "id": {
+            "maxLength": 20,
+            "minLength": 20,
+            "pattern": "^[-0-9A-Z_a-z]{20}$",
+            "title": "Id",
+            "type": "string"
+          },
+          "proposed_at": {
+            "format": "date-time",
+            "title": "Proposed At",
+            "type": "string"
+          },
+          "proposed_by": {
+            "maxLength": 20,
+            "minLength": 20,
+            "pattern": "^[-0-9A-Z_a-z]{20}$",
+            "title": "Proposed By",
+            "type": "string"
+          },
+          "state": {
+            "enum": [
+              "proposed",
+              "approved",
+              "rejected"
+            ],
+            "title": "State",
+            "type": "string"
+          },
+          "trial_id": {
+            "maxLength": 20,
+            "minLength": 20,
+            "pattern": "^[-0-9A-Z_a-z]{20}$",
+            "title": "Trial Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "trial_id",
+          "as_of",
+          "proposed_by",
+          "proposed_at",
+          "state",
+          "decided_by",
+          "decision_reason",
+          "clients_carried"
+        ],
+        "title": "SwitchView",
         "type": "object"
       },
       "TaxScreenOut": {
@@ -33775,6 +33898,204 @@
           }
         },
         "summary": "Decide Sign Off",
+        "tags": [
+          "migration"
+        ]
+      }
+    },
+    "/staff/migration/switch": {
+      "post": {
+        "description": "Ask a second person to approve the switch with the sheets of the latest trial.\n\nRefused while anything blocks the switch, while another proposal awaits a decision, and\nwhen a client in the sheets has no phone number. The sheets are kept sealed for the approval\nand the carry-over. Nothing is created yet.",
+        "operationId": "propose_switch_staff_migration_switch_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SwitchRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SwitchView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Content Too Large"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          }
+        },
+        "summary": "Propose Switch",
+        "tags": [
+          "migration"
+        ]
+      }
+    },
+    "/staff/migration/switch/{switch_id}/decision": {
+      "post": {
+        "description": "Approve or reject the switch someone else proposed.\n\nAn approval checks everything again and creates every client's account, all or none. It is\nrefused with `phone_taken`, naming the clients sheet rows, when a number already has an\naccount.",
+        "operationId": "decide_switch_staff_migration_switch__switch_id__decision_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "switch_id",
+            "required": true,
+            "schema": {
+              "maxLength": 20,
+              "minLength": 20,
+              "pattern": "^[-0-9A-Z_a-z]{20}$",
+              "title": "Switch Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DecisionRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SwitchView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Content Too Large"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          }
+        },
+        "summary": "Decide Switch",
         "tags": [
           "migration"
         ]

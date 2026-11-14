@@ -1297,6 +1297,19 @@ export const Outcome = z.object({
 });
 export type Outcome = z.infer<typeof Outcome>;
 
+export const SwitchView = z.object({
+  as_of: z.string(),
+  clients_carried: z.number().int(),
+  decided_by: z.string().nullable(),
+  decision_reason: z.string().nullable(),
+  id: z.string(),
+  proposed_at: z.string(),
+  proposed_by: z.string(),
+  state: z.enum(["proposed", "approved", "rejected"]),
+  trial_id: z.string(),
+});
+export type SwitchView = z.infer<typeof SwitchView>;
+
 export const TotalLineView = z.object({
   agrees: z.boolean(),
   currency: Currency.nullable(),
@@ -1349,11 +1362,12 @@ export const TrialView = z.object({
 export type TrialView = z.infer<typeof TrialView>;
 
 export const OverviewView = z.object({
-  allowed: z.array(z.enum(["run_trial", "enter_totals", "sign_off"])),
+  allowed: z.array(z.enum(["run_trial", "enter_totals", "sign_off", "propose_switch", "decide_switch"])),
   blockers: z.array(z.enum(["no_trial", "import_has_errors", "totals_not_entered", "totals_not_confirmed", "difference_not_signed_off"])),
   claims: ClaimProgressView.nullable(),
   differences: z.array(DifferenceView),
   lines: z.array(TotalLineView),
+  switch: SwitchView.nullable(),
   totals: TotalsView.nullable(),
   trial: TrialView.nullable(),
   trials_run: z.number().int(),
@@ -2090,6 +2104,12 @@ export const SuppressionList = z.object({
   suppressions: z.array(SuppressionView),
 });
 export type SuppressionList = z.infer<typeof SuppressionList>;
+
+export const SwitchRequest = z.object({
+  clients_csv: z.string(),
+  investments_csv: z.string(),
+});
+export type SwitchRequest = z.infer<typeof SwitchRequest>;
 
 export const TaxScreenOut = z.object({
   currency: Currency,
@@ -3311,6 +3331,30 @@ export const operations = {
     idempotent: false,
     status: 200,
     response: SignOffView,
+  },
+  "POST /staff/migration/switch": {
+    method: "POST",
+    path: "/staff/migration/switch",
+    params: z.object({}),
+    query: z.object({}),
+    body: SwitchRequest,
+    bodyKind: "json",
+    idempotent: false,
+    status: 201,
+    response: SwitchView,
+  },
+  "POST /staff/migration/switch/{switch_id}/decision": {
+    method: "POST",
+    path: "/staff/migration/switch/{switch_id}/decision",
+    params: z.object({
+    switch_id: z.string(),
+  }),
+    query: z.object({}),
+    body: DecisionRequest,
+    bodyKind: "json",
+    idempotent: false,
+    status: 200,
+    response: SwitchView,
   },
   "GET /staff/migration/trials": {
     method: "GET",

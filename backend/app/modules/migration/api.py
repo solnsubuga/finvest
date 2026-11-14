@@ -1,8 +1,10 @@
-"""Staff routes for the Finvest 1.0 migration checks. Nothing here creates a client or money.
+"""Staff routes for the Finvest 1.0 migration checks and the switch.
 
 Operations run trial imports. Finance enters the old system's totals and signs off what
-differs, and a sign-off takes a second person. Every route checks a permission; the service
-and the database check the rest.
+differs, and a sign-off takes a second person. Operations propose the switch with the sheets of
+the trial that cleared, and finance approves it: the approval creates every client's account,
+with no password until they claim it. Nothing here moves money. Every route checks a permission;
+the service and the database check the rest.
 """
 
 from datetime import date, datetime
@@ -12,9 +14,10 @@ from fastapi import APIRouter, Depends, Request
 from pydantic import BeforeValidator, Field
 
 from app.infrastructure.database import Database
+from app.infrastructure.sealing import Sealer
 from app.modules.identity.api import require_confirmed, require_permission
 from app.modules.identity.service import StaffSession
-from app.modules.migration import claims, service
+from app.modules.migration import claims, service, switch
 from app.modules.migration.domain.claim import Progress
 from app.modules.migration.domain.finance import ControlTotals, Figure, InvalidFinanceCheck
 from app.modules.migration.domain.sheet import Severity, Sheet
@@ -39,7 +42,7 @@ def _iso_date(value: object) -> date:
 # Contracts are strict, and JSON has no date or enum of its own: these two arrive as text.
 IsoDate = Annotated[date, BeforeValidator(_iso_date)]
 CurrencyCode = Annotated[Currency, Field(strict=False)]
-Allowed = Literal["run_trial", "enter_totals", "sign_off"]
+Allowed = Literal["run_trial", "enter_totals", "sign_off", "propose_switch", "decide_switch"]
 
 _REFUSALS: dict[int | str, dict[str, object]] = {
     401: {"model": ErrorEnvelope},
@@ -147,6 +150,22 @@ class ClaimProgressView(Contract):
     cannot_be_invited: int
 
 
+class SwitchView(Contract):
+    """The newest proposal to switch, and what was decided. Nothing from the sheets."""
+
+    id: PushId
+    trial_id: PushId
+    as_of: date
+    proposed_by: PushId
+    proposed_at: datetime
+    state: switch.SwitchState
+    decided_by: PushId | None
+    # Why it was rejected, shown to the person who proposed it.
+    decision_reason: str | None
+    # How many accounts the approval created. Zero until it is approved.
+    clients_carried: int
+
+
 class OverviewView(Contract):
     trials_run: int
     trial: TrialView | None
@@ -155,6 +174,8 @@ class OverviewView(Contract):
     lines: list[TotalLineView]
     differences: list[DifferenceView]
     blockers: list[service.BlockerCode]
+    # Null until someone proposes the switch.
+    switch: SwitchView | None
     # Null until the switch has created the claims.
     claims: ClaimProgressView | None
     # What the signed-in person may do here. Each route checks it again.
@@ -204,6 +225,13 @@ class ControlTotalsRequest(Contract):
 class SignOffRequest(Contract):
     key: str = Field(min_length=1, max_length=200)
     reason: str = Field(min_length=1, max_length=500)
+
+
+class SwitchRequest(Contract):
+    """The two sheets of the latest trial, exactly as that trial read them."""
+
+    clients_csv: str = Field(max_length=service.MAX_SHEET_BYTES)
+    investments_csv: str = Field(max_length=service.MAX_SHEET_BYTES)
 
 
 class DecisionRequest(Contract):
@@ -257,10 +285,34 @@ def _totals(view: service.TotalsView | None) -> TotalsView | None:
 def _allowed(staff: StaffSession) -> list[Allowed]:
     allowed: list[Allowed] = []
     if "migration.import" in staff.permissions:
-        allowed.append("run_trial")
+        allowed += ["run_trial", "propose_switch"]
     if "migration.sign_off" in staff.permissions:
-        allowed += ["enter_totals", "sign_off"]
+        allowed += ["enter_totals", "sign_off", "decide_switch"]
     return allowed
+
+
+def _switch(view: switch.SwitchView | None) -> SwitchView | None:
+    if view is None:
+        return None
+    return SwitchView(
+        id=view.id,
+        trial_id=view.trial_id,
+        as_of=view.as_of,
+        proposed_by=view.proposed_by,
+        proposed_at=view.proposed_at,
+        state=view.state,
+        decided_by=view.decided_by,
+        decision_reason=view.decision_reason,
+        clients_carried=view.clients_carried,
+    )
+
+
+def _sealer(request: Request) -> Sealer:
+    sealer: Sealer | None = request.app.state.migration_sealer
+    if sealer is None:
+        # Without the identity data key the sheets cannot be kept sealed, so nothing is kept.
+        raise ApplicationError("unavailable")
+    return sealer
 
 
 def _claims(progress: Progress) -> ClaimProgressView | None:
@@ -275,7 +327,12 @@ def _claims(progress: Progress) -> ClaimProgressView | None:
     )
 
 
-def _overview(view: service.Overview, progress: Progress, staff: StaffSession) -> OverviewView:
+def _overview(
+    view: service.Overview,
+    progress: Progress,
+    proposal: switch.SwitchView | None,
+    staff: StaffSession,
+) -> OverviewView:
     trial = view.trial
     placed = trial.placed if trial is not None else {}
     line_currency = {line.key: line.currency for line in view.lines}
@@ -324,6 +381,7 @@ def _overview(view: service.Overview, progress: Progress, staff: StaffSession) -
             for key, figures in view.differing.items()
         ],
         blockers=list(view.blockers),
+        switch=_switch(proposal),
         claims=_claims(progress),
         allowed=_allowed(staff),
     )
@@ -333,7 +391,10 @@ async def _read(request: Request, staff: StaffSession) -> OverviewView:
     database, _ = _state(request)
     async with database.actor_transaction(_actor(staff)) as session:
         return _overview(
-            await service.overview(session), await claims.claim_progress(session), staff
+            await service.overview(session),
+            await claims.claim_progress(session),
+            await switch.latest_switch(session),
+            staff,
         )
 
 
@@ -450,3 +511,54 @@ async def decide_sign_off(
             session, _actor(staff), clock, sign_off_id, approve=body.approve, reason=body.reason
         )
     return _sign_off(view)
+
+
+@router.post("/switch", status_code=201)
+async def propose_switch(body: SwitchRequest, request: Request, staff: Importer) -> SwitchView:
+    """Ask a second person to approve the switch with the sheets of the latest trial.
+
+    Refused while anything blocks the switch, while another proposal awaits a decision, and
+    when a client in the sheets has no phone number. The sheets are kept sealed for the approval
+    and the carry-over. Nothing is created yet.
+    """
+    database, clock = _state(request)
+    async with database.actor_transaction(_actor(staff)) as session:
+        view = await switch.propose_switch(
+            session,
+            _sealer(request),
+            _actor(staff),
+            clock,
+            clients_csv=body.clients_csv,
+            investments_csv=body.investments_csv,
+        )
+    return _switch_view(view)
+
+
+@router.post("/switch/{switch_id}/decision")
+async def decide_switch(
+    switch_id: PushId, body: DecisionRequest, request: Request, staff: SignOffDecider
+) -> SwitchView:
+    """Approve or reject the switch someone else proposed.
+
+    An approval checks everything again and creates every client's account, all or none. It is
+    refused with `phone_taken`, naming the clients sheet rows, when a number already has an
+    account.
+    """
+    database, clock = _state(request)
+    async with database.actor_transaction(_actor(staff)) as session:
+        view = await switch.decide_switch(
+            session,
+            _sealer(request),
+            _actor(staff),
+            clock,
+            switch_id,
+            approve=body.approve,
+            reason=body.reason,
+        )
+    return _switch_view(view)
+
+
+def _switch_view(view: switch.SwitchView) -> SwitchView:
+    shown = _switch(view)
+    assert shown is not None
+    return shown
