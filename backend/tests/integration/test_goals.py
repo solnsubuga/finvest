@@ -864,12 +864,13 @@ async def test_the_reminder_run_goes_a_page_at_a_time(
         await started_saving(app_database, worker_database, client, goal.id, ugx(1_000_000))
     monkeypatch.setattr(reminders, "BATCH", 2)
     first = min(goal.id for goal in made)
+    first_key = key()
     async with worker_database.actor_transaction(SYSTEM) as session:
         # Start just before this test's goals, so the shared database's other goals are skipped.
         await enqueue(
             session,
             JobRequest(
-                kind=SEND_REMINDERS_KIND, idempotency_key=key(), payload={"after": first[:-1]}
+                kind=SEND_REMINDERS_KIND, idempotency_key=first_key, payload={"after": first[:-1]}
             ),
             now=at(DAY, hour=5).now(),
         )
@@ -882,18 +883,27 @@ async def test_the_reminder_run_goes_a_page_at_a_time(
     while await runner.run_once():
         pass
     async with worker_database.actor_transaction(SYSTEM) as session:
+        # Follow this run's own chain of pages: each full page queues the next under
+        # "after:<its job id>". Goals other tests add meanwhile can lengthen the chain, so only
+        # its first two pages, which hold this test's goals, are checked.
         pages = (
             await session.execute(
                 text(
-                    "SELECT status, payload ->> 'after' AS after FROM jobs WHERE kind = :kind "
-                    "AND payload ->> 'after' >= :first ORDER BY created_at"
+                    "WITH RECURSIVE chain AS ("
+                    " SELECT id, status, payload ->> 'after' AS after, 1 AS n FROM jobs"
+                    " WHERE kind = :kind AND idempotency_key = :key"
+                    " UNION ALL"
+                    " SELECT j.id, j.status, j.payload ->> 'after', c.n + 1 FROM jobs j"
+                    " JOIN chain c ON j.kind = :kind AND j.idempotency_key = 'after:' || c.id"
+                    ") SELECT status, after FROM chain ORDER BY n"
                 ),
-                {"kind": SEND_REMINDERS_KIND, "first": first[:-1]},
+                {"kind": SEND_REMINDERS_KIND, "key": first_key},
             )
         ).all()
     # Two goals on the first page, which queues the second, which has the last one.
-    assert [page.status for page in pages] == ["succeeded", "succeeded"]
+    assert [page.status for page in pages[:2]] == ["succeeded", "succeeded"]
     assert pages[1].after == sorted(goal.id for goal in made)[1]
+    assert all(page.status == "succeeded" for page in pages)
     seen = await told(worker_database, client)
     assert sorted(k for event, k, _, _ in seen if event == "goal_reached") == sorted(
         f"goal-reached:{goal.id}:1000000" for goal in made
