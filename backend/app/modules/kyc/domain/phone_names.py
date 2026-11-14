@@ -5,13 +5,14 @@ network holds for the client's phone number, with the same lookup that proves a 
 payout number (`payouts/domain/name_lookups.py`). The name is compared with the name the client
 confirmed from their document by the same rule (`compare_names`).
 
-It is a hint for the person who decides the check. It never approves or rejects anyone: an
-identity provider never rejects a client on its own, and a phone may be registered to a family
-member. With approval with no person involved turned on, a check is approved automatically only
-when the network's name matches.
+A different name on the client's current number blocks approval, by the owner's decision: staff
+may still reject, or ask the client to change to a number registered in their own name and hand
+the check in again, which looks the new number up. It never rejects anyone on its own. Every
+other answer is a hint for the person who decides. With approval with no person involved turned
+on, a check is approved automatically only when the network's name matches.
 
-A lookup that got no answer is asked again at the next hand-in, up to `MAX_LOOKUPS` in all for
-one check. One that found a name, or found none, is not repeated.
+A lookup that got no answer is asked again at the next hand-in, up to `MAX_LOOKUPS` for each
+number on one check. One that found a name, or found none, is not repeated for that number.
 """
 
 from __future__ import annotations
@@ -22,7 +23,7 @@ from enum import StrEnum
 from app.modules.payouts.domain.destinations import NameMatch
 from app.modules.payouts.domain.name_lookups import STALE_AFTER, LookupStatus
 
-# Lookups one identity check may have, counting the first. Each costs a fee at ioTec.
+# Lookups one number may have on an identity check, counting the first. Each costs a fee at ioTec.
 MAX_LOOKUPS = 3
 
 # Only a Ugandan number has a Ugandan network to ask.
