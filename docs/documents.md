@@ -139,4 +139,6 @@ The PDF is kept in the row. A statement is a few tens of kilobytes, and keeping 
 | `POST /client/statements` | Client, with `Idempotency-Key` | Ask for a statement from `date_from` to `date_to`. Answers 202 with the document, `pending`. A refused period is 422 with the reason on the field. |
 | `GET /client/documents` | Client | Their statements, receipts, tax certificates and investment notes, newest first. An investment note carries `investment_id` and a receipt carries `deposit_id`, so the app can offer each beside the investment or payment it is about. Both are null on every other kind. |
 | `GET /client/documents/{id}` | Client | One document, to poll until it is `ready`. `not_final_from` is the first day whose figures may still change, or null. |
+| `GET /client/documents` | Client | Their statements and receipts, newest first |
+| `GET /client/documents/{id}` | Client | One document, to poll until it is `ready`. `not_final_from` is the first day whose figures may still change, or null. `reference` is what the PDF and its email call the document (`ST-`, `RC-`, `TC-` or `IN-` and its ID), and `note` says whether an investment note confirms the investment `started` or `ended` (null for other kinds), so the app never reads either from the file name. |
 | `GET /client/documents/{id}/file` | Client | The PDF, as a download, never cached |
