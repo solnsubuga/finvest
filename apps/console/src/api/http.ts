@@ -41,6 +41,7 @@ export class ApiError extends Error {
 export type Method = "GET" | "POST" | "PUT" | "DELETE";
 
 export interface Http {
+  /** `body` is sent as JSON, or as multipart form data when it is a FormData. */
   request<T>(method: Method, path: string, body?: unknown, init?: RequestOptions): Promise<T>;
   /** For a file such as a CSV export. */
   download(path: string): Promise<Blob>;
@@ -64,7 +65,9 @@ export function createHttp(baseUrl: string, fetchImpl: Fetch = fetch, confirm: C
 
   async function send(method: Method, path: string, body: unknown, options?: RequestOptions) {
     const headers: Record<string, string> = { Accept: "application/json" };
-    if (body !== undefined) headers["Content-Type"] = "application/json";
+    // A form, such as a statement file, sets its own multipart boundary.
+    const form = body instanceof FormData;
+    if (body !== undefined && !form) headers["Content-Type"] = "application/json";
     if (options?.idempotencyKey) headers["Idempotency-Key"] = options.idempotencyKey;
     let response: Response;
     try {
@@ -73,7 +76,7 @@ export function createHttp(baseUrl: string, fetchImpl: Fetch = fetch, confirm: C
         headers,
         credentials: "include",
         cache: "no-store",
-        body: body === undefined ? null : JSON.stringify(body),
+        body: body === undefined ? null : form ? body : JSON.stringify(body),
       });
     } catch {
       throw new ApiError("unavailable", 0);
