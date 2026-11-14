@@ -4,9 +4,18 @@ output "deploy_host" {
 }
 
 output "database_admin_uri" {
-  description = "doadmin connection on the private network. Used only by the Provision run to create roles."
-  value       = digitalocean_database_cluster.postgres.private_uri
-  sensitive   = true
+  description = "doadmin connection to the finvest database on the private network. Used only by the Provision run to create roles. The cluster's own URI names defaultdb, where handing over schema public would not reach the database the app uses."
+  value = replace(
+    digitalocean_database_cluster.postgres.private_uri,
+    "/${digitalocean_database_cluster.postgres.database}?",
+    "/${digitalocean_database_db.finvest.name}?",
+  )
+  sensitive = true
+
+  precondition {
+    condition     = strcontains(digitalocean_database_cluster.postgres.private_uri, "/${digitalocean_database_cluster.postgres.database}?")
+    error_message = "The cluster URI does not name its default database as expected, so the roles could be set up in the wrong database."
+  }
 }
 
 output "database_role_passwords" {
