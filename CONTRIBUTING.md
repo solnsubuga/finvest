@@ -15,7 +15,7 @@ A PR that adds or changes a screen in the client app, the console or the website
 ## Commits
 
 - Imperative subject line, under about 70 characters. Use the body to explain why.
-- No `Co-Authored-By: Claude` trailers and no other AI attribution lines in any commit that lands on `main`. This includes squash and merge commit messages.
+- Commits are authored by Solo. A `Co-Authored-By: Claude` trailer or other AI attribution line in a commit, squash or merge message is allowed.
 - Never commit secrets, real client data or provider credentials. Use `.env` files locally. They are ignored by git, and each directory keeps a `.env.example` with placeholder values.
 
 ## Before asking for review
