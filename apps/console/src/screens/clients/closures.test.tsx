@@ -127,12 +127,14 @@ describe("account closures over HTTP", () => {
       reply(409, { error: { code: "conflict", fields: [{ field_path: ["blockers"], code: "money_owed" }] } }),
       reply(409, { error: { code: "conflict", fields: [] } }),
       reply(403, { error: { code: "forbidden", fields: [] } }),
+      reply(429, { error: { code: "rate_limited", fields: [] } }),
     ];
     const fetch = vi.fn<typeof globalThis.fetch>(() => answers.shift() ?? Promise.reject(new TypeError("offline")));
     const api = createHttpClosuresApi(createHttp("https://api.test", fetch));
     await expect(api.prepare(CLOSURE.id, "x")).rejects.toEqual(new ClosuresError("blocked"));
     await expect(api.prepare(CLOSURE.id, "x")).rejects.toMatchObject({ code: "moved" });
     await expect(api.approve(CLOSURE.id, "x")).rejects.toMatchObject({ code: "same_person" });
+    await expect(api.decline(CLOSURE.id, "x")).rejects.toMatchObject({ code: "refused" });
     await expect(api.open()).rejects.toMatchObject({ code: "unavailable" });
   });
 });
