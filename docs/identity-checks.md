@@ -135,6 +135,8 @@ The API stores each photo in the shared private storage (`app.infrastructure.sto
 
 The client is told, in the same transaction as the decision, when their check is approved (by staff or by the worker), rejected, or sent back for new photos: the events `kyc_approved`, `kyc_rejected` and `kyc_retake_requested`, linked to the check. The approval and rejection are keyed by the check, and a request for photos by the check and its submission, so a check sent back twice tells the client twice. Escalating a check, or sending it to a person, tells the client nothing.
 
+In the same transaction, an approval or rejection is published as `kyc.check_decided`, keyed by the check, with the client, the check and `approved`. A module that needs to hear, such as migration for a client claiming an account who redoes the full check, adds its consumer to `service.DECIDED_CONSUMERS`.
+
 Without `FINVEST_IDENTITY_DATA_KEY` the routes answer `unavailable`, and so do the photo routes when file storage is not configured.
 
 ## In the client app
