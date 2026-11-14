@@ -70,6 +70,9 @@ READ_WITHIN = timedelta(minutes=20)
 # Longer than a send and a read can take together, so the sweep never races a live job.
 UNANSWERED_AFTER = timedelta(minutes=30)
 MAX_PHOTO_BYTES = 10 * 1024 * 1024
+# Every photo is kept, replaced ones too, so a check holds at most this many in all. Far more
+# than any honest retake needs; it stops one client filling private storage.
+MAX_PHOTOS_PER_CHECK = 30
 PHOTO_CONTENT_TYPES = frozenset({"image/jpeg", "image/png", "image/webp"})
 MAX_CLIENT_MESSAGE = 300
 DEFAULT_PAGE_SIZE = 50
@@ -241,6 +244,7 @@ _PHOTOS = text(
     "SELECT id, kind, storage_key, content_type, byte_size, created_at FROM kyc_photos "
     "WHERE check_id = :check_id AND replaced_at IS NULL ORDER BY kind"
 )
+_PHOTO_COUNT = text("SELECT count(*) FROM kyc_photos WHERE check_id = :check_id")
 _REPLACE_PHOTO = text(
     "UPDATE kyc_photos SET replaced_at = :now "
     "WHERE check_id = :check_id AND kind = :kind AND replaced_at IS NULL"
@@ -314,6 +318,7 @@ async def photo_slot(
     """
     row = await _editable(session, client)
     _check_photo(row, kind, content_type, byte_size)
+    await _require_room_for_photo(session, row.id)
     return str(row.id)
 
 
@@ -335,6 +340,7 @@ async def add_photo(
     """
     row = await _editable(session, client)
     _check_photo(row, kind, content_type, byte_size)
+    await _require_room_for_photo(session, row.id)
     now = clock.now()
     photo_id = photo_id or push_id()
     storage_key = photo_key(row.id, photo_id)
@@ -1023,6 +1029,12 @@ def _message(value: str | None, *, required: bool) -> str | None:
 def _require_move(actor: ActorKind, current: CheckStatus, target: CheckStatus) -> None:
     if not can_move(actor, current, target):
         raise ApplicationError("conflict")
+
+
+async def _require_room_for_photo(session: AsyncSession, check_id: str) -> None:
+    taken = (await session.execute(_PHOTO_COUNT, {"check_id": check_id})).scalar_one()
+    if taken >= MAX_PHOTOS_PER_CHECK:
+        raise _invalid("photo", "too_many_photos")
 
 
 def _check_photo(row: Row[Any], kind: PhotoKind, content_type: str, byte_size: int) -> None:

@@ -979,3 +979,26 @@ async def test_a_photo_cannot_be_inserted_already_retired(
                 ),
                 photo_row(check_id, "back"),
             )
+
+
+async def test_a_check_holds_a_limited_number_of_photos(
+    app_database: Database, fake_clock: FakeClock
+) -> None:
+    client = new_client()
+    async with app_database.actor_transaction(client) as session:
+        view = await ready_draft(session, client, fake_clock)
+        # Every photo is kept, replaced ones too, so retakes count towards the limit.
+        for _ in range(kyc.MAX_PHOTOS_PER_CHECK - len(view.photos)):
+            await add_photos(session, client, fake_clock, PhotoKind.SELFIE)
+        with pytest.raises(ApplicationError) as error:
+            await kyc.photo_slot(
+                session, client, PhotoKind.SELFIE, content_type="image/jpeg", byte_size=2048
+            )
+        assert refused(error) == ("validation_failed", [("photo", "too_many_photos")])
+        with pytest.raises(ApplicationError) as error:
+            await add_photos(session, client, fake_clock, PhotoKind.FRONT)
+        assert refused(error) == ("validation_failed", [("photo", "too_many_photos")])
+        count = await session.execute(
+            text("SELECT count(*) FROM kyc_photos WHERE check_id = :id"), {"id": view.id}
+        )
+    assert count.scalar_one() == kyc.MAX_PHOTOS_PER_CHECK
