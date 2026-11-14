@@ -41,7 +41,7 @@ export const OUTCOME_LABELS: Record<RecoveryOutcome, string> = {
   not_the_client: "Not the client",
 };
 
-export type RecoveryErrorCode = "forbidden" | "not_found" | "not_connected" | "not_confirmed" | "unavailable";
+export type RecoveryErrorCode = "forbidden" | "not_found" | "not_connected" | "not_confirmed" | "refused" | "unavailable";
 
 export class RecoveryError extends Error {
   constructor(readonly code: RecoveryErrorCode) {
@@ -55,6 +55,7 @@ const MESSAGES: Record<RecoveryErrorCode, string> = {
   not_found: "Someone else has already closed that request.",
   not_connected: "This console is not connected to Finvest yet.",
   not_confirmed: "Not done. Confirm it is you with your passkey or authenticator app, then try again.",
+  refused: "Finvest refused this. Reload the page and try again, and tell the engineers if it happens again.",
   unavailable: "Finvest could not be reached. Check your connection and try again.",
 };
 
@@ -68,6 +69,8 @@ export function toRecoveryError(error: unknown): RecoveryError {
     if (error.code === "forbidden") return new RecoveryError("forbidden");
     if (error.code === "not_found") return new RecoveryError("not_found");
     if (error.code === "confirm_it_is_you") return new RecoveryError("not_confirmed");
+    // Only a lost connection or a server failure reads as could not be reached.
+    if (error.code !== "unavailable") return new RecoveryError("refused");
   }
   return new RecoveryError("unavailable");
 }
