@@ -32,16 +32,26 @@ pytestmark = pytest.mark.integration
 
 # The database refuses an investment not created at the real time, so these tests run on the
 # real clock and date everything from this month back.
-TODAY = today()
 NOW = PRESENT
-THIS_MONTH = month_start(TODAY)
-LAST_MONTH = month_start(THIS_MONTH - timedelta(days=1))
-TWO_BACK = month_start(LAST_MONTH - timedelta(days=1))
+# Dates are read when a test asks, not when this file is imported, so a run that crosses
+# midnight in Kampala still agrees with the database about which day it is.
+
+
+def this_month_start() -> date:
+    return month_start(today())
+
+
+def last_month() -> date:
+    return month_start(this_month_start() - timedelta(days=1))
+
+
+def two_back() -> date:
+    return month_start(last_month() - timedelta(days=1))
 
 
 def this_month(day: int) -> date:
     """A day this month, no later than today."""
-    return THIS_MONTH.replace(day=min(day, TODAY.day))
+    return this_month_start().replace(day=min(day, today().day))
 
 
 def end_of(month: date, days_before: int = 0) -> date:
@@ -113,9 +123,9 @@ async def test_a_new_client_sees_empty_months(app_database: Database) -> None:
     client = new_client()
     result = await read(app_database, client)
     assert [month.month for month in result.months] == [
-        TWO_BACK,
-        LAST_MONTH,
-        THIS_MONTH,
+        two_back(),
+        last_month(),
+        this_month_start(),
     ]
     zero = ugx(0)
     assert all((m.invested, m.earned, m.paid_out) == (zero, zero, zero) for m in result.months)
@@ -125,10 +135,10 @@ async def test_a_new_client_sees_empty_months(app_database: Database) -> None:
 async def test_months_add_up_what_started_what_was_earned_and_what_was_paid_out(
     app_database: Database, worker_database: Database
 ) -> None:
-    investment = await started(app_database, worker_database, NOW, confirmed_on=TODAY)
+    investment = await started(app_database, worker_database, NOW, confirmed_on=today())
     client = Actor("client", investment.client_id)
     interest = ("client.interest_accrued", "investment.interest_accrued")
-    for amount, on in ((300, end_of(LAST_MONTH)), (291, this_month(1)), (291, TODAY)):
+    for amount, on in ((300, end_of(last_month())), (291, this_month(1)), (291, today())):
         await post(
             worker_database,
             client_id=client.id,  # type: ignore[arg-type]
@@ -145,7 +155,7 @@ async def test_months_add_up_what_started_what_was_earned_and_what_was_paid_out(
         code="client.payout_in_flight",
         entry_type="payout.reserve",
         amount=50_000,
-        on=TWO_BACK,
+        on=two_back(),
     )
     await post(
         worker_database,
@@ -153,7 +163,7 @@ async def test_months_add_up_what_started_what_was_earned_and_what_was_paid_out(
         code="client.payout_in_flight",
         entry_type="payout.settle",
         amount=50_000,
-        on=TWO_BACK.replace(day=2),
+        on=two_back().replace(day=2),
         direction="debit",
     )
     # Not counted: a rollover is not new money, and interest of another kind is not earnings.
@@ -172,7 +182,7 @@ async def test_months_add_up_what_started_what_was_earned_and_what_was_paid_out(
         code=interest[0],
         entry_type=interest[1],
         amount=7,
-        on=TWO_BACK - timedelta(days=1),
+        on=two_back() - timedelta(days=1),
         reference=investment.id,
     )
     september, october, november = (await read(app_database, client)).months
@@ -200,7 +210,7 @@ async def test_a_payout_that_came_back_comes_off_paid_out_in_the_month_it_came_b
         code="client.payout_in_flight",
         entry_type="payout.reserve",
         amount=80_000,
-        on=end_of(LAST_MONTH, 1),
+        on=end_of(last_month(), 1),
     )
     await post(
         worker_database,
@@ -208,7 +218,7 @@ async def test_a_payout_that_came_back_comes_off_paid_out_in_the_month_it_came_b
         code="client.payout_in_flight",
         entry_type="payout.settle",
         amount=80_000,
-        on=end_of(LAST_MONTH),
+        on=end_of(last_month()),
         direction="debit",
     )
     # The bank sent it back this month: owed to the client again in their pending account.
@@ -218,7 +228,7 @@ async def test_a_payout_that_came_back_comes_off_paid_out_in_the_month_it_came_b
         code="client.payout_pending",
         entry_type="payout.returned",
         amount=80_000,
-        on=TODAY,
+        on=today(),
     )
     _, last, this = (await read(app_database, client)).months
     assert (last.paid_out, this.paid_out) == (ugx(80_000), ugx(-80_000))
@@ -236,7 +246,7 @@ async def test_a_reversed_entry_nets_out_in_the_month_it_is_reversed(
         code=interest[0],
         entry_type=interest[1],
         amount=300,
-        on=end_of(LAST_MONTH, 1),
+        on=end_of(last_month(), 1),
     )
     wrong = await post(
         worker_database,
@@ -244,7 +254,7 @@ async def test_a_reversed_entry_nets_out_in_the_month_it_is_reversed(
         code=interest[0],
         entry_type=interest[1],
         amount=500,
-        on=end_of(LAST_MONTH),
+        on=end_of(last_month()),
     )
     # The same day's mistake, and one found in the next month.
     started_twice = await post(
@@ -295,7 +305,7 @@ async def test_each_currency_has_its_own_figures_never_summed(
         code=interest[0],
         entry_type=interest[1],
         amount=300,
-        on=TODAY,
+        on=today(),
     )
     # 12.34 dollars, in cents.
     await post(
@@ -304,7 +314,7 @@ async def test_each_currency_has_its_own_figures_never_summed(
         code=interest[0],
         entry_type=interest[1],
         amount=1_234,
-        on=TODAY,
+        on=today(),
         currency=Currency.USD,
     )
     shillings = await read(app_database, client)
@@ -320,7 +330,7 @@ async def test_each_currency_has_its_own_figures_never_summed(
 async def test_what_is_invested_now_and_what_comes_next(
     app_database: Database, worker_database: Database
 ) -> None:
-    investment = await started(app_database, worker_database, NOW, confirmed_on=TODAY)
+    investment = await started(app_database, worker_database, NOW, confirmed_on=today())
     client = Actor("client", investment.client_id)
     result = await read(app_database, client)
     assert result.invested_now == ugx(1_000_000)
@@ -334,7 +344,7 @@ async def test_what_is_invested_now_and_what_comes_next(
 async def test_coming_up_holds_maturities_automatic_runs_goal_savings_and_goal_dates(
     app_database: Database, worker_database: Database
 ) -> None:
-    investment = await started(app_database, worker_database, NOW, confirmed_on=TODAY)
+    investment = await started(app_database, worker_database, NOW, confirmed_on=today())
     client = Actor("client", investment.client_id)
     number = phone()
     async with app_database.actor_transaction(client) as session:
@@ -359,7 +369,7 @@ async def test_coming_up_holds_maturities_automatic_runs_goal_savings_and_goal_d
             name="Land in Mukono",
             category=GoalCategory.SCHOOL_FEES,
             target=ugx(5_000_000),
-            target_date=add_months(TODAY, 11),
+            target_date=add_months(today(), 11),
             clock=NOW,
         )
         rule = await saving_rules.set_up_rule(
@@ -412,7 +422,7 @@ async def test_coming_up_holds_maturities_automatic_runs_goal_savings_and_goal_d
 async def test_a_client_never_sees_another_clients_figures(
     app_database: Database, worker_database: Database
 ) -> None:
-    investment = await started(app_database, worker_database, NOW, confirmed_on=TODAY)
+    investment = await started(app_database, worker_database, NOW, confirmed_on=today())
     other = new_client()
     async with app_database.actor_transaction(other) as session:
         # Asking with the other client's own session shows only their (empty) books.
@@ -467,13 +477,13 @@ async def test_the_route_serves_the_signed_in_clients_own_insights(
             "currency": "UGX",
             "months": [
                 {
-                    "month": LAST_MONTH.isoformat(),
+                    "month": last_month().isoformat(),
                     "invested_minor": 0,
                     "earned_minor": 0,
                     "paid_out_minor": 0,
                 },
                 {
-                    "month": THIS_MONTH.isoformat(),
+                    "month": this_month_start().isoformat(),
                     "invested_minor": 0,
                     "earned_minor": 0,
                     "paid_out_minor": 0,

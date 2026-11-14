@@ -41,11 +41,11 @@ function DemoRegula({ onEnd }: { onEnd: (outcome: RegulaOutcome) => void }) {
   return (
     <View style={styles.demo} testID="regula-demo">
       <Txt weight="bold" color={colors.white} center>
-        {"Regula's live selfie runs here"}
+        The live selfie runs here
       </Txt>
       <Txt size={fontSizes.sm} color={colors.white} center>
         {
-          "On a real build, Regula's own camera screen opens here and asks you to move your face as it shows. This demo has no Regula service, so it stands in."
+          "On a real build, our partner's camera screen opens here and asks you to move your face as it shows. This demo cannot reach it, so it stands in."
         }
       </Txt>
       <View style={{ gap: 10, alignSelf: "stretch" }}>

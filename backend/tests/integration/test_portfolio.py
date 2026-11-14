@@ -32,7 +32,6 @@ from tests.support.ledger import key, staff, ugx
 pytestmark = pytest.mark.integration
 
 # The database refuses an investment not created at the real time, so these run on the real clock.
-TODAY = today()
 NOW = PRESENT
 
 
@@ -50,7 +49,7 @@ async def start(
     await pay(worker_database, investment, investment.amount, NOW)
     async with worker_database.actor_transaction(SYSTEM) as session:
         return await investments.start_investment(
-            session, investment.id, confirmed_on=TODAY, clock=NOW
+            session, investment.id, confirmed_on=today(), clock=NOW
         )
 
 
@@ -75,7 +74,7 @@ async def save_to_new_goal(
         investment = await investments.get_investment(session, saving.id)
     await pay(worker_database, investment, investment.amount, NOW)
     async with worker_database.actor_transaction(SYSTEM) as session:
-        await investments.start_investment(session, saving.id, confirmed_on=TODAY, clock=NOW)
+        await investments.start_investment(session, saving.id, confirmed_on=today(), clock=NOW)
     return saving.id
 
 
@@ -163,7 +162,7 @@ async def test_an_early_withdrawal_stops_the_daily_figure(
     client = await approved_client(app_database, NOW)
     investment = await start(app_database, worker_database, client, amount=1_000_000)
     destination = await approved_destination(app_database, client, NOW)
-    later = at(TODAY + timedelta(days=2))
+    later = at(today() + timedelta(days=2))
     async with app_database.actor_transaction(client) as session:
         await investments.request_withdrawal(
             session,

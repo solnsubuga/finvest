@@ -6,9 +6,9 @@ import pytest
 from app.infrastructure.database import Database
 from tests.integration.test_dealing_api import Api, api, code, key, signed_in_staff
 from tests.integration.test_tax import (
-    LAST_MONTH,
     approved_client,
     fund_trust,
+    last_month,
     running,
     withhold,
 )
@@ -17,7 +17,10 @@ from tests.support.investments import today
 pytestmark = pytest.mark.integration
 __all__ = ["api"]
 
-MONTH = f"{LAST_MONTH.year:04d}-{LAST_MONTH.month:02d}"
+
+def month_label() -> str:
+    """Last month as the API writes it, read when a test asks."""
+    return f"{last_month().year:04d}-{last_month().month:02d}"
 
 
 async def screen(api: Api, headers: dict[str, str]) -> dict[str, object]:
@@ -41,11 +44,11 @@ async def test_the_tax_screen_is_for_finance(api: Api, worker_database: Database
     months = body["months"]
     assert isinstance(months, list) and len(months) == 12
     assert months[0]["month"] == f"{today().year:04d}-{today().month:02d}"
-    assert month_in(body, MONTH)["due_on"] == f"{today().year:04d}-{today().month:02d}-15"
+    assert month_in(body, month_label())["due_on"] == f"{today().year:04d}-{today().month:02d}-15"
     for path in (
         "/staff/tax",
-        f"/staff/tax/months/{MONTH}",
-        f"/staff/tax/months/{MONTH}/payees.csv",
+        f"/staff/tax/months/{month_label()}",
+        f"/staff/tax/months/{month_label()}/payees.csv",
     ):
         refused = await api.http.get(path, headers=operations)
         assert (refused.status_code, code(refused)) == (403, "forbidden")
@@ -59,23 +62,25 @@ async def test_the_months_return_and_its_file_list_each_client(
 ) -> None:
     client = await approved_client(api.database)
     investment = await running(api.database, worker_database, client)
-    await withhold(worker_database, investment, LAST_MONTH, 31_164, 4_674)
+    await withhold(worker_database, investment, last_month(), 31_164, 4_674)
     _, finance = await signed_in_staff(api, "finance")
-    response = await api.http.get(f"/staff/tax/months/{MONTH}?currency=UGX", headers=finance)
+    response = await api.http.get(
+        f"/staff/tax/months/{month_label()}?currency=UGX", headers=finance
+    )
     assert response.status_code == 200, response.text
     body = response.json()
     (line,) = [p for p in body["payees"] if p["client_id"] == client.id]
     assert line["gross"] == {"minor": 31_164, "currency": "UGX"}
     assert line["tax"] == {"minor": 4_674, "currency": "UGX"}
     assert line["name"] == "Amara Nakato"
-    assert body["summary"]["month"] == MONTH
-    exported = await api.http.get(f"/staff/tax/months/{MONTH}/payees.csv", headers=finance)
+    assert body["summary"]["month"] == month_label()
+    exported = await api.http.get(f"/staff/tax/months/{month_label()}/payees.csv", headers=finance)
     assert exported.status_code == 200
     assert exported.headers["content-type"].startswith("text/csv")
-    assert f"finvest-withholding-ugx-{MONTH}.csv" in exported.headers["content-disposition"]
+    assert f"finvest-withholding-ugx-{month_label()}.csv" in exported.headers["content-disposition"]
     rows = exported.text.split("\r\n")
     assert rows[0].startswith("Month,Payee name,Payee TIN")
-    assert f"{MONTH},Amara Nakato,,{line['account_number']},UGX,31164,4674" in rows
+    assert f"{month_label()},Amara Nakato,,{line['account_number']},UGX,31164,4674" in rows
 
 
 async def test_a_payment_to_ura_is_recorded_by_one_person_and_approved_by_another(
@@ -83,7 +88,7 @@ async def test_a_payment_to_ura_is_recorded_by_one_person_and_approved_by_anothe
 ) -> None:
     client = await approved_client(api.database)
     investment = await running(api.database, worker_database, client)
-    await withhold(worker_database, investment, LAST_MONTH, 6_000, 900)
+    await withhold(worker_database, investment, last_month(), 6_000, 900)
     await fund_trust(worker_database, 900)
     daniel_id, daniel = await signed_in_staff(api, "finance")
     _, grace = await signed_in_staff(api, "admin")
@@ -91,7 +96,7 @@ async def test_a_payment_to_ura_is_recorded_by_one_person_and_approved_by_anothe
     before = await screen(api, daniel)
     payment = {
         "currency": "UGX",
-        "month": MONTH,
+        "month": month_label(),
         "amount_minor": 900,
         "ura_reference": f"PRN-{key()['Idempotency-Key']}",
         "bank_reference": f"FT-{key()['Idempotency-Key']}",
@@ -126,4 +131,4 @@ async def test_a_payment_to_ura_is_recorded_by_one_person_and_approved_by_anothe
     assert done["status"] == "approved"
     held_before = before["held_for_ura"]["minor"]  # type: ignore[index]
     assert approved.json()["held_for_ura"]["minor"] == held_before - 900
-    assert month_in(approved.json(), MONTH)["remitted"]["minor"] >= 900  # type: ignore[index]
+    assert month_in(approved.json(), month_label())["remitted"]["minor"] >= 900  # type: ignore[index]

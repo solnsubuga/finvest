@@ -55,6 +55,20 @@ describe("bank transfers on the reconciliation screen", () => {
     expect(within(card).queryByRole("button", { name: "Match to this line" })).not.toBeInTheDocument();
   });
 
+  it("warns when the receipt was used on another deposit, and says so in the queue", async () => {
+    const { user } = renderScreen();
+    const card = await transfer("UGX 10,000,000");
+    const warning = within(card).getByRole("alert");
+    expect(within(warning).getByText("This receipt was used before")).toBeInTheDocument();
+    expect(within(warning).getByText(/The same file and transaction number on payment/)).toHaveTextContent(
+      /-OdBank0000000000Z9A by another client, told to us .*, refused or failed\./,
+    );
+    expect(within(queueItem("UGX 10,000,000")).getByText("Receipt used before")).toBeInTheDocument();
+    expect(within(queueItem("UGX 2,500,000")).queryByText("Receipt used before")).not.toBeInTheDocument();
+    await user.click(queueItem("UGX 2,500,000"));
+    expect(await screen.findByTestId("receipt-not-used-before")).toBeInTheDocument();
+  });
+
   it("matches a transfer to the line the person picks, and then waits for someone else", async () => {
     const { user, keys } = renderScreen();
     await transfer("UGX 10,000,000");

@@ -33,6 +33,8 @@ export function Transfer({ transfer, canDecide, busy, error, onCommand }: Transf
         <StagePill transfer={transfer} />
       </header>
 
+      <UsedBefore transfer={transfer} />
+
       <div className="flex flex-wrap items-start gap-5">
         <ReceiptView transfer={transfer} />
         <div className="flex min-w-0 flex-[1_1_280px] flex-col gap-5">
@@ -66,6 +68,54 @@ export function Transfer({ transfer, canDecide, busy, error, onCommand }: Transf
       ) : null}
       {!transfer.allowed.length && error ? <ErrorNote message={error} /> : null}
     </article>
+  );
+}
+
+const EARLIER_STATUS: Record<string, string> = {
+  in_review: "being checked",
+  confirmed: "confirmed",
+  failed: "refused or failed",
+  created: "started",
+  sending: "being sent",
+  awaiting_approval: "waiting for the client",
+  uncertain: "waiting for the bank",
+};
+
+/**
+ * The design's "File has not been used on any other deposit", and its warning when it has.
+ * A fraud signal only: one real transfer shown to Finvest twice. Crediting still needs a
+ * statement line, and a line confirms one payment.
+ */
+function UsedBefore({ transfer }: { transfer: TransferDetail }) {
+  if (transfer.earlierUses.length === 0) {
+    return (
+      <p className="m-0 text-md text-muted" data-testid="receipt-not-used-before">
+        This receipt file and transaction number have not been used on any other deposit.
+      </p>
+    );
+  }
+  return (
+    <div role="alert" className="flex flex-col gap-2 rounded-lg border border-danger bg-danger-surface px-4 py-3.5 text-ink">
+      <p className="m-0 text-md font-extrabold text-danger">This receipt was used before</p>
+      <p className="m-0 text-md leading-normal">
+        One real transfer may be shown to us twice. Check the earlier deposit before you match this one, and refuse it if it is
+        the same money. A statement line can confirm only one payment.
+      </p>
+      <ul className="m-0 flex list-disc flex-col gap-1 pl-5 text-md">
+        {transfer.earlierUses.map((use) => (
+          <li key={use.paymentId}>
+            {use.sameFile && use.sameTransactionNumber
+              ? "The same file and transaction number"
+              : use.sameFile
+                ? "The same file"
+                : "The same transaction number"}{" "}
+            on payment <span className="font-bold whitespace-nowrap tabular-nums">{use.paymentId}</span>
+            {use.clientId === transfer.clientId ? " by this client" : " by another client"}, told to us{" "}
+            {formatMoment(use.submittedAt)}, {EARLIER_STATUS[use.status] ?? use.status}.
+          </li>
+        ))}
+      </ul>
+    </div>
   );
 }
 

@@ -37,16 +37,17 @@ from tests.support.ledger import client as new_client
 from tests.support.ledger import staff as new_staff
 from tests.support.ledger import ugx
 
-pytestmark = pytest.mark.integration
+pytestmark = [pytest.mark.integration, pytest.mark.usefixtures("clear_of_midnight")]
 
-DAY = today()
 NOW = PRESENT
 MATURED, ACTIVE = InvestmentStatus.MATURED, InvestmentStatus.ACTIVE
 PROCEEDS = 1_026_490
 
 
 def day(offset: int) -> date:
-    return DAY + timedelta(days=offset)
+    """That many days from today in Kampala, read when asked, so a run that crosses midnight
+    still agrees with the database about which day it is."""
+    return today() + timedelta(days=offset)
 
 
 async def mature(
@@ -264,7 +265,7 @@ async def test_with_nowhere_to_send_it_the_money_waits_until_the_client_says_whe
     investment = await request(app_database, client, NOW, at_maturity=AtMaturity.PAY_OUT)
     await pay(worker_database, investment, investment.amount, NOW)
     async with worker_database.actor_transaction(SYSTEM) as session:
-        await investments.start_investment(session, investment.id, confirmed_on=DAY, clock=NOW)
+        await investments.start_investment(session, investment.id, confirmed_on=day(0), clock=NOW)
 
     held = await mature(worker_database, investment.id)
 

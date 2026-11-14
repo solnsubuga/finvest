@@ -36,7 +36,6 @@ from tests.support.ledger import key, ugx
 
 pytestmark = pytest.mark.integration
 
-DAY = today()
 MATURED, ACTIVE = InvestmentStatus.MATURED, InvestmentStatus.ACTIVE
 PRINCIPAL = 1_000_000
 # UGX 1,000,000 for 91 days, after tax. Below the 91 day bill's minimum of UGX 100,000.
@@ -44,7 +43,7 @@ INTEREST = 26_490
 
 
 def day(offset: int) -> date:
-    return DAY + timedelta(days=offset)
+    return today() + timedelta(days=offset)
 
 
 def refused(error: pytest.ExceptionInfo[ApplicationError]) -> list[tuple[str, str]]:
@@ -58,7 +57,7 @@ async def running(
     await pay(worker_database, investment, investment.amount, PRESENT)
     async with worker_database.actor_transaction(SYSTEM) as session:
         return await investments.start_investment(
-            session, investment.id, confirmed_on=DAY, clock=PRESENT
+            session, investment.id, confirmed_on=today(), clock=PRESENT
         )
 
 
@@ -71,7 +70,7 @@ async def new_goal(app_database: Database, client: Actor, name: str = "School fe
             name=name,
             category=GoalCategory.SCHOOL_FEES,
             target=ugx(5_000_000),
-            target_date=add_months(DAY, 12),
+            target_date=add_months(today(), 12),
             clock=PRESENT,
         )
     return goal.id

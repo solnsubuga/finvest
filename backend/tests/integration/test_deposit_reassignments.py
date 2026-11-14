@@ -5,7 +5,7 @@ money moves in that same transaction, and the database holds everyone to their p
 import asyncio
 import secrets
 from dataclasses import dataclass
-from datetime import timedelta
+from datetime import date, timedelta
 
 import pytest
 from sqlalchemy import text
@@ -40,8 +40,13 @@ from tests.support.payments import drain
 
 pytestmark = pytest.mark.integration
 
+
+def yesterday() -> date:
+    """Read when asked, so a run that crosses midnight in Kampala agrees with the database."""
+    return today() - timedelta(days=1)
+
+
 Status = ReassignmentStatus
-DAY = today() - timedelta(days=1)
 FORMAT = CsvFormat(
     value_date="Date",
     date_format="%Y-%m-%d",
@@ -79,11 +84,11 @@ async def a_statement_line(database: Database, minor: int, reference: str) -> st
     opening = 10**12
     parsed = parse_csv(
         "Date,Details,Reference,In,Out\n"
-        f"{DAY.isoformat()},Transfer from a client,{reference},{minor},\n",
+        f"{yesterday().isoformat()},Transfer from a client,{reference},{minor},\n",
         FORMAT,
         source=StatementSource.BANK,
         account_reference=pot,
-        statement_date=DAY,
+        statement_date=yesterday(),
         opening_balance=ugx(opening),
         closing_balance=ugx(opening + minor),
     )
@@ -93,8 +98,8 @@ async def a_statement_line(database: Database, minor: int, reference: str) -> st
         found = await statements.find_statement_lines(
             session,
             source=StatementSource.BANK,
-            date_from=DAY,
-            date_to=DAY,
+            date_from=yesterday(),
+            date_to=yesterday(),
             amount=ugx(minor),
         )
     [line] = [line for line in found if line.account_reference == imported.account_reference]
@@ -117,7 +122,7 @@ async def confirmed_transfer(
                 Purpose.INVESTMENT,
                 investment.id,
                 ReceiptFile("application/pdf", 48_000, secrets.token_hex(32)),
-                ReceiptDetails(investment.amount, DAY, "Stanbic Bank", "FT2632100042"),
+                ReceiptDetails(investment.amount, yesterday(), "Stanbic Bank", "FT2632100042"),
             ),
             idempotency_key=f"key-{push_id()}",
             clock=PRESENT,

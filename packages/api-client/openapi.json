@@ -1690,6 +1690,10 @@
               }
             ]
           },
+          "receipt_used_before": {
+            "title": "Receipt Used Before",
+            "type": "boolean"
+          },
           "status": {
             "enum": [
               "created",
@@ -1715,7 +1719,8 @@
           "receipt",
           "created_at",
           "confirmed_at",
-          "awaiting"
+          "awaiting",
+          "receipt_used_before"
         ],
         "title": "BankTransferInQueue",
         "type": "object"
@@ -1760,6 +1765,13 @@
               }
             ]
           },
+          "receipt_used_before": {
+            "items": {
+              "$ref": "#/components/schemas/EarlierUseOut"
+            },
+            "title": "Receipt Used Before",
+            "type": "array"
+          },
           "review": {
             "anyOf": [
               {
@@ -1774,6 +1786,7 @@
         "required": [
           "payment",
           "client_id",
+          "receipt_used_before",
           "receipt_link",
           "review",
           "matched_line",
@@ -7493,6 +7506,53 @@
         "title": "DocumentType",
         "type": "string"
       },
+      "EarlierUseOut": {
+        "additionalProperties": false,
+        "description": "Another deposit handed in with the same receipt file or bank transaction number.",
+        "properties": {
+          "client_id": {
+            "maxLength": 20,
+            "minLength": 20,
+            "pattern": "^[-0-9A-Z_a-z]{20}$",
+            "title": "Client Id",
+            "type": "string"
+          },
+          "payment_id": {
+            "maxLength": 20,
+            "minLength": 20,
+            "pattern": "^[-0-9A-Z_a-z]{20}$",
+            "title": "Payment Id",
+            "type": "string"
+          },
+          "same_file": {
+            "title": "Same File",
+            "type": "boolean"
+          },
+          "same_transaction_number": {
+            "title": "Same Transaction Number",
+            "type": "boolean"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          },
+          "submitted_at": {
+            "format": "date-time",
+            "title": "Submitted At",
+            "type": "string"
+          }
+        },
+        "required": [
+          "payment_id",
+          "client_id",
+          "status",
+          "submitted_at",
+          "same_file",
+          "same_transaction_number"
+        ],
+        "title": "EarlierUseOut",
+        "type": "object"
+      },
       "EmailChange": {
         "additionalProperties": false,
         "properties": {
@@ -11377,6 +11437,52 @@
           "member_id"
         ],
         "title": "MemberView",
+        "type": "object"
+      },
+      "MenuCount": {
+        "additionalProperties": false,
+        "properties": {
+          "count": {
+            "title": "Count",
+            "type": "integer"
+          },
+          "screen": {
+            "enum": [
+              "review-queue",
+              "identity-checks",
+              "maturities",
+              "support",
+              "complaints",
+              "reconciliation",
+              "rates",
+              "compliance"
+            ],
+            "title": "Screen",
+            "type": "string"
+          }
+        },
+        "required": [
+          "screen",
+          "count"
+        ],
+        "title": "MenuCount",
+        "type": "object"
+      },
+      "MenuCountsOut": {
+        "additionalProperties": false,
+        "properties": {
+          "counts": {
+            "items": {
+              "$ref": "#/components/schemas/MenuCount"
+            },
+            "title": "Counts",
+            "type": "array"
+          }
+        },
+        "required": [
+          "counts"
+        ],
+        "title": "MenuCountsOut",
         "type": "object"
       },
       "MessageItem": {
@@ -56147,6 +56253,58 @@
         "summary": "Staff Maturities",
         "tags": [
           "staff investing"
+        ]
+      }
+    },
+    "/staff/menu-counts": {
+      "get": {
+        "description": "Work waiting on each screen this member of staff may open, for the badges on the menu.",
+        "operationId": "menu_counts_staff_menu_counts_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MenuCountsOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          }
+        },
+        "summary": "Menu Counts",
+        "tags": [
+          "staff review queue"
         ]
       }
     },

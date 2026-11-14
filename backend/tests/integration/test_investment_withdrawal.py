@@ -31,6 +31,7 @@ from tests.support.investments import (
     approved_client,
     approved_destination,
     at,
+    days_on,
     started,
     today,
 )
@@ -39,14 +40,12 @@ from tests.support.ledger import staff as new_staff
 
 pytestmark = pytest.mark.integration
 
-DAY = today()
 NOW = PRESENT
 # A day after the destinations are approved, past their first day's safety wait.
-LATER = at(today() + timedelta(days=2))
 
 
 def day(offset: int) -> date:
-    return DAY + timedelta(days=offset)
+    return today() + timedelta(days=offset)
 
 
 async def earn(worker_database: Database, investment_id: str, days: int) -> None:
@@ -62,9 +61,10 @@ async def ask(
     *,
     client: Actor | None = None,
     idempotency_key: str | None = None,
-    clock: FakeClock = LATER,
+    clock: FakeClock | None = None,
 ) -> investments.Investment:
     client = client or Actor("client", investment.client_id)
+    clock = clock or days_on(2)
     async with app_database.actor_transaction(client) as session:
         return await investments.request_withdrawal(
             session,
@@ -78,7 +78,7 @@ async def ask(
 
 async def withdraw(worker_database: Database, investment_id: str) -> investments.Investment:
     async with worker_database.actor_transaction(SYSTEM) as session:
-        return await investments.withdraw(session, investment_id, LATER)
+        return await investments.withdraw(session, investment_id, days_on(2))
 
 
 async def fund(
@@ -86,7 +86,7 @@ async def fund(
 ) -> investments.Investment:
     async with worker_database.actor_transaction(SYSTEM) as session:
         return await investments.pay_funded(
-            session, investments.Funded(funding_id or push_id(), investment_id, amount), LATER
+            session, investments.Funded(funding_id or push_id(), investment_id, amount), days_on(2)
         )
 
 
@@ -158,7 +158,7 @@ async def test_an_early_withdrawal_pays_principal_and_interest_so_far_once_funde
     ]
     client = Actor("client", investment.client_id)
     async with app_database.actor_transaction(client) as session:
-        seen = await investments.client_investment(session, client, investment.id, LATER)
+        seen = await investments.client_investment(session, client, investment.id, days_on(2))
     assert (seen.can_withdraw, seen.can_change_maturity) == (False, False)
     assert seen.value == ugx(1_000_000 + earned)
 
@@ -287,7 +287,7 @@ async def test_two_requests_at_once_withdraw_once(
                     investment.id,
                     destination_id=destination_id,
                     idempotency_key=key(),
-                    clock=LATER,
+                    clock=days_on(2),
                 )
             except ApplicationError as error:
                 return error.code
@@ -388,13 +388,13 @@ async def run_job(
         job_id = await enqueue(
             session,
             JobRequest(kind=kind, idempotency_key=push_id(), payload=payload, queue=queue),
-            now=LATER.now(),
+            now=days_on(2).now(),
         )
     runner = Worker(
         worker_database,
-        InvestmentJobs(worker_database, LATER).handlers(),
+        InvestmentJobs(worker_database, days_on(2)).handlers(),
         WorkerConfig(queue=queue),
-        LATER,
+        days_on(2),
     )
     assert await runner.run_once() == 1
     async with worker_database.actor_transaction(SYSTEM) as session:

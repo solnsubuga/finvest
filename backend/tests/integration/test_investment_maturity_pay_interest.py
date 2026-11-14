@@ -37,14 +37,13 @@ from tests.support.ledger import ugx
 
 pytestmark = pytest.mark.integration
 
-DAY = today()
 MATURED, ACTIVE = InvestmentStatus.MATURED, InvestmentStatus.ACTIVE
 PRINCIPAL = 1_000_000
 INTEREST = 26_490
 
 
 def day(offset: int) -> date:
-    return DAY + timedelta(days=offset)
+    return today() + timedelta(days=offset)
 
 
 async def mature(
@@ -136,7 +135,7 @@ async def test_interest_with_nowhere_to_go_waits_and_the_client_sends_it_on(
     chosen = await request(app_database, client, PRESENT, at_maturity=AtMaturity.PAY_INTEREST)
     await pay(worker_database, chosen, chosen.amount, PRESENT)
     async with worker_database.actor_transaction(SYSTEM) as session:
-        await investments.start_investment(session, chosen.id, confirmed_on=DAY, clock=PRESENT)
+        await investments.start_investment(session, chosen.id, confirmed_on=today(), clock=PRESENT)
 
     held = await mature(worker_database, chosen.id)
 
@@ -185,7 +184,7 @@ async def test_staff_send_held_interest_on_for_the_interest_alone(
     chosen = await request(app_database, client, PRESENT, at_maturity=AtMaturity.PAY_INTEREST)
     await pay(worker_database, chosen, chosen.amount, PRESENT)
     async with worker_database.actor_transaction(SYSTEM) as session:
-        await investments.start_investment(session, chosen.id, confirmed_on=DAY, clock=PRESENT)
+        await investments.start_investment(session, chosen.id, confirmed_on=today(), clock=PRESENT)
     held = await mature(worker_database, chosen.id)
     destination_id = await approved_destination(app_database, client, PRESENT)
 

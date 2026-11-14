@@ -344,9 +344,20 @@ export const BankTransferInQueue = z.object({
   method: z.enum(["mtn", "airtel", "bank_transfer"]),
   payer: z.string().nullable(),
   receipt: ReceiptView.nullable(),
+  receipt_used_before: z.boolean(),
   status: z.enum(["created", "sending", "awaiting_approval", "uncertain", "in_review", "confirmed", "failed"]),
 });
 export type BankTransferInQueue = z.infer<typeof BankTransferInQueue>;
+
+export const EarlierUseOut = z.object({
+  client_id: z.string(),
+  payment_id: z.string(),
+  same_file: z.boolean(),
+  same_transaction_number: z.boolean(),
+  status: z.string(),
+  submitted_at: z.string(),
+});
+export type EarlierUseOut = z.infer<typeof EarlierUseOut>;
 
 export const PaymentView = z.object({
   amount: MoneyView,
@@ -395,6 +406,7 @@ export const BankTransferOut = z.object({
   matched_line: StatementLineOut.nullable(),
   payment: PaymentView,
   receipt_link: ReceiptLinkOut.nullable(),
+  receipt_used_before: z.array(EarlierUseOut),
   review: ReviewOut.nullable(),
 });
 export type BankTransferOut = z.infer<typeof BankTransferOut>;
@@ -1947,6 +1959,17 @@ export const MaturityRemindersProposal = z.object({
   yours: z.boolean(),
 });
 export type MaturityRemindersProposal = z.infer<typeof MaturityRemindersProposal>;
+
+export const MenuCount = z.object({
+  count: z.number().int(),
+  screen: z.enum(["review-queue", "identity-checks", "maturities", "support", "complaints", "reconciliation", "rates", "compliance"]),
+});
+export type MenuCount = z.infer<typeof MenuCount>;
+
+export const MenuCountsOut = z.object({
+  counts: z.array(MenuCount),
+});
+export type MenuCountsOut = z.infer<typeof MenuCountsOut>;
 
 export const MessageItem = z.object({
   author: z.enum(["client", "staff"]),
@@ -5699,6 +5722,17 @@ export const operations = {
     idempotent: false,
     status: 200,
     response: MaturitiesOut,
+  },
+  "GET /staff/menu-counts": {
+    method: "GET",
+    path: "/staff/menu-counts",
+    params: z.object({}),
+    query: z.object({}),
+    body: null,
+    bodyKind: null,
+    idempotent: false,
+    status: 200,
+    response: MenuCountsOut,
   },
   "GET /staff/migration": {
     method: "GET",
