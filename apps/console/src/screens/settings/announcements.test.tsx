@@ -46,8 +46,11 @@ describe("settings: announcements", () => {
   it("approves someone else's announcement, which sends it", async () => {
     const { user } = renderSection();
     const waiting = await card("Office closed on Monday");
-    expect(waiting).toHaveTextContent(
-      "Approving sends it straight away to 1,284 active clients, in the app, and by push where they have it. 96 of them also get it by SMS and 310 by email, as they chose for news. It cannot be called back.",
+    // The reach loads after the card, so wait for it rather than racing it.
+    await waitFor(() =>
+      expect(waiting).toHaveTextContent(
+        "Approving sends it straight away to 1,284 active clients, in the app, and by push where they have it. 96 of them also get it by SMS and 310 by email, as they chose for news. It cannot be called back.",
+      ),
     );
     await user.click(within(waiting).getByRole("button", { name: "Approve and send" }));
     await waitFor(async () => expect(await card("Office closed on Monday")).toHaveTextContent("Sent to 1,284 clients"));
