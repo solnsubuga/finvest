@@ -1,0 +1,118 @@
+# Screening and compliance cases
+
+Sanctions and politically exposed person (PEP) screening, and the compliance cases staff close with two people. The code is `backend/app/modules/screening`, the tables are migration `0180_screening`, and the console reads it on the Compliance screen.
+
+## In short
+
+- Every client is screened when they hand in their identity check, again every 30 days once approved, and before a payout (built in the payout screening PR).
+- The provider is behind a port, so it can be swapped. The owner chose Sigma360. Until its account exists, no provider is set up and every screen is recorded as **not run**; the Compliance screen says screening is off.
+- A screen that finds a listed entity that may be the client opens a **case**. Two members of staff close it: one proposes the outcome, a different one approves it.
+- An entity staff already ruled out for a client, or accepted as a PEP, is recognised the next time and opens no new case.
+- Clients never see any of this. Telling a client they matched a list could tip them off.
+
+## The provider port
+
+`domain/provider.py`. A provider is asked about one person at a time and answers with the listed entities it thinks may be them.
+
+| What we send | From |
+| --- | --- |
+| Surname and given names | The client's handed-in or approved identity check (`kyc.service.screening_subject`) |
+| Date of birth | The same. It is sealed in the identity check and opened only in the worker. |
+| Country that issued the document | The same. For a passport it is the nationality; for a Ugandan national ID it says only that the client lives in Uganda. There is no nationality field. |
+
+The ID number is never sent.
+
+What comes back is a list of matches. Each has the provider's own ID for the listed entity (stable across screens), the listed name, a category (`sanctions`, `pep`, `adverse_media`, `other`), a strength as a whole percentage, and the lists it was found in. Which lists are searched and how close a name must be to count is the provider's configuration (a Sigma360 "filter set"), not ours.
+
+A provider that does not answer raises `ProviderUnavailable` and the job asks again later. Screening only reads lists, so asking twice is harmless and the job is not an external effect. A provider that refuses a subject raises `ProviderRefused` and the screen is recorded as unavailable with its code.
+
+| Setting | Values |
+| --- | --- |
+| `FINVEST_SCREENING_PROVIDER` | `none` (default): nothing is screened and each screen is recorded as not run. `development-stub`: for a developer's own machine; surname `SANCTIONED` matches a sanctions list and `POLITICIAN` a PEP list. Refused in production. The Sigma360 adapter adds `sigma360`. |
+
+A provider needs `FINVEST_IDENTITY_DATA_KEY`, because the date of birth is sealed with it. The worker refuses to start without it.
+
+## A screen
+
+`screening_runs`. A screen is asked for with `contract.request_screening(session, client_id=, reason=, idempotency_key=, now=)` in the caller's transaction. It saves a pending run and a job together. The same key asks once.
+
+| Reason | Who asks | Key |
+| --- | --- | --- |
+| `onboarding` | The identity check, when the client hands it in | Chosen by the identity check |
+| `rescreen` | The daily sweep | `rescreen:<client>:<day>` |
+| `payout` | Payouts, before money leaves | Chosen by payouts |
+| `staff` | A member of staff, from the Compliance screen | `staff:<staff>:<Idempotency-Key>` |
+
+The worker (`jobs.py`, `screening.screen_client`) reads who to screen, calls the provider with no transaction open, and records one of:
+
+| Status | Meaning |
+| --- | --- |
+| `clear` | Nothing found |
+| `possible_match` | At least one listed entity found. A case opens if any of them is new for this client. |
+| `unavailable` | The provider refused (`failure_code` says why), or never answered within 6 hours (`provider_no_answer`) |
+| `not_run` | No provider is set up |
+| `no_subject` | The client has no handed-in identity check to screen |
+
+### The daily sweep
+
+`screening.rescreen_due` runs at 02:15 Kampala time. It gives up on screens waiting more than 6 hours, then pages through approved clients (`kyc.service.approved_client_ids`, which includes clients carried over from Finvest 1.0) and asks for a screen of each one whose last finished screen is 30 days old or more, or who was never screened. A client already waiting for a screen is skipped. It asks for at most 5,000 screens a run, so a first run over every client is spread over days.
+
+30 days is decided for now. Lists change daily, so it is the floor rather than the aim: Sigma360's ongoing monitoring, which alerts when a listed entity changes, can replace or supplement it once the account exists.
+
+## Where a client stands
+
+`contract.latest_outcome(session, client_id)` answers with an outcome, when they were last screened, the case it concerns and whether they are an accepted PEP:
+
+| Outcome | When |
+| --- | --- |
+| `confirmed_match` | Two members of staff closed a case as `sanctioned`. It outweighs every later screen. |
+| `possible_match` | A screening case is open |
+| `clear` | The last screen found nothing, or found only entities already decided for this client |
+| `pending`, `unavailable`, `not_run` | The last screen is waiting, failed, or could not be run |
+
+None means the client was never screened. The identity check review shows anything other than `clear` as a flag.
+
+## Cases
+
+`compliance_cases`. Only the worker opens a case: a screen with new matches, or (from the monitoring PR) a transaction monitoring rule. A case is closed by two people, from the owner's standing maker and checker rule:
+
+1. A member of staff with `compliance_cases.change` proposes an outcome with a reason.
+2. A different member of staff approves it, with their second step from the last few minutes, and the case closes with that outcome in the same transaction. Or they send it back with a note, and the case stays open for a new proposal.
+3. The proposer may withdraw their own proposal before anyone decides it.
+
+| Source | Outcomes |
+| --- | --- |
+| Screening | `not_a_match`: the listed entity is someone else. `pep_accepted`: the client is a PEP (or family or close associate) and stays a client, with the enhanced due diligence done written in the reason. `sanctioned`: the client is on a sanctions list. Payouts stay held and a report is owed to the Financial Intelligence Authority. |
+| Monitoring | `no_concern`, or `report_to_fia`: a suspicious transaction report is owed to the Financial Intelligence Authority. |
+
+A `not_a_match` or `pep_accepted` case tells later screens that its entities are decided for this client. A `sanctioned` client stays `confirmed_match`.
+
+Filing the report to the Financial Intelligence Authority is not built: staff file it on the FIA's own system and write the reference in the reason.
+
+Waiting proposals appear in the approvals inbox as `compliance_case`.
+
+## What the database enforces
+
+- A screen starts pending, asked for by whoever is signed in: a client only for themselves, staff naming themselves for a screen by hand. Only the worker finishes one, once.
+- Only the worker records matches, and nothing changes them.
+- Only the worker opens a case, and a screening case only for a screen of the same client with new matches.
+- A proposal is made by the active member of staff signed in, for an open case, with an outcome that fits the case. It is decided once. The approver and the sender-back are never the proposer, and only the proposer withdraws.
+- A case closes only with a proposal for it approved in the same transaction by the person signed in, with the same outcome. A closed case never changes.
+- Nothing is ever deleted or truncated.
+- Staff read everything on the API's role; clients read nothing.
+
+## Routes
+
+All under `/staff/compliance`. Reading needs `compliance.view` (Admin, Compliance). Everything else needs `compliance_cases.change` (Admin, Compliance).
+
+| Route | What it does |
+| --- | --- |
+| `GET /summary` | Whether screening is on, open cases, proposals waiting, and screens in the last 30 days |
+| `GET /cases?status=open&source=` | Cases, open ones oldest first |
+| `GET /cases/{id}` | One case, the screen and its matches, every proposal, where the client stands, and what the reader may do |
+| `POST /cases/{id}/proposals` | Propose an outcome. `409 proposal_waiting` or `case_closed`; `422 outcome_does_not_fit_case`. |
+| `POST /proposals/{id}/approve` | Close the case. Needs a recent second step. The proposer gets `403`. |
+| `POST /proposals/{id}/send-back` | With a note. The proposer gets `403`. |
+| `POST /proposals/{id}/withdraw` | The proposer only. |
+| `GET /clients/{id}` | A client's standing, screens and cases |
+| `POST /clients/{id}/screenings` | Screen the client again now. Takes an `Idempotency-Key`. One person's step: it only reads lists. |

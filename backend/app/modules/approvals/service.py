@@ -24,6 +24,7 @@ from app.modules.notifications import announcements, suppression_lifts, wording_
 from app.modules.payments import bank_transfers, reassignments
 from app.modules.payouts import destinations, resolutions, reviews
 from app.modules.reconciliation import day_close, transfers
+from app.modules.screening import service as screening
 from app.modules.support import complaints
 from app.modules.tax import service as tax
 
@@ -77,6 +78,8 @@ async def waiting_for(session: AsyncSession, staff: StaffSession, now: datetime)
         found += await _payout_releases(session)
     if "account_closure" in kinds:
         found += await _closures(session)
+    if "compliance_case" in kinds:
+        found += await _compliance_cases(session)
     return inbox(found, staff.staff_id, staff.permissions)
 
 
@@ -315,4 +318,12 @@ async def _payout_releases(session: AsyncSession) -> list[Waiting]:
     return [
         Waiting("payout_release", r.id, r.payout_id, r.proposed_by, r.proposed_at)
         for r in await reviews.waiting(session)
+    ]
+
+
+async def _compliance_cases(session: AsyncSession) -> list[Waiting]:
+    # The subject is the proposed outcome, never the client or what the case is about.
+    return [
+        Waiting("compliance_case", p.id, p.outcome.value, p.proposed_by, p.proposed_at)
+        for p in await screening.waiting_proposals(session)
     ]

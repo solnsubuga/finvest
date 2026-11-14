@@ -83,6 +83,8 @@ from app.modules.reconciliation import api as reconciliation_api
 from app.modules.reconciliation import transfers_api as pot_transfers_api
 from app.modules.reconciliation.domain.wallet import WalletBalances
 from app.modules.reconciliation.wiring import wallet_balances
+from app.modules.screening import api as screening_api
+from app.modules.screening.settings import ScreeningSettings
 from app.modules.support import api as support_api
 from app.modules.tax import api as tax_api
 from app.shared.clock import Clock, SystemClock
@@ -245,4 +247,5 @@ def create_app(
     app.include_router(tax_api.create_router(identity_sealer))
     app.include_router(finance_api.create_router())
     app.include_router(client_data_api.create_router(identity_sealer))
+    app.include_router(screening_api.create_router(ScreeningSettings().screening_provider))
     return app
