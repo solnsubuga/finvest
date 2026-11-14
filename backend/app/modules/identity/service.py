@@ -763,6 +763,55 @@ async def staff_names(session: AsyncSession, staff_ids: Collection[str]) -> dict
     return {row.id: row.name for row in rows.all()}
 
 
+@dataclass(frozen=True, slots=True)
+class StaffContact:
+    """Where to reach a member of staff, and whether they may still be sent anything."""
+
+    id: str
+    email: str
+    name: str
+    role: Role
+    active: bool
+
+
+async def staff_contacts(
+    session: AsyncSession, staff_ids: Collection[str]
+) -> dict[str, StaffContact]:
+    """The email address, name, role and status of these members of staff, for the worker that
+    sends them their scheduled reports. An ID with no account is left out.
+
+    The worker may read these columns of a staff account and nothing else.
+    """
+    if not staff_ids:
+        return {}
+    rows = await session.execute(
+        text("SELECT id, email, name, role, status FROM identity_staff WHERE id = ANY(:ids)"),
+        {"ids": sorted(set(staff_ids))},
+    )
+    return {
+        row.id: StaffContact(
+            id=row.id,
+            email=row.email,
+            name=row.name,
+            role=row.role,
+            active=row.status == "active",
+        )
+        for row in rows.all()
+    }
+
+
+async def active_staff_roles(session: AsyncSession) -> list[tuple[str, str, Role]]:
+    """Every active member of staff as (id, name, role), by name, for a screen that picks who
+    may be sent something their role allows."""
+    rows = await session.execute(
+        text(
+            "SELECT id, name, role FROM identity_staff WHERE status = 'active' "
+            "ORDER BY lower(name), id"
+        )
+    )
+    return [(row.id, row.name, row.role) for row in rows.all()]
+
+
 async def active_staff_names(session: AsyncSession) -> dict[str, str]:
     """Every active member of staff by name, for a console screen that picks one."""
     rows = await session.execute(

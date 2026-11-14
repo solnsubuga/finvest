@@ -107,7 +107,7 @@ export type Approval = z.infer<typeof Approval>;
 export const ApprovalItemOut = z.object({
   can_decide: z.boolean(),
   id: z.string(),
-  kind: z.enum(["wording_change", "ledger_correction", "pot_transfer", "bank_transfer_match", "day_close", "dealing_order", "dealing_result", "buffer_rules", "buffer_capital", "rate_change", "migration_totals", "migration_sign_off", "phone_change", "team_change", "client_lock", "suppression_lift", "complaint_outcome", "announcement", "payout_account", "investment_correction", "payout_resolution", "tax_remittance", "deposit_reassignment", "payout_release", "investment_transfer", "organisation", "account_closure", "compliance_case", "bank_account_change"]),
+  kind: z.enum(["wording_change", "ledger_correction", "pot_transfer", "bank_transfer_match", "day_close", "dealing_order", "dealing_result", "buffer_rules", "buffer_capital", "rate_change", "migration_totals", "migration_sign_off", "phone_change", "team_change", "client_lock", "suppression_lift", "complaint_outcome", "announcement", "payout_account", "investment_correction", "payout_resolution", "tax_remittance", "deposit_reassignment", "payout_release", "investment_transfer", "organisation", "account_closure", "compliance_case", "bank_account_change", "report_schedule"]),
   proposed_at: z.string(),
   proposed_by: z.string(),
   proposed_by_name: z.string().nullable(),
@@ -1040,6 +1040,11 @@ export const DecideOutcome = z.object({
   reason: z.string().nullable().optional(),
 });
 export type DecideOutcome = z.infer<typeof DecideOutcome>;
+
+export const DecideScheduleIn = z.object({
+  reason: z.string(),
+});
+export type DecideScheduleIn = z.infer<typeof DecideScheduleIn>;
 
 export const DecideWording = z.object({
   decision: z.enum(["approved", "rejected", "withdrawn"]),
@@ -2010,6 +2015,15 @@ export const ProposePhone = z.object({
 });
 export type ProposePhone = z.infer<typeof ProposePhone>;
 
+export const ProposeScheduleIn = z.object({
+  currency: z.enum(["UGX", "USD"]).optional(),
+  frequency: z.enum(["daily", "weekly", "monthly", "quarterly"]),
+  reason: z.string(),
+  recipients: z.array(z.string()),
+  report_key: z.enum(["daily_position", "deposits_and_withdrawals", "interest_and_tax", "maturity_ladder", "identity_and_risk", "client_statements", "complaints_quarterly"]),
+});
+export type ProposeScheduleIn = z.infer<typeof ProposeScheduleIn>;
+
 export const ProposeWording = z.object({
   reason: z.string(),
   wording: WordingText,
@@ -2351,6 +2365,43 @@ export const SavedReplies = z.object({
   replies: z.array(SavedReplyItem),
 });
 export type SavedReplies = z.infer<typeof SavedReplies>;
+
+export const ScheduleOut = z.object({
+  currency: z.enum(["UGX", "USD"]).nullable(),
+  decided_at: z.string().nullable(),
+  decided_by: z.string().nullable(),
+  decision_reason: z.string().nullable(),
+  frequency: z.enum(["daily", "weekly", "monthly", "quarterly"]),
+  id: z.string(),
+  last_sent_at: z.string().nullable(),
+  proposed_at: z.string(),
+  proposed_by: z.string(),
+  proposed_by_name: z.string().nullable(),
+  reason: z.string(),
+  recipient_names: z.array(z.string()),
+  recipients: z.array(z.string()),
+  report_key: z.enum(["daily_position", "deposits_and_withdrawals", "interest_and_tax", "maturity_ladder", "identity_and_risk", "client_statements", "complaints_quarterly"]),
+  report_name: z.string(),
+  status: z.enum(["proposed", "active", "declined", "withdrawn", "stopped"]),
+  stopped_at: z.string().nullable(),
+  stopped_by: z.string().nullable(),
+  yours: z.boolean(),
+});
+export type ScheduleOut = z.infer<typeof ScheduleOut>;
+
+export const ReportsApiRecipientOut = z.object({
+  id: z.string(),
+  name: z.string(),
+  reports: z.array(z.enum(["daily_position", "deposits_and_withdrawals", "interest_and_tax", "maturity_ladder", "identity_and_risk", "client_statements", "complaints_quarterly"])),
+});
+export type ReportsApiRecipientOut = z.infer<typeof ReportsApiRecipientOut>;
+
+export const SchedulesOut = z.object({
+  frequencies: z.record(z.string(), z.unknown()),
+  people: z.array(ReportsApiRecipientOut),
+  schedules: z.array(ScheduleOut),
+});
+export type SchedulesOut = z.infer<typeof SchedulesOut>;
 
 export const SearchResult = z.object({
   clients: z.array(AccountView),
@@ -5717,6 +5768,80 @@ export const operations = {
     idempotent: false,
     status: 204,
     response: null,
+  },
+  "GET /staff/report-schedules": {
+    method: "GET",
+    path: "/staff/report-schedules",
+    params: z.object({}),
+    query: z.object({}),
+    body: null,
+    bodyKind: null,
+    idempotent: false,
+    status: 200,
+    response: SchedulesOut,
+  },
+  "POST /staff/report-schedules": {
+    method: "POST",
+    path: "/staff/report-schedules",
+    params: z.object({}),
+    query: z.object({}),
+    body: ProposeScheduleIn,
+    bodyKind: "json",
+    idempotent: true,
+    status: 201,
+    response: ScheduleOut,
+  },
+  "POST /staff/report-schedules/{schedule_id}/approve": {
+    method: "POST",
+    path: "/staff/report-schedules/{schedule_id}/approve",
+    params: z.object({
+    schedule_id: z.string(),
+  }),
+    query: z.object({}),
+    body: DecideScheduleIn,
+    bodyKind: "json",
+    idempotent: true,
+    status: 200,
+    response: ScheduleOut,
+  },
+  "POST /staff/report-schedules/{schedule_id}/decline": {
+    method: "POST",
+    path: "/staff/report-schedules/{schedule_id}/decline",
+    params: z.object({
+    schedule_id: z.string(),
+  }),
+    query: z.object({}),
+    body: DecideScheduleIn,
+    bodyKind: "json",
+    idempotent: false,
+    status: 200,
+    response: ScheduleOut,
+  },
+  "POST /staff/report-schedules/{schedule_id}/stop": {
+    method: "POST",
+    path: "/staff/report-schedules/{schedule_id}/stop",
+    params: z.object({
+    schedule_id: z.string(),
+  }),
+    query: z.object({}),
+    body: DecideScheduleIn,
+    bodyKind: "json",
+    idempotent: false,
+    status: 200,
+    response: ScheduleOut,
+  },
+  "POST /staff/report-schedules/{schedule_id}/withdraw": {
+    method: "POST",
+    path: "/staff/report-schedules/{schedule_id}/withdraw",
+    params: z.object({
+    schedule_id: z.string(),
+  }),
+    query: z.object({}),
+    body: DecideScheduleIn,
+    bodyKind: "json",
+    idempotent: false,
+    status: 200,
+    response: ScheduleOut,
   },
   "GET /staff/reports": {
     method: "GET",

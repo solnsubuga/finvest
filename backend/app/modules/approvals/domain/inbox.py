@@ -40,6 +40,7 @@ Kind = Literal[
     "account_closure",
     "compliance_case",
     "bank_account_change",
+    "report_schedule",
 ]
 
 
@@ -91,6 +92,9 @@ SOURCES: dict[Kind, Source] = {
     "compliance_case": Source("compliance.view", "compliance_cases.change"),
     # The bank account clients pay into by transfer, on Settings.
     "bank_account_change": Source("settings.view", "bank_accounts.change"),
+    # A report emailed on a schedule, on Reports. Only shown for a report the reader may
+    # download, and approving needs that too.
+    "report_schedule": Source("reports.view", "reports.view"),
 }
 
 

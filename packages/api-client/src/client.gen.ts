@@ -1123,12 +1123,6 @@ export const QuoteOut = z.object({
 });
 export type QuoteOut = z.infer<typeof QuoteOut>;
 
-export const RecipientOut = z.object({
-  account_number: z.string(),
-  name: z.string(),
-});
-export type RecipientOut = z.infer<typeof RecipientOut>;
-
 export const RecoveryAsk = z.object({
   contact_phone: z.string(),
   phone: z.string(),
@@ -1253,6 +1247,12 @@ export const WithdrawalRequest = z.object({
   pin_confirmation: z.string().nullable().optional(),
 });
 export type WithdrawalRequest = z.infer<typeof WithdrawalRequest>;
+
+export const InvestmentsTransfersApiRecipientOut = z.object({
+  account_number: z.string(),
+  name: z.string(),
+});
+export type InvestmentsTransfersApiRecipientOut = z.infer<typeof InvestmentsTransfersApiRecipientOut>;
 
 /** Every route, by method and path, with what it takes and what it answers. */
 export const operations = {
@@ -2878,7 +2878,7 @@ export const operations = {
     bodyKind: null,
     idempotent: false,
     status: 200,
-    response: RecipientOut,
+    response: InvestmentsTransfersApiRecipientOut,
   },
   "GET /client/transfers": {
     method: "GET",

@@ -25,6 +25,8 @@ from app.modules.organisations import service as organisations
 from app.modules.payments import bank_accounts, bank_transfers, reassignments
 from app.modules.payouts import destinations, resolutions, reviews
 from app.modules.reconciliation import day_close, transfers
+from app.modules.reports import schedules as report_schedules
+from app.modules.reports.domain.catalogue import REPORTS, may_download
 from app.modules.screening import service as screening
 from app.modules.support import complaints
 from app.modules.tax import service as tax
@@ -87,6 +89,8 @@ async def waiting_for(session: AsyncSession, staff: StaffSession, now: datetime)
         found += await _compliance_cases(session)
     if "bank_account_change" in kinds:
         found += await _bank_accounts(session)
+    if "report_schedule" in kinds:
+        found += await _report_schedules(session, staff)
     return inbox(found, staff.staff_id, staff.permissions)
 
 
@@ -362,4 +366,19 @@ async def _organisations(session: AsyncSession) -> list[Waiting]:
         Waiting("organisation", o.id, o.kind.value, o.checked_by, o.checked_at)
         for o in await organisations.waiting(session)
         if o.checked_by is not None and o.checked_at is not None
+    ]
+
+
+async def _report_schedules(session: AsyncSession, staff: StaffSession) -> list[Waiting]:
+    # The subject is the report and how often, never who it goes to.
+    return [
+        Waiting(
+            "report_schedule",
+            s.id,
+            f"{s.report_key} {s.frequency}",
+            s.proposed_by,
+            s.proposed_at,
+        )
+        for s in await report_schedules.waiting(session)
+        if may_download(REPORTS[s.report_key], staff.permissions)
     ]
