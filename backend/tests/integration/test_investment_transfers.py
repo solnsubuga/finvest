@@ -743,10 +743,20 @@ async def test_a_client_who_asked_to_close_cannot_send(
 ) -> None:
     sender, _ = await person(app_database)
     recipient, _ = await person(app_database)
-    async with app_database.actor_transaction(sender) as session:
-        asked = await closures.ask(session, sender, None, PRESENT)
-    # An investment paid for after asking: nothing new should leave while staff decide.
     source = await running(app_database, worker_database, sender)
+    # A waiting request, saved straight away. Asking through the app is refused while an
+    # investment runs, and a waiting request refuses a new one, so this reaches the guard
+    # that sits behind those checks.
+    request_id = push_id()
+    async with app_database.actor_transaction(sender) as session:
+        await session.execute(
+            text(
+                "INSERT INTO closure_requests (id, client_id, requested_at) "
+                "VALUES (:id, :client_id, now())"
+            ),
+            {"id": request_id, "client_id": sender.id},
+        )
+    # Nothing should leave by a send while staff decide.
     with pytest.raises(ApplicationError) as refused:
         await send(
             app_database,
@@ -758,4 +768,4 @@ async def test_a_client_who_asked_to_close_cannot_send(
     assert refused.value.fields[0].code == "closure_requested"
     # Leave no open request behind for the staff queue other tests read.
     async with app_database.actor_transaction(sender) as session:
-        await closures.cancel(session, sender, asked.id, PRESENT)
+        await closures.cancel(session, sender, request_id, PRESENT)
