@@ -14,7 +14,9 @@ from httpx import Response
 from app.infrastructure.database import Database
 from app.modules.reconciliation import statements
 from app.modules.reconciliation.domain.statements import StatementSource
+from app.modules.reconciliation.domain.wallet import WalletReading
 from app.shared.business_day import business_date
+from app.shared.money import Currency, Money
 from app.shared.push_ids import push_id
 from tests.support.database import TestDatabase
 from tests.support.http import Api, running_api
@@ -228,3 +230,43 @@ async def test_seeing_reconciliation_does_not_let_you_change_it(api: Api) -> Non
         json={"statement_line_id": push_id(), "entry_id": push_id(), "line_no": 1, "reason": "No"},
     )
     assert matched.status_code == 403
+
+
+class StaticWallet:
+    def __init__(self, reading: WalletReading | None) -> None:
+        self.reading = reading
+
+    async def wallet_balance(self) -> WalletReading | None:
+        return self.reading
+
+
+async def test_staff_see_the_ioTec_wallet_beside_the_ledger(
+    test_database: TestDatabase, app_database: Database
+) -> None:
+    read_at = datetime(2026, 11, 14, 6, tzinfo=UTC)
+    reading = WalletReading(Money(15_150_000, Currency.UGX), read_at)
+    async with running_api(test_database, app_database, iotec_wallet=StaticWallet(reading)) as api:
+        await api.staff("operations")
+        found = (await api.http.get("/staff/reconciliation/iotec-wallet")).json()
+        assert found["connected"] is True
+        assert found["wallet_balance"] == {"minor": 15_150_000, "currency": "UGX"}
+        ledger = found["ledger_balance"]["minor"]
+        assert found["difference"] == {"minor": 15_150_000 - ledger, "currency": "UGX"}
+        assert datetime.fromisoformat(found["read_at"]) == read_at
+
+    async with running_api(test_database, app_database, iotec_wallet=StaticWallet(None)) as api:
+        await api.staff("operations")
+        found = (await api.http.get("/staff/reconciliation/iotec-wallet")).json()
+        assert (found["connected"], found["wallet_balance"], found["difference"]) == (
+            True,
+            None,
+            None,
+        )
+
+
+async def test_without_ioTec_the_wallet_is_not_connected(api: Api) -> None:
+    await api.staff("operations")
+    found = (await api.http.get("/staff/reconciliation/iotec-wallet")).json()
+    assert found["connected"] is False
+    assert found["wallet_balance"] is None
+    assert found["ledger_balance"]["currency"] == "UGX"
