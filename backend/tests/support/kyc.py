@@ -108,7 +108,7 @@ async def ready_draft(
 
 
 # The name `verify` gives a client, as `kyc.verified_name` reads it back.
-VERIFIED_NAME = "NAKATO Amara"
+VERIFIED_NAME = "Amara Nakato"  # as shown; the check holds "NAKATO", "Amara"
 
 
 async def verify(database: Database, client: Actor, clock: Clock) -> None:

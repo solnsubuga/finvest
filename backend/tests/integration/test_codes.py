@@ -333,6 +333,9 @@ async def test_a_code_finishes_sign_in_and_restricts_the_account(api: Api) -> No
         "locked": False,
         # A texted code never counts as confirming it is the client.
         "confirmed_at": None,
+        # No name until the identity check is approved.
+        "display_name": None,
+        "first_name": None,
         "confirmed_until": None,
     }
     assert COOKIES["client"] in verified.headers["set-cookie"]

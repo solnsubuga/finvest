@@ -67,7 +67,7 @@ async def test_the_months_return_and_its_file_list_each_client(
     (line,) = [p for p in body["payees"] if p["client_id"] == client.id]
     assert line["gross"] == {"minor": 31_164, "currency": "UGX"}
     assert line["tax"] == {"minor": 4_674, "currency": "UGX"}
-    assert line["name"] == "NAKATO Amara"
+    assert line["name"] == "Amara Nakato"
     assert body["summary"]["month"] == MONTH
     exported = await api.http.get(f"/staff/tax/months/{MONTH}/payees.csv", headers=finance)
     assert exported.status_code == 200
@@ -75,7 +75,7 @@ async def test_the_months_return_and_its_file_list_each_client(
     assert f"finvest-withholding-ugx-{MONTH}.csv" in exported.headers["content-disposition"]
     rows = exported.text.split("\r\n")
     assert rows[0].startswith("Month,Payee name,Payee TIN")
-    assert f"{MONTH},NAKATO Amara,,{line['account_number']},UGX,31164,4674" in rows
+    assert f"{MONTH},Amara Nakato,,{line['account_number']},UGX,31164,4674" in rows
 
 
 async def test_a_payment_to_ura_is_recorded_by_one_person_and_approved_by_another(

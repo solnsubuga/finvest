@@ -324,7 +324,7 @@ async def test_the_verified_name_exists_only_once_the_client_is_approved(
     async with app_database.actor_transaction(staff) as session:
         assert await kyc.verified_name(session, client.id or "") is None
         await kyc.approve(session, SEALER, staff, check_id, "Checked", fake_clock)
-        assert await kyc.verified_name(session, client.id or "") == "NAKATO Amara"
+        assert await kyc.verified_name(session, client.id or "") == "Amara Nakato"
         assert await kyc.verified_name(session, new_client().id or "") is None
 
 
