@@ -50,7 +50,7 @@ export const legalDocuments: LegalDocument[] = [
       },
       {
         heading: "Closing your account",
-        covers: "How to close, and what happens to money still invested.",
+        covers: "How to close once nothing is left invested or owed to you, and the records we keep afterwards.",
       },
     ],
   },
@@ -66,7 +66,7 @@ export const legalDocuments: LegalDocument[] = [
       {
         heading: "What we collect",
         covers:
-          "Identity documents and selfies, contact details, payout accounts, payments and investments, and device and sign-in records.",
+          "Identity documents and selfies, contact details, the next of kin you name, your answers to the investing questions, payout accounts, payments and investments, and device and sign-in records.",
       },
       {
         heading: "Why we use it",
@@ -76,15 +76,15 @@ export const legalDocuments: LegalDocument[] = [
       {
         heading: "Who we share it with",
         covers:
-          "Payment providers, the custodian, identity check providers, regulators and tax authorities, and nobody else.",
+          "Payment providers, the custodian, identity check providers, regulators and tax authorities, and the next of kin you named if we cannot reach you. Nobody else.",
       },
       {
         heading: "Where it is kept and for how long",
-        covers: "Where data is stored, how it is protected, and how long each kind is kept.",
+        covers: "Where data is stored, how it is protected, and how long each kind is kept, including after you close your account.",
       },
       {
         heading: "Your rights",
-        covers: "How to see, correct or object to the use of your data, and how to complain.",
+        covers: "How to download a copy of your data from Profile, correct it or object to its use, and how to complain.",
       },
     ],
   },

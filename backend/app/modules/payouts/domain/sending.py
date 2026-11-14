@@ -78,6 +78,8 @@ class SendStep:
     outcome: AttemptOutcome
     provider_reference: str | None = None
     failure_code: str | None = None
+    # Why a deferred send took nothing, when staff must act: `wallet_short`.
+    deferred_for: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -99,8 +101,12 @@ def after_send(result: SendResult) -> SendStep:
             return SendStep(
                 PayoutEvent.SEND_REJECTED, AttemptOutcome.REJECTED, reference, code.value
             )
-        case Deferred():
-            return SendStep(PayoutEvent.SEND_DEFERRED, AttemptOutcome.DEFERRED)
+        case Deferred(reason=reason):
+            return SendStep(
+                PayoutEvent.SEND_DEFERRED,
+                AttemptOutcome.DEFERRED,
+                deferred_for=None if reason is None else reason.value,
+            )
         case Uncertain(provider_reference=reference):
             return SendStep(PayoutEvent.SEND_UNCERTAIN, AttemptOutcome.UNCERTAIN, reference)
 

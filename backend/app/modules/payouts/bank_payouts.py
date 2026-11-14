@@ -136,6 +136,8 @@ class SettlementView:
     decided_by: str | None
     decided_at: datetime | None
     decision_reason: str | None
+    # The bulk settlement this is one payout of, decided only with it (bulk_settlements.py).
+    bulk_id: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -154,7 +156,7 @@ _BATCH_COLUMNS = (
 )
 _SETTLEMENT_COLUMNS = (
     "id, payout_id, batch_id, outcome, statement_line_id, statement_id, reason, status, "
-    "proposed_by, proposed_at, decided_by, decided_at, decision_reason"
+    "proposed_by, proposed_at, decided_by, decided_at, decision_reason, bulk_id"
 )
 # Queued bank payouts in no batch that is prepared or approved, oldest first.
 _WAITING_PAYOUTS = text(
@@ -222,8 +224,11 @@ _OPEN_SETTLEMENT = text(
     f"SELECT {_SETTLEMENT_COLUMNS} FROM payout_bank_settlements "  # noqa: S608
     "WHERE payout_id = :payout_id AND status = 'proposed'"
 )
+# A line is named by one live settlement at a time: one payout's, or one bulk's.
 _LINE_IN_USE = text(
     "SELECT 1 FROM payout_bank_settlements WHERE statement_line_id = :line_id "
+    "AND status IN ('proposed', 'approved') UNION ALL "
+    "SELECT 1 FROM payout_bank_bulk_settlements WHERE statement_line_id = :line_id "
     "AND status IN ('proposed', 'approved')"
 )
 _DECIDE_SETTLEMENT = text(
@@ -234,7 +239,8 @@ _EVIDENCE = text(
     "SELECT public.finvest_payout_bank_settlement_evidence(ROW(CAST(:id AS text), "
     "CAST(:payout_id AS text), CAST(:batch_id AS text), CAST(:outcome AS text), "
     "CAST(:statement_line_id AS text), CAST(:statement_id AS text), CAST(:reason AS text), "
-    "'proposed', CAST(:proposed_by AS text), CAST(:now AS timestamptz), NULL, NULL, NULL)"
+    "'proposed', CAST(:proposed_by AS text), CAST(:now AS timestamptz), NULL, NULL, NULL, "
+    "NULL)"
     "::public.payout_bank_settlements) AS shown"
 )
 
@@ -703,6 +709,9 @@ async def _open_settlement(session: AsyncSession, settlement_id: str) -> Settlem
     settlement = _settlement_view(row)
     if settlement.status is not Decision.PROPOSED:
         raise BankPayoutRefused("settlement_already_decided")
+    if settlement.bulk_id is not None:
+        # One payout of a bulk debit: decided only with the bulk, all together.
+        raise BankPayoutRefused("settlement_in_bulk")
     return settlement
 
 
@@ -780,6 +789,7 @@ def _settlement_view(row: Row[Any]) -> SettlementView:
         decided_by=row.decided_by,
         decided_at=row.decided_at,
         decision_reason=row.decision_reason,
+        bulk_id=row.bulk_id,
     )
 
 

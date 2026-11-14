@@ -97,6 +97,10 @@ export function toPayoutAccount(view: DestinationOut, nowMs: number, banks: Bank
  * a timeout, a server error) is "unavailable", which the review screen treats as "may have
  * been saved": it keeps the same key and the same choices, so trying again cannot invest twice.
  */
+/** Only a phone with a PIN sends a confirmation; a browser leaves it out. */
+const pinOf = (request: { pinConfirmation?: string | null }) =>
+  request.pinConfirmation ? { pin_confirmation: request.pinConfirmation } : {};
+
 /** Which call failed, where the same refusal means different things. */
 type Call = "withdraw" | "maturity" | "pay_out" | "other";
 
@@ -113,6 +117,8 @@ export function toInvestingError(error: unknown, call: Call = "other"): Investin
   switch (error.code) {
     case "not_found":
       return new InvestingError("not_found");
+    case "pin_required":
+      return new InvestingError("pin_required");
     case "idempotency_key_reused":
       return new InvestingError("key_reused");
     case "forbidden":
@@ -208,7 +214,7 @@ export function createApiInvestingClient(): InvestingClient {
           toInvestment(
             await api("POST /client/investments/{investment_id}/withdraw", {
               params: { investment_id: request.investmentId },
-              body: { destination_id: request.destinationId },
+              body: { destination_id: request.destinationId, ...pinOf(request) },
               idempotencyKey: request.idempotencyKey,
             }),
           ),
@@ -233,7 +239,7 @@ export function createApiInvestingClient(): InvestingClient {
           toInvestment(
             await api("POST /client/investments/{investment_id}/pay-out", {
               params: { investment_id: request.investmentId },
-              body: { destination_id: request.destinationId },
+              body: { destination_id: request.destinationId, ...pinOf(request) },
             }),
           ),
         "pay_out",

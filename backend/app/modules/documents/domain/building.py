@@ -19,6 +19,8 @@ DEPOSIT_CONFIRMED = "payment.deposit_confirmed"
 # A bank transfer credited to the wrong client, moved to the client whose money it was.
 DEPOSIT_REASSIGNED = "payment.deposit_reassigned"
 INTEREST_ACCRUED = "investment.interest_accrued"
+# An investment sent from one client to another. Each sees only their own side of it.
+TRANSFERRED = "investment.transferred"
 PAYOUT_PREFIX = "payout."
 
 _METHODS = {"mtn": "MTN Mobile Money", "airtel": "Airtel Money", "bank_transfer": "Bank transfer"}
@@ -78,6 +80,10 @@ def activity_line(change: EntryChange, names: Names) -> Activity | None:
         investment = change.investment_ids[0] if len(change.investment_ids) == 1 else reference
         product = names.products.get(investment, "your investment")
         return Activity(change.on, ActivityKind.EARNED, f"Interest, {product}", investment, owed)
+    if change.entry_type == TRANSFERRED:
+        if owed.is_positive:
+            return Activity(change.on, ActivityKind.PAID_IN, "Investment received", reference, owed)
+        return Activity(change.on, ActivityKind.PAID_OUT, "Investment sent", reference, owed)
     if change.entry_type.startswith(PAYOUT_PREFIX):
         if owed.is_negative:
             where = destination_name(names.payout_kinds.get(reference, ""))
@@ -115,6 +121,7 @@ STATUS_LABELS: dict[InvestmentStatus, str] = {
     InvestmentStatus.MATURED: "Matured",
     InvestmentStatus.WITHDRAWN: "Withdrawn early",
     InvestmentStatus.UNWOUND: "Reversed",
+    InvestmentStatus.TRANSFERRED: "Sent to another client",
 }
 
 

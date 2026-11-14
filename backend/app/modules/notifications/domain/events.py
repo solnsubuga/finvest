@@ -65,6 +65,19 @@ _SPECS = (
         "investment_withdrawal_requested", Category.INVESTMENTS, "investments", "amount", "product"
     ),
     _event("investment_withdrawal_paid", Category.INVESTMENTS, "investments", "amount", "product"),
+    # Sending an investment to another client. `person` is the other client's short name, the
+    # first given name and the surname's initial. Never the amount in the words.
+    _event("investment_sent", Category.INVESTMENTS, "investments", "amount", "product", "person"),
+    _event(
+        "investment_received", Category.INVESTMENTS, "investments", "amount", "product", "person"
+    ),
+    # Large: waiting for staff before it moves.
+    _event("investment_transfer_held", Category.INVESTMENTS, "investments", "product", "person"),
+    _event(
+        "investment_transfer_declined", Category.INVESTMENTS, "investments", "product", "person"
+    ),
+    # It could not be done, for example the investment matured first. Nothing moved.
+    _event("investment_transfer_failed", Category.INVESTMENTS, "investments", "product", "person"),
     _event("interest_earned", Category.EARNINGS, "investments", "amount", "count"),
     # Goals. The goal's name is the client's own words. Never an amount.
     _event("goal_top_up_due", Category.INVESTMENTS, "goals", "goal", "date"),
@@ -77,6 +90,12 @@ _SPECS = (
     _event("kyc_approved", Category.ACCOUNT, "kyc"),
     _event("kyc_retake_requested", Category.ACCOUNT, "kyc"),
     _event("kyc_rejected", Category.ACCOUNT, "kyc"),
+    # Company and group accounts.
+    # Never the organisation's name, which the applicant wrote and staff have not seen yet.
+    _event("organisation_invited", Category.ACCOUNT, "organisations", "person"),
+    _event("organisation_returned", Category.ACCOUNT, "organisations", "organisation"),
+    _event("organisation_rejected", Category.ACCOUNT, "organisations", "organisation"),
+    _event("organisation_approved", Category.ACCOUNT, "organisations", "organisation"),
     _event("payout_destination_approved", Category.ACCOUNT, "payouts", "destination"),
     _event("payout_destination_refused", Category.ACCOUNT, "payouts", "destination"),
     _event("statement_ready", Category.ACCOUNT, "statements", "period"),

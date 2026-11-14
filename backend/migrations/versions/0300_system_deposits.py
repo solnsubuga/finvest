@@ -1,7 +1,7 @@
 """Let the worker ask for a mobile money payment for a saving it set going.
 
 Revision ID: 0300_system_deposits
-Revises: 0225_identity_pin_confirmations
+Revises: 0270_payout_wallet_short
 
 Until now only a client saved a deposit, from their own transaction. An automatic investing run
 has nobody signed in: on its due day the worker saves the investment and then the deposit that
@@ -17,7 +17,7 @@ later move goes through the update guard of 0020, as before.
 from alembic import op
 
 revision = "0300_system_deposits"
-down_revision = "0225_identity_pin_confirmations"
+down_revision = "0270_payout_wallet_short"
 branch_labels = None
 depends_on = None
 
