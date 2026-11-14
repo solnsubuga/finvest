@@ -849,7 +849,7 @@ export const ConversationItem = z.object({
 });
 export type ConversationItem = z.infer<typeof ConversationItem>;
 
-export const CorrectionKind = z.enum(["unwind", "refund"]);
+export const CorrectionKind = z.enum(["unwind", "refund", "pay_out"]);
 export type CorrectionKind = z.infer<typeof CorrectionKind>;
 
 export const CorrectionIn = z.object({
