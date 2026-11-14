@@ -20,6 +20,9 @@ from app.modules.kyc.domain.checks import DocumentType, required_photos
 from app.modules.kyc.providers import ManualProvider
 from app.modules.ledger import service as ledger
 from app.modules.ledger.domain.entries import AccountKind, AccountSpec, EntryDraft, credit, debit
+from app.modules.reconciliation import day_close
+from app.modules.reconciliation.domain.matching import LedgerMovement
+from app.modules.reconciliation.domain.statements import Direction
 from app.modules.tax import remittances, service, withholding
 from app.modules.tax.domain.periods import month_end, month_of, months_back, tax_year_of
 from app.modules.tax.domain.remittances import RemittanceStatus
@@ -341,6 +344,47 @@ async def test_a_payment_to_ura_posts_once_a_second_person_approves(
         recorded.id,
         today(),
     )
+
+
+async def test_reconciliation_pairs_an_approved_payment_by_the_banks_reference(
+    app_database: Database, worker_database: Database
+) -> None:
+    await withheld_last_month(app_database, worker_database, 3_000)
+    daniel, grace = new_staff(), new_staff()
+    waiting = await propose(app_database, daniel, 1_000)
+    approved = await approve(app_database, grace, (await propose(app_database, daniel, 2_000)).id)
+    assert approved.ledger_entry_id is not None
+    async with app_database.actor_transaction(new_staff()) as session:
+        expected = await service.expected_bank_movements(
+            session, date_from=today(), date_to=today()
+        )
+    found = {payment.ledger_entry_id: payment for payment in expected}
+    # Only an approved payment has left the trust account in the books.
+    assert waiting.id not in {payment.ledger_entry_id for payment in expected}
+    payment = found[approved.ledger_entry_id]
+    assert (payment.bank_reference, payment.amount, payment.paid_on) == (
+        approved.bank_reference,
+        ugx(2_000),
+        today(),
+    )
+
+    # The day close pairs the trust account's ledger line with the bank line by that reference.
+    movement = LedgerMovement(
+        line_id=f"{approved.ledger_entry_id}:2",
+        effective_date=today(),
+        direction=Direction.OUT,
+        amount=ugx(2_000),
+        reference=approved.id,
+        entry_type="tax.remitted",
+    )
+    reader = new_staff()
+    async with app_database.actor_transaction(reader) as session:
+        line_for, reference_for, why = await day_close._recorded_links(
+            session, reader, [movement], today()
+        )
+    assert line_for == {}
+    assert reference_for == {movement.line_id: approved.bank_reference}
+    assert why == {movement.line_id: "The approved payment to URA gives this bank reference"}
 
 
 async def test_a_payment_is_refused_for_a_month_not_ended_or_more_than_it_owes(

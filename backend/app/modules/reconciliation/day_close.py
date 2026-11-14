@@ -3,10 +3,10 @@
 Reconciliation keeps its own copy of the ledger movements on each pot, read through the
 ledger's API. A statement line and a movement are paired by what another module recorded (a
 bank transfer's approved review names its line; the dealing desk gives the bank's reference
-for a settlement), then by reference, or by a person with a reason. Whatever is left unpaired
-on either side is an open exception. A day can be closed only when, for every pot, the
-statement balance equals the ledger balance plus what the open exceptions account for, and two
-different members of staff have signed.
+for a settlement, and the tax module for an approved payment to URA), then by reference, or by
+a person with a reason. Whatever is left unpaired on either side is an open exception. A day
+can be closed only when, for every pot, the statement balance equals the ledger balance plus
+what the open exceptions account for, and two different members of staff have signed.
 
 Nothing here moves money. A difference is put right by a ledger entry made elsewhere, which
 then shows up as a movement and is matched.
@@ -42,6 +42,7 @@ from app.modules.reconciliation.domain.statements import (
     StatementLine,
     StatementSource,
 )
+from app.modules.tax import service as tax
 from app.shared.actors import Actor
 from app.shared.business_day import business_date
 from app.shared.clock import Clock
@@ -184,7 +185,7 @@ async def refresh(
                     },
                 )
         lines, movements = await _open_items(session, pot, day)
-        line_for, reference_for = await _recorded_links(session, staff, movements, day)
+        line_for, reference_for, why = await _recorded_links(session, staff, movements, day)
         recorded = pair_recorded(
             lines, movements, line_for_movement=line_for, reference_for_movement=reference_for
         )
@@ -198,11 +199,7 @@ async def refresh(
                     "line_no": line_no,
                     "how": "recorded",
                     "matched_by": staff.id,
-                    "reason": (
-                        _BY_PAYMENT_REVIEW
-                        if pair.movement.line_id in line_for
-                        else _BY_DEALING_REFERENCE
-                    ),
+                    "reason": why[pair.movement.line_id],
                     "now": now,
                 },
             )
@@ -550,15 +547,18 @@ async def _blockers(
 _DEPOSIT_CONFIRMED = "payment.deposit_confirmed"
 _BY_PAYMENT_REVIEW = "The approved review of the bank transfer names this statement line"
 _BY_DEALING_REFERENCE = "The dealing desk gives this bank reference for the settlement"
+_BY_TAX_REFERENCE = "The approved payment to URA gives this bank reference"
 
 
 async def _recorded_links(
     session: AsyncSession, staff: Actor, movements: Sequence[LedgerMovement], day: date
-) -> tuple[dict[str, str], dict[str, str]]:
+) -> tuple[dict[str, str], dict[str, str], dict[str, str]]:
     """What other modules recorded about the open movements: the statement line each
     confirmed bank transfer was approved against, and the bank's reference for each dealing
-    settlement. Keyed by the movement's `line_id`."""
+    settlement and each approved payment to URA. Keyed by the movement's `line_id`, with why
+    each was recorded."""
     line_for: dict[str, str] = {}
+    why: dict[str, str] = {}
     for movement in movements:
         if movement.entry_type != _DEPOSIT_CONFIRMED or not movement.reference:
             continue
@@ -570,15 +570,22 @@ async def _recorded_links(
             and review.statement_line_id is not None
         ):
             line_for[movement.line_id] = review.statement_line_id
+            why[movement.line_id] = _BY_PAYMENT_REVIEW
     reference_for: dict[str, str] = {}
     if movements:
-        expected = await dealing.expected_bank_movements(session, date_from=_EPOCH, date_to=day)
-        by_entry = {move.ledger_entry_id: move.bank_reference for move in expected}
+        by_entry: dict[str, tuple[str, str]] = {}
+        for settled in await dealing.expected_bank_movements(
+            session, date_from=_EPOCH, date_to=day
+        ):
+            by_entry[settled.ledger_entry_id] = (settled.bank_reference, _BY_DEALING_REFERENCE)
+        for paid in await tax.expected_bank_movements(session, date_from=_EPOCH, date_to=day):
+            by_entry[paid.ledger_entry_id] = (paid.bank_reference, _BY_TAX_REFERENCE)
         for movement in movements:
             entry_id, _ = _movement_key(movement)
-            if by_entry.get(entry_id):
-                reference_for[movement.line_id] = by_entry[entry_id]
-    return line_for, reference_for
+            found = by_entry.get(entry_id)
+            if found and found[0] and movement.line_id not in line_for:
+                reference_for[movement.line_id], why[movement.line_id] = found
+    return line_for, reference_for, why
 
 
 async def _open_items(

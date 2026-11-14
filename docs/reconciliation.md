@@ -42,10 +42,11 @@ Only a day that has ended in Kampala can be imported (`statement_day_not_over`).
 
 A statement line and a ledger movement match only when they carry the same reference, go the same way and are for the same amount. The reference is the deposit or payout ID we gave the provider.
 
-Two kinds of movement carry a reference the statement does not show, and another module already recorded how they pair. They are paired first, as `recorded` matches:
+Three kinds of movement carry a reference the statement does not show, and another module already recorded how they pair. They are paired first, as `recorded` matches:
 
 - A confirmed bank transfer. The ledger carries the deposit's ID, and the bank shows its own reference on the day the money arrived. The transfer's approved review (one person matched it, a second approved) names the statement line, so the movement pairs with that line.
 - A dealing settlement or a bill's maturity. The ledger carries the order's ID, and the bank shows the custodian's reference, which `dealing.holdings.expected_bank_movements` gives. The movement pairs with the one open line under that reference.
+- A payment of withholding tax to URA. The ledger carries the remittance's ID, and the bank shows its own reference, which the person who recorded the payment entered and a second person checked against the statement. `tax.service.expected_bank_movements` gives it for each approved payment, and the movement pairs with the one open line under that reference, going out, for the same amount. A payment whose line has not arrived stays an open exception, as any other.
 
 A recorded pair is made only for the same direction and amount, and only with a line still open. When two lines carry the same reference, a person decides.
 
