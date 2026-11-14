@@ -20,6 +20,9 @@ export interface RecoveryRequest {
   contactPhone: string;
   reason: RecoveryReason;
   createdAt: string;
+  /** Asks while it was open, the first included. The number and reason are the latest ask's. */
+  asks: number;
+  lastAskedAt: string;
 }
 
 export interface RecoveryApi {
@@ -86,6 +89,8 @@ interface RecoveryJson {
   contact_phone: string;
   reason: RecoveryReason;
   created_at: string;
+  asks: number;
+  last_asked_at: string;
 }
 
 export function createHttpRecoveryApi(http: Http): RecoveryApi {
@@ -101,6 +106,8 @@ export function createHttpRecoveryApi(http: Http): RecoveryApi {
           contactPhone: item.contact_phone,
           reason: item.reason,
           createdAt: item.created_at,
+          asks: item.asks,
+          lastAskedAt: item.last_asked_at,
         }));
       } catch (error) {
         throw toRecoveryError(error);
@@ -129,6 +136,9 @@ export function createStubRecoveryApi(now: () => number = Date.now, delayMs = 12
       contactPhone: "+256701555013",
       reason: "lost_phone",
       createdAt: ago(95),
+      // Asked again later with another number to call, so the screen shows it changed.
+      asks: 3,
+      lastAskedAt: ago(12),
     },
     {
       id: "-NstubRecovery000002",
@@ -137,6 +147,8 @@ export function createStubRecoveryApi(now: () => number = Date.now, delayMs = 12
       contactPhone: "+256701987654",
       reason: "no_codes",
       createdAt: ago(20),
+      asks: 1,
+      lastAskedAt: ago(20),
     },
   ];
   const wait = () => new Promise((resolve) => setTimeout(resolve, delayMs));

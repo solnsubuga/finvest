@@ -33,6 +33,15 @@ export type RecoveryAsk = { phone: string; contactPhone: string; reason: Recover
 /** What checking a PIN said. Out of tries signs the phone out instead (`signed_out`). */
 export type PinCheck = { unlocked: boolean; triesLeft: number };
 
+/** What the PIN confirms on the phone app, as well as the checks these already have. */
+export type PinAction = "withdrawal" | "payout_account";
+
+/**
+ * What confirming with the PIN said. A right PIN gives `confirmation`, good once for that
+ * action from this phone, for three minutes. Out of tries signs the phone out (`signed_out`).
+ */
+export type PinConfirmation = { confirmed: boolean; triesLeft: number; confirmation: string | null };
+
 export type AuthErrorCode =
   | "invalid_credentials"
   /** The same refusal as `invalid_credentials`, for a log in by email. */
@@ -248,6 +257,11 @@ export interface AuthClient {
    * wrong one in a row fails with `signed_out`, and the client logs in again.
    */
   unlockWithPin(pin: string): Promise<PinCheck>;
+  /**
+   * Confirms one action with the PIN. Wrong PINs count with the ones typed to unlock, so the
+   * fifth wrong one in a row fails with `signed_out`.
+   */
+  confirmWithPin(pin: string, action: PinAction): Promise<PinConfirmation>;
 
   signOut(): Promise<void>;
 }

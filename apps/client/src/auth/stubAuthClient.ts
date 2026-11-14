@@ -6,6 +6,7 @@ import {
   LoginChallenge,
   Passkey,
   PinCheck,
+  PinConfirmation,
   SecondStep,
   Session,
   SignupChallenge,
@@ -192,6 +193,22 @@ export function createStubAuthClient(options: StubOptions = {}): AuthClient {
   const wait = () =>
     delayMs > 0 ? new Promise<void>((resolve) => setTimeout(resolve, delayMs)) : Promise.resolve();
 
+  /** Right, or one more wrong try; the fifth wrong one in a row signs out. */
+  const checkPin = (tried: string): PinCheck => {
+    currentAccount();
+    if (tried === pin) {
+      wrongPins = 0;
+      return { unlocked: true, triesLeft: MAX_WRONG_PINS };
+    }
+    wrongPins += 1;
+    if (wrongPins >= MAX_WRONG_PINS) {
+      signedIn = null;
+      pin = null;
+      throw new AuthError("signed_out");
+    }
+    return { unlocked: false, triesLeft: MAX_WRONG_PINS - wrongPins };
+  };
+
   const sessionFor = (phone: string, restricted: boolean): Session => {
     signedInRestricted = restricted;
     signedIn = phone;
@@ -352,18 +369,17 @@ export function createStubAuthClient(options: StubOptions = {}): AuthClient {
 
     async unlockWithPin(tried): Promise<PinCheck> {
       await wait();
-      currentAccount();
-      if (tried === pin) {
-        wrongPins = 0;
-        return { unlocked: true, triesLeft: MAX_WRONG_PINS };
-      }
-      wrongPins += 1;
-      if (wrongPins >= MAX_WRONG_PINS) {
-        signedIn = null;
-        pin = null;
-        throw new AuthError("signed_out");
-      }
-      return { unlocked: false, triesLeft: MAX_WRONG_PINS - wrongPins };
+      return checkPin(tried);
+    },
+
+    async confirmWithPin(tried, action): Promise<PinConfirmation> {
+      await wait();
+      const checked = checkPin(tried);
+      return {
+        confirmed: checked.unlocked,
+        triesLeft: checked.triesLeft,
+        confirmation: checked.unlocked ? `demo-${action}-${Date.now()}` : null,
+      };
     },
 
     async sendLoginCode(loginId, _channel): Promise<void> {

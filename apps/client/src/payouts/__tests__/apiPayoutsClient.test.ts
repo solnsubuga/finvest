@@ -142,6 +142,14 @@ describe("the payouts client for the real API", () => {
       account_number: "9030012344821",
       holder_name: "Amara Nakato",
     });
+    // A phone with a PIN sends its confirmation; a refusal for it says to enter the PIN again.
+    seen = serve(201, destination({ kind: "mobile_money", network: "mtn", bank_code: null }));
+    await client.addAccount({ kind: "mobile_money", phone: "+256772123456", holderName: "Amara Nakato", pinConfirmation: "token" });
+    expect(seen[0]!.body).toMatchObject({ pin_confirmation: "token" });
+    serve(428, refusal("pin_required"));
+    await expect(
+      client.addAccount({ kind: "mobile_money", phone: "+256772123456", holderName: "Amara Nakato", pinConfirmation: "old" }),
+    ).rejects.toMatchObject({ code: "pin_required" });
   });
 
   it("says why an account was refused", async () => {
