@@ -96,6 +96,10 @@ type Stored = {
   product: Product & Terms;
   amount: Amount;
   atMaturity: Investment["atMaturity"];
+  /** The account chosen to be paid at maturity. */
+  destinationId: string | null;
+  /** Set once a matured investment's money was sent. */
+  payoutId: string | null;
   createdAtMs: number;
   /** Set for the sample investments, which start already running. */
   startDate: string | null;
@@ -103,20 +107,23 @@ type Stored = {
   withdrawnAtMs: number | null;
 };
 
+/** The most mobile money takes in one payout, as the launch limits set it. */
+const MOBILE_MONEY_PER_PAYOUT = 5_000_000;
+
 /** Demo accounts: one ready, and one approved today, so still in its safety wait. */
 function demoAccounts(nowMs: number): PayoutAccount[] {
   return [
     {
       id: "demo-account-mtn",
       kind: "mobile_money",
-      label: "MTN 0772 *** 456",
+      label: "MTN +256 77• ••• 456",
       payableFrom: new Date(nowMs - 10 * DAY_MS).toISOString(),
       ready: true,
     },
     {
       id: "demo-account-bank",
       kind: "bank",
-      label: "Bank ****4821",
+      label: "Stanbic Bank •••• 4821",
       payableFrom: new Date(nowMs + DAY_MS / 2).toISOString(),
       ready: false,
     },
@@ -140,6 +147,8 @@ export type StubOptions = {
   accounts?: "default" | "none";
   /** True loses the answer to the first withdrawal request, to show that state. */
   loseFirstWithdrawal?: boolean;
+  /** True adds an investment that matured to be paid out with no account chosen, to show that state. */
+  maturedWaiting?: boolean;
 };
 
 export function createStubInvestingClient(options: StubOptions = {}): InvestingClient {
@@ -157,7 +166,13 @@ export function createStubInvestingClient(options: StubOptions = {}): InvestingC
 
   if (options.sample !== "empty") {
     const today = kampalaDay(now());
-    const seed = (code: string, minor: number, startedDaysAgo: number, atMaturity: Stored["atMaturity"]) => {
+    const seed = (
+      code: string,
+      minor: number,
+      startedDaysAgo: number,
+      atMaturity: Stored["atMaturity"],
+      destinationId: string | null = null,
+    ) => {
       const product = find(code) as Product & Terms;
       nextId += 1;
       const id = `demo-investment-${nextId}`;
@@ -166,13 +181,19 @@ export function createStubInvestingClient(options: StubOptions = {}): InvestingC
         product,
         amount: { currency: product.currency, minor },
         atMaturity,
+        destinationId,
+        payoutId: null,
         createdAtMs: now() - (startedDaysAgo + 1) * DAY_MS,
         startDate: addDays(today, -startedDaysAgo),
         withdrawnAtMs: null,
       });
     };
     seed("TREA-91", 5_000_000, 85, "roll_over");
-    seed("TREA-182", 2_000_000, 40, "pay_out");
+    seed("TREA-182", 2_000_000, 40, "pay_out", "demo-account-mtn");
+    if (options.maturedWaiting) {
+      // Its account was removed before it matured, so the money waits for the client to choose.
+      seed("TREA-91", 3_000_000, 93, "pay_out");
+    }
   }
 
   function startDate(entry: Stored): string | null {
@@ -217,6 +238,7 @@ export function createStubInvestingClient(options: StubOptions = {}): InvestingC
       ratePercent: product.ratePercent,
       termDays: product.termDays,
       atMaturity: entry.atMaturity,
+      payoutDestinationId: entry.atMaturity === "pay_out" ? entry.destinationId : null,
       canChangeMaturity: product.termDays !== null && (status === "awaiting_payment" || (status === "active" && maturity !== null && today < addDays(maturity, -1))),
       payBy: new Date(entry.createdAtMs + PAY_WINDOW_MS).toISOString(),
       startDate: start,
@@ -228,8 +250,8 @@ export function createStubInvestingClient(options: StubOptions = {}): InvestingC
       interestAtMaturity: atMaturityInterest === null ? null : money(atMaturityInterest),
       totalAtMaturity: atMaturityInterest === null ? null : money(amount.minor + atMaturityInterest),
       rolledIntoId: null,
-      payoutId: null,
-      waitingForDestination: false,
+      payoutId: entry.payoutId,
+      waitingForDestination: status === "matured" && entry.atMaturity === "pay_out" && entry.payoutId === null && entry.destinationId === null,
       canWithdraw: status === "active" && entry.withdrawnAtMs === null && (maturity === null || today < maturity),
       withdrawalRequestedAt: entry.withdrawnAtMs === null ? null : new Date(entry.withdrawnAtMs).toISOString(),
     };
@@ -296,6 +318,8 @@ export function createStubInvestingClient(options: StubOptions = {}): InvestingC
         product,
         amount: request.amount,
         atMaturity: product.termDays === null ? null : (request.atMaturity ?? "roll_over"),
+        destinationId: null,
+        payoutId: null,
         createdAtMs: now(),
         startDate: null,
         withdrawnAtMs: null,
@@ -365,6 +389,56 @@ export function createStubInvestingClient(options: StubOptions = {}): InvestingC
         loseNextWithdrawal = false;
         throw new InvestingError("unavailable");
       }
+      return view(entry);
+    },
+
+    async chooseAtMaturity(choice) {
+      await pause();
+      const entry = stored.get(choice.investmentId);
+      if (!entry) {
+        throw new InvestingError("not_found");
+      }
+      if (!view(entry).canChangeMaturity) {
+        throw new InvestingError("cannot_change_maturity");
+      }
+      if (choice.atMaturity === "pay_out") {
+        // Like the backend: any approved account, even one still in its first day.
+        const accounts = options.accounts === "none" ? [] : demoAccounts(now());
+        if (!accounts.some((account) => account.id === choice.destinationId)) {
+          throw new InvestingError("account_not_ready");
+        }
+      } else if (choice.destinationId !== null) {
+        throw new InvestingError("invalid");
+      }
+      entry.atMaturity = choice.atMaturity;
+      entry.destinationId = choice.destinationId;
+      return view(entry);
+    },
+
+    async payOutMatured(request) {
+      await pause();
+      const entry = stored.get(request.investmentId);
+      if (!entry) {
+        throw new InvestingError("not_found");
+      }
+      const shown = view(entry);
+      if (shown.payoutId !== null && entry.destinationId === request.destinationId) {
+        // The same account asked twice is the same payout.
+        return shown;
+      }
+      if (!shown.waitingForDestination) {
+        throw new InvestingError("already_sent");
+      }
+      const account = demoAccounts(now()).find((candidate) => candidate.id === request.destinationId);
+      if (!account || !account.ready) {
+        throw new InvestingError("account_not_ready");
+      }
+      if (account.kind === "mobile_money" && shown.value.minor > MOBILE_MONEY_PER_PAYOUT) {
+        throw new InvestingError("over_mobile_money_limit");
+      }
+      nextId += 1;
+      entry.payoutId = `demo-payout-${nextId}`;
+      entry.destinationId = request.destinationId;
       return view(entry);
     },
   };

@@ -20,7 +20,7 @@ Install a browser once with `pnpm exec playwright install chromium`, or point `P
 
 | App | Flow |
 | --- | --- |
-| Client | The welcome screen says the sign-in is a demo; signing up with a texted code and a password; a wrong password; signing in with an authenticator code, a wrong one first; paying for an investment by mobile money from the account's own number, from the prompt to the receipt |
+| Client | The welcome screen says the sign-in is a demo; signing up with a texted code and a password; a wrong password; signing in with an authenticator code, a wrong one first; paying for an investment by mobile money from the account's own number, from the prompt to the receipt; adding a mobile money number to be paid to, a wrong texted code first |
 | Console | A screen asked for before signing in goes to sign-in; a password and a passkey; a password and an authenticator code, a wrong one first; staff with no second step are refused; a role that may not open the dealing desk sees "You cannot open this screen"; a dealing order its preparer cannot approve |
 
 The sample sessions keep nothing between page loads, so a test moves between screens inside the app rather than loading an address afresh.

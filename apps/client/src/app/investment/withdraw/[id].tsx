@@ -1,5 +1,5 @@
 import { useCallback, useState } from "react";
-import { Pressable, StyleSheet, View } from "react-native";
+import { View } from "react-native";
 import { Stack, useLocalSearchParams, useRouter } from "expo-router";
 
 import { BackButton } from "@/components/BackButton";
@@ -7,15 +7,15 @@ import { Notice } from "@/components/Blocks";
 import { Button } from "@/components/Button";
 import { Screen } from "@/components/Screen";
 import { Eyebrow, Title, Txt } from "@/components/Txt";
+import { AccountPicker, firstChoosable, NoAccount } from "@/investing/AccountPicker";
 import { formatAmount } from "@/investing/format";
 import { useInvesting } from "@/investing/InvestingProvider";
 import { Failed } from "@/investing/Parts";
 import { describeInvestingError, Investment, InvestingError, PayoutAccount } from "@/investing/types";
 import { useLoaded } from "@/investing/useLoaded";
-import { formatDateTime } from "@/payments/format";
 import { newIdempotencyKey } from "@/payments/idempotency";
 import { DetailList, Loading } from "@/payments/Parts";
-import { colors, fontSizes, radii } from "@/theme";
+import { colors, fontSizes } from "@/theme";
 
 /**
  * Withdraw a running investment early. The client sees exactly what they will get, the
@@ -43,7 +43,7 @@ export default function Withdraw() {
   const [locked, setLocked] = useState(false);
 
   const accounts = loaded.state === "ready" ? loaded.value.accounts : [];
-  const firstReady = accounts.find((account) => account.ready)?.id ?? null;
+  const firstReady = firstChoosable(accounts);
   const destinationId = chosen ?? firstReady;
   const canConfirm = loaded.state === "ready" && loaded.value.investment.canWithdraw && destinationId !== null;
 
@@ -122,51 +122,12 @@ export default function Withdraw() {
                 : []),
             ]}
           />
-          <View style={{ gap: 8 }} accessibilityRole="radiogroup">
+          <View style={{ gap: 8 }}>
             <Eyebrow>Pay it to</Eyebrow>
             {accounts.length === 0 ? (
-              <Notice tone="warning">
-                You need an approved account to be paid to. Ask us in Help to add one, then come back.
-              </Notice>
+              <NoAccount />
             ) : (
-              accounts.map((account) => {
-                const isReady = account.ready;
-                const selected = isReady && account.id === destinationId;
-                const disabled = locked || !isReady;
-                return (
-                  <Pressable
-                    key={account.id}
-                    accessibilityRole="radio"
-                    accessibilityState={{ checked: selected, disabled }}
-                    accessibilityLabel={account.label}
-                    disabled={disabled}
-                    onPress={() => setChosen(account.id)}
-                    testID={`account-${account.id}`}
-                    style={({ pressed }) => [
-                      styles.option,
-                      selected && styles.selected,
-                      !isReady && styles.waiting,
-                      pressed && { opacity: 0.85 },
-                    ]}
-                  >
-                    <View style={[styles.radio, selected && styles.radioOn]} />
-                    <View style={{ flex: 1, gap: 2 }}>
-                      <Txt size={fontSizes.md} weight="bold">
-                        {account.label}
-                      </Txt>
-                      <Txt size={fontSizes.sm} color={colors.muted}>
-                        {isReady
-                          ? account.kind === "mobile_money"
-                            ? "Mobile money"
-                            : "Bank account"
-                          : account.payableFrom
-                            ? `New account. It can be paid from ${formatDateTime(account.payableFrom)}.`
-                            : "New account. It can be paid one day after it is approved."}
-                      </Txt>
-                    </View>
-                  </Pressable>
-                );
-              })
+              <AccountPicker accounts={accounts} chosen={destinationId} onChoose={setChosen} locked={locked} />
             )}
             {locked ? (
               <Txt size={fontSizes.xs} color={colors.muted}>
@@ -183,20 +144,3 @@ export default function Withdraw() {
     </Screen>
   );
 }
-
-const styles = StyleSheet.create({
-  option: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 12,
-    padding: 16,
-    borderRadius: radii.lg,
-    borderWidth: 1,
-    borderColor: colors.border,
-    backgroundColor: colors.surface,
-  },
-  selected: { borderColor: colors.black, borderWidth: 2, padding: 15 },
-  waiting: { opacity: 0.6 },
-  radio: { width: 20, height: 20, borderRadius: 10, borderWidth: 2, borderColor: colors.borderStrong },
-  radioOn: { borderColor: colors.black, borderWidth: 6 },
-});
