@@ -284,6 +284,19 @@ _RECORD_COLUMNS = (
 )
 
 
+async def is_active(session: AsyncSession, *, kind: str, idempotency_key: str) -> bool:
+    """Whether a job of this kind and key is waiting or running. The API may ask: it reads only
+    the kind, the key and the status, the columns it is granted."""
+    found = await session.scalar(
+        text(
+            "SELECT 1 FROM jobs WHERE kind = :kind AND idempotency_key = :key "
+            "AND status IN ('pending', 'running')"
+        ),
+        {"kind": kind, "key": idempotency_key},
+    )
+    return found is not None
+
+
 async def failed_jobs(session: AsyncSession, *, limit: int = 50) -> list[JobRecord]:
     """The failed-job queue, newest first."""
     rows = await session.execute(

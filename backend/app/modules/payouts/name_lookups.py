@@ -15,7 +15,7 @@ from typing import Any
 from sqlalchemy import Row, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.infrastructure.jobs import JobRequest, enqueue
+from app.infrastructure.jobs import JobRequest, enqueue, is_active
 from app.modules.kyc import service as kyc
 from app.modules.payouts import destinations
 from app.modules.payouts.destinations import DestinationView
@@ -143,17 +143,28 @@ async def check_again(
 
 
 async def name_check_for(
-    session: AsyncSession, view: DestinationView, clock: Clock
+    session: AsyncSession, view: DestinationView, clock: Clock, *, asking: bool = True
 ) -> NameCheck | None:
-    """For a mobile money number waiting for its name, where its lookup stands. Else None."""
+    """For a mobile money number waiting for its name, where its lookup stands. Else None.
+
+    `asking` is False while no provider reads names: the number waits, shown as `checking`, and
+    nothing is asked, so none of its lookups are used up.
+    """
     if view.kind is not DestinationKind.MOBILE_MONEY or (
         view.status is not DestinationStatus.AWAITING_PROOF
     ):
         return None
+    if not asking:
+        return NameCheck.CHECKING
     latest = await latest_lookup(session, view.id)
     if latest is None:
         return name_check(None, None, 0, clock.now())
-    return name_check(latest.status, latest.created_at, latest.number, clock.now())
+    deciding = latest.status is LookupStatus.FOUND and await is_active(
+        session, kind=DECIDE_KIND, idempotency_key=latest.id
+    )
+    return name_check(
+        latest.status, latest.created_at, latest.number, clock.now(), deciding=deciding
+    )
 
 
 async def latest_lookup(session: AsyncSession, destination_id: str) -> Lookup | None:
