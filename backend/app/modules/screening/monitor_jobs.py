@@ -42,7 +42,9 @@ class MonitoringJobs:
         async with self.database.actor_transaction(SYSTEM) as session:
             deposit = await payments.find_deposit(session, deposit_id)
         if deposit is None or deposit.status is not DepositStatus.CONFIRMED:
-            raise PermanentJobError(code="deposit_not_confirmed")
+            # Moved on before this ran: nothing to record, and nothing for a person to read.
+            await context.apply(_nothing)
+            return
         transaction = Transaction(
             deposit.id,
             Kind.DEPOSIT,
@@ -77,3 +79,7 @@ class MonitoringJobs:
             return {"recorded": opened is not None, "cases_opened": len(opened or [])}
 
         return record
+
+
+async def _nothing(session: AsyncSession) -> Mapping[str, object]:
+    return {"recorded": False, "cases_opened": 0}

@@ -4,12 +4,10 @@ Sanctions and politically exposed person (PEP) screening, transaction monitoring
 
 ## In short
 
-- Every client is screened when they hand in their identity check, again every 30 days once approved, and before a payout (built in the payout screening PR). The call at hand-in lands with the identity checks thread's next PR; until then a newly approved client's first screen comes from the nightly sweep.
-- Every client is screened when they hand in their identity check, again every 30 days once approved, and before a payout unless they were screened clear in the last 24 hours.
+- Every client is screened when they hand in their identity check, again every 30 days once approved, and before a payout unless they were screened clear in the last 24 hours. The call at hand-in lands with the identity checks thread's next PR; until then a newly approved client's first screen comes from the nightly sweep.
 - The provider is behind a port, so it can be swapped. The owner chose Sigma360. Until its account exists, no provider is set up and every screen is recorded as **not run**; the Compliance screen says screening is off.
 - A screen that finds a listed entity that may be the client opens a **case**. Two members of staff close it: one proposes the outcome, a different one approves it.
 - An entity already on a case for the client (still open, ruled out, accepted as a PEP, or confirmed as sanctioned) is recognised the next time and opens no new case.
-- An entity staff already ruled out for a client, or accepted as a PEP, is recognised the next time and opens no new case.
 - Every confirmed deposit and every payout is checked against monitoring rules, and a rule that fires opens a case the same way.
 - Clients never see any of this. Telling a client they matched a list could tip them off.
 
