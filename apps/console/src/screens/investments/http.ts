@@ -8,11 +8,10 @@
  */
 
 import type { InterestRunOut, StaffInvestmentOut } from "@finvest/api-client/staff";
-import { ApiError, apiBaseUrl, createHttp, type Http } from "@/api/http.ts";
+import { ApiError, type Http } from "@/api/http.ts";
 import {
   INVESTMENT_STATUSES,
   InvestmentsError,
-  notConnectedInvestmentsApi,
   type InterestRun,
   type Investment,
   type InvestmentsApi,
@@ -98,8 +97,3 @@ export function createHttpInvestmentsApi(http: Http): InvestmentsApi {
   };
 }
 
-/** The real API when the build names one, otherwise investments that say they are not connected. */
-export function connectedInvestmentsApi(): InvestmentsApi {
-  const base = apiBaseUrl();
-  return base ? createHttpInvestmentsApi(createHttp(base)) : notConnectedInvestmentsApi;
-}

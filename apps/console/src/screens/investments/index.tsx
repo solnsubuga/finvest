@@ -1,18 +1,22 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { apiBaseUrl, createHttp } from "@/api/http.ts";
 import { isStubAuth } from "@/auth/index.ts";
+import { emptyDirectory, type ClientCard, type Directory } from "@/directory/api.ts";
+import { createHttpDirectory } from "@/directory/http.ts";
 import { Button } from "@/components/ui/button.tsx";
 import { cn } from "@/lib.ts";
 import { PageHeader } from "@/pages/PageHeader.tsx";
 import { formatBps, formatDay, formatExact, formatStamp } from "../products/format.ts";
 import {
   investmentsErrorMessage,
+  notConnectedInvestmentsApi,
   type AtMaturity,
   type InterestRun,
   type Investment,
   type InvestmentStatus,
   type InvestmentsApi,
 } from "./api.ts";
-import { connectedInvestmentsApi } from "./http.ts";
+import { createHttpInvestmentsApi } from "./http.ts";
 import { createStubInvestmentsApi } from "./stub.ts";
 
 const SUMMARY = "Client investments, what they have earned so far, and the daily interest run.";
@@ -39,6 +43,8 @@ type Load =
 
 interface InvestmentsScreenProps {
   api: InvestmentsApi;
+  /** Names each client. Without it, a client shows as their ID. */
+  directory?: Directory;
   /** The Kampala business day, as a calendar date. */
   today?: () => string;
 }
@@ -51,18 +57,36 @@ function addDays(isoDate: string, days: number): string {
   return date.toISOString().slice(0, 10);
 }
 
-export function InvestmentsScreen({ api, today = kampalaToday }: InvestmentsScreenProps) {
+export function InvestmentsScreen({ api, directory = emptyDirectory, today = kampalaToday }: InvestmentsScreenProps) {
   const [tab, setTab] = useState<InvestmentStatus>("active");
   const [load, setLoad] = useState<Load>({ state: "loading" });
+  const [cards, setCards] = useState<Record<string, ClientCard | null>>({});
+  const asked = useRef(new Set<string>());
+
+  // Every client asked for in the same moment goes in one request (directory/http.ts batches them).
+  const lookUp = useCallback(
+    (clientIds: readonly string[]) => {
+      for (const clientId of new Set(clientIds)) {
+        if (asked.current.has(clientId)) continue;
+        asked.current.add(clientId);
+        void directory.client(clientId).then(
+          (card) => setCards((known) => ({ ...known, [clientId]: card })),
+          () => setCards((known) => ({ ...known, [clientId]: null })),
+        );
+      }
+    },
+    [directory],
+  );
 
   const fetchAll = useCallback(async (): Promise<Load> => {
     try {
       const [investments, runs] = await Promise.all([api.listInvestments(), api.interestRuns()]);
+      lookUp(investments.map((investment) => investment.clientId));
       return { state: "ready", investments, runs };
     } catch (error) {
       return { state: "failed", message: investmentsErrorMessage(error) };
     }
-  }, [api]);
+  }, [api, lookUp]);
 
   useEffect(() => {
     let current = true;
@@ -139,7 +163,7 @@ export function InvestmentsScreen({ api, today = kampalaToday }: InvestmentsScre
             <p className="m-0 text-md leading-normal text-muted">Investments appear here once a client reviews and confirms one in the app.</p>
           </section>
         ) : (
-          <InvestmentTable investments={shown} status={tab} />
+          <InvestmentTable investments={shown} status={tab} cards={cards} />
         )}
       </div>
       <RunHistory runs={load.runs} />
@@ -147,7 +171,14 @@ export function InvestmentsScreen({ api, today = kampalaToday }: InvestmentsScre
   );
 }
 
-function InvestmentTable({ investments, status }: { investments: readonly Investment[]; status: InvestmentStatus }) {
+interface InvestmentTableProps {
+  investments: readonly Investment[];
+  status: InvestmentStatus;
+  /** Each client's card once it is read. Null when it cannot be. */
+  cards: Readonly<Record<string, ClientCard | null>>;
+}
+
+function InvestmentTable({ investments, status, cards }: InvestmentTableProps) {
   const last = status === "awaiting_payment" ? "Pay by" : status === "matured" ? "What happened" : "At maturity";
   return (
     <div role="tabpanel" className="overflow-x-auto rounded-xl border border-border bg-surface">
@@ -165,8 +196,8 @@ function InvestmentTable({ investments, status }: { investments: readonly Invest
         <tbody>
           {investments.map((investment) => (
             <tr key={investment.id} className="border-t border-divider align-top tabular-nums">
-              <th scope="row" className="px-3 py-3 text-left font-mono text-sm font-bold whitespace-nowrap">
-                {investment.clientId}
+              <th scope="row" className="px-3 py-3 text-left font-normal">
+                <ClientName clientId={investment.clientId} card={cards[investment.clientId]} />
               </th>
               <td className="px-3 py-3">
                 <div className="font-bold whitespace-nowrap">{investment.productName}</div>
@@ -309,6 +340,17 @@ function RunHistory({ runs }: { runs: readonly InterestRun[] }) {
   );
 }
 
+/** The client's name and account number, or their ID until the card is read or when it cannot be. */
+function ClientName({ clientId, card }: { clientId: string; card: ClientCard | null | undefined }) {
+  if (!card) return <span className="font-mono text-sm font-bold whitespace-nowrap">{clientId}</span>;
+  return (
+    <>
+      <div className="font-bold whitespace-nowrap">{card.name}</div>
+      <div className="text-xs text-muted">{card.accountNumber ?? "No account number yet"}</div>
+    </>
+  );
+}
+
 function Row({ name, value, warn = false }: { name: string; value: string; warn?: boolean }) {
   return (
     <div className="flex justify-between gap-3 border-t border-divider pt-2.5 text-md">
@@ -320,10 +362,15 @@ function Row({ name, value, warn = false }: { name: string; value: string; warn?
 
 export default function InvestmentsPage() {
   // Sample investments under `pnpm dev` or a preview build, otherwise the real API. `?sample=empty` shows a new system.
-  const [api] = useState<InvestmentsApi>(() =>
-    isStubAuth()
-      ? createStubInvestmentsApi(new URLSearchParams(window.location.search).get("sample") === "empty" ? "empty" : "default")
-      : connectedInvestmentsApi(),
-  );
-  return <InvestmentsScreen api={api} />;
+  const [{ api, directory }] = useState<{ api: InvestmentsApi; directory: Directory }>(() => {
+    if (isStubAuth()) {
+      const sample = new URLSearchParams(window.location.search).get("sample") === "empty" ? "empty" : "default";
+      return { api: createStubInvestmentsApi(sample), directory: emptyDirectory };
+    }
+    const base = apiBaseUrl();
+    if (!base) return { api: notConnectedInvestmentsApi, directory: emptyDirectory };
+    const http = createHttp(base);
+    return { api: createHttpInvestmentsApi(http), directory: createHttpDirectory(http) };
+  });
+  return <InvestmentsScreen api={api} directory={directory} />;
 }

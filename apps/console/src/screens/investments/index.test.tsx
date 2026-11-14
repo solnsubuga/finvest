@@ -4,6 +4,7 @@ import { describe, expect, it } from "vitest";
 import { InvestmentsError, notConnectedInvestmentsApi, type InvestmentsApi } from "./api.ts";
 import { InvestmentsScreen } from "./index.tsx";
 import { createStubInvestmentsApi } from "./stub.ts";
+import { emptyDirectory, type Directory } from "@/directory/api.ts";
 
 const TODAY = "2026-11-13";
 
@@ -88,5 +89,26 @@ describe("investments screen", () => {
   it("says when it is not connected", async () => {
     renderInvestments(notConnectedInvestmentsApi);
     expect(await screen.findByRole("alert")).toHaveTextContent("not connected to the Finvest service yet");
+  });
+
+  it("names each client from the directory, asking once per client, and keeps the ID when a card cannot be read", async () => {
+    const asked: string[] = [];
+    const directory: Directory = {
+      ...emptyDirectory,
+      client: (clientId) => {
+        asked.push(clientId);
+        return Promise.resolve(
+          clientId === "-ClientSample0000001"
+            ? { clientId, name: "NAKATO Amara", accountNumber: "1001004827", verified: true, clientSince: "2026-10-10", status: "active" }
+            : null,
+        );
+      },
+    };
+    render(<InvestmentsScreen api={createStubInvestmentsApi()} directory={directory} today={() => TODAY} />);
+    await screen.findByText("NAKATO Amara");
+    const [first, second] = rows();
+    expect(first?.[0]).toBe("NAKATO Amara1001004827");
+    expect(second?.[0]).toBe("-ClientSample0000002");
+    expect(asked.filter((id) => id === "-ClientSample0000001")).toHaveLength(1);
   });
 });
