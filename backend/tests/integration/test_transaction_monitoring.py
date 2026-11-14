@@ -239,7 +239,7 @@ async def test_two_people_close_a_monitoring_case_with_a_report_owed(
     ]
     summary = (await api.http.get("/staff/compliance/summary")).json()
     assert summary["reports_to_fia_this_year"] == reported + 1
-    register = await api.http.get("/staff/compliance/cases.csv")
+    register = await api.http.post("/staff/compliance/cases.csv")
     assert register.status_code == 200, register.text
     assert register.headers["content-type"].startswith("text/csv")
     rows = register.text.split("\r\n")
@@ -253,7 +253,7 @@ async def test_the_rules_are_shown_as_they_run(api: Api) -> None:
     await api.staff("support")
     assert (await api.http.get("/staff/compliance/rules")).status_code == 403
     await api.staff("compliance")
-    assert (await api.http.get("/staff/compliance/cases.csv")).status_code == 200
+    assert (await api.http.post("/staff/compliance/cases.csv")).status_code == 200
     rules = (await api.http.get("/staff/compliance/rules")).json()
     assert rules["currency"] == "UGX"
     assert rules["large_deposit_minor"] == LARGE_AMOUNT

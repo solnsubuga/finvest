@@ -118,6 +118,12 @@ export type GoalsClient = {
   getGoal(goalId: string): Promise<Goal>;
   closeGoal(goalId: string): Promise<Goal>;
   /**
+   * Change the name, what it is for, the target or the date. Savings already made are not
+   * touched; a new target or date can move later savings to another product. The currency
+   * never changes. Sending the same details again changes nothing, so a retry is safe.
+   */
+  updateGoal(goalId: string, details: GoalDetails): Promise<Goal>;
+  /**
    * Confirm a saving: a new investment awaiting payment. Returns its ID, which
    * is what the pay screens pay for.
    */

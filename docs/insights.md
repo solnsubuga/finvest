@@ -13,7 +13,7 @@ What a client put in, earned and was paid, month by month, and what comes next f
 | Paid out in a month | Debits from the client's `client.payout_in_flight` accounts by `payout.settle` entries: money the provider confirmed reached the client's mobile money or bank account. Less credits to `client.payout_pending` by `payout.returned` entries, in the month the payout came back: a paid payout the bank or network sent back is not paid out. |
 | Invested now | The principal of the client's active investments. |
 | Earned so far | Interest earned after tax on those investments, as posted to the ledger. |
-| Coming up | The next five maturities, with what comes back after tax and whether it rolls over or pays out. |
+| Coming up | The next five things to happen to the client's money, soonest first, each with a `kind`: a `maturity` (what comes back after tax, and whether it rolls over or pays out), an `autoinvest_run` (the next payment an active automatic plan asks for), a `goal_saving` (the next monthly saving of a goal's saving rule, named by the goal) or a `goal_date` (an active goal's date, with its target). A paused plan asks for nothing and is left out. Read from the investments, autoinvest and goals modules' own views. |
 
 A month is a Kampala calendar month, counted by the effective date of each ledger entry. A daily interest run that posts several days late in one entry counts them in the month of the day it is dated.
 
@@ -43,6 +43,8 @@ No tax rate, tax amount or rate before tax. Interest comes only from the after-t
 
 The route opens the client's own transaction, so the ledger's row policies show only that client's accounts. `ledger.statements.client_month_totals` filters by the client too, so asking for another client's figures in a client transaction returns nothing. Staff and the system get `forbidden`: there is no staff view of a client's insights.
 
+Each item of `upcoming` has `kind`, `on`, `amount_minor`, and whichever of `investment_id`, `plan_id`, `goal_id`, `product_name`, `goal_name` and `at_maturity` its kind has; the rest are `null`. A goal's name is the client's own words.
+
 ## Not built yet
 
-Upcoming runs of automatic investing plans and goal due dates in "coming up". The client app screen runs on a demo until this route is deployed.
+The client app shows only maturities under "Coming up" until its screen shows the other kinds.

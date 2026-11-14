@@ -37,8 +37,6 @@ class PersonBody(Contract):
     relationship: Kin
     phone: str = Field(max_length=32)
     id_number: str = Field(max_length=40)
-    # Basis points: 10,000 is the whole. The shares of everyone named add up to 10,000.
-    share_bps: int
 
 
 class NextOfKinBody(Contract):
@@ -51,7 +49,6 @@ class PersonView(Contract):
     relationship: Relationship
     phone: str
     id_number: str
-    share_bps: int
 
 
 class NextOfKinView(Contract):
@@ -94,7 +91,6 @@ class StaffPersonView(Contract):
     relationship: Relationship
     phone: str
     id_number_masked: str
-    share_bps: int
 
 
 class StaffProfileView(Contract):
@@ -134,7 +130,6 @@ def _kin(found: next_of_kin.NextOfKin) -> NextOfKinView:
                 relationship=p.relationship,
                 phone=p.phone,
                 id_number=p.id_number,
-                share_bps=p.share_bps,
             )
             for p in found.people
         ],
@@ -178,7 +173,6 @@ def create_routers(sealer: Sealer | None) -> list[APIRouter]:
                 relationship=p.relationship,
                 phone=p.phone,
                 id_number=p.id_number,
-                share_bps=p.share_bps,
             )
             for p in body.people
         ]
@@ -236,7 +230,6 @@ def create_routers(sealer: Sealer | None) -> list[APIRouter]:
                     relationship=p.relationship,
                     phone=p.phone,
                     id_number_masked=mask_document_number(p.id_number),
-                    share_bps=p.share_bps,
                 )
                 for p in kin.people
             ]

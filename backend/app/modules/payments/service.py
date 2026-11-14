@@ -122,12 +122,15 @@ class Deposit:
     updated_at: datetime
     sent_at: datetime | None
     settled_at: datetime | None
+    # Set when two members of staff took back a deposit credited by mistake (reversals.py).
+    # It stays confirmed, but no longer counts as the investment's payment.
+    reversal_id: str | None = None
 
 
 _COLUMNS = (
     "id, client_id, purpose_type, purpose_id, method, provider, currency, amount_minor, "
     "payer_msisdn, status, code, provider_reference, ledger_entry_id, created_at, updated_at, "
-    "sent_at, settled_at"
+    "sent_at, settled_at, reversal_id"
 )
 _INSERT = text(
     "INSERT INTO payment_deposits (id, client_id, purpose_type, purpose_id, method, provider, "
@@ -140,15 +143,16 @@ _SELECT = text(f"SELECT {_COLUMNS} FROM payment_deposits WHERE id = :id")  # noq
 LIVE_INVESTMENT_INDEX = "uq_payment_deposits_live_investment"
 _HAS_LIVE = text(
     "SELECT 1 FROM payment_deposits WHERE purpose_type = :purpose_type "
-    "AND purpose_id = :purpose_id AND status <> 'failed' LIMIT 1"
+    "AND purpose_id = :purpose_id AND status <> 'failed' AND reversal_id IS NULL LIMIT 1"
 )
 _HAS_LIVE_ID = text(
     "SELECT id FROM payment_deposits WHERE purpose_type = :purpose_type "
-    "AND purpose_id = :purpose_id AND status <> 'failed' ORDER BY id DESC LIMIT 1"
+    "AND purpose_id = :purpose_id AND status <> 'failed' AND reversal_id IS NULL "
+    "ORDER BY id DESC LIMIT 1"
 )
 _SELECT_LIVE = text(
     "SELECT id, status FROM payment_deposits WHERE purpose_type = 'investment' "
-    "AND purpose_id = :purpose_id AND status <> 'failed' LIMIT 1"
+    "AND purpose_id = :purpose_id AND status <> 'failed' AND reversal_id IS NULL LIMIT 1"
 )
 _SELECT_LOCKED = text(
     f"SELECT {_COLUMNS} FROM payment_deposits WHERE id = :id FOR UPDATE"  # noqa: S608
@@ -280,6 +284,86 @@ async def request_deposit(
     return await get_deposit(session, deposit_id)
 
 
+async def request_system_deposit(
+    session: AsyncSession,
+    request: DepositRequest,
+    *,
+    client_id: str,
+    account_phone: str,
+    provider: str,
+    clock: Clock,
+) -> Deposit:
+    """Save a mobile money payment the worker asks for on a client's behalf, and its send job.
+
+    For a saving the client set going ahead of time, such as an automatic investing run, in the
+    worker's own transaction as the system. Nothing is sent here: the send job prompts the
+    payer, who approves on their phone as for any payment. `account_phone` is the number on the
+    client's account now, from identity, and the payer must still be that number.
+
+    Idempotent through the investment: while it has a deposit that has not failed, this raises
+    `DepositExists` with that deposit and saves nothing. The idempotency table belongs to
+    clients and staff, so the system has no key of its own here. Migration 0300 lets the worker
+    save only the start of a mobile money deposit for an investment.
+    """
+    if request.purpose is not Purpose.INVESTMENT:
+        raise ApplicationError("forbidden")
+    try:
+        check_mobile_money_amount(request.amount)
+        msisdn = normalise_msisdn(request.phone)
+        validate_push_id(request.purpose_id)
+        if msisdn != normalise_msisdn(account_phone):
+            raise InvalidDeposit("not_account_phone")
+    except InvalidDeposit as error:
+        field = "phone" if error.code in ("invalid_phone", "not_account_phone") else "amount"
+        raise ApplicationError(
+            "validation_failed", fields=[FieldProblem(field_path=[field], code=error.code)]
+        ) from None
+    now = clock.now()
+    deposit_id = push_id()
+    await insert_deposit(
+        session,
+        {
+            "id": deposit_id,
+            "client_id": client_id,
+            "purpose_type": request.purpose.value,
+            "purpose_id": request.purpose_id,
+            "method": request.network.value,
+            "provider": provider,
+            "currency": request.amount.currency.value,
+            "amount_minor": request.amount.minor,
+            "payer_msisdn": msisdn,
+            "status": DepositStatus.CREATED.value,
+            "now": now,
+        },
+    )
+    await record_event(session, deposit_id, None, DepositStatus.CREATED, None, "request", now)
+    await audit.record(
+        session,
+        AuditEvent(
+            category="change",
+            action="payments.deposit_requested",
+            resource_type=DEPOSIT_RESOURCE,
+            resource_id=deposit_id,
+            actor=AuditActor.system(),
+            details={"method": request.network.value},
+        ),
+        clock,
+    )
+    await enqueue(
+        session,
+        JobRequest(
+            kind=SEND_KIND,
+            idempotency_key=deposit_id,
+            payload={"deposit_id": deposit_id},
+            max_attempts=SEND_ATTEMPTS,
+            max_age=SEND_MAX_AGE,
+        ),
+        now=now,
+    )
+    logger.info("deposit_requested", deposit_id=deposit_id)
+    return await get_deposit(session, deposit_id)
+
+
 async def insert_deposit(session: AsyncSession, values: dict[str, object]) -> None:
     """Save a new deposit, or raise `DepositExists` if its investment already has a live one.
 
@@ -308,7 +392,8 @@ async def insert_deposit(session: AsyncSession, values: dict[str, object]) -> No
 
 
 async def has_live_deposit(session: AsyncSession, *, purpose: Purpose, purpose_id: str) -> bool:
-    """Whether a deposit that has not failed exists for this investment or goal.
+    """Whether a deposit that has not failed, and was not reversed, exists for this investment
+    or goal.
 
     For other modules, called as the system in the worker. True while a deposit is being sent,
     awaiting approval, uncertain or confirmed: money for this purpose has arrived or still may.
@@ -368,6 +453,40 @@ async def list_deposits(
             "before_id": before_id,
             "limit": max(1, min(limit, 200)),
         },
+    )
+    return [_deposit(row) for row in rows.all()]
+
+
+_CONFIRMED_AUTOMATICALLY = text(
+    "SELECT count(*) AS confirmed FROM payment_deposits "
+    "WHERE status = 'confirmed' AND method <> 'bank_transfer' "
+    "AND settled_at >= :since AND settled_at < :until"
+)
+
+
+async def confirmed_automatically(
+    session: AsyncSession, *, since: datetime, until: datetime
+) -> int:
+    """Mobile money deposits the provider confirmed from `since` up to `until`: money that
+    arrived and started its investment with no person involved. For the review queue's figures.
+    A staff transaction sees every deposit."""
+    row = (await session.execute(_CONFIRMED_AUTOMATICALLY, {"since": since, "until": until})).one()
+    return int(row.confirmed)
+
+
+_REQUESTED_BETWEEN = text(
+    f"SELECT {_COLUMNS} FROM payment_deposits "  # noqa: S608 - constant column list
+    "WHERE created_at >= :since AND created_at < :until ORDER BY created_at, id LIMIT :limit"
+)
+
+
+async def deposits_requested_between(
+    session: AsyncSession, *, since: datetime, until: datetime, limit: int
+) -> list[Deposit]:
+    """Deposits asked for from `since` up to `until`, oldest first, at most `limit`. For staff
+    reports: a staff transaction sees every deposit."""
+    rows = await session.execute(
+        _REQUESTED_BETWEEN, {"since": since, "until": until, "limit": max(1, limit)}
     )
     return [_deposit(row) for row in rows.all()]
 
@@ -527,6 +646,8 @@ async def apply_move(
         if paid_into is None:
             paid_into = _wallet(deposit, move.post.currency)
         entry_id = await _post_confirmed(session, deposit, move.post, paid_into, clock)
+        if move.charge is not None:
+            await _post_charge(session, deposit, move.charge, paid_into, clock)
     await session.execute(
         _UPDATE,
         {
@@ -625,6 +746,11 @@ async def schedule_status_read(
     )
 
 
+# The names the expense accounts already carry: reconciliation opened `fees.provider.iotec` as
+# "ioTec fees" for sweeps between pots, and the ledger finds an account by its code.
+_PROVIDER_NAMES = {"iotec": "ioTec"}
+
+
 def _wallet(deposit: Deposit, currency: Currency) -> AccountSpec:
     if deposit.network is None:
         raise RuntimeError("A bank transfer is posted to the bank account it was found in")
@@ -667,6 +793,41 @@ async def _post_confirmed(
         clock,
     )
     return entry.id
+
+
+async def _post_charge(
+    session: AsyncSession, deposit: Deposit, charge: Money, paid_from: AccountSpec, clock: Clock
+) -> None:
+    """The provider's charge for this deposit, taken from our wallet, as Finvest's own cost.
+
+    It is its own entry beside the deposit's, so the deposit's entry still shows the client's
+    whole payment arriving, as the provider's statement does. The charge is already rounded up
+    to a whole shilling, so a fractional charge leaves the wallet a little under the ledger, and
+    that shows as a difference at reconciliation (decided by the owner, 2026-11-14).
+    """
+    wallet = await ledger.open_account(session, paid_from, clock)
+    fees = await ledger.open_account(
+        session,
+        AccountSpec(
+            f"fees.provider.{deposit.provider}",
+            AccountKind.EXPENSE,
+            charge.currency,
+            f"{_PROVIDER_NAMES.get(deposit.provider, deposit.provider)} fees",
+        ),
+        clock,
+    )
+    await ledger.post_entry(
+        session,
+        EntryDraft(
+            entry_type="payment.provider_charge",
+            effective_date=business_date(clock.now()),
+            lines=(debit(fees.id, charge), credit(wallet.id, charge)),
+            idempotency_key=f"deposit-charge:{deposit.id}",
+            source_type="payment.deposit",
+            source_id=deposit.id,
+        ),
+        clock,
+    )
 
 
 async def record_event(
@@ -715,6 +876,7 @@ def _deposit(row: Row[Any]) -> Deposit:
         updated_at=row.updated_at,
         sent_at=row.sent_at,
         settled_at=row.settled_at,
+        reversal_id=row.reversal_id,
     )
 
 

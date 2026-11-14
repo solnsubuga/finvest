@@ -17,6 +17,8 @@ const SIGNED_IN = [
   "/invest",
   "/goals",
   "/goals/new",
+  "/goals/demo-goal-1",
+  "/goals/edit/demo-goal-1",
   "/insights",
   "/documents",
   "/help",

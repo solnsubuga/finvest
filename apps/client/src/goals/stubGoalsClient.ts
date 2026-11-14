@@ -303,6 +303,24 @@ export function createStubGoalsClient(options: StubOptions = {}): GoalsClient {
       return view(own(goalId));
     },
 
+    async updateGoal(goalId, details) {
+      await pause();
+      const goal = own(goalId);
+      if (goal.status !== "active") {
+        throw new GoalError("closed");
+      }
+      if (details.target.currency !== goal.details.target.currency) {
+        throw new GoalError("invalid");
+      }
+      const cleaned = check(details);
+      const moved =
+        cleaned.target.minor !== goal.details.target.minor || cleaned.targetDate !== goal.details.targetDate;
+      const productCode = moved ? productFor(cleaned) : goal.productCode;
+      goal.details = cleaned;
+      goal.productCode = productCode;
+      return view(goal);
+    },
+
     async closeGoal(goalId) {
       await pause();
       const goal = own(goalId);

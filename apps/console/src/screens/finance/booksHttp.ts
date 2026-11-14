@@ -1,6 +1,6 @@
 import type { Http } from "@/api/http.ts";
 import type { Amount, Currency } from "./api.ts";
-import { toBooksError, type BookLine, type Books, type BooksApi, type Days } from "./books.ts";
+import { toBooksError, type BookLine, type Books, type BooksApi, type Days, type FormatOption, type JournalFormat } from "./books.ts";
 
 interface DaysJson {
   date_from: string;
@@ -30,7 +30,9 @@ interface BooksJson {
     exported_by: string;
     exported_by_name: string | null;
     exported_at: string;
+    format: JournalFormat;
   })[];
+  formats: FormatOption[];
 }
 
 export function toBooks(json: BooksJson): Books {
@@ -67,12 +69,16 @@ export function toBooks(json: BooksJson): Books {
       exportedBy: e.exported_by,
       exportedByName: e.exported_by_name,
       exportedAt: e.exported_at,
+      format: e.format,
     })),
+    formats: json.formats.map((f) => ({ format: f.format, name: f.name, ready: f.ready, unmapped: f.unmapped, currencies: f.currencies })),
   };
 }
 
-export function journalFilename(currency: Currency, { dateFrom, dateTo }: Days): string {
-  return `finvest-journal-${currency.toLowerCase()}-${dateFrom}${dateFrom === dateTo ? "" : `-to-${dateTo}`}.csv`;
+/** The server's own name for the file: `finvest-journal-xero-ugx-2026-11-12.csv`. */
+export function journalFilename(currency: Currency, { dateFrom, dateTo }: Days, format: JournalFormat = "csv"): string {
+  const system = format === "csv" ? "" : `-${format}`;
+  return `finvest-journal${system}-${currency.toLowerCase()}-${dateFrom}${dateFrom === dateTo ? "" : `-to-${dateTo}`}.csv`;
 }
 
 export function createHttpBooksApi(http: Http): BooksApi {
@@ -89,12 +95,14 @@ export function createHttpBooksApi(http: Http): BooksApi {
       call(async () =>
         toBooks(await http.request<BooksJson>("GET", `/staff/finance?${currencyQuery(currency)}&month=${encodeURIComponent(month)}`)),
       ),
-    exportJournal: (currency, days) =>
+    // A POST: the server records every export as it answers.
+    exportJournal: (currency, days, format) =>
       call(async () => ({
-        file: await http.download(
-          `/staff/finance/journal.csv?${currencyQuery(currency)}&date_from=${encodeURIComponent(days.dateFrom)}&date_to=${encodeURIComponent(days.dateTo)}`,
-        ),
-        filename: journalFilename(currency, days),
+        file: await http.download("/staff/finance/journal.csv", {
+          method: "POST",
+          body: { currency, date_from: days.dateFrom, date_to: days.dateTo, format },
+        }),
+        filename: journalFilename(currency, days, format),
       })),
   };
 }

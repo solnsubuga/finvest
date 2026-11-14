@@ -151,4 +151,25 @@ describe("goals", () => {
     await fireEvent.press(screen.getByTestId("save-continue"));
     expect(await screen.findByText("Pay UGX 250,000")).toBeTruthy();
   });
+
+  it("changes a goal's name and target from its detail screen", async () => {
+    await signIn("772123456");
+    await screen.findByText("Welcome, Amara");
+    await fireEvent.press(screen.getByLabelText("Goals"));
+    await fireEvent.press(await screen.findByText("Emergency fund"));
+    await fireEvent.press(await screen.findByTestId("goal-edit"));
+    expect(await screen.findByText("Change your goal")).toBeTruthy();
+    expect(screen.getByTestId("goal-edit-name").props.value).toBe("Emergency fund");
+
+    await fireEvent.changeText(screen.getByTestId("goal-edit-name"), " ");
+    await fireEvent.press(screen.getByTestId("goal-edit-save"));
+    expect(await screen.findByText("Give your goal a name.")).toBeTruthy();
+
+    await fireEvent.changeText(screen.getByTestId("goal-edit-name"), "Rainy day fund");
+    await fireEvent.changeText(screen.getByTestId("goal-edit-target"), "2500000");
+    await fireEvent.press(screen.getByTestId("goal-edit-when-12"));
+    await fireEvent.press(screen.getByTestId("goal-edit-save"));
+    expect(await screen.findByText("Rainy day fund")).toBeTruthy();
+    expect(screen.getByText("Needed by")).toBeTruthy();
+  });
 });

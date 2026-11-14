@@ -9,6 +9,7 @@ from app.infrastructure.database import Database
 from app.modules.identity.api import CurrentClient
 from app.modules.insights import service
 from app.modules.insights.domain.months import DEFAULT_MONTHS, MAX_MONTHS
+from app.modules.insights.service import UpcomingKind
 from app.modules.investments.domain.investments import AtMaturity
 from app.shared.clock import Clock
 from app.shared.contracts import Contract, PushId
@@ -30,9 +31,16 @@ class MonthView(Contract):
 
 
 class UpcomingView(Contract):
+    """One thing coming up. `amount_minor` is, by `kind`: what a maturity pays back after tax,
+    what a run or a goal saving asks for, or a goal's target."""
+
+    kind: UpcomingKind
     on: date
-    investment_id: PushId
-    product_name: str
+    investment_id: PushId | None
+    plan_id: PushId | None
+    goal_id: PushId | None
+    product_name: str | None
+    goal_name: str | None
     at_maturity: AtMaturity | None
     amount_minor: int
 
@@ -76,9 +84,13 @@ async def client_insights(
         earned_so_far_minor=insights.earned_so_far.minor,
         upcoming=[
             UpcomingView(
+                kind=item.kind,
                 on=item.on,
                 investment_id=item.investment_id,
+                plan_id=item.plan_id,
+                goal_id=item.goal_id,
                 product_name=item.product_name,
+                goal_name=item.goal_name,
                 at_maturity=item.at_maturity,
                 amount_minor=item.amount.minor,
             )

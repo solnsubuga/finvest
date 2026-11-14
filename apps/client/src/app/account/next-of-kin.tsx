@@ -11,7 +11,6 @@ import { Icon } from "@/components/Icon";
 import { Screen } from "@/components/Screen";
 import { Eyebrow, Title, Txt } from "@/components/Txt";
 import { useProfile } from "@/profile/ProfileProvider";
-import { bpsToPercent, evenShares, percentToBps } from "@/profile/shares";
 import { describeProfileError, Person, ProfileError, Relationship, RELATIONSHIPS } from "@/profile/types";
 import { colors, fontSizes, radii } from "@/theme";
 
@@ -28,7 +27,6 @@ type Draft = {
   /** National digits as typed, without +256. */
   phone: string;
   idNumber: string;
-  share: string;
 };
 
 const WORDS = {
@@ -38,14 +36,13 @@ const WORDS = {
   your_own_number: "This is your own number. Give theirs.",
   invalid_id_number: "Write their ID number, letters and digits only.",
   named_twice: "This person is already on your list.",
-  invalid_share: "Give a share between 0.01% and 100%.",
 } as const;
 const FIELD_WORDS: Readonly<Record<string, string | undefined>> = WORDS;
 
 const relationshipLabel = (value: Relationship) =>
   RELATIONSHIPS.find((item) => item.value === value)?.label ?? "Someone else";
 
-/** Profile, Next of kin: who we contact if we cannot reach the client, and their shares. */
+/** Profile, Next of kin: who we contact if we cannot reach the client. Contacts only, with no share. */
 export default function NextOfKinScreen() {
   const profile = useProfile();
   const [state, setState] = useState<State>({ status: "loading" });
@@ -88,8 +85,6 @@ export default function NextOfKinScreen() {
           const match = /^people\.(\d+)\.(\w+)$/.exec(problem.field);
           if (match?.[2] && Number(match[1]) === index) {
             mine[match[2]] = FIELD_WORDS[problem.code] ?? "Check this.";
-          } else if (problem.code === "shares_must_total_100") {
-            other = "Shares must add up to 100%. Change the shares so they do.";
           } else {
             other = "Some details on your list need fixing.";
           }
@@ -107,9 +102,7 @@ export default function NextOfKinScreen() {
   const startAdding = () => {
     setDraftErrors({});
     setNote(null);
-    // A new person takes an even share, and everyone's shares are shared out again.
-    const share = bpsToPercent(evenShares(people.length + 1).at(-1) ?? 10_000).replace("%", "");
-    setEditing({ index: null, draft: { fullName: "", relationship: null, phone: "", idNumber: "", share } });
+    setEditing({ index: null, draft: { fullName: "", relationship: null, phone: "", idNumber: "" } });
   };
 
   const startEditing = (index: number) => {
@@ -124,7 +117,6 @@ export default function NextOfKinScreen() {
         relationship: person.relationship,
         phone: person.phone.startsWith("+256") ? person.phone.slice(4) : person.phone,
         idNumber: person.idNumber,
-        share: bpsToPercent(person.shareBps).replace("%", ""),
       },
     });
   };
@@ -138,43 +130,22 @@ export default function NextOfKinScreen() {
     const phone = toE164(draft.phone);
     if (!phone) problems.phone = WORDS.invalid_phone;
     if (!/^[A-Za-z0-9 -]{5,40}$/.test(draft.idNumber.trim())) problems.id_number = WORDS.invalid_id_number;
-    const share = percentToBps(draft.share);
-    if (share === null) problems.share_bps = WORDS.invalid_share;
     setDraftErrors(problems);
-    if (Object.keys(problems).length || !phone || share === null || !draft.relationship) return;
+    if (Object.keys(problems).length || !phone || !draft.relationship) return;
     const person: Person = {
       fullName: draft.fullName.trim(),
       relationship: draft.relationship,
       phone,
       idNumber: draft.idNumber.trim(),
-      shareBps: share,
     };
-    let next: Person[];
-    if (index === null) {
-      // Adding someone shares everyone else's part out evenly with the new share.
-      const rest = evenShares(people.length).map((bps) => Math.floor((bps * (10_000 - share)) / 10_000));
-      const spare = 10_000 - share - rest.reduce((sum, bps) => sum + bps, 0);
-      next = [...people.map((p, i) => ({ ...p, shareBps: (rest[i] ?? 0) + (i === 0 ? spare : 0) })), person];
-      if (next.some((p) => p.shareBps < 1)) {
-        setDraftErrors({ share_bps: "Leave some share for the others, or remove someone first." });
-        return;
-      }
-    } else {
-      next = people.map((p, i) => (i === index ? person : p));
-    }
+    const next = index === null ? [...people, person] : people.map((p, i) => (i === index ? person : p));
     void save(next, index === null ? `${person.fullName} is on your list.` : "Saved.");
   };
 
   const remove = (index: number) => {
     const left = people.filter((_, i) => i !== index);
-    const shares = evenShares(left.length);
-    void save(
-      left.map((p, i) => ({ ...p, shareBps: shares[i] ?? 0 })),
-      left.length ? "Removed. The others now share it evenly." : "Removed. Your list is empty.",
-    );
+    void save(left, left.length ? "Removed." : "Removed. Your list is empty.");
   };
-
-  const total = people.reduce((sum, p) => sum + p.shareBps, 0);
 
   return (
     <Screen signedIn>
@@ -220,9 +191,6 @@ export default function NextOfKinScreen() {
                         {relationshipLabel(person.relationship)}, {formatE164(person.phone)}
                       </Txt>
                     </View>
-                    <Txt size={fontSizes.sm} weight="bold">
-                      {bpsToPercent(person.shareBps)}
-                    </Txt>
                     <Icon name="chevron" size={16} strokeWidth={2.2} />
                   </Pressable>
                 </View>
@@ -241,8 +209,8 @@ export default function NextOfKinScreen() {
 
           <View style={styles.info}>
             <Txt size={fontSizes.sm}>
-              Shares must add up to 100%{people.length ? ` (now ${bpsToPercent(total)})` : ""}. Each person needs a
-              mobile number and their ID number, so we can confirm who they are.
+              Each person needs a mobile number and their ID number, so we can confirm who they are. Naming
+              someone here does not give them anything you hold.
             </Txt>
           </View>
 
@@ -301,20 +269,6 @@ export default function NextOfKinScreen() {
                   hint="The NIN on their national ID, or their passport number"
                   error={draftErrors.id_number}
                   testID="kin-id"
-                />
-                <TextField
-                  label="Their share, in %"
-                  value={editing.draft.share}
-                  onChangeText={(share) => setEditing({ ...editing, draft: { ...editing.draft, share } })}
-                  keyboardType="decimal-pad"
-                  inputMode="decimal"
-                  hint={
-                    editing.index === null && people.length
-                      ? "Everyone else shares what is left evenly. You can change each share after."
-                      : undefined
-                  }
-                  error={draftErrors.share_bps}
-                  testID="kin-share"
                 />
                 <Button
                   label={editing.index === null ? "Add this person" : "Save changes"}

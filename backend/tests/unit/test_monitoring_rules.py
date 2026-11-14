@@ -270,3 +270,58 @@ def test_the_median_is_the_lower_middle(amounts: list[int], middle: int) -> None
 def test_there_is_no_median_of_nothing() -> None:
     with pytest.raises(ValueError):
         median_minor([])
+
+
+# Client-to-client transfers ---------------------------------------------------------------
+
+
+@pytest.mark.parametrize("kind", [Kind.DEPOSIT, Kind.TRANSFER_RECEIVED])
+def test_money_received_by_transfer_counts_as_a_deposit(kind: Kind) -> None:
+    assert rules(tx(LARGE_AMOUNT, kind=kind)) == {Rule.LARGE_DEPOSIT}
+    assert rules(tx(LARGE_AMOUNT - 1, kind=kind)) == set()
+
+
+@pytest.mark.parametrize("kind", [Kind.PAYOUT, Kind.TRANSFER_SENT])
+def test_money_sent_by_transfer_counts_as_a_payout(kind: Kind) -> None:
+    earlier = [tx(QUICK_FLOOR, ago=timedelta(days=1))]
+    assert rules(tx(QUICK_FLOOR // 2, kind=kind), earlier) == {Rule.QUICK_WITHDRAWAL}
+    assert rules(tx(QUICK_FLOOR // 2 - 1, kind=kind), earlier) == set()
+
+
+def test_money_sent_by_transfer_never_counts_as_money_in() -> None:
+    assert rules(tx(LARGE_AMOUNT, kind=Kind.TRANSFER_SENT)) == set()
+    sent_before = [tx(QUICK_FLOOR * 4, kind=Kind.TRANSFER_SENT, ago=timedelta(days=1))]
+    assert rules(tx(QUICK_FLOOR, kind=Kind.PAYOUT), sent_before) == set()
+    assert (
+        rules(tx(LARGE_AMOUNT - 1), [tx(1, kind=Kind.TRANSFER_SENT, ago=timedelta(hours=1))])
+        == set()
+    )
+
+
+def test_a_transfer_in_and_a_deposit_add_up_to_a_split() -> None:
+    half = LARGE_AMOUNT // 2
+    received = tx(half, kind=Kind.TRANSFER_RECEIVED, ago=timedelta(days=1), id="transfer-1")
+    deposit = tx(LARGE_AMOUNT - half, id="deposit-1")
+    (alert,) = evaluate(CLIENT, deposit, [received])
+    assert alert.rule is Rule.SPLIT_DEPOSITS
+    assert alert.detail["deposit_ids"] == ["transfer-1", "deposit-1"]
+    assert alert.detail["transfer_ids"] == ["transfer-1"]
+
+
+def test_a_quick_transfer_out_names_the_transfers_it_saw() -> None:
+    came_in = [
+        tx(QUICK_FLOOR, kind=Kind.TRANSFER_RECEIVED, ago=timedelta(days=2), id="transfer-in"),
+        tx(QUICK_FLOOR, ago=timedelta(days=1), id="deposit-1"),
+    ]
+    (alert,) = evaluate(
+        CLIENT, tx(QUICK_FLOOR, kind=Kind.TRANSFER_SENT, id="transfer-out"), came_in
+    )
+    assert alert.rule is Rule.QUICK_WITHDRAWAL
+    assert alert.detail["payout_id"] == "transfer-out"
+    assert alert.detail["deposits_minor"] == 2 * QUICK_FLOOR
+    assert alert.detail["transfer_ids"] == ["transfer-in", "transfer-out"]
+
+
+def test_an_alert_with_no_transfer_names_none() -> None:
+    (alert,) = evaluate(CLIENT, tx(LARGE_AMOUNT), [])
+    assert "transfer_ids" not in alert.detail
