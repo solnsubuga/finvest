@@ -438,3 +438,40 @@ async def test_deciding_needs_a_recent_second_step(api: Api) -> None:
         late = await checker.post(url, json={"decision": "approved", "reason": "Fine"})
         assert late.status_code == 403
         assert late.json()["error"]["code"] == "confirm_it_is_you"
+
+
+async def test_staff_use_the_console_only_from_an_office_network_once_one_is_set(
+    api: Api,
+) -> None:
+    office = [{"network": "196.43.130.0/24", "label": "Head office"}]
+    await set_setting(api.database, "office_networks", office, api.clock, address="196.43.130.9")
+    async with api.http("196.43.130.20") as inside, api.http("41.210.140.5") as outside:
+        staff = await api.staff(inside)
+        assert (await inside.get("/staff/session")).status_code == 200
+        issued = await api.identity.issue_session(staff, second_step="passkey", transport="cookie")
+        outside.cookies.set(COOKIES["staff"], issued.token)
+        outside.headers["Origin"] = STAFF_ORIGIN
+        refused = await outside.get("/staff/session")
+        assert refused.status_code == 403
+        assert refused.json()["error"]["fields"] == [
+            {"field_path": ["network"], "code": "outside_office_network"}
+        ]
+        # The same session still works from the office: being refused did not end it.
+        assert (await inside.get("/staff/session")).status_code == 200
+
+
+async def test_a_shorter_idle_time_ends_staff_sessions_idle_for_longer(api: Api) -> None:
+    async with api.http() as http:
+        await api.staff(http)
+        api.clock.advance(minutes=12)
+        assert (await http.get("/staff/session")).status_code == 200
+        await set_setting(api.database, "staff_idle_minutes", 10, api.clock)
+        api.clock.advance(minutes=9)
+        assert (await http.get("/staff/session")).status_code == 200
+        api.clock.advance(minutes=11)
+        assert (await http.get("/staff/session")).status_code == 401
+    # A new session is given the approved idle time from the start.
+    async with api.http() as http:
+        await api.staff(http)
+        api.clock.advance(minutes=11)
+        assert (await http.get("/staff/session")).status_code == 401
