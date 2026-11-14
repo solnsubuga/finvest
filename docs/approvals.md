@@ -52,6 +52,7 @@ The inbox only reads. Deciding happens on the owning module's own route, which c
 | `investment_run` | investments `list_runs`, proposed. The subject is the run and its day, such as `interest 2026-11-13`. | `investments.view` | `investment_corrections.change` |
 | `investment_transfer` | investments `held_transfers`: a proposal to let through an investment sent to another client that was held because it is large. The subject is the transfer's ID. | `review_queue.view` | `investment_transfers.change` |
 | `organisation` | organisations `waiting`: an application for a company or group account that one member of staff checked. The subject is the kind (`company` or `group`), never a name. See [organisations.md](organisations.md). | `review_queue.view` | `organisations.review` |
+| `client_pin_reset` | console `actions.waiting`, kind `pin_reset`. The subject is the client's ID. See [client-accounts.md](client-accounts.md#acting-for-a-client). | `clients.view` | `client_pins.reset` |
 | `tax_remittance` | tax `service.waiting`: a payment to URA recorded, not yet approved. The subject is the month and currency, never the amount. | `finance.view` | `tax_remittances.change` |
 
 Where a module has no separate deciding permission, the screen's own is used.
