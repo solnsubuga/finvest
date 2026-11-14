@@ -42,7 +42,8 @@ from app.modules.payments.jobs import DepositJobs
 from app.modules.payments.settings import PaymentsSettings
 from app.modules.payments.wiring import collections_provider
 from app.modules.payouts.jobs import PayoutJobs, release_screened
-from app.modules.payouts.wiring import disbursements_provider
+from app.modules.payouts.name_lookup_jobs import NameLookupJobs
+from app.modules.payouts.wiring import PayoutNameSettings, disbursements_provider
 from app.modules.screening.domain.provider import ScreeningSubject
 from app.modules.screening.jobs import ScreeningJobs
 from app.modules.screening.monitor_jobs import MonitoringJobs
@@ -130,6 +131,10 @@ def handlers(
     disbursements = disbursements_provider(PaymentsSettings(), clock)
     if disbursements is not None:
         kinds.update(PayoutJobs(database, disbursements, clock).handlers())
+    names = PayoutNameSettings().provider()
+    if names is not None:
+        # Without a provider, a mobile money number waits for its name and its lookup waits.
+        kinds.update(NameLookupJobs(database, names, clock).handlers())
     kinds.update(
         notification_jobs.handlers(
             database,

@@ -1450,7 +1450,7 @@ export const Network = z.enum(["mtn", "airtel"]);
 export type Network = z.infer<typeof Network>;
 
 export const NewCheck = z.object({
-  proof_name: z.string(),
+  proof_name: z.string().nullable().optional(),
   reason: z.string(),
   statement_date: z.string().nullable().optional(),
 });
@@ -2201,10 +2201,11 @@ export const StaffDestinationDetail = z.object({
   id_name: z.string().nullable(),
   kind: z.enum(["mobile_money", "bank"]),
   network: z.enum(["mtn", "airtel"]).nullable(),
+  network_name: z.string().nullable(),
   payable_from: z.string().nullable(),
   proof_kind: z.enum(["bank_statement", "bank_letter", "bank_card", "network_registered_name"]).nullable(),
   proof_link: ProofLinkOut.nullable(),
-  rejection_reason: z.enum(["name_different", "proof_unreadable", "proof_too_old", "proof_wrong_account", "proof_wrong_document", "suspected_fraud"]).nullable(),
+  rejection_reason: z.union([z.enum(["name_different", "proof_unreadable", "proof_too_old", "proof_wrong_account", "proof_wrong_document", "suspected_fraud"]), z.literal("network_name_unavailable")]).nullable(),
   status: z.enum(["awaiting_code", "awaiting_proof", "in_review", "approved", "rejected", "removed"]),
 });
 export type StaffDestinationDetail = z.infer<typeof StaffDestinationDetail>;
@@ -2221,9 +2222,10 @@ export const StaffDestinationOut = z.object({
   id: z.string(),
   kind: z.enum(["mobile_money", "bank"]),
   network: z.enum(["mtn", "airtel"]).nullable(),
+  network_name: z.string().nullable(),
   payable_from: z.string().nullable(),
   proof_kind: z.enum(["bank_statement", "bank_letter", "bank_card", "network_registered_name"]).nullable(),
-  rejection_reason: z.enum(["name_different", "proof_unreadable", "proof_too_old", "proof_wrong_account", "proof_wrong_document", "suspected_fraud"]).nullable(),
+  rejection_reason: z.union([z.enum(["name_different", "proof_unreadable", "proof_too_old", "proof_wrong_account", "proof_wrong_document", "suspected_fraud"]), z.literal("network_name_unavailable")]).nullable(),
   status: z.enum(["awaiting_code", "awaiting_proof", "in_review", "approved", "rejected", "removed"]),
 });
 export type StaffDestinationOut = z.infer<typeof StaffDestinationOut>;

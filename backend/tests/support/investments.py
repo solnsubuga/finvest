@@ -10,7 +10,7 @@ from app.modules.investments.holdings import AWAITING_START
 from app.modules.ledger import service as ledger
 from app.modules.ledger.domain.entries import AccountKind, AccountSpec, EntryDraft, credit, debit
 from app.modules.payouts import destinations
-from app.modules.payouts.domain.destinations import MobileMoneyNumber, ProofKind
+from app.modules.payouts.domain.destinations import MobileMoneyNumber
 from app.shared.actors import SYSTEM, Actor
 from app.shared.business_day import business_date
 from app.shared.clock import Clock
@@ -19,7 +19,7 @@ from tests.support.clock import FakeClock
 from tests.support.kyc import verify
 from tests.support.ledger import client as new_client
 from tests.support.ledger import key, ugx
-from tests.support.payouts import approve_by_two
+from tests.support.payouts import approve_by_two, name_from_network
 
 
 class _Present(FakeClock):
@@ -166,8 +166,6 @@ async def approved_destination(
             session, client, MobileMoneyNumber.parse(number), "Sarah Nakato", clock
         )
         await destinations.confirm_code(session, client, view.id, clock)
-        await destinations.submit_proof(
-            session, client, view.id, ProofKind.NETWORK_REGISTERED_NAME, "doc-1", clock
-        )
+    await name_from_network(app_database, view.id, clock)
     await approve_by_two(app_database, view.id, clock)
     return view.id
