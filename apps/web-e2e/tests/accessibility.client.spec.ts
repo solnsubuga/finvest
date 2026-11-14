@@ -211,7 +211,7 @@ test("confirming a new payout account with the PIN meets WCAG 2.1 AA", async ({ 
   expect(await violations(page), "wrong PIN when confirming").toEqual([]);
 });
 
-test("the PIN and passkey offer at the end of sign up meet WCAG 2.1 AA", async ({ page }) => {
+test("the email, PIN and passkey steps at the end of sign up meet WCAG 2.1 AA", async ({ page }) => {
   await page.goto("/");
   await page.getByText("Create an account").click();
   await page.getByTestId("phone-input").fill("701555014");
@@ -223,7 +223,11 @@ test("the PIN and passkey offer at the end of sign up meet WCAG 2.1 AA", async (
   await page.getByTestId("password-input").fill("green matooke sunday");
   await page.getByTestId("password-confirm-input").fill("green matooke sunday");
   await page.getByTestId("password-submit").click();
-  await expect(page.getByText("3 of 4")).toBeVisible();
+  await expect(page.getByText("3 of 5")).toBeVisible();
+  await expect(page.getByText("Check your email").last()).toBeVisible();
+  expect(await violations(page), "check your email at sign up").toEqual([]);
+  await page.getByTestId("email-step-later").click();
+  await expect(page.getByText("4 of 5")).toBeVisible();
   expect(await violations(page), "create a PIN at sign up").toEqual([]);
   await typePin(page, DEMO_PIN);
   await typePin(page, DEMO_PIN);
