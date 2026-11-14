@@ -154,7 +154,7 @@ describe("goals", () => {
 
   it("changes a goal's name and target from its detail screen", async () => {
     await signIn("772123456");
-    await screen.findByText("Welcome, Amara");
+    await screen.findByTestId("home");
     await fireEvent.press(screen.getByLabelText("Goals"));
     await fireEvent.press(await screen.findByText("Emergency fund"));
     await fireEvent.press(await screen.findByTestId("goal-edit"));
