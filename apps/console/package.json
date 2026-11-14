@@ -12,6 +12,7 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "@finvest/api-client": "workspace:*",
     "@finvest/tokens": "workspace:*",
     "@fontsource-variable/plus-jakarta-sans": "^5.2.0",
     "class-variance-authority": "^0.7.1",

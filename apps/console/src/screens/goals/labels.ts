@@ -1,6 +1,12 @@
-import type { GoalCategory, SavingStatus, Standing } from "./api.ts";
+import { formatExact } from "@/screens/products/format.ts";
+import type { Currency, GoalCategory, SavingStatus, Standing } from "./api.ts";
 
-export { formatDay, formatShillings } from "@/screens/automatic-investing/labels.ts";
+export { formatDay } from "@/screens/automatic-investing/labels.ts";
+
+/** A whole-number string in the currency's smallest unit, as "UGX 1,000,000" or "$500.00". */
+export function formatMoney(minor: string, currency: Currency): string {
+  return formatExact({ minor: Number(minor), currency });
+}
 
 export const CATEGORY_LABELS: Record<GoalCategory, string> = {
   school_fees: "School fees",
@@ -23,5 +29,6 @@ export const SAVING_LABELS: Record<SavingStatus, string> = {
   awaiting_payment: "Awaiting payment",
   active: "Running",
   matured: "Matured",
+  withdrawn: "Withdrawn early",
   cancelled: "Cancelled",
 };

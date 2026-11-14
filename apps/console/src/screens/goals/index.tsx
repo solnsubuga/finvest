@@ -4,10 +4,11 @@ import { Button } from "@/components/ui/button.tsx";
 import { cn } from "@/lib.ts";
 import { PageHeader } from "@/pages/PageHeader.tsx";
 import { Panel, PanelRow, Pill } from "@/screens/migration/Checks.tsx";
-import { goalsErrorMessage, notConnectedGoalsApi, type Goal, type GoalDetail, type GoalsApi, type GoalStatus, type SavingStatus, type Standing } from "./api.ts";
-import { CATEGORY_LABELS, formatDay, formatShillings, SAVING_LABELS, STANDING_LABELS } from "./labels.ts";
+import { goalsErrorMessage, type Goal, type GoalDetail, type GoalsApi, type GoalStatus, type SavingStatus, type Standing } from "./api.ts";
+import { CATEGORY_LABELS, formatDay, formatMoney, SAVING_LABELS, STANDING_LABELS } from "./labels.ts";
 import { GroupGoals } from "./Groups.tsx";
-import { notConnectedGroupsApi, type GroupsApi } from "./groupsApi.ts";
+import type { GroupsApi } from "./groupsApi.ts";
+import { connectedGoalsApis } from "./http.ts";
 import { createStubGroupsApi } from "./groupsStub.ts";
 import { createStubGoalsApi, type StubCase } from "./stub.ts";
 
@@ -21,9 +22,10 @@ function stubCase(): StubCase {
   return sample === "empty" || sample === "error" ? sample : "sample";
 }
 
-/** Sample goals under `pnpm dev` or a preview build, like sign-in. `?sample=empty` and `?sample=error` show those states. */
-const defaultApi: GoalsApi = isStubAuth() ? createStubGoalsApi(today(new Date()), 150, stubCase()) : notConnectedGoalsApi;
-const defaultGroupsApi: GroupsApi = isStubAuth() ? createStubGroupsApi(today(new Date()), 150, stubCase()) : notConnectedGroupsApi;
+/** Sample goals under `pnpm dev` or a preview build, like sign-in, otherwise the real API. `?sample=empty` and `?sample=error` show those states. */
+const connected = isStubAuth() ? null : connectedGoalsApis();
+const defaultApi: GoalsApi = connected?.goals ?? createStubGoalsApi(today(new Date()), 150, stubCase());
+const defaultGroupsApi: GroupsApi = connected?.groups ?? createStubGroupsApi(today(new Date()), 150, stubCase());
 
 type View = "goals" | "groups";
 
@@ -58,6 +60,7 @@ const SAVING_TONES: Record<SavingStatus, string> = {
   awaiting_payment: "bg-warning-surface text-warning-text",
   active: "bg-success-surface text-success",
   matured: "bg-surface-sunken text-muted",
+  withdrawn: "bg-surface-sunken text-muted",
   cancelled: "bg-surface-sunken text-muted",
 };
 
@@ -250,10 +253,10 @@ function GoalsTable({ goals, selected, onSelect }: { goals: readonly Goal[]; sel
               </th>
               <td className="px-3 py-3">
                 <div className="font-bold">{goal.clientName}</div>
-                <div className="text-xs text-muted tabular-nums">{goal.accountNumber}</div>
+                <div className="text-xs text-muted tabular-nums">{goal.accountNumber ?? "No account number yet"}</div>
               </td>
               <td className="px-3 py-3 whitespace-nowrap">
-                <div className="font-bold tabular-nums">{formatShillings(goal.target)}</div>
+                <div className="font-bold tabular-nums">{formatMoney(goal.target, goal.currency)}</div>
                 <div className="text-xs text-muted">{goal.targetDate ? `By ${formatDay(goal.targetDate)}` : "No date"}</div>
               </td>
               <td className="px-3 py-3">{goal.productName}</td>
@@ -308,7 +311,7 @@ function Detail({ api, goalId }: { api: GoalsApi; goalId: string }) {
     <section aria-label={`Goal: ${goal.name}`} className="flex flex-col gap-4">
       <Panel title={goal.name}>
         <div className="flex items-baseline justify-between gap-3">
-          <span className="text-2xl font-extrabold tabular-nums">{formatShillings(progress.value)}</span>
+          <span className="text-2xl font-extrabold tabular-nums">{formatMoney(progress.value, goal.currency)}</span>
           <Pill tone={STANDING_TONES[progress.standing]}>{STANDING_LABELS[progress.standing]}</Pill>
         </div>
         <div
@@ -321,9 +324,9 @@ function Detail({ api, goalId }: { api: GoalsApi; goalId: string }) {
         >
           <div className="h-full bg-black" style={{ width: `${Math.min(progress.percent, 100)}%` }} />
         </div>
-        <PanelRow name="Target" value={`${formatShillings(goal.target)}, ${progress.percent}% there`} />
-        <PanelRow name="Interest after tax" value={formatShillings(progress.interest)} />
-        <PanelRow name="Awaiting payment" value={formatShillings(progress.awaitingPayment)} />
+        <PanelRow name="Target" value={`${formatMoney(goal.target, goal.currency)}, ${progress.percent}% there`} />
+        <PanelRow name="Interest after tax" value={formatMoney(progress.interest, goal.currency)} />
+        <PanelRow name="Awaiting payment" value={formatMoney(progress.awaitingPayment, goal.currency)} />
         <PanelRow name="Needed by" value={goal.targetDate ? formatDay(goal.targetDate) : "No date"} />
       </Panel>
       <Panel title="Investments in this goal">
@@ -343,7 +346,7 @@ function Detail({ api, goalId }: { api: GoalsApi; goalId: string }) {
                   </div>
                 </div>
                 <div className="flex flex-col items-end gap-1">
-                  <span className="font-bold whitespace-nowrap tabular-nums">{formatShillings(saving.amount)}</span>
+                  <span className="font-bold whitespace-nowrap tabular-nums">{formatMoney(saving.amount, goal.currency)}</span>
                   <Pill tone={SAVING_TONES[saving.status]}>{SAVING_LABELS[saving.status]}</Pill>
                 </div>
               </li>

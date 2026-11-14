@@ -1,34 +1,42 @@
 /**
  * The console's view of goals.
  *
- * A stand-in for the generated client in packages/api-client, like AutoinvestApi.
- * The shapes follow the staff routes in backend/app/modules/goals/api.py
- * (GET /staff/goals and GET /staff/goals/{id}, see docs/goals.md). When the
- * console is connected, an implementation that calls them replaces the stub in
- * index.tsx and the screen does not change.
+ * `http.ts` calls the staff routes in backend/app/modules/goals/api.py
+ * (GET /staff/goals and GET /staff/goals/{id}, see docs/goals.md); `stub.ts`
+ * stands in for them under `pnpm dev` and previews.
  *
- * Amounts travel as whole-number strings in shillings, so nothing here is ever a
+ * Amounts travel as whole-number strings in the smallest unit of the goal's
+ * currency (shillings, or cents for a dollar goal), so nothing here is ever a
  * floating point number. The screen only reads: a goal holds no money, and only
  * its client changes or closes it.
  */
 
+import type { Currency } from "@/screens/products/api.ts";
+
+export type { Currency } from "@/screens/products/api.ts";
+
 export type GoalStatus = "active" | "closed";
 export type GoalCategory = "school_fees" | "emergency" | "land_or_home" | "business" | "wedding" | "retirement" | "other";
 export type Standing = "reached" | "on_track" | "behind" | "no_date";
-export type SavingStatus = "awaiting_payment" | "active" | "matured" | "cancelled";
+export type SavingStatus = "awaiting_payment" | "active" | "matured" | "withdrawn" | "cancelled";
 
 export interface Goal {
   id: string;
   clientId: string;
+  /** The verified name, or a placeholder when the client's card cannot be read. */
   clientName: string;
-  accountNumber: string;
+  /** Null until the client's identity check has passed, or when their card cannot be read. */
+  accountNumber: string | null;
   name: string;
   category: GoalCategory;
-  /** Shillings, as a whole-number string. */
+  /** Every amount of the goal and its savings is in this currency. */
+  currency: Currency;
+  /** The smallest unit of the currency, as a whole-number string. */
   target: string;
   /** YYYY-MM-DD, or null for a goal with no date such as an emergency fund. */
   targetDate: string | null;
   status: GoalStatus;
+  /** The product's name, or its code when the name cannot be read. */
   productName: string;
   /** YYYY-MM-DD in Kampala. */
   createdOn: string;
@@ -44,7 +52,7 @@ export interface Saving {
   accruedNet: string;
   startDate: string | null;
   maturityDate: string | null;
-  /** The saving this one rolled over from, when it did. */
+  /** The saving this one rolled over from, when it did. Not sent to the console yet, so null there. */
   rolledFrom: string | null;
 }
 

@@ -6,13 +6,13 @@ import { PageHeader } from "@/pages/PageHeader.tsx";
 import { formatBps, formatDay, formatExact, formatStamp } from "../products/format.ts";
 import {
   investmentsErrorMessage,
-  notConnectedInvestmentsApi,
   type AtMaturity,
   type InterestRun,
   type Investment,
   type InvestmentStatus,
   type InvestmentsApi,
 } from "./api.ts";
+import { connectedInvestmentsApi } from "./http.ts";
 import { createStubInvestmentsApi } from "./stub.ts";
 
 const SUMMARY = "Client investments, what they have earned so far, and the daily interest run.";
@@ -21,6 +21,7 @@ const TABS: readonly { status: InvestmentStatus; label: string; empty: string }[
   { status: "active", label: "Running", empty: "No investments are running." },
   { status: "awaiting_payment", label: "Awaiting payment", empty: "Nobody is waiting to pay for an investment." },
   { status: "matured", label: "Matured", empty: "No investment has matured yet." },
+  { status: "withdrawn", label: "Withdrawn early", empty: "No investment has been withdrawn early." },
   { status: "cancelled", label: "Cancelled", empty: "No investment has been cancelled." },
 ];
 
@@ -198,6 +199,7 @@ function InvestmentTable({ investments, status }: { investments: readonly Invest
 function LastColumn({ investment }: { investment: Investment }) {
   if (investment.status === "awaiting_payment") return <span className="whitespace-nowrap">{formatStamp(investment.payBy)}</span>;
   if (investment.status === "cancelled") return <span className="text-muted">Not paid in time</span>;
+  if (investment.status === "withdrawn") return <span>{investment.payoutId ? "Paid out early" : "Being paid out early"}</span>;
   if (investment.status === "matured") {
     if (investment.rolledIntoId) return <span>Rolled over into a new term</span>;
     if (investment.payoutRefusal) {
@@ -317,11 +319,11 @@ function Row({ name, value, warn = false }: { name: string; value: string; warn?
 }
 
 export default function InvestmentsPage() {
-  // Sample investments under `pnpm dev` or a preview build. `?sample=empty` shows a new system.
+  // Sample investments under `pnpm dev` or a preview build, otherwise the real API. `?sample=empty` shows a new system.
   const [api] = useState<InvestmentsApi>(() =>
     isStubAuth()
       ? createStubInvestmentsApi(new URLSearchParams(window.location.search).get("sample") === "empty" ? "empty" : "default")
-      : notConnectedInvestmentsApi,
+      : connectedInvestmentsApi(),
   );
   return <InvestmentsScreen api={api} />;
 }
