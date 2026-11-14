@@ -17,10 +17,10 @@ from app.infrastructure.sealing import Sealer
 from app.modules.identity.service import create_unclaimed_client
 from app.shared.actors import Actor
 from tests.integration.test_identity import HASHER, STAFF_ORIGIN
-from tests.integration.test_migration_api import AS_OF, NOW, Console, code
+from tests.integration.test_migration_api import AS_OF, Console, code
 from tests.support import database as harness
-from tests.support.clock import FakeClock
 from tests.support.database import TestDatabase
+from tests.support.investments import PRESENT
 from tests.unit.test_migration_sheet import clients, investments
 from tests.unit.test_migration_trial import client, investment
 
@@ -46,17 +46,22 @@ async def console(test_database: TestDatabase, app_database: Database) -> AsyncI
     settings = test_database.settings("finvest_app").model_copy(
         update={"staff_allowed_origins": [STAFF_ORIGIN], "trusted_proxies": ["127.0.0.1"]}
     )
-    app = create_app(settings, app_database, FakeClock(NOW), HASHER, identity_sealer=SEALER)
+    app = create_app(settings, app_database, PRESENT, HASHER, identity_sealer=SEALER)
     transport = httpx.ASGITransport(app=app, raise_app_exceptions=False, client=("127.0.0.1", 1))
     async with httpx.AsyncClient(transport=transport, base_url="https://api") as http:
         yield Console(http, app.state.identity, app_database)
+
+
+def person(ref: str, **changes: str) -> dict[str, str]:
+    """A client whose names pass the identity check's rules: letters only."""
+    return client(ref, given_names=f"Grace {'ABCDEFGHIJ'[int(ref) % 10]}", **changes)
 
 
 def sheets(count: int) -> dict[str, str]:
     """`count` clients, each with one investment whose interest is what the formula gives."""
     refs = [str(n) for n in range(1, count + 1)]
     return {
-        "clients_csv": clients(*(client(ref) for ref in refs)),
+        "clients_csv": clients(*(person(ref) for ref in refs)),
         "investments_csv": investments(
             *(
                 investment(
@@ -72,7 +77,9 @@ def sheets(count: int) -> dict[str, str]:
     }
 
 
-async def cleared(console: Console, files: dict[str, str], count: int) -> None:
+async def cleared(
+    console: Console, files: dict[str, str], count: int, *, verified: int | None = None
+) -> None:
     """A trial with nothing to sign off, and Finvest 1.0's totals confirmed by a second person."""
     await console.sign_in("operations")
     ran = await console.post("/trials", {"as_of": AS_OF, **files})
@@ -83,7 +90,7 @@ async def cleared(console: Console, files: dict[str, str], count: int) -> None:
         {
             "as_of": AS_OF,
             "clients": count,
-            "verified_identities": count,
+            "verified_identities": count if verified is None else verified,
             "running_investments": count,
             "pending_orders": 0,
             "invested": [{"currency": "UGX", "minor": 1_000_000 * count}],
@@ -128,11 +135,11 @@ async def test_one_person_proposes_the_switch_and_another_approves_it(
     # Operations cannot decide it, and nothing in the answer comes from a cell of the sheets.
     decision = f"/switch/{switch['id']}/decision"
     assert code(await console.post(decision, {"approve": True}))[0] == 403
-    assert "Person 1" not in proposed.text and "+256" not in proposed.text
+    assert "Grace" not in proposed.text and "+256" not in proposed.text
 
     # The sheets are kept sealed, never as they were sent.
     [kept] = await table(migrator_database, "SELECT clients_csv FROM migration_switch_files")
-    assert b"Person 1" not in bytes(kept.clients_csv)
+    assert b"Grace" not in bytes(kept.clients_csv)
 
     approver = await console.sign_in("finance")
     approved = await console.post(decision, {"approve": True})
@@ -178,7 +185,7 @@ async def test_only_the_sheets_of_the_cleared_trial_can_be_switched(console: Con
 
 async def test_a_client_without_a_phone_number_holds_the_switch(console: Console) -> None:
     files = {
-        "clients_csv": clients(client("1", phone="")),
+        "clients_csv": clients(person("1", phone="")),
         "investments_csv": sheets(1)["investments_csv"],
     }
     await cleared(console, files, 1)
@@ -201,7 +208,7 @@ async def test_a_number_that_already_has_an_account_refuses_the_whole_approval(
     staff = Actor("staff", await console.sign_in("operations"))
     async with console.database.actor_transaction(staff) as session:
         await create_unclaimed_client(
-            session, FakeClock(NOW), staff, phone=client("2")["phone"], email=None
+            session, PRESENT, staff, phone=client("2")["phone"], email=None
         )
 
     await console.sign_in("finance")

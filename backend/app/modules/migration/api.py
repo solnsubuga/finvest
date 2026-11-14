@@ -17,7 +17,7 @@ from app.infrastructure.database import Database
 from app.infrastructure.sealing import Sealer
 from app.modules.identity.api import require_confirmed, require_permission
 from app.modules.identity.service import StaffSession
-from app.modules.migration import claims, service, switch
+from app.modules.migration import carry_over, claims, service, switch
 from app.modules.migration.domain.claim import Progress
 from app.modules.migration.domain.finance import ControlTotals, Figure, InvalidFinanceCheck
 from app.modules.migration.domain.sheet import Severity, Sheet
@@ -150,6 +150,13 @@ class ClaimProgressView(Contract):
     cannot_be_invited: int
 
 
+class NotCarriedView(Contract):
+    """A client the worker could not carry over. Staff resolve it by hand."""
+
+    legacy_client_ref: str
+    code: str
+
+
 class SwitchView(Contract):
     """The newest proposal to switch, and what was decided. Nothing from the sheets."""
 
@@ -164,6 +171,8 @@ class SwitchView(Contract):
     decision_reason: str | None
     # How many accounts the approval created. Zero until it is approved.
     clients_carried: int
+    # The clients the worker could not carry over, and why. Empty until it has run.
+    not_carried: list[NotCarriedView]
 
 
 class OverviewView(Contract):
@@ -291,7 +300,9 @@ def _allowed(staff: StaffSession) -> list[Allowed]:
     return allowed
 
 
-def _switch(view: switch.SwitchView | None) -> SwitchView | None:
+def _switch(
+    view: switch.SwitchView | None, not_carried: list[tuple[str, str]] | None = None
+) -> SwitchView | None:
     if view is None:
         return None
     return SwitchView(
@@ -304,6 +315,9 @@ def _switch(view: switch.SwitchView | None) -> SwitchView | None:
         decided_by=view.decided_by,
         decision_reason=view.decision_reason,
         clients_carried=view.clients_carried,
+        not_carried=[
+            NotCarriedView(legacy_client_ref=ref, code=code) for ref, code in not_carried or []
+        ],
     )
 
 
@@ -331,6 +345,7 @@ def _overview(
     view: service.Overview,
     progress: Progress,
     proposal: switch.SwitchView | None,
+    not_carried: list[tuple[str, str]],
     staff: StaffSession,
 ) -> OverviewView:
     trial = view.trial
@@ -381,7 +396,7 @@ def _overview(
             for key, figures in view.differing.items()
         ],
         blockers=list(view.blockers),
-        switch=_switch(proposal),
+        switch=_switch(proposal, not_carried),
         claims=_claims(progress),
         allowed=_allowed(staff),
     )
@@ -390,10 +405,15 @@ def _overview(
 async def _read(request: Request, staff: StaffSession) -> OverviewView:
     database, _ = _state(request)
     async with database.actor_transaction(_actor(staff)) as session:
+        proposal = await switch.latest_switch(session)
+        not_carried = (
+            await carry_over.carry_problems(session, proposal.id) if proposal is not None else []
+        )
         return _overview(
             await service.overview(session),
             await claims.claim_progress(session),
-            await switch.latest_switch(session),
+            proposal,
+            not_carried,
             staff,
         )
 

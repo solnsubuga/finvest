@@ -16,12 +16,13 @@ switch is approved, and a client is carried over only in the transaction that ap
 
 import hashlib
 from dataclasses import dataclass
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from typing import Any, Literal
 
 from sqlalchemy import Row, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.infrastructure.jobs import JobRequest, enqueue
 from app.infrastructure.sealing import Sealer, associated_data
 from app.modules.identity.service import create_unclaimed_client
 from app.modules.investments import service as investments
@@ -35,6 +36,8 @@ from app.shared.errors import ApplicationError, FieldProblem
 from app.shared.push_ids import push_id
 
 SwitchState = Literal["proposed", "approved", "rejected"]
+# The worker's job that carries every client of an approved switch over.
+CARRY_OVER = "migration.carry_over"
 # The most rows an answer names. The error envelope holds at most 100 field problems.
 MAX_NAMED_ROWS = 100
 
@@ -226,6 +229,17 @@ async def decide_switch(
     )
     if report is not None:
         await _create_accounts(session, staff, clock, switch_id, report)
+        # The worker carries each client's identity, investments and claim over from here.
+        await enqueue(
+            session,
+            JobRequest(
+                kind=CARRY_OVER,
+                idempotency_key=switch_id,
+                payload={"switch_id": switch_id},
+                max_age=timedelta(days=7),
+            ),
+            now=now,
+        )
     await service._audit(
         session,
         staff,
@@ -238,6 +252,11 @@ async def decide_switch(
         reason=note or f"Every check cleared for the trial as of {switch.as_of.isoformat()}",
         details={"clients": len(report.clients)} if report is not None else None,
     )
+    return await _by_id(session, switch_id)
+
+
+async def switch_by_id(session: AsyncSession, switch_id: str) -> SwitchView:
+    """One switch and what was decided. `not_found` for an unknown ID."""
     return await _by_id(session, switch_id)
 
 
