@@ -878,7 +878,6 @@ export const PersonBody = z.object({
   id_number: z.string(),
   phone: z.string(),
   relationship: Relationship,
-  share_bps: z.number().int(),
 });
 export type PersonBody = z.infer<typeof PersonBody>;
 
@@ -893,7 +892,6 @@ export const KycProfileApiPersonView = z.object({
   id_number: z.string(),
   phone: z.string(),
   relationship: Relationship,
-  share_bps: z.number().int(),
 });
 export type KycProfileApiPersonView = z.infer<typeof KycProfileApiPersonView>;
 

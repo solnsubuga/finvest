@@ -96,7 +96,7 @@ describe("account closures", () => {
     renderScreen("/clients?client=-NstubClient00000042");
     const kin = await screen.findByRole("region", { name: "Next of kin" });
     expect(within(kin).getByText("Joseph Nakato")).toBeInTheDocument();
-    expect(within(kin).getByText("60%")).toBeInTheDocument();
+    expect(within(kin).queryByText(/%/)).toBeNull();
     expect(within(kin).getByText(/CM••••••••12AB/)).toBeInTheDocument();
     const risk = screen.getByRole("region", { name: "Investing questions" });
     expect(within(risk).getByText("Balanced")).toBeInTheDocument();

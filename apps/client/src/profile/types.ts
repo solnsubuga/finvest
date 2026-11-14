@@ -31,8 +31,6 @@ export type Person = {
   /** E.164 once saved. */
   phone: string;
   idNumber: string;
-  /** Basis points: 10,000 is everything. The shares of everyone add up to 10,000. */
-  shareBps: number;
 };
 
 export type NextOfKin = { people: Person[]; updatedAt: string | null };

@@ -10790,18 +10790,13 @@
           },
           "relationship": {
             "$ref": "#/components/schemas/Relationship"
-          },
-          "share_bps": {
-            "title": "Share Bps",
-            "type": "integer"
           }
         },
         "required": [
           "full_name",
           "relationship",
           "phone",
-          "id_number",
-          "share_bps"
+          "id_number"
         ],
         "title": "PersonBody",
         "type": "object"
@@ -17535,18 +17530,13 @@
           },
           "relationship": {
             "$ref": "#/components/schemas/Relationship"
-          },
-          "share_bps": {
-            "title": "Share Bps",
-            "type": "integer"
           }
         },
         "required": [
           "full_name",
           "relationship",
           "phone",
-          "id_number_masked",
-          "share_bps"
+          "id_number_masked"
         ],
         "title": "StaffPersonView",
         "type": "object"
@@ -20492,10 +20482,6 @@
           },
           "relationship": {
             "$ref": "#/components/schemas/Relationship"
-          },
-          "share_bps": {
-            "title": "Share Bps",
-            "type": "integer"
           }
         },
         "required": [
@@ -20503,8 +20489,7 @@
           "full_name",
           "relationship",
           "phone",
-          "id_number",
-          "share_bps"
+          "id_number"
         ],
         "title": "PersonView",
         "type": "object"

@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { formatTime } from "./labels.ts";
-import { ANSWER_LABELS, PROFILE_LABELS, RELATIONSHIP_LABELS, sharePercent, type ClientProfile, type ProfileApi } from "./profile.ts";
+import { ANSWER_LABELS, PROFILE_LABELS, RELATIONSHIP_LABELS, type ClientProfile, type ProfileApi } from "./profile.ts";
 
 type Load = { state: "loading" } | { state: "failed" } | { state: "ready"; profile: ClientProfile };
 
@@ -47,7 +47,6 @@ export function ProfileSection({ api, clientId }: { api: ProfileApi; clientId: s
                       {RELATIONSHIP_LABELS[person.relationship]} · {person.phone} · ID {person.idNumberMasked}
                     </span>
                   </div>
-                  <span className="font-bold">{sharePercent(person.shareBps)}</span>
                 </li>
               ))}
             </ul>
