@@ -1,7 +1,7 @@
 """Save an investment's interest to a goal at maturity, and keep the principal invested.
 
 Revision ID: 0400_maturity_interest_to_goal
-Revises: 0335_note_reissues
+Revises: 0410_custodian_statement_checks
 
 A client may now choose `interest_to_goal` for what happens when a fixed term ends: the
 principal rolls over into a new term in the same product, as for `pay_interest`, and the
@@ -36,7 +36,7 @@ from alembic import op
 from sqlalchemy import text
 
 revision: str = "0400_maturity_interest_to_goal"
-down_revision: str | None = "0335_note_reissues"
+down_revision: str | None = "0410_custodian_statement_checks"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 
