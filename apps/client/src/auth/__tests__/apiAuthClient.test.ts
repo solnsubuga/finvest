@@ -76,8 +76,30 @@ describe("the sign-in client for the real API", () => {
 
   it("keeps the API's list and order, less a passkey on a phone without WebAuthn", async () => {
     serve({ "POST /client/login/start": { status: 200, body: { login_id: ID, methods: ["passkey", "authenticator", "code"] } } });
-    const challenge = await createApiAuthClient().startLogin("+256772123456", "pw");
+    const challenge = await createApiAuthClient().startLogin({ phone: "+256772123456" }, "pw");
     expect(challenge.methods).toEqual(["authenticator", "code"]);
+  });
+
+  it("logs in by a proved email and sends the code there", async () => {
+    const seen = serve({
+      "POST /client/login/start": { status: 200, body: { login_id: ID, methods: ["code"] } },
+      "POST /client/login/code/send": { status: 204 },
+    });
+    const client = createApiAuthClient();
+    const challenge = await client.startLogin({ email: " amara@example.com " }, "pw");
+    expect(challenge).toEqual({ loginId: ID, phone: null, email: "amara@example.com", methods: ["code"] });
+    await client.sendLoginCode(ID, "email");
+    expect(seen.map((s) => s.body)).toEqual([
+      { email: "amara@example.com", password: "pw" },
+      { login_id: ID, channel: "email" },
+    ]);
+  });
+
+  it("says an email log in was refused in words about the email", async () => {
+    serve({ "POST /client/login/start": refused(401, "invalid_credentials") });
+    await expect(createApiAuthClient().startLogin({ email: "a@example.com" }, "x")).rejects.toEqual(
+      new AuthError("invalid_email_credentials"),
+    );
   });
 
   it("resets a password with the texted code and forgets this device's token", async () => {
@@ -236,11 +258,11 @@ describe("the sign-in client for the real API", () => {
       "POST /client/login/code/send": refused(429, "rate_limited"),
     });
     const client = createApiAuthClient();
-    await expect(client.startLogin("+256772123456", "x")).rejects.toEqual(new AuthError("invalid_credentials"));
+    await expect(client.startLogin({ phone: "+256772123456" }, "x")).rejects.toEqual(new AuthError("invalid_credentials"));
     await expect(client.confirmSignupCode(ID, "123456")).rejects.toEqual(new AuthError("phone_taken"));
     await expect(client.startAuthenticatorSetup()).rejects.toEqual(new AuthError("sign_in_again"));
     await expect(client.confirmAuthenticatorSetup("123456")).rejects.toEqual(new AuthError("sign_in_again"));
-    await expect(client.sendLoginCode(ID)).rejects.toEqual(new AuthError("rate_limited"));
+    await expect(client.sendLoginCode(ID, "sms")).rejects.toEqual(new AuthError("rate_limited"));
     await expect(client.addPasskey()).rejects.toEqual(new AuthError("passkey_unsupported"));
   });
 

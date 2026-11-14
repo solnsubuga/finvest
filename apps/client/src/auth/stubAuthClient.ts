@@ -287,15 +287,21 @@ export function createStubAuthClient(options: StubOptions = {}): AuthClient {
       return sessionFor(signup.phone, false);
     },
 
-    async startLogin(phone, password): Promise<LoginChallenge> {
+    async startLogin(identifier, password): Promise<LoginChallenge> {
       await wait();
-      const account = accounts.get(phone);
-      if (!account || account.password !== password) {
-        throw new AuthError("invalid_credentials");
+      const byEmail = "email" in identifier;
+      const email = byEmail ? identifier.email.trim().toLowerCase() : null;
+      // Like the API, only a proved address finds an account.
+      const phone = byEmail
+        ? [...accounts].find(([, held]) => held.emailVerified && held.email === email)?.[0]
+        : identifier.phone;
+      const account = phone ? accounts.get(phone) : undefined;
+      if (!phone || !account || account.password !== password) {
+        throw new AuthError(byEmail ? "invalid_email_credentials" : "invalid_credentials");
       }
       const loginId = nextId("login");
       logins.set(loginId, phone);
-      return { loginId, phone, methods: methodsFor(account) };
+      return { loginId, phone: byEmail ? null : phone, email, methods: methodsFor(account) };
     },
 
     async verifyWithPasskey(loginId): Promise<Session> {
@@ -323,7 +329,7 @@ export function createStubAuthClient(options: StubOptions = {}): AuthClient {
       return sessionFor(phone, false);
     },
 
-    async sendLoginCode(loginId): Promise<void> {
+    async sendLoginCode(loginId, _channel): Promise<void> {
       await wait();
       if (!logins.has(loginId)) {
         throw new AuthError("expired");

@@ -117,10 +117,23 @@ export function createApiAuthClient(): AuthClient {
     completeSignup: (ticket, password) =>
       wrap(async () => signedIn(await api("POST /client/signup/complete", { body: { ticket, password } }))),
 
-    startLogin: (phone, password) =>
+    startLogin: (identifier, password) =>
       wrap(async () => {
-        const result = await api("POST /client/login/start", { body: { phone, password } });
-        return { loginId: result.login_id, phone, methods: usable(result.methods) };
+        const byEmail = "email" in identifier;
+        try {
+          const result = await api("POST /client/login/start", {
+            body: byEmail ? { email: identifier.email.trim(), password } : { phone: identifier.phone, password },
+          });
+          return {
+            loginId: result.login_id,
+            phone: byEmail ? null : identifier.phone,
+            email: byEmail ? identifier.email.trim() : null,
+            methods: usable(result.methods),
+          };
+        } catch (error) {
+          const refused = toAuthError(error);
+          throw byEmail && refused.code === "invalid_credentials" ? new AuthError("invalid_email_credentials") : refused;
+        }
       }),
 
     verifyWithPasskey: (loginId) =>
@@ -135,9 +148,9 @@ export function createApiAuthClient(): AuthClient {
         signedIn(await api("POST /client/login/authenticator/verify", { body: { login_id: loginId, code } })),
       ),
 
-    sendLoginCode: (loginId) =>
+    sendLoginCode: (loginId, channel) =>
       wrap(async () => {
-        await api("POST /client/login/code/send", { body: { login_id: loginId, channel: "sms" } });
+        await api("POST /client/login/code/send", { body: { login_id: loginId, channel } });
       }),
 
     verifyWithCode: (loginId, code) =>
