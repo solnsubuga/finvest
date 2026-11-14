@@ -444,7 +444,7 @@ describe("sending an investment through the real API", () => {
       investmentId: ID,
       toAccountNumber: "1001005170",
       amount: ugx(1_000_000),
-      message: "For school fees",
+      message: "For school fees", purpose: "gift" as const, purposeNote: null,
       whole: false,
       idempotencyKey: "s-1",
     });
@@ -452,14 +452,14 @@ describe("sending an investment through the real API", () => {
       method: "POST",
       path: `/client/investments/${ID}/send`,
       key: "s-1",
-      body: { to_account_number: "1001005170", amount_minor: 1000000, currency: "UGX", message: "For school fees", whole: false },
+      body: { to_account_number: "1001005170", amount_minor: 1000000, currency: "UGX", message: "For school fees", purpose: "gift", purpose_note: null, whole: false },
     });
     expect(sent).toMatchObject({ id: transfer.id, direction: "sent", otherName: "Brian K.", amount: ugx(1_000_000) });
   });
 
   it("says why a send was refused", async () => {
     const client = createApiInvestingClient();
-    const request = { investmentId: ID, toAccountNumber: "1001005170", amount: ugx(50_000), message: null, whole: false, idempotencyKey: "s" };
+    const request = { investmentId: ID, toAccountNumber: "1001005170", amount: ugx(50_000), message: null, purpose: "gift" as const, purposeNote: null, whole: false, idempotencyKey: "s" };
     const cases: [string, InvestingError["code"]][] = [
       ["below_product_minimum", "below_product_minimum"],
       ["more_than_investment_value", "more_than_value"],

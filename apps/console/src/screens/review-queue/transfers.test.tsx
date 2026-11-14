@@ -6,7 +6,7 @@ import { createHttp } from "@/api/http.ts";
 import { createStubDirectory } from "@/directory/stub.ts";
 import { notConnectedReviewQueueApi } from "./api.ts";
 import { ReviewQueueScreen } from "./index.tsx";
-import { createHttpTransfersApi, createStubTransfersApi, transfersErrorMessage, type TransfersApi } from "./transfers.ts";
+import { createHttpTransfersApi, describePurpose, createStubTransfersApi, transfersErrorMessage, type TransfersApi } from "./transfers.ts";
 
 const ME = { id: "sample-staff-me", name: "Ruth Nambi" };
 const NOW = Date.parse("2026-11-14T09:00:00Z");
@@ -45,6 +45,8 @@ describe("review queue: held transfers", () => {
     const review = await screen.findByRole("article", { name: "Held transfer from Joan Namutebi" });
     expect(within(review).getByText("Joan N. and Sarah A.")).toBeInTheDocument();
     expect(within(review).getByText("For the land in Mukono")).toBeInTheDocument();
+    // Why the sender sends it, in their own words after "Something else".
+    expect(within(review).getByText("Something else: Her share of the plot we bought together")).toBeInTheDocument();
   });
 
   it("proposes letting one through, then waits for someone else", async () => {
@@ -116,6 +118,8 @@ const JSON_TRANSFER = {
   currency: "UGX",
   whole: false,
   message: null,
+  purpose: "loan_repayment",
+  purpose_note: null,
   status: "release_proposed",
   requested_at: "2026-11-14T06:00:00Z",
   release_proposed_by: "-Nstaff000000000000A",
@@ -129,7 +133,9 @@ describe("held transfers over HTTP", () => {
     const api = createHttpTransfersApi(createHttp("https://api.test", fetch, () => Promise.resolve(false)));
     const [held] = await api.listHeld();
     expect(fetch.mock.calls[0]![0]).toBe("https://api.test/staff/investment-transfers/held");
-    expect(held).toMatchObject({ amount: { minor: 15_000_000, currency: "UGX" }, release: { reason: "Called her" } });
+    expect(held).toMatchObject({ amount: { minor: 15_000_000, currency: "UGX" }, purpose: "loan_repayment", release: { reason: "Called her" } });
+    expect(describePurpose(held!)).toBe("Paying back a loan");
+    expect(describePurpose({ purpose: null, purposeNote: null })).toMatch(/^Not asked/);
 
     fetch.mockImplementation(() => reply(200, JSON_TRANSFER));
     await api.approveRelease(JSON_TRANSFER.id, "Agree", "key-1");
