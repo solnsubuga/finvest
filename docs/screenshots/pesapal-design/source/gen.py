@@ -12,9 +12,9 @@ TOKENS = """
 """
 
 CLIENT_CSS = TOKENS + """
-@font-face{font-family:PJ;src:url(../PlusJakartaSans-Regular.ttf);font-weight:400}
-@font-face{font-family:PJ;src:url(../PlusJakartaSans-Bold.ttf);font-weight:700}
-@font-face{font-family:PJ;src:url(../PlusJakartaSans-ExtraBold.ttf);font-weight:800}
+@font-face{font-family:PJ;src:url(../../../../backend/app/modules/documents/fonts/PlusJakartaSans-Regular.ttf);font-weight:400}
+@font-face{font-family:PJ;src:url(../../../../backend/app/modules/documents/fonts/PlusJakartaSans-Bold.ttf);font-weight:700}
+@font-face{font-family:PJ;src:url(../../../../backend/app/modules/documents/fonts/PlusJakartaSans-ExtraBold.ttf);font-weight:800}
 *{box-sizing:border-box;margin:0;padding:0}
 body{font-family:PJ,sans-serif;background:var(--paper);color:var(--ink);letter-spacing:-.01em}
 .col{max-width:688px;margin:0 auto;padding:24px 24px 32px}
@@ -111,7 +111,7 @@ CARD_INNER = ('<div class="lines"><div class="l"><span>Investment</span><span>UG
               '<p class="note">The card charge goes to the card network and Pesapal, not to Finvest. Up to UGX 5,000,000 a payment. '
               'If this money is ever refunded, it goes back to the same card.</p>')
 BANK_ROW = opt("Bank", "Bank transfer", "Send from your bank, then upload the receipt", right='<span class="chev">&#8250;</span>')
-MOMO_B = 'MoMo'
+MOMO_B = '<span style="font-size:10px;line-height:1.1;text-align:center">MTN<br>Airtel</span>'
 CARD_B = f'{VISA}{MC}'
 
 

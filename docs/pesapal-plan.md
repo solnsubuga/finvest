@@ -1,6 +1,6 @@
 # Plan: mobile money and card payments through Pesapal
 
-**Status: a plan, not built.** The owner decided on 14 November 2026 that Pesapal takes both mobile money and card payments and that ioTec is to go, and asked for the screens to be redesigned before anything is built ([the designs](#the-designs)). Nothing here is in the code yet. Building waits for the owner's approval of this plan and the choices in [Choices for the owner](#choices-for-the-owner). Facts about Pesapal come from its public API 3.0 documentation, read on 14 November 2026. Items marked "confirm" are not documented publicly and must be checked with Pesapal before anyone relies on them.
+**Status: a plan, not built.** The owner decided on 14 November 2026 that Pesapal takes both mobile money and card payments and that ioTec is to go, and asked for the screens to be redesigned before anything is built ([the designs](#the-designs)). Later the same evening the owner paused to rethink how mobile money and cards are best split between providers, so that choice is open again and is not yet in [decisions.md](decisions.md). This plan is updated, and the decision recorded, once the owner answers. Nothing here is in the code yet. Building waits for the owner's approval of this plan and the choices in [Choices for the owner](#choices-for-the-owner). Facts about Pesapal come from its public API 3.0 documentation, read on 14 November 2026. Items marked "confirm" are not documented publicly and must be checked with Pesapal before anyone relies on them.
 
 ## In short
 
@@ -108,6 +108,7 @@ In `apps/client/src/payments` and the pay screens.
 
 - **Pick a way to pay** becomes mobile money, card or bank transfer (MTN and Airtel are chosen on Pesapal's page), each shown only when its channel is open and the amount is within its limit. If the client pays the charge, the screen shows it in shillings and the total before they go on. No rate is shown.
 - **Paying.** On the web (app.finvestug.com) the app sends the whole page to Pesapal and Pesapal sends it back to `https://app.finvestug.com/pay/card/return?payment=<id>`. On Android and iPhone the app opens Pesapal's page in the system's secure in-app browser (`expo-web-browser`, a new dependency), which closes when the payer reaches the return address. **No iframe.** A full redirect keeps card entry entirely on Pesapal's page, which is what keeps us at SAQ A, and the client app's Content Security Policy needs no frame source for Pesapal.
+- **The web app's state is lost on the redirect.** Sending the whole page to Pesapal drops everything held in memory on app.finvestug.com. The return route `/pay/card/return?payment=<id>` (and the mobile money return) rebuilds everything from the API, using only the payment ID in the address: the payment, its investment and what to show next. Nothing may rely on context from before the redirect.
 - **Waiting and result.** The return screen polls the payment and shows "Confirming your card payment", then the existing paid or failed screens. Closing the browser early returns to the same waiting screen, with "Open the card page again" while the order is open.
 - **Receipts, Activity and notices** say "Visa card ending 0010". Notifications gain the method word "your card".
 - Automatic investing stays mobile money only: Pesapal cannot charge a card on our schedule.
@@ -218,7 +219,7 @@ The first live check is a small real card payment after deploy, refunded to the 
 
 ## The designs
 
-Redesigned before building, as the owner asked. One image per screen and layout, in [screenshots/pesapal-design](screenshots/pesapal-design/) (made from static mockups in its `source` folder, not from the app):
+Redesigned before building, as the owner asked. One image per screen and layout, in [screenshots/pesapal-design](screenshots/pesapal-design/) (made from static mockups in its `source` folder, not from the app). Two phone images, 02 and 08, are taller than one screen; when the real screens are built, their screenshots show where the pay button falls at the fold.
 
 | Screen | Shows |
 | --- | --- |
@@ -243,6 +244,7 @@ Redesigned before building, as the owner asked. One image per screen and layout,
 | What Pesapal is used for | Decided by the owner: mobile money and cards, and ioTec goes. |
 | Mobile money payouts | ioTec keeps sending them until Pesapal has a payout API (on a decision card). |
 | SMS and the phone-name check | Stay on ioTec for now (on a decision card). |
+| Who pays Pesapal's mobile money charge | Finvest, as the owner decided for ioTec's pay-in charge: booked as Finvest's expense, each charge rounded up to a whole shilling. So the app can keep saying "no charge" for mobile money. |
 | Who pays the card charge | The client, shown in shillings before paying, if Pesapal allows it. Otherwise Finvest, as with ioTec. A card charge of a few percent is a large share of a short bill's return, so absorbing it would cost far more than ioTec's charge. |
 | Card limits | UGX 5,000,000 per payment and UGX 10,000,000 per client in 30 days, changeable on Settings by two people. |
 | Early withdrawal of money paid by card | Within 30 days of the payment, refunded to the card rather than paid out. |
