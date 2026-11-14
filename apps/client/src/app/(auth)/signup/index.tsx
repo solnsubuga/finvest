@@ -105,7 +105,7 @@ export default function SignupStart() {
         />
         <Pressable
           accessibilityRole="checkbox"
-          accessibilityState={{ checked: agreed }}
+          aria-checked={agreed}
           onPress={() => setAgreed((current) => !current)}
           style={styles.terms}
           testID="terms-checkbox"

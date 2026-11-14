@@ -24,7 +24,7 @@ export function TabBar({ activeName }: { activeName: string }) {
           <Pressable
             key={destination.name}
             accessibilityRole="tab"
-            accessibilityState={{ selected: active }}
+            aria-selected={active}
             accessibilityLabel={destination.label}
             onPress={() => router.navigate(destination.href)}
             style={({ pressed }) => [styles.tab, pressed && { opacity: 0.6 }]}

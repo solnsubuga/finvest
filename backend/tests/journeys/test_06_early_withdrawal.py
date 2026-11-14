@@ -80,7 +80,7 @@ async def paid_by_transfer(
     world: World, bank: TrustBank, client: Person, amount: int
 ) -> investments.Investment:
     requested = await invest(world, client, amount)
-    importer = await world.staff("operations")
+    importer = await world.staff("finance")
     sent_on = await bank.receive(world, importer, f"FV{requested.id[-6:]}", amount)
     payment = await pay_by_bank_transfer(
         world,

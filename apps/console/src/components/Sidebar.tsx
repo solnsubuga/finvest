@@ -69,6 +69,18 @@ export function Sidebar({ session, onNavigate, className }: SidebarProps) {
           </strong>
         </p>
       </div>
+      <NavLink
+        to="/devices"
+        {...(onNavigate ? { onClick: onNavigate } : {})}
+        className={({ isActive }) =>
+          cn(
+            "flex h-[34px] shrink-0 items-center rounded-sm px-2.5 text-sm",
+            isActive ? "bg-lime font-bold text-ink" : "font-semibold text-white hover:bg-on-black-surface",
+          )
+        }
+      >
+        Your devices
+      </NavLink>
       <Button variant="onBlack" size="block" onClick={() => void signOut()}>
         <svg
           aria-hidden="true"

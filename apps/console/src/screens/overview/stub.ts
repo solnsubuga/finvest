@@ -9,9 +9,9 @@ import type { ApprovalItem, ApprovalsApi, Kind } from "./api.ts";
 const SOURCES: Record<Kind, { view: Permission; decide: Permission }> = {
   wording_change: { view: "settings.view", decide: "wordings.change" },
   ledger_correction: { view: "finance.view", decide: "finance.view" },
-  pot_transfer: { view: "reconciliation.view", decide: "reconciliation.view" },
+  pot_transfer: { view: "reconciliation.view", decide: "reconciliation.change" },
   bank_transfer_match: { view: "reconciliation.view", decide: "bank_transfers.change" },
-  day_close: { view: "reconciliation.view", decide: "reconciliation.view" },
+  day_close: { view: "reconciliation.view", decide: "reconciliation.change" },
   dealing_order: { view: "dealing_desk.view", decide: "dealing_desk.view" },
   dealing_result: { view: "dealing_desk.view", decide: "dealing_desk.view" },
   buffer_rules: { view: "dealing_desk.view", decide: "dealing_orders.change" },
@@ -29,6 +29,8 @@ const SOURCES: Record<Kind, { view: Permission; decide: Permission }> = {
   payout_account: { view: "review_queue.view", decide: "review_queue.view" },
   deposit_reassignment: { view: "reconciliation.view", decide: "deposit_reassignments.change" },
   tax_remittance: { view: "finance.view", decide: "tax_remittances.change" },
+  payout_resolution: { view: "reconciliation.view", decide: "reconciliation.change" },
+  payout_release: { view: "review_queue.view", decide: "payout_accounts.change" },
 };
 
 interface Reader {
@@ -52,6 +54,7 @@ export function createStubApprovalsApi(reader: Reader, now: () => number = Date.
     ["buffer_rules", "-NstubRules000000001", "UGX from 2026-12-01", "Daniel Okello", 1190],
     ["day_close", "-NstubClose000000012", "2026-11-12", "Daniel Kato", 600],
     ["payout_account", "-NstubDest0000000088", "bank", "Peter Okello", 2900],
+    ["payout_release", "-NstubRelease0000003", "-NstubPayout00000017", "Grace Auma", 70],
   ];
   const held = new Set(reader.permissions);
   const items: ApprovalItem[] =

@@ -19,7 +19,7 @@ function Chip({ label, selected, onPress, testID }: { label: string; selected: b
   return (
     <Pressable
       accessibilityRole="radio"
-      accessibilityState={{ selected }}
+      aria-checked={selected}
       onPress={onPress}
       testID={testID}
       style={({ pressed }) => [styles.chip, selected && styles.chipOn, pressed && { opacity: 0.7 }]}
@@ -139,7 +139,7 @@ function DocumentForm({ check }: { check: IdentityCheck | null }) {
                 <Pressable
                   key={option.code}
                   accessibilityRole="radio"
-                  accessibilityState={{ selected: country === option.code }}
+                  aria-checked={country === option.code}
                   onPress={() => setCountry(option.code)}
                   style={({ pressed }) => [styles.other, pressed && { opacity: 0.7 }]}
                 >
@@ -160,7 +160,7 @@ function DocumentForm({ check }: { check: IdentityCheck | null }) {
               <Pressable
                 key={type}
                 accessibilityRole="radio"
-                accessibilityState={{ selected }}
+                aria-checked={selected}
                 onPress={() => setDocumentType(type)}
                 testID={`document-${type}`}
                 style={({ pressed }) => [styles.option, selected && styles.optionOn, pressed && { opacity: 0.8 }]}

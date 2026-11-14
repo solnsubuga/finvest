@@ -91,8 +91,8 @@ export default function Security() {
       </View>
 
       {steps.status === "loading" ? (
-        <View style={{ marginTop: 40 }} accessibilityLabel="Loading">
-          <ActivityIndicator color={colors.black} />
+        <View style={{ marginTop: 40 }}>
+          <ActivityIndicator accessibilityLabel="Loading" color={colors.black} />
         </View>
       ) : null}
 

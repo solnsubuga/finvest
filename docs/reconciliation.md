@@ -119,7 +119,7 @@ The pots closed today are the two ioTec wallets and the trust bank account (`dom
 
 ## Staff routes
 
-In `backend/app/modules/reconciliation/api.py`. Everything needs `reconciliation.view`. Approving a close also needs the second step in the last ten minutes (403 `confirm_it_is_you`). Refusals carry their code in `fields`.
+In `backend/app/modules/reconciliation/api.py`. Reading needs `reconciliation.view`. Every `POST` needs `reconciliation.change`, held by finance and admin. Approving a close also needs the second step in the last ten minutes (403 `confirm_it_is_you`). Refusals carry their code in `fields`.
 
 | Route | What it does |
 | --- | --- |
@@ -135,11 +135,11 @@ In `backend/app/modules/reconciliation/api.py`. Everything needs `reconciliation
 
 A statement line's narrative is shown only as `counterparty_hint`. Statements are uploaded in the `standard` layout (`domain/formats.py`): a header row `Date,Details,Reference,In,Out`, dates as `YYYY-MM-DD`, and money in and money out in separate columns. Each provider's own export gets a format once one of its files has been seen. Until then staff save the export in that layout.
 
-The journeys import ioTec's statements and sign every day off through these routes (`tests/journeys/test_99_day_close.py`). Pot transfers have no routes yet.
+The journeys import ioTec's statements and sign every day off through these routes (`tests/journeys/test_99_day_close.py`).
 
 ### In the console
 
-"Close the day" on the Reconciliation screen (`apps/console/src/screens/reconciliation/dayclose/`) opens the first day not yet closed. For each pot it shows the statement's closing balance, the ledger's, the open differences and what is unexplained, with every open line and movement. Staff import a missing statement there, pair a line with one of its `suggested_movements` and a reason, and prepare the close once nothing blocks it. Anyone else then sees approve and send back, and the person who prepared it can only take it back. The screen decides nothing: it words what the routes answer and reloads the day after any refusal. These routes take no idempotency key, since none of them moves money and a repeat is refused rather than done twice.
+"Close the day" on the Reconciliation screen (`apps/console/src/screens/reconciliation/dayclose/`) opens the first day not yet closed. For each pot it shows the statement's closing balance, the ledger's, the open differences and what is unexplained, with every open line and movement. Staff import a missing statement there, pair a line with one of its `suggested_movements` and a reason, and prepare the close once nothing blocks it. Anyone else then sees approve and send back, and the person who prepared it can only take it back. Someone without `reconciliation.change` sees the day and nothing to press. The screen decides nothing: it words what the routes answer and reloads the day after any refusal. These routes take no idempotency key, since none of them moves money and a repeat is refused rather than done twice.
 
 ## Transfers between pots
 
@@ -159,3 +159,15 @@ Finvest moves its own money between pots, such as sweeping collected mobile mone
 | Reviewed staff money path | `pot_transfer` is in the ledger's list of source types staff may post |
 
 The transfer's ID is the entry's `source_id`, so a statement line that carries it is matched by reference. Otherwise staff pair it by hand. A sweep that has left the wallet but not reached the bank stays an open exception until it arrives.
+
+### Routes
+
+In `backend/app/modules/reconciliation/transfers_api.py`. Seeing transfers needs `reconciliation.view`. Recording, approving and declining need `reconciliation.change`, and approving and declining also need the second step in the last ten minutes (403 `confirm_it_is_you`). All three take an `Idempotency-Key`: a retried request returns what the first one did, and a key reused for a different request is refused with `idempotency_key_reused`.
+
+| Route | What it does |
+| --- | --- |
+| `GET /staff/reconciliation/pot-transfers` | Transfers waiting for a second person, oldest first, at most 100 |
+| `GET /staff/reconciliation/pot-transfers/{id}` | One transfer, in any status, with the entry its approval posted |
+| `POST /staff/reconciliation/pot-transfers` | `{from_pot, to_pot, sent, received, value_date, provider_reference, reason}`, each pot as `{source, account_reference}`. 201, proposed. 422 `pot_unknown`, `transfer_same_pot`, `currency_not_supported`, `transfer_received_more_than_sent`, `transfer_fee_not_allowed` or `transfer_in_the_future`; 409 `transfer_in_a_closed_day` or `transfer_already_recorded` |
+| `POST /staff/reconciliation/pot-transfers/{id}/approve` | Posts it. 403 `transfer_needs_second_person` for whoever recorded it; 409 `transfer_already_decided` or `transfer_more_than_the_pot_holds` |
+| `POST /staff/reconciliation/pot-transfers/{id}/decline` | `{reason}`. Nothing is posted. 403 `transfer_needs_second_person`; 409 `transfer_already_decided` |

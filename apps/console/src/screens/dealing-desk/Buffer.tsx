@@ -414,7 +414,9 @@ function ProposalItem({ proposal, who, busy, error, onApprove, onWithdraw, onSen
         <p className="m-0 text-xs font-bold text-muted">{PROPOSAL_STATUS[proposal.status]}</p>
       </div>
       <RulesRows rules={proposal.rules} />
-      <Row name="Proposed by" value={`${who(proposal.proposedBy)}, ${formatWhen(proposal.proposedAt)}`} />
+      <dl className="m-0 flex flex-col">
+        <Row name="Proposed by" value={`${who(proposal.proposedBy)}, ${formatWhen(proposal.proposedAt)}`} />
+      </dl>
       <p className="m-0 text-sm leading-[1.45] text-muted">{proposal.reason}</p>
       {proposal.decisionNote ? (
         <p className="m-0 rounded-md bg-surface-sunken px-3 py-2 text-sm leading-[1.45]">

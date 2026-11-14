@@ -60,6 +60,9 @@ export const ACTION_PERMISSIONS = [
   "announcements.send",
   // Matching a bank transfer to a statement line, refusing it, and approving someone else's match.
   "bank_transfers.change",
+  // Importing a statement, pairing by hand, signing a day close, and settling a payout the
+  // provider never answered for. Every signature still takes a second person.
+  "reconciliation.change",
   // Proposing to move a bank transfer credited to the wrong client, approving or sending back someone else's, withdrawing your own.
   "deposit_reassignments.change",
   // Checking a client's proof of a payout account, approving someone else's check, refusing it, or removing the account.
@@ -82,6 +85,8 @@ export const ACTION_PERMISSIONS = [
   "identity_checks.review",
   // Recording a payment of withholding tax to URA, approving someone else's, or declining it.
   "tax_remittances.change",
+  // Proposing a new mobile number for a client, or approving or rejecting someone else's.
+  "client_phones.change",
 ] as const;
 
 export const PERMISSIONS = [...SCREEN_PERMISSIONS, ...ACTION_PERMISSIONS] as const;

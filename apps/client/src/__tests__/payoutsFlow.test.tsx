@@ -172,7 +172,7 @@ describe("the maturity choice", () => {
     expect(await screen.findByText("Your money is ready. Choose where to be paid and we will send it.")).toBeTruthy();
     await fireEvent.press(screen.getByTestId("choose-pay-out"));
     await screen.findByTestId("pay-out-amount");
-    expect(screen.getByTestId("account-demo-account-bank").props.accessibilityState).toMatchObject({ disabled: true });
+    expect(screen.getByTestId("account-demo-account-bank")).toBeDisabled();
 
     mockInvesting.failPayOut = "unavailable";
     await fireEvent.press(screen.getByTestId("pay-out-send"));

@@ -217,13 +217,13 @@ export default function Help() {
             returnKeyType="send"
             maxLength={MAX_MESSAGE}
             editable={chat.status === "ready"}
-            style={[styles.input, webNoOutline]}
+            style={styles.input}
             testID="chat-input"
           />
           <Pressable
             accessibilityRole="button"
             accessibilityLabel="Send"
-            accessibilityState={{ disabled: draft.trim().length === 0 }}
+            aria-disabled={draft.trim().length === 0}
             disabled={draft.trim().length === 0 || chat.status !== "ready"}
             onPress={send}
             style={({ pressed }) => [
@@ -263,7 +263,6 @@ function Bubble({ message }: { message: Message }) {
 }
 
 // React Native Web draws its own focus ring. The border already shows focus.
-const webNoOutline = Platform.OS === "web" ? ({ outlineStyle: "none" } as object) : null;
 
 const styles = StyleSheet.create({
   page: { flex: 1, paddingHorizontal: 20, paddingBottom: 16, gap: 12 },

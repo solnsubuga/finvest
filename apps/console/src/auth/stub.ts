@@ -50,6 +50,7 @@ export const STUB_ROLE_PERMISSIONS: Record<Role, readonly Permission[]> = {
     "email_suppressions.lift",
     "payout_accounts.change",
     "identity_checks.review",
+    "client_phones.change",
   ],
   finance: [
     "overview.view",
@@ -58,6 +59,7 @@ export const STUB_ROLE_PERMISSIONS: Record<Role, readonly Permission[]> = {
     "clients.view",
     "money_movement.view",
     "reconciliation.view",
+    "reconciliation.change",
     "investments.view",
     "automatic_investing.view",
     "goals.view",

@@ -316,7 +316,7 @@ function SendProof({ account, onChanged, again = false }: { account: PayoutAccou
               <Pressable
                 key={kind}
                 accessibilityRole="radio"
-                accessibilityState={{ checked: on }}
+                aria-checked={on}
                 onPress={() => setProofKind(kind)}
                 style={[styles.option, on && styles.selected]}
                 testID={`proof-${kind}`}

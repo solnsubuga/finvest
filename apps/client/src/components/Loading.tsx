@@ -8,8 +8,8 @@ import { TextLink } from "./Button";
 /** A spinner with a name, for a list or a page that is being read. */
 export function Loading({ label }: { label: string }) {
   return (
-    <View style={{ paddingVertical: 32, alignItems: "center" }} accessibilityLabel={label}>
-      <ActivityIndicator color={colors.black} />
+    <View style={{ paddingVertical: 32, alignItems: "center" }}>
+      <ActivityIndicator accessibilityLabel={label} color={colors.black} />
     </View>
   );
 }

@@ -1,5 +1,8 @@
 import { useCallback, useEffect, useState } from "react";
+import { apiBaseUrl, createHttp } from "@/api/http.ts";
+import { useAuth } from "@/auth/context.ts";
 import { isStubAuth } from "@/auth/index.ts";
+import { createHttpDirectory } from "@/directory/http.ts";
 import { Button } from "@/components/ui/button.tsx";
 import { PageHeader } from "@/pages/PageHeader.tsx";
 import {
@@ -14,6 +17,7 @@ import {
 import { Cards, ChecksTable, Panel, PanelRow } from "./Checks.tsx";
 import { SignOffs, TotalsForm, TotalsPanel, type FinanceActions } from "./Finance.tsx";
 import { BLOCKER_LABELS, formatAmount } from "./labels.ts";
+import { createHttpMigrationApi } from "./http.ts";
 import { createStubMigrationApi } from "./stub.ts";
 import { Problems, TrialForm } from "./Trial.tsx";
 
@@ -21,12 +25,21 @@ function sampleStart(sample: string | null): "empty" | "imported" | "unconfirmed
   return sample === "empty" || sample === "unconfirmed" ? sample : "imported";
 }
 
-/** Sample figures under `pnpm dev` or a preview build, like sign-in. Otherwise nothing until the API client exists. */
-const defaultApi: MigrationApi = isStubAuth()
-  ? // Under the stub, `?sample=empty` shows the screen before any trial has been run, and
+/**
+ * Sample figures under `pnpm dev` or a preview build, like sign-in. Otherwise the real routes,
+ * or "not connected" in a build that names no API.
+ */
+function defaultApi(staffId: string | null): MigrationApi {
+  if (isStubAuth()) {
+    // Under the stub, `?sample=empty` shows the screen before any trial has been run, and
     // `?sample=unconfirmed` shows Finvest 1.0 totals waiting for a second person.
-    createStubMigrationApi(150, sampleStart(new URLSearchParams(window.location.search).get("sample")))
-  : notConnectedMigrationApi;
+    return createStubMigrationApi(150, sampleStart(new URLSearchParams(window.location.search).get("sample")));
+  }
+  const base = apiBaseUrl();
+  if (!base || !staffId) return notConnectedMigrationApi;
+  const http = createHttp(base);
+  return createHttpMigrationApi(http, createHttpDirectory(http), staffId);
+}
 
 type Load = { state: "loading" } | { state: "failed"; message: string } | { state: "ready"; value: Overview };
 
@@ -37,7 +50,7 @@ function today(now: Date): string {
   return new Intl.DateTimeFormat("en-CA", { timeZone: "Africa/Kampala" }).format(now);
 }
 
-export function MigrationScreen({ api = defaultApi, now = () => new Date() }: { api?: MigrationApi; now?: () => Date }) {
+export function MigrationScreen({ api, now = () => new Date() }: { api: MigrationApi; now?: () => Date }) {
   const [load, setLoad] = useState<Load>({ state: "loading" });
   const [formOpen, setFormOpen] = useState<"trial" | "totals" | null>(null);
   const [busy, setBusy] = useState(false);
@@ -73,7 +86,7 @@ export function MigrationScreen({ api = defaultApi, now = () => new Date() }: { 
     } catch (error) {
       (inForm ? setFormError : setActionError)(migrationErrorMessage(error));
       // Someone else changed it first: show what stands now.
-      if (error instanceof MigrationError && error.code === "conflict") {
+      if (error instanceof MigrationError && (error.code === "conflict" || error.code === "stale")) {
         const latest = await fetchOverview();
         if (latest.state === "ready") setLoad(latest);
       }
@@ -237,5 +250,8 @@ function Ready({ overview, form, actionError, actions, onOpenTotals, onConfirmTo
 }
 
 export default function MigrationPage() {
-  return <MigrationScreen />;
+  const { session } = useAuth();
+  const staffId = session?.staffId ?? null;
+  const [api] = useState(() => defaultApi(staffId));
+  return <MigrationScreen api={api} />;
 }

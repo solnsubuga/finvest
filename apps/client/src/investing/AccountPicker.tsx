@@ -31,7 +31,8 @@ export function AccountPicker({ accounts, chosen, onChoose, allowWaiting = false
           <Pressable
             key={account.id}
             accessibilityRole="radio"
-            accessibilityState={{ checked: selected, disabled }}
+            aria-checked={selected}
+            aria-disabled={disabled}
             accessibilityLabel={account.label}
             disabled={disabled}
             onPress={() => onChoose(account.id)}

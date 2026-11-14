@@ -364,7 +364,8 @@
               "investment_correction",
               "payout_resolution",
               "tax_remittance",
-              "deposit_reassignment"
+              "deposit_reassignment",
+              "payout_release"
             ],
             "title": "Kind",
             "type": "string"
@@ -832,6 +833,21 @@
           "cost"
         ],
         "title": "BillsOut",
+        "type": "object"
+      },
+      "Body_add_photo_client_claim_check_photos__kind__put": {
+        "properties": {
+          "photo": {
+            "contentMediaType": "application/octet-stream",
+            "description": "JPEG, PNG or WebP, at most 10 MiB",
+            "title": "Photo",
+            "type": "string"
+          }
+        },
+        "required": [
+          "photo"
+        ],
+        "title": "Body_add_photo_client_claim_check_photos__kind__put",
         "type": "object"
       },
       "Body_add_photo_client_identity_check_photos__kind__put": {
@@ -1361,6 +1377,17 @@
         "title": "CheckStatus",
         "type": "string"
       },
+      "ClaimCheckStatus": {
+        "enum": [
+          "draft",
+          "needs_review",
+          "awaiting_client",
+          "matched",
+          "not_matched"
+        ],
+        "title": "ClaimCheckStatus",
+        "type": "string"
+      },
       "ClaimComplete": {
         "additionalProperties": false,
         "properties": {
@@ -1431,6 +1458,23 @@
           "cannot_be_invited"
         ],
         "title": "ClaimProgressView",
+        "type": "object"
+      },
+      "ClaimQueue": {
+        "additionalProperties": false,
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/StaffClaimCheck"
+            },
+            "title": "Items",
+            "type": "array"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "title": "ClaimQueue",
         "type": "object"
       },
       "ClaimStart": {
@@ -1744,6 +1788,105 @@
           "check"
         ],
         "title": "ClientCheckEnvelope",
+        "type": "object"
+      },
+      "ClientClaimCheck": {
+        "additionalProperties": false,
+        "description": "The client's own claim check. Nothing about who decided.",
+        "properties": {
+          "client_message": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Client Message"
+          },
+          "id": {
+            "maxLength": 20,
+            "minLength": 20,
+            "pattern": "^[-0-9A-Z_a-z]{20}$",
+            "title": "Id",
+            "type": "string"
+          },
+          "missing": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Missing",
+            "type": "array"
+          },
+          "photos": {
+            "items": {
+              "$ref": "#/components/schemas/ClientPhoto"
+            },
+            "title": "Photos",
+            "type": "array"
+          },
+          "retake_photos": {
+            "items": {
+              "$ref": "#/components/schemas/PhotoKind"
+            },
+            "title": "Retake Photos",
+            "type": "array"
+          },
+          "retaken": {
+            "items": {
+              "$ref": "#/components/schemas/PhotoKind"
+            },
+            "title": "Retaken",
+            "type": "array"
+          },
+          "status": {
+            "$ref": "#/components/schemas/ClaimCheckStatus"
+          },
+          "submitted_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Submitted At"
+          }
+        },
+        "required": [
+          "id",
+          "status",
+          "photos",
+          "missing",
+          "retake_photos",
+          "retaken",
+          "client_message",
+          "submitted_at"
+        ],
+        "title": "ClientClaimCheck",
+        "type": "object"
+      },
+      "ClientClaimCheckEnvelope": {
+        "additionalProperties": false,
+        "properties": {
+          "check": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ClientClaimCheck"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "check"
+        ],
+        "title": "ClientClaimCheckEnvelope",
         "type": "object"
       },
       "ClientComplaint": {
@@ -6385,6 +6528,30 @@
         "title": "MobileMoneyPayment",
         "type": "object"
       },
+      "MoneyIn": {
+        "additionalProperties": false,
+        "properties": {
+          "currency": {
+            "enum": [
+              "UGX",
+              "USD"
+            ],
+            "title": "Currency",
+            "type": "string"
+          },
+          "minor": {
+            "exclusiveMinimum": 0.0,
+            "title": "Minor",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "minor",
+          "currency"
+        ],
+        "title": "MoneyIn",
+        "type": "object"
+      },
       "MoneyOut": {
         "additionalProperties": false,
         "properties": {
@@ -8016,46 +8183,13 @@
         "title": "PlanStatus",
         "type": "string"
       },
-      "PotOut": {
+      "PotIn": {
         "additionalProperties": false,
-        "description": "A place real money sits, with its last imported statement day.",
         "properties": {
           "account_reference": {
+            "maxLength": 40,
+            "minLength": 1,
             "title": "Account Reference",
-            "type": "string"
-          },
-          "currency": {
-            "enum": [
-              "UGX",
-              "USD"
-            ],
-            "title": "Currency",
-            "type": "string"
-          },
-          "last_closing": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/MoneyOut"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "last_statement_date": {
-            "anyOf": [
-              {
-                "format": "date",
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Last Statement Date"
-          },
-          "name": {
-            "title": "Name",
             "type": "string"
           },
           "source": {
@@ -8069,13 +8203,9 @@
         },
         "required": [
           "source",
-          "account_reference",
-          "name",
-          "currency",
-          "last_statement_date",
-          "last_closing"
+          "account_reference"
         ],
-        "title": "PotOut",
+        "title": "PotIn",
         "type": "object"
       },
       "PreferenceChange": {
@@ -10271,6 +10401,7 @@
                 "clients.lock",
                 "money_movement.view",
                 "reconciliation.view",
+                "reconciliation.change",
                 "investments.view",
                 "automatic_investing.view",
                 "goals.view",
@@ -11396,6 +11527,102 @@
           "allowed"
         ],
         "title": "StaffCheck",
+        "type": "object"
+      },
+      "StaffClaimCheck": {
+        "additionalProperties": false,
+        "properties": {
+          "check_id": {
+            "maxLength": 20,
+            "minLength": 20,
+            "pattern": "^[-0-9A-Z_a-z]{20}$",
+            "title": "Check Id",
+            "type": "string"
+          },
+          "client_id": {
+            "maxLength": 20,
+            "minLength": 20,
+            "pattern": "^[-0-9A-Z_a-z]{20}$",
+            "title": "Client Id",
+            "type": "string"
+          },
+          "client_message": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Client Message"
+          },
+          "decided_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Decided At"
+          },
+          "id": {
+            "maxLength": 20,
+            "minLength": 20,
+            "pattern": "^[-0-9A-Z_a-z]{20}$",
+            "title": "Id",
+            "type": "string"
+          },
+          "photos": {
+            "items": {
+              "$ref": "#/components/schemas/StaffPhoto"
+            },
+            "title": "Photos",
+            "type": "array"
+          },
+          "retake_photos": {
+            "items": {
+              "$ref": "#/components/schemas/PhotoKind"
+            },
+            "title": "Retake Photos",
+            "type": "array"
+          },
+          "status": {
+            "$ref": "#/components/schemas/ClaimCheckStatus"
+          },
+          "submission": {
+            "title": "Submission",
+            "type": "integer"
+          },
+          "submitted_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Submitted At"
+          }
+        },
+        "required": [
+          "id",
+          "client_id",
+          "check_id",
+          "status",
+          "submission",
+          "submitted_at",
+          "photos",
+          "retake_photos",
+          "client_message",
+          "decided_at"
+        ],
+        "title": "StaffClaimCheck",
         "type": "object"
       },
       "StaffComplaint": {
@@ -12893,6 +13120,7 @@
                 "clients.lock",
                 "money_movement.view",
                 "reconciliation.view",
+                "reconciliation.change",
                 "investments.view",
                 "automatic_investing.view",
                 "goals.view",
@@ -13527,6 +13755,154 @@
           "interest_before_tax"
         ],
         "title": "TotalsView",
+        "type": "object"
+      },
+      "TransferIn": {
+        "additionalProperties": false,
+        "description": "A transfer that has already been made, as the provider or bank shows it.",
+        "properties": {
+          "from_pot": {
+            "$ref": "#/components/schemas/PotIn"
+          },
+          "provider_reference": {
+            "maxLength": 100,
+            "minLength": 1,
+            "title": "Provider Reference",
+            "type": "string"
+          },
+          "reason": {
+            "maxLength": 500,
+            "minLength": 1,
+            "title": "Reason",
+            "type": "string"
+          },
+          "received": {
+            "$ref": "#/components/schemas/MoneyIn"
+          },
+          "sent": {
+            "$ref": "#/components/schemas/MoneyIn"
+          },
+          "to_pot": {
+            "$ref": "#/components/schemas/PotIn"
+          },
+          "value_date": {
+            "format": "date",
+            "title": "Value Date",
+            "type": "string"
+          }
+        },
+        "required": [
+          "from_pot",
+          "to_pot",
+          "sent",
+          "received",
+          "value_date",
+          "provider_reference",
+          "reason"
+        ],
+        "title": "TransferIn",
+        "type": "object"
+      },
+      "TransferOut": {
+        "additionalProperties": false,
+        "properties": {
+          "decided_by": {
+            "anyOf": [
+              {
+                "maxLength": 20,
+                "minLength": 20,
+                "pattern": "^[-0-9A-Z_a-z]{20}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Decided By"
+          },
+          "fee": {
+            "$ref": "#/components/schemas/MoneyOut"
+          },
+          "from_pot": {
+            "$ref": "#/components/schemas/app__modules__reconciliation__transfers_api__PotOut"
+          },
+          "id": {
+            "maxLength": 20,
+            "minLength": 20,
+            "pattern": "^[-0-9A-Z_a-z]{20}$",
+            "title": "Id",
+            "type": "string"
+          },
+          "ledger_entry_id": {
+            "anyOf": [
+              {
+                "maxLength": 20,
+                "minLength": 20,
+                "pattern": "^[-0-9A-Z_a-z]{20}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ledger Entry Id"
+          },
+          "proposed_at": {
+            "format": "date-time",
+            "title": "Proposed At",
+            "type": "string"
+          },
+          "proposed_by": {
+            "maxLength": 20,
+            "minLength": 20,
+            "pattern": "^[-0-9A-Z_a-z]{20}$",
+            "title": "Proposed By",
+            "type": "string"
+          },
+          "provider_reference": {
+            "title": "Provider Reference",
+            "type": "string"
+          },
+          "received": {
+            "$ref": "#/components/schemas/MoneyOut"
+          },
+          "sent": {
+            "$ref": "#/components/schemas/MoneyOut"
+          },
+          "status": {
+            "enum": [
+              "proposed",
+              "approved",
+              "declined"
+            ],
+            "title": "Status",
+            "type": "string"
+          },
+          "to_pot": {
+            "$ref": "#/components/schemas/app__modules__reconciliation__transfers_api__PotOut"
+          },
+          "value_date": {
+            "format": "date",
+            "title": "Value Date",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "from_pot",
+          "to_pot",
+          "sent",
+          "received",
+          "fee",
+          "value_date",
+          "provider_reference",
+          "status",
+          "proposed_by",
+          "proposed_at",
+          "decided_by",
+          "ledger_entry_id"
+        ],
+        "title": "TransferOut",
         "type": "object"
       },
       "TrialHistoryView": {
@@ -14562,6 +14938,96 @@
           "exceptions"
         ],
         "title": "PositionOut",
+        "type": "object"
+      },
+      "app__modules__reconciliation__api__PotOut": {
+        "additionalProperties": false,
+        "description": "A place real money sits, with its last imported statement day.",
+        "properties": {
+          "account_reference": {
+            "title": "Account Reference",
+            "type": "string"
+          },
+          "currency": {
+            "enum": [
+              "UGX",
+              "USD"
+            ],
+            "title": "Currency",
+            "type": "string"
+          },
+          "last_closing": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/MoneyOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "last_statement_date": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Statement Date"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "source": {
+            "enum": [
+              "iotec",
+              "bank"
+            ],
+            "title": "Source",
+            "type": "string"
+          }
+        },
+        "required": [
+          "source",
+          "account_reference",
+          "name",
+          "currency",
+          "last_statement_date",
+          "last_closing"
+        ],
+        "title": "PotOut",
+        "type": "object"
+      },
+      "app__modules__reconciliation__transfers_api__PotOut": {
+        "additionalProperties": false,
+        "properties": {
+          "account_reference": {
+            "title": "Account Reference",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "source": {
+            "enum": [
+              "iotec",
+              "bank"
+            ],
+            "title": "Source",
+            "type": "string"
+          }
+        },
+        "required": [
+          "source",
+          "account_reference",
+          "name"
+        ],
+        "title": "PotOut",
         "type": "object"
       },
       "app__modules__support__api__Amount": {
@@ -15738,6 +16204,352 @@
         "summary": "My Claim",
         "tags": [
           "account claim"
+        ]
+      }
+    },
+    "/client/claim-check": {
+      "get": {
+        "description": "The signed-in client's claim check, or `null` before they have started it.",
+        "operationId": "my_claim_check_client_claim_check_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ClientClaimCheckEnvelope"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "summary": "My Claim Check",
+        "tags": [
+          "identity checks"
+        ]
+      },
+      "post": {
+        "description": "Start the claim check. Only a client carried over from Finvest 1.0 has one.",
+        "operationId": "start_client_claim_check_post",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ClientClaimCheck"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "summary": "Start",
+        "tags": [
+          "identity checks"
+        ]
+      }
+    },
+    "/client/claim-check/photos/{kind}": {
+      "put": {
+        "description": "Send the selfie or the front of the ID as `multipart/form-data`.",
+        "operationId": "add_photo_client_claim_check_photos__kind__put",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "kind",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/PhotoKind"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_add_photo_client_claim_check_photos__kind__put"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ClientClaimCheck"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "summary": "Add Photo",
+        "tags": [
+          "identity checks"
+        ]
+      }
+    },
+    "/client/claim-check/submit": {
+      "post": {
+        "description": "Hand the photos in. Answers which photos are missing if it is not ready.",
+        "operationId": "submit_client_claim_check_submit_post",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ClientClaimCheck"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "summary": "Submit",
+        "tags": [
+          "identity checks"
         ]
       }
     },
@@ -24803,6 +25615,597 @@
         "summary": "Staff Runs",
         "tags": [
           "staff autoinvest"
+        ]
+      }
+    },
+    "/staff/claim-checks": {
+      "get": {
+        "description": "Claim checks waiting for a person, the longest waiting first.",
+        "operationId": "queue_staff_claim_checks_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ClaimQueue"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "summary": "Queue",
+        "tags": [
+          "identity checks"
+        ]
+      }
+    },
+    "/staff/claim-checks/{claim_check_id}": {
+      "get": {
+        "operationId": "one_staff_claim_checks__claim_check_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "claim_check_id",
+            "required": true,
+            "schema": {
+              "maxLength": 20,
+              "minLength": 20,
+              "pattern": "^[-0-9A-Z_a-z]{20}$",
+              "title": "Claim Check Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StaffClaimCheck"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "summary": "One",
+        "tags": [
+          "identity checks"
+        ]
+      }
+    },
+    "/staff/claim-checks/{claim_check_id}/ask-for-photos": {
+      "post": {
+        "description": "Ask the client to take the named photos again, with a message.",
+        "operationId": "ask_for_photos_staff_claim_checks__claim_check_id__ask_for_photos_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "claim_check_id",
+            "required": true,
+            "schema": {
+              "maxLength": 20,
+              "minLength": 20,
+              "pattern": "^[-0-9A-Z_a-z]{20}$",
+              "title": "Claim Check Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AskForPhotosBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StaffClaimCheck"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "summary": "Ask For Photos",
+        "tags": [
+          "identity checks"
+        ]
+      }
+    },
+    "/staff/claim-checks/{claim_check_id}/match": {
+      "post": {
+        "description": "The photos match each other and the carried-over check. It cannot be undone.",
+        "operationId": "match_staff_claim_checks__claim_check_id__match_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "claim_check_id",
+            "required": true,
+            "schema": {
+              "maxLength": 20,
+              "minLength": 20,
+              "pattern": "^[-0-9A-Z_a-z]{20}$",
+              "title": "Claim Check Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReasonBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StaffClaimCheck"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "summary": "Match",
+        "tags": [
+          "identity checks"
+        ]
+      }
+    },
+    "/staff/claim-checks/{claim_check_id}/no-match": {
+      "post": {
+        "description": "The photos do not match. It cannot be undone; staff then follow the claim up.",
+        "operationId": "no_match_staff_claim_checks__claim_check_id__no_match_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "claim_check_id",
+            "required": true,
+            "schema": {
+              "maxLength": 20,
+              "minLength": 20,
+              "pattern": "^[-0-9A-Z_a-z]{20}$",
+              "title": "Claim Check Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReasonBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StaffClaimCheck"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "summary": "No Match",
+        "tags": [
+          "identity checks"
+        ]
+      }
+    },
+    "/staff/claim-checks/{claim_check_id}/photo-links": {
+      "post": {
+        "description": "Short-lived links to the photos. Each call is written to the audit trail.",
+        "operationId": "photo_links_staff_claim_checks__claim_check_id__photo_links_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "claim_check_id",
+            "required": true,
+            "schema": {
+              "maxLength": 20,
+              "minLength": 20,
+              "pattern": "^[-0-9A-Z_a-z]{20}$",
+              "title": "Claim Check Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PhotoLinks"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "summary": "Photo Links",
+        "tags": [
+          "identity checks"
         ]
       }
     },
@@ -36005,6 +37408,500 @@
         ]
       }
     },
+    "/staff/reconciliation/pot-transfers": {
+      "get": {
+        "description": "Transfers waiting for a second person, oldest first.",
+        "operationId": "waiting_staff_reconciliation_pot_transfers_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 50,
+              "maximum": 100,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/TransferOut"
+                  },
+                  "title": "Response Waiting Staff Reconciliation Pot Transfers Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          }
+        },
+        "summary": "Waiting",
+        "tags": [
+          "staff reconciliation"
+        ]
+      },
+      "post": {
+        "description": "Record a transfer that has been made. Nothing is posted until someone else approves it.\n\n422 `pot_unknown`, `transfer_same_pot`, `currency_not_supported`,\n`transfer_received_more_than_sent`, `transfer_fee_not_allowed` (a transfer out of the bank\ncannot carry a fee yet) or `transfer_in_the_future`; 409 `transfer_in_a_closed_day` or\n`transfer_already_recorded` for a provider reference already recorded from that pot.",
+        "operationId": "record_staff_reconciliation_pot_transfers_post",
+        "parameters": [
+          {
+            "description": "A value the caller chooses once per intended action and sends again on every retry of it. Pattern: `[A-Za-z0-9._:-]{8,128}`.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "A value the caller chooses once per intended action and sends again on every retry of it. Pattern: `[A-Za-z0-9._:-]{8,128}`.",
+              "title": "Idempotency-Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TransferIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TransferOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          }
+        },
+        "summary": "Record",
+        "tags": [
+          "staff reconciliation"
+        ]
+      }
+    },
+    "/staff/reconciliation/pot-transfers/{transfer_id}": {
+      "get": {
+        "description": "One transfer, in any status.",
+        "operationId": "get_transfer_staff_reconciliation_pot_transfers__transfer_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "transfer_id",
+            "required": true,
+            "schema": {
+              "maxLength": 20,
+              "minLength": 20,
+              "pattern": "^[-0-9A-Z_a-z]{20}$",
+              "title": "Transfer Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TransferOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          }
+        },
+        "summary": "Get Transfer",
+        "tags": [
+          "staff reconciliation"
+        ]
+      }
+    },
+    "/staff/reconciliation/pot-transfers/{transfer_id}/approve": {
+      "post": {
+        "description": "The second signature, which posts the transfer. 403 `transfer_needs_second_person` for\nwhoever recorded it; 409 `transfer_already_decided` or `transfer_more_than_the_pot_holds`\nwhen the books say the sending pot never held that much.",
+        "operationId": "approve_staff_reconciliation_pot_transfers__transfer_id__approve_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "transfer_id",
+            "required": true,
+            "schema": {
+              "maxLength": 20,
+              "minLength": 20,
+              "pattern": "^[-0-9A-Z_a-z]{20}$",
+              "title": "Transfer Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "A value the caller chooses once per intended action and sends again on every retry of it. Pattern: `[A-Za-z0-9._:-]{8,128}`.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "A value the caller chooses once per intended action and sends again on every retry of it. Pattern: `[A-Za-z0-9._:-]{8,128}`.",
+              "title": "Idempotency-Key"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TransferOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          }
+        },
+        "summary": "Approve",
+        "tags": [
+          "staff reconciliation"
+        ]
+      }
+    },
+    "/staff/reconciliation/pot-transfers/{transfer_id}/decline": {
+      "post": {
+        "description": "A second person refuses it, with a reason. Nothing is posted. 403\n`transfer_needs_second_person`; 409 `transfer_already_decided`.",
+        "operationId": "decline_staff_reconciliation_pot_transfers__transfer_id__decline_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "transfer_id",
+            "required": true,
+            "schema": {
+              "maxLength": 20,
+              "minLength": 20,
+              "pattern": "^[-0-9A-Z_a-z]{20}$",
+              "title": "Transfer Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "A value the caller chooses once per intended action and sends again on every retry of it. Pattern: `[A-Za-z0-9._:-]{8,128}`.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "A value the caller chooses once per intended action and sends again on every retry of it. Pattern: `[A-Za-z0-9._:-]{8,128}`.",
+              "title": "Idempotency-Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReasonIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TransferOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          }
+        },
+        "summary": "Decline",
+        "tags": [
+          "staff reconciliation"
+        ]
+      }
+    },
     "/staff/reconciliation/pots": {
       "get": {
         "description": "Every pot closed each day, with its last imported statement.",
@@ -36015,7 +37912,7 @@
               "application/json": {
                 "schema": {
                   "items": {
-                    "$ref": "#/components/schemas/PotOut"
+                    "$ref": "#/components/schemas/app__modules__reconciliation__api__PotOut"
                   },
                   "title": "Response Pots Staff Reconciliation Pots Get",
                   "type": "array"

@@ -47,6 +47,7 @@ from app.modules.identity.service import IdentityService
 from app.modules.insights import api as insights_api
 from app.modules.investments import api as investments_api
 from app.modules.kyc import api as kyc_api
+from app.modules.kyc import claims_api as kyc_claims_api
 from app.modules.kyc.domain.provider import IdentityProvider
 from app.modules.kyc.settings import KycSettings
 from app.modules.migration import api as migration_api
@@ -69,6 +70,7 @@ from app.modules.payouts import api as payouts_api
 from app.modules.payouts import staff_api as payouts_staff_api
 from app.modules.payouts import staff_held_api, staff_payouts_api
 from app.modules.reconciliation import api as reconciliation_api
+from app.modules.reconciliation import transfers_api as pot_transfers_api
 from app.modules.support import api as support_api
 from app.modules.tax import api as tax_api
 from app.shared.clock import Clock, SystemClock
@@ -187,6 +189,7 @@ def create_app(
         *staff_payouts_api.routers,
         *staff_held_api.routers,
         *reconciliation_api.routers,
+        *pot_transfers_api.routers,
     ):
         app.include_router(router)
     app.include_router(payments_api.create_router(collections))
@@ -203,6 +206,8 @@ def create_app(
     for router in investments_api.routers:
         app.include_router(router)
     for router in kyc_api.create_routers(identity_sealer, identity_provider, storage):
+        app.include_router(router)
+    for router in kyc_claims_api.create_routers(storage):
         app.include_router(router)
     app.include_router(dealing_api.router)
     app.include_router(dealing_buffer_api.router)

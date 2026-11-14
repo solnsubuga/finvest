@@ -273,7 +273,7 @@ Not built yet: the two-person settlement of a stranded payout, and paying a bank
 
 ## Settling a payout the provider never answered for
 
-When the reads end with no answer, the payout is **stranded**: sent or uncertain, and first sent three or more days ago. The ioTec statement is then the only evidence. Two members of staff with `reconciliation.view` settle it from there (`backend/app/modules/payouts/resolutions.py`, migration 0037).
+When the reads end with no answer, the payout is **stranded**: sent or uncertain, and first sent three or more days ago. The ioTec statement is then the only evidence. Two members of staff with `reconciliation.change` settle it from there (`backend/app/modules/payouts/resolutions.py`, migration 0037).
 
 1. One proposes an outcome with a reason. The evidence is the statement of the ioTec wallet the payout left from (the destination's network, so `mtn` or `airtel`), in the payout's currency.
    - For `paid` they name the line on that wallet's statement that carries the payout's ID, going out, for its amount.
@@ -290,7 +290,7 @@ When the reads end with no answer, the payout is **stranded**: sent or uncertain
 
 Proposing and approving take an `Idempotency-Key`: a retried request returns what the first one did, and a key reused for a different request is refused with `idempotency_key_reused`.
 
-Open proposals wait in the approvals inbox as `payout_resolution`, with the outcome as the subject. The database holds the rules too:
+Open proposals wait in the approvals inbox as `payout_resolution`, with the outcome as the subject. An open proposal to release a held payout waits there as `payout_release`, with the payout's ID as the subject, for whoever may approve it. The database holds the rules too:
 
 | Rule | How |
 | --- | --- |

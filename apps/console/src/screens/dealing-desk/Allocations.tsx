@@ -121,7 +121,7 @@ function ProductCard({ product }: { product: ProductAllocation }) {
       {product.lots.length === 0 ? (
         <p className="m-0 text-sm text-muted">No bills of this product are held.</p>
       ) : (
-        <div className="overflow-x-auto">
+        <div className="overflow-x-auto" tabIndex={0} role="region" aria-label={`Bills held in ${product.productCode}`}>
           <table className="w-full min-w-[720px] border-collapse text-sm whitespace-nowrap">
             <caption className="sr-only">Bills held in {product.productCode}, oldest purchase first</caption>
             <thead>

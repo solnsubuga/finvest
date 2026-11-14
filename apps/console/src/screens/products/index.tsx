@@ -95,7 +95,7 @@ export function ProductsScreen({ api }: { api: CatalogueApi }) {
         </section>
       ) : (
         <div className="flex flex-wrap items-start gap-5">
-          <div className="min-w-0 flex-[3_1_520px] overflow-x-auto rounded-xl border border-border bg-surface">
+          <div className="min-w-0 flex-[3_1_520px] overflow-x-auto rounded-xl border border-border bg-surface" tabIndex={0} role="region" aria-label="Products">
             <table className="w-full min-w-[640px] border-collapse text-md">
               <caption className="sr-only">Products</caption>
               <thead>

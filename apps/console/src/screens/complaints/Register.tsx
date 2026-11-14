@@ -62,7 +62,7 @@ interface RegisterTableProps {
 
 export function RegisterTable({ complaints, selected, today, clientName, clientStatus, ownerName, onSelect }: RegisterTableProps) {
   return (
-    <div className="overflow-x-auto rounded-xl border border-border bg-surface">
+    <div className="overflow-x-auto rounded-xl border border-border bg-surface" tabIndex={0} role="region" aria-label="Complaints register">
       <table className="w-full min-w-[560px] border-collapse text-md">
         <caption className="sr-only">Complaints register</caption>
         <thead>

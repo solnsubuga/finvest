@@ -113,7 +113,8 @@ export default function NewComplaint() {
                 <Pressable
                   key={choice.category}
                   accessibilityRole="radio"
-                  accessibilityState={{ checked: chosen, disabled: locked }}
+                  aria-checked={chosen}
+                  aria-disabled={locked}
                   disabled={locked}
                   onPress={() => {
                     setCategory(choice.category);

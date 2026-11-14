@@ -134,12 +134,12 @@ describe("notification settings", () => {
 
   it("shows the defaults and saves a change as it is made", async () => {
     await openSettings();
-    expect(screen.getByTestId("pref-money-sms").props.accessibilityState.checked).toBe(true);
-    expect(screen.getByTestId("pref-money-email").props.accessibilityState.checked).toBe(false);
+    expect(screen.getByTestId("pref-money-sms")).toBeChecked();
+    expect(screen.getByTestId("pref-money-email")).not.toBeChecked();
 
     await fireEvent.press(screen.getByTestId("pref-money-email"));
     await waitFor(() =>
-      expect(screen.getByTestId("pref-money-email").props.accessibilityState.checked).toBe(true),
+      expect(screen.getByTestId("pref-money-email")).toBeChecked(),
     );
     expect(mockSave).toHaveBeenCalledWith("money", ["push", "sms", "email"]);
   });
@@ -148,14 +148,14 @@ describe("notification settings", () => {
     await openSettings();
     await fireEvent.press(screen.getByTestId("pref-security-sms"));
     await waitFor(() =>
-      expect(screen.getByTestId("pref-security-sms").props.accessibilityState.checked).toBe(false),
+      expect(screen.getByTestId("pref-security-sms")).not.toBeChecked(),
     );
     await fireEvent.press(screen.getByTestId("pref-security-email"));
 
     await screen.findByText(
       "Security alerts always go by SMS or email, so one of them stays on.",
     );
-    expect(screen.getByTestId("pref-security-email").props.accessibilityState.checked).toBe(true);
+    expect(screen.getByTestId("pref-security-email")).toBeChecked();
     expect(mockSave).toHaveBeenCalledTimes(1);
   });
 
@@ -167,7 +167,7 @@ describe("notification settings", () => {
     await fireEvent.press(screen.getByTestId("pref-news-push"));
 
     await screen.findByText("We could not reach Finvest. Check your connection and try again.");
-    expect(screen.getByTestId("pref-news-push").props.accessibilityState.checked).toBe(true);
+    expect(screen.getByTestId("pref-news-push")).toBeChecked();
   });
 });
 

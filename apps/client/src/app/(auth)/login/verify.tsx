@@ -154,7 +154,8 @@ export default function LoginVerify() {
                 <Pressable
                   key={method}
                   accessibilityRole="button"
-                  accessibilityState={{ disabled: busy !== null, busy: busy === method }}
+                  aria-disabled={busy !== null}
+                  aria-busy={busy === method}
                   disabled={busy !== null}
                   onPress={() => choose(method)}
                   style={({ pressed }) => [

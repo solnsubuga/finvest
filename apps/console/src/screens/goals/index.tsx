@@ -229,7 +229,7 @@ function Ready({
 
 function GoalsTable({ goals, selected, onSelect }: { goals: readonly Goal[]; selected: string | null; onSelect: (goalId: string) => void }) {
   return (
-    <div className="overflow-x-auto rounded-xl border border-border bg-surface">
+    <div className="overflow-x-auto rounded-xl border border-border bg-surface" tabIndex={0} role="region" aria-label="Client goals">
       <table className="w-full min-w-[720px] border-collapse text-md">
         <caption className="sr-only">Client goals</caption>
         <thead>

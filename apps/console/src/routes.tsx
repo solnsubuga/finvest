@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import { Navigate, type RouteObject } from "react-router";
+import { DevicesPage } from "@/account/DevicesPage.tsx";
 import { useAuth } from "@/auth/context.ts";
 import { can } from "@/auth/types.ts";
 import { AppShell } from "@/components/AppShell.tsx";
@@ -38,6 +39,8 @@ export const routes: RouteObject[] = [
     element: <AppShell />,
     children: [
       { index: true, element: <Home /> },
+      // Everyone's own devices. Not a menu screen, so no permission: the API lists only yours.
+      { path: "devices", element: <DevicesPage /> },
       ...NAV_ITEMS.map((item) => ({
         path: item.path,
         element: <Guarded item={item}>{screenFor(item)}</Guarded>,

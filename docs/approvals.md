@@ -25,9 +25,9 @@ The inbox only reads. Deciding happens on the owning module's own route, which c
 | --- | --- | --- | --- |
 | `wording_change` | notifications `wording_store.list_wordings` | `settings.view` | `wordings.change` |
 | `ledger_correction` | ledger `corrections.pending_corrections` | `finance.view` | `finance.view` |
-| `pot_transfer` | reconciliation `transfers.waiting` | `reconciliation.view` | `reconciliation.view` |
+| `pot_transfer` | reconciliation `transfers.waiting` | `reconciliation.view` | `reconciliation.change` |
 | `bank_transfer_match` | payments `bank_transfers.matches_awaiting_approval` | `reconciliation.view` | `bank_transfers.change` |
-| `day_close` | reconciliation `day_close.prepared_closes` | `reconciliation.view` | `reconciliation.view` |
+| `day_close` | reconciliation `day_close.prepared_closes` | `reconciliation.view` | `reconciliation.change` |
 | `dealing_order` | dealing `orders.open_orders`, prepared | `dealing_desk.view` | `dealing_orders.change` |
 | `dealing_result` | dealing `orders.open_orders`, result recorded | `dealing_desk.view` | `dealing_orders.change` |
 | `buffer_rules` | dealing `buffer.waiting_proposals`. The subject is the currency and the day the rules would start, such as `UGX from 2026-12-01`. | `dealing_desk.view` | `dealing_orders.change` |
@@ -41,9 +41,10 @@ The inbox only reads. Deciding happens on the owning module's own route, which c
 | `suppression_lift` | notifications `suppression_lifts.open_lifts`. The subject is the start of the address hash. | `clients.view` | `email_suppressions.lift` |
 | `complaint_outcome` | support `complaints.pending_outcomes`. The subject is the complaint's reference. | `complaints.view` | `complaints.close` |
 | `announcement` | notifications `announcements.list_announcements`, proposed | `settings.view` | `announcements.send` |
-| `payout_resolution` | payouts `resolutions.waiting` | `reconciliation.view` | `reconciliation.view` |
+| `payout_resolution` | payouts `resolutions.waiting` | `reconciliation.view` | `reconciliation.change` |
 | `deposit_reassignment` | payments `reassignments.proposals_awaiting_approval`. The subject is the deposit's ID. | `reconciliation.view` | `deposit_reassignments.change` |
 | `payout_account` | payouts `destinations.checks_awaiting_approval`: a check recorded, not yet approved | `review_queue.view` | `payout_accounts.change` |
+| `payout_release` | payouts `reviews.waiting`: a proposal to release a payout held because it is large. The subject is the payout's ID. | `review_queue.view` | `payout_accounts.change` |
 | `investment_correction` | investments `list_corrections`, proposed. The subject is `unwind` or `refund`. | `investments.view` | `investment_corrections.change` |
 | `tax_remittance` | tax `service.waiting`: a payment to URA recorded, not yet approved. The subject is the month and currency, never the amount. | `finance.view` | `tax_remittances.change` |
 

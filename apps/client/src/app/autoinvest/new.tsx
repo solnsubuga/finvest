@@ -327,7 +327,8 @@ function Choice({ selected, disabled, onPress, title, note, testID }: ChoiceProp
   return (
     <Pressable
       accessibilityRole="radio"
-      accessibilityState={{ checked: selected, disabled }}
+      aria-checked={selected}
+      aria-disabled={disabled}
       accessibilityLabel={title}
       onPress={onPress}
       disabled={disabled}
@@ -362,7 +363,8 @@ function Segment({ label, selected, disabled, onPress, testID }: SegmentProps) {
   return (
     <Pressable
       accessibilityRole="radio"
-      accessibilityState={{ checked: selected, disabled }}
+      aria-checked={selected}
+      aria-disabled={disabled}
       onPress={onPress}
       disabled={disabled}
       testID={testID}
@@ -391,7 +393,8 @@ function Chip({
     <Pressable
       accessibilityRole="radio"
       accessibilityLabel={accessibilityLabel ?? label}
-      accessibilityState={{ checked: selected, disabled }}
+      aria-checked={selected}
+      aria-disabled={disabled}
       onPress={onPress}
       disabled={disabled}
       testID={testID}

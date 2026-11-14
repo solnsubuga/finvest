@@ -27,7 +27,7 @@ interface MoneyMovementScreenProps {
   api: PayoutsApi;
   /** The signed-in member of staff. */
   me: string;
-  /** Whether this person holds `reconciliation.view`, which settling a payout needs. */
+  /** Whether this person holds `reconciliation.change`, which settling a payout needs. */
   canSettle: boolean;
   /** Makes the idempotency key for one command. Every try at the same command carries the same key. */
   newKey?: () => string;
@@ -232,7 +232,7 @@ const REFRESH: ReadonlySet<string> = new Set([
 
 function HeldUpTable({ items }: { items: readonly HeldUpPayout[] }) {
   return (
-    <div className="overflow-x-auto rounded-xl border border-border bg-surface">
+    <div className="overflow-x-auto rounded-xl border border-border bg-surface" tabIndex={0} role="region" aria-label="Payouts held up at ioTec">
       <table className="w-full min-w-[640px] border-collapse text-md">
         <caption className="sr-only">Payouts held up at ioTec, longest first</caption>
         <thead>
@@ -295,5 +295,5 @@ export default function MoneyMovementPage() {
   const { session } = useAuth();
   const me = session?.staffId ?? "";
   const [api] = useState<PayoutsApi>(() => defaultApi(me));
-  return <MoneyMovementScreen api={api} me={me} canSettle={session ? can(session, "reconciliation.view") : false} />;
+  return <MoneyMovementScreen api={api} me={me} canSettle={session ? can(session, "reconciliation.change") : false} />;
 }

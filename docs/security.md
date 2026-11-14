@@ -17,6 +17,7 @@ Status is **Met** (checked in the code or configuration named), **Fixed** (a gap
 | 7 | `pnpm audit --prod` reports 1 low and 4 moderate advisories (`deepmerge`, `glob`, `minimatch`), all reached through Expo and Jest build and test tooling. None is in code sent to a browser or phone. | Low | Open: clear them when Expo and Jest release fixed versions. Check again before the test. |
 | 8 | Secret scanning with push protection and Dependabot alerts are repository settings, not files. Their state could not be confirmed from the code. | Low | Open: Solo, in the repository's Settings, Code security. |
 | 9 | New passwords are checked against a short built-in list, not a full breached-password list as ASVS 2.1.7 asks. | Low | Open: Solo picks the source, behind `too_common`. Recommended: the top one million passwords from a published breach corpus, kept as a hashed file in the image, so nothing about a password leaves the server. |
+| 10 | Importing statements, pairing by hand, both signatures on a day close, and every step of settling a stranded payout were allowed by `reconciliation.view`, a permission named and given out for seeing. | Medium | Fixed: these need `reconciliation.change`, held by finance and admin (#331). A test checks a view-only role is refused each one. |
 
 `make audit` (pip-audit on the locked backend dependencies) found no known vulnerabilities on 2026-11-13.
 
