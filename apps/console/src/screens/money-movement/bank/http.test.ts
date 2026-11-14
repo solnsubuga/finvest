@@ -163,4 +163,71 @@ describe("bank payouts over HTTP", () => {
       expect(bankPayoutsErrorMessage(error)).toContain(words);
     }
   });
+
+  it("reads a batch's bulk debit and sends a proposal with its key", async () => {
+    const batchJson = {
+      id: "-NbatchA000000000001",
+      currency: "UGX",
+      reason: "Tuesday",
+      status: "approved",
+      prepared_by: "-Nstaff000000000000A",
+      prepared_at: "2026-11-13T06:00:00Z",
+      decided_by: "-Nstaff000000000000B",
+      decided_at: "2026-11-13T07:00:00Z",
+      decision_reason: "Checked",
+      payout_ids: [PAYOUT.id],
+      total: PAYOUT.amount,
+      items: null,
+    };
+    const line = { id: "-NlineA0000000000001", value_date: "2026-11-13", amount: PAYOUT.amount, reference: "BULK 1", narrative: "Bulk transfer" };
+    const fetch = vi
+      .fn<typeof globalThis.fetch>()
+      .mockImplementationOnce(() => reply(200, { batch: batchJson, payouts: [PAYOUT], lines: [line] }))
+      .mockImplementationOnce(() => reply(201, {}))
+      .mockImplementationOnce(() => refusal(409, "conflict", "amounts_do_not_add_up"));
+    const debit = await api(fetch).getBulkDebit(batchJson.id);
+    expect(fetch.mock.calls[0]?.[0]).toBe(`https://api.test/staff/payout-bank-batches/${batchJson.id}/bulk-debit`);
+    expect(debit.lines).toEqual([{ id: line.id, valueDate: "2026-11-13", amount: PAYOUT.amount, reference: "BULK 1", narrative: "Bulk transfer" }]);
+    expect(debit.payouts.map((each) => each.id)).toEqual([PAYOUT.id]);
+
+    await api(fetch).proposeBulk("key-1", batchJson.id, line.id, [PAYOUT.id], "One debit");
+    const [url, init] = fetch.mock.calls[1]!;
+    expect(url).toBe(`https://api.test/staff/payout-bank-batches/${batchJson.id}/bulk-settlements`);
+    expect(body(init)).toEqual({ statement_line_id: line.id, payout_ids: [PAYOUT.id], reason: "One debit" });
+    expect(header(init, "Idempotency-Key")).toBe("key-1");
+
+    const error = await api(fetch).proposeBulk("key-2", batchJson.id, line.id, [PAYOUT.id], "One debit").catch((caught: unknown) => caught);
+    expect(bankPayoutsErrorMessage(error)).toMatch(/do not add up to the line/);
+  });
+
+  it("reads a waiting bulk debit with its statement line", async () => {
+    const line = { id: "-NlineA0000000000001", value_date: "2026-11-13", amount: PAYOUT.amount, reference: "BULK 1", narrative: "Bulk transfer" };
+    const bulk = {
+      id: "-NbulkA0000000000001",
+      batch_id: "-NbatchA000000000001",
+      statement_line_id: line.id,
+      reason: "One debit",
+      status: "proposed",
+      proposed_by: "-NstaffA000000000001",
+      proposed_at: "2026-11-13T08:00:00Z",
+      decided_by: null,
+      decided_at: null,
+      decision_reason: null,
+      payout_ids: [PAYOUT.id],
+      total: PAYOUT.amount,
+    };
+    const fetch = vi.fn<typeof globalThis.fetch>(() => reply(200, [{ ...bulk, line }, { ...bulk, id: "-NbulkA0000000000002", line: null }]));
+    const [withLine, without] = await api(fetch).listBulks();
+    expect(fetch.mock.calls[0]?.[0]).toBe("https://api.test/staff/payout-bank-bulk-settlements");
+    expect(withLine?.line).toEqual({ id: line.id, valueDate: "2026-11-13", amount: PAYOUT.amount, reference: "BULK 1", narrative: "Bulk transfer" });
+    expect(without?.line).toBeNull();
+  });
+
+  it("marks a payout's settlement that belongs to a bulk debit", async () => {
+    const fetch = vi.fn<typeof globalThis.fetch>(() =>
+      reply(200, [{ payout: PAYOUT, batch_id: "-NbatchA000000000001", sent_at: "2026-11-13T07:00:00Z", settlement: { ...SETTLEMENT, bulk_id: "-NbulkA0000000000001" } }]),
+    );
+    const [item] = await api(fetch).listSent();
+    expect(item?.settlement?.bulkId).toBe("-NbulkA0000000000001");
+  });
 });
