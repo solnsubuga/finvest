@@ -306,3 +306,24 @@ async def test_each_step_is_audited(api: Api, migrator_database: Database) -> No
             )
         ).all()
     assert actions == ["identity.client.lock_proposed", "identity.client.lock_approved"]
+
+
+async def test_two_proposals_for_one_client_at_once_make_one(api: Api) -> None:
+    client = await api.client()
+    proposers = [await api.staff("operations"), await api.staff("compliance")]
+
+    async def propose_lock(proposer: Actor) -> str:
+        try:
+            async with api.database.actor_transaction(proposer) as session:
+                await client_locks.propose(
+                    session, proposer, str(client.id), "lock", "Fraud alert", api.clock
+                )
+        except ApplicationError as error:
+            return error.code
+        return "proposed"
+
+    outcomes = await asyncio.gather(*(propose_lock(proposer) for proposer in proposers))
+    assert sorted(outcomes) == ["conflict", "proposed"]
+    async with api.database.actor_transaction(proposers[0]) as session:
+        waiting = [c for c in await client_locks.open_locks(session) if c.client_id == client.id]
+    assert len(waiting) == 1

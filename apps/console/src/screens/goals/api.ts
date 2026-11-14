@@ -18,7 +18,7 @@ export type { Currency } from "@/screens/products/api.ts";
 export type GoalStatus = "active" | "closed";
 export type GoalCategory = "school_fees" | "emergency" | "land_or_home" | "business" | "wedding" | "retirement" | "other";
 export type Standing = "reached" | "on_track" | "behind" | "no_date";
-export type SavingStatus = "awaiting_payment" | "active" | "matured" | "withdrawn" | "unwound" | "cancelled";
+export type SavingStatus = "awaiting_payment" | "active" | "matured" | "withdrawn" | "unwound" | "transferred" | "cancelled";
 
 export interface Goal {
   id: string;

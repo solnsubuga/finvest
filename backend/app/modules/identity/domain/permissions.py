@@ -115,6 +115,11 @@ Permission = Literal[
     # never started one, and approving or sending back someone else's. Seeing investments is
     # `investments.view`. Both move money, so each takes a second person. Not a screen.
     "investment_corrections.change",
+    # Proposing to let through a transfer of an investment to another client that is held
+    # because it is large, approving someone else's proposal, withdrawing your own, or
+    # declining one. Letting one through always takes a second person. Seeing them is
+    # `review_queue.view`. Not a screen.
+    "investment_transfers.change",
 ]
 PERMISSIONS: tuple[Permission, ...] = get_args(Permission)
 
@@ -149,6 +154,7 @@ ROLE_PERMISSIONS: dict[Role, frozenset[Permission]] = {
             "bank_transfers.change",
             "deposit_reassignments.change",
             "payout_accounts.change",
+            "investment_transfers.change",
             "migration.import",
             "client_phones.change",
         }
@@ -202,6 +208,7 @@ ROLE_PERMISSIONS: dict[Role, frozenset[Permission]] = {
             "reports.view",
             "audit.view",
             "payout_accounts.change",
+            "investment_transfers.change",
         }
     ),
     # Support answers clients and logs and works complaints. Closing one is for operations and

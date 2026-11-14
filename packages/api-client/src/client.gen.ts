@@ -284,13 +284,14 @@ export type ClientComplaints = z.infer<typeof ClientComplaints>;
 export const Currency = z.enum(["UGX", "USD"]);
 export type Currency = z.infer<typeof Currency>;
 
-export const InvestmentStatus = z.enum(["awaiting_payment", "active", "cancelled", "matured", "withdrawn", "unwound"]);
+export const InvestmentStatus = z.enum(["awaiting_payment", "active", "cancelled", "matured", "withdrawn", "unwound", "transferred"]);
 export type InvestmentStatus = z.infer<typeof InvestmentStatus>;
 
 export const ClientInvestmentOut = z.object({
   amount_minor: z.number().int(),
   at_maturity: AtMaturity.nullable(),
   can_change_maturity: z.boolean(),
+  can_send: z.boolean().optional(),
   can_withdraw: z.boolean(),
   client_rate_percent: z.string(),
   currency: Currency,
@@ -341,6 +342,26 @@ export const ClientSignedIn = z.object({
   token: z.string().nullable(),
 });
 export type ClientSignedIn = z.infer<typeof ClientSignedIn>;
+
+export const TransferStatus = z.enum(["waiting", "held", "release_proposed", "done", "failed", "declined", "cancelled"]);
+export type TransferStatus = z.infer<typeof TransferStatus>;
+
+export const ClientTransferOut = z.object({
+  amount_minor: z.number().int(),
+  currency: Currency,
+  direction: z.string(),
+  failure_code: z.string().nullable(),
+  finished_at: z.string().nullable(),
+  id: z.string(),
+  investment_id: z.string().nullable(),
+  kept_investment_id: z.string().nullable(),
+  message: z.string().nullable(),
+  other_name: z.string(),
+  requested_at: z.string(),
+  status: TransferStatus,
+  whole: z.boolean(),
+});
+export type ClientTransferOut = z.infer<typeof ClientTransferOut>;
 
 export const CodeAnswer = z.object({
   code: z.string(),
@@ -1008,6 +1029,12 @@ export const QuoteOut = z.object({
 });
 export type QuoteOut = z.infer<typeof QuoteOut>;
 
+export const RecipientOut = z.object({
+  account_number: z.string(),
+  name: z.string(),
+});
+export type RecipientOut = z.infer<typeof RecipientOut>;
+
 export const RecoveryAsk = z.object({
   contact_phone: z.string(),
   phone: z.string(),
@@ -1071,6 +1098,15 @@ export const SendMessage = z.object({
   topic: z.enum(["deposit", "withdrawal", "investment", "identity", "account", "other"]).optional(),
 });
 export type SendMessage = z.infer<typeof SendMessage>;
+
+export const SendRequest = z.object({
+  amount_minor: z.number().int(),
+  currency: Currency,
+  message: z.string().nullable().optional(),
+  to_account_number: z.string(),
+  whole: z.boolean().optional(),
+});
+export type SendRequest = z.infer<typeof SendRequest>;
 
 export const SignedOut = z.object({
   ended: z.number().int(),
@@ -1968,6 +2004,19 @@ export const operations = {
     status: 201,
     response: PaymentView,
   },
+  "POST /client/investments/{investment_id}/send": {
+    method: "POST",
+    path: "/client/investments/{investment_id}/send",
+    params: z.object({
+    investment_id: z.string(),
+  }),
+    query: z.object({}),
+    body: SendRequest,
+    bodyKind: "json",
+    idempotent: true,
+    status: 201,
+    response: ClientTransferOut,
+  },
   "POST /client/investments/{investment_id}/withdraw": {
     method: "POST",
     path: "/client/investments/{investment_id}/withdraw",
@@ -2608,6 +2657,56 @@ export const operations = {
     idempotent: false,
     status: 204,
     response: null,
+  },
+  "GET /client/transfer-recipients": {
+    method: "GET",
+    path: "/client/transfer-recipients",
+    params: z.object({}),
+    query: z.object({
+    to: z.string(),
+  }),
+    body: null,
+    bodyKind: null,
+    idempotent: false,
+    status: 200,
+    response: RecipientOut,
+  },
+  "GET /client/transfers": {
+    method: "GET",
+    path: "/client/transfers",
+    params: z.object({}),
+    query: z.object({}),
+    body: null,
+    bodyKind: null,
+    idempotent: false,
+    status: 200,
+    response: z.array(ClientTransferOut),
+  },
+  "GET /client/transfers/{transfer_id}": {
+    method: "GET",
+    path: "/client/transfers/{transfer_id}",
+    params: z.object({
+    transfer_id: z.string(),
+  }),
+    query: z.object({}),
+    body: null,
+    bodyKind: null,
+    idempotent: false,
+    status: 200,
+    response: ClientTransferOut,
+  },
+  "POST /client/transfers/{transfer_id}/cancel": {
+    method: "POST",
+    path: "/client/transfers/{transfer_id}/cancel",
+    params: z.object({
+    transfer_id: z.string(),
+  }),
+    query: z.object({}),
+    body: null,
+    bodyKind: null,
+    idempotent: false,
+    status: 200,
+    response: ClientTransferOut,
   },
   "GET /client/withdrawal-limits": {
     method: "GET",

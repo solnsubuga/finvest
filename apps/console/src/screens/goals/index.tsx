@@ -62,6 +62,7 @@ const SAVING_TONES: Record<SavingStatus, string> = {
   matured: "bg-surface-sunken text-muted",
   withdrawn: "bg-surface-sunken text-muted",
   unwound: "bg-surface-sunken text-muted",
+  transferred: "bg-surface-sunken text-muted",
   cancelled: "bg-surface-sunken text-muted",
 };
 

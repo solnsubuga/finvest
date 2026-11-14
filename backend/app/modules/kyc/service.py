@@ -991,6 +991,40 @@ async def client_for_account_number(session: AsyncSession, number: str) -> str |
     return str(client_id) if client_id is not None else None
 
 
+@dataclass(frozen=True, slots=True)
+class Recipient:
+    """An approved client another client may send an investment to. Names only, no details."""
+
+    client_id: str
+    account_number: str
+    surname: str
+    given_names: str
+
+
+_RECIPIENT = text(
+    "SELECT client_id, account_number, surname, given_names "
+    "FROM finvest_kyc_transfer_recipient(CAST(:number AS text), CAST(:client AS text))"
+)
+
+
+async def transfer_recipient(
+    session: AsyncSession, *, account_number: str | None = None, client_id: str | None = None
+) -> Recipient | None:
+    """The approved client with this account number or ID, or None.
+
+    Through a narrow database function (migration 0240), so a client's transaction can find
+    another client without its row policies opening the other's identity check.
+    """
+    if (account_number is None) == (client_id is None):
+        raise ValueError("Find a recipient by account number or by client ID")
+    row = (
+        await session.execute(_RECIPIENT, {"number": account_number, "client": client_id})
+    ).one_or_none()
+    if row is None:
+        return None
+    return Recipient(row.client_id, row.account_number, row.surname, row.given_names)
+
+
 async def approve(
     session: AsyncSession, sealer: Sealer, staff: Actor, check_id: str, reason: str, clock: Clock
 ) -> CheckView:
