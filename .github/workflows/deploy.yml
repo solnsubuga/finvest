@@ -170,7 +170,7 @@ jobs:
         run: python3 infra/deployment/prepare_release.py "$RUNNER_TEMP/finvest-release"
       - name: Admit this run to SSH
         env:
-          DIGITALOCEAN_TOKEN: ${{ secrets.DEPLOY_FIREWALL_TOKEN }}
+          DIGITALOCEAN_TOKEN: ${{ secrets.DIGITALOCEAN_TOKEN }}
           FIREWALL_ID: ${{ vars.DEPLOY_FIREWALL_ID }}
         run: |
           set -euo pipefail
@@ -201,7 +201,7 @@ jobs:
       - name: Close SSH to this run
         if: always() && env.SSH_RULE != ''
         env:
-          DIGITALOCEAN_TOKEN: ${{ secrets.DEPLOY_FIREWALL_TOKEN }}
+          DIGITALOCEAN_TOKEN: ${{ secrets.DIGITALOCEAN_TOKEN }}
           FIREWALL_ID: ${{ vars.DEPLOY_FIREWALL_ID }}
         run: |
           set -euo pipefail
