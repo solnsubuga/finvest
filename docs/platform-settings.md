@@ -20,7 +20,7 @@ Only one change per setting waits at a time, so an approver always approves the 
 | `public_holidays` | Calendar | Uganda's fixed-date holidays, Good Friday and Easter Monday, for this year and next | Days that are not working days, besides Saturday and Sunday, at most 60. The two Eid holidays follow the moon and are gazetted each year, so staff add them when announced. |
 | `bank_payout_cutoff` | Calendar | 14:00 | The Kampala time after which a bank payout is paid on the next working day. Between 08:00 and 17:00. |
 | `maturity_reminders` | Calendar | 7 days and 1 day before | How many days before an investment matures the client is reminded, up to three days between 1 and 30. Empty sends none. |
-| `staff_idle_minutes` | Staff security | 30 | Minutes without use after which a member of staff is signed out of the console, 5 to 240. |
+| `staff_idle_minutes` | Staff security | The deploy's `FINVEST_STAFF_SESSION_IDLE_MINUTES` (30) | Minutes without use after which a member of staff is signed out of the console, 5 to 240. |
 | `office_networks` | Staff security | None (any network) | The networks, as addresses or CIDR ranges, staff may use the console from. At most 20, none wider than /8 (IPv4) or /32 (IPv6). |
 | `statement_layouts` | Statement import | None | Column layouts for providers' CSV statement exports, beside the built-in `standard` layout. At most 10. |
 
@@ -65,6 +65,8 @@ Migration `0340_platform_settings`:
 | Setting | Read by | Effect |
 | --- | --- | --- |
 | `payment_channels` | payments `request_deposit` and the bank transfer details route; payouts `create_payout` | A paused pay in refuses a new payment with 503 `channel_paused`. A paused payout refuses a client's new withdrawal with `channel_paused`; a maturity payout the system asks for is still made |
+| `staff_idle_minutes` | identity, on every staff request and when a staff session opens | Once approved, it replaces the deploy setting. A session idle for longer than a newly shortened time ends at its next request. It never stretches past the session's absolute limit |
+| `office_networks` | identity, on every staff request | A request from outside every listed network is refused with 403 and field code `outside_office_network`, and does not count as use of the session. The session goes on working from the office |
 
 ## For other modules
 
