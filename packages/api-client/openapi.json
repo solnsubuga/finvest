@@ -188,6 +188,30 @@
         "title": "AnnouncementList",
         "type": "object"
       },
+      "AnnouncementReach": {
+        "additionalProperties": false,
+        "properties": {
+          "clients": {
+            "title": "Clients",
+            "type": "integer"
+          },
+          "email": {
+            "title": "Email",
+            "type": "integer"
+          },
+          "sms": {
+            "title": "Sms",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "clients",
+          "sms",
+          "email"
+        ],
+        "title": "AnnouncementReach",
+        "type": "object"
+      },
       "AnnouncementView": {
         "additionalProperties": false,
         "properties": {
@@ -483,7 +507,9 @@
               "organisation",
               "account_closure",
               "compliance_case",
-              "bank_account_change"
+              "bank_account_change",
+              "account_code_map",
+              "deposit_reversal"
             ],
             "title": "Kind",
             "type": "string"
@@ -4358,6 +4384,31 @@
         "title": "CodeAnswer",
         "type": "object"
       },
+      "CodeMapsOut": {
+        "additionalProperties": false,
+        "properties": {
+          "codes": {
+            "items": {
+              "$ref": "#/components/schemas/LedgerCodeOut"
+            },
+            "title": "Codes",
+            "type": "array"
+          },
+          "systems": {
+            "items": {
+              "$ref": "#/components/schemas/SystemMapOut"
+            },
+            "title": "Systems",
+            "type": "array"
+          }
+        },
+        "required": [
+          "codes",
+          "systems"
+        ],
+        "title": "CodeMapsOut",
+        "type": "object"
+      },
       "ComplaintDetail": {
         "additionalProperties": false,
         "properties": {
@@ -5227,6 +5278,32 @@
         "title": "DecideChange",
         "type": "object"
       },
+      "DecideCodeMap": {
+        "additionalProperties": false,
+        "properties": {
+          "decision": {
+            "enum": [
+              "approved",
+              "rejected",
+              "withdrawn"
+            ],
+            "title": "Decision",
+            "type": "string"
+          },
+          "reason": {
+            "maxLength": 500,
+            "minLength": 1,
+            "title": "Reason",
+            "type": "string"
+          }
+        },
+        "required": [
+          "decision",
+          "reason"
+        ],
+        "title": "DecideCodeMap",
+        "type": "object"
+      },
       "DecideIn": {
         "additionalProperties": false,
         "properties": {
@@ -5973,7 +6050,8 @@
               "monthly_statement",
               "requested_statement",
               "receipt",
-              "tax_certificate"
+              "tax_certificate",
+              "investment_note"
             ],
             "title": "Kind",
             "type": "string"
@@ -6625,6 +6703,9 @@
             ],
             "title": "Exported By Name"
           },
+          "format": {
+            "$ref": "#/components/schemas/Format"
+          },
           "id": {
             "title": "Id",
             "type": "string"
@@ -6642,7 +6723,8 @@
           "debit_total",
           "exported_by",
           "exported_by_name",
-          "exported_at"
+          "exported_at",
+          "format"
         ],
         "title": "ExportOut",
         "type": "object"
@@ -6835,6 +6917,13 @@
             "title": "Exports",
             "type": "array"
           },
+          "formats": {
+            "items": {
+              "$ref": "#/components/schemas/FormatOut"
+            },
+            "title": "Formats",
+            "type": "array"
+          },
           "income": {
             "$ref": "#/components/schemas/IncomeOut"
           },
@@ -6875,9 +6964,61 @@
           "closed_through",
           "sent_through",
           "next_export",
-          "exports"
+          "exports",
+          "formats"
         ],
         "title": "FinanceScreenOut",
+        "type": "object"
+      },
+      "Format": {
+        "enum": [
+          "csv",
+          "quickbooks",
+          "xero",
+          "sage",
+          "zoho"
+        ],
+        "title": "Format",
+        "type": "string"
+      },
+      "FormatOut": {
+        "additionalProperties": false,
+        "description": "A file the journal can be downloaded as, and whether it can be now.",
+        "properties": {
+          "currencies": {
+            "items": {
+              "$ref": "#/components/schemas/Currency"
+            },
+            "title": "Currencies",
+            "type": "array"
+          },
+          "format": {
+            "$ref": "#/components/schemas/Format"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "ready": {
+            "title": "Ready",
+            "type": "boolean"
+          },
+          "unmapped": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Unmapped",
+            "type": "array"
+          }
+        },
+        "required": [
+          "format",
+          "name",
+          "ready",
+          "unmapped",
+          "currencies"
+        ],
+        "title": "FormatOut",
         "type": "object"
       },
       "Frequency": {
@@ -7012,6 +7153,16 @@
           "progress": {
             "$ref": "#/components/schemas/ProgressView"
           },
+          "saving_rule": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SavingRuleView"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "savings": {
             "items": {
               "$ref": "#/components/schemas/SavingView"
@@ -7051,7 +7202,8 @@
           "created_at",
           "progress",
           "plan",
-          "savings"
+          "savings",
+          "saving_rule"
         ],
         "title": "GoalView",
         "type": "object"
@@ -7939,6 +8091,35 @@
         "title": "JoinGroup",
         "type": "object"
       },
+      "JournalRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "currency": {
+            "$ref": "#/components/schemas/Currency",
+            "default": "UGX"
+          },
+          "date_from": {
+            "format": "date",
+            "title": "Date From",
+            "type": "string"
+          },
+          "date_to": {
+            "format": "date",
+            "title": "Date To",
+            "type": "string"
+          },
+          "format": {
+            "$ref": "#/components/schemas/Format",
+            "default": "csv"
+          }
+        },
+        "required": [
+          "date_from",
+          "date_to"
+        ],
+        "title": "JournalRequest",
+        "type": "object"
+      },
       "JsonValue": {},
       "Kind": {
         "enum": [
@@ -7947,6 +8128,30 @@
         ],
         "title": "Kind",
         "type": "string"
+      },
+      "LedgerCodeOut": {
+        "additionalProperties": false,
+        "properties": {
+          "code": {
+            "title": "Code",
+            "type": "string"
+          },
+          "kind": {
+            "title": "Kind",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "code",
+          "name",
+          "kind"
+        ],
+        "title": "LedgerCodeOut",
+        "type": "object"
       },
       "LiftView": {
         "additionalProperties": false,
@@ -8196,7 +8401,8 @@
               "conversation",
               "complaint",
               "goal",
-              "organisation"
+              "organisation",
+              "autoinvest_plan"
             ],
             "title": "Kind",
             "type": "string"
@@ -8776,6 +8982,133 @@
           "details"
         ],
         "title": "MakeComplaint",
+        "type": "object"
+      },
+      "MapVersionOut": {
+        "additionalProperties": false,
+        "properties": {
+          "accounts": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "title": "Accounts",
+            "type": "object"
+          },
+          "decided_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Decided At"
+          },
+          "decided_by": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Decided By"
+          },
+          "decided_by_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Decided By Name"
+          },
+          "decision_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Decision Reason"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "proposed_at": {
+            "format": "date-time",
+            "title": "Proposed At",
+            "type": "string"
+          },
+          "proposed_by": {
+            "title": "Proposed By",
+            "type": "string"
+          },
+          "proposed_by_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Proposed By Name"
+          },
+          "reason": {
+            "title": "Reason",
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "proposed",
+              "approved",
+              "rejected",
+              "withdrawn"
+            ],
+            "title": "Status",
+            "type": "string"
+          },
+          "tax_rate": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tax Rate"
+          },
+          "yours": {
+            "title": "Yours",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "id",
+          "accounts",
+          "tax_rate",
+          "reason",
+          "status",
+          "proposed_by",
+          "proposed_by_name",
+          "proposed_at",
+          "decided_by",
+          "decided_by_name",
+          "decided_at",
+          "decision_reason",
+          "yours"
+        ],
+        "title": "MapVersionOut",
         "type": "object"
       },
       "MarkRead": {
@@ -9727,6 +10060,37 @@
         "title": "NewSaving",
         "type": "object"
       },
+      "NewSavingRule": {
+        "additionalProperties": false,
+        "properties": {
+          "amount_minor": {
+            "exclusiveMinimum": 0.0,
+            "maximum": 1000000000000000.0,
+            "title": "Amount Minor",
+            "type": "integer"
+          },
+          "currency": {
+            "$ref": "#/components/schemas/Currency",
+            "default": "UGX"
+          },
+          "day": {
+            "maximum": 31.0,
+            "minimum": 1.0,
+            "title": "Day",
+            "type": "integer"
+          },
+          "network": {
+            "$ref": "#/components/schemas/Network"
+          }
+        },
+        "required": [
+          "amount_minor",
+          "day",
+          "network"
+        ],
+        "title": "NewSavingRule",
+        "type": "object"
+      },
       "NextOfKinBody": {
         "additionalProperties": false,
         "properties": {
@@ -10148,35 +10512,6 @@
         ],
         "title": "OrderStatus",
         "type": "string"
-      },
-      "Outcome": {
-        "additionalProperties": false,
-        "properties": {
-          "check": {
-            "$ref": "#/components/schemas/AutomaticCheck"
-          },
-          "score": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Score"
-          },
-          "verdict": {
-            "$ref": "#/components/schemas/Verdict"
-          }
-        },
-        "required": [
-          "check",
-          "verdict",
-          "score"
-        ],
-        "title": "Outcome",
-        "type": "object"
       },
       "OverviewView": {
         "additionalProperties": false,
@@ -10819,18 +11154,13 @@
           },
           "relationship": {
             "$ref": "#/components/schemas/Relationship"
-          },
-          "share_bps": {
-            "title": "Share Bps",
-            "type": "integer"
           }
         },
         "required": [
           "full_name",
           "relationship",
           "phone",
-          "id_number",
-          "share_bps"
+          "id_number"
         ],
         "title": "PersonBody",
         "type": "object"
@@ -11811,6 +12141,44 @@
           "reason"
         ],
         "title": "ProposeChange",
+        "type": "object"
+      },
+      "ProposeCodeMap": {
+        "additionalProperties": false,
+        "properties": {
+          "accounts": {
+            "additionalProperties": {
+              "maxLength": 100,
+              "type": "string"
+            },
+            "maxProperties": 1000,
+            "title": "Accounts",
+            "type": "object"
+          },
+          "reason": {
+            "maxLength": 500,
+            "minLength": 1,
+            "title": "Reason",
+            "type": "string"
+          },
+          "tax_rate": {
+            "anyOf": [
+              {
+                "maxLength": 50,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tax Rate"
+          }
+        },
+        "required": [
+          "accounts",
+          "reason"
+        ],
+        "title": "ProposeCodeMap",
         "type": "object"
       },
       "ProposeIn": {
@@ -13923,6 +14291,254 @@
         "title": "ReturnedPayoutOut",
         "type": "object"
       },
+      "ReversalDetailOut": {
+        "additionalProperties": false,
+        "properties": {
+          "can_decide": {
+            "title": "Can Decide",
+            "type": "boolean"
+          },
+          "method": {
+            "title": "Method",
+            "type": "string"
+          },
+          "refusal": {
+            "anyOf": [
+              {
+                "enum": [
+                  "not_confirmed",
+                  "not_for_an_investment",
+                  "already_reversed",
+                  "not_a_payment",
+                  "money_moved_on"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Refusal"
+          },
+          "reversal": {
+            "$ref": "#/components/schemas/ReversalOut"
+          },
+          "waiting": {
+            "$ref": "#/components/schemas/MoneyView"
+          },
+          "yours": {
+            "title": "Yours",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "reversal",
+          "method",
+          "waiting",
+          "refusal",
+          "can_decide",
+          "yours"
+        ],
+        "title": "ReversalDetailOut",
+        "type": "object"
+      },
+      "ReversalOut": {
+        "additionalProperties": false,
+        "properties": {
+          "amount": {
+            "$ref": "#/components/schemas/MoneyView"
+          },
+          "client_id": {
+            "maxLength": 20,
+            "minLength": 20,
+            "pattern": "^[-0-9A-Z_a-z]{20}$",
+            "title": "Client Id",
+            "type": "string"
+          },
+          "decided_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Decided At"
+          },
+          "decided_by": {
+            "anyOf": [
+              {
+                "maxLength": 20,
+                "minLength": 20,
+                "pattern": "^[-0-9A-Z_a-z]{20}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Decided By"
+          },
+          "decision_note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Decision Note"
+          },
+          "deposit_id": {
+            "maxLength": 20,
+            "minLength": 20,
+            "pattern": "^[-0-9A-Z_a-z]{20}$",
+            "title": "Deposit Id",
+            "type": "string"
+          },
+          "done_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Done At"
+          },
+          "entry_id": {
+            "anyOf": [
+              {
+                "maxLength": 20,
+                "minLength": 20,
+                "pattern": "^[-0-9A-Z_a-z]{20}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Entry Id"
+          },
+          "failure_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Failure Code"
+          },
+          "id": {
+            "maxLength": 20,
+            "minLength": 20,
+            "pattern": "^[-0-9A-Z_a-z]{20}$",
+            "title": "Id",
+            "type": "string"
+          },
+          "investment_id": {
+            "maxLength": 20,
+            "minLength": 20,
+            "pattern": "^[-0-9A-Z_a-z]{20}$",
+            "title": "Investment Id",
+            "type": "string"
+          },
+          "proposed_at": {
+            "format": "date-time",
+            "title": "Proposed At",
+            "type": "string"
+          },
+          "proposed_by": {
+            "maxLength": 20,
+            "minLength": 20,
+            "pattern": "^[-0-9A-Z_a-z]{20}$",
+            "title": "Proposed By",
+            "type": "string"
+          },
+          "reason": {
+            "title": "Reason",
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "proposed",
+              "approved",
+              "sent_back",
+              "withdrawn",
+              "done",
+              "failed"
+            ],
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "status",
+          "deposit_id",
+          "client_id",
+          "investment_id",
+          "amount",
+          "reason",
+          "proposed_by",
+          "proposed_at",
+          "decided_by",
+          "decided_at",
+          "decision_note",
+          "done_at",
+          "entry_id",
+          "failure_code"
+        ],
+        "title": "ReversalOut",
+        "type": "object"
+      },
+      "ReversalProposeIn": {
+        "additionalProperties": false,
+        "properties": {
+          "deposit_id": {
+            "maxLength": 20,
+            "minLength": 20,
+            "pattern": "^[-0-9A-Z_a-z]{20}$",
+            "title": "Deposit Id",
+            "type": "string"
+          },
+          "reason": {
+            "maxLength": 500,
+            "minLength": 1,
+            "title": "Reason",
+            "type": "string"
+          }
+        },
+        "required": [
+          "deposit_id",
+          "reason"
+        ],
+        "title": "ReversalProposeIn",
+        "type": "object"
+      },
+      "ReversalSendBackIn": {
+        "additionalProperties": false,
+        "properties": {
+          "note": {
+            "maxLength": 500,
+            "minLength": 1,
+            "title": "Note",
+            "type": "string"
+          }
+        },
+        "required": [
+          "note"
+        ],
+        "title": "ReversalSendBackIn",
+        "type": "object"
+      },
       "ReviewIn": {
         "additionalProperties": false,
         "properties": {
@@ -14142,6 +14758,7 @@
                 "bank_accounts.change",
                 "email_suppressions.lift",
                 "announcements.send",
+                "account_codes.change",
                 "migration.view",
                 "bank_transfers.change",
                 "deposit_reassignments.change",
@@ -14626,6 +15243,70 @@
           "body"
         ],
         "title": "SavedReplyItem",
+        "type": "object"
+      },
+      "SavingRuleView": {
+        "additionalProperties": false,
+        "description": "The monthly saving collected by itself, by a mobile money prompt on its day.",
+        "properties": {
+          "amount_minor": {
+            "title": "Amount Minor",
+            "type": "integer"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "currency": {
+            "$ref": "#/components/schemas/Currency"
+          },
+          "day": {
+            "title": "Day",
+            "type": "integer"
+          },
+          "network": {
+            "$ref": "#/components/schemas/Network"
+          },
+          "next_run_on": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Run On"
+          },
+          "payer_msisdn": {
+            "title": "Payer Msisdn",
+            "type": "string"
+          },
+          "plan_id": {
+            "maxLength": 20,
+            "minLength": 20,
+            "pattern": "^[-0-9A-Z_a-z]{20}$",
+            "title": "Plan Id",
+            "type": "string"
+          },
+          "status": {
+            "$ref": "#/components/schemas/PlanStatus"
+          }
+        },
+        "required": [
+          "plan_id",
+          "amount_minor",
+          "currency",
+          "day",
+          "network",
+          "payer_msisdn",
+          "status",
+          "next_run_on",
+          "created_at"
+        ],
+        "title": "SavingRuleView",
         "type": "object"
       },
       "SavingView": {
@@ -15583,7 +16264,7 @@
           },
           "automatic_checks": {
             "items": {
-              "$ref": "#/components/schemas/Outcome"
+              "$ref": "#/components/schemas/app__modules__kyc__api__Outcome"
             },
             "title": "Automatic Checks",
             "type": "array"
@@ -15714,6 +16395,16 @@
             "title": "Review Flags",
             "type": "array"
           },
+          "screening": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/app__modules__screening__domain__standing__Outcome"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "status": {
             "$ref": "#/components/schemas/CheckStatus"
           },
@@ -15762,7 +16453,8 @@
           "account_number",
           "decided_at",
           "carried_over",
-          "allowed"
+          "allowed",
+          "screening"
         ],
         "title": "StaffCheck",
         "type": "object"
@@ -17553,18 +18245,13 @@
           },
           "relationship": {
             "$ref": "#/components/schemas/Relationship"
-          },
-          "share_bps": {
-            "title": "Share Bps",
-            "type": "integer"
           }
         },
         "required": [
           "full_name",
           "relationship",
           "phone",
-          "id_number_masked",
-          "share_bps"
+          "id_number_masked"
         ],
         "title": "StaffPersonView",
         "type": "object"
@@ -18012,6 +18699,7 @@
                 "bank_accounts.change",
                 "email_suppressions.lift",
                 "announcements.send",
+                "account_codes.change",
                 "migration.view",
                 "bank_transfers.change",
                 "deposit_reassignments.change",
@@ -19027,6 +19715,87 @@
           "not_carried"
         ],
         "title": "SwitchView",
+        "type": "object"
+      },
+      "System": {
+        "description": "An accounting system with its own account codes, and so its own code map.",
+        "enum": [
+          "quickbooks",
+          "xero",
+          "sage",
+          "zoho"
+        ],
+        "title": "System",
+        "type": "string"
+      },
+      "SystemMapOut": {
+        "additionalProperties": false,
+        "properties": {
+          "account_label": {
+            "title": "Account Label",
+            "type": "string"
+          },
+          "active": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/MapVersionOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "default_tax_rate": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Default Tax Rate"
+          },
+          "history": {
+            "items": {
+              "$ref": "#/components/schemas/MapVersionOut"
+            },
+            "title": "History",
+            "type": "array"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "needs_tax_rate": {
+            "title": "Needs Tax Rate",
+            "type": "boolean"
+          },
+          "proposal": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/MapVersionOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "system": {
+            "$ref": "#/components/schemas/System"
+          }
+        },
+        "required": [
+          "system",
+          "name",
+          "account_label",
+          "needs_tax_rate",
+          "default_tax_rate",
+          "active",
+          "proposal",
+          "history"
+        ],
+        "title": "SystemMapOut",
         "type": "object"
       },
       "TaxScreenOut": {
@@ -20457,6 +21226,35 @@
         "title": "PersonView",
         "type": "object"
       },
+      "app__modules__kyc__api__Outcome": {
+        "additionalProperties": false,
+        "properties": {
+          "check": {
+            "$ref": "#/components/schemas/AutomaticCheck"
+          },
+          "score": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Score"
+          },
+          "verdict": {
+            "$ref": "#/components/schemas/Verdict"
+          }
+        },
+        "required": [
+          "check",
+          "verdict",
+          "score"
+        ],
+        "title": "Outcome",
+        "type": "object"
+      },
       "app__modules__kyc__profile_api__PersonView": {
         "additionalProperties": false,
         "properties": {
@@ -20481,10 +21279,6 @@
           },
           "relationship": {
             "$ref": "#/components/schemas/Relationship"
-          },
-          "share_bps": {
-            "title": "Share Bps",
-            "type": "integer"
           }
         },
         "required": [
@@ -20492,8 +21286,7 @@
           "full_name",
           "relationship",
           "phone",
-          "id_number",
-          "share_bps"
+          "id_number"
         ],
         "title": "PersonView",
         "type": "object"
@@ -20814,6 +21607,19 @@
         ],
         "title": "PotOut",
         "type": "object"
+      },
+      "app__modules__screening__domain__standing__Outcome": {
+        "description": "Where a client stands, for the identity check review and for payouts.",
+        "enum": [
+          "clear",
+          "possible_match",
+          "confirmed_match",
+          "unavailable",
+          "pending",
+          "not_run"
+        ],
+        "title": "Outcome",
+        "type": "string"
       },
       "app__modules__support__api__Amount": {
         "additionalProperties": false,
@@ -25251,6 +26057,206 @@
           }
         },
         "summary": "Close Goal",
+        "tags": [
+          "goals"
+        ]
+      }
+    },
+    "/client/goals/{goal_id}/saving-rule": {
+      "post": {
+        "description": "Save the amount towards the goal on that day of every month, by itself.\n\nOn each day the client's own number gets a mobile money prompt for the amount, which they\napprove as for any payment. 409 if the goal already has a rule or is closed. Answers with\nthe goal, which carries the rule.",
+        "operationId": "set_up_saving_rule_client_goals__goal_id__saving_rule_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "goal_id",
+            "required": true,
+            "schema": {
+              "maxLength": 20,
+              "minLength": 20,
+              "pattern": "^[-0-9A-Z_a-z]{20}$",
+              "title": "Goal Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "A value the caller chooses once per intended action and sends again on every retry of it. Pattern: `[A-Za-z0-9._:-]{8,128}`.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "A value the caller chooses once per intended action and sends again on every retry of it. Pattern: `[A-Za-z0-9._:-]{8,128}`.",
+              "title": "Idempotency-Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NewSavingRule"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GoalView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          }
+        },
+        "summary": "Set Up Saving Rule",
+        "tags": [
+          "goals"
+        ]
+      }
+    },
+    "/client/goals/{goal_id}/saving-rule/stop": {
+      "post": {
+        "description": "End the goal's monthly saving. Savings already made carry on. Sending it again changes\nnothing.",
+        "operationId": "stop_saving_rule_client_goals__goal_id__saving_rule_stop_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "goal_id",
+            "required": true,
+            "schema": {
+              "maxLength": 20,
+              "minLength": 20,
+              "pattern": "^[-0-9A-Z_a-z]{20}$",
+              "title": "Goal Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GoalView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          }
+        },
+        "summary": "Stop Saving Rule",
         "tags": [
           "goals"
         ]
@@ -33432,6 +34438,58 @@
         ]
       }
     },
+    "/staff/announcements/reach": {
+      "get": {
+        "description": "How many clients an announcement approved now reaches, and how many by SMS and email.",
+        "operationId": "announcement_reach_staff_announcements_reach_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AnnouncementReach"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          }
+        },
+        "summary": "Announcement Reach",
+        "tags": [
+          "staff message wordings"
+        ]
+      }
+    },
     "/staff/announcements/{announcement_id}/decision": {
       "post": {
         "description": "Approve, which starts sending, or reject someone else's announcement, or withdraw yours.",
@@ -36873,9 +37931,9 @@
       }
     },
     "/staff/compliance/cases.csv": {
-      "get": {
+      "post": {
         "description": "Newest first, with each client's account number and name. Every export is on the audit\ntrail. More than 10,000 cases is refused with `too_many_cases`.",
-        "operationId": "export_register_staff_compliance_cases_csv_get",
+        "operationId": "export_register_staff_compliance_cases_csv_post",
         "responses": {
           "200": {
             "content": {
@@ -40456,40 +41514,247 @@
         ]
       }
     },
-    "/staff/finance/journal.csv": {
+    "/staff/finance/account-codes": {
       "get": {
-        "operationId": "export_journal_staff_finance_journal_csv_get",
+        "operationId": "get_code_maps_staff_finance_account_codes_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CodeMapsOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          }
+        },
+        "summary": "Each accounting system's account code map",
+        "tags": [
+          "finance"
+        ]
+      }
+    },
+    "/staff/finance/account-codes/proposals/{map_id}/decision": {
+      "post": {
+        "operationId": "decide_code_map_staff_finance_account_codes_proposals__map_id__decision_post",
         "parameters": [
           {
-            "in": "query",
-            "name": "date_from",
+            "in": "path",
+            "name": "map_id",
             "required": true,
             "schema": {
-              "format": "date",
-              "title": "Date From",
+              "maxLength": 20,
+              "minLength": 20,
+              "pattern": "^[-0-9A-Z_a-z]{20}$",
+              "title": "Map Id",
               "type": "string"
-            }
-          },
-          {
-            "in": "query",
-            "name": "date_to",
-            "required": true,
-            "schema": {
-              "format": "date",
-              "title": "Date To",
-              "type": "string"
-            }
-          },
-          {
-            "in": "query",
-            "name": "currency",
-            "required": false,
-            "schema": {
-              "$ref": "#/components/schemas/Currency",
-              "default": "UGX"
             }
           }
         ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DecideCodeMap"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CodeMapsOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          }
+        },
+        "summary": "Approve or reject someone else's code map, or withdraw your own",
+        "tags": [
+          "finance"
+        ]
+      }
+    },
+    "/staff/finance/account-codes/{system}/proposals": {
+      "post": {
+        "description": "Exports keep the map in use until a different member of staff approves this one.",
+        "operationId": "propose_code_map_staff_finance_account_codes__system__proposals_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "system",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/System"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ProposeCodeMap"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CodeMapsOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          }
+        },
+        "summary": "Propose a whole new account code map for one accounting system",
+        "tags": [
+          "finance"
+        ]
+      }
+    },
+    "/staff/finance/journal.csv": {
+      "post": {
+        "operationId": "export_journal_staff_finance_journal_csv_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/JournalRequest"
+              }
+            }
+          },
+          "required": true
+        },
         "responses": {
           "200": {
             "content": {
@@ -46971,6 +48236,635 @@
         "summary": "Withdraw Reassignment",
         "tags": [
           "staff deposit reassignments"
+        ]
+      }
+    },
+    "/staff/payments/reversals": {
+      "get": {
+        "description": "Reversals, newest first, at most 200.",
+        "operationId": "list_reversals_staff_payments_reversals_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "status",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "proposed",
+                    "approved",
+                    "sent_back",
+                    "withdrawn",
+                    "done",
+                    "failed"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Status"
+            }
+          },
+          {
+            "in": "query",
+            "name": "deposit_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 20,
+                  "minLength": 20,
+                  "pattern": "^[-0-9A-Z_a-z]{20}$",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Deposit Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/ReversalOut"
+                  },
+                  "title": "Response List Reversals Staff Payments Reversals Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          }
+        },
+        "summary": "List Reversals",
+        "tags": [
+          "staff deposit reversals"
+        ]
+      },
+      "post": {
+        "description": "Propose taking back a deposit credited by mistake. Nothing moves until a different\nmember of staff approves.\n\nThe whole amount must still wait for the investment (`422` `money_moved_on` if not: unwind\na started investment first). `409` if the deposit already has a reversal.",
+        "operationId": "propose_reversal_staff_payments_reversals_post",
+        "parameters": [
+          {
+            "description": "A value the caller chooses once per intended action and sends again on every retry of it. Pattern: `[A-Za-z0-9._:-]{8,128}`.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "A value the caller chooses once per intended action and sends again on every retry of it. Pattern: `[A-Za-z0-9._:-]{8,128}`.",
+              "title": "Idempotency-Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReversalProposeIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReversalDetailOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          }
+        },
+        "summary": "Propose Reversal",
+        "tags": [
+          "staff deposit reversals"
+        ]
+      }
+    },
+    "/staff/payments/reversals/{reversal_id}": {
+      "get": {
+        "description": "One reversal, the money waiting now and whether approving would go through.",
+        "operationId": "get_reversal_staff_payments_reversals__reversal_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "reversal_id",
+            "required": true,
+            "schema": {
+              "maxLength": 20,
+              "minLength": 20,
+              "pattern": "^[-0-9A-Z_a-z]{20}$",
+              "title": "Reversal Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReversalDetailOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          }
+        },
+        "summary": "Get Reversal",
+        "tags": [
+          "staff deposit reversals"
+        ]
+      }
+    },
+    "/staff/payments/reversals/{reversal_id}/approve": {
+      "post": {
+        "description": "Approve someone else's proposal. The worker takes the money back moments later. The\nproposer gets `403`. `422` with a code if the money moved on since it was proposed: the\nproposal stays open.",
+        "operationId": "approve_reversal_staff_payments_reversals__reversal_id__approve_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "reversal_id",
+            "required": true,
+            "schema": {
+              "maxLength": 20,
+              "minLength": 20,
+              "pattern": "^[-0-9A-Z_a-z]{20}$",
+              "title": "Reversal Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "A value the caller chooses once per intended action and sends again on every retry of it. Pattern: `[A-Za-z0-9._:-]{8,128}`.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "A value the caller chooses once per intended action and sends again on every retry of it. Pattern: `[A-Za-z0-9._:-]{8,128}`.",
+              "title": "Idempotency-Key"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReversalDetailOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          }
+        },
+        "summary": "Approve Reversal",
+        "tags": [
+          "staff deposit reversals"
+        ]
+      }
+    },
+    "/staff/payments/reversals/{reversal_id}/send-back": {
+      "post": {
+        "description": "Decline someone else's proposal, with a note. Nothing moves. The proposer gets `403`.",
+        "operationId": "send_back_reversal_staff_payments_reversals__reversal_id__send_back_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "reversal_id",
+            "required": true,
+            "schema": {
+              "maxLength": 20,
+              "minLength": 20,
+              "pattern": "^[-0-9A-Z_a-z]{20}$",
+              "title": "Reversal Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "A value the caller chooses once per intended action and sends again on every retry of it. Pattern: `[A-Za-z0-9._:-]{8,128}`.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "A value the caller chooses once per intended action and sends again on every retry of it. Pattern: `[A-Za-z0-9._:-]{8,128}`.",
+              "title": "Idempotency-Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReversalSendBackIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReversalDetailOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          }
+        },
+        "summary": "Send Back Reversal",
+        "tags": [
+          "staff deposit reversals"
+        ]
+      }
+    },
+    "/staff/payments/reversals/{reversal_id}/withdraw": {
+      "post": {
+        "description": "Take back your own proposal before anyone decides it. Anyone else gets `403`.",
+        "operationId": "withdraw_reversal_staff_payments_reversals__reversal_id__withdraw_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "reversal_id",
+            "required": true,
+            "schema": {
+              "maxLength": 20,
+              "minLength": 20,
+              "pattern": "^[-0-9A-Z_a-z]{20}$",
+              "title": "Reversal Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "A value the caller chooses once per intended action and sends again on every retry of it. Pattern: `[A-Za-z0-9._:-]{8,128}`.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "A value the caller chooses once per intended action and sends again on every retry of it. Pattern: `[A-Za-z0-9._:-]{8,128}`.",
+              "title": "Idempotency-Key"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReversalDetailOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          }
+        },
+        "summary": "Withdraw Reversal",
+        "tags": [
+          "staff deposit reversals"
         ]
       }
     },

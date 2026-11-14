@@ -43,6 +43,8 @@ describe("the Documents screen", () => {
     expect(screen.getByText("Tax certificates")).toBeTruthy();
     expect(screen.getByText("Tax year 2025-26")).toBeTruthy();
     expect(screen.getByText(/1 Jul 2025 to 30 Jun 2026\. Shows the tax withheld/)).toBeTruthy();
+    expect(screen.getByText("Investment notes")).toBeTruthy();
+    expect(screen.getByText("Investment note IN-Pq31wXb7")).toBeTruthy();
     await fireEvent.press(screen.getByLabelText("Download October 2026"));
     // The download finishes after the press returns, so wait for it.
     await waitFor(() => expect(client.downloaded).toEqual(["demo-monthly-1"]));

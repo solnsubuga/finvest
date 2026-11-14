@@ -53,7 +53,9 @@ class StatementRequest(Contract):
 
 class DocumentItem(Contract):
     id: PushId
-    kind: Literal["monthly_statement", "requested_statement", "receipt", "tax_certificate"]
+    kind: Literal[
+        "monthly_statement", "requested_statement", "receipt", "tax_certificate", "investment_note"
+    ]
     # `pending` while the worker builds it, then `ready` to download, or `failed`.
     status: Literal["pending", "ready", "failed"]
     date_from: date | None

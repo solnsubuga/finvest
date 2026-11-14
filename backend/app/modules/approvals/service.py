@@ -14,6 +14,7 @@ from app.modules.dealing import buffer, capital
 from app.modules.dealing import orders as dealing
 from app.modules.dealing.domain.capital import Direction
 from app.modules.dealing.domain.orders import OrderStatus
+from app.modules.finance import code_maps
 from app.modules.identity import client_locks, phone_changes, team
 from app.modules.identity.service import StaffSession
 from app.modules.investments import service as investments
@@ -22,7 +23,7 @@ from app.modules.ledger import corrections
 from app.modules.migration import service as migration
 from app.modules.notifications import announcements, suppression_lifts, wording_store
 from app.modules.organisations import service as organisations
-from app.modules.payments import bank_accounts, bank_transfers, reassignments
+from app.modules.payments import bank_accounts, bank_transfers, reassignments, reversals
 from app.modules.payouts import destinations, resolutions, reviews
 from app.modules.reconciliation import day_close, transfers
 from app.modules.screening import service as screening
@@ -87,6 +88,10 @@ async def waiting_for(session: AsyncSession, staff: StaffSession, now: datetime)
         found += await _compliance_cases(session)
     if "bank_account_change" in kinds:
         found += await _bank_accounts(session)
+    if "account_code_map" in kinds:
+        found += await _code_maps(session)
+    if "deposit_reversal" in kinds:
+        found += await _reversals(session)
     return inbox(found, staff.staff_id, staff.permissions)
 
 
@@ -329,6 +334,14 @@ async def _reassignments(session: AsyncSession) -> list[Waiting]:
     ]
 
 
+async def _reversals(session: AsyncSession) -> list[Waiting]:
+    # The subject is the deposit's ID, never a name or an amount.
+    return [
+        Waiting("deposit_reversal", r.id, r.deposit_id, r.proposed_by, r.proposed_at)
+        for r in await reversals.proposals_awaiting_approval(session)
+    ]
+
+
 async def _payout_releases(session: AsyncSession) -> list[Waiting]:
     # The subject is the payout's ID, never the client, the account or the amount.
     return [
@@ -362,4 +375,12 @@ async def _organisations(session: AsyncSession) -> list[Waiting]:
         Waiting("organisation", o.id, o.kind.value, o.checked_by, o.checked_at)
         for o in await organisations.waiting(session)
         if o.checked_by is not None and o.checked_at is not None
+    ]
+
+
+async def _code_maps(session: AsyncSession) -> list[Waiting]:
+    # The subject is the accounting system, never an account.
+    return [
+        Waiting("account_code_map", m.id, m.system.value, m.proposed_by, m.proposed_at)
+        for m in await code_maps.waiting(session)
     ]

@@ -43,6 +43,7 @@ from app.infrastructure.sealing import Sealer
 from app.modules.documents import building, locking, pdf, service
 from app.modules.documents.domain.emails import (
     Rendered,
+    investment_note_email,
     receipt_email,
     statement_email,
     tax_certificate_email,
@@ -55,7 +56,7 @@ from app.modules.documents.domain.statements import (
     not_final_from,
     previous_month,
 )
-from app.modules.documents.events import RECEIPT_KIND
+from app.modules.documents.events import INVESTMENT_NOTE_KIND, RECEIPT_KIND
 from app.modules.documents.service import DocumentFile, DocumentKind, DocumentStatus, DocumentView
 from app.modules.identity import service as identity
 from app.modules.kyc import service as kyc
@@ -113,6 +114,10 @@ def receipt_reference(document_id: str) -> str:
     return f"RC-{document_id}"
 
 
+def note_reference(document_id: str) -> str:
+    return f"IN-{document_id}"
+
+
 def certificate_reference(document_id: str) -> str:
     return f"TC-{document_id}"
 
@@ -127,6 +132,8 @@ def file_name(view: DocumentView) -> str:
         return f"Finvest receipt {receipt_reference(view.id)}.pdf"
     if view.kind is DocumentKind.TAX_CERTIFICATE:
         return f"Finvest tax certificate {_tax_year(view).label}.pdf"
+    if view.kind is DocumentKind.INVESTMENT_NOTE:
+        return f"Finvest investment note {note_reference(view.id)}.pdf"
     assert view.period is not None
     return f"Finvest statement {view.period.label}.pdf"
 
@@ -167,6 +174,7 @@ class DocumentJobs:
             service.MONTHLY_KIND: self.monthly_run,
             service.EXPIRE_EMAILS_KIND: self.expire_emails,
             RECEIPT_KIND: self.receipt_from_deposit,
+            INVESTMENT_NOTE_KIND: self.note_from_investment,
             # Sending reaches Resend. Its idempotency key makes a lost answer safe to repeat,
             # and a crash mid-send stops the job instead of sending blind.
             service.EMAIL_KIND: external_effect(self.send_email),
@@ -235,6 +243,26 @@ class DocumentJobs:
                     session, deposit_id=view.source_id, reference=receipt_reference(view.id)
                 )
                 return DocumentStatus.READY, None, pdf.receipt_pdf(receipt), None
+            if view.kind is DocumentKind.INVESTMENT_NOTE:
+                assert view.source_id is not None
+                try:
+                    note, _ = await building.investment_note(
+                        session,
+                        client_id=view.client_id,
+                        investment_id=view.source_id,
+                        reference=note_reference(view.id),
+                        clock=self._clock,
+                    )
+                except ApplicationError as error:
+                    if error.code != "not_found":
+                        raise
+                    # Staff undid it: it started by mistake and was never really the
+                    # client's. Nothing to confirm, show or send.
+                    return DocumentStatus.EMPTY, None, None, None
+                drawn_note = pdf.investment_note_pdf(
+                    note, issued_on=business_date(self._clock.now())
+                )
+                return DocumentStatus.READY, None, drawn_note, None
             assert view.period is not None
             drawn = await building.statement(
                 session,
@@ -466,6 +494,28 @@ class DocumentJobs:
         result = await context.apply(effect)
         logger.info("receipt_asked", document_id=result.get("document_id"))
 
+    async def note_from_investment(self, job: ClaimedJob, context: JobContext) -> None:
+        """An investment started: ask for the note that confirms it, built and emailed next."""
+        data = job.payload.get("data")
+        data = data if isinstance(data, Mapping) else {}
+        investment_id, client_id = data.get("investment_id"), data.get("client_id")
+        if not isinstance(investment_id, str) or not isinstance(client_id, str):
+            raise PermanentJobError(code="investment_id_missing")
+
+        async def effect(session: AsyncSession) -> Mapping[str, object]:
+            view = await service.ask(
+                session,
+                client_id=client_id,
+                kind=DocumentKind.INVESTMENT_NOTE,
+                key=f"started:{investment_id}",
+                source_id=investment_id,
+                now=self._clock.now(),
+            )
+            return {"document_id": view.id}
+
+        result = await context.apply(effect)
+        logger.info("investment_note_asked", document_id=result.get("document_id"))
+
     async def send_email(self, job: ClaimedJob, context: JobContext) -> None:
         """Email a ready document to its client, with the PDF attached.
 
@@ -508,7 +558,11 @@ class DocumentJobs:
                     password = await self._password(session, view)
                     if password is None:
                         address, skip = None, "no_date_of_birth"
-                rendered = await _render(session, view, file, self._links) if address else None
+                rendered = (
+                    await _render(session, view, file, self._links, self._clock)
+                    if address
+                    else None
+                )
 
         if status != "queued":
             # Finished by an earlier attempt whose result was saved.
@@ -601,7 +655,7 @@ async def _queue_email(session: AsyncSession, view: DocumentView, now: datetime)
 
 
 async def _render(
-    session: AsyncSession, view: DocumentView, file: DocumentFile, links: Links
+    session: AsyncSession, view: DocumentView, file: DocumentFile, links: Links, clock: Clock
 ) -> Rendered:
     holder = await building.holder(session, view.client_id)
     if view.kind is DocumentKind.RECEIPT:
@@ -611,6 +665,18 @@ async def _render(
         )
         return receipt_email(
             first_name=holder.first_name, receipt=receipt, file_name=file.file_name, links=links
+        )
+    if view.kind is DocumentKind.INVESTMENT_NOTE:
+        assert view.source_id is not None
+        note, _ = await building.investment_note(
+            session,
+            client_id=view.client_id,
+            investment_id=view.source_id,
+            reference=note_reference(view.id),
+            clock=clock,
+        )
+        return investment_note_email(
+            first_name=holder.first_name, note=note, file_name=file.file_name, links=links
         )
     assert view.period is not None
     if view.kind is DocumentKind.TAX_CERTIFICATE:

@@ -2,9 +2,9 @@
 
 What Finvest sends a client in writing about their money: a statement after every month, a statement for any dates the client picks in the app, and a receipt for every payment received. Each one is a PDF, sent by email through Resend and kept in the app under Documents.
 
-The code is `backend/app/modules/documents`. It also draws and sends the yearly withholding tax certificate, from figures the tax module gives it ([tax.md](tax.md)). Transaction notes will join this module later.
+The code is `backend/app/modules/documents`. It also draws and sends the yearly withholding tax certificate, from figures the tax module gives it ([tax.md](tax.md)). It also issues the note that confirms an investment started.
 
-**Status:** statements are asked for, built from the ledger, stored, downloadable and emailed with the PDF attached, and the monthly run asks for every client's. Every confirmed payment gets a receipt, built and emailed the same way. The app's Documents screen arrives in its own pull request. The tables are migrations `0140_documents` and `0141_document_emails`, and `0142_tax_certificates` lets `documents` hold a certificate.
+**Status:** statements are asked for, built from the ledger, stored, downloadable and emailed with the PDF attached, and the monthly run asks for every client's. Every confirmed payment gets a receipt, built and emailed the same way. The app's Documents screen arrives in its own pull request. The tables are migrations `0140_documents` and `0141_document_emails`, `0142_tax_certificates` lets `documents` hold a certificate, and `0143_investment_notes` an investment note.
 
 The designs are in `/mnt/project-files/screenshots/statements/` in the project folder: the statement PDF, the receipt PDF, the three emails at phone and wide sizes, and the app's Documents screen in every state.
 
@@ -46,6 +46,18 @@ The figures come from `tax.service.certificate_figures`, read from the ledger. I
 **When.** The monthly run for June, which starts only once the ledger is closed through 30 June, also asks for every client's certificate for the year that June ends. A year in which a client earned nothing is recorded as `empty` and never shown or sent. The certificate is emailed like a statement, with no figure in the email.
 
 **The TIN.** The certificate prints the TIN, which only the identity data key opens. A worker started without `FINVEST_IDENTITY_DATA_KEY` leaves certificates pending and retries them with `identity_key_missing`, logged as an error, instead of drawing one without the TIN.
+
+## An investment note
+
+The note that confirms an investment started, one for each investment. When an investment starts, `investments.started` names the consumer `documents.note_from_investment`, which asks for a document of kind `investment_note` keyed `started:<investment id>` with the investment as its source. The database holds each note to its investment, so an investment gets one note however often the event is delivered. It is built, kept in the app under Investment notes and emailed like a receipt, with no figure in the email.
+
+| Part | What it shows |
+| --- | --- |
+| Heading | The client's name, account number, the product, the investment number, the start and maturity dates (or "Open term"), the issue date and the note number (`IN-<document id>`) |
+| Figures | The amount invested, the yearly rate after tax and, for a fixed term, the term, the interest at maturity after tax and what the client gets back |
+| At maturity | What the client chose: roll over or pay out. Rolling over is the default |
+
+The figures are the client's own view of the investment (`investments.client_investment`), so like every client figure they are after tax and the note never shows a tax rate or a tax amount. The note says the interest at maturity assumes the investment is held to maturity. A note for an investment that was never started fails with `source_conflict`. An investment that staff undid because it started by mistake (an investment correction) gets no note: its note is recorded as `empty` and never shown or sent, even when the job runs or retries after the undo. Investments carried over from Finvest 1.0 do not publish `investments.started`, so they get no note. Nor does the new investment a rollover opens at maturity: it publishes `investments.rolled_over`, not `investments.started`, so a note is issued only when a client's own payment starts an investment.
 
 ## The PDFs
 

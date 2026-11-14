@@ -97,7 +97,19 @@ function seed(today: string, now: Date): DocumentItem[] {
     byteSize: 41_000,
     notFinalFrom: null,
   };
-  return [requested, ...monthly, certificate, ...receipts];
+  const note: DocumentItem = {
+    id: "demo-investment-note-1",
+    kind: "investment_note",
+    status: "ready",
+    dateFrom: null,
+    dateTo: null,
+    requestedAt: morning(shiftMonth(today, -1, 11)),
+    finishedAt: morning(shiftMonth(today, -1, 11)),
+    fileName: "Finvest investment note IN-Pq31wXb7.pdf",
+    byteSize: 24_000,
+    notFinalFrom: null,
+  };
+  return [requested, ...monthly, certificate, note, ...receipts];
 }
 
 export function createStubDocumentsClient(phone: string | null, options: Options = {}) {

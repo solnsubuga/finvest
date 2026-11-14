@@ -57,6 +57,7 @@ const goal = {
   created_at: "2026-11-13T10:00:00Z",
   progress: { value_minor: 0, interest_minor: 0, awaiting_payment_minor: 300000, percent: 0, standing: "on_track" },
   plan,
+  saving_rule: null,
   savings: [saving],
 };
 
@@ -115,6 +116,27 @@ describe("the goals client for the real API", () => {
     });
     expect(made.savings[0]).toMatchObject({ investmentId: INV, status: "awaiting_payment", amount: { minor: 300000 } });
     expect(made.progress.awaitingPayment).toEqual({ minor: 300000, currency: "UGX" });
+  });
+
+  it("changes a goal with PUT, with no idempotency key, and says when it is closed", async () => {
+    const seen = serve(200, { ...goal, name: "University fees", target_minor: 5000000 });
+    const changed = await createApiGoalsClient().updateGoal(ID, {
+      name: "University fees",
+      category: "school_fees",
+      target: { minor: 5000000, currency: "UGX" },
+      targetDate: null,
+    });
+    expect(seen[0]).toMatchObject({
+      method: "PUT",
+      path: `/client/goals/${ID}`,
+      key: undefined,
+      body: { name: "University fees", category: "school_fees", target_minor: 5000000, currency: "UGX", target_date: null },
+    });
+    expect(changed).toMatchObject({ name: "University fees", target: { minor: 5000000, currency: "UGX" } });
+    serve(409, refusal(409, "conflict"));
+    await expect(
+      createApiGoalsClient().updateGoal(ID, { name: "x", category: "other", target: { minor: 1, currency: "UGX" }, targetDate: null }),
+    ).rejects.toMatchObject({ code: "closed" });
   });
 
   it("saves to a goal and hands back the investment to pay for", async () => {

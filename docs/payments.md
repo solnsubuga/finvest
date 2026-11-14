@@ -82,7 +82,7 @@ Client routes, signed in as the client. Each `POST` needs an `Idempotency-Key`.
 | `GET /client/payments` | The client's own payments, newest first, 50 a page, for the Activity list. Each is the same shape as below without its `receipt`. Pass `next_before` back as `before` for the next page; it is null on the last. |
 | `GET /client/payments/{id}` | One payment, the client's own only. |
 
-Every payment leaves a trail in the audit log. A client asking to pay, by mobile money or by bank receipt, writes `payments.deposit_requested` as the client, with the method. When the deposit settles, the system writes `payments.deposit_confirmed` or `payments.deposit_failed`, with the method, what settled it (such as `status_read` or `staff_review`) and, for a failure, the failure code. Amounts and phone numbers are not put in these events: the deposit holds them.
+Every payment leaves a trail in the audit log. A client asking to pay, by mobile money or by bank receipt, writes `payments.deposit_requested` as the client, with the method. A deposit the worker asks for on the client's behalf, for an automatic investing run, writes the same event as the system. When the deposit settles, the system writes `payments.deposit_confirmed` or `payments.deposit_failed`, with the method, what settled it (such as `status_read` or `staff_review`) and, for a failure, the failure code. Amounts and phone numbers are not put in these events: the deposit holds them.
 
 
 Seeing transfers needs `reconciliation.view`. Matching, refusing and approving need `bank_transfers.change`, because they confirm money. Admin, operations and finance hold both for now. Opening a transfer writes a `payments.bank_transfer_opened` access event to the audit trail, because the receipt and the bank's narrative can name the client and the sender.
@@ -143,6 +143,7 @@ When a deposit settles, the client is told in the same transaction, through the 
 - A deposit is `confirmed` exactly when it points at its ledger entry.
 - The status history (`payment_deposit_events`) and the callback record (`payment_provider_notices`) are insert only for every role.
 - A client transaction sees and creates only that client's deposits. The API cannot change a deposit. Only the worker can, and only its status fields.
+- The worker saves a deposit only at the start of a mobile money payment for an investment, for an automatic investing run (`request_system_deposit`, migration 0300): `created`, MTN or Airtel, with no provider reference, ledger entry or settlement. The payer must still be the number on the client's account. See [automatic-investing.md](automatic-investing.md#asking-for-a-run).
 - A bank transfer starts `in_review` and moves only to `confirmed` or `failed`. A mobile money deposit is never `in_review`. A bank transfer has no payer number and its provider is `bank`; every other deposit has a payer number (migration 0022).
 - A bank transfer's receipt and its staff review are insert only for every role, one of each per deposit. A client adds a receipt only to their own transfer in review. Only staff add a review, in their own name, of a transfer in review.
 - A statement line is used by one review at most.
@@ -153,7 +154,21 @@ When a deposit settles, the client is told in the same transaction, through the 
 
 Decided by the owner on 13 November 2026: receivable, then recover. The original entry is never touched, and no balance goes below zero. Every step is proposed by one staff member and approved by another through the ledger's corrections ([ledger.md](ledger.md)), with a reason, and is audited.
 
-**The money is still in `client.awaiting_start`.** Staff propose an exact reversal of the deposit entry and a second person approves it.
+**The money is still in `client.awaiting_start`.** The deposit is reversed, by two people (`reversals.py`, `domain/reversals.py`, `reversal_routes.py`, migration 0261). If the investment started, it is unwound first through investments corrections, which puts the principal back there.
+
+1. **Propose.** One member of staff names the confirmed deposit and a reason (`POST /staff/payments/reversals`). The whole amount must still wait for the investment, or it is refused with `money_moved_on`. A deposit saved by a reassignment is refused with `not_a_payment`: it is put right by reassigning it. Nothing moves.
+2. **Approve.** A different member of staff approves, with a passkey or app code from the last ten minutes, and the worker's job is queued in that transaction. Or the second person sends it back with a note, or the proposer withdraws it. It shows in the approvals inbox as `deposit_reversal`.
+3. **The worker** takes the investment's row lock, the one the start of an investment holds while it reads the money waiting, so a start and a reversal never interleave. It checks everything again and posts the exact reversal of the deposit's entry:
+
+| Debit | Credit |
+| --- | --- |
+| Liability `client.awaiting_start`, the client, reference the investment | The wallet or bank account the deposit's entry debited |
+
+The entry is `payment.deposit_reversed`, source `payment.deposit_reversal` and the reversal's ID, key `deposit-reversal:<ID>`, and it points at the deposit's entry as the one it reverses. In the same transaction the deposit's `reversal_id` is set. The deposit stays `confirmed`, because it was, but it no longer counts as the investment's payment: `has_live_deposit` is false and the one-payment-per-investment index leaves it out. So the client can pay for the investment again, or the sweep cancels it as unpaid at its pay-by time. If the money moved in between, the reversal is marked `failed` with a code and nothing moves; staff propose again once it is back.
+
+Seeing reversals needs `reconciliation.view`. Proposing and deciding need `deposit_reassignments.change`, the permission for putting a wrongly credited payment right. The database holds each person to their part: only the proposer withdraws, nobody decides their own, only the worker records the outcome, a done reversal must carry its own exact reversing entry, and a deposit's `reversal_id` is set once, by the worker, to a done reversal of it. Payments never writes to investments.
+
+The client is not told by message yet, and a start job queued by the original confirmation, if it runs after the reversal, fails for want of money and shows among the failed jobs.
 
 **The investment has started and is still running.** Staff first unwind it with `/staff/investment-corrections` (see [investing.md](investing.md)), which moves the principal back to `client.awaiting_start`, takes back the interest so far and has the desk release the bills. The deposit is then reversed as above. An unwind is refused once the money has left: the investment matured and was paid out, it was withdrawn early, or a refund went out.
 
@@ -234,7 +249,8 @@ ioTec Pay is the chosen provider, and there is a sandbox that moves no money for
   - the payer's number as `256…`
   - the amount in whole shillings
   - the deposit ID as `externalId`
-  - `transactionChargesCategory` `ChargeWallet`, so the client pays exactly the investment's amount and ioTec's charge falls on our wallet. That is decided for now ([decisions.md](decisions.md)). Nothing posts the charge yet, so `iotec.wallet` runs ahead of ioTec's balance by the charges until how it is booked is decided (an open question there).
+  - `transactionChargesCategory` `ChargeWallet`, so the client pays exactly the investment's amount and ioTec's charge falls on our wallet. That is decided for now ([decisions.md](decisions.md)).
+- **Booking the charge.** The status read that confirms a collection carries `totalTransactionCharge`. The adapter rounds it up to a whole shilling (24.5 becomes 25), and the confirmation posts it beside the deposit's own entry as `payment.provider_charge`: debit `fees.provider.iotec`, credit `iotec.wallet`, key `deposit-charge:<deposit id>`. The deposit's entry still credits the client with the whole payment, so the charge is Finvest's cost and never the client's. Rounding up means the books never show less than ioTec took. The fraction shows as a small difference on the ioTec wallet at reconciliation. A charge that cannot be read (missing, not a number, negative, or not below the amount) is left out and logged as `iotec_charge_unreadable`. It never stops the deposit, and the wallet difference shows at reconciliation.
 - **Reading the status.** The status is read by ioTec's ID, or by the deposit ID when the answer to the send was lost.
 
 How a send ends:

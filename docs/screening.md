@@ -4,7 +4,7 @@ Sanctions and politically exposed person (PEP) screening, transaction monitoring
 
 ## In short
 
-- Every client is screened when they hand in their identity check, again every 30 days once approved, and before a payout unless they were screened clear in the last 24 hours. The call at hand-in lands with the identity checks thread's next PR; until then a newly approved client's first screen comes from the nightly sweep.
+- Every client is screened when they hand in their identity check, again every 30 days once approved, and before a payout unless they were screened clear in the last 24 hours. The identity check asks for the screen in the hand-in's own transaction (`Reason.ONBOARDING`, keyed by the check and its submission), once a provider is set up; with none, it asks for nothing, so a pending screen never holds a new client's payouts. Staff see the client's standing on the identity check (`screening` on the staff check): anything but `clear` is a reason to look before approving.
 - The provider is behind a port, so it can be swapped. The owner chose Sigma360. Until its account exists, no provider is set up and every screen is recorded as **not run**; the Compliance screen says screening is off.
 - A screen that finds a listed entity that may be the client opens a **case**. Two members of staff close it: one proposes the outcome, a different one approves it.
 - An entity already on a case for the client (still open, ruled out, accepted as a PEP, or confirmed as sanctioned) is recognised the next time and opens no new case.
@@ -175,7 +175,7 @@ All under `/staff/compliance`. Reading needs `compliance.view` (Admin, Complianc
 | `GET /summary` | Whether screening is on, open cases, proposals waiting, screens in the last 30 days, and cases closed since 1 January (Kampala) as `report_to_fia` |
 | `GET /rules` | The monitoring thresholds and the rescreening interval, read from `domain/monitoring.py` and `domain/standing.py` so the screen never shows a copy that has gone stale |
 | `GET /cases?status=open&source=` | Cases, open ones oldest first. A monitoring case carries `amount`: the payment that raised it, or for split deposits their total |
-| `GET /cases.csv` | The register: every case newest first, with the client's account number and name, how it closed and when, as a CSV file. Each export is an audit event, `compliance.register_exported`. More than 10,000 cases is `422 too_many_cases`. |
+| `POST /cases.csv` | The register, a POST because each export is recorded: every case newest first, with the client's account number and name, how it closed and when, as a CSV file. Each export is an audit event, `compliance.register_exported`. More than 10,000 cases is `422 too_many_cases`. |
 | `GET /cases/{id}` | One case, the screen and its matches, every proposal, where the client stands, and what the reader may do |
 | `POST /cases/{id}/proposals` | Propose an outcome. `409 proposal_waiting` or `case_closed`; `422 outcome_does_not_fit_case`. |
 | `POST /proposals/{id}/approve` | Close the case. Needs a recent second step. The proposer gets `403`. |

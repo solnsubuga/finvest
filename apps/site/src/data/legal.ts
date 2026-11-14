@@ -3,6 +3,10 @@
  * come from Finvest's lawyers before launch, and every page says so.
  */
 
+/** The notice every legal page and its PDF carry, after a bold "Layout only." */
+export const layoutOnlyNotice =
+  "The headings below show the structure. The wording must come from Finvest's lawyers before launch.";
+
 export interface LegalDocument {
   slug: string;
   title: string;
