@@ -185,6 +185,17 @@ describe("complaints screen", () => {
     expect(within(history).getAllByRole("listitem").at(-1)).toHaveTextContent(
       "Outcome rejected, Amina Kintu, 13 Nov, 12:00Say what the rate was on the day she invested.",
     );
+    // The next proposal starts from the rejected one, with what was asked beside it.
+    await user.click(within(after).getByRole("button", { name: "Propose the outcome" }));
+    const again = within(after).getByRole("form", { name: "Propose the outcome" });
+    expect(again).toHaveTextContent(
+      "Amina Kintu rejected the last outcome, 13 Nov, 12:00, and asked: “Say what the rate was on the day she invested.”",
+    );
+    expect(within(again).getByRole("radio", { name: /^Not upheld/ })).toBeChecked();
+    expect(within(again).getByLabelText(/What was done about it/)).toHaveValue(
+      "The rate you saw was right. Your statement shows the interest after tax, so the figure is lower. Nothing is missing.",
+    );
+    expect(within(again).getByRole("radio", { name: "Yes" })).toBeChecked();
   });
 
   it("never lets whoever logged a complaint confirm its outcome", async () => {

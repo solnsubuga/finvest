@@ -852,6 +852,16 @@ export const PendingOutcome = z.object({
 });
 export type PendingOutcome = z.infer<typeof PendingOutcome>;
 
+export const RejectedOutcome = z.object({
+  client_accepted: z.boolean(),
+  decided_at: z.string(),
+  decided_by: z.string(),
+  outcome: z.enum(["upheld", "partly_upheld", "not_upheld"]),
+  reason: z.string(),
+  resolution: z.string(),
+});
+export type RejectedOutcome = z.infer<typeof RejectedOutcome>;
+
 export const SupportApiAmount = z.object({
   currency: z.enum(["UGX", "USD"]),
   minor: z.number().int(),
@@ -883,6 +893,7 @@ export type StaffComplaint = z.infer<typeof StaffComplaint>;
 export const ComplaintDetail = z.object({
   complaint: StaffComplaint,
   history: z.array(ComplaintHistoryItem),
+  last_rejected: RejectedOutcome.nullable(),
   pending_outcome: PendingOutcome.nullable(),
 });
 export type ComplaintDetail = z.infer<typeof ComplaintDetail>;
