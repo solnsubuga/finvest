@@ -58,6 +58,8 @@ export const ACTION_PERMISSIONS = [
   "wordings.change",
   // Proposing or deciding an announcement to every active client. Apart from wordings, so fewer people can do it.
   "announcements.send",
+  // Proposing or deciding the bank account clients pay into by transfer, on Settings. Approving always takes a second person.
+  "bank_accounts.change",
   // Matching a bank transfer to a statement line, refusing it, and approving someone else's match.
   "bank_transfers.change",
   // Importing a statement, pairing by hand, signing a day close, and settling a payout the
