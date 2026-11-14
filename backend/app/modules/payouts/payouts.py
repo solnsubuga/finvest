@@ -35,7 +35,8 @@ from app.modules.payouts.domain.limits import (
 from app.modules.payouts.domain.payouts import LedgerEffect, PayoutEvent, PayoutStatus
 from app.modules.payouts.domain.posting import PayoutTerms
 from app.modules.payouts.domain.sending import HELD_UP_AFTER, SEND_ATTEMPTS
-from app.shared.actors import Actor
+from app.modules.screening import contract as screening
+from app.shared.actors import SYSTEM, Actor
 from app.shared.business_day import business_date
 from app.shared.clock import Clock
 from app.shared.errors import ApplicationError
@@ -124,6 +125,14 @@ _UPDATE = text(
 )
 _HELD = text(
     f"SELECT {_COLUMNS} FROM payouts WHERE status = 'held' "  # noqa: S608 - constant column list
+    "ORDER BY created_at, id LIMIT :limit"
+)
+_WAITING_FOR_CLIENT = text(
+    f"SELECT {_COLUMNS} FROM payouts WHERE client_id = :client_id "  # noqa: S608
+    "AND status = 'screening' ORDER BY created_at, id FOR UPDATE"
+)
+_WAITING_SCREENING = text(
+    f"SELECT {_COLUMNS} FROM payouts WHERE status = 'screening' "  # noqa: S608
     "ORDER BY created_at, id LIMIT :limit"
 )
 # Queued mobile money payouts no send has left, first tried before a time.
@@ -248,7 +257,10 @@ async def create_payout(
         raise PayoutRefused(decision.refusal.value)
 
     payout_id = push_id()
-    status = machine.initial_status(needs_review=decision.needs_review)
+    clearance = await screening.payout_clearance(session, client_id, now)
+    status = machine.initial_status(
+        needs_review=decision.needs_review, screened=clearance is screening.Clearance.CLEAR
+    )
     try:
         async with session.begin_nested():
             source = await ledger.open_account(session, funding, clock)
@@ -279,6 +291,15 @@ async def create_payout(
         raise PayoutRefused("insufficient_funds") from None
     if status is PayoutStatus.QUEUED:
         await queue_send(session, payout_id, destination.kind, now)
+    if clearance is screening.Clearance.SCREEN:
+        # No recent screen: ask for one. The payout moves on when it comes back clear.
+        await screening.request_screening(
+            session,
+            client_id=client_id,
+            reason=screening.Reason.PAYOUT,
+            idempotency_key=f"payout:{payout_id}",
+            now=now,
+        )
     await _audit(session, actor, "payouts.payout_requested", payout_id, clock)
     return await get_payout(session, payout_id)
 
@@ -411,7 +432,10 @@ async def _move(
             ),
             now=now,
         )
-    if before.status is PayoutStatus.HELD and transition.status is PayoutStatus.QUEUED:
+    if (
+        before.status in (PayoutStatus.HELD, PayoutStatus.SCREENING)
+        and transition.status is PayoutStatus.QUEUED
+    ):
         await queue_send(session, payout_id, before.kind, now)
     return await get_payout(session, payout_id)
 
@@ -459,6 +483,53 @@ async def get_payout(session: AsyncSession, payout_id: str) -> PayoutView:
     if row is None:
         raise ApplicationError("not_found")
     return _view(row)
+
+
+async def release_screened(session: AsyncSession, client_id: str, clock: Clock) -> list[str]:
+    """Move on the client's payouts waiting for screening, if the client is now clear.
+
+    Called by the worker when where the client stands with screening changed. A large payout
+    goes to staff review under the review amount in force today, as it would have at creation.
+    Returns the IDs moved. A payout still waiting after a fresh screen was asked for stays, and
+    staff can screen the client again from the Compliance screen.
+    """
+    now = clock.now()
+    waiting = [
+        _view(row) for row in await session.execute(_WAITING_FOR_CLIENT, {"client_id": client_id})
+    ]
+    if not waiting:
+        return []
+    clearance = await screening.payout_clearance(session, client_id, now)
+    if clearance is screening.Clearance.SCREEN:
+        await screening.request_screening(
+            session,
+            client_id=client_id,
+            reason=screening.Reason.PAYOUT,
+            idempotency_key=f"payout:{waiting[0].id}:{business_date(now).isoformat()}",
+            now=now,
+        )
+        return []
+    if clearance is not screening.Clearance.CLEAR:
+        return []
+    limits = await current_limits(session, business_date(now))
+    moved: list[str] = []
+    for payout in waiting:
+        needs_review = limits.review_above is not None and payout.amount > limits.review_above
+        await _move(
+            session,
+            SYSTEM,
+            payout.id,
+            machine.after_screening(needs_review=needs_review),
+            clock,
+        )
+        moved.append(payout.id)
+    return moved
+
+
+async def waiting_for_screening(session: AsyncSession, *, limit: int = 100) -> list[PayoutView]:
+    """Payouts waiting for their client to be screened, oldest first. For staff."""
+    rows = await session.execute(_WAITING_SCREENING, {"limit": max(1, min(limit, 200))})
+    return [_view(row) for row in rows]
 
 
 async def held_for_review(session: AsyncSession, *, limit: int = 50) -> list[PayoutView]:

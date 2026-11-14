@@ -5779,6 +5779,29 @@
         "title": "Health",
         "type": "object"
       },
+      "HeldAmountOut": {
+        "additionalProperties": false,
+        "properties": {
+          "currency": {
+            "enum": [
+              "UGX",
+              "USD"
+            ],
+            "title": "Currency",
+            "type": "string"
+          },
+          "minor": {
+            "title": "Minor",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "minor",
+          "currency"
+        ],
+        "title": "HeldAmountOut",
+        "type": "object"
+      },
       "HeldPayoutOut": {
         "additionalProperties": false,
         "description": "A payout waiting for a member of staff, because it is above the review threshold.",
@@ -15143,6 +15166,10 @@
             "title": "Open Screening Cases",
             "type": "integer"
           },
+          "payouts_waiting": {
+            "title": "Payouts Waiting",
+            "type": "integer"
+          },
           "pending": {
             "title": "Pending",
             "type": "integer"
@@ -15179,7 +15206,8 @@
           "unavailable_last_30_days",
           "not_run_last_30_days",
           "pending",
-          "last_screened_at"
+          "last_screened_at",
+          "payouts_waiting"
         ],
         "title": "SummaryOut",
         "type": "object"
@@ -16074,6 +16102,58 @@
         ],
         "title": "Verdict",
         "type": "string"
+      },
+      "WaitingPayoutOut": {
+        "additionalProperties": false,
+        "description": "A payout whose money is reserved and waiting for its client to be screened.",
+        "properties": {
+          "amount": {
+            "$ref": "#/components/schemas/HeldAmountOut"
+          },
+          "client": {
+            "$ref": "#/components/schemas/ClientOut"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "id": {
+            "maxLength": 20,
+            "minLength": 20,
+            "pattern": "^[-0-9A-Z_a-z]{20}$",
+            "title": "Id",
+            "type": "string"
+          },
+          "kind": {
+            "enum": [
+              "mobile_money",
+              "bank"
+            ],
+            "title": "Kind",
+            "type": "string"
+          },
+          "standing": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/StandingOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "id",
+          "client",
+          "kind",
+          "amount",
+          "created_at",
+          "standing"
+        ],
+        "title": "WaitingPayoutOut",
+        "type": "object"
       },
       "WalletOut": {
         "additionalProperties": false,
@@ -30218,6 +30298,82 @@
           }
         },
         "summary": "Screen Again",
+        "tags": [
+          "staff compliance"
+        ]
+      }
+    },
+    "/staff/compliance/payouts": {
+      "get": {
+        "description": "Payouts waiting for their client to be screened, oldest first, at most 200. They move\non by themselves once the client is screened clear; staff may decline one from the\nreview queue's decline route.",
+        "operationId": "waiting_payouts_staff_compliance_payouts_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/WaitingPayoutOut"
+                  },
+                  "title": "Response Waiting Payouts Staff Compliance Payouts Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          }
+        },
+        "summary": "Waiting Payouts",
         "tags": [
           "staff compliance"
         ]

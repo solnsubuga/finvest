@@ -2,11 +2,26 @@
 
 * `request_screening` asks for a screen in the caller's transaction. The identity check calls
   it when a client hands in their check (`Reason.ONBOARDING`), and payouts before money leaves.
+* `payout_clearance` says whether money may leave for a client now. Payouts asks it when a
+  payout is created, and waits for a screen when it is not clear.
 * `latest_outcome` says where a client stands: anything but `clear` is a reason for a person to
   look before approving an identity check.
 """
 
-from app.modules.screening.domain.standing import Outcome, Reason
-from app.modules.screening.service import ScreeningStanding, latest_outcome, request_screening
+from app.modules.screening.domain.standing import Clearance, Outcome, Reason
+from app.modules.screening.service import (
+    ScreeningStanding,
+    latest_outcome,
+    payout_clearance,
+    request_screening,
+)
 
-__all__ = ["Outcome", "Reason", "ScreeningStanding", "latest_outcome", "request_screening"]
+__all__ = [
+    "Clearance",
+    "Outcome",
+    "Reason",
+    "ScreeningStanding",
+    "latest_outcome",
+    "payout_clearance",
+    "request_screening",
+]

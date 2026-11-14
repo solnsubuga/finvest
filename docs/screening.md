@@ -4,7 +4,7 @@ Sanctions and politically exposed person (PEP) screening, and the compliance cas
 
 ## In short
 
-- Every client is screened when they hand in their identity check, again every 30 days once approved, and before a payout (built in the payout screening PR).
+- Every client is screened when they hand in their identity check, again every 30 days once approved, and before a payout unless they were screened clear in the last 24 hours.
 - The provider is behind a port, so it can be swapped. The owner chose Sigma360. Until its account exists, no provider is set up and every screen is recorded as **not run**; the Compliance screen says screening is off.
 - A screen that finds a listed entity that may be the client opens a **case**. Two members of staff close it: one proposes the outcome, a different one approves it.
 - An entity staff already ruled out for a client, or accepted as a PEP, is recognised the next time and opens no new case.
@@ -71,6 +71,25 @@ The worker (`jobs.py`, `screening.screen_client`) reads who to screen, calls the
 | `pending`, `unavailable`, `not_run` | The last screen is waiting, failed, or could not be run |
 
 None means the client was never screened. The identity check review shows anything other than `clear` as a flag.
+
+## Before a payout
+
+Migration `0181_payout_screening`. When a payout is created, payouts asks `contract.payout_clearance(session, client_id, now)`:
+
+| Clearance | When | What the payout does |
+| --- | --- | --- |
+| `clear` | A screen finished in the last 24 hours found nothing new, and no case is open | Goes on as before: queued, or held for staff review if it is large |
+| `screen` | No screen in the last 24 hours | Starts `screening`, and a screen is asked for with the key `payout:<payout>` |
+| `wait` | A screening case is open, a screen is under way, or a screen moments ago could not run (provider refused, or no identity check) | Starts `screening` |
+| `blocked` | Two members of staff confirmed a sanctions match | Starts `screening` and stays there |
+
+A payout in `screening` has its money reserved and nothing sent. The client app shows it as processing, never as being screened, so a client is not tipped off.
+
+Whenever a client's standing may have changed (a screen finished, a case closed), screening publishes `screening.standing_changed`, and payouts' consumer `payouts.release_screened` moves the client's waiting payouts on once they are clear: to the queue, or to staff review if the payout is above the review amount in force that day. A payout still waiting can be found on the Compliance screen (`GET /staff/compliance/payouts`), and staff may decline it from the review queue's decline route, which returns the money to where it came from, as for a held payout. A person never releases one: only a clear screen does.
+
+With no screening provider set up there is no screen to wait for, so `screen` counts as `clear`. An open case or a confirmed sanctions match still holds the payout. Decided for now.
+
+What the database enforces: `screening_payout_clearance(client, at)` holds the rule. A payout is never created held or queued for a client who is blocked, has an open screening case or is being screened. Only the worker moves a payout out of `screening` to queued or held, and only under the same condition. Staff may move it only to cancelled, in their own name. A client may ask the function only about themselves.
 
 ## Cases
 
