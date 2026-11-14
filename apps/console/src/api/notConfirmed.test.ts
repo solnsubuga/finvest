@@ -7,6 +7,8 @@ import { complaintsErrorMessage } from "@/screens/complaints/api.ts";
 import { toComplaintsError } from "@/screens/complaints/http.ts";
 import { kycErrorMessage } from "@/screens/identity-checks/api.ts";
 import { toKycError } from "@/screens/identity-checks/http.ts";
+import { reviewQueueErrorMessage } from "@/screens/review-queue/api.ts";
+import { toReviewQueueError } from "@/screens/review-queue/http.ts";
 import { announcementsErrorMessage } from "@/screens/settings/announcements.ts";
 import { wordingsErrorMessage } from "@/screens/settings/api.ts";
 import { toAnnouncementsError, toWordingsError } from "@/screens/settings/http.ts";
@@ -28,6 +30,7 @@ const SCREENS: [string, (error: unknown) => unknown, (error: unknown) => string]
   ["suppression lifts", (e) => toSuppressionsError(e, true), suppressionsErrorMessage],
   ["liquidity buffer", toBufferError, bufferErrorMessage],
   ["rate approvals", toCatalogueError, catalogueErrorMessage],
+  ["review queue", toReviewQueueError, reviewQueueErrorMessage],
 ];
 
 describe("a decision the person did not confirm", () => {
