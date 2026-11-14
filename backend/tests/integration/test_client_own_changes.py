@@ -204,3 +204,23 @@ async def test_only_the_client_changes_their_own_number_and_email(
         with pytest.raises(DBAPIError, match="permission denied"):
             async with app_database.actor_transaction(client) as session:
                 await session.execute(text(statement), {"id": client.id})
+
+
+async def test_a_number_code_is_spent_only_on_the_session_that_asked(
+    api: Api, worker_database: Database
+) -> None:
+    client = await api.client()
+    old_phone = str((await account(api, client))["phone"])
+    new_phone = "+256701555014"
+    started = await api.http.post("/client/phone-change", json={"phone": new_phone})
+    challenge = started.json()["challenge_id"]
+    [(_, code)] = await sent(worker_database, new_phone)
+
+    # Another session of the same client, also signed in with a passkey just now.
+    other = await api.identity.issue_session(client, second_step="passkey", transport="token")
+    api.http.headers["Authorization"] = f"Bearer {other.token}"
+    elsewhere = await api.http.post(
+        f"/client/phone-change/{challenge}/confirmation", json={"code": code}
+    )
+    assert elsewhere.status_code == 410, elsewhere.text
+    assert (await account(api, client))["phone"] == old_phone
