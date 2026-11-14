@@ -37,9 +37,10 @@ export default function SignupPassword() {
       setTicket(null);
       setSignup(null);
       setJustSignedUp(true);
-      // The auth layout sends a signed-in client on: a phone to choose its PIN (the app's
-      // layout asks for one), anything that can make a passkey to the offer of one.
-      if (!pinApplies && signupSteps(false).includes("passkey")) setReturnTo("/setup/passkey");
+      // The auth layout sends a signed-in client on to check the email sign up has just sent a
+      // link to; that step then goes on to the PIN on a phone and the offer of a passkey.
+      if (session.email) setReturnTo("/setup/email");
+      else if (!pinApplies && signupSteps(false).includes("passkey")) setReturnTo("/setup/passkey");
       setSession(session);
     } catch (caught) {
       setError(describeAuthError(caught));

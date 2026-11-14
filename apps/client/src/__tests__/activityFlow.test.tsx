@@ -32,6 +32,7 @@ async function signUp(local: string) {
   await fireEvent.changeText(await screen.findByTestId("password-input"), "green matooke sunday");
   await fireEvent.changeText(screen.getByTestId("password-confirm-input"), "green matooke sunday");
   await fireEvent.press(screen.getByTestId("password-submit"));
+  await fireEvent.press(await screen.findByTestId("email-step-later"));
   await screen.findByTestId("home");
 }
 

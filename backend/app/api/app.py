@@ -189,7 +189,14 @@ def create_app(
     passkeys = PasskeyService(database, clock, settings, identity, hasher)
     app.state.passkeys = passkeys
     app.state.authenticators = AuthenticatorService(database, clock, settings, identity, passkeys)
-    app.state.codes = CodeService(database, clock, identity, passkeys, hasher)
+    app.state.email_checks = EmailCheckService(
+        database,
+        clock,
+        settings.client_app(),
+    )
+    app.state.codes = CodeService(
+        database, clock, identity, passkeys, hasher, app.state.email_checks
+    )
     app.state.phone_changes = PhoneChangeService(database, clock)
     # The migration switch keeps the two sheets sealed until the carry-over is done.
     app.state.migration_sealer = identity_sealer
@@ -197,11 +204,6 @@ def create_app(
     app.state.identity_provider = identity_provider
     app.state.pins = PinService(database, clock, hasher)
     app.state.recovery = RecoveryService(database, clock)
-    app.state.email_checks = EmailCheckService(
-        database,
-        clock,
-        settings.client_app(),
-    )
     app.state.own_changes = OwnChangeService(
         database, clock, hasher, app.state.codes, app.state.email_checks
     )

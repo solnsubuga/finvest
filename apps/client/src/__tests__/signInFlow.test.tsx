@@ -136,6 +136,9 @@ describe("the shell, from the first screen", () => {
     await fireEvent.changeText(screen.getByTestId("password-confirm-input"), "green matooke sunday");
     await fireEvent.press(screen.getByTestId("password-submit"));
 
+    // Sign up has emailed a link; confirming it never holds the client up.
+    await screen.findByText("Check your email");
+    await fireEvent.press(screen.getByTestId("email-step-later"));
     await waitFor(() => expect(screen.getByTestId("home")).toBeTruthy());
     // The signed-in shell keeps saying it is a demo.
     expect(screen.getByText(/Demo\. Not connected to Finvest yet/)).toBeTruthy();

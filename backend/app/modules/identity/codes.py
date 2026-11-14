@@ -29,6 +29,7 @@ from app.modules.identity import notices, terms, trail
 from app.modules.identity.domain.accounts import InvalidIdentifier, normalize_email, normalize_phone
 from app.modules.identity.domain.passwords import password_problem
 from app.modules.identity.domain.sessions import RESTRICTION, Transport, new_token, token_digest
+from app.modules.identity.email_checks import EmailCheckService
 from app.modules.identity.hashing import PasswordHasher
 from app.modules.identity.passkeys import PasskeyService
 from app.modules.identity.service import IdentityService, IssuedSession
@@ -106,12 +107,15 @@ class CodeService:
         identity: IdentityService,
         logins: PasskeyService,
         hasher: PasswordHasher,
+        email_checks: EmailCheckService | None = None,
     ) -> None:
         self.database = database
         self.clock = clock
         self.identity = identity
         self.logins = logins
         self.hasher = hasher
+        # Sends the link that proves a new client's email address, once their account exists.
+        self.email_checks = email_checks
 
     # Making and checking a code
 
@@ -337,6 +341,13 @@ class CodeService:
             # Someone finished signing up with this number in the meantime.
             raise ApplicationError("phone_taken") from None
         logger.info("client_created", client_id=client_id)
+        if pending.email is not None and self.email_checks is not None:
+            # Ask the new client to prove their address straight away. It never holds sign-up up:
+            # the account works without it, and the client can ask for another link from Profile.
+            try:
+                await self.email_checks.send_link(client_id)
+            except ApplicationError as error:
+                logger.warning("signup_email_check_not_sent", error_code=error.code)
         return issued
 
     # The sign-in fallback
