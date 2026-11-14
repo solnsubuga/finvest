@@ -728,6 +728,7 @@ export const NewDestination = z.object({
   holder_name: z.string(),
   kind: z.enum(["mobile_money", "bank"]),
   phone: z.string().nullable().optional(),
+  pin_confirmation: z.string().nullable().optional(),
 });
 export type NewDestination = z.infer<typeof NewDestination>;
 
