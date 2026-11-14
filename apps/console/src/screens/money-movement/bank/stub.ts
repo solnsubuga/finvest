@@ -6,7 +6,9 @@ import {
   type BankPayout,
   type BankPayoutsApi,
   type Batch,
+  type BulkSettlement,
   type Currency,
+  type StatementLine,
   type SentBankPayout,
   type Settlement,
 } from "./api.ts";
@@ -60,6 +62,9 @@ interface State {
   payouts: BankPayout[];
   batches: Batch[];
   sent: SentBankPayout[];
+  /** Trust statement lines going out, for the bulk debit picker. */
+  lines: StatementLine[];
+  bulks: BulkSettlement[];
 }
 
 function sample(now: Date, me: string): State {
@@ -83,9 +88,52 @@ function sample(now: Date, me: string): State {
     reason: "Stanbic trust statement for yesterday shows it going out, same amount, our reference.",
     proposedBy: by,
     proposedAt: ago(minutes, now),
+    bulkId: null,
   });
+  // A batch the bank took in one debit, still to settle, and another whose debit a colleague
+  // has already proposed.
+  const bulkOnes = [payout(11, 5_000_000, 2 * 24 * 60, now), payout(12, 3_250_000, 2 * 24 * 60, now), payout(13, 1_750_000, 2 * 24 * 60, now)].map(
+    (each): BankPayout => ({ ...each, status: "sent" }),
+  );
+  const proposedOnes = [payout(14, 2_400_000, 4 * 24 * 60, now), payout(15, 600_000, 4 * 24 * 60, now)].map(
+    (each): BankPayout => ({ ...each, status: "sent" }),
+  );
+  const yesterday = ago(24 * 60, now).slice(0, 10);
+  const approvedBatch = (id: string, payouts: BankPayout[], minutes: number, reason: string): Batch => ({
+    id,
+    currency: "UGX",
+    reason,
+    status: "approved",
+    preparedBy: me,
+    preparedAt: ago(minutes + 30, now),
+    decidedBy: BANK_COLLEAGUE,
+    decidedAt: ago(minutes, now),
+    decisionReason: "Checked each account against the client's approved destination",
+    payoutIds: payouts.map((each) => each.id),
+    total: money(payouts.reduce((sum, each) => sum + each.amount.minor, 0)),
+    items: null,
+  });
+  const bulkId = "-OdBankBulk000000001";
   return {
-    payouts: [...queued, ...inBatch, ...sentOnes],
+    lines: [
+      { id: "-OdTrustLine00000031", valueDate: yesterday, amount: money(10_000_000), reference: "BULK 0412 FINVEST", narrative: "Bulk transfer, 3 items" },
+      { id: "-OdTrustLine00000032", valueDate: yesterday, amount: money(250_000), reference: "CHG 0412", narrative: "Bank charges" },
+      { id: "-OdTrustLine00000033", valueDate: yesterday, amount: money(3_250_000), reference: "TRF 88123", narrative: "Transfer" },
+    ],
+    bulks: [
+      {
+        id: bulkId,
+        batchId: "-OdBankBatch00000005",
+        statementLineId: "-OdTrustLine00000027",
+        reason: "Stanbic statement shows one debit for the whole file, BULK 0409 FINVEST.",
+        status: "proposed",
+        proposedBy: BANK_COLLEAGUE,
+        proposedAt: ago(35, now),
+        payoutIds: proposedOnes.map((each) => each.id),
+        total: money(3_000_000),
+      },
+    ],
+    payouts: [...queued, ...inBatch, ...sentOnes, ...bulkOnes, ...proposedOnes],
     batches: [
       {
         id: "-OdBankBatch00000001",
@@ -115,17 +163,31 @@ function sample(now: Date, me: string): State {
         total: money(7_350_000),
         items: null,
       },
+      approvedBatch("-OdBankBatch00000004", bulkOnes, 2 * 24 * 60, "Bank payouts asked for on Tuesday"),
+      approvedBatch("-OdBankBatch00000005", proposedOnes, 4 * 24 * 60, "Bank payouts from last week"),
     ],
     sent: [
       { payout: sentOnes[0]!, batchId: "-OdBankBatch00000002", sentAt: ago(3 * 24 * 60, now), settlement: settlement(BANK_COLLEAGUE, sentOnes[0]!, 50) },
       { payout: sentOnes[1]!, batchId: "-OdBankBatch00000002", sentAt: ago(3 * 24 * 60, now), settlement: null },
       { payout: sentOnes[2]!, batchId: "-OdBankBatch00000003", sentAt: ago(2 * 24 * 60, now), settlement: settlement(me, sentOnes[2]!, 15) },
+      ...bulkOnes.map((each) => ({ payout: each, batchId: "-OdBankBatch00000004", sentAt: ago(2 * 24 * 60, now), settlement: null })),
+      ...proposedOnes.map((each) => ({
+        payout: each,
+        batchId: "-OdBankBatch00000005",
+        sentAt: ago(4 * 24 * 60, now),
+        settlement: {
+          ...settlement(BANK_COLLEAGUE, each, 35),
+          statementLineId: "-OdTrustLine00000027",
+          reason: "Stanbic statement shows one debit for the whole file, BULK 0409 FINVEST.",
+          bulkId,
+        },
+      })),
     ],
   };
 }
 
 export function createStubBankPayoutsApi(me: string, delay = 150, which: BankStubCase = "sample", now = new Date()): BankPayoutsApi {
-  const state: State = which === "sample" ? sample(now, me) : { payouts: [], batches: [], sent: [] };
+  const state: State = which === "sample" ? sample(now, me) : { payouts: [], batches: [], sent: [], lines: [], bulks: [] };
   let made = 10;
   const wait = <T>(value: () => T): Promise<T> =>
     new Promise((resolve, reject) =>
@@ -155,7 +217,29 @@ export function createStubBankPayoutsApi(me: string, delay = 150, which: BankStu
     Object.assign(found, { status, decidedBy: me, decidedAt: new Date().toISOString(), decisionReason: reason });
     return found;
   };
-  const sentOne = (id: string) => state.sent.find((each) => each.settlement?.id === id) ?? refuse("not_found");
+  const sentOne = (id: string) => {
+    const found = state.sent.find((each) => each.settlement?.id === id) ?? refuse("not_found");
+    if (found.settlement?.bulkId) refuse("settlement_in_bulk");
+    return found;
+  };
+  const openBulk = (id: string) => {
+    const found = state.bulks.find((each) => each.id === id) ?? refuse("not_found");
+    if (found.status !== "proposed") refuse("settlement_already_decided");
+    return found;
+  };
+  const lineInUse = (id: string) =>
+    state.bulks.some((each) => each.statementLineId === id && (each.status === "proposed" || each.status === "approved")) ||
+    state.sent.some((each) => each.settlement?.statementLineId === id);
+  const toSettle = (batchId: string) => state.sent.filter((each) => each.batchId === batchId && each.payout.status === "sent" && !each.settlement);
+  const closeBulk = (id: string, status: BulkSettlement["status"]) => {
+    const found = openBulk(id);
+    found.status = status;
+    for (const each of state.sent) {
+      if (each.settlement?.bulkId !== id) continue;
+      if (status === "approved") each.payout.status = "paid";
+      else each.settlement = null;
+    }
+  };
 
   return {
     listWaiting: (currency) =>
@@ -246,6 +330,7 @@ export function createStubBankPayoutsApi(me: string, delay = 150, which: BankStu
           reason: proposal.reason,
           proposedBy: me,
           proposedAt: new Date().toISOString(),
+          bulkId: null,
         };
       }),
     approveSettlement: (_key, id) =>
@@ -265,6 +350,61 @@ export function createStubBankPayoutsApi(me: string, delay = 150, which: BankStu
         const found = sentOne(id);
         if (found.settlement?.proposedBy !== me) refuse("not_proposed_by_you");
         found.settlement = null;
+      }),
+    getBulkDebit: (batchId) =>
+      wait(() => {
+        const batch = state.batches.find((each) => each.id === batchId) ?? refuse("not_found");
+        if (batch.status !== "approved") refuse("batch_not_approved");
+        const payouts = toSettle(batchId).map((each) => each.payout);
+        const owed = payouts.reduce((sum, each) => sum + each.amount.minor, 0);
+        return {
+          batch,
+          payouts,
+          lines: state.lines.filter((line) => line.amount.currency === batch.currency && line.amount.minor <= owed && !lineInUse(line.id)),
+        };
+      }),
+    listBulks: () => wait(() => state.bulks.filter((each) => each.status === "proposed")),
+    proposeBulk: (_key, batchId, statementLineId, payoutIds, reason) =>
+      wait(() => {
+        if (payoutIds.length === 0 || new Set(payoutIds).size !== payoutIds.length) refuse("bulk_payouts_invalid");
+        const free = toSettle(batchId);
+        const chosen = payoutIds.map((id) => free.find((each) => each.payout.id === id) ?? refuse("payout_not_to_settle"));
+        const line = state.lines.find((each) => each.id === statementLineId) ?? refuse("statement_line_not_this_batch");
+        if (lineInUse(line.id)) refuse("statement_line_in_use");
+        const total = chosen.reduce((sum, each) => sum + each.payout.amount.minor, 0);
+        if (total !== line.amount.minor) refuse("amounts_do_not_add_up");
+        made += 1;
+        const id = `-OdBankBulk0000000${String(made).padStart(2, "0")}`;
+        const proposedAt = new Date().toISOString();
+        state.bulks.push({ id, batchId, statementLineId, reason, status: "proposed", proposedBy: me, proposedAt, payoutIds, total: line.amount });
+        for (const each of chosen) {
+          each.settlement = {
+            id: `-OdBankSettle${each.payout.id.slice(-7)}`,
+            payoutId: each.payout.id,
+            outcome: "paid",
+            statementLineId,
+            statementId: null,
+            reason,
+            proposedBy: me,
+            proposedAt,
+            bulkId: id,
+          };
+        }
+      }),
+    approveBulk: (_key, id) =>
+      wait(() => {
+        if (openBulk(id).proposedBy === me) refuse("proposed_by_you");
+        closeBulk(id, "approved");
+      }),
+    declineBulk: (id) =>
+      wait(() => {
+        if (openBulk(id).proposedBy === me) refuse("proposed_by_you");
+        closeBulk(id, "declined");
+      }),
+    withdrawBulk: (id) =>
+      wait(() => {
+        if (openBulk(id).proposedBy !== me) refuse("not_proposed_by_you");
+        closeBulk(id, "withdrawn");
       }),
   };
 }
