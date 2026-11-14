@@ -274,6 +274,40 @@ async def test_a_successful_collection_is_confirmed_for_the_amount_ioTec_says_mo
     assert str(fake.requests[0].url) == f"{PAY_URL}/api/collections/status/{TRANSACTION}"
 
 
+@pytest.mark.parametrize(
+    ("given", "booked"),
+    [
+        (500, 500),
+        (24.5, 25),
+        (24.01, 25),
+        (0, 0),
+        # Left out: what we cannot read never stops the deposit.
+        (None, None),
+        ("500", None),
+        (True, None),
+        (-1, None),
+        (AMOUNT.minor, None),
+    ],
+)
+async def test_ioTecs_charge_comes_back_rounded_up_to_a_whole_shilling(
+    given: object, booked: int | None
+) -> None:
+    fake = FakeIotec(answering(200, transaction("Success", totalTransactionCharge=given)))
+    reading = await adapter(fake).collection_status(
+        request_id=DEPOSIT, provider_reference=TRANSACTION
+    )
+    charge = None if booked is None else Money(booked, Currency.UGX)
+    assert reading == Confirmed(TRANSACTION, AMOUNT, charge)
+
+
+async def test_a_confirmation_without_a_charge_has_none() -> None:
+    fake = FakeIotec(answering(200, transaction("Success")))
+    reading = await adapter(fake).collection_status(
+        request_id=DEPOSIT, provider_reference=TRANSACTION
+    )
+    assert isinstance(reading, Confirmed) and reading.charge is None
+
+
 async def test_a_whole_amount_written_with_a_decimal_point_is_read_exactly() -> None:
     def answer(_: httpx.Request) -> httpx.Response:
         body = json.dumps(transaction("Success")).replace('"amount": 250000', '"amount": 250000.0')

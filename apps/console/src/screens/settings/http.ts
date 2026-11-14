@@ -9,6 +9,7 @@ import { ApiError, type Http } from "@/api/http.ts";
 import {
   AnnouncementsError,
   type Announcement,
+  type AnnouncementReach,
   type AnnouncementField,
   type AnnouncementProblem,
   type AnnouncementProblemCode,
@@ -245,6 +246,13 @@ export function createHttpAnnouncementsApi(http: Http): AnnouncementsApi {
         return toAnnouncement(
           await http.request<AnnouncementJson>("POST", "/staff/announcements", announcement, { idempotencyKey }),
         );
+      } catch (error) {
+        throw toAnnouncementsError(error);
+      }
+    },
+    async reach() {
+      try {
+        return await http.request<AnnouncementReach>("GET", "/staff/announcements/reach");
       } catch (error) {
         throw toAnnouncementsError(error);
       }

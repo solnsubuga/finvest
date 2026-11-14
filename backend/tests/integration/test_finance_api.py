@@ -25,13 +25,14 @@ CLOCK = SystemClock()
 async def test_finance_is_for_finance_staff(api: Api) -> None:
     _, finance = await signed_in_staff(api, "finance")
     _, operations = await signed_in_staff(api, "operations")
-    for path in (
-        "/staff/finance",
-        "/staff/finance/journal.csv?date_from=2001-01-01&date_to=2001-01-01",
-    ):
-        refused = await api.http.get(path, headers=operations)
-        assert (refused.status_code, code(refused)) == (403, "forbidden")
-        assert (await api.http.get(path)).status_code == 401
+    refused = await api.http.get("/staff/finance", headers=operations)
+    assert (refused.status_code, code(refused)) == (403, "forbidden")
+    assert (await api.http.get("/staff/finance")).status_code == 401
+    days = {"date_from": "2001-01-01", "date_to": "2001-01-01"}
+    refused = await api.http.post("/staff/finance/journal.csv", json=days, headers=operations)
+    assert (refused.status_code, code(refused)) == (403, "forbidden")
+    # The export records itself, so it is never a GET a browser or proxy might repeat.
+    assert (await api.http.get("/staff/finance/journal.csv", headers=finance)).status_code == 405
     future = today().replace(day=1) + timedelta(days=40)
     for month, problem in (("2026-13", "bad_month"), (f"{future:%Y-%m}", "month_in_future")):
         bad = await api.http.get(f"/staff/finance?month={month}", headers=finance)
@@ -122,19 +123,23 @@ async def test_a_closed_day_is_exported_once_asked_and_shows_as_sent(api: Api) -
         )
     day = closed.isoformat()
     open_day = today().isoformat()
-    not_closed = await api.http.get(
-        f"/staff/finance/journal.csv?date_from={open_day}&date_to={open_day}", headers=finance
+    not_closed = await api.http.post(
+        "/staff/finance/journal.csv",
+        json={"date_from": open_day, "date_to": open_day},
+        headers=finance,
     )
     assert (not_closed.status_code, code(not_closed)) == (409, "conflict")
     assert not_closed.json()["error"]["fields"][0]["code"] == "day_not_closed"
     before = (closed - timedelta(days=1)).isoformat()
-    backwards = await api.http.get(
-        f"/staff/finance/journal.csv?date_from={day}&date_to={before}", headers=finance
+    backwards = await api.http.post(
+        "/staff/finance/journal.csv", json={"date_from": day, "date_to": before}, headers=finance
     )
     assert (backwards.status_code, code(backwards)) == (422, "validation_failed")
     assert backwards.json()["error"]["fields"][0]["code"] == "days_backwards"
-    exported = await api.http.get(
-        f"/staff/finance/journal.csv?currency=UGX&date_from={day}&date_to={day}", headers=finance
+    exported = await api.http.post(
+        "/staff/finance/journal.csv",
+        json={"currency": "UGX", "date_from": day, "date_to": day, "format": "csv"},
+        headers=finance,
     )
     assert exported.status_code == 200, exported.text
     assert exported.headers["content-type"].startswith("text/csv")
@@ -147,3 +152,4 @@ async def test_a_closed_day_is_exported_once_asked_and_shows_as_sent(api: Api) -
     assert screen["sent_through"] >= day
     mine = [e for e in screen["exports"] if e["exported_by"] == exporter_id]
     assert mine and mine[0]["date_from"] == day and mine[0]["exported_by_name"] == "Ada Nakato"
+    assert mine[0]["format"] == "csv"

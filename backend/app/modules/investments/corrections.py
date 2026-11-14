@@ -1,6 +1,6 @@
 """Corrections staff make to investments, each with a second person.
 
-Two kinds, both for money that should not be invested:
+Two kinds for money that should not be invested, and one for money a matured investment holds:
 
 - **Unwind.** A running investment was started by a deposit credited by mistake. Its
   principal goes back to the client's money awaiting start for it, and the interest it has
@@ -17,6 +17,13 @@ Two kinds, both for money that should not be invested:
 - **Refund.** Money is waiting in the client's awaiting-start account for an investment that
   will never start: it was cancelled, or undone. It goes to the client's payout pending account
   for this correction, and a payout sends it to the payout account staff named.
+
+- **Pay out.** A matured investment's money waits in the client's payout pending account,
+  because the payout the client chose could not be made. When the client asks staff instead of
+  choosing in the app, staff send it to another approved payout account of the client's. The
+  worker creates the payout as the client's own request would (`pay_out_matured`), under the
+  same key, so the client and staff can never both send it. No entry is posted here: the
+  payout's own reserve entry moves the money.
 
 One member of staff proposes, with a reason. A different one approves, sends it back with a
 note, or the proposer withdraws it. The database holds them to that (migration 0066). An
@@ -77,6 +84,7 @@ logger = structlog.get_logger()
 class CorrectionKind(StrEnum):
     UNWIND = "unwind"
     REFUND = "refund"
+    PAY_OUT = "pay_out"
 
 
 class CorrectionStatus(StrEnum):
@@ -141,6 +149,10 @@ _FINISH = text(
 _INVESTMENT_LOCKED = select_investments("WHERE i.id = :id FOR UPDATE OF i")
 _INVESTMENT = select_investments("WHERE i.id = :id")
 _CARRIED_OVER = text("SELECT legacy_reference IS NOT NULL FROM investments WHERE id = :id")
+_SETTLE = text(
+    "UPDATE investments SET payout_id = :payout_id, payout_refusal = NULL, updated_at = :now "
+    "WHERE id = :id"
+)
 _UNWIND = text(
     "UPDATE investments SET status = 'unwound', unwound_at = :now, unwind_entry_id = :entry_id, "
     "updated_at = :now WHERE id = :id"
@@ -163,9 +175,11 @@ async def propose_correction(
     """Save a correction for a second member of staff to approve. Nothing moves yet.
 
     An unwind is for a running investment the client has not asked to withdraw. A refund is
-    for money waiting for an investment that was cancelled or undone, to one of the client's
+    for money waiting for an investment that was cancelled or undone, and a pay out for the
+    money of a matured investment that waits for the client. Both name one of the client's
     payout accounts that is past its first day's safety wait and can carry the amount. `conflict`
-    if a correction of the same kind is already open for the investment.
+    if a correction of the same kind is already open for the investment, or the investment is
+    not in the state the kind is for.
     """
     _staff_only(staff)
     if not reason.strip() or len(reason.strip()) > MAX_REASON_LENGTH:
@@ -188,11 +202,16 @@ async def propose_correction(
     else:
         if destination_id is None:
             raise invalid("destination_id", "required")
-        if investment.status not in REFUNDABLE:
-            raise ApplicationError("conflict")
-        amount = await _waiting(session, investment, clock)
-        if not amount.is_positive:
-            raise invalid("investment_id", "nothing_waiting")
+        if kind is CorrectionKind.REFUND:
+            if investment.status not in REFUNDABLE:
+                raise ApplicationError("conflict")
+            amount = await _waiting(session, investment, clock)
+            if not amount.is_positive:
+                raise invalid("investment_id", "nothing_waiting")
+        else:
+            if not _held(investment):
+                raise ApplicationError("conflict")
+            amount = _proceeds(investment)
         await check_payable_destination(session, investment.client_id, destination_id, amount, now)
     correction_id = push_id()
     try:
@@ -345,8 +364,10 @@ async def apply_correction(session: AsyncSession, correction_id: str, clock: Clo
     )
     if correction.kind is CorrectionKind.UNWIND:
         outcome = await _unwind(session, correction, investment, clock)
-    else:
+    elif correction.kind is CorrectionKind.REFUND:
         outcome = await _refund(session, correction, investment, clock)
+    else:
+        outcome = await _pay_out(session, correction, investment, clock)
     entry_id, payout_id, failure = outcome
     now = clock.now()
     await session.execute(
@@ -497,7 +518,55 @@ async def _refund(
     return entry.id, payout.id, None
 
 
+async def _pay_out(
+    session: AsyncSession, correction: Correction, investment: Investment, clock: Clock
+) -> _Outcome:
+    # Still waiting: the client may have sent it on from the app since it was proposed.
+    if not _held(investment) or correction.destination_id is None:
+        return None, None, "investment_not_held"
+    if _proceeds(investment) != correction.amount:
+        return None, None, "amount_changed"
+    try:
+        # A refusal leaves nothing behind, and the money keeps waiting for the client.
+        async with session.begin_nested():
+            payout = await payouts.create_payout(
+                session,
+                SYSTEM,
+                client_id=investment.client_id,
+                destination_id=correction.destination_id,
+                amount=correction.amount,
+                source_reference=investment.id,
+                # The key the client's own request uses for this destination, so the same
+                # money can never be sent twice to it by the client and by staff.
+                request_key=f"maturity:{investment.id}:{correction.destination_id}",
+                clock=clock,
+            )
+            await session.execute(
+                _SETTLE, {"id": investment.id, "payout_id": payout.id, "now": clock.now()}
+            )
+    except payouts.PayoutRefused as refused:
+        return None, None, refused.code
+    except ApplicationError as error:
+        # The destination was removed or is no longer the client's.
+        return None, None, f"destination_{error.code}"
+    return None, payout.id, None
+
+
 # Internals --------------------------------------------------------------------------------------
+
+
+def _held(investment: Investment) -> bool:
+    """Matured, and its money waits for the client: neither rolled over nor paid out."""
+    return (
+        investment.status is InvestmentStatus.MATURED
+        and investment.rolled_into_id is None
+        and investment.payout_id is None
+    )
+
+
+def _proceeds(investment: Investment) -> Money:
+    """What a matured investment handed to payouts: the principal and the interest after tax."""
+    return investment.amount + investment.accrued_net
 
 
 def _awaiting_start(investment: Investment) -> AccountSpec:

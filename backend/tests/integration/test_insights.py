@@ -7,11 +7,17 @@ import pytest
 
 from app.api.app import create_app
 from app.infrastructure.database import Database
+from app.modules.autoinvest import service as autoinvest
+from app.modules.goals import saving_rules
+from app.modules.goals import service as goals
+from app.modules.goals.domain.goals import GoalCategory
+from app.modules.goals.domain.plans import add_months
 from app.modules.identity.hashing import PasswordHasher
 from app.modules.insights import service as insights
 from app.modules.insights.domain.months import month_start
 from app.modules.ledger import service as ledger
 from app.modules.ledger.domain.entries import AccountKind, AccountSpec, EntryDraft, credit, debit
+from app.modules.payments.domain.deposits import Network
 from app.shared.actors import SYSTEM, Actor
 from app.shared.errors import ApplicationError
 from app.shared.money import Currency, Money
@@ -20,6 +26,7 @@ from tests.support.database import TestDatabase
 from tests.support.investments import PRESENT, started, today
 from tests.support.ledger import client as new_client
 from tests.support.ledger import key, staff, ugx
+from tests.support.payments import phone
 
 pytestmark = pytest.mark.integration
 
@@ -322,6 +329,84 @@ async def test_what_is_invested_now_and_what_comes_next(
     assert upcoming.investment_id == investment.id
     # What comes back at maturity, after tax: the canvas example.
     assert upcoming.amount == ugx(1_026_490)
+
+
+async def test_coming_up_holds_maturities_automatic_runs_goal_savings_and_goal_dates(
+    app_database: Database, worker_database: Database
+) -> None:
+    investment = await started(app_database, worker_database, NOW, confirmed_on=TODAY)
+    client = Actor("client", investment.client_id)
+    number = phone()
+    async with app_database.actor_transaction(client) as session:
+        plan = await autoinvest.create_plan(
+            session,
+            client,
+            autoinvest.PlanTerms(
+                product_code="TREA-91",
+                amount=ugx(200_000),
+                schedule=autoinvest.Schedule(autoinvest.Frequency.WEEKLY, 1),
+                network=Network.MTN,
+                phone=number,
+            ),
+            idempotency_key=key(),
+            account_phone=number,
+            clock=NOW,
+        )
+        goal = await goals.create_goal(
+            session,
+            client,
+            idempotency_key=key(),
+            name="Land in Mukono",
+            category=GoalCategory.SCHOOL_FEES,
+            target=ugx(5_000_000),
+            target_date=add_months(TODAY, 11),
+            clock=NOW,
+        )
+        rule = await saving_rules.set_up_rule(
+            session,
+            client,
+            goal.id,
+            amount=ugx(300_000),
+            day=5,
+            network=Network.MTN,
+            idempotency_key=key(),
+            account_phone=number,
+            clock=NOW,
+        )
+    result = await read(app_database, client)
+    kinds = {item.kind: item for item in result.upcoming}
+    assert set(kinds) == set(insights.UpcomingKind)
+    assert [item.on for item in result.upcoming] == sorted(item.on for item in result.upcoming)
+    run = kinds[insights.UpcomingKind.AUTOINVEST_RUN]
+    assert (run.on, run.plan_id, run.amount, run.goal_id) == (
+        plan.next_run_on,
+        plan.id,
+        ugx(200_000),
+        None,
+    )
+    assert run.product_name is not None and run.product_name != "TREA-91"
+    saving = kinds[insights.UpcomingKind.GOAL_SAVING]
+    assert (saving.on, saving.plan_id, saving.goal_id, saving.goal_name, saving.amount) == (
+        rule.next_run_on,
+        rule.plan_id,
+        goal.id,
+        "Land in Mukono",
+        ugx(300_000),
+    )
+    date_of = kinds[insights.UpcomingKind.GOAL_DATE]
+    assert (date_of.on, date_of.goal_id, date_of.amount, date_of.plan_id) == (
+        goal.target_date,
+        goal.id,
+        ugx(5_000_000),
+        None,
+    )
+    assert kinds[insights.UpcomingKind.MATURITY].investment_id == investment.id
+
+    # A paused plan asks for nothing, so it is not coming up.
+    async with app_database.actor_transaction(client) as session:
+        await autoinvest.pause_plan(session, client, plan.id, NOW)
+    paused = await read(app_database, client)
+    assert insights.UpcomingKind.AUTOINVEST_RUN not in {item.kind for item in paused.upcoming}
 
 
 async def test_a_client_never_sees_another_clients_figures(

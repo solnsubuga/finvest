@@ -48,8 +48,8 @@ export function createStubProfileClient(account: string | null): ProfileClient {
   let kin: NextOfKin = seeded
     ? {
         people: [
-          { fullName: "Joseph Nakato", relationship: "spouse", phone: "+256701555210", idNumber: "CM90012345ABCD", shareBps: 6000 },
-          { fullName: "Grace Nakato", relationship: "sibling", phone: "+256772310448", idNumber: "CF91000000WXYZ", shareBps: 4000 },
+          { fullName: "Joseph Nakato", relationship: "spouse", phone: "+256701555210", idNumber: "CM90012345ABCD" },
+          { fullName: "Grace Nakato", relationship: "sibling", phone: "+256772310448", idNumber: "CF91000000WXYZ" },
         ],
         updatedAt: "2026-10-02T09:12:00Z",
       }
@@ -93,13 +93,9 @@ export function createStubProfileClient(account: string | null): ProfileClient {
         if (!phone) fields.push({ field: `people.${index}.phone`, code: "invalid_phone" });
         else if (phone === account) fields.push({ field: `people.${index}.phone`, code: "your_own_number" });
         if (!ID_NUMBER.test(idNumber)) fields.push({ field: `people.${index}.id_number`, code: "invalid_id_number" });
-        if (p.shareBps < 1 || p.shareBps > 10_000) fields.push({ field: `people.${index}.share_bps`, code: "invalid_share" });
         return { ...p, fullName, phone: phone ?? p.phone, idNumber };
       });
       if (people.length > 5) fields.push({ field: "people", code: "too_many" });
-      if (people.length && people.reduce((sum, p) => sum + p.shareBps, 0) !== 10_000) {
-        fields.push({ field: "people", code: "shares_must_total_100" });
-      }
       if (fields.length) throw new ProfileError("invalid", fields);
       kin = { people: cleaned, updatedAt: new Date().toISOString() };
       return kin;
