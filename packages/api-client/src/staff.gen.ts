@@ -967,6 +967,9 @@ export const FillIn = z.object({
 });
 export type FillIn = z.infer<typeof FillIn>;
 
+export const Frequency = z.enum(["weekly", "monthly"]);
+export type Frequency = z.infer<typeof Frequency>;
+
 export const GoalCategory = z.enum(["school_fees", "emergency", "land_or_home", "business", "wedding", "retirement", "other"]);
 export type GoalCategory = z.infer<typeof GoalCategory>;
 
@@ -1255,6 +1258,9 @@ export const MovementIn = z.object({
 });
 export type MovementIn = z.infer<typeof MovementIn>;
 
+export const Network = z.enum(["mtn", "airtel"]);
+export type Network = z.infer<typeof Network>;
+
 export const NewCheck = z.object({
   proof_name: z.string(),
   reason: z.string(),
@@ -1405,6 +1411,12 @@ export const PhotoLinks = z.object({
   photos: z.array(PhotoLink),
 });
 export type PhotoLinks = z.infer<typeof PhotoLinks>;
+
+export const PlanCountsView = z.object({
+  active: z.number().int(),
+  paused: z.number().int(),
+});
+export type PlanCountsView = z.infer<typeof PlanCountsView>;
 
 export const PotIn = z.object({
   account_reference: z.string(),
@@ -1761,6 +1773,9 @@ export const RulesIn = z.object({
 });
 export type RulesIn = z.infer<typeof RulesIn>;
 
+export const RunStatus = z.enum(["due", "requested", "paid", "failed", "missed"]);
+export type RunStatus = z.infer<typeof RunStatus>;
+
 export const SavedReplyItem = z.object({
   body: z.string(),
   id: z.string(),
@@ -2006,6 +2021,32 @@ export const StaffProductOut = z.object({
   term_days: z.number().int().nullable(),
 });
 export type StaffProductOut = z.infer<typeof StaffProductOut>;
+
+export const StaffRunView = z.object({
+  amount_minor: z.number().int(),
+  attempt: z.number().int(),
+  client_id: z.string(),
+  code: z.string().nullable(),
+  currency: Currency,
+  day: z.number().int(),
+  due_on: z.string(),
+  frequency: Frequency,
+  investment_id: z.string().nullable(),
+  network: Network,
+  plan_id: z.string(),
+  product_code: z.string(),
+  product_name: z.string(),
+  retry_on: z.string().nullable(),
+  run_id: z.string(),
+  status: RunStatus,
+});
+export type StaffRunView = z.infer<typeof StaffRunView>;
+
+export const StaffRunList = z.object({
+  next_before_id: z.string().nullable(),
+  runs: z.array(StaffRunView),
+});
+export type StaffRunList = z.infer<typeof StaffRunList>;
 
 export const StaffSendMessage = z.object({
   body: z.string(),
@@ -2280,6 +2321,34 @@ export const operations = {
     idempotent: false,
     status: 200,
     response: Facets,
+  },
+  "GET /staff/autoinvest/plans/counts": {
+    method: "GET",
+    path: "/staff/autoinvest/plans/counts",
+    params: z.object({}),
+    query: z.object({}),
+    body: null,
+    bodyKind: null,
+    idempotent: false,
+    status: 200,
+    response: PlanCountsView,
+  },
+  "GET /staff/autoinvest/runs": {
+    method: "GET",
+    path: "/staff/autoinvest/runs",
+    params: z.object({}),
+    query: z.object({
+    date_from: z.string(),
+    date_to: z.string(),
+    status: RunStatus.nullable().optional(),
+    before_id: z.string().nullable().optional(),
+    limit: z.number().int().optional(),
+  }),
+    body: null,
+    bodyKind: null,
+    idempotent: false,
+    status: 200,
+    response: StaffRunList,
   },
   "GET /staff/claim-checks": {
     method: "GET",

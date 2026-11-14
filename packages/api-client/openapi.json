@@ -8411,6 +8411,25 @@
         "title": "PhotoLinks",
         "type": "object"
       },
+      "PlanCountsView": {
+        "additionalProperties": false,
+        "properties": {
+          "active": {
+            "title": "Active",
+            "type": "integer"
+          },
+          "paused": {
+            "title": "Paused",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "active",
+          "paused"
+        ],
+        "title": "PlanCountsView",
+        "type": "object"
+      },
       "PlanDetails": {
         "additionalProperties": false,
         "description": "What a plan does. The same shape sets a plan up and changes it.",
@@ -13575,6 +13594,159 @@
           "next_rate"
         ],
         "title": "StaffProductOut",
+        "type": "object"
+      },
+      "StaffRunList": {
+        "additionalProperties": false,
+        "properties": {
+          "next_before_id": {
+            "anyOf": [
+              {
+                "maxLength": 20,
+                "minLength": 20,
+                "pattern": "^[-0-9A-Z_a-z]{20}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Before Id"
+          },
+          "runs": {
+            "items": {
+              "$ref": "#/components/schemas/StaffRunView"
+            },
+            "title": "Runs",
+            "type": "array"
+          }
+        },
+        "required": [
+          "runs",
+          "next_before_id"
+        ],
+        "title": "StaffRunList",
+        "type": "object"
+      },
+      "StaffRunView": {
+        "additionalProperties": false,
+        "description": "A run and its plan's terms now. The client is an ID: the console names them.",
+        "properties": {
+          "amount_minor": {
+            "title": "Amount Minor",
+            "type": "integer"
+          },
+          "attempt": {
+            "title": "Attempt",
+            "type": "integer"
+          },
+          "client_id": {
+            "maxLength": 20,
+            "minLength": 20,
+            "pattern": "^[-0-9A-Z_a-z]{20}$",
+            "title": "Client Id",
+            "type": "string"
+          },
+          "code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Code"
+          },
+          "currency": {
+            "$ref": "#/components/schemas/Currency"
+          },
+          "day": {
+            "title": "Day",
+            "type": "integer"
+          },
+          "due_on": {
+            "format": "date",
+            "title": "Due On",
+            "type": "string"
+          },
+          "frequency": {
+            "$ref": "#/components/schemas/Frequency"
+          },
+          "investment_id": {
+            "anyOf": [
+              {
+                "maxLength": 20,
+                "minLength": 20,
+                "pattern": "^[-0-9A-Z_a-z]{20}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Investment Id"
+          },
+          "network": {
+            "$ref": "#/components/schemas/Network"
+          },
+          "plan_id": {
+            "maxLength": 20,
+            "minLength": 20,
+            "pattern": "^[-0-9A-Z_a-z]{20}$",
+            "title": "Plan Id",
+            "type": "string"
+          },
+          "product_code": {
+            "title": "Product Code",
+            "type": "string"
+          },
+          "product_name": {
+            "title": "Product Name",
+            "type": "string"
+          },
+          "retry_on": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Retry On"
+          },
+          "run_id": {
+            "maxLength": 20,
+            "minLength": 20,
+            "pattern": "^[-0-9A-Z_a-z]{20}$",
+            "title": "Run Id",
+            "type": "string"
+          },
+          "status": {
+            "$ref": "#/components/schemas/RunStatus"
+          }
+        },
+        "required": [
+          "run_id",
+          "plan_id",
+          "client_id",
+          "due_on",
+          "status",
+          "attempt",
+          "retry_on",
+          "code",
+          "investment_id",
+          "product_code",
+          "product_name",
+          "currency",
+          "amount_minor",
+          "frequency",
+          "day",
+          "network"
+        ],
+        "title": "StaffRunView",
         "type": "object"
       },
       "StaffSavingView": {
@@ -26073,6 +26245,216 @@
         "summary": "Facets",
         "tags": [
           "staff audit trail"
+        ]
+      }
+    },
+    "/staff/autoinvest/plans/counts": {
+      "get": {
+        "operationId": "staff_plan_counts_staff_autoinvest_plans_counts_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PlanCountsView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          }
+        },
+        "summary": "Staff Plan Counts",
+        "tags": [
+          "staff autoinvest"
+        ]
+      }
+    },
+    "/staff/autoinvest/runs": {
+      "get": {
+        "description": "Runs due from `date_from` to `date_to`, newest first. Reading them is audited.",
+        "operationId": "staff_runs_staff_autoinvest_runs_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "date_from",
+            "required": true,
+            "schema": {
+              "format": "date",
+              "title": "Date From",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "date_to",
+            "required": true,
+            "schema": {
+              "format": "date",
+              "title": "Date To",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "status",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/RunStatus"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Status"
+            }
+          },
+          {
+            "in": "query",
+            "name": "before_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 40,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Before Id"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 200,
+              "maximum": 200,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StaffRunList"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          }
+        },
+        "summary": "Staff Runs",
+        "tags": [
+          "staff autoinvest"
         ]
       }
     },
