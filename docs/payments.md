@@ -214,7 +214,7 @@ ioTec Pay is the chosen provider, and there is a sandbox that moves no money for
   - the payer's number as `256…`
   - the amount in whole shillings
   - the deposit ID as `externalId`
-  - `transactionChargesCategory` `ChargeWallet`, so the client pays exactly the investment's amount and ioTec's charge falls on our wallet.
+  - `transactionChargesCategory` `ChargeWallet`, so the client pays exactly the investment's amount and ioTec's charge falls on our wallet. That is decided for now ([decisions.md](decisions.md)). Nothing posts the charge yet, so `iotec.wallet` runs ahead of ioTec's balance by the charges until how it is booked is decided (an open question there).
 - **Reading the status.** The status is read by ioTec's ID, or by the deposit ID when the answer to the send was lost.
 
 How a send ends:
@@ -247,7 +247,15 @@ Settings, from `FINVEST_IOTEC_*`:
 | `WALLET_ID` | The ioTec Pay wallet collections are paid into. |
 | `CALLBACK_TOKEN` | The token ioTec sends on callbacks. A secret. Without it, callbacks are refused and the worker's status reads carry every payment through. |
 | `CURRENCY_CODE` | `UGX`, or `ITX` for an ioTec test wallet. `ITX` is refused outside local and staging, as the sandbox is. |
-| `TOKEN_URL`, `PAY_URL`, `TIMEOUT_SECONDS` | Default to `https://id.iotec.io/connect/token`, `https://pay.iotec.io` and 30 seconds. |
+| `TOKEN_URL`, `PAY_URL`, `TIMEOUT_SECONDS` | Default to `https://id.iotec.io/connect/token`, `https://pay.iotec.io` and 30 seconds. Both addresses must be `https`, or the process refuses to start. |
+
+Which process needs which:
+
+| Process | Needs |
+| --- | --- |
+| Worker | `CLIENT_ID`, `CLIENT_SECRET`, `WALLET_ID`, `CURRENCY_CODE`. It sends every request and reads every status. |
+| API | The same as the worker, plus `CALLBACK_TOKEN` to accept callbacks. It builds the adapter to check callbacks, but sends no request to ioTec. |
+| Scheduler | Only `CURRENCY_CODE`, for the test wallet check. It holds no ioTec credentials. |
 
 ioTec's test numbers: `011177777x` succeed, `011177799x` fail, `011177778x` stay pending and `011177779x` stay with the network. A deposit is collected from the account's own number, so trying a test wallet needs a staging client whose number is one of these, such as `+256111777771`.
 
