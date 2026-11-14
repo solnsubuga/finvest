@@ -1,5 +1,5 @@
-"""The worker's side of goals: follow a saving into the investment it rolled over into, and
-record each day what every group goal member's goal is worth.
+"""The worker's side of goals: follow a saving into the investment it rolled over into, record
+each day what every group goal member's goal is worth, and tell clients about their goals.
 
 No handler here calls a provider. Each does its work in the fenced transaction that also
 completes the job, so a job that is run twice changes nothing the second time.
@@ -11,12 +11,14 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.infrastructure.database import Database
 from app.infrastructure.jobs import ClaimedJob, Handler, JobContext, JobHandler, PermanentJobError
-from app.modules.goals import groups, service
+from app.modules.goals import groups, reminders, service
 from app.modules.goals.events import FOLLOW_ROLLOVER_KIND
 from app.shared.clock import Clock
 
 # The scheduler asks for this once a day, after interest and maturities.
 REFRESH_GROUPS_KIND = "goals.refresh_groups"
+# The scheduler asks for this once a day, in the morning, so a reminder is not sent at night.
+SEND_REMINDERS_KIND = "goals.send_reminders"
 
 
 class GoalJobs:
@@ -28,6 +30,7 @@ class GoalJobs:
         return {
             FOLLOW_ROLLOVER_KIND: self.follow_rollover,
             REFRESH_GROUPS_KIND: self.refresh_groups,
+            SEND_REMINDERS_KIND: self.send_reminders,
         }
 
     async def follow_rollover(self, job: ClaimedJob, context: JobContext) -> None:
@@ -52,5 +55,14 @@ class GoalJobs:
 
         async def effect(session: AsyncSession) -> Mapping[str, object]:
             return {"recorded": await groups.refresh_values(session, self._clock)}
+
+        await context.apply(effect)
+
+    async def send_reminders(self, job: ClaimedJob, context: JobContext) -> None:
+        """Remind clients of a goal saving due in the next three days, and tell them when a
+        goal reaches its target. Each is keyed, so running it again tells nobody twice."""
+
+        async def effect(session: AsyncSession) -> Mapping[str, object]:
+            return await reminders.send_reminders(session, self._clock)
 
         await context.apply(effect)

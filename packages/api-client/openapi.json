@@ -6670,7 +6670,8 @@
               "statement",
               "security",
               "conversation",
-              "complaint"
+              "complaint",
+              "goal"
             ],
             "title": "Kind",
             "type": "string"

@@ -24,6 +24,8 @@ export function hrefFor(link: Notification["link"]): Href | null {
       return "/documents";
     case "investment":
       return "/portfolio";
+    case "goal":
+      return { pathname: "/goals/[goalId]", params: { goalId: link.id } };
     case "identity_check":
       return "/id-check";
     default:

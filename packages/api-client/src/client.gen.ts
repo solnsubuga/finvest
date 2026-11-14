@@ -638,7 +638,7 @@ export type LimitsOut = z.infer<typeof LimitsOut>;
 
 export const LinkView = z.object({
   id: z.string(),
-  kind: z.enum(["deposit", "payout", "investment", "identity_check", "payout_destination", "statement", "security", "conversation", "complaint"]),
+  kind: z.enum(["deposit", "payout", "investment", "identity_check", "payout_destination", "statement", "security", "conversation", "complaint", "goal"]),
 });
 export type LinkView = z.infer<typeof LinkView>;
 
