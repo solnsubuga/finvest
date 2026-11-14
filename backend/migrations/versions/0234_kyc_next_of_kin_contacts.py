@@ -21,6 +21,8 @@ revision: str = "0234_kyc_next_of_kin_contacts"
 down_revision: str | None = "0270_payout_wallet_short"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
+# The running release still writes and reads share_bps, so it is stopped before this runs.
+zero_downtime = False
 
 # Runs at commit, once the whole list is in place, so a save may delete and insert in any order.
 COUNT = """
