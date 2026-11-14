@@ -143,7 +143,7 @@ export default function GoalDetail() {
 
           {open && goal.savings.some((saving) => saving.status === "active") ? (
             <Txt size={12} color={colors.muted} testID="goal-take-out-note">
-              Need money before the date? Open a saving to take it out early. Each saving comes out
+              Need some of it sooner? Open a saving to take it out early. Each saving comes out
               whole, with the interest it has earned after tax and no fee, and stops counting towards
               this goal.
             </Txt>
