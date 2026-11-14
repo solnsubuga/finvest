@@ -2,7 +2,9 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { AppState } from "react-native";
 import { randomUUID } from "expo-crypto";
 
-import { CHAT_POLL_MS } from "./pollInterval";
+import { useDataSaving } from "@/dataSaving/DataSavingProvider";
+
+import { CHAT_POLL_MS, LIGHT_CHAT_POLL_MS } from "./pollInterval";
 import { useSupport } from "./SupportProvider";
 import { MAX_MESSAGE, Message, Topic } from "./types";
 
@@ -44,6 +46,8 @@ function newKey(): string {
  */
 export function useChat(active: boolean): ChatView {
   const { client } = useSupport();
+  const { light } = useDataSaving();
+  const pace = light ? LIGHT_CHAT_POLL_MS : CHAT_POLL_MS;
   const [status, setStatus] = useState<ChatView["status"]>("loading");
   const [messages, setMessages] = useState<Message[]>([]);
   const [outgoing, setOutgoing] = useState<Outgoing[]>([]);
@@ -107,7 +111,7 @@ export function useChat(active: boolean): ChatView {
         reading = false;
       }
       if (live && AppState.currentState !== "background") {
-        timer = setTimeout(() => void read(), CHAT_POLL_MS);
+        timer = setTimeout(() => void read(), pace);
       }
     }
 
@@ -124,7 +128,7 @@ export function useChat(active: boolean): ChatView {
       subscription.remove();
       clearTimeout(timer);
     };
-  }, [active, client, merge, attempt]);
+  }, [active, client, merge, attempt, pace]);
 
   const post = useCallback(
     async (item: Outgoing) => {
