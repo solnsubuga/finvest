@@ -9,6 +9,11 @@ a second step.
 Some actions on the phone app ask for the PIN again (see `CONFIRMATION_LASTS`): `confirm` checks
 it the same way and gives a one-use confirmation for that action, which the action's own route
 spends with `spend`. A browser has no PIN, so nothing there asks for one.
+
+A phone may also open a locked app with a fingerprint or face. Turning that on checks the PIN
+and gives the phone a random unlock key once, which it keeps where only the fingerprint or face
+can read it. Only the key's digest is stored. A wrong key turns it off, so only the PIN opens
+the app after that; a new PIN turns it off too.
 """
 
 from dataclasses import dataclass
@@ -54,6 +59,15 @@ class PinConfirmation:
     confirmation: str | None = None
 
 
+@dataclass(frozen=True, slots=True)
+class UnlockKey:
+    """A right PIN gives `key`, once, for the phone to keep. Otherwise the tries left."""
+
+    enabled: bool
+    tries_left: int
+    key: str | None = None
+
+
 class _Checked(NamedTuple):
     right: bool
     tries_left: int
@@ -86,7 +100,10 @@ class PinService:
                     "INSERT INTO identity_app_pins (session_id, pin_hash, created_at) "
                     "VALUES (:id, :hash, :now) ON CONFLICT (session_id) DO UPDATE "
                     "SET pin_hash = EXCLUDED.pin_hash, wrong_tries = 0, "
-                    "created_at = EXCLUDED.created_at RETURNING (xmax <> 0)"
+                    "created_at = EXCLUDED.created_at, "
+                    # A new PIN starts again, so fingerprint or face unlock is turned on afresh.
+                    "unlock_key_hash = NULL, unlock_key_set_at = NULL "
+                    "RETURNING (xmax <> 0)"
                 ),
                 {"id": client.session_id, "hash": hashed, "now": now},
             )
@@ -120,6 +137,97 @@ class PinService:
             )
         logger.info("pin_unlocked")
         return PinCheck(unlocked=True, tries_left=MAX_WRONG_PINS)
+
+    async def turn_on_unlock_key(self, client: ClientSession, pin: str) -> UnlockKey:
+        """Check the PIN, then give this phone a new unlock key, replacing any it had."""
+        if client.transport != "token":
+            raise ApplicationError("forbidden")
+        checked = await self._check(client, pin)
+        if not checked.right:
+            return UnlockKey(enabled=False, tries_left=checked.tries_left)
+        key = new_token()
+        async with self.database.transaction() as session:
+            await session.execute(
+                text(
+                    "UPDATE identity_app_pins "
+                    "SET unlock_key_hash = :hash, unlock_key_set_at = :now WHERE session_id = :id"
+                ),
+                {"hash": token_digest(key), "now": self.clock.now(), "id": client.session_id},
+            )
+            await trail.note(
+                session,
+                self.clock,
+                client.actor,
+                "identity.unlock_key.set",
+                resource_type="session",
+                resource_id=client.session_id,
+            )
+        logger.info("unlock_key_set")
+        return UnlockKey(enabled=True, tries_left=MAX_WRONG_PINS, key=key)
+
+    async def turn_off_unlock_key(self, client: ClientSession) -> None:
+        """Forget this phone's unlock key. Nothing to forget is not an error."""
+        async with self.database.transaction() as session:
+            removed = await self._forget_key(session, client)
+            if removed:
+                await trail.note(
+                    session,
+                    self.clock,
+                    client.actor,
+                    "identity.unlock_key.removed",
+                    resource_type="session",
+                    resource_id=client.session_id,
+                )
+        logger.info("unlock_key_removed", removed=removed)
+
+    async def unlock_with_key(self, client: ClientSession, key: str) -> PinCheck:
+        """Open a locked app with the phone's unlock key, as a right PIN does.
+
+        A wrong key is not a guess at the PIN, so it charges no try, but it turns the key off:
+        the phone has lost it or it was never this phone's, and only the PIN opens the app now.
+        """
+        if not client.pin_set:
+            raise ApplicationError("conflict")
+        now = self.clock.now()
+        async with self.database.transaction() as session:
+            opened = await session.scalar(
+                text(
+                    "UPDATE identity_app_pins SET wrong_tries = 0 "
+                    "WHERE session_id = :id AND unlock_key_hash = :hash AND wrong_tries < :limit "
+                    "RETURNING session_id"
+                ),
+                {"id": client.session_id, "hash": token_digest(key), "limit": MAX_WRONG_PINS},
+            )
+            if opened is not None:
+                await session.execute(
+                    text(
+                        "UPDATE identity_sessions SET last_seen_at = :now "
+                        "WHERE id = :id AND revoked_at IS NULL"
+                    ),
+                    {"now": now, "id": client.session_id},
+                )
+            else:
+                await self._forget_key(session, client)
+            tries = await session.scalar(
+                text("SELECT wrong_tries FROM identity_app_pins WHERE session_id = :id"),
+                {"id": client.session_id},
+            )
+        left = MAX_WRONG_PINS - int(tries or 0)
+        if opened is None:
+            logger.info("unlock_key_refused", error_code="invalid_unlock_key")
+            return PinCheck(unlocked=False, tries_left=left)
+        logger.info("pin_unlocked", by="unlock_key")
+        return PinCheck(unlocked=True, tries_left=MAX_WRONG_PINS)
+
+    async def _forget_key(self, session: AsyncSession, client: ClientSession) -> bool:
+        removed = await session.scalar(
+            text(
+                "UPDATE identity_app_pins SET unlock_key_hash = NULL, unlock_key_set_at = NULL "
+                "WHERE session_id = :id AND unlock_key_hash IS NOT NULL RETURNING session_id"
+            ),
+            {"id": client.session_id},
+        )
+        return removed is not None
 
     def needs_confirmation(self, client: ClientSession) -> bool:
         """Whether actions in this session are confirmed with the PIN: a phone app with one."""
