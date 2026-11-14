@@ -1,5 +1,5 @@
 import { canProveAgain, isPayable } from "../format";
-import { createStubPayoutsClient, DEMO_PAYOUT_CODE } from "../stubPayoutsClient";
+import { createStubPayoutsClient, DEMO_PAYOUT_CODE, RETURNED_DEMO_PAYOUT } from "../stubPayoutsClient";
 import { PayoutsError } from "../types";
 
 const NOW = Date.parse("2026-11-13T09:00:00Z");
@@ -96,4 +96,30 @@ describe("the demo bank list", () => {
     expect(accounts.find((account) => account.id === "demo-account-bank")?.bankName).toBe("Stanbic Bank");
     expect(accounts.find((account) => account.id === "demo-account-mtn")?.bankName).toBeNull();
   });
+});
+
+it("sends a payout that came back again once, to a ready account", async () => {
+  const api = client("default");
+  const returned = await api.getPayout(RETURNED_DEMO_PAYOUT);
+  expect(returned.returnedAt).not.toBeNull();
+  // Not one that came back.
+  expect(await code(api.resend("demo-payout-1", "demo-account-mtn"))).toBe("not_returned");
+  // Still in its first day, and not approved.
+  expect(await code(api.resend(RETURNED_DEMO_PAYOUT, "demo-account-bank"))).toBe("account_not_ready");
+  expect(await code(api.resend(RETURNED_DEMO_PAYOUT, "demo-account-centenary"))).toBe("account_not_ready");
+
+  const sent = await api.resend(RETURNED_DEMO_PAYOUT, "demo-account-mtn");
+  expect(sent).toMatchObject({ destinationId: "demo-account-mtn", status: "processing", amount: returned.amount, returnedAt: null });
+  // Asking again with the same account is the same payout; another account is refused.
+  expect(await api.resend(RETURNED_DEMO_PAYOUT, "demo-account-mtn")).toEqual(sent);
+  expect(await code(api.resend(RETURNED_DEMO_PAYOUT, "demo-account-bank"))).toBe("already_resent");
+  expect((await api.listPayouts())[0]).toEqual(sent);
+});
+
+it("lets a new account take a payout that came back once its first day has passed", async () => {
+  let at = NOW;
+  const api = createStubPayoutsClient({ sample: "default", delayMs: 0, now: () => at });
+  at = NOW + 2 * 24 * 60 * 60 * 1000;
+  // The bank account is past its first day now, so it can take it.
+  expect((await api.resend(RETURNED_DEMO_PAYOUT, "demo-account-bank")).kind).toBe("bank");
 });

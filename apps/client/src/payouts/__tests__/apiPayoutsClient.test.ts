@@ -212,6 +212,7 @@ describe("the payouts client for the real API", () => {
         status: "processing",
         businessDate: "2026-11-13",
         createdAt: "2026-11-13T09:00:00Z",
+        returnedAt: null,
       },
     ]);
     serve(200, {
@@ -228,5 +229,33 @@ describe("the payouts client for the real API", () => {
       bankPerPayout: null,
       bankPerDay: { currency: "UGX", minor: 50000000 },
     });
+  });
+
+  it("sends a payout that came back again, and names each refusal", async () => {
+    const client = createApiPayoutsClient();
+    serve(200, { ...payout, status: "paid", returned_at: "2026-11-12T10:00:00Z" });
+    expect(await client.getPayout(payout.id)).toMatchObject({ status: "paid", returnedAt: "2026-11-12T10:00:00Z" });
+
+    const seen = serve(201, { ...payout, id: "NNNNNNNNNNNNNNNNNNNN" });
+    expect(await client.resend(payout.id, ID)).toMatchObject({ id: "NNNNNNNNNNNNNNNNNNNN", returnedAt: null });
+    expect(seen[0]).toEqual({ method: "POST", path: `/client/payouts/${payout.id}/resend`, body: { destination_id: ID } });
+
+    const resend = () => client.resend(payout.id, ID);
+    serve(409, refusal("conflict", [{ field_path: ["body"], code: "payout_not_returned" }]));
+    await expect(resend()).rejects.toEqual(new PayoutsError("not_returned"));
+    serve(422, refusal("idempotency_key_reused"));
+    await expect(resend()).rejects.toEqual(new PayoutsError("already_resent"));
+    for (const code of ["destination_not_approved", "destination_in_safety_wait", "destination_not_known_yet"]) {
+      serve(422, refusal("validation_failed", [{ field_path: ["body", "destination_id"], code }]));
+      await expect(resend()).rejects.toEqual(new PayoutsError("account_not_ready"));
+    }
+    serve(422, refusal("validation_failed", [{ field_path: ["body", "destination_id"], code: "over_mobile_money_limit" }]));
+    await expect(resend()).rejects.toEqual(new PayoutsError("over_mobile_money_limit"));
+    serve(422, refusal("validation_failed", [{ field_path: ["body", "destination_id"], code: "over_daily_limit" }]));
+    await expect(resend()).rejects.toEqual(new PayoutsError("over_limit"));
+    serve(422, refusal("validation_failed", [{ field_path: ["body", "destination_id"], code: "insufficient_funds" }]));
+    await expect(resend()).rejects.toEqual(new PayoutsError("invalid"));
+    serve(503, refusal("unavailable"));
+    await expect(resend()).rejects.toEqual(new PayoutsError("unavailable"));
   });
 });
