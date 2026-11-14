@@ -342,7 +342,7 @@ async def test_a_carried_over_investment_is_never_unwound(
             tax_bps=1500,
             interest_through=DAY - timedelta(days=1),
             opened_on=DAY,
-            legacy_reference=f"FV1-INV-{push_id()[-8:].replace('-', 'x').replace('_', 'y')}",
+            legacy_reference=f"FV1-INV-{push_id()[-8:].encode().hex()}",
             opening_account=AccountSpec(
                 "migration.opening_balances",
                 AccountKind.ASSET,
