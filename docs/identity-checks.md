@@ -106,6 +106,7 @@ When staff mark a claim check `not_matched`, the client does the full ID check, 
 - Staff still find the client: `check_summary` gives the superseded check until the client starts the new one, `identities` keeps the account number with no verified name, and `client_for_account_number` still finds the client.
 - The account number stays with the client. When the full check is approved, by staff or by the worker, it is given the same number. The same identity document may be used, because a superseded check does not hold it.
 - The client gets the `kyc_full_check_needed` notice, linked to the identity check.
+- Until the full check is approved, whatever waits on an approved client waits for them too: statements and tax certificates for their carried-over investments (no `account_holder`), and payouts (no `verified_name`). This is on purpose. Support can tell the client that it all resumes, under the same account number, once their ID check is approved.
 - The migration module hears `kyc.claim_check_decided` with `matched` false and sends the claim's identity step to the full check. When the full check is decided, it hears `kyc.check_decided` as for any other client.
 - Only staff supersede, only a carried-over approved check, and only when that check's claim check is `not_matched` in the same transaction. A superseded check never changes again. A client has at most one check that is not superseded: the unique indexes on the client and on the account number leave superseded checks out.
 
