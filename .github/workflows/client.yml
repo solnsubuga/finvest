@@ -106,7 +106,7 @@ jobs:
             exit 1
           fi
           # Nor the demo identity check, which approves identities nobody checked.
-          if grep -rIl -e "demo-check-" -e "Your selfie is too dark to match" dist; then
+          if grep -rIl -e "demo-check-" -e "Your selfie is too dark to match" -e "faces.iotec.io/demo/" dist; then
             echo "The demo identity check was bundled into a production build" >&2
             exit 1
           fi

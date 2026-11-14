@@ -28,7 +28,7 @@ export default function ChangeEmail() {
     },
     [session, setSession],
   );
-  const { run, busy, error, confirming, setConfirming } = useConfirmedChange(change, onDone);
+  const { run, send, busy, error, confirming, setConfirming } = useConfirmedChange(change, onDone);
 
   if (!session) return null;
   if (saved) {
@@ -63,7 +63,7 @@ export default function ChangeEmail() {
         </Txt>
       </View>
       <View style={{ marginTop: 20, gap: 14 }}>
-        {confirming ? <ConfirmItIsYou onConfirmed={run} onCancel={() => setConfirming(false)} /> : null}
+        {confirming ? <ConfirmItIsYou onConfirmed={send} onCancel={() => setConfirming(false)} /> : null}
         {error ? <Notice tone="danger">{error}</Notice> : null}
         <TextField
           label="New email address"

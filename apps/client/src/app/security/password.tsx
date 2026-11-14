@@ -8,13 +8,19 @@ import { BackButton } from "@/components/BackButton";
 import { Card, CheckRow, Notice } from "@/components/Blocks";
 import { Button } from "@/components/Button";
 import { ConfirmItIsYou, useConfirmedChange } from "@/components/ConfirmItIsYou";
+import { ConfirmWithSelfie } from "@/components/ConfirmWithSelfie";
 import { Done } from "@/components/Done";
 import { PasswordField } from "@/components/Field";
 import { Screen } from "@/components/Screen";
 import { Eyebrow, Title, Txt } from "@/components/Txt";
 import { colors } from "@/theme";
 
-/** Sign in and security: change the password, after a passkey or the authenticator app. */
+const SUPPORT = "Or ask us in Help.";
+
+/**
+ * Sign in and security: change the password, after a passkey or the authenticator app, and a live
+ * selfie when the client's ID check has one to match.
+ */
 export default function ChangePassword() {
   const router = useRouter();
   const { client, session } = useAuth();
@@ -25,7 +31,10 @@ export default function ChangePassword() {
 
   const change = useCallback(() => client.changePassword(current, next), [client, current, next]);
   const onDone = useCallback(() => setDone(true), []);
-  const { run, busy, error, confirming, setConfirming } = useConfirmedChange(change, onDone);
+  const { run, send, busy, error, confirming, setConfirming, selfie, setSelfie } = useConfirmedChange(
+    change,
+    onDone,
+  );
 
   if (!session) return null;
   if (done) {
@@ -46,7 +55,7 @@ export default function ChangePassword() {
     <Screen
       signedIn
       footer={
-        confirming ? null : (
+        confirming || selfie ? null : (
           <Button label="Change password" onPress={run} loading={busy} disabled={!ready} testID="password-change" />
         )
       }
@@ -60,8 +69,9 @@ export default function ChangePassword() {
       </View>
       <View style={{ marginTop: 20, gap: 14 }}>
         {confirming ? (
-          <ConfirmItIsYou onConfirmed={run} onCancel={() => setConfirming(false)} />
+          <ConfirmItIsYou onConfirmed={send} onCancel={() => setConfirming(false)} />
         ) : null}
+        {selfie ? <ConfirmWithSelfie onConfirmed={send} onCancel={() => setSelfie(false)} otherwise={SUPPORT} /> : null}
         {error ? <Notice tone="danger">{error}</Notice> : null}
         <PasswordField label="Current password" value={current} onChangeText={setCurrent} testID="password-current" />
         <PasswordField isNew label="New password" value={next} onChangeText={setNext} testID="password-new" />

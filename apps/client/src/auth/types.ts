@@ -23,6 +23,32 @@ export type Session = {
   pinSet: boolean;
   /** True when the PIN must be entered before anything else works. */
   locked: boolean;
+  /**
+   * Until when a change to how the client signs in works without a passkey or app again, as an
+   * ISO time. Null after a log in with a code and no confirmation since.
+   */
+  confirmedUntil: string | null;
+};
+
+/** One live selfie that confirms a password or number change (docs/sign-in.md). */
+export type SelfieStatus = "starting" | "open" | "matching" | "passed" | "failed" | "not_started" | "expired";
+
+export type SelfieAttempt = {
+  id: string;
+  status: SelfieStatus;
+  /** Our partner's camera page. Only while `status` is `open`. */
+  url: string | null;
+  /** Why it failed, such as `face_not_matched` or `not_live`. */
+  failureCode: string | null;
+};
+
+export type SelfieState = {
+  /** False when there is no face on file to compare with: the passkey or app is enough. */
+  needed: boolean;
+  /** True while a passed selfie on this session confirms a change. */
+  confirmed: boolean;
+  attemptsLeft: number;
+  latest: SelfieAttempt | null;
 };
 
 /** Why someone cannot get in. There is no free text, so nothing personal is kept. */
@@ -65,6 +91,10 @@ export type AuthErrorCode =
   | "pin_too_simple"
   /** A change to how the client signs in needs a passkey or authenticator app first. */
   | "confirm_it_is_you"
+  /** A password or number change also needs a live selfie matched to the face on file. */
+  | "confirm_with_selfie"
+  /** Five live selfies today already. */
+  | "selfie_used_up"
   /** The new number or address is the one the account already has. */
   | "same_as_now"
   | "unavailable";
@@ -311,6 +341,15 @@ export interface AuthClient {
    * `invalid_credentials`. Every other device is signed out.
    */
   changePassword(current: string, next: string): Promise<void>;
+  /**
+   * A password or number change also fails with `confirm_with_selfie` when the client has a face
+   * on file and took no live selfie on this session in the last ten minutes. These take it.
+   */
+  getSelfieConfirmation(): Promise<SelfieState>;
+  /** Starts a live selfie. A sixth in a day fails with `selfie_used_up`. */
+  startSelfieConfirmation(): Promise<SelfieAttempt>;
+  /** Reads one live selfie again, every few seconds while it waits. */
+  getSelfieAttempt(id: string): Promise<SelfieAttempt>;
   /** Moving to a new number, step 1: texts a code to it. Returns its id. */
   startPhoneChange(phone: string): Promise<string>;
   /**
@@ -350,6 +389,8 @@ const messages: Record<AuthErrorCode, string> = {
   pin_too_simple:
     "That PIN is too easy to guess. Avoid repeated digits and runs like 12345.",
   confirm_it_is_you: "For your safety, confirm it is you with your passkey or authenticator app first.",
+  confirm_with_selfie: "For your safety, take a live selfie first.",
+  selfie_used_up: "You have taken 5 live selfies today. Try again tomorrow, or ask us in Help.",
   same_as_now: "That is already the one on your account.",
   unavailable: "We could not reach Finvest. Check your connection and try again.",
 };

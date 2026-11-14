@@ -9,7 +9,7 @@ import {
 } from "../stubAuthClient";
 import { DEMO_CLAIM_SELFIE } from "@/claim/demo";
 
-import { AuthError, describeAuthError } from "../types";
+import { AuthClient, AuthError, describeAuthError } from "../types";
 
 const NEW_PHONE = "+256701555012";
 const signupInput = { phone: NEW_PHONE, email: "new@example.com" };
@@ -34,7 +34,7 @@ describe("sign up", () => {
     const challenge = await auth.startSignup(signupInput);
     const ticket = await auth.confirmSignupCode(challenge.challengeId, DEMO_CODE);
     const session = await auth.completeSignup(ticket.ticket, "green matooke sunday");
-    expect(session).toEqual({ phone: NEW_PHONE, displayName: null, restricted: false, email: "new@example.com", emailVerified: false, pinSet: false, locked: false });
+    expect(session).toEqual({ phone: NEW_PHONE, displayName: null, restricted: false, email: "new@example.com", emailVerified: false, pinSet: false, locked: false, confirmedUntil: null });
   });
 
   it("does not reveal that a number has an account until the code proves ownership", async () => {
@@ -107,7 +107,7 @@ describe("log in", () => {
     const auth = client();
     const challenge = await auth.startLogin({ phone: DEMO_PHONE }, DEMO_PASSWORD);
     const session = await auth.verifyWithPasskey(challenge.loginId);
-    expect(session).toEqual({ phone: DEMO_PHONE, displayName: "Amara Nakato", restricted: false, email: "amara@example.com", emailVerified: false, pinSet: false, locked: false });
+    expect(session).toEqual({ phone: DEMO_PHONE, displayName: "Amara Nakato", restricted: false, email: "amara@example.com", emailVerified: false, pinSet: false, locked: false, confirmedUntil: expect.any(String) });
   });
 
   it("opens a restricted session with a code", async () => {
@@ -133,7 +133,7 @@ describe("log in", () => {
       "invalid_code",
     );
     const session = await auth.verifyWithAuthenticator(challenge.loginId, DEMO_CODE);
-    expect(session).toEqual({ phone: DEMO_PHONE, displayName: "Amara Nakato", restricted: false, email: "amara@example.com", emailVerified: false, pinSet: false, locked: false });
+    expect(session).toEqual({ phone: DEMO_PHONE, displayName: "Amara Nakato", restricted: false, email: "amara@example.com", emailVerified: false, pinSet: false, locked: false, confirmedUntil: expect.any(String) });
   });
 
   it("lets the client switch method within one log in", async () => {
@@ -327,8 +327,33 @@ describe("changing how the client signs in", () => {
     expect(await codeOf(auth.changeEmail("nakato@example.com"))).toBe("same_as_now");
   });
 
+  /** The demo client has a selfie on their ID check: a live one, as the partner page answers. */
+  async function liveSelfie(auth: AuthClient) {
+    const attempt = await auth.startSelfieConfirmation();
+    expect(attempt.status).toBe("starting");
+    expect((await auth.getSelfieAttempt(attempt.id)).url).toMatch(/^https:\/\//);
+    await auth.getSelfieAttempt(attempt.id);
+    expect((await auth.getSelfieAttempt(attempt.id)).status).toBe("passed");
+  }
+
+  it("asks a client with a selfie on file for a live one too, for a password or number", async () => {
+    const auth = await signedIn("passkey");
+    expect(await auth.getSelfieConfirmation()).toMatchObject({ needed: true, confirmed: false, attemptsLeft: 5 });
+    expect(await codeOf(auth.changePassword(DEMO_PASSWORD, "lantern meadow quartz"))).toBe("confirm_with_selfie");
+    expect(await codeOf(auth.startPhoneChange("701 555 013"))).toBe("confirm_with_selfie");
+    await liveSelfie(auth);
+    expect(await auth.getSelfieConfirmation()).toMatchObject({ confirmed: true, attemptsLeft: 4 });
+  });
+
+  it("allows five live selfies a day", async () => {
+    const auth = await signedIn("passkey");
+    for (let n = 0; n < 5; n += 1) await auth.startSelfieConfirmation();
+    expect(await codeOf(auth.startSelfieConfirmation())).toBe("selfie_used_up");
+  });
+
   it("needs the current password, and a strong one, to change it", async () => {
     const auth = await signedIn("passkey");
+    await liveSelfie(auth);
     expect(await codeOf(auth.changePassword("wrong one", "lantern meadow quartz"))).toBe("invalid_credentials");
     expect(await codeOf(auth.changePassword(DEMO_PASSWORD, "password123"))).toBe("leaked_password");
     await auth.changePassword(DEMO_PASSWORD, "lantern meadow quartz");
@@ -337,6 +362,7 @@ describe("changing how the client signs in", () => {
   it("moves to a new number only with the code sent to it", async () => {
     let clock = 0;
     const auth = await signedIn("passkey", () => clock);
+    await liveSelfie(auth);
     const id = await auth.startPhoneChange("701 555 013");
     expect(await codeOf(auth.confirmPhoneChange(id, "000000"))).toBe("invalid_code");
     expect(await auth.confirmPhoneChange(id, DEMO_CODE)).toBe(NEW_PHONE.replace("012", "013"));

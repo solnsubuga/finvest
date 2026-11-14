@@ -34,6 +34,7 @@ export type ApiErrorCode =
   | "second_step_missing"
   | "sign_in_again"
   | "confirm_it_is_you"
+  | "confirm_with_selfie"
   | "app_locked"
   | "pin_required"
   | "expired"
@@ -62,6 +63,7 @@ const KNOWN_CODES = new Set<string>([
   "second_step_missing",
   "sign_in_again",
   "confirm_it_is_you",
+  "confirm_with_selfie",
   "app_locked",
   "pin_required",
   "expired",
