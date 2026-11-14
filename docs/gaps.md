@@ -39,7 +39,7 @@ Every console screen is built, but eight of them only work on the sample sign-in
 | Reconciliation | Sample data only | `/staff/payments/bank-transfers` (four) | None |
 | Migration | Sample data only | `/staff/migration` and its trials, control totals and sign-offs (seven) | Migration thread, to confirm |
 | Dealing Desk | Sample data only; the buffer tab is being connected | `/staff/dealing/desk`, `/staff/dealing/orders` (seven) | Dealing desk thread (PRs #262, #265) |
-| Automatic Investing | Sample data only | None: the staff routes are not built ([automatic-investing.md](automatic-investing.md)) | Phase 4 |
+| ~~Automatic Investing~~ | ~~Sample data only~~ Closed by the automatic investing staff routes PR. | `/staff/autoinvest/plans/counts`, `/staff/autoinvest/runs` | |
 
 Four screens are still the placeholder page. The Review Queue is connected to `/staff/payout-destinations` and the held payout routes (`/staff/payouts/held`, `.../approve`, `.../decline`).
 

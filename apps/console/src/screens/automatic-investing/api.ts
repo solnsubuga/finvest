@@ -1,10 +1,8 @@
 /**
  * The console's view of automatic investing.
  *
- * A stand-in for the generated client in packages/api-client, like AuthApi.
  * The shapes follow backend/app/modules/autoinvest (see docs/automatic-investing.md).
- * When the backend publishes its staff routes, an implementation that calls them
- * replaces the stub in index.tsx and the screen does not change.
+ * `http.ts` reads them from `/staff/autoinvest`; `stub.ts` holds the samples.
  *
  * Amounts travel as whole-number strings in shillings, so nothing here is ever
  * a floating point number. The screen only reads: staff cannot start, retry or
@@ -74,7 +72,7 @@ export function autoinvestErrorMessage(error: unknown): string {
   return "We could not reach Finvest. Try again in a moment.";
 }
 
-/** Until the API client exists, a normal build has nothing to show. */
+/** Used in builds with no backend client and the stub turned off. */
 export const notConnectedAutoinvestApi: AutoinvestApi = {
   getOverview: () => Promise.reject(new AutoinvestError("not_connected")),
 };
