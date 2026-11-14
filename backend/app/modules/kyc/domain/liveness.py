@@ -10,6 +10,7 @@ Pure rules and the provider port. Nothing here reads a clock, a database or the 
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from enum import StrEnum
@@ -22,6 +23,11 @@ from app.modules.kyc.domain.checks import CheckStatus, DocumentType, PhotoKind, 
 OPEN_FOR = timedelta(minutes=30)
 # Attempts per check, so a client cannot start paid requests without end.
 MAX_ATTEMPTS = 10
+# A session the client reports finishing at the provider, where the provider's session runs in
+# the app (Regula's): a lowercase UUID, as Regula gives it.
+TRANSACTION_ID = re.compile(r"[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}")
+# Between the provider's request ID and the reported session, in the ID the worker reads.
+TRANSACTION_SEPARATOR = "|"
 
 
 class LivenessStatus(StrEnum):

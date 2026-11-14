@@ -183,6 +183,11 @@ class LivenessAttempt(Contract):
     expires_at: datetime
 
 
+class LivenessTransactionBody(Contract):
+    # The transaction ID Regula's liveness gave the app when its session ended.
+    transaction_id: str = Field(min_length=36, max_length=36)
+
+
 class LivenessState(Contract):
     """Whether the selfie step can use a liveness check, and the latest attempt."""
 
@@ -625,6 +630,27 @@ def create_routers(
             seal()  # refuse before saving anything when the data key is missing
             view = await liveness.start(
                 session, client.actor, liveness_provider.name, clock(request)
+            )
+        return _attempt(view)
+
+    @client_router.post("/liveness/{attempt_id}/transaction")
+    async def report_liveness_transaction(
+        attempt_id: PushId,
+        body: LivenessTransactionBody,
+        client: CurrentClient,
+        request: Request,
+    ) -> LivenessAttempt:
+        """Report the session Regula's liveness ran in the app for an open attempt.
+
+        Only where the attempt's page is `regula-liveness:<tag>`: run Regula's liveness with
+        that tag, then send the transaction ID it gives back, once. The server reads the result
+        from Regula itself. Keep reading `GET /liveness` until the attempt ends.
+        """
+        if liveness_provider is None:
+            raise ApplicationError("unavailable")
+        async with database(request).actor_transaction(client.actor) as session:
+            view = await liveness.report_transaction(
+                session, client.actor, attempt_id, body.transaction_id, clock(request)
             )
         return _attempt(view)
 

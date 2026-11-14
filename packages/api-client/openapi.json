@@ -10330,6 +10330,22 @@
         "title": "LivenessStatus",
         "type": "string"
       },
+      "LivenessTransactionBody": {
+        "additionalProperties": false,
+        "properties": {
+          "transaction_id": {
+            "maxLength": 36,
+            "minLength": 36,
+            "title": "Transaction Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "transaction_id"
+        ],
+        "title": "LivenessTransactionBody",
+        "type": "object"
+      },
       "LockView": {
         "additionalProperties": false,
         "properties": {
@@ -34352,6 +34368,112 @@
           }
         },
         "summary": "Start Liveness",
+        "tags": [
+          "identity checks"
+        ]
+      }
+    },
+    "/client/identity-check/liveness/{attempt_id}/transaction": {
+      "post": {
+        "description": "Report the session Regula's liveness ran in the app for an open attempt.\n\nOnly where the attempt's page is `regula-liveness:<tag>`: run Regula's liveness with\nthat tag, then send the transaction ID it gives back, once. The server reads the result\nfrom Regula itself. Keep reading `GET /liveness` until the attempt ends.",
+        "operationId": "report_liveness_transaction_client_identity_check_liveness__attempt_id__transaction_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "attempt_id",
+            "required": true,
+            "schema": {
+              "maxLength": 20,
+              "minLength": 20,
+              "pattern": "^[-0-9A-Z_a-z]{20}$",
+              "title": "Attempt Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LivenessTransactionBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LivenessAttempt"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "summary": "Report Liveness Transaction",
         "tags": [
           "identity checks"
         ]

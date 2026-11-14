@@ -23,6 +23,8 @@ from app.modules.kyc.domain.checks import CheckStatus, DocumentType, PhotoKind
 from app.modules.kyc.domain.liveness import (
     MAX_ATTEMPTS,
     OPEN_FOR,
+    TRANSACTION_ID,
+    TRANSACTION_SEPARATOR,
     WAITING,
     LivenessStatus,
     selfie_editable,
@@ -71,6 +73,11 @@ _INSERT_LIVE_PHOTO = text(
     "INSERT INTO kyc_photos (id, check_id, kind, storage_key, content_type, byte_size, sha256, "
     "source, created_at) VALUES (:id, :check_id, 'selfie', :storage_key, :content_type, "
     ":byte_size, :sha256, 'liveness', :now)"
+)
+_TRANSACTION = text("SELECT transaction_id FROM kyc_liveness_transactions WHERE attempt_id = :id")
+_INSERT_TRANSACTION = text(
+    "INSERT INTO kyc_liveness_transactions (attempt_id, transaction_id, created_at) "
+    "VALUES (:id, :transaction_id, :now) ON CONFLICT DO NOTHING"
 )
 _RETIRE_SELFIE = text(
     "UPDATE kyc_photos SET replaced_at = :now "
@@ -183,6 +190,48 @@ async def availability(
     )
 
 
+async def report_transaction(
+    session: AsyncSession, client: Actor, attempt_id: str, transaction_id: str, clock: Clock
+) -> LivenessView:
+    """Note the session the client finished at the provider, for the worker to read.
+
+    Only for the client's own open attempt, once. The worker reads the result from the provider
+    itself and checks it belongs to this attempt, so this is a pointer, never the result. The
+    worker's next read, at most `POLL_EVERY` away, picks it up.
+    """
+    service._person(client, "client")
+    # Under the client's policies, so another client's attempt is not found.
+    row = (await session.execute(_ATTEMPT_LOCKED, {"id": attempt_id})).one_or_none()
+    if row is None:
+        raise ApplicationError("not_found")
+    now = clock.now()
+    # An attempt past its life shows as expired; the worker retires it at its next read.
+    if shown_status(LivenessStatus(row.status), row.created_at, now) is not LivenessStatus.OPEN:
+        raise ApplicationError("conflict")
+    if TRANSACTION_ID.fullmatch(transaction_id) is None:
+        raise service._invalid("transaction_id", "invalid_transaction")
+    kept = (await session.execute(_TRANSACTION, {"id": attempt_id})).scalar_one_or_none()
+    if kept is not None and kept != transaction_id:
+        raise ApplicationError("conflict")
+    if kept is None:
+        inserted = await session.execute(
+            _INSERT_TRANSACTION, {"id": attempt_id, "transaction_id": transaction_id, "now": now}
+        )
+        if inserted.rowcount != 1:  # type: ignore[attr-defined]
+            # The transaction is another attempt's.
+            raise ApplicationError("conflict")
+        await service._audit(
+            session,
+            client,
+            "change",
+            "kyc.liveness.transaction_reported",
+            attempt_id,
+            clock,
+            resource=RESOURCE,
+        )
+    return await _view_by_id(session, None, attempt_id, now)
+
+
 # The worker, around the provider -------------------------------------------------------------
 
 
@@ -253,6 +302,10 @@ async def to_read(session: AsyncSession, attempt_id: str, clock: Clock) -> str |
     if await _expire_if_old(session, row, clock):
         return None
     request_id: str = row.provider_request_id
+    transaction = (await session.execute(_TRANSACTION, {"id": attempt_id})).scalar_one_or_none()
+    if transaction is not None:
+        # The session the client reported (`report_transaction`), for the provider to read.
+        return f"{request_id}{TRANSACTION_SEPARATOR}{transaction}"
     return request_id
 
 
@@ -308,6 +361,8 @@ async def record_live(
     )
     if usable:
         await session.execute(_RETIRE_SELFIE, {"check_id": check.id, "now": now})
+        # A new selfie retires the guided selfie's pose frames, as a client's selfie does.
+        await session.execute(service._RETIRE_POSES, {"check_id": check.id, "now": now})
         await session.execute(
             _INSERT_LIVE_PHOTO,
             {

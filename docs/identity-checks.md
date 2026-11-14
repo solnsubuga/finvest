@@ -112,7 +112,7 @@ The module talks to an `IdentityProvider` port (`domain/provider.py`) with three
 - Neither request changes anything at Regula, so sending again is harmless. A timeout, a dropped connection, a 5xx, 429 or 403 (a missing or expired licence) is deferred and the worker tries again. A refusal (400 or 422) of the document request refuses the submission (`regula_refused`), and it goes to a person. A refused face match is left out.
 - Both verdicts are kept in the reference the worker saves (`regula:<tag>:doc=pass,face=pass@96`), and the result is read back from it. The reference holds no details. The tag sent to Regula is a hash of the submission's key.
 - The addresses are `FINVEST_REGULA_DOCUMENT_READER_URL` and `FINVEST_REGULA_FACE_URL`: Regula's cloud addresses from the contract, or, self-hosted, such as `http://regula-docreader:8080`. The settings take https anywhere, or plain http only to a container name, localhost or a private address: never plain http over the internet. Still to confirm with Regula: how the cloud signs requests in (the Document Reader specification has a licence in the request body, `systemInfo.license`, and no API key header).
-- Liveness stays the camera selfie with Regula for now: `liveness` is not run, so nobody is approved with no person until Regula's liveness is built ([Not built yet](#not-built-yet)). Face confirmations are off with Regula for the same reason.
+- Liveness is Regula's own ([Regula liveness](#regula-liveness)), and its capture is the selfie the face match compares. Face confirmations stay off with Regula until they take a session reported from the app.
 - To confirm on a running Regula: the `/api` prefix on both paths, that `similarity` comes back in percent as the specification says (a fraction would always be below 90 and go to a person, never pass), and the text field types for the Ugandan national ID's NIN. Anything not recognised is `unsure`, never a pass.
 - Nothing Regula sends back is logged or kept beyond the verdicts and the similarity, because it carries the client's details.
 
@@ -170,6 +170,19 @@ How an attempt goes (`app/modules/kyc/liveness.py`, `liveness_jobs.py`, `domain/
 - ioTec's callback (`/api/face-verification/callback`) is not used. Reading is cheap and a callback is only a hint.
 - To confirm against ioTec's sandbox: that a request with no email still returns `verificationUrl`; that `profileImageUrl` is on an ioTec host and needs no key; whether ioTec Faces can return the client to the app when done; and what ioTec Faces asks of the client (it may also ask for the ID card, which this flow does not use).
 - The development stub passes on the first read with a stand-in capture, and its page is a placeholder.
+
+### Regula liveness
+
+`app/modules/kyc/regula_liveness.py`, on the Face service. By the owner's choice (2026-11-14, "Regula liveness plus our five poses"), Regula's liveness is the first step of the guided selfie: its capture is the straight-on selfie, and the client then takes the four turns ([Guided selfie](#guided-selfie)). Taking a camera selfie after it replaces the live one, so `liveness` is then not run.
+
+Regula's liveness runs in the app with Regula's own capture and guidance, not on a page. So:
+
+1. The worker asks Regula nothing to start a session. The attempt's ID is the session's tag, and the attempt's page is `regula-liveness:<tag>`. The app sees that address, and runs Regula's liveness with that tag instead of opening a page.
+2. When Regula's session ends, the app sends the transaction ID it was given: `POST /client/identity-check/liveness/{attempt}/transaction`, with `transaction_id`. This works only for the client's own open attempt, and only once. Sending the same ID again is harmless, but a different one is a `conflict`, and so is a transaction already used by another attempt. The table is `kyc_liveness_transactions` (migration 0372), and its rows are never changed or deleted.
+3. On its next read, the worker gets the result from Regula itself: `GET /api/v2/liveness?transactionId=`. The app's word is never taken. The session must carry the attempt's tag (`regula_wrong_session` otherwise), and its `status` must be 0, confirmed. A 1 is `not_live`, and anything else is `regula_unclear`, never a pass. Regula saves a session a moment after it ends, so a 404 is simply read again.
+4. When the session is live, the capture is downloaded from the `portrait` link. It is downloaded only from the Face service's own host, or from a host in `FINVEST_REGULA_CAPTURE_HOSTS` over https. The type is read from its bytes, and it may be at most 10 MiB. Otherwise the attempt fails with `no_capture`, and the client tries again. The capture becomes the selfie as with any liveness provider. A new selfie retires the pose frames, so the worker retires them too.
+
+- Still to confirm against Regula's cloud: whether `portrait` is a link or the image itself, and the host it points to, and how the cloud signs requests in.
 
 ## Guided selfie
 
@@ -256,6 +269,7 @@ The client's own check, under `/client/identity-check`, with the client's sessio
 | `POST /submit` | Hand the check in. Says which photos or details are missing if it is not ready. |
 | `GET /liveness` | Whether the selfie can be taken with a liveness check (`available`), why a new attempt cannot start now (`problem`), the attempts left and the latest attempt, with its page while it is open. |
 | `POST /liveness` | Start a liveness attempt. `unavailable` when no liveness provider is set. |
+| `POST /liveness/{id}/transaction` | Report the session Regula's liveness ran in the app for an open attempt, once ([Regula liveness](#regula-liveness)). |
 
 The review queue, under `/staff/identity-checks`. Reading needs the permission `identity_checks.view`. Deciding needs `identity_checks.review`. Admin, Operations and Compliance hold both.
 
@@ -290,7 +304,8 @@ Without `FINVEST_IDENTITY_DATA_KEY` the routes answer `unavailable`, and so do t
 - The console calling these routes. It still uses sample data.
 - Replacing the identity data key. Do not rotate it yet: a sealed value records which key sealed it and an old key can still be read, but nothing seals the rows again, and the document fingerprints are made with the current key only, so the one-document rule would stop matching earlier clients.
 - Company, joint and group accounts. Only personal accounts are issued.
-- Regula's liveness. Until then `liveness` is not run with Regula, so nobody is approved with no person. The owner is choosing how liveness and the guided selfie's poses combine.
+- Regula's liveness in the client app: running Regula's SDK for a `regula-liveness:<tag>` page and sending the transaction ID ([Regula liveness](#regula-liveness)). Until it is built, a client with Regula cannot finish a liveness attempt and takes the camera selfie instead, so `liveness` is not run.
+- Face confirmations with Regula. They are off until they take a session reported from the app.
 - The pose frames in the console. The client app takes the guided selfie ([Guided selfie](#guided-selfie)).
 - The Regula containers in `infra/`, with their licence. That is the infrastructure thread's.
 - Removing the ioTec Verify identity adapter (NIRA lookup, face match and AML), now that Regula replaces it. ioTec stays for SMS, mobile money and phone names.
