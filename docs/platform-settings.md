@@ -73,6 +73,7 @@ Migration `0340_platform_settings`:
 | `maturity_reminders` | investments `remind_maturing`, every morning at 08:30 | Which days before maturity a client is told their investment matures soon |
 
 Complaint deadlines still count Monday to Friday only. Whether public holidays are left out is open for counsel ([decisions.md](decisions.md)); once decided, the complaints rule reads `public_holidays` here.
+| `statement_layouts` | reconciliation `POST /staff/reconciliation/statements` and `GET /staff/reconciliation/statement-formats` | A statement can be imported in any approved layout by its name, as well as the built-in `standard` |
 
 ## For other modules
 
