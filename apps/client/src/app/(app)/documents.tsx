@@ -322,9 +322,13 @@ function StatementForm({ onAsked }: { onAsked: (document: DocumentItem, format: 
         <Txt size={fontSizes.sm} weight="bold" color={colors.white} nativeID="statement-include-label">
           Include
         </Txt>
-        <View style={styles.dateBox} aria-labelledby="statement-include-label" testID="statement-include">
-          <Txt size={15} weight="bold" color={colors.white} style={{ flex: 1 }}>
+        {/* Not a field: a statement always covers the whole account, so it adds up and its check code vouches for all of it. */}
+        <View aria-labelledby="statement-include-label" testID="statement-include" style={{ gap: 2 }}>
+          <Txt size={15} weight="bold" color={colors.white}>
             All investments and goals
+          </Txt>
+          <Txt size={fontSizes.sm} color={colors.onBlackMuted}>
+            A statement always covers your whole account.
           </Txt>
         </View>
       </View>
@@ -807,7 +811,7 @@ function DocumentRow({ document, first }: { document: DocumentItem; first: boole
           onPress={download}
           disabled={pdfState === "busy"}
           accessibilityRole="button"
-          accessibilityLabel={pdfState === "held" ? `Download ${title} on mobile data` : `Download ${title}`}
+          accessibilityLabel={`Download ${title}${document.spreadsheetByteSize !== null ? " as PDF" : ""}${pdfState === "held" ? " on mobile data" : ""}`}
           style={({ pressed }) => [styles.roundButton, pressed && { opacity: 0.7 }]}
           testID={`download-${document.id}`}
         >

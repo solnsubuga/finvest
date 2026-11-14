@@ -69,7 +69,7 @@ describe("the Documents screen", () => {
     expect(screen.getByText("Investment note IN-Pq31wXb7")).toBeTruthy();
     expect(screen.getByText("Investment note IN-Pq2mKc84")).toBeTruthy();
     expect(screen.getByText(/^Investment ended\. Note made on/)).toBeTruthy();
-    await fireEvent.press(screen.getByLabelText("Download October 2026"));
+    await fireEvent.press(screen.getByLabelText("Download October 2026 as PDF"));
     // The download finishes after the press returns, so wait for it.
     await waitFor(() => expect(client.downloaded).toEqual(["demo-monthly-1"]));
   });
