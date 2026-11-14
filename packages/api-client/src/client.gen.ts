@@ -327,7 +327,9 @@ export const ClientSessionView = z.object({
   client_id: z.string(),
   email: z.string().nullable().optional(),
   email_verified: z.boolean().optional(),
+  locked: z.boolean().optional(),
   phone: z.string(),
+  pin_set: z.boolean().optional(),
   restricted_until: z.string().nullable(),
 });
 export type ClientSessionView = z.infer<typeof ClientSessionView>;
@@ -862,6 +864,17 @@ export const PayoutOut = z.object({
   status: z.enum(["in_review", "processing", "paid", "failed", "cancelled"]),
 });
 export type PayoutOut = z.infer<typeof PayoutOut>;
+
+export const PinBody = z.object({
+  pin: z.string(),
+});
+export type PinBody = z.infer<typeof PinBody>;
+
+export const PinChecked = z.object({
+  tries_left: z.number().int(),
+  unlocked: z.boolean(),
+});
+export type PinChecked = z.infer<typeof PinChecked>;
 
 export const PlanDetails = z.object({
   amount_minor: z.number().int(),
@@ -2310,6 +2323,28 @@ export const operations = {
     idempotent: false,
     status: 201,
     response: PayoutOut,
+  },
+  "PUT /client/pin": {
+    method: "PUT",
+    path: "/client/pin",
+    params: z.object({}),
+    query: z.object({}),
+    body: PinBody,
+    bodyKind: "json",
+    idempotent: false,
+    status: 204,
+    response: null,
+  },
+  "POST /client/pin/unlock": {
+    method: "POST",
+    path: "/client/pin/unlock",
+    params: z.object({}),
+    query: z.object({}),
+    body: PinBody,
+    bodyKind: "json",
+    idempotent: false,
+    status: 200,
+    response: PinChecked,
   },
   "GET /client/products": {
     method: "GET",

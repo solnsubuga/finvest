@@ -850,6 +850,17 @@ ROWS = {
         "VALUES ('-Nabc0000000000000A1', '-Nabc0000000000000B1', now()); COMMIT",
         "refusing to drop closure_requests",
     ),
+    "0221_identity_app_pins": (
+        "INSERT INTO identity_clients (id, phone, status, created_at) VALUES "
+        "('-Nabc0000000000000B1', '+256772123456', 'unclaimed', now()); "
+        "INSERT INTO identity_sessions (id, actor_kind, actor_id, token_hash, second_step, "
+        "transport, created_at, last_seen_at, idle_expires_at, absolute_expires_at) "
+        "VALUES ('-Nabc0000000000000A1', 'client', '-Nabc0000000000000B1', "
+        "decode(repeat('00', 32), 'hex'), 'passkey', 'token', now(), now(), now(), now()); "
+        "INSERT INTO identity_app_pins (session_id, pin_hash, created_at) "
+        "VALUES ('-Nabc0000000000000A1', 'x', now())",
+        "refusing to drop app PINs that are in use",
+    ),
 }
 
 

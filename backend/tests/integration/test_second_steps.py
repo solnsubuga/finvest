@@ -614,6 +614,8 @@ async def test_a_client_adds_a_passkey_and_signs_in_with_it(api: Api) -> None:
         "restricted_until": None,
         "email": None,
         "email_verified": False,
+        "pin_set": False,
+        "locked": False,
     }
     assert COOKIES["client"] in verified.headers["set-cookie"]
     assert (await api.http.get("/client/session")).status_code == 200
