@@ -1,4 +1,5 @@
 import { act, fireEvent, screen } from "@testing-library/react-native";
+import { router } from "expo-router";
 import { renderRouter } from "expo-router/testing-library";
 
 import { DEMO_PASSWORD } from "@/auth/stubAuthClient";
@@ -147,6 +148,24 @@ describe("Regula's liveness in the app", () => {
 
     await fireEvent.press(await top("live-open"));
     expect(regulaSession.open).toBe(true);
+  });
+
+  it("starts a new attempt for one that was already open when the screen opened", async () => {
+    await upToTheSelfie();
+    await startSession();
+    const client = made[made.length - 1]!;
+    const first = (await client.getLiveness()).latest!.id;
+    // The client leaves mid-session and comes back, as after a reload. The attempt is still open,
+    // but its session may already have run, and an attempt takes one session.
+    await act(async () => router.replace("/id-check"));
+    await act(async () => router.push("/id-check/photo/selfie"));
+    expect(await screen.findByText("Your live selfie did not finish")).toBeTruthy();
+    expect(regulaSession.open).toBe(false);
+
+    await fireEvent.press(await top("live-open"));
+    for (let read = 0; read < 4 && !regulaSession.open; read++) await nextRead();
+    expect(regulaSession.open).toBe(true);
+    expect((await client.getLiveness()).latest!.id).not.toBe(first);
   });
 
   it("says why a session could not run", async () => {

@@ -54,6 +54,13 @@ export function LiveSelfie({ check, top, frame, onCamera, onDone, regula = false
   // closed session is not opened again by itself), and the attempt whose transaction was sent.
   const [running, setRunning] = useState<string | null>(null);
   const ran = useRef(new Set<string>());
+  // Attempts already open when this screen first read them, such as after a reload. Their
+  // session may have run before, and an attempt takes one session, so a new attempt is started.
+  const [earlier, setEarlier] = useState<Set<string> | null>(null);
+  const noteEarlier = useCallback((next: LivenessState) => {
+    const latest = next.latest;
+    setEarlier((known) => known ?? new Set(latest?.status === "open" || latest?.status === "starting" ? [latest.id] : []));
+  }, []);
   const [reported, setReported] = useState<string | null>(null);
   const [unsent, setUnsent] = useState<{ attempt: string; transaction: string } | null>(null);
 
@@ -61,25 +68,28 @@ export function LiveSelfie({ check, top, frame, onCamera, onDone, regula = false
     try {
       const next = await client.getLiveness();
       setLoadError(null);
+      noteEarlier(next);
       setState(next);
       return next;
     } catch (caught) {
       setLoadError(describeIdentityError(caught));
       return null;
     }
-  }, [client]);
+  }, [client, noteEarlier]);
 
   const latest = state?.latest ?? null;
   const waiting = latest?.status === "starting" || latest?.status === "open";
   const tag = latest?.status === "open" ? regulaTag(latest.url) : null;
   const openId = latest?.status === "open" ? latest.id : null;
 
+  const fromEarlier = openId !== null && (earlier?.has(openId) ?? false);
+
   // Regula's session opens by itself once its attempt is open, once per attempt.
   useEffect(() => {
-    if (!tag || !openId || ran.current.has(openId) || reported === openId) return;
+    if (!tag || !openId || fromEarlier || ran.current.has(openId) || reported === openId) return;
     ran.current.add(openId);
     setRunning(openId);
-  }, [tag, openId, reported]);
+  }, [tag, openId, reported, fromEarlier]);
 
   const report = useCallback(
     async (attempt: string, transaction: string) => {
@@ -128,6 +138,7 @@ export function LiveSelfie({ check, top, frame, onCamera, onDone, regula = false
           (next) => {
             if (!current) return;
             setLoadError(null);
+            noteEarlier(next);
             setState(next);
             if (!state && !next.available) onCamera();
           },
@@ -145,7 +156,7 @@ export function LiveSelfie({ check, top, frame, onCamera, onDone, regula = false
       current = false;
       clearTimeout(timer);
     };
-  }, [client, state, waiting, onCamera, failedReads]);
+  }, [client, state, waiting, onCamera, failedReads, noteEarlier]);
 
   useEffect(() => {
     if (latest?.status !== "passed" || finishing.current) return;
@@ -315,7 +326,12 @@ export function LiveSelfie({ check, top, frame, onCamera, onDone, regula = false
                 testID="live-resend"
               />
             ) : (
-              <Button label="Open the live selfie" onPress={() => setRunning(attempt)} testID="live-open" />
+              <Button
+                label="Open the live selfie"
+                onPress={() => (fromEarlier ? void start() : setRunning(attempt))}
+                loading={busy}
+                testID="live-open"
+              />
             )}
             {cameraLink}
           </>
