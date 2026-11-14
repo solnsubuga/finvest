@@ -14,7 +14,7 @@
 | [screening.md](screening.md) | Sanctions and politically exposed person screening, rescreening, and the compliance cases staff close with two people |
 | [identity-checks.md](identity-checks.md) | What a client hands in, the lifecycle of a check, automatic checks, and what the database enforces |
 | [payments.md](payments.md) | How a deposit by mobile money is sent, confirmed and posted, what happens when the provider's answer is unclear, and how a mistaken credit is corrected |
-| [pesapal-plan.md](pesapal-plan.md) | Plan, not built: mobile money and card payments through Pesapal in place of ioTec, the screens redesigned, ledger and reconciliation impact, two-person steps, card data rules and what to get from Pesapal |
+| [payment-providers-plan.md](payment-providers-plan.md) | Plan, not built: mobile money through Yo! Payments and cards through Pesapal, replacing ioTec collections; screens redesigned, ledger and reconciliation impact, two-person steps, card data rules and what to get from each provider |
 | [goals.md](goals.md) | Goals as targets attached to investments, the monthly plan and how a goal's progress is labelled |
 | [notifications.md](notifications.md) | How a module tells a client something, the event catalogue, channels, and how staff change the words |
 | [tax.md](tax.md) | Withholding tax on interest: the monthly return for URA and its file, paying URA by two people, and the figures on a client's yearly certificate |

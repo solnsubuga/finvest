@@ -101,10 +101,12 @@ def opt(badge, t, s, state="", inner="", right=None):
     return f'<div class="opt {state}"><div class="row"><div class="badge">{badge}</div><div class="grow"><div class="t">{t}</div><div class="s">{s}</div></div>{right}</div>{inner_html}</div>'
 
 
-SECURE = f'<div class="secure">{LOCK}<span>You finish on Pesapal\'s secure payment page. Pesapal is licensed by the Bank of Uganda. Finvest never sees your card number or mobile money PIN.</span></div>'
-MOMO_INNER = ('<div class="field"><span>Pay from</span><b>+256 772 123 456</b></div>'
-              '<p class="note">Pick MTN or Airtel on the next page and approve the prompt on this phone with your PIN. '
-              'Use the number on your Finvest account. A payment from any other number is sent back.</p>')
+SECURE = f'<div class="secure">{LOCK}<span>Mobile money is prompted on your phone through Yo! Payments. Cards are paid on Pesapal\'s secure page. Both are licensed by the Bank of Uganda. Finvest never sees your PIN or card number.</span></div>'
+CHIPS = ('<div style="display:flex;gap:8px;margin-bottom:10px">'
+         '<div style="flex:1;border:2px solid var(--ink);border-radius:12px;padding:10px;text-align:center;font-weight:700;background:#fff">MTN</div>'
+         '<div style="flex:1;border:1px solid var(--border);border-radius:12px;padding:11px;text-align:center;font-weight:700;color:var(--muted);background:#fff">Airtel</div></div>')
+MOMO_INNER = (CHIPS + '<div class="field"><span>Your number</span><b>+256 772 123 456</b></div>'
+              '<p class="note">MTN sends a prompt to the number on your Finvest account. You approve it with your Mobile Money PIN. No charge.</p>')
 CARD_INNER = ('<div class="lines"><div class="l"><span>Investment</span><span>UGX 1,000,000</span></div>'
               '<div class="l"><span>Card charge</span><span>UGX 35,000</span></div>'
               '<div class="l"><span>You pay</span><span>UGX 1,035,000</span></div></div>'
@@ -116,7 +118,7 @@ CARD_B = f'{VISA}{MC}'
 
 
 def pay_choose(method):
-    momo = opt(MOMO_B, "Mobile money", "MTN or Airtel, no charge", "sel" if method == "momo" else "", MOMO_INNER if method == "momo" else "")
+    momo = opt(MOMO_B, "Mobile money", "MTN or Airtel, prompted on your phone", "sel" if method == "momo" else "", MOMO_INNER if method == "momo" else "")
     card = opt(CARD_B, "Card", f'Visa or Mastercard, debit or credit', "sel" if method == "card" else "", CARD_INNER if method == "card" else "")
     amount = "UGX 1,000,000" if method == "momo" else "UGX 1,035,000"
     return (BACK + '<h1>Pay for your investment</h1>' + hero() + '<div class="label">Pay with</div>' + momo + card + BANK_ROW
@@ -125,27 +127,43 @@ def pay_choose(method):
 
 def handover():
     steps = [
-        "Pesapal's payment page opens. Check that it says Finvest and UGX 1,000,000.",
-        "Choose MTN or Airtel, and enter <b>+256 772 123 456</b>, the number on your Finvest account.",
-        "Approve the prompt on your phone with your mobile money PIN.",
+        "Pesapal's payment page opens. Check that it says Finvest and UGX 1,035,000.",
+        "Type your card details there. Finvest never sees them.",
+        "Your bank may ask you to confirm, with a code by SMS or in its app.",
         "You come back here by yourself. Your investment starts once Pesapal confirms the payment.",
     ]
     s = "".join(f'<div class="step"><div class="n">{i+1}</div><div>{t}</div></div>' for i, t in enumerate(steps))
     return (BACK + '<h1>Finish on Pesapal\'s secure page</h1>'
-            '<p class="sub" style="margin-top:-6px">Mobile money, UGX 1,000,000 for your 91 Day Treasury Bill.</p>'
-            f'<div class="steps">{s}</div>' + SECURE.replace("margin:16px 0 18px", "margin:18px 0 6px")
+            '<p class="sub" style="margin-top:-6px">Card payment, UGX 1,035,000 for your 91 Day Treasury Bill.</p>'
+            f'<div class="steps">{s}</div>'
+            + f'<div class="secure" style="margin:18px 0 6px">{LOCK}<span>Pesapal is licensed by the Bank of Uganda. Your card details stay with Pesapal and your bank.</span></div>'
             + '<div class="btn">Open the secure page</div><div class="btn ghost">Pay another way</div>')
+
+
+PHONE = '<svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="#2A3800" stroke-width="2.2" stroke-linecap="round"><rect x="7" y="2.5" width="10" height="19" rx="2.5"/><path d="M11 18.5h2"/></svg>'
+
+
+def approve_phone():
+    return (f'<div class="center"><div class="icon" style="background:var(--limeSurface)">{PHONE}</div>'
+            '<div class="status" style="color:var(--limeBorder)">Waiting for you</div><div class="big">Approve on your phone</div>'
+            '<p class="sub">MTN sent a prompt to +256 772 123 456. Enter your Mobile Money PIN to pay UGX 1,000,000 to Finvest.</p></div>'
+            '<div class="card"><div class="r"><span>Paying with</span><span>MTN Mobile Money</span></div>'
+            '<div class="r"><span>For</span><span>91 Day Treasury Bill</span></div>'
+            '<div class="r"><span>Amount</span><span>UGX 1,000,000</span></div></div>'
+            '<p class="note" style="text-align:center;margin-top:16px">No prompt after a minute? Check that your phone has signal and is not busy in another menu. '
+            'We never send a second prompt for the same payment, so you cannot pay twice.</p>'
+            '<div class="btn ghost">Pay another way</div><div class="btn">Back to home</div>')
 
 
 def confirming():
     return ('<div class="center"><div class="icon spin"></div><div class="status" style="color:var(--limeBorder)">Waiting for Pesapal</div>'
-            '<div class="big">UGX 1,000,000</div><p class="sub">Confirming your mobile money payment. This usually takes less than a minute. '
+            '<div class="big">UGX 1,035,000</div><p class="sub">Confirming your card payment. This usually takes less than a minute. '
             'You can leave this screen. We will tell you when it is done.</p></div>'
-            '<div class="card"><div class="r"><span>Paying with</span><span>Mobile money</span></div>'
+            '<div class="card"><div class="r"><span>Paying with</span><span>Card</span></div>'
             '<div class="r"><span>For</span><span>91 Day Treasury Bill</span></div>'
             '<div class="r"><span>Started</span><span>15 Nov 2026, 00:44</span></div></div>'
-            '<p class="note" style="text-align:center;margin-top:16px">Closed the payment page before you finished?</p>'
-            '<div class="btn ghost">Open the payment page again</div><div class="btn">Back to home</div>')
+            '<p class="note" style="text-align:center;margin-top:16px">Closed the card page before you finished?</p>'
+            '<div class="btn ghost">Open the card page again</div><div class="btn">Back to home</div>')
 
 
 def paid():
@@ -172,31 +190,17 @@ def failed():
             '<div class="btn" style="margin-top:24px">Try again</div><div class="btn ghost">Pay another way</div>')
 
 
-def other_number():
-    return ('<div class="center"><div class="icon" style="background:var(--warningSurface);font-size:34px;font-weight:800;color:var(--warning)">!</div>'
-            '<div class="status" style="color:var(--warning)">Sending it back</div><div class="big">Paid from another number</div>'
-            '<p class="sub">This payment came from +256 701 &bull;&bull;&bull; 789, which is not the number on your Finvest account. '
-            'We can only take payments from your own number, so we are sending the whole amount back to that number. '
-            'Your investment has not started.</p></div>'
-            '<div class="card"><div class="r"><span>Amount</span><span>UGX 1,000,000</span></div>'
-            '<div class="r"><span>Going back to</span><span>+256 701 &bull;&bull;&bull; 789</span></div>'
-            '<div class="r"><span>Expected</span><span>Within 2 working days</span></div></div>'
-            '<div class="btn" style="margin-top:24px">Pay from my own number</div><div class="btn ghost">Pay by card or bank</div>')
-
-
 def over_limits():
-    momo = opt(MOMO_B, "Mobile money", "Up to UGX 5,000,000 a payment", "off")
+    momo = opt(MOMO_B, "Mobile money", "MTN or Airtel, prompted on your phone", "sel", MOMO_INNER)
     card = opt(CARD_B, "Card", "Up to UGX 5,000,000 a payment", "off")
-    bank = opt("Bank", "Bank transfer", "Any amount. Send from your bank, then upload the receipt", "sel")
     return (BACK + '<h1>Pay for your investment</h1>' + hero(amt="UGX 8,000,000")
-            + '<div class="banner warn"><b>Pay this one by bank transfer</b>Mobile money and cards take up to UGX 5,000,000 in one payment. '
-              'For a larger amount, send a bank transfer, or invest a smaller amount.</div>'
-            + '<div class="label">Pay with</div>' + bank + momo + card
-            + '<div class="btn" style="margin-top:20px">See the bank details</div><div class="btn ghost">Change the amount</div>')
+            + '<div class="banner warn"><b>Cards take up to UGX 5,000,000</b>Pay this one by mobile money or bank transfer, or invest a smaller amount by card.</div>'
+            + '<div class="label">Pay with</div>' + momo + card + BANK_ROW
+            + '<div class="btn" style="margin-top:20px">Continue to pay UGX 8,000,000</div>')
 
 
 def paused():
-    momo = opt(MOMO_B, "Mobile money", "MTN or Airtel, no charge", "sel", MOMO_INNER)
+    momo = opt(MOMO_B, "Mobile money", "MTN or Airtel, prompted on your phone", "sel", MOMO_INNER)
     card = opt(CARD_B, "Card", "Paused for now. Try mobile money or a bank transfer.", "off")
     return (BACK + '<h1>Pay for your investment</h1>' + hero()
             + '<div class="banner warn"><b>Card payments are paused</b>Card payments are not working right now. Mobile money and bank transfer work as usual.</div>'
@@ -207,12 +211,12 @@ def paused():
 CLIENT = {
     "01-pay-mobile-money": pay_choose("momo"),
     "02-pay-card-with-charge": pay_choose("card"),
-    "03-finish-on-pesapal": handover(),
-    "04-confirming": confirming(),
-    "05-paid-by-card": paid(),
-    "06-card-declined": failed(),
-    "07-paid-from-another-number": other_number(),
-    "08-above-mobile-and-card-limits": over_limits(),
+    "03-approve-on-your-phone": approve_phone(),
+    "04-finish-on-pesapal": handover(),
+    "05-confirming-card": confirming(),
+    "06-paid-by-card": paid(),
+    "07-card-declined": failed(),
+    "08-above-card-limit": over_limits(),
     "09-card-payments-paused": paused(),
 }
 
@@ -280,8 +284,8 @@ def shell(active, body):
 
 
 def con_settings():
-    ch = [("Mobile money pay in", "Pesapal", "Open", "p-ok"), ("Card pay in", "Pesapal", "Pause waiting for a second person", "p-warn"),
-          ("Bank transfer pay in", "Trust account", "Open", "p-ok"), ("Mobile money payouts", "ioTec, until Pesapal has a payout API", "Open", "p-ok"),
+    ch = [("MTN pay in", "Yo! Payments", "Open", "p-ok"), ("Airtel pay in", "Yo! Payments", "Open", "p-ok"), ("Card pay in", "Pesapal", "Pause waiting for a second person", "p-warn"),
+          ("Bank transfer pay in", "Trust account", "Open", "p-ok"), ("MTN and Airtel payouts", "Yo! Payments", "Open", "p-ok"),
           ("Bank payouts", "Trust account, two-person batches", "Open", "p-ok")]
     rows = "".join(f'<div class="row"><div class="grow"><b>{a}</b><div class="muted small">{p}</div></div><span class="pill {c}">{s}</span>'
                    f'<span class="b">{"Approve or reject" if c == "p-warn" else "Propose a pause"}</span></div>' for a, p, s, c in ch)
@@ -290,10 +294,10 @@ def con_settings():
             f'<div class="panel">{rows}</div>'
             '<div class="banner warn"><b>Grace A. proposed pausing card pay in, 15 Nov, 00:20.</b> Reason: Pesapal reports card declines across all banks. '
             'You can approve or reject it. Grace can only withdraw it.</div>'
-            '<h2>Card and mobile money limits</h2><p class="muted">Checked before a payment is saved. Pesapal also caps mobile money at UGX 5,000,000 a payment.</p>'
+            '<h2>Card limits</h2><p class="muted">Checked before a card payment is saved, to make stolen cards hard to cash out.</p>'
             '<div class="panel grid3"><div><div class="muted small">Card, one payment</div><div style="font-size:20px;font-weight:700;margin-top:4px">UGX 5,000,000</div></div>'
             '<div><div class="muted small">Card, per client in 30 days</div><div style="font-size:20px;font-weight:700;margin-top:4px">UGX 10,000,000</div></div>'
-            '<div><div class="muted small">Mobile money, one payment</div><div style="font-size:20px;font-weight:700;margin-top:4px">UGX 5,000,000</div></div></div>'
+            '<div><div class="muted small">Card money refunded</div><div style="font-size:20px;font-weight:700;margin-top:4px">To the same card</div></div></div>'
             '<div style="margin-top:12px"><span class="b">Propose new limits</span></div>')
     return shell("Settings", body)
 
@@ -322,22 +326,22 @@ def con_payment():
 
 
 def con_refunds():
-    items = [("UGX 1,000,000", "Mobile money from another number", "To +256 701 ••• 789, in full", "Needs a second person", "p-warn", "Proposed by Grace A., 15 Nov, 09:12"),
-             ("UGX 1,035,000", "Card refund, investment cancelled", "To Visa ending 0010", "Approve it on Pesapal too", "p-warn", "Approved by Fred F., 15 Nov, 10:02"),
+    items = [("UGX 1,035,000", "Card refund, investment cancelled", "To Visa ending 0010", "Needs a second person", "p-warn", "Proposed by Grace A., 15 Nov, 09:12"),
+             ("UGX 600,000", "Card refund, paid twice by mistake", "To Visa ending 8812", "Approve it on Pesapal too", "p-warn", "Approved by Fred F., 15 Nov, 10:02"),
              ("UGX 450,000", "Card refund, early withdrawal within 30 days", "To Mastercard ending 4417", "Sent, waiting for the statement", "p-n", "Pesapal approved 14 Nov, 16:40"),
              ("UGX 2,000,000", "Card refund", "To Visa ending 2231", "Done", "p-ok", "On the Pesapal statement 13 Nov")]
     rows = "".join(f'<div class="row"><div style="width:150px"><b>{a}</b></div><div class="grow"><b>{t}</b><div class="muted small">{d} · {w}</div></div>'
                    f'<span class="pill {c}">{s}</span></div>' for a, t, d, s, c, w in items)
     body = ('<h1>Reconciliation</h1><p class="lead">The ledger compared with provider and bank statements, and anything that does not match.</p>'
-            '<h2>Refunds through Pesapal</h2><p class="muted">Money goes back only to the card or number it came from. One person proposes, a different person approves, '
+            '<h2>Card refunds</h2><p class="muted">Card money goes back only to the card it came from. One person proposes, a different person approves, '
             'then someone approves it on Pesapal\'s dashboard. Pesapal takes one refund per payment.</p>'
             f'<div class="panel">{rows}</div>'
-            '<div class="grid2" style="margin-top:4px"><div class="panel"><b>Approve: mobile money from another number</b>'
+            '<div class="grid2" style="margin-top:4px"><div class="panel"><b>Approve: card refund, investment cancelled</b>'
             '<div class="kv"><span class="muted">Client</span><span>Amara Nakato, 1001004827</span></div>'
-            '<div class="kv"><span class="muted">Paid from</span><span>+256 701 ••• 789, Airtel</span></div>'
-            '<div class="kv"><span class="muted">Number on the account</span><span>+256 772 ••• 456</span></div>'
-            '<div class="kv"><span class="muted">Amount, refunded in full</span><span>UGX 1,000,000</span></div>'
-            '<div class="kv"><span class="muted">Investment</span><span>Not started</span></div>'
+            '<div class="kv"><span class="muted">Paid by</span><span>Visa card ending 0010</span></div>'
+            '<div class="kv"><span class="muted">Refund, in full</span><span>UGX 1,035,000</span></div>'
+            '<div class="kv"><span class="muted">Investment</span><span>Cancelled, never started</span></div>'
+            '<div class="kv"><span class="muted">Proposed by</span><span>Grace A.: the client changed their mind</span></div>'
             '<div style="display:flex;gap:8px;margin-top:14px"><span class="b pri">Approve with passkey</span><span class="b">Send back</span></div></div>'
             '<div class="panel"><b>After approving here</b><p class="muted" style="margin-top:8px;line-height:1.5">Finvest sends the refund to Pesapal. Pesapal then asks for it to be approved on its own dashboard. '
             'Once someone has done that, record it here. The refund is done when it shows on the next Pesapal statement, which the day close checks.</p>'
@@ -354,9 +358,9 @@ def con_close():
             '<h2>Close the day, Sat 14 Nov 2026</h2><p class="muted">One person prepares the close and another approves it.</p>'
             '<div class="grid3">' + pot("Pesapal balance", "UGX 18,240,000", "UGX 18,240,000", "None", "Ready", "p-ok")
             + pot("Trust bank account, Stanbic trust", "UGX 412,500,000", "UGX 424,500,000", "Settlement on its way, UGX 12,000,000", "Explained", "p-ok")
-            + pot("ioTec wallet, payouts", "UGX 3,100,000", "UGX 3,100,000", "None", "Ready", "p-ok") + '</div>'
+            + pot("Yo! Payments account", "UGX 9,450,000", "UGX 9,450,000", "None", "Ready", "p-ok") + '</div>'
             '<div style="margin-top:12px"><span class="b pri">Prepare the close</span></div>'
-            '<h2>Pesapal settlements</h2><p class="muted">Pesapal pays card and mobile money collections to the trust account about two working days after a withdrawal is asked for on its dashboard. '
+            '<h2>Pesapal settlements</h2><p class="muted">Pesapal pays card collections to the trust account about two working days after a withdrawal is asked for on its dashboard. '
             'Record each one here. A different person approves it, which posts it to the books.</p>'
             '<div class="panel grid3"><div><div class="lbl" style="margin-top:0">Pesapal sent (UGX)</div><div class="inp">12,000,000</div></div>'
             '<div><div class="lbl" style="margin-top:0">Arrived at the trust account (UGX)</div><div class="inp">12,000,000</div></div>'
@@ -368,8 +372,8 @@ def con_close():
 CONSOLE = {
     "c1-settings-payment-channels": con_settings(),
     "c2-card-payment-detail": con_payment(),
-    "c3-refunds-through-pesapal": con_refunds(),
-    "c4-close-the-day-pesapal": con_close(),
+    "c3-card-refunds": con_refunds(),
+    "c4-close-the-day": con_close(),
 }
 
 for name, body in CLIENT.items():
