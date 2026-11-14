@@ -7,8 +7,8 @@ complaints register, the goals, the email delivery records, the unclaimed accoun
 complaint outcomes, the suppression lifts, the client locks, the announcements, the team
 changes, Finvest's own money in the buffer, the payments of tax to URA, the payments moved to
 the right client, next of kin, the answers to the investing questions, the requests to close an
-account, the journals sent to the accounting system or who set the bank account clients pay
-into."""
+account, the journals sent to the accounting system, who set the bank account clients pay
+into or why a payout send waited."""
 
 import os
 from collections.abc import Iterator
@@ -911,6 +911,24 @@ ROWS = {
         "INSERT INTO identity_app_pins (session_id, pin_hash, created_at) "
         "VALUES ('-Nabc0000000000000A1', 'x', now())",
         "refusing to drop app PINs that are in use",
+    ),
+    "0270_payout_wallet_short": (
+        "BEGIN; SELECT set_config('finvest.actor_kind', 'system', true); "
+        "INSERT INTO payout_destinations (id, client_id, kind, network, account_number, "
+        "holder_name, status, created_at, updated_at) VALUES ('-Nabc0000000000000D1', "
+        "'-Nabc0000000000000B1', 'mobile_money', 'mtn', '256772000000', 'Test', "
+        "'awaiting_code', now(), now()); "
+        "INSERT INTO payouts (id, client_id, destination_id, kind, amount_minor, currency, "
+        "status, business_date, source_account_id, source_reference, in_flight_account_id, "
+        "request_key, created_at, updated_at) VALUES ('-Nabc0000000000000A1', "
+        "'-Nabc0000000000000B1', '-Nabc0000000000000D1', 'mobile_money', 1000, 'UGX', "
+        "'queued', DATE '2026-11-10', '-Nabc0000000000000E1', 'investment-1', "
+        "'-Nabc0000000000000F1', 'request-key-1', now(), now()); "
+        "INSERT INTO payout_send_attempts (payout_id, attempt, provider, started_at) VALUES "
+        "('-Nabc0000000000000A1', 1, 'iotec', now()); "
+        "UPDATE payout_send_attempts SET outcome = 'deferred', finished_at = now(), "
+        "deferred_for = 'wallet_short' WHERE payout_id = '-Nabc0000000000000A1'; COMMIT",
+        "refusing to drop why payout sends were deferred",
     ),
     "0222_identity_recovery_requests": (
         "INSERT INTO identity_clients (id, phone, status, created_at) VALUES "

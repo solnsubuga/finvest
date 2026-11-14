@@ -8,6 +8,7 @@ from app.modules.payments.domain.deposits import Network
 from app.modules.payments.domain.outcomes import (
     Accepted,
     Confirmed,
+    DeferReason,
     Deferred,
     NotFound,
     Pending,
@@ -183,3 +184,12 @@ async def test_the_sandbox_has_no_record_of_what_it_did_not_hand_out() -> None:
             await sandbox.disbursement_status(request_id=request_id, provider_reference=reference)
             == NotFound()
         )
+
+
+def test_a_send_deferred_for_our_wallet_says_so_and_stays_sendable() -> None:
+    step = after_send(Deferred(reason=DeferReason.WALLET_SHORT))
+    assert step.outcome is OUT.DEFERRED
+    assert step.deferred_for == "wallet_short"
+    assert step.failure_code is None
+    assert machine.may_send(machine.apply(S.QUEUED, step.event).status)
+    assert after_send(Deferred()).deferred_for is None

@@ -7332,7 +7332,7 @@
       },
       "HeldUpPayoutOut": {
         "additionalProperties": false,
-        "description": "A queued payout first tried two hours or more ago, and taken by nothing since.",
+        "description": "A queued payout first tried two hours or more ago, and taken by nothing since, or one\nwaiting on Finvest's own wallet.",
         "properties": {
           "amount": {
             "$ref": "#/components/schemas/MoneyView"
@@ -7374,6 +7374,18 @@
           "tries": {
             "title": "Tries",
             "type": "integer"
+          },
+          "waiting_for": {
+            "anyOf": [
+              {
+                "const": "wallet_short",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Waiting For"
           }
         },
         "required": [
