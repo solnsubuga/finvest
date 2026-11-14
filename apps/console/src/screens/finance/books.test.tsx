@@ -103,10 +103,10 @@ describe("books", () => {
     expect(screen.getByText(/No Sage Accounting account codes are approved yet/)).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /^Download 11/ })).toBeDisabled();
     await user.selectOptions(picker, "xero");
-    expect(screen.getByText(/1 account has no Xero account yet: fees\.provider\.iotec/)).toBeInTheDocument();
+    expect(screen.getByText(/1 Finvest account has no Xero code yet: fees\.provider\.iotec/)).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: /^Download 11 .* for Xero$/ }));
     expect(await screen.findByRole("alert")).toHaveTextContent(
-      "This account has no account in the accounting system yet: fees.provider.iotec. An admin names them under Settings, Accounting system codes.",
+      "This Finvest account has no code in the accounting system yet: fees.provider.iotec. An admin adds codes under Settings, Accounting system codes.",
     );
     await user.selectOptions(picker, "csv");
     await user.click(screen.getByRole("button", { name: "Download 11 Nov 2026 to 12 Nov 2026" }));

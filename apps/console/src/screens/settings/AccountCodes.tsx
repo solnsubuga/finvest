@@ -277,10 +277,10 @@ function SystemPanel({ item, codes, canChange, editing, busy, error, refused, on
 function CodesTable({ item, codes, accounts, before }: { item: SystemMap; codes: readonly LedgerCode[]; accounts: Readonly<Record<string, string>>; before?: Readonly<Record<string, string>> }) {
   return (
     <div className="overflow-x-auto rounded-xl border border-border" tabIndex={0} role="region" aria-label={`${item.name} codes`}>
-      <table className="w-full min-w-[520px] border-collapse text-md">
+      <table className="w-full table-fixed border-collapse text-md break-words">
         <thead>
           <tr className="text-left text-xs text-muted">
-            <th scope="col" className="px-3 py-3 font-bold">
+            <th scope="col" className="w-1/2 px-3 py-3 font-bold">
               Finvest account
             </th>
             <th scope="col" className="px-3 py-3 font-bold">
@@ -437,10 +437,10 @@ function MapForm({
         {codes.length} have a code.
       </p>
       <div className="overflow-x-auto rounded-xl border border-border">
-        <table className="w-full min-w-[520px] border-collapse text-md">
+        <table className="w-full table-fixed border-collapse text-md break-words">
           <thead>
             <tr className="text-left text-xs text-muted">
-              <th scope="col" className="px-3 py-3 font-bold">
+              <th scope="col" className="w-1/2 px-3 py-3 font-bold">
                 Finvest account
               </th>
               <th scope="col" className="px-3 py-3 font-bold">

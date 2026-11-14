@@ -121,7 +121,7 @@ const MESSAGES: Record<BooksErrorCode, string> = {
   too_many_days: "Download at most 31 days in one file.",
   days_backwards: "The first day comes before the last.",
   month_in_future: "That month has not started yet.",
-  codes_not_mapped: "Some accounts in these days have no account in the accounting system yet. An admin names them under Settings, Accounting system codes.",
+  codes_not_mapped: "Some Finvest accounts in these days have no code in the accounting system yet. An admin adds codes under Settings, Accounting system codes.",
   currency_not_supported: "Accounting systems take the journal in shillings only. Download dollar journals as the Finvest CSV.",
   invalid: "Check the month and try again.",
   forbidden: "Your role cannot see the books.",
@@ -131,7 +131,7 @@ const MESSAGES: Record<BooksErrorCode, string> = {
 
 export function booksErrorMessage(error: unknown): string {
   if (error instanceof BooksError && error.code === "codes_not_mapped" && error.codes.length > 0) {
-    return `${error.codes.length === 1 ? "This account has" : "These accounts have"} no account in the accounting system yet: ${error.codes.join(", ")}. An admin names them under Settings, Accounting system codes.`;
+    return `${error.codes.length === 1 ? "This Finvest account has" : "These Finvest accounts have"} no code in the accounting system yet: ${error.codes.join(", ")}. An admin adds codes under Settings, Accounting system codes.`;
   }
   return MESSAGES[error instanceof BooksError ? error.code : "unavailable"];
 }
