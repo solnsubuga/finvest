@@ -252,7 +252,8 @@ function Waiting({
       {currencies.map((currency) => (
         <BooksTable key={currency} currency={currency} close={close} />
       ))}
-      <div className="flex flex-wrap gap-2">
+      {/* While a reason form is open, its own button acts, so the choices step aside. */}
+      <div className={cn("flex flex-wrap gap-2", choice ? "hidden" : null)}>
         {choices.map((decision) => (
           <Button key={decision} variant={choice === decision ? "primary" : "secondary"} aria-expanded={choice === decision} onClick={() => setChoice(choice === decision ? null : decision)}>
             {DECISIONS[decision].button}
@@ -281,7 +282,7 @@ function Waiting({
 function BooksTable({ currency, close }: { currency: Currency; close: MonthClose }) {
   const lines = close.books.filter((line) => line.currency === currency);
   return (
-    <div className="overflow-x-auto">
+    <div className="overflow-x-auto" tabIndex={0} role="region" aria-label={`Books in ${currency}, as proposed`}>
       <table className="w-full min-w-[520px] border-collapse text-sm">
         <caption className="pb-1.5 text-left text-xs font-bold tracking-[0.6px] text-muted uppercase">Books in {currency}, as proposed</caption>
         <thead>
