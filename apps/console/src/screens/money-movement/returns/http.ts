@@ -1,7 +1,56 @@
-/** Payouts that came back, over `/staff/payout-returns` and `/staff/payouts/{id}/returns`. */
+/**
+ * Payouts that came back, over `/staff/payout-returns`, `/staff/payouts/{id}/returns` and the
+ * pickers `/staff/payout-returns/returnable` and `/staff/payouts/{id}/return-lines`.
+ */
 
 import { ApiError, type Http } from "@/api/http.ts";
-import { ReturnsError, type PayoutReturn, type ReturnsApi, type ReturnsErrorCode } from "./api.ts";
+import {
+  ReturnsError,
+  type Amount,
+  type PayoutReturn,
+  type ReturnablePayout,
+  type ReturnLine,
+  type ReturnsApi,
+  type ReturnsErrorCode,
+} from "./api.ts";
+
+interface ReturnableJson {
+  id: string;
+  client_id: string;
+  kind: ReturnablePayout["kind"];
+  amount: Amount;
+  paid_at: string;
+  bank_name: string | null;
+  network: string | null;
+  masked_account: string;
+  holder_name: string;
+}
+
+interface LineJson {
+  id: string;
+  value_date: string;
+  amount: Amount;
+  reference: string;
+  narrative: string;
+}
+
+export function toReturnable(json: ReturnableJson): ReturnablePayout {
+  return {
+    id: json.id,
+    clientId: json.client_id,
+    kind: json.kind,
+    amount: json.amount,
+    paidAt: json.paid_at,
+    bankName: json.bank_name,
+    network: json.network,
+    maskedAccount: json.masked_account,
+    holderName: json.holder_name,
+  };
+}
+
+function toLine(json: LineJson): ReturnLine {
+  return { id: json.id, valueDate: json.value_date, amount: json.amount, reference: json.reference, narrative: json.narrative };
+}
 
 interface ReturnJson {
   id: string;
@@ -71,6 +120,13 @@ export function createHttpReturnsApi(http: Http): ReturnsApi {
 
   return {
     listWaiting: () => call(async () => (await http.request<ReturnJson[]>("GET", "/staff/payout-returns")).map(toReturn)),
+    listReturnable: (amount) =>
+      call(async () => {
+        const query = amount ? `?amount_minor=${amount.minor}&currency=${amount.currency}` : "";
+        return (await http.request<ReturnableJson[]>("GET", `/staff/payout-returns/returnable${query}`)).map(toReturnable);
+      }),
+    listReturnLines: (payoutId) =>
+      call(async () => (await http.request<LineJson[]>("GET", `/staff/payouts/${encodeURIComponent(payoutId)}/return-lines`)).map(toLine)),
     propose: (key, payoutId, statementLineId, reason) =>
       call(async () => {
         await http.request(

@@ -1,4 +1,4 @@
-import { ReturnsError, type PayoutReturn, type ReturnsApi } from "./api.ts";
+import { ReturnsError, type PayoutReturn, type ReturnablePayout, type ReturnLine, type ReturnsApi } from "./api.ts";
 
 /**
  * Sample returns for `pnpm dev` and previews. Not real people or money, and not connected to
@@ -39,6 +39,53 @@ export function createStubReturnsApi(me: string, delay = 150, which: ReturnsStub
           },
         ]
       : [];
+  const ugx = (minor: number) => ({ minor, currency: "UGX" as const });
+  const day = (minutes: number) => ago(minutes, now).slice(0, 10);
+  const paid: ReturnablePayout[] =
+    which === "sample"
+      ? [
+          {
+            id: "-OdBankPay00000000P3",
+            clientId: "sample-client-amara",
+            kind: "bank",
+            amount: ugx(2_750_000),
+            paidAt: ago(2 * 24 * 60, now),
+            bankName: "Centenary Bank",
+            network: null,
+            maskedAccount: "•••• 4417",
+            holderName: "Amara Nakato",
+          },
+          {
+            id: "-OdMobPay000000000P4",
+            clientId: "sample-client-david",
+            kind: "mobile_money",
+            amount: ugx(480_000),
+            paidAt: ago(26 * 60, now),
+            bankName: null,
+            network: "airtel",
+            maskedAccount: "•••• 3381",
+            holderName: "David Mugisha",
+          },
+          {
+            id: "-OdBankPay00000000P5",
+            clientId: "sample-client-peter",
+            kind: "bank",
+            amount: ugx(2_750_000),
+            paidAt: ago(6 * 24 * 60, now),
+            bankName: "Stanbic Bank",
+            network: null,
+            maskedAccount: "•••• 0912",
+            holderName: "Peter Okello",
+          },
+        ]
+      : [];
+  const lines: Record<string, ReturnLine[]> = {
+    "-OdBankPay00000000P3": [
+      { id: "-OdTrustLine00000052", valueDate: day(60), amount: ugx(2_750_000), reference: "RTN 0413 FINVEST -OdBankPay00000000P3", narrative: "Returned: account closed" },
+      { id: "-OdTrustLine00000053", valueDate: day(30), amount: ugx(2_750_000), reference: "TRF 77120", narrative: "Incoming transfer" },
+    ],
+    "-OdMobPay000000000P4": [{ id: "-OdIotecLine00000061", valueDate: day(90), amount: ugx(480_000), reference: "REV 99231", narrative: "Airtel reversal" }],
+  };
   let made = 2;
   const wait = <T>(value: () => T): Promise<T> =>
     new Promise((resolve, reject) =>
@@ -61,6 +108,18 @@ export function createStubReturnsApi(me: string, delay = 150, which: ReturnsStub
   };
   return {
     listWaiting: () => wait(() => items.filter((each) => each.status === "proposed")),
+    listReturnable: (amount) =>
+      wait(() =>
+        paid.filter(
+          (each) =>
+            (!amount || (each.amount.minor === amount.minor && each.amount.currency === amount.currency)) &&
+            !items.some((one) => one.payoutId === each.id && (one.status === "proposed" || one.status === "approved")),
+        ),
+      ),
+    listReturnLines: (payoutId) =>
+      wait(() =>
+        (lines[payoutId] ?? []).filter((line) => !items.some((one) => one.statementLineId === line.id && (one.status === "proposed" || one.status === "approved"))),
+      ),
     propose: (_key, payoutId, statementLineId, reason) =>
       wait(() => {
         if (items.some((each) => each.payoutId === payoutId && each.status !== "declined" && each.status !== "withdrawn")) refuse("return_already_recorded");
@@ -70,7 +129,7 @@ export function createStubReturnsApi(me: string, delay = 150, which: ReturnsStub
         items.push({
           id: `-OdReturn000000000${String(made).padStart(2, "0")}`,
           payoutId,
-          clientId: "-OdClient00000000029",
+          clientId: paid.find((each) => each.id === payoutId)?.clientId ?? "-OdClient00000000029",
           statementLineId,
           reason,
           status: "proposed",
