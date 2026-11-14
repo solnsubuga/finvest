@@ -28,9 +28,11 @@ export function upcomingWords(item: Upcoming): { title: string; detail: string; 
             ? "Pays out to your account"
             : item.atMaturity === "pay_interest"
               ? "Pays the interest, keeps the rest invested"
-              : "Rolls over and keeps earning",
-        // Only the interest is paid out, so say the amount shown is the whole value.
-        ...(item.atMaturity === "pay_interest" ? { amountNote: "Total, interest included" } : {}),
+              : item.atMaturity === "interest_to_goal"
+                ? "Saves the interest to your goal, keeps the rest invested"
+                : "Rolls over and keeps earning",
+        // Only the interest leaves, so say the amount shown is the whole value.
+        ...(item.atMaturity === "pay_interest" || item.atMaturity === "interest_to_goal" ? { amountNote: "Total, interest included" } : {}),
       };
     case "goal_saving":
       return {

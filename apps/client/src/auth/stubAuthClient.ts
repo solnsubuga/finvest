@@ -252,6 +252,7 @@ export function createStubAuthClient(options: StubOptions = {}): AuthClient {
     return {
       phone,
       displayName: account?.displayName ?? null,
+      firstName: account?.displayName?.split(" ")[0] ?? null,
       restricted,
       email: account?.email ?? null,
       emailVerified: account?.emailVerified ?? false,
@@ -333,6 +334,7 @@ export function createStubAuthClient(options: StubOptions = {}): AuthClient {
         ? {
             phone: signedIn,
             displayName: account.displayName,
+            firstName: account.displayName?.split(" ")[0] ?? null,
             restricted: signedInRestricted,
             email: account.email,
             emailVerified: account.emailVerified,

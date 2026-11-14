@@ -27,12 +27,13 @@ import {
   photoName,
 } from "@/identity/types";
 import { useIdentityCheck } from "@/identity/useIdentityCheck";
+import { firstGivenName } from "@/identity/names";
 import { colors, fontSizes } from "@/theme";
 
 const HOME = "/";
 
 function firstName(check: IdentityCheck): string | null {
-  return check.details?.givenNames.split(/\s+/)[0] ?? null;
+  return check.details ? firstGivenName(check.details.givenNames) : null;
 }
 
 /** What `missing` names, in words, for a check that could not be handed in. */

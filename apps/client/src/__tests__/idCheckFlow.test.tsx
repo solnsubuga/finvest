@@ -89,7 +89,7 @@ async function handIn(documentNumber: string) {
 
   await fireEvent.changeText(await screen.findByTestId("details-surname"), "OKELLO");
   expect(screen.getByText("4 of 5")).toBeTruthy();
-  await fireEvent.changeText(screen.getByTestId("details-given-names"), "Peter");
+  await fireEvent.changeText(screen.getByTestId("details-given-names"), "PETER JOHN");
   await fireEvent.changeText(screen.getByTestId("details-number"), documentNumber);
   await fireEvent.changeText(screen.getByTestId("details-born"), "14/11/2008");
   await fireEvent.changeText(screen.getByTestId("details-expires"), "18/09/2030");

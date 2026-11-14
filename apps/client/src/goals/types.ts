@@ -57,6 +57,12 @@ export type SavingStatus = "awaiting_payment" | "active" | "matured" | "cancelle
 export type Saving = {
   investmentId: string;
   productName: string;
+  /**
+   * `interest`: started from another investment's interest when it matured, with nothing to
+   * pay. `fromProductName` names that investment's product.
+   */
+  source?: "saving" | "interest";
+  fromProductName?: string | null;
   status: SavingStatus;
   amount: Money;
   value: Money;
@@ -88,6 +94,19 @@ export type Goal = {
   lockedUntil: string | null;
   /** ISO 8601. When the client asked to unlock, which brings `lockedUntil` to seven days later. */
   unlockRequestedAt: string | null;
+  /** Interest other investments will save to this goal when they mature, soonest first. */
+  interestComing?: InterestComing[];
+};
+
+/** One investment whose interest is saved to the goal when it matures. */
+export type InterestComing = {
+  investmentId: string;
+  /** "91 Day Treasury Bill" */
+  productName: string;
+  /** YYYY-MM-DD, the maturity date. */
+  on: string;
+  /** After tax, at today's figures. */
+  amount: Money;
 };
 
 export type GoalDetails = {

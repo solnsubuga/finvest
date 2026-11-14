@@ -347,6 +347,26 @@ async def test_staff_approve_once_with_a_reason_and_the_client_gets_the_number(a
     assert (missing.status_code, missing.json()["error"]["code"]) == (404, "not_found")
 
 
+async def test_the_session_names_the_client_once_approved_in_proper_case(api: Api) -> None:
+    client, check_id = await hand_in(api)
+    waiting = (await api.http.get("/client/session", headers=client)).json()
+    assert (waiting["display_name"], waiting["first_name"]) == (None, None)
+
+    staff = await api.staff("operations")
+    queue = (await api.http.get("/staff/identity-checks", headers=staff)).json()["items"]
+    assert [item["name"] for item in queue if item["id"] == check_id] == ["Amara Nakato"]
+    approved = await api.http.post(
+        f"/staff/identity-checks/{check_id}/approve", json={"reason": "Photos match"}, headers=staff
+    )
+    assert approved.status_code == 200
+
+    named = (await api.http.get("/client/session", headers=client)).json()
+    assert (named["display_name"], named["first_name"]) == ("Amara Nakato", "Amara")
+    # The check keeps the name exactly as printed on the ID.
+    mine = (await api.http.get("/client/identity-check", headers=client)).json()["check"]
+    assert (mine["details"]["surname"], mine["details"]["given_names"]) == ("NAKATO", "Amara")
+
+
 async def test_staff_ask_for_a_photo_escalate_and_reject(api: Api) -> None:
     client, check_id = await hand_in(api)
     staff = await api.staff()

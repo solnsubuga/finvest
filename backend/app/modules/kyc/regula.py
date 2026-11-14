@@ -1,7 +1,7 @@
 """The Regula adapter for identity checks. See docs/identity-checks.md#regula.
 
-Regula runs on Finvest's own servers, so the ID photos and the selfie never leave them. Two
-services answer a submission, each in one request:
+Regula runs in Regula's cloud (the owner's choice), or on Finvest's own servers by changing two
+addresses. Two services answer a submission, each in one request:
 
 - Document Reader (`POST /api/process`, scenario `FullAuth`) reads the ID from the photos of
   its sides and checks its security features, which is how a forged or altered ID is caught.
@@ -286,6 +286,22 @@ def _plain(number: str) -> str:
 
 def _b64(data: bytes) -> str:
     return base64.b64encode(data).decode("ascii")
+
+
+# Regula's public demo services. Real clients' ID photos never go there.
+DEMO_HOSTS = frozenset(
+    {
+        "api.regulaforensics.com",
+        "nightly-api.regulaforensics.com",
+        "faceapi.regulaforensics.com",
+        "nightly-faceapi.regulaforensics.com",
+    }
+)
+
+
+def is_demo(url: str) -> bool:
+    """Whether an address is one of Regula's public demo services."""
+    return (urlsplit(url).hostname or "").lower() in DEMO_HOSTS
 
 
 def private_or_https(url: str) -> bool:

@@ -33,7 +33,7 @@ export function UnlockScreen() {
   const [biometric, setBiometric] = useState(false);
   const asked = useRef(false);
 
-  const firstName = session?.displayName?.split(/\s+/)[0];
+  const firstName = session?.firstName;
 
   const check = async (tried: string) => {
     setBusy(true);

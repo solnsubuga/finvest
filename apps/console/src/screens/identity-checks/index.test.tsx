@@ -34,7 +34,8 @@ describe("identity checks screen", () => {
     ]);
     expect(within(review).getByText("Selfie could not be confirmed")).toBeInTheDocument();
     expect(within(review).getByText("Face match 62%")).toBeInTheDocument();
-    expect(within(review).getByText("MUGISHA David")).toBeInTheDocument();
+    expect(within(review).getByRole("heading", { name: "David Mugisha" })).toBeInTheDocument();
+    expect(within(review).getByText("MUGISHA")).toBeInTheDocument();
     expect(within(review).getByText("14 Mar 1990")).toBeInTheDocument();
   });
 
@@ -64,7 +65,7 @@ describe("identity checks screen", () => {
     renderScreen(api);
     const review = await openCheck("a client");
     expect(within(review).getByRole("heading", { name: "Details not confirmed yet" })).toBeInTheDocument();
-    expect(within(review).getAllByText("Not given yet")).toHaveLength(4);
+    expect(within(review).getAllByText("Not given yet")).toHaveLength(5);
     expect(within(review).queryByRole("button", { name: "Show" })).toBeNull();
     expect(api.showDocumentNumber).not.toHaveBeenCalled();
   });
