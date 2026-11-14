@@ -1,11 +1,12 @@
 """A downgrade must never delete the books, the issued numbers, the audit trail, the job history,
-the receipts that stop a command running twice, the identity records, the payout destinations
-and their two-person checks, the withdrawal limits, the payouts, their send attempts, their
-resolutions and their bank batches, the migration checks, the imported statements, the day
-closes and their recorded matches, the pot transfers, the help chat, the complaints register,
-the goals, the email delivery records, the unclaimed accounts, the complaint outcomes, the
-suppression lifts, the client locks, the announcements, the team changes, Finvest's own money in
-the buffer, the payments of tax to URA or the payments moved to the right client."""
+the receipts that stop a command running twice, the identity records, the payout destinations,
+their two-person checks and network name lookups, the withdrawal limits, the payouts, their send
+attempts, their resolutions and their bank batches, the migration checks, the imported
+statements, the day closes and their recorded matches, the pot transfers, the help chat, the
+complaints register, the goals, the email delivery records, the unclaimed accounts, the
+complaint outcomes, the suppression lifts, the client locks, the announcements, the team
+changes, Finvest's own money in the buffer, the payments of tax to URA or the payments moved to
+the right client."""
 
 import os
 from collections.abc import Iterator
@@ -305,6 +306,16 @@ ROWS = {
         "'-Nabc0000000000000B1', 'mobile_money', 'mtn', '256772000000', 'Test', "
         "'awaiting_code', now(), now())",
         "refusing to drop payout destinations",
+    ),
+    "0190_payout_name_lookups": (
+        "INSERT INTO payout_destinations (id, client_id, kind, network, account_number, "
+        "holder_name, status, created_at, updated_at) VALUES ('-Nabc0000000000000A1', "
+        "'-Nabc0000000000000B1', 'mobile_money', 'mtn', '256772000000', 'Test', "
+        "'awaiting_proof', now(), now()); "
+        "INSERT INTO payout_name_lookups (id, destination_id, number, status, created_at, "
+        "updated_at) VALUES ('-Nabc0000000000000C1', '-Nabc0000000000000A1', 1, 'queued', "
+        "now(), now())",
+        "refusing to drop the network name lookups of payout destinations",
     ),
     "0031_payouts": (
         "INSERT INTO withdrawal_limits (id, effective_from, currency, mobile_money_per_payout, "

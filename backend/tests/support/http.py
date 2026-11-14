@@ -87,6 +87,7 @@ async def running_api(
     *,
     storage: FileStorage | None = None,
     iotec_wallet: WalletBalances | None = None,
+    payout_names: bool = True,
 ) -> AsyncIterator[Api]:
     settings = test_database.settings("finvest_app").model_copy(
         update={
@@ -95,7 +96,15 @@ async def running_api(
         }
     )
     clock = FakeClock()
-    app = create_app(settings, database, clock, HASHER, storage=storage, iotec_wallet=iotec_wallet)
+    app = create_app(
+        settings,
+        database,
+        clock,
+        HASHER,
+        storage=storage,
+        iotec_wallet=iotec_wallet,
+        payout_names=payout_names,
+    )
     transport = httpx.ASGITransport(app=app, raise_app_exceptions=False, client=("127.0.0.1", 1))
     async with httpx.AsyncClient(transport=transport, base_url="https://api") as http:
         yield Api(http, app.state.identity, clock, database)

@@ -74,6 +74,7 @@ from app.modules.payouts import (
     staff_payouts_api,
     staff_returns_api,
 )
+from app.modules.payouts.wiring import PayoutNameSettings
 from app.modules.reconciliation import api as reconciliation_api
 from app.modules.reconciliation import transfers_api as pot_transfers_api
 from app.modules.reconciliation.domain.wallet import WalletBalances
@@ -99,6 +100,7 @@ def create_app(
     identity_provider: IdentityProvider | None = None,
     email_hash: EmailHashSettings | None = None,
     iotec_wallet: WalletBalances | None = None,
+    payout_names: bool | None = None,
 ) -> FastAPI:
     owned = database is None
     database = database or Database(settings)
@@ -137,6 +139,11 @@ def create_app(
     app.state.email_hash_key = email_hash_key
     app.state.storage = storage
     app.state.iotec_wallet = iotec_wallet
+    # The worker reads payout names only when a provider is set. Without one the API asks for
+    # none, so a number does not use up its lookups on requests nobody would send.
+    if payout_names is None:
+        payout_names = PayoutNameSettings().payout_name_provider != "none"
+    app.state.payout_names_on = payout_names
     hasher = hasher or PasswordHasher(
         memory_kib=settings.password_memory_kib, time_cost=settings.password_time_cost
     )

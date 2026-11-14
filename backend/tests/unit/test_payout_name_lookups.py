@@ -88,6 +88,8 @@ def test_the_client_sees_where_the_lookup_stands() -> None:
     assert name_check(LookupStatus.UNANSWERED, fresh, 1, NOW) is NameCheck.NOT_ANSWERED
     assert name_check(LookupStatus.UNANSWERED, fresh, MAX_LOOKUPS, NOW) is NameCheck.LIMIT_REACHED
     assert name_check(LookupStatus.FOUND, fresh, 1, NOW) is NameCheck.WAITING_FOR_ID
+    # Asked again once the ID was approved: the comparison is under way.
+    assert name_check(LookupStatus.FOUND, fresh, 1, NOW, deciding=True) is NameCheck.CHECKING
 
 
 # --- A fake ioTec -------------------------------------------------------------------------
