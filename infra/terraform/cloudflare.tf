@@ -47,18 +47,37 @@ resource "cloudflare_origin_ca_certificate" "this" {
 
 # Back office behind Cloudflare Access, on top of the console's own password and passkey sign in.
 
+# Staff the console has invited. The worker adds an email when a team invite or reactivation is
+# approved and removes it on deactivation, so Terraform creates the list but never touches its
+# entries. ADMIN_ACCESS_EMAILS stays as the break-glass list that Terraform owns.
+resource "cloudflare_zero_trust_list" "staff_emails" {
+  count = length(var.admin_access_emails) > 0 ? 1 : 0
+
+  account_id  = data.cloudflare_zone.this.account.id
+  name        = "${local.name} staff invited in the console"
+  description = "Managed by the Finvest worker from console Team changes. Do not edit by hand."
+  type        = "EMAIL"
+
+  lifecycle {
+    ignore_changes = [items]
+  }
+}
+
+locals {
+  # Who Access lets in: the break-glass emails, and anyone on the console's list.
+  staff_include = concat(
+    [for e in var.admin_access_emails : { email = { email = e } }],
+    [for l in cloudflare_zero_trust_list.staff_emails : { email_list = { id = l.id } }],
+  )
+}
+
 resource "cloudflare_zero_trust_access_policy" "admin_staff" {
   count = length(var.admin_access_emails) > 0 ? 1 : 0
 
   account_id = data.cloudflare_zone.this.account.id
   name       = "${local.name} staff"
   decision   = "allow"
-
-  include = [for e in var.admin_access_emails : {
-    email = {
-      email = e
-    }
-  }]
+  include    = local.staff_include
 }
 
 # Office networks for the back office (ADMIN_OFFICE_NETWORKS). When set, Access lets a staff
@@ -80,11 +99,7 @@ resource "cloudflare_zero_trust_access_policy" "admin_office" {
   name       = "${local.name} staff in the office"
   decision   = "allow"
 
-  include = [for e in var.admin_access_emails : {
-    email = {
-      email = e
-    }
-  }]
+  include = local.staff_include
   require = [{
     ip_list = {
       id = cloudflare_zero_trust_list.office_networks[0].id
