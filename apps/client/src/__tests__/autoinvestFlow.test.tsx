@@ -97,8 +97,8 @@ it("after a lost answer, fixes the plan and sends the same one again", async () 
   // Nothing on the form can change now.
   expect(screen.getByTestId("plan-amount").props.editable).toBe(false);
   await fireEvent.press(screen.getByTestId("frequency-weekly"));
-  expect(screen.getByTestId("frequency-monthly").props.accessibilityState.checked).toBe(true);
-  expect(screen.getByTestId("day-5").props.accessibilityState.disabled).toBe(true);
+  expect(screen.getByTestId("frequency-monthly")).toBeChecked();
+  expect(screen.getByTestId("day-5")).toBeDisabled();
 
   await fireEvent.press(screen.getByTestId("plan-start"));
   expect(await screen.findByLabelText("Each time: UGX 300,000")).toBeTruthy();
@@ -119,7 +119,7 @@ it("leaves the form open after a refusal, because nothing was saved", async () =
   await screen.findByText(/once your identity check is approved/);
   expect(screen.queryByText(/Your plan may already have reached us/)).toBeNull();
   await fireEvent.press(screen.getByTestId("frequency-weekly"));
-  expect(screen.getByTestId("frequency-weekly").props.accessibilityState.checked).toBe(true);
+  expect(screen.getByTestId("frequency-weekly")).toBeChecked();
 });
 
 it("shows insights after tax for the demo account", async () => {

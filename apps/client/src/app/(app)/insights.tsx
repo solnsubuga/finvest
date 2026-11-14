@@ -306,7 +306,7 @@ function CurrencySwitch({
           <Pressable
             key={currency}
             accessibilityRole="radio"
-            accessibilityState={{ checked: on }}
+            aria-checked={on}
             accessibilityLabel={CURRENCY_NAMES[currency]}
             onPress={() => onChoose(currency)}
             style={[styles.switchOption, on && styles.switchOn]}

@@ -76,7 +76,7 @@ export function Timeline({ steps }: { steps: Step[] }) {
               {step.state === "done" ? (
                 <Icon name="check" size={14} color={colors.ink} strokeWidth={3} />
               ) : step.state === "now" ? (
-                <ActivityIndicator size="small" color={colors.white} style={styles.spinner} />
+                <ActivityIndicator size="small" color={colors.white} style={styles.spinner} aria-hidden />
               ) : null}
             </View>
             <Txt
@@ -102,8 +102,8 @@ export function Timeline({ steps }: { steps: Step[] }) {
 /** Shown while the first answer is on its way. */
 export function Loading({ label }: { label: string }) {
   return (
-    <View style={styles.loading} accessibilityLabel={label} accessibilityRole="progressbar">
-      <ActivityIndicator color={colors.black} />
+    <View style={styles.loading}>
+      <ActivityIndicator accessibilityLabel={label} color={colors.black} />
     </View>
   );
 }

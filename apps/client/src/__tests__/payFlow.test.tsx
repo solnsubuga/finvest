@@ -87,8 +87,8 @@ describe("paying for an investment by mobile money", () => {
     expect(screen.getByText("UGX 1,000,000")).toBeTruthy();
     expect(screen.getByText("+256 772 123 456")).toBeTruthy();
     expect(screen.queryByTestId("phone-input")).toBeNull();
-    expect(screen.getByTestId("network-mtn").props.accessibilityState.checked).toBe(true);
-    expect(screen.getByTestId("network-airtel").props.accessibilityState.checked).toBe(false);
+    expect(screen.getByTestId("network-mtn")).toBeChecked();
+    expect(screen.getByTestId("network-airtel")).not.toBeChecked();
   });
 
   it("goes from the prompt to the receipt when the payment is approved", async () => {
@@ -123,8 +123,8 @@ describe("paying for an investment by mobile money", () => {
     // The first request may have been saved, so the network can no longer be changed.
     expect(screen.getByText(/Your first request may already be with MTN/)).toBeTruthy();
     await fireEvent.press(screen.getByTestId("network-airtel"));
-    expect(screen.getByTestId("network-mtn").props.accessibilityState.checked).toBe(true);
-    expect(screen.getByTestId("network-airtel").props.accessibilityState.disabled).toBe(true);
+    expect(screen.getByTestId("network-mtn")).toBeChecked();
+    expect(screen.getByTestId("network-airtel")).toBeDisabled();
 
     await fireEvent.press(screen.getByTestId("pay-submit"));
     await screen.findByText("Approve on your phone");
@@ -140,7 +140,7 @@ describe("paying for an investment by mobile money", () => {
     await fireEvent.press(screen.getByTestId("pay-submit"));
     await screen.findByText(/A payment for this is already under way/);
     await fireEvent.press(screen.getByTestId("network-airtel"));
-    expect(screen.getByTestId("network-airtel").props.accessibilityState.checked).toBe(true);
+    expect(screen.getByTestId("network-airtel")).toBeChecked();
   });
 
   it("takes the client to the payment already under way instead of paying again", async () => {

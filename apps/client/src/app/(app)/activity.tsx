@@ -86,7 +86,7 @@ export default function Activity() {
                   <Pressable
                     key={option.value}
                     accessibilityRole="tab"
-                    accessibilityState={{ selected: active }}
+                    aria-selected={active}
                     onPress={() => setFilter(option.value)}
                     style={[styles.chip, active && styles.chipActive]}
                     testID={`filter-${option.value}`}
@@ -193,6 +193,9 @@ const styles = StyleSheet.create({
     backgroundColor: colors.surface,
     paddingVertical: 8,
     paddingHorizontal: 14,
+    // A 44 point touch target, as every control in the app has.
+    minHeight: 44,
+    justifyContent: "center",
   },
   chipActive: { backgroundColor: colors.black, borderColor: colors.black },
   row: { flexDirection: "row", alignItems: "center", gap: 12, padding: 16, minHeight: 68 },

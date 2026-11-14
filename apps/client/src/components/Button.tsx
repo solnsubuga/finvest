@@ -60,7 +60,10 @@ export function Button({
   return (
     <Pressable
       accessibilityRole="button"
-      accessibilityState={{ disabled: inactive, busy: loading }}
+      // While it is busy the spinner replaces the words, so the name is given here.
+      accessibilityLabel={label}
+      aria-disabled={inactive}
+      aria-busy={loading}
       disabled={inactive}
       onPress={onPress}
       testID={testID}
@@ -72,7 +75,7 @@ export function Button({
       ]}
     >
       {loading ? (
-        <ActivityIndicator color={fill.text} />
+        <ActivityIndicator color={fill.text} aria-hidden />
       ) : (
         <Txt size={fontSizes.lg} weight="bold" color={fill.text}>
           {label}

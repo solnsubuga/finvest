@@ -198,7 +198,7 @@ function History({ book, today }: { book: Book; today: string }) {
       <h2 id="rate-history" className="m-0 text-[17px] font-extrabold">
         Rate history
       </h2>
-      <div className="overflow-x-auto rounded-xl border border-border bg-surface">
+      <div className="overflow-x-auto rounded-xl border border-border bg-surface" tabIndex={0} role="region" aria-label="Rate history">
         <table className="w-full min-w-[620px] border-collapse text-md">
           <caption className="sr-only">Rate history</caption>
           <thead>

@@ -90,7 +90,7 @@ export function Cards({ overview }: { overview: Overview }) {
 /** Finvest 1.0 against the trial import, line by line. */
 export function ChecksTable({ lines }: { lines: readonly TotalLine[] }) {
   return (
-    <div className="overflow-x-auto rounded-xl border border-border bg-surface">
+    <div className="overflow-x-auto rounded-xl border border-border bg-surface" tabIndex={0} role="region" aria-label="Finvest 1.0 totals compared with the trial import">
       <table className="w-full min-w-[600px] border-collapse text-md">
         <caption className="sr-only">Finvest 1.0 totals compared with the trial import</caption>
         <thead>

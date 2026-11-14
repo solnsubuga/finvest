@@ -123,7 +123,8 @@ export default function NewGroup() {
             <Pressable
               key={option}
               accessibilityRole="radio"
-              accessibilityState={{ checked: on, disabled: locked }}
+              aria-checked={on}
+              aria-disabled={locked}
               accessibilityLabel={copy.name}
               disabled={locked}
               onPress={() => choose(option)}
@@ -177,7 +178,8 @@ export default function NewGroup() {
                 <Pressable
                   key={String(option)}
                   accessibilityRole="radio"
-                  accessibilityState={{ checked: on, disabled: locked }}
+                  aria-checked={on}
+                  aria-disabled={locked}
                   disabled={locked}
                   onPress={() => setHorizon(option)}
                   style={[styles.chip, on && styles.chipOn]}

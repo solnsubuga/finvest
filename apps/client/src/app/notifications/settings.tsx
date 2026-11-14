@@ -116,10 +116,8 @@ export default function NotificationSettings() {
                             key={channel}
                             accessibilityRole="switch"
                             accessibilityLabel={`${title} by ${channelNames[channel]}`}
-                            accessibilityState={{
-                              checked: on,
-                              busy: saving === `${category}-${channel}`,
-                            }}
+                            aria-checked={on}
+                            aria-busy={saving === `${category}-${channel}`}
                             onPress={() => void toggle(row, channel)}
                             style={({ pressed }) => [
                               styles.chip,

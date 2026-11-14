@@ -124,7 +124,8 @@ export default function Review() {
                   <Pressable
                     key={choice}
                     accessibilityRole="radio"
-                    accessibilityState={{ checked: selected, disabled: locked }}
+                    aria-checked={selected}
+                    aria-disabled={locked}
                     disabled={locked}
                     accessibilityLabel={atMaturityLabel[choice]}
                     onPress={() => setAtMaturity(choice)}

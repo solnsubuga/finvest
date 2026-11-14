@@ -1,5 +1,5 @@
 import { ComponentRef, ReactNode, Ref, useCallback, useEffect, useRef, useState } from "react";
-import { ActivityIndicator, Platform, Pressable, StyleSheet, TextInput, View } from "react-native";
+import { ActivityIndicator, Pressable, StyleSheet, TextInput, View } from "react-native";
 
 import { formatLongDay, kampalaToday } from "@/autoinvest/schedule";
 import { AppPage } from "@/components/AppPage";
@@ -32,7 +32,6 @@ import { useIsWide } from "@/theme/useIsWide";
 /** Error text on the black card. The light-background red is too dark to read there. */
 const ON_BLACK_DANGER = "#FF9D94";
 // The box's own border shows errors. The browser's outline would sit inside it.
-const webNoOutline = Platform.OS === "web" ? ({ outlineStyle: "none" } as object) : null;
 
 type ListState =
   | { status: "loading" }
@@ -347,7 +346,7 @@ function StatementProgress({
           </Txt>
         </View>
         <View style={styles.spinnerRow}>
-          <ActivityIndicator color={colors.lime} />
+          <ActivityIndicator color={colors.lime} aria-hidden />
           <Txt size={fontSizes.lg} weight="bold" color={colors.white}>
             {request.step === "slow" ? "Taking longer than usual" : "Adding up your investments"}
           </Txt>
@@ -603,14 +602,14 @@ function DocumentRow({ document, first }: { document: DocumentItem; first: boole
           testID={`download-${document.id}`}
         >
           {state === "busy" ? (
-            <ActivityIndicator color={colors.ink} />
+            <ActivityIndicator color={colors.ink} accessibilityLabel="Downloading" />
           ) : (
             <Icon name={state === "done" ? "check" : "download"} size={20} />
           )}
         </Pressable>
       ) : document.status === "pending" ? (
         <View style={styles.roundButton}>
-          <ActivityIndicator color={colors.ink} />
+          <ActivityIndicator color={colors.ink} accessibilityLabel="Being made" />
         </View>
       ) : null}
     </View>
@@ -632,7 +631,7 @@ function Chip({
     <Pressable
       onPress={onPress}
       accessibilityRole="radio"
-      accessibilityState={{ selected }}
+      aria-checked={selected}
       style={[styles.chip, selected && styles.chipSelected]}
       testID={testID}
     >
@@ -668,7 +667,7 @@ function DateInput({ label, value, invalid, onChangeText, testID, ref }: DateInp
           placeholderTextColor={colors.onBlackMuted}
           autoCorrect={false}
           autoCapitalize="none"
-          style={[styles.dateText, webNoOutline]}
+          style={styles.dateText}
           testID={testID}
         />
         <Icon name="calendar" size={18} color={colors.onBlackMuted} />
@@ -685,6 +684,9 @@ const styles = StyleSheet.create({
   chip: {
     paddingHorizontal: 14,
     paddingVertical: 9,
+    // A 44 point touch target, as every control in the app has.
+    minHeight: 44,
+    justifyContent: "center",
     borderRadius: radii.pill,
     backgroundColor: colors.onBlackSurface,
     borderWidth: 1,
@@ -711,6 +713,8 @@ const styles = StyleSheet.create({
     fontFamily: fontFor("bold"),
     fontSize: 15,
     paddingVertical: 0,
+    // The whole box takes the tap, not only the line of text.
+    alignSelf: "stretch",
   },
   spinnerRow: { flexDirection: "row", alignItems: "center", gap: 10 },
   readyBadge: {

@@ -102,8 +102,8 @@ export default function VerifyEmail() {
     >
       <Stack.Screen options={{ title: "Prove your email address" }} />
       {state.status === "checking" ? (
-        <View style={{ marginTop: 80, gap: 16, alignItems: "flex-start" }} accessibilityLabel="Checking the link">
-          <ActivityIndicator color={colors.black} />
+        <View style={{ marginTop: 80, gap: 16, alignItems: "flex-start" }}>
+          <ActivityIndicator accessibilityLabel="Checking the link" color={colors.black} />
           <Txt color={colors.muted}>Checking your link…</Txt>
         </View>
       ) : null}

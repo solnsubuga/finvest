@@ -27,7 +27,6 @@ export function Sidebar({ activeName, session }: Props) {
           <Pressable
             key={destination.name}
             accessibilityRole="link"
-            accessibilityState={{ selected: active }}
             aria-current={active ? "page" : undefined}
             onPress={() => router.navigate(destination.href)}
             style={({ pressed, hovered }: { pressed: boolean; hovered?: boolean }) => [

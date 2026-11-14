@@ -62,7 +62,7 @@ export default function NewGoal() {
             <Pressable
               key={option}
               accessibilityRole="radio"
-              accessibilityState={{ checked: on }}
+              aria-checked={on}
               accessibilityLabel={`${copy.name}. ${copy.hint}`}
               onPress={() => choose(option)}
               style={[styles.tile, on && styles.tileOn]}

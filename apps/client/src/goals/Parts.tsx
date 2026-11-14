@@ -40,7 +40,9 @@ export function ProgressBar({ goal, onDark = false }: { goal: Goal; onDark?: boo
       style={[styles.track, { backgroundColor: onDark ? colors.onBlackDivider : colors.border }]}
       accessibilityRole="progressbar"
       accessibilityLabel={`${goal.progress.percent}% of the target`}
-      accessibilityValue={{ min: 0, max: 100, now: goal.progress.percent }}
+      aria-valuemin={0}
+      aria-valuemax={100}
+      aria-valuenow={goal.progress.percent}
     >
       <View
         style={[

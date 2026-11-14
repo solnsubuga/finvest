@@ -301,7 +301,7 @@ export function RoleMatrix({ roles }: { roles: readonly RolePermissions[] }) {
   const rows = permissionRows();
   const holds = new Map(roles.map((entry) => [entry.role, new Set(entry.permissions)]));
   return (
-    <div className="overflow-x-auto rounded-xl border border-border bg-surface">
+    <div className="overflow-x-auto rounded-xl border border-border bg-surface" tabIndex={0} role="region" aria-label="What each role can open and do">
       <table className="w-full min-w-[560px] border-collapse text-sm">
         <caption className="sr-only">What each role can open and do</caption>
         <thead>

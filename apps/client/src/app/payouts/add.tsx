@@ -116,7 +116,7 @@ export default function AddPayoutAccount() {
             <Pressable
               key={value}
               accessibilityRole="radio"
-              accessibilityState={{ checked: kind === value }}
+              aria-checked={kind === value}
               onPress={() => {
                 setKind(value);
                 setProblems({});
@@ -154,7 +154,7 @@ export default function AddPayoutAccount() {
                       <Pressable
                         key={bank.code}
                         accessibilityRole="radio"
-                        accessibilityState={{ checked: on }}
+                        aria-checked={on}
                         onPress={() => setBankCode(bank.code)}
                         style={[styles.bank, on && styles.bankOn]}
                         testID={`bank-${bank.code}`}
@@ -207,12 +207,21 @@ const styles = StyleSheet.create({
     padding: 4,
     gap: 4,
   },
-  segmentOption: { flex: 1, alignItems: "center", paddingVertical: 12, borderRadius: radii.lg - 4 },
+  segmentOption: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    minHeight: 44,
+    paddingVertical: 12,
+    borderRadius: radii.lg - 4,
+  },
   segmentOn: { backgroundColor: colors.black },
   banks: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
   bank: {
     paddingHorizontal: 14,
     paddingVertical: 10,
+    minHeight: 44,
+    justifyContent: "center",
     borderRadius: 20,
     borderWidth: 1,
     borderColor: colors.border,

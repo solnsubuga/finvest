@@ -147,7 +147,7 @@ function Card({ title, value, note }: { title: string; value: string; note: stri
 
 function GroupsTable({ groups, selected, onSelect }: { groups: readonly Group[]; selected: string | null; onSelect: (groupId: string) => void }) {
   return (
-    <div className="overflow-x-auto rounded-xl border border-border bg-surface">
+    <div className="overflow-x-auto rounded-xl border border-border bg-surface" tabIndex={0} role="region" aria-label="Group goals">
       <table className="w-full min-w-[640px] border-collapse text-md">
         <caption className="sr-only">Group goals</caption>
         <thead>

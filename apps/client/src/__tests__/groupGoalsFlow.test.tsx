@@ -237,8 +237,8 @@ describe("group goals", () => {
     await fireEvent.press(screen.getByTestId("group-create"));
     expect(await screen.findByText(LOST_CREATE)).toBeTruthy();
     expect(screen.getByTestId("group-name").props.editable).toBe(false);
-    expect(screen.getByTestId("group-category-wedding").props.accessibilityState).toMatchObject({ disabled: true });
-    expect(screen.getByTestId("group-horizon-24").props.accessibilityState).toMatchObject({ disabled: true });
+    expect(screen.getByTestId("group-category-wedding")).toBeDisabled();
+    expect(screen.getByTestId("group-horizon-24")).toBeDisabled();
 
     await fireEvent.press(screen.getByTestId("group-create"));
     expect(await screen.findByText("Members, 1 of 10")).toBeTruthy();
@@ -255,7 +255,7 @@ describe("group goals", () => {
     expect(await screen.findByText("Something here is not right. Check it and try again.")).toBeTruthy();
     expect(screen.queryByText(LOST_CREATE)).toBeNull();
     expect(screen.getByTestId("group-name").props.editable).toBe(true);
-    expect(screen.getByTestId("group-category-wedding").props.accessibilityState).toMatchObject({ disabled: false });
+    expect(screen.getByTestId("group-category-wedding")).not.toBeDisabled();
 
     await fireEvent.changeText(screen.getByTestId("group-name"), "Our wedding day");
     await fireEvent.press(screen.getByTestId("group-create"));

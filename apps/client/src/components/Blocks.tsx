@@ -41,7 +41,9 @@ export function StepProgress({ step, of }: { step: number; of: number }) {
       style={styles.progress}
       accessibilityRole="progressbar"
       accessibilityLabel={`Step ${step} of ${of}`}
-      accessibilityValue={{ min: 0, max: of, now: step }}
+      aria-valuemin={0}
+      aria-valuemax={of}
+      aria-valuenow={step}
     >
       <View style={styles.bars}>
         {Array.from({ length: of }, (_, index) => (

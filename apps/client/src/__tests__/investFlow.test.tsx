@@ -136,7 +136,7 @@ describe("investing", () => {
     await fireEvent.press(await screen.findByTestId("product-TREA-182"));
     await quoteFor("50000");
     expect(await screen.findByText("That is below the smallest amount for this product.")).toBeTruthy();
-    expect(screen.getByTestId("review").props.accessibilityState.disabled).toBe(true);
+    expect(screen.getByTestId("review")).toBeDisabled();
   });
 
   it("reviews, confirms once, and pays for what was confirmed", async () => {
@@ -237,8 +237,8 @@ describe("withdrawing early", () => {
     expect(screen.getByTestId("withdraw-amount").props.children).toBe("UGX 5,123,715");
     expect(screen.getByText("No fee. Interest stops when you confirm.")).toBeTruthy();
     // The new bank account is still in its first day's wait, so it cannot be chosen.
-    expect(screen.getByTestId("account-demo-account-bank").props.accessibilityState).toMatchObject({ disabled: true });
-    expect(screen.getByTestId("account-demo-account-mtn").props.accessibilityState).toMatchObject({ checked: true });
+    expect(screen.getByTestId("account-demo-account-bank")).toBeDisabled();
+    expect(screen.getByTestId("account-demo-account-mtn")).toBeChecked();
     expect(screen.queryByText(/tax:|15%/)).toBeNull();
 
     await fireEvent.press(screen.getByTestId("confirm-withdraw"));
@@ -256,7 +256,7 @@ describe("withdrawing early", () => {
     mockFailNext.code = "unavailable";
     await fireEvent.press(screen.getByTestId("confirm-withdraw"));
     expect(await screen.findByText(/so you will not withdraw twice/)).toBeTruthy();
-    expect(screen.getByTestId("account-demo-account-mtn").props.accessibilityState).toMatchObject({ disabled: true });
+    expect(screen.getByTestId("account-demo-account-mtn")).toBeDisabled();
 
     await fireEvent.press(screen.getByTestId("confirm-withdraw"));
     expect(await screen.findByText(/goes to your account, and we tell you when it is sent/)).toBeTruthy();

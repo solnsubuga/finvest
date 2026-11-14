@@ -141,7 +141,8 @@ export default function Pay() {
                 <Pressable
                   key={option}
                   accessibilityRole="radio"
-                  accessibilityState={{ checked: selected, disabled: locked }}
+                  aria-checked={selected}
+                  aria-disabled={locked}
                   disabled={locked}
                   accessibilityLabel={networkProduct[option]}
                   onPress={() => setNetwork(option)}
