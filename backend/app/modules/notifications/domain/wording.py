@@ -239,6 +239,13 @@ DEFAULTS: dict[str, Wording] = {
         "One of your identity photos was not clear enough. Open the app to take it again.",
         "Finvest: we need one of your identity photos again. Open the app to take it.",
     ),
+    "kyc_full_check_needed": Wording(
+        "Check your identity again",
+        "Your photos did not match the identity we had on file. Open the app to check your "
+        "identity with your ID document. Your account number stays the same.",
+        "Finvest: your photos did not match the identity on file. Open the app to check your "
+        "identity with your ID document.",
+    ),
     "kyc_rejected": Wording(
         "Identity check not approved",
         "We could not approve your identity check. Open Help in the app and we will "

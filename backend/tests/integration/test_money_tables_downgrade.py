@@ -585,6 +585,27 @@ ROWS = {
         "now(), now())",
         "refusing to drop claim checks that hold records",
     ),
+    "0371_kyc_superseded": (
+        # Only staff supersede, in the claim's own transaction, so the guard is set aside here.
+        "ALTER TABLE kyc_checks DISABLE TRIGGER kyc_checks_guard; "
+        "INSERT INTO account_numbers (number, issued_at) VALUES ('1001004827', now()); "
+        "INSERT INTO kyc_checks (id, client_id, status, document_type, document_country, "
+        "surname, given_names, document_number_sealed, date_of_birth_sealed, "
+        "document_fingerprint, details_confirmed_at, decided_at, account_number, source, "
+        "legacy_reference, created_at, updated_at) VALUES ('-Nabc0000000000000A1', "
+        "'-Nabc0000000000000B1', 'approved', 'national_id', 'UG', 'NAKATO', 'Amara', "
+        "decode(repeat('00', 40), 'hex'), decode(repeat('00', 40), 'hex'), repeat('0', 64), "
+        "now(), now(), '1001004827', 'finvest1', 'FV1-0001', now(), now()); "
+        "INSERT INTO kyc_claim_checks (id, client_id, check_id, status, submission, "
+        "submitted_at, decided_at, decided_by, created_at, updated_at) VALUES "
+        "('-Nabc0000000000000C1', '-Nabc0000000000000B1', '-Nabc0000000000000A1', "
+        "'not_matched', 1, now(), now(), '-Nabc0000000000000S1', now(), now()); "
+        "UPDATE kyc_checks SET status = 'superseded', superseded_at = now(), "
+        "superseded_by = '-Nabc0000000000000S1', superseded_by_claim = '-Nabc0000000000000C1' "
+        "WHERE id = '-Nabc0000000000000A1'; "
+        "ALTER TABLE kyc_checks ENABLE TRIGGER kyc_checks_guard",
+        "refusing to drop superseded identity checks",
+    ),
     "0006_passkeys": (
         "INSERT INTO identity_passkeys (id, actor_kind, actor_id, credential_id, public_key, "
         "sign_count, transports, name, created_at) VALUES ('-Nabc0000000000000A1', 'staff', "

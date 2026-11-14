@@ -21,7 +21,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.infrastructure.jobs import JobRequest, enqueue
 from app.infrastructure.jobs.outbox import Consumer, publish
 from app.infrastructure.sealing import Sealer, associated_data
-from app.modules.account_numbers.domain.numbers import AccountType
+from app.modules.account_numbers.domain.numbers import AccountNumber, AccountType
 from app.modules.account_numbers.service import issue_account_number
 from app.modules.audit import service as audit
 from app.modules.audit.domain.events import AuditActor, AuditCategory, AuditEvent
@@ -174,16 +174,21 @@ _COLUMNS = (
     "submitted_at, provider, provider_reference, automatic_checks, review_flags, retake_photos, "
     "retake_requested_at, client_message, decided_at, decided_by, account_number, source"
 )
-_BY_CLIENT = text(f"SELECT {_COLUMNS} FROM kyc_checks WHERE client_id = :client_id")  # noqa: S608
+# A client's live check: superseded ones stay on record beside it (migration 0371).
+_BY_CLIENT = text(
+    f"SELECT {_COLUMNS} FROM kyc_checks "  # noqa: S608 - constant column list
+    "WHERE client_id = :client_id AND status <> 'superseded'"
+)
 _BY_CLIENT_LOCKED = text(
-    f"SELECT {_COLUMNS} FROM kyc_checks WHERE client_id = :client_id FOR UPDATE"  # noqa: S608
+    f"SELECT {_COLUMNS} FROM kyc_checks "  # noqa: S608 - constant column list
+    "WHERE client_id = :client_id AND status <> 'superseded' FOR UPDATE"
 )
 _BY_ID = text(f"SELECT {_COLUMNS} FROM kyc_checks WHERE id = :id")  # noqa: S608
 _BY_ID_LOCKED = text(f"SELECT {_COLUMNS} FROM kyc_checks WHERE id = :id FOR UPDATE")  # noqa: S608
 _INSERT = text(
     "INSERT INTO kyc_checks (id, client_id, document_type, document_country, created_at, "
     "updated_at) VALUES (:id, :client_id, :document_type, :document_country, :now, :now) "
-    "ON CONFLICT ON CONSTRAINT uq_kyc_checks_client DO NOTHING"
+    "ON CONFLICT (client_id) WHERE status <> 'superseded' DO NOTHING"
 )
 _CHANGE_DOCUMENT = text(
     "UPDATE kyc_checks SET document_type = :document_type, document_country = :document_country, "
@@ -212,6 +217,15 @@ _APPROVE = text(
     "provider_reference = coalesce(:provider_reference, provider_reference), "
     "automatic_checks = coalesce(CAST(:automatic_checks AS jsonb), automatic_checks), "
     "decided_at = :now, decided_by = :decided_by, updated_at = :now WHERE id = :id"
+)
+_SUPERSEDE = text(
+    "UPDATE kyc_checks SET status = 'superseded', superseded_at = :now, superseded_by = :staff, "
+    "superseded_by_claim = :claim_check_id, updated_at = :now WHERE id = :id"
+)
+# The number a superseded check holds, given again when the client's full check is approved.
+_KEPT_NUMBER = text(
+    "SELECT account_number FROM kyc_checks WHERE client_id = :client_id "
+    "AND status = 'superseded' ORDER BY superseded_at DESC LIMIT 1"
 )
 _REJECT = text(
     "UPDATE kyc_checks SET status = 'rejected', client_message = :client_message, "
@@ -919,9 +933,11 @@ class Identity:
     account_number: str | None
 
 
+# The live check first; a client with only a superseded one still shows their account number.
 _IDENTITIES = text(
-    "SELECT client_id, status, surname, given_names, account_number FROM kyc_checks "
-    "WHERE client_id = ANY(CAST(:ids AS text[]))"
+    "SELECT DISTINCT ON (client_id) client_id, status, surname, given_names, account_number "
+    "FROM kyc_checks WHERE client_id = ANY(CAST(:ids AS text[])) "
+    "ORDER BY client_id, status = 'superseded'"
 )
 
 
@@ -1024,15 +1040,21 @@ class CheckSummary:
 
 _SUMMARY = text(
     "SELECT id, status, submitted_at, decided_at, account_number FROM kyc_checks "
-    "WHERE client_id = :client_id"
+    "WHERE client_id = :client_id ORDER BY status = 'superseded', superseded_at DESC LIMIT 1"
 )
+# A superseded check keeps the client's number, so the client is found by it either way.
 _BY_ACCOUNT_NUMBER = text(
-    "SELECT client_id FROM kyc_checks WHERE account_number = :number AND status = 'approved'"
+    "SELECT client_id FROM kyc_checks WHERE account_number = :number "
+    "AND status IN ('approved', 'superseded') LIMIT 1"
 )
 
 
 async def check_summary(session: AsyncSession, client_id: str) -> CheckSummary | None:
-    """The client's check, or None before they start one. For staff transactions."""
+    """The client's live check, or None before they start one. For staff transactions.
+
+    A client whose carried-over check was superseded and who has not started the full check
+    yet gets the superseded one.
+    """
     row = (await session.execute(_SUMMARY, {"client_id": client_id})).one_or_none()
     if row is None:
         return None
@@ -1107,6 +1129,40 @@ async def approve(
         raise ApplicationError("conflict")
     await _audit(session, staff, "approval", "kyc.check.approved", row.id, clock, reason=reason)
     return await _view_by_id(session, sealer, row.id)
+
+
+async def supersede_carried_over(
+    session: AsyncSession, staff: Actor, check_id: str, *, claim_check_id: str, clock: Clock
+) -> None:
+    """Supersede a carried-over check whose claim photos did not match (the owner's decision).
+
+    `claims.decide` calls it in the transaction that marks the claim check not matched, after
+    that update, so the database can see why. The check stays on record with the client's
+    account number, and stops counting as approved: the client does the full ID check, and its
+    approval gives the same number again. The client is told to start it.
+    """
+    staff_id = _person(staff, "staff")
+    row = (await session.execute(_BY_ID_LOCKED, {"id": check_id})).one_or_none()
+    if row is None:
+        raise ApplicationError("not_found")
+    if row.source != "finvest1" or row.status != CheckStatus.APPROVED:
+        raise ApplicationError("conflict")
+    await session.execute(
+        _SUPERSEDE,
+        {"id": row.id, "staff": staff_id, "claim_check_id": claim_check_id, "now": clock.now()},
+    )
+    # The reason is on the claim check's own decision; this names the claim check instead.
+    await _audit(
+        session,
+        staff,
+        "approval",
+        "kyc.check.superseded",
+        row.id,
+        clock,
+        reason="The claim photos did not match the check carried over",
+        details={"claim_check_id": claim_check_id},
+    )
+    await _tell(session, row, "kyc_full_check_needed", row.id, clock)
 
 
 async def reject(
@@ -1291,7 +1347,7 @@ async def _approve(
         return False
     try:
         async with session.begin_nested():
-            number = await issue_account_number(session, AccountType.PERSONAL, clock)
+            number = await _account_number(session, row.client_id, clock)
             await session.execute(
                 _APPROVE,
                 {
@@ -1311,6 +1367,14 @@ async def _approve(
     await _tell(session, row, "kyc_approved", row.id, clock)
     await _publish_decision(session, row, approved=True, clock=clock)
     return True
+
+
+async def _account_number(session: AsyncSession, client_id: str, clock: Clock) -> AccountNumber:
+    """The number the client already holds from a superseded check, or a new one."""
+    kept = await session.scalar(_KEPT_NUMBER, {"client_id": client_id})
+    if kept is not None:
+        return AccountNumber(str(kept))
+    return await issue_account_number(session, AccountType.PERSONAL, clock)
 
 
 async def _publish_decision(

@@ -13,6 +13,7 @@ export const CHECK_STATUSES = [
   "awaiting_client",
   "approved",
   "rejected",
+  "superseded",
 ] as const;
 export type CheckStatus = (typeof CHECK_STATUSES)[number];
 

@@ -36,6 +36,7 @@ from app.modules.kyc.service import (
     _invalid,
     _message,
     _person,
+    supersede_carried_over,
 )
 from app.modules.notifications import contract as notifications
 from app.shared.actors import Actor, ActorKind
@@ -269,7 +270,9 @@ async def decide(
 ) -> ClaimCheckView:
     """Say whether the photos match each other and the carried-over check. Final.
 
-    Published as `kyc.claim_check_decided` in this same transaction, keyed by the claim check.
+    Not matched supersedes the carried-over check in the same transaction, so the client does
+    the full ID check (the owner's decision). Published as `kyc.claim_check_decided` in this
+    same transaction, keyed by the claim check.
     """
     staff_id = _person(staff, "staff")
     target = ClaimCheckStatus.MATCHED if matched else ClaimCheckStatus.NOT_MATCHED
@@ -288,6 +291,10 @@ async def decide(
         reason=reason,
         resource=RESOURCE,
     )
+    if not matched:
+        await supersede_carried_over(
+            session, staff, row.check_id, claim_check_id=row.id, clock=clock
+        )
     await publish(
         session,
         topic=DECIDED_TOPIC,

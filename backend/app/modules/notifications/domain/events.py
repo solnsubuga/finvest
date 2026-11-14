@@ -95,6 +95,8 @@ _SPECS = (
     _event("kyc_approved", Category.ACCOUNT, "kyc"),
     _event("kyc_retake_requested", Category.ACCOUNT, "kyc"),
     _event("kyc_rejected", Category.ACCOUNT, "kyc"),
+    # A client carried over from Finvest 1.0 whose claim photos did not match.
+    _event("kyc_full_check_needed", Category.ACCOUNT, "kyc"),
     # Company and group accounts.
     # Never the organisation's name, which the applicant wrote and staff have not seen yet.
     _event("organisation_invited", Category.ACCOUNT, "organisations", "person"),
