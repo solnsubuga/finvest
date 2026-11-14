@@ -29846,7 +29846,7 @@
     },
     "/client/claim/identity": {
       "post": {
-        "description": "Hand in the identity step: the claim check's photos, or the full ID check.\n\n`conflict` unless the claim is waiting for it. Answers which photos or details are missing,\nas the identity check routes do, and then nothing changes.",
+        "description": "Hand in the identity step: the full ID check, which every client takes.\n\n`conflict` unless the claim is waiting for it. Answers which photos or details are missing,\nas the ID check routes do, and then nothing changes.",
         "operationId": "hand_in_identity_client_claim_identity_post",
         "responses": {
           "200": {

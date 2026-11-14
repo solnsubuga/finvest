@@ -2,21 +2,20 @@ import { useCallback, useState } from "react";
 import { useFocusEffect } from "expo-router";
 
 import { useClaimClient } from "./ClaimProvider";
-import { Claim, ClaimCheck, describeClaimError } from "./types";
+import { Claim, describeClaimError } from "./types";
 
 export type ClaimState =
   | { status: "loading" }
-  | { status: "ready"; claim: Claim | null; check: ClaimCheck | null }
+  | { status: "ready"; claim: Claim | null }
   | { status: "error"; message: string };
 
 /**
- * The signed-in client's claim, and their selfie claim check when that is
- * their step. Read again every time the screen comes back into view, so it is
- * right after a photo or a decision by staff.
+ * The signed-in client's claim. Read again every time the screen comes back
+ * into view, so it is right after the ID check or a decision by staff.
  */
 export function useClaim(): ClaimState & {
   reload: () => void;
-  replace: (claim: Claim | null, check: ClaimCheck | null) => void;
+  replace: (claim: Claim | null) => void;
 } {
   const client = useClaimClient();
   const [state, setState] = useState<ClaimState>({ status: "loading" });
@@ -25,12 +24,8 @@ export function useClaim(): ClaimState & {
   useFocusEffect(
     useCallback(() => {
       let current = true;
-      (async () => {
-        const claim = await client.getClaim();
-        const check = claim?.identityStep === "selfie" ? await client.getCheck() : null;
-        return { claim, check };
-      })().then(
-        ({ claim, check }) => current && setState({ status: "ready", claim, check }),
+      client.getClaim().then(
+        (claim) => current && setState({ status: "ready", claim }),
         (caught: unknown) => current && setState({ status: "error", message: describeClaimError(caught) }),
       );
       return () => {
@@ -47,7 +42,7 @@ export function useClaim(): ClaimState & {
   }, []);
 
   const replace = useCallback(
-    (claim: Claim | null, check: ClaimCheck | null) => setState({ status: "ready", claim, check }),
+    (claim: Claim | null) => setState({ status: "ready", claim }),
     [],
   );
 

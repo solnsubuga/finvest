@@ -1,10 +1,10 @@
-"""Carry each client over from Finvest 1.0 once the switch is approved. Worker only.
+"""Carry each client over from their paper record once the switch is approved. Worker only.
 
 The approval created every client's account. The worker then carries each client over in one
 transaction of its own, acting as the system:
 
-1. Their identity, approved, with a new account number, when Finvest 1.0 checked a document that
-   has not expired. Otherwise they do the full ID check when they claim.
+1. Nothing of their identity: every client takes the full ID check when they claim, as a new
+   client does, since a check made by hand on paper cannot be verified now.
 2. Each running investment, opened in the ledger with its original start date, rate and tax and
    the interest earned up to the trial's "as of" day. That interest must be what the finance
    check showed, or nothing of the client is kept.
@@ -33,8 +33,6 @@ from app.infrastructure.sealing import Sealer
 from app.modules.investments import carried_over
 from app.modules.investments import service as investments
 from app.modules.investments.domain.products import Product
-from app.modules.kyc import service as kyc
-from app.modules.kyc.domain.checks import IdentityDetails
 from app.modules.ledger.domain.entries import AccountKind, AccountSpec
 from app.modules.migration import claims, resolutions, service, switch
 from app.modules.migration.domain.claim import LINK_LIFETIME
@@ -52,8 +50,6 @@ OPENING_BALANCES = "migration.opening_balances"
 # The client app's page that opens a claim link. The token follows the `#`, so it never reaches
 # a server log.
 CLAIM_PATH = "/claim"
-DOCUMENT_COUNTRY = "UG"
-CARRIED_OVER_REASON = "Identity document checked by Finvest 1.0"
 
 logger = structlog.get_logger()
 
@@ -184,37 +180,6 @@ async def _carry_client(
     if await claims.claim_for(session, client_id) is not None:
         return  # carried over by an earlier run
     today = business_date(clock.now())
-    needs_id_check = client.needs_id_check(today) or client.date_of_birth is None
-    if not needs_id_check:
-        assert client.id_type is not None and client.id_number is not None
-        assert client.date_of_birth is not None
-        try:
-            await kyc.record_carried_over_check(
-                session,
-                sealer,
-                SYSTEM,
-                client_id=client_id,
-                document_type=client.id_type,
-                document_country=DOCUMENT_COUNTRY,
-                details=IdentityDetails(
-                    surname=client.surname,
-                    given_names=client.given_names,
-                    document_number=client.id_number,
-                    date_of_birth=client.date_of_birth,
-                    document_expires_on=client.id_expires_on,
-                ),
-                legacy_reference=client.legacy_client_ref,
-                reason=CARRIED_OVER_REASON,
-                clock=clock,
-            )
-        except ApplicationError as error:
-            codes = {problem.code for problem in error.fields}
-            if error.code == "validation_failed" and codes == {"document_expired"}:
-                # Expired since the trial: the client does the full check when they claim.
-                needs_id_check = True
-            else:
-                raise NotCarried(next(iter(sorted(codes)), error.code)) from None
-
     for investment in held:
         if investment.status is not InvestmentStatus.RUNNING:
             continue  # an order awaiting payment is placed again after claiming
@@ -226,7 +191,9 @@ async def _carry_client(
         clock,
         client_id=client_id,
         legacy_client_ref=client.legacy_client_ref,
-        needs_id_check=needs_id_check,
+        # Every client takes the full ID check (the owner, 2026-11-14): the records are on
+        # paper, and a check made by hand cannot be verified now.
+        needs_id_check=True,
     )
     token = await claims.send_link(session, SYSTEM, clock, client_id)
     await _invite(session, clock, client, client_id, f"{client_app}{CLAIM_PATH}#{token}")
