@@ -39,6 +39,8 @@ const paths = {
   calendar: ["M4 6h16v14H4zM4 10h16M8 3v4M16 3v4"],
   // A shield with a tick: the identity check.
   shield: ["M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6z", "M8.5 12l2.5 2.5 4.5-5"],
+  // A padlock: freezing the account.
+  lock: ["M5 11h14v10H5z", "M8 11V7a4 4 0 018 0v4"],
 } as const;
 
 export type IconName = keyof typeof paths;

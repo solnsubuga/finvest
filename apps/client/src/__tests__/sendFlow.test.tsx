@@ -118,10 +118,11 @@ async function sendNow() {
   await fireEvent.press(await screen.findByTestId("confirm-send"));
 }
 
-async function findBrian() {
+async function findBrian({ purpose = true }: { purpose?: boolean } = {}) {
   await fireEvent.changeText(screen.getByTestId("send-to"), "1001005170");
   await fireEvent.press(screen.getByTestId("find-recipient"));
   await screen.findByTestId("recipient");
+  if (purpose) await fireEvent.press(screen.getByTestId("send-purpose-family_support"));
 }
 
 describe("sending an investment to someone", () => {
@@ -154,6 +155,35 @@ describe("sending an investment to someone", () => {
     expect(screen.getByTestId("open-kept")).toBeTruthy();
     expect(mockSend).toHaveBeenCalledTimes(1);
     expect(mockSend.mock.calls[0][0]).toMatchObject({ toAccountNumber: "1001005170", amount: { currency: "UGX", minor: 1_000_000 }, message: "For school fees" });
+  });
+
+  it("asks why it is sent, with the sender's own words for something else", async () => {
+    await openSend();
+    await findBrian({ purpose: false });
+    await fireEvent.changeText(screen.getByTestId("send-amount"), "1000000");
+    expect(screen.getByTestId("review-send")).toBeDisabled();
+    await fireEvent.press(screen.getByTestId("send-purpose-other"));
+    // Something else needs a few words, and says so.
+    expect(screen.getByTestId("review-send")).toBeDisabled();
+    expect(screen.getByText("Needed before you can send: say why in a few words.")).toBeTruthy();
+    await fireEvent.changeText(screen.getByTestId("send-purpose-note"), "  Our shared plot  ");
+    await fireEvent.press(screen.getByTestId("review-send"));
+    expect(within(await screen.findByTestId("send-confirm")).getByText("Why: Our shared plot")).toBeTruthy();
+    await sendNow();
+    await screen.findByText("To Brian K.");
+    expect(mockSend.mock.calls[0][0]).toMatchObject({ purpose: "other", purposeNote: "Our shared plot" });
+  });
+
+  it("sends the reason picked, with no words of its own", async () => {
+    await openSend();
+    await findBrian();
+    await fireEvent.changeText(screen.getByTestId("send-amount"), "1000000");
+    expect(screen.queryByTestId("send-purpose-note")).toBeNull();
+    await fireEvent.press(screen.getByTestId("review-send"));
+    expect(within(await screen.findByTestId("send-confirm")).getByText("Why: Family support")).toBeTruthy();
+    await sendNow();
+    await screen.findByText("To Brian K.");
+    expect(mockSend.mock.calls[0][0]).toMatchObject({ purpose: "family_support", purposeNote: null });
   });
 
   it("says why an amount was refused, and asks again under a new key", async () => {

@@ -28,6 +28,7 @@ from app.modules.identity.service import client_contact
 from app.modules.investments.jobs import InvestmentJobs
 from app.modules.kyc.jobs import ProviderJobs, sweep_unanswered
 from app.modules.kyc.liveness_jobs import LivenessJobs
+from app.modules.kyc.phone_name_jobs import PhoneNameJobs
 from app.modules.kyc.service import SWEEP_UNANSWERED
 from app.modules.kyc.settings import KycSettings
 from app.modules.migration.jobs import MigrationJobs
@@ -145,6 +146,8 @@ def handlers(
     if names is not None:
         # Without a provider, a mobile money number waits for its name and its lookup waits.
         kinds.update(NameLookupJobs(database, names, clock).handlers())
+        # The same lookup, for the phone number of a client handing in their identity check.
+        kinds.update(PhoneNameJobs(database, names, clock).handlers())
     kinds.update(
         notification_jobs.handlers(
             database,

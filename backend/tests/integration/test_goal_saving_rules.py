@@ -377,3 +377,66 @@ async def test_a_rule_only_ends_once_and_only_by_its_client(
                 text("DELETE FROM goal_saving_rules WHERE goal_id = :goal_id"),
                 {"goal_id": goal.id},
             )
+
+
+# Paydays ----------------------------------------------------------------------------------------
+
+
+async def paydays(database: Database, client: Actor) -> list[str]:
+    async with database.actor_transaction(SYSTEM) as session:
+        rows = await session.execute(
+            text(
+                "SELECT idempotency_key FROM notifications WHERE client_id = :client_id "
+                "AND event = 'goal_payday' ORDER BY created_at"
+            ),
+            {"client_id": client.id},
+        )
+    return [row.idempotency_key for row in rows]
+
+
+async def test_a_client_names_a_payday_and_is_nudged_on_it_instead_of_before_the_saving(
+    app_database: Database, worker_database: Database, contacts: Contacts
+) -> None:
+    client, goal, _ = await goal_for(app_database, contacts)
+    payday = today() + timedelta(days=5)
+    async with app_database.actor_transaction(client) as session:
+        changed = await goals.set_payday(session, client, goal.id, payday.day, PRESENT)
+    assert changed.payday == payday.day
+    due = next_due(today(), today())
+    # The morning the saving reminder would have gone, and the payday and the day after it.
+    await remind(worker_database, due - timedelta(days=2))
+    await remind(worker_database, payday)
+    await remind(worker_database, payday + timedelta(days=1))
+    assert await top_ups(worker_database, client) == []
+    assert await paydays(worker_database, client) == [f"goal-payday:{goal.id}:{payday.isoformat()}"]
+
+    async with app_database.actor_transaction(client) as session:
+        cleared = await goals.set_payday(session, client, goal.id, None, PRESENT)
+    assert cleared.payday is None
+
+
+async def test_a_payday_is_a_day_of_the_month_and_only_for_an_open_goal_of_ones_own(
+    app_database: Database, contacts: Contacts
+) -> None:
+    client, goal, _ = await goal_for(app_database, contacts)
+    other, _, _ = await goal_for(app_database, contacts)
+    for day in (0, 32):
+        with pytest.raises(ApplicationError) as refused:
+            async with app_database.actor_transaction(client) as session:
+                await goals.set_payday(session, client, goal.id, day, PRESENT)
+        assert refused.value.code == "validation_failed"
+    with pytest.raises(ApplicationError) as hidden:
+        async with app_database.actor_transaction(other) as session:
+            await goals.set_payday(session, other, goal.id, 25, PRESENT)
+    assert hidden.value.code == "not_found"
+    with pytest.raises(DBAPIError):
+        async with app_database.actor_transaction(client) as session:
+            await session.execute(
+                text("UPDATE goals SET payday = 40 WHERE id = :id"), {"id": goal.id}
+            )
+    async with app_database.actor_transaction(client) as session:
+        await goals.close_goal(session, client, goal.id, PRESENT)
+    with pytest.raises(ApplicationError) as closed:
+        async with app_database.actor_transaction(client) as session:
+            await goals.set_payday(session, client, goal.id, 25, PRESENT)
+    assert closed.value.code == "conflict"

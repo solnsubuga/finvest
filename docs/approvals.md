@@ -42,6 +42,11 @@ The inbox only reads. Deciding happens on the owning module's own route, which c
 | `complaint_outcome` | support `complaints.pending_outcomes`. The subject is the complaint's reference. | `complaints.view` | `complaints.close` |
 | `announcement` | notifications `announcements.list_announcements`, proposed | `settings.view` | `announcements.send` |
 | `bank_account_change` | payments `bank_accounts.list_accounts`, a change waiting. The subject is the currency, never the account details. | `settings.view` | `bank_accounts.change` |
+| `payment_channels_change` | platform_settings `waiting`, a change to `payment_channels`. The subject is the setting's key. | `settings.view` | `payment_channels.change` |
+| `calendar_change` | the same, for `public_holidays`, `bank_payout_cutoff` or `maturity_reminders` | `settings.view` | `calendar.change` |
+| `staff_security_change` | the same, for `staff_idle_minutes` or `office_networks` | `settings.view` | `staff_security.change` |
+| `statement_layout_change` | the same, for `statement_layouts` | `settings.view` | `statement_layouts.change` |
+| `withdrawal_limits_change` | payouts `limit_changes.waiting`. The subject is the start day, never the amounts | `settings.view` | `withdrawal_limits.change` |
 | `payout_resolution` | payouts `resolutions.waiting` | `reconciliation.view` | `reconciliation.change` |
 | `deposit_reassignment` | payments `reassignments.proposals_awaiting_approval`. The subject is the deposit's ID. | `reconciliation.view` | `deposit_reassignments.change` |
 | `payout_account` | payouts `destinations.checks_awaiting_approval`: a check recorded, not yet approved | `review_queue.view` | `payout_accounts.change` |
@@ -52,6 +57,10 @@ The inbox only reads. Deciding happens on the owning module's own route, which c
 | `investment_run` | investments `list_runs`, proposed. The subject is the run and its day, such as `interest 2026-11-13`. | `investments.view` | `investment_corrections.change` |
 | `investment_transfer` | investments `held_transfers`: a proposal to let through an investment sent to another client that was held because it is large. The subject is the transfer's ID. | `review_queue.view` | `investment_transfers.change` |
 | `organisation` | organisations `waiting`: an application for a company or group account that one member of staff checked. The subject is the kind (`company` or `group`), never a name. See [organisations.md](organisations.md). | `review_queue.view` | `organisations.review` |
+| `client_pin_reset` | console `actions.waiting`, kind `pin_reset`. The subject is the client's ID. See [client-accounts.md](client-accounts.md#acting-for-a-client). | `clients.view` | `client_pins.reset` |
+| `client_limits` | console `actions.waiting`, kind `withdrawal_limits`. The subject is the client's ID. | `clients.view` | `client_limits.change` |
+| `client_statement` | console `actions.waiting`, kind `statement`. The subject is the client's ID. | `clients.view` | `client_statements.send` |
+| `client_withdrawal` | console `actions.waiting`, kind `withdrawal`. The subject is the client's ID. | `clients.view` | `client_withdrawals.start` |
 | `tax_remittance` | tax `service.waiting`: a payment to URA recorded, not yet approved. The subject is the month and currency, never the amount. | `finance.view` | `tax_remittances.change` |
 
 Where a module has no separate deciding permission, the screen's own is used.

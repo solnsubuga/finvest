@@ -104,11 +104,78 @@ run "production_with_access" {
     error_message = "Production puts the back office behind Cloudflare Access."
   }
   assert {
+    condition     = length(cloudflare_zero_trust_list.staff_emails) == 1 && cloudflare_zero_trust_list.staff_emails[0].type == "EMAIL"
+    error_message = "Production has the console's staff email list."
+  }
+  assert {
+    condition     = length(local.staff_include) == 2
+    error_message = "Access lets in the break-glass emails and the console's staff list."
+  }
+  assert {
+    condition     = contains(keys(github_actions_environment_variable.deploy), "FINVEST_CLOUDFLARE_STAFF_LIST_ID")
+    error_message = "The worker is told which list to keep in step."
+  }
+  assert {
     condition     = cloudflare_zero_trust_access_policy.admin_staff[0].account_id == "account"
     error_message = "Access uses the zone's own Cloudflare account."
   }
   assert {
     condition     = alltrue([for s in github_actions_environment_secret.deploy : s.environment == "prod"])
     error_message = "Production settings go to the prod GitHub environment."
+  }
+}
+
+run "back_office_open_from_anywhere_without_office_networks" {
+  command = plan
+  variables {
+    environment         = "production"
+    admin_access_emails = ["staff@example.com"]
+  }
+  assert {
+    condition     = length(cloudflare_zero_trust_list.office_networks) == 0 && length(cloudflare_zero_trust_access_policy.admin_office) == 0
+    error_message = "With no office networks the back office keeps the email-only policy."
+  }
+}
+
+run "back_office_only_from_office_networks" {
+  command = plan
+  variables {
+    environment           = "production"
+    admin_access_emails   = ["staff@example.com"]
+    admin_office_networks = ["203.0.113.0/24", "198.51.100.7/32"]
+  }
+  assert {
+    condition     = toset([for i in cloudflare_zero_trust_list.office_networks[0].items : i.value]) == toset(["203.0.113.0/24", "198.51.100.7/32"])
+    error_message = "The office list holds exactly the configured networks."
+  }
+  assert {
+    condition     = length(cloudflare_zero_trust_access_policy.admin_office[0].require) == 1
+    error_message = "The office policy requires the office list."
+  }
+  assert {
+    condition     = length(cloudflare_zero_trust_access_application.app) == 1
+    error_message = "The client app keeps the email-only staff policy before launch."
+  }
+}
+
+run "office_networks_must_be_cidr" {
+  command = plan
+  variables {
+    environment           = "production"
+    admin_access_emails   = ["staff@example.com"]
+    admin_office_networks = ["office"]
+  }
+  expect_failures = [var.admin_office_networks]
+}
+
+run "no_ssh_rule_without_ssh_addresses" {
+  command = plan
+  variables {
+    environment          = "staging"
+    ssh_source_addresses = []
+  }
+  assert {
+    condition     = length([for rule in digitalocean_firewall.app.inbound_rule : rule if coalesce(rule.port_range, "-") == "22"]) == 0
+    error_message = "With no SSH addresses and no Provision run, nothing may reach SSH."
   }
 }

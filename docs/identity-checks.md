@@ -40,6 +40,7 @@ A provider is asked for three things: that the document is genuine and not expir
 - A person approves every client. When all three ran and passed, the check goes to staff flagged `automatic_checks_passed`, so it is quick to confirm.
 - Approval with no person involved is built but switched off (`automatic_approval` in `record_provider_result`). It is the owner's decision to turn it on, and it is listed as open in [decisions.md](decisions.md). With it on, a client is approved automatically only when all three ran and passed and the document has not expired since.
 - Anything else, including a failed check, sends the client to a person with the reasons listed. A provider never rejects a client on its own.
+- The name the network holds for the client's phone number is looked up too and shown to staff ([Phone number name](#phone-number-name)). It is not one of the four checks: a different name never fails the check, but it blocks approval, and approval with no person needs it to match.
 - The expiry date is checked again at approval. Staff cannot approve a document that expired while the check waited.
 - Finvest itself refuses to approve a second client on an identity document that an approved client already holds. The database enforces this with a unique index on a keyed fingerprint of the document.
 
@@ -170,6 +171,17 @@ How an attempt goes (`app/modules/kyc/liveness.py`, `liveness_jobs.py`, `domain/
 - To confirm against ioTec's sandbox: that a request with no email still returns `verificationUrl`; that `profileImageUrl` is on an ioTec host and needs no key; whether ioTec Faces can return the client to the app when done; and what ioTec Faces asks of the client (it may also ask for the ID card, which this flow does not use).
 - The development stub passes on the first read with a stand-in capture, and its page is a placeholder.
 
+## Phone number name
+
+When a client hands in their check, the worker asks ioTec Verify for the name the mobile network holds for the client's own phone number, the one they sign in with. It is the same lookup that proves a mobile money payout number ([payouts.md](payouts.md#mobile-money-numbers)), with the same adapter and the same name rule (`compare_names`). The code is `app/modules/kyc/phone_names.py` and `phone_name_jobs.py`, the rules `domain/phone_names.py`, and the table `kyc_phone_names` (migration 0370).
+
+- Staff see the result on the check as `phone_name`: `checking`, `matches`, `partly_matches` (the same names with one left out), `different`, `no_name` (the network holds none, or barred the number) or `not_answered`, with the network's name once it gave one, `current_number` (false once the client's number has changed since) and `blocks_approval`. It is `null` when nothing was looked up.
+- A different name on the client's current number blocks approval (the owner's decision). Approve is left out of `allowed`, and approving anyway is refused with `conflict` on `phone_name` (`phone_name_different`). Staff may still reject, or ask the client to move to a number registered in their own name (a phone change, made by two staff) and hand the check in again, which looks the new number up.
+- Every other result is a hint for the person who decides. It never rejects a client on its own. Approval with no person involved, which is off, needs `matches`: anything else goes to a person flagged `phone_name_not_confirmed`.
+- The lookup is asked for in the transaction that hands the check in, with its job, for the number on the client's account at that moment. Only a Ugandan number (+256) is looked up. One that got no answer is asked again at the next hand-in, up to three lookups for each number on one check, as each costs a fee. One that found a name, or none, is not repeated for that number.
+- The send is never repeated after it may have arrived, and a send that certainly never arrived is tried again by its job, as for payout numbers. Only the worker records what ioTec said, and an answer is final. Nothing logs the number or the name.
+- It runs with the payout name lookup's setting: `FINVEST_PAYOUT_NAME_PROVIDER=iotec` with the ioTec Verify credentials, for both the API and the worker. With the default, `none`, nothing is looked up.
+
 ## Talking to the provider
 
 The API never calls the provider. Submitting a check saves a job in the same transaction, and the worker does the rest (`app/modules/kyc/jobs.py`).
@@ -236,5 +248,4 @@ Without `FINVEST_IDENTITY_DATA_KEY` the routes answer `unavailable`, and so do t
 
 - The console calling these routes. It still uses sample data.
 - Replacing the identity data key. Do not rotate it yet: a sealed value records which key sealed it and an old key can still be read, but nothing seals the rows again, and the document fingerprints are made with the current key only, so the one-document rule would stop matching earlier clients.
-- Checking that the name matches the name registered on the client's mobile money number.
 - Company, joint and group accounts. Only personal accounts are issued.

@@ -83,8 +83,11 @@ async def test_a_wording_change_shows_to_who_sees_settings_and_only_admins_decid
         item = (await inbox(api))[proposal_id]
         assert (item["kind"], item["subject"]) == ("wording_change", "payment_confirmed")
         assert item["can_decide"]
-        # Operations do not see settings.
+        # Operations open Settings for the channels and calendar, and see the change, but only
+        # those who may change wordings decide it.
         await api.staff("operations")
+        assert not (await inbox(api))[proposal_id]["can_decide"]
+        await api.staff("support")
         assert proposal_id not in await inbox(api)
     finally:
         await api.as_staff(proposer)

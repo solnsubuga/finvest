@@ -23,9 +23,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.infrastructure.idempotency import Receipt, run_once
 from app.modules.autoinvest import service as autoinvest
 from app.modules.goals.domain.goals import GoalStatus
+from app.modules.investments import service as investments
 from app.modules.investments.domain.investments import AtMaturity
 from app.modules.payments.domain.deposits import Network
 from app.shared.actors import Actor
+from app.shared.business_day import business_date
 from app.shared.clock import Clock
 from app.shared.errors import ApplicationError, FieldProblem
 from app.shared.money import Money
@@ -50,7 +52,7 @@ _INSERT_RULE = text(
 )
 _END_RULE = text("UPDATE goal_saving_rules SET ended_at = :now WHERE id = :id")
 _RULE_OF_PLAN = text(
-    "SELECT r.id, r.goal_id, r.client_id, g.status FROM goal_saving_rules r "
+    "SELECT r.id, r.goal_id, r.client_id, g.status, g.locked_until FROM goal_saving_rules r "
     "JOIN goals g ON g.id = r.goal_id WHERE r.plan_id = :plan_id"
 )
 _INSERT_SAVING = text(
@@ -251,6 +253,15 @@ async def link_plan_run(
         if getattr(error.orig, "sqlstate", None) != _REFUSED:
             raise
         return False
+    if row.locked_until is not None and business_date(clock.now()) < row.locked_until:
+        # A locked goal's new savings are locked with it, until the same day.
+        await investments.lock_withdrawals(
+            session,
+            client_id=row.client_id,
+            investment_ids=[investment_id],
+            until=row.locked_until,
+            now=clock.now(),
+        )
     return True
 
 

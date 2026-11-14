@@ -46,6 +46,7 @@ Nothing personal goes into a job payload or a log. The words live in the `notifi
 | --- | --- | --- | --- |
 | `payment_confirmed` | Payments | `amount`, `method` | Money |
 | `payment_failed` | Payments | `amount`, `method` | Money |
+| `payment_reversed` | Payments | `amount`, `method` | Money |
 | `payout_processing` | Payouts | `amount`, `destination` | Money |
 | `payout_sent` | Payouts | `amount`, `destination` | Money |
 | `payout_failed` | Payouts | `amount`, `destination` | Money |
@@ -62,6 +63,7 @@ Nothing personal goes into a job payload or a log. The words live in the `notifi
 | `investment_transfer_failed` | Investments | `product`, `person` | Investments |
 | `interest_earned` | Investments | `amount`, `count` | Daily earnings |
 | `goal_top_up_due` | Goals | `goal`, `date` | Investments |
+| `goal_payday` | Goals | `goal` | Investments |
 | `goal_reached` | Goals | `goal` | Investments |
 | `autoinvest_run_retrying` | Automatic investing | `date` | Investments |
 | `autoinvest_run_failed` | Automatic investing | `date` | Investments |
@@ -73,12 +75,12 @@ Nothing personal goes into a job payload or a log. The words live in the `notifi
 | `organisation_returned` | Organisations | `organisation` | Account |
 | `organisation_rejected` | Organisations | `organisation` | Account |
 | `organisation_approved` | Organisations | `organisation` | Account |
-| `payout_destination_approved` | Payouts | `destination` | Account |
-| `payout_destination_refused` | Payouts | `destination` | Account |
+| `payout_destination_approved` | Payouts, when the second member of staff approves | `destination` | Account |
+| `payout_destination_refused` | Payouts, at each refusal by staff or by the network's name check, keyed by the proof refused | `destination` ("your Stanbic Bank account", "your MTN Mobile Money number") | Account |
 | `statement_ready` | Statements | `period` | Account |
 | `new_sign_in` | Sign-in | `device` | Security |
-| `password_changed` | Sign-in | none | Security |
-| `second_step_changed` | Sign-in | `change` | Security |
+| `password_changed` | Sign-in, when a client resets their password | none | Security |
+| `second_step_changed` | Sign-in, when a client adds or removes a passkey or an authenticator app. Never for staff | `change`, fixed words in `identity/notices.py` | Security |
 | `support_reply` | Support | none | Help |
 | `complaint_received` | Support | `reference`, `date` | Help |
 | `complaint_closed` | Support | `reference` | Help |
