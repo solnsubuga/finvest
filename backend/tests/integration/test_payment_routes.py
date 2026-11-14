@@ -496,6 +496,18 @@ async def test_a_bank_transfer_is_checked_by_one_person_and_approved_by_another(
         detail = (await first.get(f"/staff/payments/bank-transfers/{payment['id']}")).json()
         line = next(line for line in detail["candidates"] if line["account_reference"] == pot)
         assert detail["receipt_link"]["url"].startswith(f"memory://{stored_key}?")
+        # The tests here hand in the same file and number, so any earlier one is listed.
+        used = detail["receipt_used_before"]
+        assert all(
+            use["same_file"]
+            and use["same_transaction_number"]
+            and use["payment_id"] != payment["id"]
+            for use in used
+        )
+        queued = (await first.get("/staff/payments/bank-transfers")).json()["items"]
+        assert next(i for i in queued if i["id"] == payment["id"])["receipt_used_before"] is bool(
+            used
+        )
 
         matched = await first.post(
             f"/staff/payments/bank-transfers/{payment['id']}/review",

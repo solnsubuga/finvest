@@ -41,6 +41,21 @@ export interface QueueItem {
   bankName: string;
   submittedAt: string;
   stage: Stage;
+  /** The same receipt file or bank transaction number was handed in on another deposit. */
+  usedBefore: boolean;
+}
+
+/**
+ * Another deposit, by this client or anyone, handed in with the same receipt file or the
+ * same bank transaction number. A fraud signal for the checker: it changes nothing by itself.
+ */
+export interface EarlierUse {
+  paymentId: string;
+  clientId: string;
+  status: string;
+  submittedAt: string;
+  sameFile: boolean;
+  sameTransactionNumber: boolean;
 }
 
 export interface StatementLine {
@@ -73,6 +88,7 @@ export interface Receipt {
 
 export interface TransferDetail extends QueueItem {
   investmentId: string;
+  clientId: string;
   transactionNumber: string;
   receipt: Receipt;
   review: Review | null;
@@ -81,6 +97,8 @@ export interface TransferDetail extends QueueItem {
   /** Lines that could be this transfer: money in, the same amount, within 7 days. Empty once reviewed. */
   candidates: readonly StatementLine[];
   allowed: readonly TransferAction[];
+  /** Other deposits with the same file or transaction number, oldest first. */
+  earlierUses: readonly EarlierUse[];
 }
 
 /**

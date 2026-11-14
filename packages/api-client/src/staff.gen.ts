@@ -344,9 +344,20 @@ export const BankTransferInQueue = z.object({
   method: z.enum(["mtn", "airtel", "bank_transfer"]),
   payer: z.string().nullable(),
   receipt: ReceiptView.nullable(),
+  receipt_used_before: z.boolean(),
   status: z.enum(["created", "sending", "awaiting_approval", "uncertain", "in_review", "confirmed", "failed"]),
 });
 export type BankTransferInQueue = z.infer<typeof BankTransferInQueue>;
+
+export const EarlierUseOut = z.object({
+  client_id: z.string(),
+  payment_id: z.string(),
+  same_file: z.boolean(),
+  same_transaction_number: z.boolean(),
+  status: z.string(),
+  submitted_at: z.string(),
+});
+export type EarlierUseOut = z.infer<typeof EarlierUseOut>;
 
 export const PaymentView = z.object({
   amount: MoneyView,
@@ -395,6 +406,7 @@ export const BankTransferOut = z.object({
   matched_line: StatementLineOut.nullable(),
   payment: PaymentView,
   receipt_link: ReceiptLinkOut.nullable(),
+  receipt_used_before: z.array(EarlierUseOut),
   review: ReviewOut.nullable(),
 });
 export type BankTransferOut = z.infer<typeof BankTransferOut>;

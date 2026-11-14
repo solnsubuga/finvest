@@ -43,6 +43,17 @@ interface PaymentJson {
   created_at: string;
   /** Not sent by the list yet. When it is, the queue shows which step each transfer waits for. */
   awaiting?: "check" | "second_person" | "posting";
+  /** Sent by the list: the receipt's file or transaction number was handed in before. */
+  receipt_used_before?: boolean;
+}
+
+interface EarlierUseJson {
+  payment_id: string;
+  client_id: string;
+  status: string;
+  submitted_at: string;
+  same_file: boolean;
+  same_transaction_number: boolean;
 }
 
 interface LineJson {
@@ -71,6 +82,7 @@ interface TransferJson {
   review: ReviewJson | null;
   matched_line: LineJson | null;
   candidates: LineJson[];
+  receipt_used_before: EarlierUseJson[];
 }
 
 interface PageJson {
@@ -102,6 +114,7 @@ function toQueueItem(payment: PaymentJson): QueueItem {
     bankName: payment.receipt?.bank_name ?? "",
     submittedAt: payment.created_at,
     stage: queueStage(payment),
+    usedBefore: payment.receipt_used_before ?? false,
   };
 }
 
@@ -145,6 +158,7 @@ export function toTransferDetail(json: TransferJson, me: string): TransferDetail
     ...toQueueItem(payment),
     stage,
     investmentId: payment.investment_id,
+    clientId: json.client_id,
     transactionNumber: payment.receipt?.transaction_number ?? "",
     receipt: {
       contentType: payment.receipt?.content_type ?? "",
@@ -155,6 +169,15 @@ export function toTransferDetail(json: TransferJson, me: string): TransferDetail
     matchedLine: json.matched_line ? toLine(json.matched_line) : null,
     candidates: json.candidates.map(toLine),
     allowed: allowedFor(stage, review, me),
+    usedBefore: json.receipt_used_before.length > 0,
+    earlierUses: json.receipt_used_before.map((use) => ({
+      paymentId: use.payment_id,
+      clientId: use.client_id,
+      status: use.status,
+      submittedAt: use.submitted_at,
+      sameFile: use.same_file,
+      sameTransactionNumber: use.same_transaction_number,
+    })),
   };
 }
 

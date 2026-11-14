@@ -444,9 +444,24 @@ class ReceiptLinkOut(Contract):
     expires_at: datetime
 
 
+class EarlierUseOut(Contract):
+    """Another deposit handed in with the same receipt file or bank transaction number."""
+
+    payment_id: PushId
+    client_id: PushId
+    status: str
+    submitted_at: datetime
+    same_file: bool
+    same_transaction_number: bool
+
+
 class BankTransferOut(Contract):
     payment: PaymentView
     client_id: PushId
+    # Other deposits, by anyone, with the same receipt file or transaction number, oldest
+    # first. Empty when the receipt is new. A fraud signal for the checker: it changes nothing
+    # by itself, since only a matched statement line credits a transfer.
+    receipt_used_before: list[EarlierUseOut]
     # None if storage cannot make a link right now; the rest of the transfer still shows.
     receipt_link: ReceiptLinkOut | None
     review: ReviewOut | None
@@ -462,6 +477,8 @@ class BankTransferInQueue(PaymentView):
     # person matched it and a different one must approve), `posting` (approved or refused, and
     # the worker is settling it).
     awaiting: Literal["check", "second_person", "posting"]
+    # The same receipt file or transaction number was handed in on another deposit.
+    receipt_used_before: bool
 
 
 class BankTransferPage(Contract):
@@ -524,6 +541,7 @@ async def bank_transfers_in_review(
             BankTransferInQueue(
                 **vars(await _payment_view(session, deposit)),
                 awaiting=_awaiting(await bank.get_review(session, staff.actor, deposit.id)),
+                receipt_used_before=bool(await bank.earlier_uses(session, staff.actor, deposit.id)),
             )
             for deposit in deposits
         ]
@@ -567,9 +585,21 @@ async def _detail(
     candidates: tuple[StatementLineView, ...] = ()
     if review is None and transfer.deposit.status is DepositStatus.IN_REVIEW:
         candidates = await bank.candidate_lines(session, staff.actor, payment_id)
+    uses = await bank.earlier_uses(session, staff.actor, payment_id)
     return BankTransferOut(
         payment=_view(transfer.deposit, transfer.receipt),
         client_id=transfer.deposit.client_id,
+        receipt_used_before=[
+            EarlierUseOut(
+                payment_id=use.deposit_id,
+                client_id=use.client_id,
+                status=use.status.value,
+                submitted_at=use.created_at,
+                same_file=use.same_file,
+                same_transaction_number=use.same_transaction_number,
+            )
+            for use in uses
+        ],
         receipt_link=_receipt_link(storage, transfer.receipt, clock),
         review=_review(review) if review else None,
         matched_line=_line(line) if line else None,

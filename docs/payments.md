@@ -69,6 +69,12 @@ Choices in this design:
 - **Only an exact amount is confirmed.** A transfer for any other amount is refused as `amount_differs` and the money is returned or matched by staff, as with a mobile money amount mismatch. No part payment is posted.
 - **The statement reference is not required to match.** Banks often cut or change the reference, so staff decide from the receipt, the amount, the date and the sender's name. A transfer from an account in another name is refused as `name_differs`.
 
+### A receipt used before
+
+The design's bank receipt review says "File has not been used on any other deposit". When the same receipt file (its SHA-256), or the same bank transaction number, was handed in on another deposit, by this client or anyone else and in any state, staff are told: `GET /staff/payments/bank-transfers/{id}` lists those deposits in `receipt_used_before` (oldest first, at most 20, each with whether the file, the number or both are the same), and each queue item has `receipt_used_before: true`. Transaction numbers are compared without case, spaces, dots, slashes or dashes, the way people retype them (`bank_transfers.earlier_uses`, indexes in migration `0431_payment_receipt_reuse`). The console shows a red warning on the transfer and a "Receipt used before" tag in the queue.
+
+It is a fraud signal and nothing more: one real transfer shown to Finvest twice. It credits or refuses nothing. A transfer is still credited only by a matched statement line that two people approved, and a statement line can confirm one payment only. A legitimate repeat, such as a client sending the same receipt again after a refusal, shows the earlier deposit as refused, and staff decide.
+
 ## Routes
 
 Client routes, signed in as the client. Each `POST` needs an `Idempotency-Key`.
