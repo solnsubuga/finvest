@@ -11,8 +11,10 @@ export function PinDots({ count, invalid = false }: { count: number; invalid?: b
   return (
     <View
       style={styles.dots}
-      accessibilityRole="text"
+      // A progress bar, as StepProgress is: on the web a plain view may not carry a label.
+      accessibilityRole="progressbar"
       accessibilityLabel={`${count} of ${PIN_LENGTH} digits entered`}
+      accessibilityValue={{ min: 0, max: PIN_LENGTH, now: count }}
       testID="pin-dots"
     >
       {Array.from({ length: PIN_LENGTH }, (_, index) => (

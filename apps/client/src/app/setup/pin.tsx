@@ -122,7 +122,7 @@ export default function CreatePin() {
             color={error ? colors.lime : colors.onBlackMuted}
             center
           >
-            {error ?? "Avoid 12345, repeated digits and your birth year."}
+            {error ?? "Avoid repeated digits and runs like 12345."}
           </Txt>
         </View>
       </View>
