@@ -188,6 +188,13 @@ async def test_two_people_settle_a_whole_batch_from_one_bulk_debit(
     assert bulk.status is Decision.PROPOSED
     assert bulk.total == ugx(sum(amounts))
     assert set(bulk.payout_ids) == {each.id for each in made}
+    # The second person sees the line itself, not only its ID.
+    assert bulk.line is not None
+    assert (bulk.line.id, bulk.line.reference, bulk.line.amount) == (
+        lines["BULK-1"],
+        "BULK-1",
+        ugx(sum(amounts)),
+    )
     # Each payout now shows an open settlement, which cannot be decided on its own.
     async with app_database.actor_transaction(staff()) as session:
         sent = {each.payout.id: each for each in await bank_payouts.sent_payouts(session)}
