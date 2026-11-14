@@ -41,6 +41,7 @@ The inbox only reads. Deciding happens on the owning module's own route, which c
 | `suppression_lift` | notifications `suppression_lifts.open_lifts`. The subject is the start of the address hash. | `clients.view` | `email_suppressions.lift` |
 | `complaint_outcome` | support `complaints.pending_outcomes`. The subject is the complaint's reference. | `complaints.view` | `complaints.close` |
 | `announcement` | notifications `announcements.list_announcements`, proposed | `settings.view` | `announcements.send` |
+| `bank_account_change` | payments `bank_accounts.list_accounts`, a change waiting. The subject is the currency, never the account details. | `settings.view` | `bank_accounts.change` |
 | `payout_resolution` | payouts `resolutions.waiting` | `reconciliation.view` | `reconciliation.change` |
 | `deposit_reassignment` | payments `reassignments.proposals_awaiting_approval`. The subject is the deposit's ID. | `reconciliation.view` | `deposit_reassignments.change` |
 | `payout_account` | payouts `destinations.checks_awaiting_approval`: a check recorded, not yet approved | `review_queue.view` | `payout_accounts.change` |

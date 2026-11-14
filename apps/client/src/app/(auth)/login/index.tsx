@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { StyleSheet, View } from "react-native";
-import { Stack, useRouter } from "expo-router";
+import { Stack, useLocalSearchParams, useRouter } from "expo-router";
 
 import { useAuth } from "@/auth/AuthProvider";
 import { isValidEmail } from "@/auth/password";
@@ -19,8 +19,9 @@ import { colors, fontSizes } from "@/theme";
 export default function LoginStart() {
   const router = useRouter();
   const { client, setLogin } = useAuth();
+  const params = useLocalSearchParams<{ with?: string }>();
   // The design's "Use email instead": a proved address in place of the number.
-  const [byEmail, setByEmail] = useState(false);
+  const [byEmail, setByEmail] = useState(params.with === "email");
   const [phone, setPhone] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -61,9 +62,6 @@ export default function LoginStart() {
     }
   };
 
-  const unavailable = (topic: string) =>
-    router.push({ pathname: "/unavailable", params: { topic } });
-
   return (
     <Screen
       footer={
@@ -72,7 +70,7 @@ export default function LoginStart() {
           <TextLink label="New here? Create an account" onPress={() => router.replace("/signup")} />
           <TextLink
             label="I changed my number or cannot get in"
-            onPress={() => unavailable("locked-out")}
+            onPress={() => router.push("/recover")}
           />
         </>
       }

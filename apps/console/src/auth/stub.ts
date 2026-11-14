@@ -78,6 +78,9 @@ export const STUB_ROLE_PERMISSIONS: Record<Role, readonly Permission[]> = {
     "bank_transfers.change",
     "deposit_reassignments.change",
     "bank_payouts.change",
+    // The trust account clients pay into is finance's to keep right, on Settings.
+    "settings.view",
+    "bank_accounts.change",
   ],
   compliance: [
     "overview.view",
@@ -94,6 +97,7 @@ export const STUB_ROLE_PERMISSIONS: Record<Role, readonly Permission[]> = {
     "clients.close",
     "payout_accounts.change",
     "identity_checks.review",
+    "compliance_cases.change",
   ],
   // Support works complaints but does not close them, as the backend's table says.
   support: ["overview.view", "support.view", "complaints.view", "clients.view", "support.reply", "complaints.manage", "email_suppressions.lift"],

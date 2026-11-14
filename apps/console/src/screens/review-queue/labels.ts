@@ -1,4 +1,4 @@
-import type { AccountKind, Amount, Currency, Network, PayoutAccount, ProofKind, RejectionReason } from "./api.ts";
+import type { AccountKind, Amount, Currency, Network, PayoutAccount, ProofKind, RejectionReason, ShownRejection } from "./api.ts";
 
 const MINOR_DIGITS: Record<Currency, number> = { UGX: 0, USD: 2 };
 const SYMBOL: Record<Currency, string> = { UGX: "UGX ", USD: "$" };
@@ -60,6 +60,12 @@ export const REJECTION_LABELS: Record<RejectionReason, string> = {
   proof_wrong_account: "The proof is for another account",
   proof_wrong_document: "Not a document we accept",
   suspected_fraud: "Suspected fraud (final)",
+};
+
+/** Every refusal an account can show, including the worker's for a number with no name. */
+export const SHOWN_REJECTION_LABELS: Record<ShownRejection, string> = {
+  ...REJECTION_LABELS,
+  network_name_unavailable: "The network holds no name for the number",
 };
 
 /**

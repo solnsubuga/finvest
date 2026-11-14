@@ -211,7 +211,8 @@ export default function CloseAccount() {
                   {request?.reason ? ` Your reason: ${request.reason}` : ""}
                 </Txt>
                 <Txt size={fontSizes.sm}>
-                  Once it is closed you will not be able to log in again. Until then everything works as before.
+                  While we check, you cannot start a new investment, goal, automatic plan or payment. Everything
+                  you already have carries on. Once it is closed you will not be able to log in again.
                 </Txt>
                 <Button
                   label="Keep my account open"

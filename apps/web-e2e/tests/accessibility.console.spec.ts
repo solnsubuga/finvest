@@ -74,3 +74,19 @@ test("every console screen meets WCAG 2.1 AA", async ({ page }) => {
   }
   expect(found).toEqual([]);
 });
+
+test("the requests for a call back on Clients meet WCAG 2.1 AA", async ({ page }) => {
+  await page.goto("/sign-in");
+  await page.getByLabel("Work email").fill("admin@finvest.test");
+  await page.getByLabel("Password").fill(PASSWORD);
+  await page.getByRole("button", { name: "Continue" }).click();
+  await page.getByRole("button", { name: "Use passkey" }).click();
+  await expect(page.getByRole("heading", { level: 1, name: "Overview" })).toBeVisible();
+  await visit(page, "/clients");
+  const card = page.getByRole("article", { name: "Request for +256 772 123 456" });
+  await expect(card).toBeVisible();
+  expect(await violations(page), "requests for a call back").toEqual([]);
+  await card.getByRole("button", { name: "Close the request" }).click();
+  await expect(card.getByRole("group", { name: "How did the call end?" })).toBeVisible();
+  expect(await violations(page), "closing a request").toEqual([]);
+});

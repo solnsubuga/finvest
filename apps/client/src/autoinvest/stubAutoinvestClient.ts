@@ -1,3 +1,5 @@
+import { demoClosing } from "@/demo/closing";
+
 import { firstRun, kampalaToday, MAX_RUN_MINOR } from "./schedule";
 import { AutoinvestClient, AutoinvestError, NewPlan, Plan, PlanProduct } from "./types";
 
@@ -140,6 +142,7 @@ export function createStubAutoinvestClient(
       return settle(find(planId));
     },
     async createPlan(request: NewPlan) {
+      if (demoClosing()) throw new AutoinvestError("account_closing");
       const plans = plansFor();
       const existing = createdByKey.get(request.idempotencyKey);
       if (existing) {

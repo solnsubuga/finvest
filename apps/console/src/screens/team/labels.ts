@@ -36,9 +36,11 @@ const ACTIONS: readonly { permission: Permission; label: string; under: ScreenPe
   { permission: "rates.change", label: "Change rates", under: "rates.view" },
   { permission: "investment_corrections.change", label: "Undo investments and refund", under: "investments.view" },
   { permission: "team.change", label: "Change the team", under: "team.view" },
+  { permission: "compliance_cases.change", label: "Close screening and monitoring cases", under: "compliance.view" },
   { permission: "audit.view", label: "Read the audit trail", under: "reports.view" },
   { permission: "wordings.change", label: "Change client messages", under: "settings.view" },
   { permission: "announcements.send", label: "Send announcements", under: "settings.view" },
+  { permission: "bank_accounts.change", label: "Change the bank account clients pay into", under: "settings.view" },
   { permission: "migration.import", label: "Run a trial import", under: "migration.view" },
   { permission: "migration.sign_off", label: "Sign off the switch", under: "migration.view" },
 ];

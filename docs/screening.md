@@ -117,7 +117,7 @@ Each job carries only an ID. A transaction is recorded once, whatever the job do
 | Unusual deposit | `unusual_deposit` | A deposit of UGX 5,000,000 or more that is at least 5 times the client's median deposit over the last 180 days, once they have 3 earlier deposits in that time | Deposit |
 | Quick withdrawal | `quick_withdrawal` | A payout of at least half of what came in during the last 7 days, when that was UGX 5,000,000 or more | Payout |
 
-All thresholds are decided for now ([decisions.md](decisions.md)). UGX 20,000,000 follows the Financial Intelligence Authority's large cash transaction threshold, to confirm with counsel. The median, not the mean, is the usual deposit, so one big deposit does not hide the next.
+The owner kept all thresholds as built on 2026-11-14 ([decisions.md](decisions.md)), and counsel reviews them later. UGX 20,000,000 follows the Financial Intelligence Authority's large cash transaction threshold, which that review confirms. The median, not the mean, is the usual deposit, so one big deposit does not hide the next.
 
 A rule that fires opens a `monitoring` case with the rule as its code and what the rule saw (transaction IDs and figures) as its detail. Staff close it with two people as `no_concern` or `report_to_fia`. A monitoring case does not hold payouts: a large payout already goes to staff review, and holding money on a rule's guess would tip a client off as surely as telling them.
 
@@ -158,8 +158,10 @@ All under `/staff/compliance`. Reading needs `compliance.view` (Admin, Complianc
 
 | Route | What it does |
 | --- | --- |
-| `GET /summary` | Whether screening is on, open cases, proposals waiting, and screens in the last 30 days |
-| `GET /cases?status=open&source=` | Cases, open ones oldest first |
+| `GET /summary` | Whether screening is on, open cases, proposals waiting, screens in the last 30 days, and cases closed since 1 January (Kampala) as `report_to_fia` |
+| `GET /rules` | The monitoring thresholds and the rescreening interval, read from `domain/monitoring.py` and `domain/standing.py` so the screen never shows a copy that has gone stale |
+| `GET /cases?status=open&source=` | Cases, open ones oldest first. A monitoring case carries `amount`: the payment that raised it, or for split deposits their total |
+| `GET /cases.csv` | The register: every case newest first, with the client's account number and name, how it closed and when, as a CSV file. Each export is an audit event, `compliance.register_exported`. More than 10,000 cases is `422 too_many_cases`. |
 | `GET /cases/{id}` | One case, the screen and its matches, every proposal, where the client stands, and what the reader may do |
 | `POST /cases/{id}/proposals` | Propose an outcome. `409 proposal_waiting` or `case_closed`; `422 outcome_does_not_fit_case`. |
 | `POST /proposals/{id}/approve` | Close the case. Needs a recent second step. The proposer gets `403`. |

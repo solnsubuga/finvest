@@ -1,8 +1,8 @@
 """Check that a webhook request was signed with our hook secret, the standard Svix way.
 
-Resend's events reach us through the shared router at hooks.fidiba.com, which signs each one
-again with the hook secret (`whsec_...`) from `RESEND_HOOK_SECRET`. That is not the secret
-Resend's dashboard shows. A request carries three headers:
+Finvest's own Resend account sends its events straight to `https://api.finvestug.com/webhooks/
+resend`, signed with that webhook's signing secret (`whsec_...`), which Resend's dashboard shows
+and `RESEND_HOOK_SECRET` holds. A request carries three headers:
 
 - `svix-id`: the event's id. A retry of the same event carries the same id.
 - `svix-timestamp`: when it was signed, in Unix seconds.

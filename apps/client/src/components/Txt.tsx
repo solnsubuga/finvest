@@ -30,7 +30,15 @@ export function Txt({
   return <Text {...rest} style={[base, style]} />;
 }
 
-export function Title({ children, onDark }: { children: string; onDark?: boolean }) {
+export function Title({
+  children,
+  onDark,
+  center,
+}: {
+  children: string;
+  onDark?: boolean;
+  center?: boolean;
+}) {
   return (
     <Txt
       accessibilityRole="header"
@@ -38,6 +46,7 @@ export function Title({ children, onDark }: { children: string; onDark?: boolean
       weight="extrabold"
       lineHeight={34}
       color={onDark ? colors.white : colors.ink}
+      center={center}
       style={{ letterSpacing: -0.8 }}
     >
       {children}

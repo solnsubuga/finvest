@@ -39,6 +39,7 @@ from app.modules.notifications.domain.templates import InvalidTemplate, render, 
 from app.modules.notifications.email_delivery import is_suppressed
 from app.modules.notifications.service import PURGE_MESSAGES, SEND_MESSAGE
 from app.shared.clock import Clock
+from app.shared.email_layout import PRODUCTION, Links
 
 # A queued message with no delivery deadline keeps its content at most this long. One with a
 # deadline is cleared by the first purge after it.
@@ -61,13 +62,15 @@ def handlers(
     email: EmailTransport,
     sms: SmsTransport,
     link_origins: Sequence[str] = (),
+    links: Links = PRODUCTION,
 ) -> dict[str, JobHandler | Handler]:
-    """`link_origins` are the only sites a link in a message may point to."""
+    """`link_origins` are the only sites a link in a message may point to. `links` are the app
+    and website an email's own buttons and footer open, from the worker's settings."""
 
     async def deliver(channel: str, recipient: str, template: str, key: str, values: dict) -> _Sent:  # type: ignore[type-arg]
         """Render and send. Raises the job error that says whether a retry is safe."""
         if channel == "email":
-            rendered = render(template, values, link_origins=link_origins)
+            rendered = render(template, values, link_origins=link_origins, links=links)
             message = EmailMessage(
                 to=recipient,
                 subject=rendered.subject,

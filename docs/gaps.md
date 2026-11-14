@@ -50,7 +50,7 @@ Four screens were still the placeholder page. The Review Queue is connected to `
 | ~~Finance~~ | ~~Day close, fee income, withholding tax owed and the accounting export~~ Built: income and costs, the books by code and the daily journal export ([finance.md](finance.md)). The ioTec collection charge is not booked yet. | `GET /staff/finance`, `GET /staff/finance/journal.csv` |
 | Compliance | Screening results and monitoring alerts | Nothing built (see below) |
 | Finance | Day close, fee income, withholding tax owed and the accounting export | Reconciliation routes below; tax in the tax certificates thread |
-| Compliance | Screening results and monitoring alerts | `/staff/compliance` routes ([screening.md](screening.md)); screen being built by the screening thread |
+| Compliance | Screening results and monitoring alerts | `/staff/compliance` routes ([screening.md](screening.md)), with the rules that are on, reports to the FIA this year and a register CSV. Risk rating, source of funds, document requests and escalation wait on Solo |
 
 ~~Staff routes with no screen at all: `/staff/phone-changes` (three; the Clients screen does not show pending phone changes) and `/staff/sessions` (three).~~ Closed by the mobile number and devices PR: the client page has a Mobile number section, and every member of staff has Your devices.
 
@@ -104,7 +104,7 @@ Each of these is blocked on something only the owner can get, and is listed agai
 Credentials and accounts:
 
 - ioTec API access: the API details, the callback signature scheme, sandbox access and production credentials, for payments, payouts, SMS and Verify. Also the ioTec questions in [decisions.md](decisions.md) (fees, settlement speed, payout limits, which account a bank payout leaves).
-- The client trust account's details for `FINVEST_BANK_TRANSFER_ACCOUNTS`, and finance's confirmation that it is the account reconciliation imports.
+- The client trust account's details, to be entered by two people on the console's Settings screen, and finance's confirmation that it is the account reconciliation imports.
 - The GitHub secrets and variables still missing for provisioning and deploys (listed in [infra/README.md](../infra/README.md)), including `FINVEST_EMAIL_HASH_KEY` before the next release, `FINVEST_IDENTITY_DATA_KEY`, `FINVEST_AUTHENTICATOR_KEY`, `RESEND_HOOK_SECRET` and at least two `ALERT_EMAILS`.
 - The Cloudflare token's Zone WAF Edit permission, so the rate limit can be applied.
 - Repository settings: secret scanning, push protection and Dependabot ([security.md](security.md) finding 8), and "Keep my email addresses private" on GitHub.

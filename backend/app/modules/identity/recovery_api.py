@@ -41,6 +41,9 @@ class RecoveryView(Contract):
     contact_phone: str
     reason: Reason
     created_at: datetime
+    # Asks while it was open, the first included. The number and reason are the latest ask's.
+    asks: int
+    last_asked_at: datetime
 
 
 class RecoveryList(Contract):
@@ -76,6 +79,8 @@ async def open_recovery_requests(staff: Follower, recovery: Recovery) -> Recover
                 contact_phone=item.contact_phone,
                 reason=item.reason,
                 created_at=item.created_at,
+                asks=item.asks,
+                last_asked_at=item.last_asked_at,
             )
             for item in items
         ]
