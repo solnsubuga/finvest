@@ -6,3 +6,7 @@ from app.infrastructure.jobs import Consumer
 RECEIPT_KIND = "documents.receipt_from_deposit"
 # The payments module names this consumer when it publishes `payments.deposit_confirmed`.
 RECEIPT_ON_DEPOSIT = Consumer(kind=RECEIPT_KIND)
+
+INVESTMENT_NOTE_KIND = "documents.note_from_investment"
+# The investments module names this consumer when it publishes `investments.started`.
+NOTE_ON_START = Consumer(kind=INVESTMENT_NOTE_KIND)

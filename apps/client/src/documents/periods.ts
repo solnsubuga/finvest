@@ -163,6 +163,12 @@ export function taxYearLabel(from: string): string {
 }
 
 /** The receipt's reference, "RC-…", from its file name. */
+/** `IN-…` from an investment note's file name, `Finvest investment note IN-….pdf`. */
+export function noteReference(document: DocumentItem): string | null {
+  const match = /investment note (\S+)\.pdf$/i.exec(document.fileName ?? "");
+  return match?.[1] ?? null;
+}
+
 export function receiptReference(document: DocumentItem): string | null {
   const match = /receipt (\S+)\.pdf$/i.exec(document.fileName ?? "");
   return match?.[1] ?? null;
