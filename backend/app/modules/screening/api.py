@@ -386,7 +386,8 @@ def create_router(screening_provider: str) -> APIRouter:
             rescreen_every_days=RESCREEN_EVERY.days,
         )
 
-    @router.get(
+    # A POST, because every export is recorded on the audit trail.
+    @router.post(
         "/cases.csv",
         response_class=Response,
         responses={200: {"content": {"text/csv": {}}}},
