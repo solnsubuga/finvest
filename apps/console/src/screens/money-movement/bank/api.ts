@@ -99,6 +99,8 @@ export interface BulkSettlement {
   proposedAt: string;
   payoutIds: string[];
   total: Amount;
+  /** The debit line itself, so the second person checks what the bank took. Null only if it has left the statement search window. */
+  line: StatementLine | null;
 }
 
 export interface SentBankPayout {

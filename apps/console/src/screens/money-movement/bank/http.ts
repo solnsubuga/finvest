@@ -18,6 +18,7 @@ import {
   type Outcome,
   type SentBankPayout,
   type Settlement,
+  type StatementLine,
 } from "./api.ts";
 
 interface PayoutJson {
@@ -92,6 +93,7 @@ interface BulkJson {
   proposed_at: string;
   payout_ids: string[];
   total: Amount;
+  line: LineJson | null;
 }
 
 interface SentJson {
@@ -157,14 +159,12 @@ export function toBulkDebit(json: BulkDebitJson): BulkDebit {
   return {
     batch: toBatch(json.batch),
     payouts: json.payouts.map(toPayout),
-    lines: json.lines.map((line) => ({
-      id: line.id,
-      valueDate: line.value_date,
-      amount: line.amount,
-      reference: line.reference,
-      narrative: line.narrative,
-    })),
+    lines: json.lines.map(toLine),
   };
+}
+
+function toLine(line: LineJson): StatementLine {
+  return { id: line.id, valueDate: line.value_date, amount: line.amount, reference: line.reference, narrative: line.narrative };
 }
 
 export function toBulk(json: BulkJson): BulkSettlement {
@@ -178,6 +178,7 @@ export function toBulk(json: BulkJson): BulkSettlement {
     proposedAt: json.proposed_at,
     payoutIds: json.payout_ids,
     total: json.total,
+    line: json.line ? toLine(json.line) : null,
   };
 }
 

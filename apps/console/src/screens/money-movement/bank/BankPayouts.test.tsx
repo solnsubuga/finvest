@@ -176,7 +176,10 @@ describe("bank payouts", () => {
     const proposeBulk = vi.spyOn(api, "proposeBulk");
     const { user } = renderSection(api);
     const form = await screen.findByRole("form", { name: "Settle a batch from one debit" });
-    await user.click(within(form).getByRole("button", { name: "-OdBankBatch00000004" }));
+    // Each batch is told apart by when it was approved and how many payouts are left.
+    const choice = within(form).getByRole("button", { name: /-OdBankBatch00000004/ });
+    expect(choice).toHaveTextContent(/^Approved .+, 3 payouts left-OdBankBatch00000004$/);
+    await user.click(choice);
     const line = await within(form).findByRole("radio", { name: /UGX 10,000,000/ });
     // Every payout of the batch starts chosen.
     expect(within(form).getByRole("status")).toHaveTextContent("3 chosen, UGX 10,000,000. Choose the line.");
@@ -200,12 +203,25 @@ describe("bank payouts", () => {
     expect(await screen.findByRole("article", { name: "Bulk debit of UGX 10,000,000" })).toHaveTextContent("Waiting for a second person");
   });
 
+  it("says Loading for a bulk debit's payouts until the sent list is in", async () => {
+    const api = createStubBankPayoutsApi(ME, 0);
+    vi.spyOn(api, "listSent").mockReturnValue(new Promise(() => undefined));
+    renderSection(api);
+    const bulk = await screen.findByRole("article", { name: "Bulk debit of UGX 3,000,000" });
+    expect(within(bulk).getAllByRole("rowheader").map((cell) => cell.textContent)).toEqual(["Loading", "Loading"]);
+  });
+
   it("lets a second person approve a colleague's bulk debit, and its payouts are settled", async () => {
     const api = createStubBankPayoutsApi(ME, 0);
     const approveBulk = vi.spyOn(api, "approveBulk");
     const { user } = renderSection(api);
     const bulk = await screen.findByRole("article", { name: "Bulk debit of UGX 3,000,000" });
     expect(within(bulk).getAllByRole("rowheader").map((cell) => cell.textContent)).toEqual(["UGX 2,400,000", "UGX 600,000"]);
+    // The second person sees the debit line itself, not only its ID.
+    const debit = within(bulk).getByRole("region", { name: "The debit on the trust statement" });
+    expect(debit).toHaveTextContent("UGX 3,000,000");
+    expect(debit).toHaveTextContent("BULK 0409 FINVEST");
+    expect(debit).toHaveTextContent("Bulk transfer, 2 items");
     // Its payouts point to the bulk instead of offering their own decision.
     const sent = screen.getByRole("list", { name: "Bank payouts sent" });
     await user.click(within(sent).getByRole("button", { name: /UGX 2,400,000/ }));

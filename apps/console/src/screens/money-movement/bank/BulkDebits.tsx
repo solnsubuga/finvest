@@ -7,7 +7,7 @@ import { cn } from "@/lib.ts";
 import { formatDay, formatExact, formatMoment } from "@/screens/reconciliation/format.ts";
 import { Decide, DoneNote, Empty, ErrorNote, Failure, type Decision } from "../Decide.tsx";
 import { useLoad, type Load } from "../load.ts";
-import { bankPayoutsErrorMessage, type BankPayoutsApi, type BulkSettlement, type SentBankPayout } from "./api.ts";
+import { bankPayoutsErrorMessage, type BankPayoutsApi, type Batch, type BulkSettlement, type SentBankPayout } from "./api.ts";
 
 type Clients = ReadonlyMap<string, ClientCard>;
 type Note = { kind: "done" | "failed"; message: string } | null;
@@ -22,6 +22,8 @@ interface BulkDebitsProps {
   onRetry: () => void;
   /** The sent payouts, to show each one a bulk names. Null until they load. */
   sent: readonly SentBankPayout[] | null;
+  /** The batches, to say when each was approved. Null until they load. */
+  batches: readonly Batch[] | null;
   clients: Clients;
   /** The note for one bulk, or for "new" while proposing. */
   noteFor: (id: string) => Note;
@@ -35,10 +37,16 @@ interface BulkDebitsProps {
  * a whole uploaded file in one line. One person picks the line and the payouts it paid, which
  * must add up to it exactly, and a different person approves. The backend checks every rule.
  */
-export function BulkDebits({ api, me, canChange, busy, bulks, onRetry, sent, clients, noteFor, done, onPropose, onDecide }: BulkDebitsProps) {
+export function BulkDebits({ api, me, canChange, busy, bulks, onRetry, sent, batches, clients, noteFor, done, onPropose, onDecide }: BulkDebitsProps) {
   if (!canChange) return null;
   // Approved batches with a payout still to settle and no proposal yet: those that can take a debit.
-  const batchIds = [...new Set((sent ?? []).filter((each) => !each.settlement).map((each) => each.batchId))];
+  const open = (sent ?? []).filter((each) => !each.settlement);
+  const batchIds = [...new Set(open.map((each) => each.batchId))];
+  const choices = batchIds.map((batchId) => {
+    const approvedAt = batches?.find((each) => each.id === batchId)?.decidedAt ?? null;
+    const sentAt = open.find((each) => each.batchId === batchId)?.sentAt ?? null;
+    return { batchId, approvedAt, sentAt, left: open.filter((each) => each.batchId === batchId).length };
+  });
   const byId = new Map((sent ?? []).map((each) => [each.payout.id, each]));
   return (
     <div className="flex flex-col gap-3">
@@ -63,6 +71,7 @@ export function BulkDebits({ api, me, canChange, busy, bulks, onRetry, sent, cli
               <BulkCard
                 bulk={bulk}
                 byId={byId}
+                loaded={sent !== null}
                 clients={clients}
                 me={me}
                 busy={busy}
@@ -76,7 +85,7 @@ export function BulkDebits({ api, me, canChange, busy, bulks, onRetry, sent, cli
       {sent === null ? null : batchIds.length === 0 ? (
         <Empty>No sent batch has payouts waiting to be settled from a bulk debit.</Empty>
       ) : (
-        <ProposeBulk api={api} batchIds={batchIds} clients={clients} busy={busy} note={noteFor("new")} onPropose={onPropose} />
+        <ProposeBulk api={api} choices={choices} clients={clients} busy={busy} note={noteFor("new")} onPropose={onPropose} />
       )}
     </div>
   );
@@ -85,6 +94,7 @@ export function BulkDebits({ api, me, canChange, busy, bulks, onRetry, sent, cli
 function BulkCard({
   bulk,
   byId,
+  loaded,
   clients,
   me,
   busy,
@@ -93,6 +103,8 @@ function BulkCard({
 }: {
   bulk: BulkSettlement;
   byId: ReadonlyMap<string, SentBankPayout>;
+  /** False until the sent list is in, so a missing payout reads as loading, not as no amount. */
+  loaded: boolean;
   clients: Clients;
   me: string;
   busy: boolean;
@@ -115,9 +127,24 @@ function BulkCard({
         </span>
       </header>
       <p className="m-0 text-md">{bulk.reason}</p>
-      <p className="m-0 text-xs text-muted">
-        Batch <span className="font-mono">{bulk.batchId}</span>, statement line <span className="font-mono">{bulk.statementLineId}</span>
-      </p>
+      <section aria-label="The debit on the trust statement" className="flex flex-col gap-1 rounded-lg border border-border bg-surface-sunken px-4 py-3">
+        <h5 className="m-0 text-xs font-bold text-muted">The debit on the trust statement</h5>
+        {bulk.line ? (
+          <>
+            <p className="m-0 flex flex-wrap items-baseline gap-x-3 gap-y-0.5 text-md">
+              <span className="font-bold tabular-nums">{formatExact(bulk.line.amount)}</span>
+              <span>{formatDay(bulk.line.valueDate)}</span>
+              <span className="font-mono text-xs">{bulk.line.reference}</span>
+            </p>
+            <p className="m-0 text-md text-muted">{bulk.line.narrative}</p>
+          </>
+        ) : (
+          <p className="m-0 text-md text-muted">The line is no longer in the statement search. Find it on the trust statement by its ID.</p>
+        )}
+        <p className="m-0 text-xs text-muted">
+          Batch <span className="font-mono">{bulk.batchId}</span>, statement line <span className="font-mono">{bulk.statementLineId}</span>
+        </p>
+      </section>
       <div className="overflow-x-auto rounded-lg border border-border" tabIndex={0} role="region" aria-label="Payouts in this bulk debit">
         <table className="w-full min-w-[480px] border-collapse whitespace-nowrap text-md">
           <caption className="sr-only">Payouts in this bulk debit</caption>
@@ -136,9 +163,9 @@ function BulkCard({
               return (
                 <tr key={id} className="border-t border-divider">
                   <th scope="row" className="px-3 py-2.5 text-left font-bold tabular-nums">
-                    {item ? formatExact(item.payout.amount) : "—"}
+                    {item ? formatExact(item.payout.amount) : loaded ? "Not in the sent list" : "Loading"}
                   </th>
-                  <td className="px-3 py-2.5">{item ? (clients.get(item.payout.clientId)?.name ?? item.payout.clientId) : "—"}</td>
+                  <td className="px-3 py-2.5">{item ? (clients.get(item.payout.clientId)?.name ?? item.payout.clientId) : loaded ? "" : "Loading"}</td>
                   <td className="px-3 py-2.5 font-mono text-xs">{id}</td>
                 </tr>
               );
@@ -159,19 +186,20 @@ function BulkCard({
 
 function ProposeBulk({
   api,
-  batchIds,
+  choices,
   clients,
   busy,
   note,
   onPropose,
 }: {
   api: BankPayoutsApi;
-  batchIds: readonly string[];
+  choices: readonly { batchId: string; approvedAt: string | null; sentAt: string | null; left: number }[];
   clients: Clients;
   busy: boolean;
   note: Note;
   onPropose: (batchId: string, lineId: string, payoutIds: string[], reason: string) => void;
 }) {
+  const batchIds = choices.map((each) => each.batchId);
   const [batchId, setBatchId] = useState(batchIds[0] ?? "");
   const current = batchIds.includes(batchId) ? batchId : (batchIds[0] ?? "");
   return (
@@ -179,15 +207,19 @@ function ProposeBulk({
       <h4 className="m-0 text-lg font-extrabold">Settle a batch from one debit</h4>
       {batchIds.length > 1 ? (
         <div role="group" aria-label="Batch" className="flex flex-wrap gap-1.5">
-          {batchIds.map((each) => (
+          {choices.map((each) => (
             <Button
-              key={each}
-              variant={each === current ? "primary" : "secondary"}
-              aria-pressed={each === current}
-              onClick={() => setBatchId(each)}
-              className="h-9 px-3 font-mono text-xs"
+              key={each.batchId}
+              variant={each.batchId === current ? "primary" : "secondary"}
+              aria-pressed={each.batchId === current}
+              onClick={() => setBatchId(each.batchId)}
+              className="h-auto flex-col items-start gap-0 px-3 py-1.5 text-left"
             >
-              {each}
+              <span className="text-md font-bold">
+                {each.approvedAt ? `Approved ${formatMoment(each.approvedAt)}` : each.sentAt ? `Sent ${formatMoment(each.sentAt)}` : "Batch"},{" "}
+                {each.left === 1 ? "1 payout left" : `${each.left} payouts left`}
+              </span>
+              <span className="font-mono text-xs opacity-80">{each.batchId}</span>
             </Button>
           ))}
         </div>

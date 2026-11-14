@@ -131,6 +131,7 @@ function sample(now: Date, me: string): State {
         proposedAt: ago(35, now),
         payoutIds: proposedOnes.map((each) => each.id),
         total: money(3_000_000),
+        line: { id: "-OdTrustLine00000027", valueDate: yesterday, amount: money(3_000_000), reference: "BULK 0409 FINVEST", narrative: "Bulk transfer, 2 items" },
       },
     ],
     payouts: [...queued, ...inBatch, ...sentOnes, ...bulkOnes, ...proposedOnes],
@@ -376,7 +377,7 @@ export function createStubBankPayoutsApi(me: string, delay = 150, which: BankStu
         made += 1;
         const id = `-OdBankBulk0000000${String(made).padStart(2, "0")}`;
         const proposedAt = new Date().toISOString();
-        state.bulks.push({ id, batchId, statementLineId, reason, status: "proposed", proposedBy: me, proposedAt, payoutIds, total: line.amount });
+        state.bulks.push({ id, batchId, statementLineId, reason, status: "proposed", proposedBy: me, proposedAt, payoutIds, total: line.amount, line });
         for (const each of chosen) {
           each.settlement = {
             id: `-OdBankSettle${each.payout.id.slice(-7)}`,
