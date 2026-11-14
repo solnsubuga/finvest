@@ -28,6 +28,8 @@ export default function ResetNew() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [codeWrong, setCodeWrong] = useState(false);
+  const [resending, setResending] = useState(false);
+  const [resent, setResent] = useState(false);
 
   if (!reset) {
     return <Redirect href="/reset" />;
@@ -36,10 +38,28 @@ export default function ResetNew() {
   const checks = checkPassword(password, confirmation, reset.phone);
   const ready = code.length === CODE_LENGTH && passwordIsAcceptable(checks);
 
+  const resend = async () => {
+    setResending(true);
+    setError(null);
+    setResent(false);
+    try {
+      // A new code replaces the old one, so the boxes start empty.
+      setReset(await client.startPasswordReset(reset.phone));
+      setCode("");
+      setCodeWrong(false);
+      setResent(true);
+    } catch (caught) {
+      setError(describeAuthError(caught));
+    } finally {
+      setResending(false);
+    }
+  };
+
   const submit = async () => {
     setBusy(true);
     setError(null);
     setCodeWrong(false);
+    setResent(false);
     try {
       await client.completePasswordReset(reset.challengeId, code, password);
       setReset(null);
@@ -78,6 +98,7 @@ export default function ResetNew() {
 
       <View style={{ marginTop: 20, gap: 14 }}>
         {error ? <Notice tone="danger">{error}</Notice> : null}
+        {resent ? <Notice tone="neutral">We sent a new code. Only the newest one works.</Notice> : null}
         <View style={{ gap: 8 }}>
           <Eyebrow>Code from the SMS</Eyebrow>
           <CodeInput
@@ -88,7 +109,12 @@ export default function ResetNew() {
             }}
             invalid={codeWrong}
           />
-          <View style={{ alignItems: "flex-start" }}>
+          <View style={{ flexDirection: "row", justifyContent: "space-between", flexWrap: "wrap", gap: 12 }}>
+            <TextLink
+              label={resending ? "Sending…" : "Send the code again"}
+              onPress={() => (resending ? undefined : resend())}
+              testID="reset-resend"
+            />
             <TextLink
               label="Wrong number? Start again"
               onPress={() => router.replace("/reset")}

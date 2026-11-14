@@ -4,6 +4,7 @@ import { Stack, useFocusEffect, useRouter } from "expo-router";
 
 import { useAuth } from "@/auth/AuthProvider";
 import { describeAuthError, Passkey } from "@/auth/types";
+import { useSecondSteps } from "@/auth/useSecondSteps";
 import { accountWhen } from "@/auth/when";
 import { BackButton } from "@/components/BackButton";
 import { Card, Notice } from "@/components/Blocks";
@@ -23,6 +24,7 @@ type State =
 export default function Passkeys() {
   const router = useRouter();
   const { client } = useAuth();
+  const steps = useSecondSteps();
   const [state, setState] = useState<State>({ status: "loading" });
   const [attempt, setAttempt] = useState(0);
   const [confirming, setConfirming] = useState<string | null>(null);
@@ -157,7 +159,9 @@ export default function Passkeys() {
                     <View style={styles.confirm}>
                       <Txt size={fontSizes.sm}>
                         {state.passkeys.length === 1
-                          ? "This is your only passkey. After removing it you log in with your authenticator app or an SMS code."
+                          ? steps.status === "ready" && steps.methods.includes("authenticator")
+                            ? "This is your only passkey. After removing it you log in with your authenticator app or an SMS code."
+                            : "This is your only passkey. After removing it you log in with an SMS code, and every log in limits withdrawals to accounts you have used before for 24 hours."
                           : "You will no longer be able to log in with this passkey."}
                       </Txt>
                       <Button
