@@ -48,16 +48,27 @@ INTEREST_ACCRUED = "client.interest_accrued"
 TAX_PAYABLE = "tax.withholding_payable"
 ENTRY_TYPE = "investment.interest_accrued"
 BATCH = 200
+# A run stops after this many investments in a row could not be paid. One bad record is left
+# behind and the run goes on; a run of them has a common cause, such as a closed ledger day,
+# and going on would only fail every investment that is left.
+MAX_FAILURES_IN_A_ROW = 25
 logger = structlog.get_logger()
+
+
+class RunFailing(Exception):
+    """`MAX_FAILURES_IN_A_ROW` investments in a row could not be paid. The run stops."""
 
 
 @dataclass(frozen=True, slots=True)
 class Batch:
-    """What one step of a run did. `last_id` is None when there was nothing left to look at."""
+    """What one step of a run did. `last_id` is None when there was nothing left to look at.
+    `failing` is how many investments in a row had failed when the batch ended, carried into
+    the next batch."""
 
     last_id: str | None
     posted: int
     failed: int
+    failing: int = 0
 
 
 @dataclass(frozen=True, slots=True)
@@ -121,13 +132,23 @@ _RUNS = text(
 
 
 async def accrue_batch(
-    session: AsyncSession, run_date: date, clock: Clock, *, after: str = "", limit: int = BATCH
+    session: AsyncSession,
+    run_date: date,
+    clock: Clock,
+    *,
+    after: str = "",
+    limit: int = BATCH,
+    failing: int = 0,
 ) -> Batch:
     """Pay the next investments due for `run_date`, in ID order after `after`. Worker only.
 
     Each investment is paid inside its own savepoint. If one cannot be paid it is left exactly
     as it was, logged, and stays due: one bad record does not hold up everyone else's
     interest, and the end of the run counts it as behind.
+
+    `failing` is the count of failures in a row the batch before ended on. When it reaches
+    `MAX_FAILURES_IN_A_ROW` this raises `RunFailing`, and the caller rolls the batch back: what
+    it paid stays due for the next run.
     """
     _check_run_date(run_date, clock)
     rows = (
@@ -142,12 +163,16 @@ async def accrue_batch(
                 amount = await accrue_locked(session, investment, run_date, clock)
         except Exception as error:
             failed += 1
+            failing += 1
             logger.error(
                 "interest_not_posted",
                 investment_id=investment.id,
                 error_type=type(error).__name__,
             )
+            if failing >= MAX_FAILURES_IN_A_ROW:
+                raise RunFailing from None
             continue
+        failing = 0
         if amount is not None:
             currency = investment.amount.currency
             count, so_far = posted.get(currency, (0, _nothing(currency)))
@@ -172,6 +197,7 @@ async def accrue_batch(
         last_id=rows[-1].id if rows else None,
         posted=sum(count for count, _ in posted.values()),
         failed=failed,
+        failing=failing,
     )
 
 
