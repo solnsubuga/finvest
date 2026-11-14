@@ -1,7 +1,7 @@
 """Carry identity checks over from Finvest 1.0.
 
 Revision ID: 0052_kyc_carried_over
-Revises: 0037_payout_resolutions
+Revises: 0142_tax_certificates
 
 A client whose identity Finvest 1.0 had checked, on a document that has not expired, is carried
 over at the switch already approved, with a new account number (docs/migration.md). The check
@@ -23,7 +23,7 @@ from collections.abc import Sequence
 from alembic import op
 
 revision: str = "0052_kyc_carried_over"
-down_revision: str | None = "0037_payout_resolutions"
+down_revision: str | None = "0142_tax_certificates"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 # Adds columns with defaults and loosens one check: the previous release keeps working.

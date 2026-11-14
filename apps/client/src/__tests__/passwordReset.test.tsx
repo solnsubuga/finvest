@@ -79,6 +79,14 @@ describe("Forgot password", () => {
     await screen.findByText("That code is not right. Check it and try again.");
   });
 
+  it("sends the code again, and the new code works", async () => {
+    await openReset("772123456");
+    await fireEvent.press(screen.getByTestId("reset-resend"));
+    await screen.findByText("We sent a new code. Only the newest one works.");
+    await fill(DEMO_CODE, NEW_PASSWORD);
+    await screen.findByText("Your password is changed");
+  });
+
   it("holds the button until the password meets the rules", async () => {
     await openReset("772123456");
     await fireEvent.changeText(screen.getByTestId("code-input"), DEMO_CODE);

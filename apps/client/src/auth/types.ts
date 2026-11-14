@@ -15,6 +15,10 @@ export type Session = {
    * A passkey or an authenticator app opens a full session.
    */
   restricted: boolean;
+  /** The address statements and receipts go to, once proved. Null when the account has none. */
+  email: string | null;
+  /** True once the client opened the link we emailed to that address. */
+  emailVerified: boolean;
 };
 
 export type AuthErrorCode =
@@ -182,6 +186,17 @@ export interface AuthClient {
    */
   removePasskey(id: string): Promise<void>;
   turnOffAuthenticator(): Promise<void>;
+
+  /**
+   * Emails a one-time link to the account's address, to prove it is theirs.
+   * "proved" when it already is, so nothing was sent.
+   */
+  sendEmailProof(): Promise<"sent" | "proved">;
+  /**
+   * Spends the token from the link. Works signed in or not, on any device.
+   * Fails with `expired` for any link that is old, used or not ours.
+   */
+  confirmEmail(token: string): Promise<void>;
 
   signOut(): Promise<void>;
 }

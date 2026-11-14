@@ -89,3 +89,82 @@ test("a client pays for an investment by mobile money from their own number", as
   await expect(page.getByText("Completed")).toBeVisible({ timeout: 30_000 });
   await expect(page.getByText("Paid into 91 Day Treasury Bill")).toBeVisible();
 });
+
+test("a client adds a mobile money number to be paid to, and enters the texted code", async ({ page }) => {
+  await logIn(page);
+  await id(page, "use-passkey").click();
+  await expect(page.getByText("Welcome, Amara")).toBeVisible();
+  // The phone's tab bar and the wide sidebar both name it Profile.
+  await page
+    .getByRole("link", { name: "Profile", exact: true })
+    .or(page.getByLabel("Profile", { exact: true }))
+    .first()
+    .click();
+  await id(page, "open-payout-accounts").click();
+  await expect(id(page, "payout-account-demo-account-mtn")).toBeVisible();
+
+  await id(page, "payout-account-add").click();
+  // The client's own number is filled in; this one is another of theirs.
+  await id(page, "phone-input").fill("701 555 012");
+  await id(page, "holder-name-input").fill("Amara Nakato");
+  await id(page, "payout-account-save").click();
+
+  await expect(page.getByText(/We texted a code to \+256 70• ••• 012/)).toBeVisible();
+  await id(page, "code-input").fill("000000");
+  await id(page, "payout-code-submit").click();
+  await expect(page.getByText("That code is not right. Check it and try again.")).toBeVisible();
+  await id(page, "code-input").fill(DEMO_CODE);
+  await id(page, "payout-code-submit").click();
+
+  // A mobile money number is checked against the name the network holds, not by proof.
+  await expect(page.getByText(/We are checking the name the network holds for this number/)).toBeVisible();
+  await expect(id(page, "proof-upload")).toHaveCount(0);
+});
+
+// A 1 by 1 pixel PNG: the browser reads it as a picture, and the demo takes any photo.
+const PHOTO = Buffer.from(
+  "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==",
+  "base64",
+);
+
+/** The step on top. Earlier steps stay in the page, hidden, while the stack holds them. */
+const shown = (page: Page, testId: string) => page.getByTestId(testId).filter({ visible: true });
+
+async function photograph(page: Page, name: string) {
+  const chooser = page.waitForEvent("filechooser");
+  await shown(page, "photo-take").click();
+  await (await chooser).setFiles({ name, mimeType: "image/png", buffer: PHOTO });
+  await expect(shown(page, "photo-preview")).toBeVisible();
+  await shown(page, "photo-use").click();
+}
+
+test("a new client hands in their ID, details and a selfie for checking", async ({ page }) => {
+  // An account with no ID check yet, signed in with an authenticator code.
+  await logIn(page, "701000200");
+  await id(page, "use-authenticator").click();
+  await id(page, "code-input").fill(DEMO_CODE);
+  await id(page, "code-submit").click();
+
+  await id(page, "home-id-check").click();
+  await expect(page.getByText("Which ID will you use?")).toBeVisible();
+  await shown(page, "document-continue").click();
+
+  await expect(page.getByText("Front of your National ID")).toBeVisible();
+  await photograph(page, "front.png");
+  await expect(page.getByText("Back of your National ID")).toBeVisible();
+  await photograph(page, "back.png");
+
+  await shown(page, "details-surname").fill("OKELLO");
+  await shown(page, "details-given-names").fill("Peter");
+  await shown(page, "details-number").fill("CF94012345");
+  await shown(page, "details-born").fill("01/02/1990");
+  await shown(page, "details-expires").fill("18/09/2030");
+  await shown(page, "details-save").click();
+
+  await expect(page.getByText("5 of 5")).toBeVisible();
+  await photograph(page, "selfie.png");
+
+  await expect(page.getByText("Thanks, Peter. We are checking now.")).toBeVisible();
+  await shown(page, "id-check-home").click();
+  await expect(page.getByText("We are checking your ID")).toBeVisible();
+});

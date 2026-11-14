@@ -33,6 +33,8 @@ export const DEMO_CODE = "123456";
 export const DEMO_PHONE = "+256772123456";
 export const DEMO_PHONE_AUTHENTICATOR = "+256701000200";
 export const DEMO_PASSWORD = "correcthorse1";
+/** The demo cannot email, so this link token is always accepted. It proves nothing. */
+export const DEMO_EMAIL_TOKEN = "demo-email-link-not-a-real-token-000000";
 
 /** Stands in for the server's leaked password list. */
 const LEAKED = new Set(["password123", "1234567890", "qwertyuiop"]);
@@ -46,6 +48,8 @@ type Account = {
   passkeys: Passkey[];
   /** Other devices signed in to the account. This device is added on top. */
   otherDevices: Device[];
+  email: string | null;
+  emailVerified: boolean;
 };
 
 const HOUR_MS = 60 * 60 * 1000;
@@ -126,6 +130,8 @@ export type StubOptions = {
   now?: () => number;
   /** Artificial delay so loading states are visible. Tests pass 0. */
   delayMs?: number;
+  /** Hears each email link's token, as a test would find it in the email. */
+  onEmailLink?: (token: string) => void;
 };
 
 export function createStubAuthClient(options: StubOptions = {}): AuthClient {
@@ -141,6 +147,8 @@ export function createStubAuthClient(options: StubOptions = {}): AuthClient {
         hasAuthenticator: true,
         passkeys: demoPasskeys(now()),
         otherDevices: demoDevices(now()),
+        email: "amara@example.com",
+        emailVerified: false,
       },
     ],
     [
@@ -152,17 +160,22 @@ export function createStubAuthClient(options: StubOptions = {}): AuthClient {
         hasAuthenticator: true,
         passkeys: [],
         otherDevices: [],
+        email: "joseph@example.com",
+        emailVerified: true,
       },
     ],
   ]);
   const signups = new Map<string, SignupStart>();
   const tickets = new Map<string, SignupStart>();
   const logins = new Map<string, string>();
+  /** Email links sent, and the number of the account each proves. */
+  const emailLinks = new Map<string, string>();
   /** Reset challenges and the number each was for. A number with no account gets one too. */
   const resets = new Map<string, string>();
   /** A set-up that was started and not yet confirmed, for this session only. */
   let pendingAuthenticatorAt: number | null = null;
   let signedInAt = 0;
+  let signedInRestricted = false;
   /** How this device's session was confirmed, for its row in the device list. */
   let confirmedWith: Device["confirmedWith"] = "signup";
   /** The number of whoever is signed in, as the server would know from the session. */
@@ -174,10 +187,18 @@ export function createStubAuthClient(options: StubOptions = {}): AuthClient {
     delayMs > 0 ? new Promise<void>((resolve) => setTimeout(resolve, delayMs)) : Promise.resolve();
 
   const sessionFor = (phone: string, restricted: boolean): Session => {
+    signedInRestricted = restricted;
     signedIn = phone;
     signedInAt = now();
     pendingAuthenticatorAt = null;
-    return { phone, displayName: accounts.get(phone)?.displayName ?? null, restricted };
+    const account = accounts.get(phone);
+    return {
+      phone,
+      displayName: account?.displayName ?? null,
+      restricted,
+      email: account?.email ?? null,
+      emailVerified: account?.emailVerified ?? false,
+    };
   };
 
   const currentAccount = (): Account => {
@@ -198,8 +219,21 @@ export function createStubAuthClient(options: StubOptions = {}): AuthClient {
 
   return {
     async restoreSession(): Promise<Session | null> {
-      // Nothing is stored, so a reload always starts signed out.
-      return null;
+      // Nothing is stored, so a reload always starts signed out. While the app
+      // runs it answers for the session it opened, as the API would.
+      if (!signedIn) {
+        return null;
+      }
+      const account = accounts.get(signedIn);
+      return account
+        ? {
+            phone: signedIn,
+            displayName: account.displayName,
+            restricted: signedInRestricted,
+            email: account.email,
+            emailVerified: account.emailVerified,
+          }
+        : null;
     },
 
     async startSignup(input): Promise<SignupChallenge> {
@@ -246,6 +280,8 @@ export function createStubAuthClient(options: StubOptions = {}): AuthClient {
         hasAuthenticator: false,
         passkeys: [],
         otherDevices: [],
+        email: signup.email.trim() || null,
+        emailVerified: false,
       });
       confirmedWith = "signup";
       return sessionFor(signup.phone, false);
@@ -350,6 +386,10 @@ export function createStubAuthClient(options: StubOptions = {}): AuthClient {
 
     async startPasswordReset(phone): Promise<PasswordReset> {
       await wait();
+      // A new code replaces any older one for the same number.
+      for (const [id, number] of resets) {
+        if (number === phone) resets.delete(id);
+      }
       const challengeId = nextId("reset");
       resets.set(challengeId, phone);
       return { challengeId, phone };
@@ -431,6 +471,40 @@ export function createStubAuthClient(options: StubOptions = {}): AuthClient {
         throw new AuthError("not_found");
       }
       account.hasAuthenticator = false;
+    },
+
+    async sendEmailProof(): Promise<"sent" | "proved"> {
+      await wait();
+      const account = currentAccount();
+      if (!account.email) {
+        throw new AuthError("not_accepted");
+      }
+      if (account.emailVerified) {
+        return "proved";
+      }
+      // A new link replaces any older one, as on the server.
+      for (const [token, phone] of emailLinks) {
+        if (phone === signedIn) emailLinks.delete(token);
+      }
+      // Long enough to look like a link token: the app checks the shape before sending it.
+      const token = `${nextId("email_link")}_demo_link_token`;
+      emailLinks.set(token, signedIn as string);
+      options.onEmailLink?.(token);
+      return "sent";
+    },
+
+    async confirmEmail(token): Promise<void> {
+      await wait();
+      if (token === DEMO_EMAIL_TOKEN) {
+        return;
+      }
+      const phone = emailLinks.get(token);
+      const account = phone ? accounts.get(phone) : undefined;
+      if (!account) {
+        throw new AuthError("expired");
+      }
+      emailLinks.delete(token);
+      account.emailVerified = true;
     },
 
     async signOut(): Promise<void> {

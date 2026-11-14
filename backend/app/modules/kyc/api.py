@@ -100,6 +100,8 @@ class ClientCheck(Contract):
     # What is still needed before it can be handed in: photo kinds and "details".
     missing: list[str]
     retake_photos: list[PhotoKind]
+    # Of the photos asked for again, those the client has already taken again.
+    retaken: list[PhotoKind]
     client_message: str | None
     submitted_at: datetime | None
     account_number: str | None
@@ -205,6 +207,7 @@ def _client_check(view: service.CheckView) -> ClientCheck:
         ],
         missing=view.missing,
         retake_photos=sorted(view.retake_photos),
+        retaken=sorted(view.retaken),
         client_message=view.client_message,
         submitted_at=view.submitted_at,
         account_number=view.account_number,

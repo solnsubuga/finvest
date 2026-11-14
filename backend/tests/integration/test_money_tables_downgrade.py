@@ -4,8 +4,8 @@ destinations and their two-person checks, the withdrawal limits, the payouts, th
 attempts and their resolutions, the migration checks, the imported statements, the day closes
 and their recorded matches, the pot transfers, the help chat, the complaints register, the
 goals, the email delivery records, the unclaimed accounts, the complaint outcomes, the
-suppression lifts, the client locks, the announcements, the team changes or Finvest's own
-money in the buffer."""
+suppression lifts, the client locks, the announcements, the team changes, Finvest's own money
+in the buffer or the payments of tax to URA."""
 
 import os
 from collections.abc import Iterator
@@ -203,6 +203,15 @@ ROWS = {
         "ALTER TABLE dealing_allocations ENABLE TRIGGER dealing_allocations_guard; "
         "COMMIT",
         "refusing to drop allocations",
+    ),
+    "0170_tax_remittances": (
+        "BEGIN; SELECT set_config('finvest.actor_kind', 'staff', true); "
+        "SELECT set_config('finvest.actor_id', '-Nabc0000000000000B1', true); "
+        "INSERT INTO tax_remittances (id, month, currency, amount_minor, ura_reference, "
+        "bank_reference, paid_on, note, status, proposed_by, proposed_at) VALUES "
+        "('-Nabc0000000000000A1', DATE '2026-10-01', 'UGX', 100000, 'PRN1', 'FT1', "
+        "DATE '2026-11-12', 'Test', 'proposed', '-Nabc0000000000000B1', now()); COMMIT",
+        "refusing to drop tax remittances",
     ),
     "0087_dealing_buffer_capital": (
         "BEGIN; SELECT set_config('finvest.actor_kind', 'staff', true); "
@@ -496,6 +505,12 @@ ROWS = {
         "requested_at) VALUES ('-Nabc0000000000000A1', '-Nabc0000000000000B1', "
         "'monthly_statement', '2026-10', DATE '2026-10-01', DATE '2026-10-31', now())",
         "refusing to drop documents",
+    ),
+    "0142_tax_certificates": (
+        "INSERT INTO documents (id, client_id, kind, idempotency_key, period_start, period_end, "
+        "requested_at) VALUES ('-Nabc0000000000000A1', '-Nabc0000000000000B1', "
+        "'tax_certificate', '2026-27', DATE '2026-07-01', DATE '2027-06-30', now())",
+        "refusing to drop tax certificates",
     ),
     "0141_document_emails": (
         # Only the worker queues an email, and only for a ready document. The migrator owns

@@ -1,12 +1,13 @@
-"""The emails that carry a statement or a receipt. Pure: data in, subject and bodies out.
+"""The emails that carry a statement, a receipt or a tax certificate. Pure: data in, subject
+and bodies out.
 
 Each email has an HTML body and a plain-text body. The HTML is tables with inline styles so
 it looks the same in Gmail, Outlook and phone mail apps, and it has no images: nothing is
 fetched when it is opened, so it cannot track anyone and no client blocks it.
 
-A statement email carries no figures. The figures are in the attached PDF, so a message that
-shows on a locked phone says nothing about what the client holds. A receipt shows the amount
-received, because that is what a receipt is.
+A statement or tax certificate email carries no figures. The figures are in the attached PDF,
+so a message that shows on a locked phone says nothing about what the client holds. A receipt
+shows the amount received, because that is what a receipt is.
 
 Every value is escaped before it goes into HTML. Links go only to Finvest's own app.
 """
@@ -230,6 +231,42 @@ def receipt_email(*, first_name: str, receipt: Receipt, file_name: str) -> Rende
         _page(
             preheader=f"{amount} received for {receipt.paid_for}. Your receipt is attached.",
             title="Payment received",
+            body=body,
+        ),
+    )
+
+
+def tax_certificate_email(
+    *, first_name: str, tax_year: str, period: Period, account_number: str, file_name: str
+) -> Rendered:
+    """The email the yearly withholding tax certificate is attached to. No figures, no rate."""
+    detail = f"Account {formatting.account_number(account_number)}"
+    lines = [
+        f"Hello {first_name},",
+        f"Your withholding tax certificate for the {tax_year} tax year, "
+        f"{formatting.day(period.start)} to {formatting.day(period.end)}, is attached. It shows "
+        "the interest your investments earned in the year, the tax Finvest withheld from it "
+        "and what you earned after tax.",
+    ]
+    closing = [
+        "Keep it with your tax records. You can download it again at any time from Documents "
+        "in the app.",
+    ]
+    body = (
+        _paragraphs(lines)
+        + _attachment(file_name, detail)
+        + _button("Open Documents", DOCUMENTS_LINK)
+        + _paragraphs(closing)
+    )
+    text = "\n\n".join(
+        [*lines, f"Attached: {file_name} ({detail})", f"Open Documents: {DOCUMENTS_LINK}", *closing]
+    )
+    return Rendered(
+        f"Your Finvest tax certificate for {tax_year}",
+        text + "\n\n" + _TEXT_FOOTER,
+        _page(
+            preheader=f"Your withholding tax certificate is attached as a PDF. {detail}.",
+            title=f"Your {tax_year} tax certificate",
             body=body,
         ),
     )

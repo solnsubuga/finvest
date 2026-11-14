@@ -89,6 +89,20 @@ describe("Passkeys", () => {
     expect(await screen.findByTestId("setup-passkey")).toBeTruthy();
   });
 
+  it("says SMS is all that is left when the last passkey goes and there is no authenticator app", async () => {
+    await openSecurity();
+    await fireEvent.press(screen.getByTestId("on-authenticator"));
+    await fireEvent.press(await screen.findByTestId("confirm-authenticator-off"));
+    await fireEvent.press(await screen.findByTestId("done"));
+    await fireEvent.press(await screen.findByTestId("on-passkey"));
+    await screen.findByText("iPhone");
+    await fireEvent.press(screen.getAllByText("Remove")[0]!);
+    await fireEvent.press(screen.getByTestId("confirm-remove-passkey"));
+    await screen.findByText(/The passkey "iPhone" is removed/);
+    await fireEvent.press(screen.getByText("Remove"));
+    expect(screen.getByText(/you log in with an SMS code, and every log in limits withdrawals/)).toBeTruthy();
+  });
+
   it("keeps the passkey when the client changes their mind", async () => {
     await openSecurity();
     await fireEvent.press(screen.getByTestId("on-passkey"));

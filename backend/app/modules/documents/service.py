@@ -1,4 +1,5 @@
-"""Asking for statements and receipts, and reading them back. Each runs in the caller's session.
+"""Asking for statements, receipts and tax certificates, and reading them back. Each runs in
+the caller's session.
 
 A document is asked for first and built later by the worker (`jobs.py`), so no request waits
 for the ledger to be read or a PDF to be drawn. Asking twice with the same key asks once.
@@ -38,6 +39,9 @@ class DocumentKind(StrEnum):
     MONTHLY_STATEMENT = "monthly_statement"
     REQUESTED_STATEMENT = "requested_statement"
     RECEIPT = "receipt"
+    # Uganda's tax year, 1 July to 30 June, keyed by its label (`2026-27`). The only document
+    # that shows tax withheld, and never a rate.
+    TAX_CERTIFICATE = "tax_certificate"
 
 
 class DocumentStatus(StrEnum):

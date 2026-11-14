@@ -1,4 +1,4 @@
-"""Draw a statement or a receipt as an A4 PDF, in Finvest's black and lime.
+"""Draw a statement, a receipt or a tax certificate as an A4 PDF, in Finvest's black and lime.
 
 Pure apart from reading the bundled font files: data in, bytes out, no network and no clock.
 The same statement always gives the same bytes, so a stored PDF can be checked against its
@@ -20,6 +20,7 @@ from app.modules.documents.domain.statements import (
     Statement,
     Summary,
 )
+from app.modules.tax import service as tax
 from app.shared.money import Money
 
 FONTS = Path(__file__).parent / "fonts"
@@ -437,3 +438,110 @@ def receipt_pdf(receipt: Receipt) -> bytes:
         f"contact Finvest and quote {receipt.reference}.",
     )
     return bytes(pdf.output())
+
+
+def tax_certificate_pdf(certificate: tax.Certificate, *, reference: str, issued_on: date) -> bytes:
+    """The yearly withholding tax certificate: interest before tax, tax withheld and interest
+    after tax, for each investment and in total. The one document with a tax amount on it. It
+    never shows a rate."""
+    year = certificate.tax_year
+    account = formatting.account_number(certificate.account_number)
+    pdf = _Page(
+        title=f"Finvest withholding tax certificate, {year.label}",
+        footer_left=f"Certificate {reference}  ·  Account {account}  ·  finvestug.com",
+    )
+    _fixed_date(pdf, datetime.combine(issued_on, time(), tzinfo=UTC))
+    pdf.add_page()
+    _band(pdf, "Tax certificate", f"Tax year {year.label}")
+    _facts(
+        pdf,
+        [
+            _Fact("Prepared for", certificate.holder_name),
+            _Fact("Account number", account),
+            _Fact("Taxpayer identification number (TIN)", certificate.tin or "Not given"),
+        ],
+        [
+            _Fact(
+                "Tax year",
+                f"{formatting.day(year.first_day)} to {formatting.day(year.last_day)}",
+            ),
+            _Fact("Issued", formatting.day(issued_on)),
+            _Fact("Certificate number", reference),
+        ],
+    )
+    for total in certificate.totals:
+        if len(certificate.totals) > 1:
+            _heading(pdf, f"In {total.currency.value}")
+        _tax_total(pdf, total)
+
+    _heading(pdf, "Interest by investment")
+    _table(
+        pdf,
+        [
+            _Column("Investment", 0.28),
+            _Column("Started", 0.12),
+            _Column("Matures", 0.12),
+            _Column("Before tax", 0.16, "R"),
+            _Column("Tax withheld", 0.16, "R"),
+            _Column("After tax", 0.16, "R"),
+        ],
+        [
+            [
+                (f"{line.product_name}\n{line.investment_id}", "B"),
+                (formatting.day(line.start_date) if line.start_date else "-", ""),
+                (formatting.day(line.maturity_date) if line.maturity_date else "-", ""),
+                (formatting.money(line.gross), ""),
+                (formatting.money(line.tax), ""),
+                (formatting.money(line.net), "B"),
+            ]
+            for line in certificate.lines
+        ],
+        continued="Interest by investment, continued",
+    )
+    _note(
+        pdf,
+        "Finvest withheld this tax from the interest your investments earned in the tax year "
+        "and pays it to the Uganda Revenue Authority. Keep this certificate with your tax "
+        "records: it shows the tax already taken from your interest. Interest is counted on the "
+        "day it was earned, including on investments that matured, were rolled over or were "
+        "withdrawn during the year. A negative line puts right interest counted in an earlier "
+        "year. This certificate is issued by Finvest from its own books. To check that it is "
+        f"genuine, contact Finvest and quote {reference}.",
+    )
+    return bytes(pdf.output())
+
+
+def _tax_total(pdf: _Page, total: tax.CertificateTotal) -> None:
+    """Before tax, less tax withheld, gives after tax: in a soft box, the last in bold."""
+    row_h = 8.0
+    box_h = 8 + row_h * 2 + 14
+    top = pdf.get_y()
+    pdf.set_fill_color(*GROUND)
+    pdf.rect(MARGIN, top, CONTENT_W, box_h, style="F", round_corners=True, corner_radius=4)
+    y = top + 4
+    for label, shown in (
+        ("Interest earned before tax", formatting.money(total.gross)),
+        (
+            "Withholding tax deducted",
+            formatting.money(total.tax) if total.tax.is_zero else "-" + formatting.money(total.tax),
+        ),
+    ):
+        pdf.set_xy(MARGIN + 6, y)
+        pdf.font(10, colour=MUTED)
+        pdf.cell(CONTENT_W / 2, row_h, label)
+        pdf.set_xy(MARGIN + CONTENT_W / 2, y)
+        pdf.font(10, weight="B")
+        pdf.cell(CONTENT_W / 2 - 6, row_h, shown, align="R")
+        y += row_h
+    pdf.set_draw_color(*LINE)
+    pdf.set_line_width(0.3)
+    pdf.line(MARGIN + 6, y + 1.5, MARGIN + CONTENT_W - 6, y + 1.5)
+    pdf.set_fill_color(*LIME)
+    pdf.rect(MARGIN + 6, y + 5, 1.6, 8, style="F")
+    pdf.set_xy(MARGIN + 10, y + 4)
+    pdf.font(11.5, weight="I")
+    pdf.cell(CONTENT_W / 2, 10, "Interest earned after tax")
+    pdf.set_xy(MARGIN + CONTENT_W / 2, y + 4)
+    pdf.font(15, weight="I")
+    pdf.cell(CONTENT_W / 2 - 6, 10, formatting.money(total.net), align="R")
+    pdf.set_y(top + box_h + 8)

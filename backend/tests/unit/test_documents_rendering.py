@@ -4,7 +4,12 @@ from datetime import date, datetime
 
 import pytest
 
-from app.modules.documents.domain.emails import DOCUMENTS_LINK, receipt_email, statement_email
+from app.modules.documents.domain.emails import (
+    DOCUMENTS_LINK,
+    receipt_email,
+    statement_email,
+    tax_certificate_email,
+)
 from app.modules.documents.domain.receipts import Receipt
 from app.modules.documents.domain.statements import (
     Activity,
@@ -15,7 +20,8 @@ from app.modules.documents.domain.statements import (
     StatementKind,
     summarise,
 )
-from app.modules.documents.pdf import receipt_pdf, statement_pdf
+from app.modules.documents.pdf import receipt_pdf, statement_pdf, tax_certificate_pdf
+from app.modules.tax import service as tax
 from app.shared.business_day import KAMPALA
 from app.shared.money import Currency, Money
 
@@ -204,3 +210,71 @@ def test_a_statement_over_days_that_are_not_final_says_so_and_still_draws() -> N
     assert drawn.startswith(b"%PDF-")
     assert drawn != statement_pdf(final)
     assert pages(drawn) == 1
+
+
+# The yearly tax certificate ---------------------------------------------------------------------
+
+
+def certificate(lines: int = 2, *, tin: str | None = "1000123456") -> tax.Certificate:
+    made = tuple(
+        tax.CertificateLine(
+            investment_id=f"-Nabc00000000000{n:04d}",
+            product_name="91 Day Treasury Bill",
+            start_date=date(2026, 7, 1 + n % 28),
+            maturity_date=date(2026, 9, 30),
+            gross=ugx(31_164 + n),
+            tax=ugx(4_674),
+            net=ugx(26_490 + n),
+        )
+        for n in range(lines)
+    )
+    return tax.Certificate(
+        client_id="-Nabc0000000000000B1",
+        holder_name="Amara Nakato",
+        account_number="1001004827",
+        tin=tin,
+        tax_year=tax.TaxYear(2026),
+        lines=made,
+        totals=(
+            tax.CertificateTotal(
+                Currency.UGX,
+                sum((line.gross for line in made), ugx(0)),
+                sum((line.tax for line in made), ugx(0)),
+                sum((line.net for line in made), ugx(0)),
+            ),
+        ),
+    )
+
+
+def test_a_tax_certificate_pdf_is_a_pdf_and_the_same_every_time() -> None:
+    first = tax_certificate_pdf(certificate(), reference="TC-1", issued_on=date(2027, 7, 2))
+    assert first.startswith(b"%PDF-")
+    assert first == tax_certificate_pdf(certificate(), reference="TC-1", issued_on=date(2027, 7, 2))
+    assert pages(first) == 1
+
+
+def test_a_tax_certificate_with_many_investments_or_no_tin_still_draws() -> None:
+    long = tax_certificate_pdf(certificate(lines=60), reference="TC-1", issued_on=date(2027, 7, 2))
+    assert pages(long) >= 2
+    assert tax_certificate_pdf(
+        certificate(tin=None), reference="TC-1", issued_on=date(2027, 7, 2)
+    ).startswith(b"%PDF-")
+
+
+def test_a_tax_certificate_email_carries_no_figures_and_no_rate() -> None:
+    mail = tax_certificate_email(
+        first_name="Amara",
+        tax_year="2026-27",
+        period=Period(date(2026, 7, 1), date(2027, 6, 30)),
+        account_number="1001004827",
+        file_name="Finvest tax certificate 2026-27.pdf",
+    )
+    assert mail.subject == "Your Finvest tax certificate for 2026-27"
+    for body in (mail.subject, mail.text, mail.html):
+        assert "UGX" not in body
+        assert "$" not in body
+        assert "%" not in body.replace("100%", "")
+    assert "1 Jul 2026 to 30 Jun 2027" in mail.text
+    assert "1001 004 827" in mail.text
+    links = re.findall(r'href="([^"]+)"', mail.html)
+    assert all(re.fullmatch(r"https://(app\.)?finvestug\.com(/[a-z]*)?", link) for link in links)

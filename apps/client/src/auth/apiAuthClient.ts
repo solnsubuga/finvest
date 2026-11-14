@@ -2,6 +2,7 @@ import type { ClientSignedIn } from "@finvest/api-client/client";
 
 import { api, ApiError } from "@/api/http";
 import { saveToken } from "@/api/token";
+import { forgetPush } from "@/push/registration";
 
 import { AuthClient, AuthError, AuthErrorCode, Device, SecondStep, Session } from "./types";
 import { createPasskey, PasskeyCancelled, passkeysSupported, signWithPasskey } from "./webauthn";
@@ -59,13 +60,22 @@ function usable(methods: readonly string[]): SecondStep[] {
   );
 }
 
-export function toSession(view: { phone: string; restricted_until: string | null }, now: number = Date.now()): Session {
+type SessionView = {
+  phone: string;
+  restricted_until: string | null;
+  email?: string | null;
+  email_verified?: boolean;
+};
+
+export function toSession(view: SessionView, now: number = Date.now()): Session {
   const until = view.restricted_until ? Date.parse(view.restricted_until) : NaN;
   return {
     phone: view.phone,
     // The name is known only after the identity check, which the session does not carry yet.
     displayName: null,
     restricted: Number.isFinite(until) && until > now,
+    email: view.email ?? null,
+    emailVerified: Boolean(view.email && view.email_verified),
   };
 }
 
@@ -217,8 +227,18 @@ export function createApiAuthClient(): AuthClient {
         await api("DELETE /client/authenticator", {});
       }),
 
+    sendEmailProof: () =>
+      wrap(async () => ((await api("POST /client/email/verification", {})).sent ? "sent" : "proved")),
+
+    confirmEmail: (token) =>
+      wrap(async () => {
+        await api("POST /client/email/verification/confirm", { body: { token } });
+      }),
+
     signOut: async () => {
       try {
+        // While the session still works, so the API knows whose phone to stop.
+        await forgetPush();
         await api("POST /client/sign-out", {});
       } catch {
         // Signing out on this device goes ahead even when the API cannot be reached.

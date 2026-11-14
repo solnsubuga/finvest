@@ -187,3 +187,40 @@ describe("amount formats", () => {
     expect(formatAmount({ currency: "USD", minor: 50_000 })).toBe("USD 500.00");
   });
 });
+
+describe("demo maturity choice and pay-out", () => {
+  const demo = (maturedWaiting = false) =>
+    createStubInvestingClient({ delayMs: 0, now: () => Date.parse("2026-11-13T09:00:00Z"), maturedWaiting });
+
+  it("changes the choice, needing an approved account only to pay out", async () => {
+    const api = demo();
+    const running = (await api.listInvestments()).find((one) => one.atMaturity === "roll_over")!;
+    await expect(api.chooseAtMaturity({ investmentId: running.id, atMaturity: "pay_out", destinationId: "nope" })).rejects.toEqual(
+      new InvestingError("account_not_ready"),
+    );
+    // An account still in its first day may be chosen for later.
+    const after = await api.chooseAtMaturity({ investmentId: running.id, atMaturity: "pay_out", destinationId: "demo-account-bank" });
+    expect(after).toMatchObject({ atMaturity: "pay_out", payoutDestinationId: "demo-account-bank" });
+    await expect(
+      api.chooseAtMaturity({ investmentId: running.id, atMaturity: "roll_over", destinationId: "demo-account-bank" }),
+    ).rejects.toEqual(new InvestingError("invalid"));
+    expect((await api.chooseAtMaturity({ investmentId: running.id, atMaturity: "roll_over", destinationId: null })).payoutDestinationId).toBeNull();
+  });
+
+  it("pays matured money once, to a ready account within the mobile money limit", async () => {
+    const api = demo(true);
+    const matured = (await api.listInvestments()).find((one) => one.waitingForDestination)!;
+    const request = { investmentId: matured.id, destinationId: "demo-account-mtn" };
+    await expect(api.payOutMatured({ ...request, destinationId: "demo-account-bank" })).rejects.toEqual(
+      new InvestingError("account_not_ready"),
+    );
+    const paid = await api.payOutMatured(request);
+    expect(paid.payoutId).not.toBeNull();
+    expect(paid.waitingForDestination).toBe(false);
+    // The same account asked again is the same payout.
+    expect((await api.payOutMatured(request)).payoutId).toBe(paid.payoutId);
+    await expect(api.chooseAtMaturity({ investmentId: matured.id, atMaturity: "roll_over", destinationId: null })).rejects.toEqual(
+      new InvestingError("cannot_change_maturity"),
+    );
+  });
+});

@@ -2,9 +2,9 @@ import { useCallback, useEffect, useState } from "react";
 import { Button } from "@/components/ui/button.tsx";
 import { cn } from "@/lib.ts";
 import { Panel, PanelRow, Pill } from "@/screens/migration/Checks.tsx";
-import type { Standing } from "./api.ts";
+import type { Currency, Standing } from "./api.ts";
 import { groupsErrorMessage, type Group, type GroupDetail, type GroupsApi, type GroupStatus } from "./groupsApi.ts";
-import { CATEGORY_LABELS, formatDay, formatShillings, STANDING_LABELS } from "./labels.ts";
+import { CATEGORY_LABELS, formatDay, formatMoney, STANDING_LABELS } from "./labels.ts";
 
 type Load<T> = { state: "loading" } | { state: "failed"; message: string } | { state: "ready"; value: T };
 type Filter = GroupStatus | "all";
@@ -176,7 +176,7 @@ function GroupsTable({ groups, selected, onSelect }: { groups: readonly Group[];
                 </div>
               </th>
               <td className="px-3 py-3 whitespace-nowrap">
-                <div className="font-bold tabular-nums">{formatShillings(group.target)}</div>
+                <div className="font-bold tabular-nums">{formatMoney(group.target, group.currency)}</div>
                 <div className="text-xs text-muted">{group.targetDate ? `By ${formatDay(group.targetDate)}` : "No date"}</div>
               </td>
               <td className="px-3 py-3">
@@ -234,7 +234,7 @@ function Detail({ api, groupId }: { api: GroupsApi; groupId: string }) {
     <section aria-label={`Group goal: ${group.name}`} className="flex flex-col gap-4">
       <Panel title={group.name}>
         <div className="flex items-baseline justify-between gap-3">
-          <span className="text-2xl font-extrabold tabular-nums">{formatShillings(progress.value)}</span>
+          <span className="text-2xl font-extrabold tabular-nums">{formatMoney(progress.value, group.currency)}</span>
           <Pill tone={STANDING_TONES[progress.standing]}>{STANDING_LABELS[progress.standing]}</Pill>
         </div>
         <div
@@ -247,7 +247,7 @@ function Detail({ api, groupId }: { api: GroupsApi; groupId: string }) {
         >
           <div className="h-full bg-black" style={{ width: `${Math.min(progress.percent, 100)}%` }} />
         </div>
-        <PanelRow name="Target together" value={`${formatShillings(group.target)}, ${progress.percent}% there`} />
+        <PanelRow name="Target together" value={`${formatMoney(group.target, group.currency)}, ${progress.percent}% there`} />
         <PanelRow name="Needed by" value={group.targetDate ? formatDay(group.targetDate) : "No date"} />
         <PanelRow name="Members now" value={String(current.length)} />
         <PanelRow name="Counted as of" value={asOf ? formatDay(asOf) : "Not counted yet"} />
@@ -257,18 +257,18 @@ function Detail({ api, groupId }: { api: GroupsApi; groupId: string }) {
         </p>
       </Panel>
       <Panel title="Members">
-        <MemberList members={current} ownerClientId={group.ownerClientId} />
+        <MemberList members={current} ownerClientId={group.ownerClientId} currency={group.currency} />
       </Panel>
       {past.length > 0 ? (
         <Panel title="Left the group">
-          <MemberList members={past} ownerClientId={group.ownerClientId} />
+          <MemberList members={past} ownerClientId={group.ownerClientId} currency={group.currency} />
         </Panel>
       ) : null}
     </section>
   );
 }
 
-function MemberList({ members, ownerClientId }: { members: GroupDetail["members"]; ownerClientId: string }) {
+function MemberList({ members, ownerClientId, currency }: { members: GroupDetail["members"]; ownerClientId: string; currency: Currency }) {
   return (
     <ul className="m-0 flex list-none flex-col p-0">
       {members.map((member) => (
@@ -284,7 +284,7 @@ function MemberList({ members, ownerClientId }: { members: GroupDetail["members"
             </div>
           </div>
           <div className="flex flex-col items-end gap-1 text-right">
-            <span className="font-bold whitespace-nowrap tabular-nums">{formatShillings(member.value)}</span>
+            <span className="font-bold whitespace-nowrap tabular-nums">{formatMoney(member.value, currency)}</span>
             <span className="text-xs text-muted">{member.valueOn ? `On ${formatDay(member.valueOn)}` : "Not counted yet"}</span>
           </div>
         </li>

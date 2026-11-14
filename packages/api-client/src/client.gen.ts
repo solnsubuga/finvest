@@ -20,6 +20,12 @@ export const AuthenticatorState = z.object({
 });
 export type AuthenticatorState = z.infer<typeof AuthenticatorState>;
 
+export const BankOut = z.object({
+  code: z.string(),
+  name: z.string(),
+});
+export type BankOut = z.infer<typeof BankOut>;
+
 export const MoneyView = z.object({
   currency: z.enum(["UGX", "USD"]),
   minor: z.number().int(),
@@ -166,6 +172,7 @@ export const ClientCheck = z.object({
   missing: z.array(z.string()),
   photos: z.array(ClientPhoto),
   retake_photos: z.array(PhotoKind),
+  retaken: z.array(PhotoKind),
   status: CheckStatus,
   submitted_at: z.string().nullable(),
 });
@@ -336,7 +343,7 @@ export const DocumentItem = z.object({
   file_name: z.string().nullable(),
   finished_at: z.string().nullable(),
   id: z.string(),
-  kind: z.enum(["monthly_statement", "requested_statement", "receipt"]),
+  kind: z.enum(["monthly_statement", "requested_statement", "receipt", "tax_certificate"]),
   not_final_from: z.string().nullable(),
   requested_at: z.string(),
   status: z.enum(["pending", "ready", "failed"]),
@@ -715,6 +722,12 @@ export const PaymentView = z.object({
 });
 export type PaymentView = z.infer<typeof PaymentView>;
 
+export const PaymentPage = z.object({
+  items: z.array(PaymentView),
+  next_before: z.string().nullable(),
+});
+export type PaymentPage = z.infer<typeof PaymentPage>;
+
 export const PayoutOut = z.object({
   amount: MoneyView,
   business_date: z.string(),
@@ -1067,6 +1080,17 @@ export const operations = {
     idempotent: false,
     status: 200,
     response: AutoinvestApiPlanView,
+  },
+  "GET /client/banks": {
+    method: "GET",
+    path: "/client/banks",
+    params: z.object({}),
+    query: z.object({}),
+    body: null,
+    bodyKind: null,
+    idempotent: false,
+    status: 200,
+    response: z.array(BankOut),
   },
   "GET /client/claim": {
     method: "GET",
@@ -1869,6 +1893,19 @@ export const operations = {
     idempotent: false,
     status: 200,
     response: ResetStarted,
+  },
+  "GET /client/payments": {
+    method: "GET",
+    path: "/client/payments",
+    params: z.object({}),
+    query: z.object({
+    before: z.string().nullable().optional(),
+  }),
+    body: null,
+    bodyKind: null,
+    idempotent: false,
+    status: 200,
+    response: PaymentPage,
   },
   "GET /client/payments/{payment_id}": {
     method: "GET",

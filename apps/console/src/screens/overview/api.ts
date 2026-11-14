@@ -27,6 +27,7 @@ export const KINDS = [
   "complaint_outcome",
   "announcement",
   "payout_account",
+  "tax_remittance",
 ] as const;
 
 export type Kind = (typeof KINDS)[number];

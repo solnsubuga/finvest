@@ -2,6 +2,8 @@ import { API_URL } from "@/api/config";
 import { ApiError, setFetch } from "@/api/http";
 import { readToken, saveToken } from "@/api/token";
 
+import { registerPush, setPushDevice } from "@/push/registration";
+
 import { createApiAuthClient, toAuthError, toSession } from "../apiAuthClient";
 import { AuthError } from "../types";
 
@@ -66,7 +68,7 @@ describe("the sign-in client for the real API", () => {
     expect(seen[0]!.body).toEqual({ phone: "+256772123456", email: null });
     const ticket = await client.confirmSignupCode(challenge.challengeId, "123456");
     const session = await client.completeSignup(ticket.ticket, "a-long-unusual-phrase");
-    expect(session).toEqual({ phone: "+256772123456", displayName: null, restricted: false });
+    expect(session).toEqual({ phone: "+256772123456", displayName: null, restricted: false, email: null, emailVerified: false });
     expect(await readToken()).toBe("phone-token");
     await expect(client.restoreSession()).resolves.toEqual(session);
     expect(seen.at(-1)!.auth).toBe("Bearer phone-token");
@@ -159,6 +161,41 @@ describe("the sign-in client for the real API", () => {
     const client = createApiAuthClient();
     await expect(client.removePasskey(ID)).rejects.toEqual(new AuthError("sign_in_again"));
     await expect(client.signOutDevice(ID)).rejects.toEqual(new AuthError("not_found"));
+  });
+
+  it("reads the email and whether it is proved, and never calls an absent address proved", () => {
+    expect(toSession({ phone: "+256772123456", restricted_until: null, email: "a@example.com", email_verified: true })).toMatchObject({
+      email: "a@example.com",
+      emailVerified: true,
+    });
+    expect(toSession({ phone: "+256772123456", restricted_until: null, email: null, email_verified: true })).toMatchObject({
+      email: null,
+      emailVerified: false,
+    });
+  });
+
+  it("asks for an email link and spends one", async () => {
+    const seen = serve({
+      "POST /client/email/verification": { status: 200, body: { sent: false } },
+      "POST /client/email/verification/confirm": refused(410, "expired"),
+    });
+    const client = createApiAuthClient();
+    await expect(client.sendEmailProof()).resolves.toBe("proved");
+    await expect(client.confirmEmail("t".repeat(43))).rejects.toEqual(new AuthError("expired"));
+    expect(seen[1]?.body).toEqual({ token: "t".repeat(43) });
+  });
+
+  it("gives up this phone's push token before signing out", async () => {
+    setPushDevice({ platform: "ios", permission: async () => "granted", ask: async () => "granted", token: async () => "ExponentPushToken[x]" });
+    const seen = serve({
+      "PUT /client/push-devices": { status: 204 },
+      "POST /client/push-devices/remove": { status: 204 },
+      "POST /client/sign-out": { status: 204 },
+    });
+    await registerPush({ ask: false });
+    await createApiAuthClient().signOut();
+    setPushDevice(null);
+    expect(seen.map((s) => s.key)).toEqual(["PUT /client/push-devices", "POST /client/push-devices/remove", "POST /client/sign-out"]);
   });
 
   it("adds nothing the API did not list", async () => {

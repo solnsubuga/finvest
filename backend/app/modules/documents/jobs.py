@@ -1,5 +1,6 @@
-"""The worker's side of documents: build each statement or receipt once, email it, ask for
-a receipt when a payment is confirmed, and start the monthly run.
+"""The worker's side of documents: build each statement, receipt or tax certificate once,
+email it, ask for a receipt when a payment is confirmed, and start the monthly run. The run
+for June also asks for each client's tax certificate for the tax year that June ends.
 
 Building reads the ledger, draws the PDF and stores it in the single fenced transaction that
 also completes the job, so a job run twice builds nothing the second time. That transaction
@@ -37,8 +38,14 @@ from app.infrastructure.jobs import (
     enqueue,
     external_effect,
 )
+from app.infrastructure.sealing import Sealer
 from app.modules.documents import building, pdf, service
-from app.modules.documents.domain.emails import Rendered, receipt_email, statement_email
+from app.modules.documents.domain.emails import (
+    Rendered,
+    receipt_email,
+    statement_email,
+    tax_certificate_email,
+)
 from app.modules.documents.domain.statements import (
     Period,
     StatementDoesNotAddUp,
@@ -54,12 +61,14 @@ from app.modules.ledger import closing
 from app.modules.ledger import statements as ledger
 from app.modules.notifications import contract as notifications
 from app.modules.payments import service as payments
+from app.modules.tax import service as tax
 from app.shared.actors import SYSTEM
 from app.shared.business_day import business_date
 from app.shared.clock import Clock
 from app.shared.errors import ApplicationError
 
 MONTHLY_PAGE = 200
+_STATEMENTS = (DocumentKind.MONTHLY_STATEMENT, DocumentKind.REQUESTED_STATEMENT)
 logger = structlog.get_logger()
 
 _FINISH = text(
@@ -92,9 +101,20 @@ def receipt_reference(document_id: str) -> str:
     return f"RC-{document_id}"
 
 
+def certificate_reference(document_id: str) -> str:
+    return f"TC-{document_id}"
+
+
+def _tax_year(view: DocumentView) -> tax.TaxYear:
+    assert view.period is not None
+    return tax.tax_year_of(view.period.start)
+
+
 def file_name(view: DocumentView) -> str:
     if view.kind is DocumentKind.RECEIPT:
         return f"Finvest receipt {receipt_reference(view.id)}.pdf"
+    if view.kind is DocumentKind.TAX_CERTIFICATE:
+        return f"Finvest tax certificate {_tax_year(view).label}.pdf"
     assert view.period is not None
     return f"Finvest statement {view.period.label}.pdf"
 
@@ -114,10 +134,14 @@ class DocumentJobs:
         *,
         email: EmailTransport | None = None,
         closed_through: ClosedThrough | None = None,
+        sealer: Sealer | None = None,
     ) -> None:
         self._database = database
         self._clock = clock
         self._email = email or DisabledTransport()
+        # Opens the TIN a client gave, for their tax certificate. A worker started without the
+        # identity key holds certificates back until it has one.
+        self._sealer = sealer
         # The last day the ledger is closed through. Tests pass their own, because closing a
         # day is one fact for the whole shared test database and is never undone.
         self._closed_through = closed_through or closing.closed_through
@@ -158,7 +182,8 @@ class DocumentJobs:
                     "not_final_from": open_from,
                 },
             )
-            if status is DocumentStatus.READY and view.period is not None:
+            if status is DocumentStatus.READY and view.kind in _STATEMENTS:
+                assert view.period is not None
                 await notifications.notify(
                     session,
                     event_name="statement_ready",
@@ -181,10 +206,12 @@ class DocumentJobs:
         open_from: date | None = None
         if view.period is not None:
             open_from = not_final_from(view.period, await self._closed_through(session))
-            if open_from is not None and view.kind is DocumentKind.MONTHLY_STATEMENT:
+            if open_from is not None and view.kind is not DocumentKind.REQUESTED_STATEMENT:
                 # The monthly run asks only for a closed month, so this is a guard. The row
                 # stays pending and the build comes back later.
                 raise RetryableJobError(code="ledger_not_closed")
+        if view.kind is DocumentKind.TAX_CERTIFICATE:
+            return await self._draw_certificate(session, view)
         try:
             if view.kind is DocumentKind.RECEIPT:
                 assert view.source_id is not None
@@ -217,6 +244,37 @@ class DocumentJobs:
         if view.kind is DocumentKind.MONTHLY_STATEMENT and drawn.is_empty:
             return DocumentStatus.EMPTY, None, None, None
         return DocumentStatus.READY, None, pdf.statement_pdf(drawn), open_from
+
+    async def _draw_certificate(
+        self, session: AsyncSession, view: DocumentView
+    ) -> tuple[DocumentStatus, str | None, bytes | None, date | None]:
+        if self._sealer is None:
+            # Configuration, not data: the build waits for a worker that has the key.
+            logger.error(
+                "tax_certificate_waiting", document_id=view.id, error_code="identity_key_missing"
+            )
+            raise RetryableJobError(code="identity_key_missing")
+        try:
+            certificate = await tax.certificate_figures(
+                session, self._sealer, view.client_id, _tax_year(view)
+            )
+        except tax.NoAccount:
+            return DocumentStatus.FAILED, "not_approved", None, None
+        except tax.DoesNotAddUp:
+            # A bug or bad data, never a client's fault. Nothing is sent, and staff see it.
+            logger.error(
+                "tax_certificate_does_not_add_up", document_id=view.id, error_code="does_not_add_up"
+            )
+            return DocumentStatus.FAILED, "does_not_add_up", None, None
+        if certificate.is_empty:
+            # Nothing earned in the year: nothing to certify, show or send.
+            return DocumentStatus.EMPTY, None, None, None
+        drawn = pdf.tax_certificate_pdf(
+            certificate,
+            reference=certificate_reference(view.id),
+            issued_on=business_date(self._clock.now()),
+        )
+        return DocumentStatus.READY, None, drawn, None
 
     async def monthly_run(self, job: ClaimedJob, context: JobContext) -> None:
         """Ask for each client's statement for a month once the ledger has closed that month.
@@ -296,6 +354,8 @@ class DocumentJobs:
                 raise PermanentJobError(code="ledger_not_closed")
             now = self._clock.now()
             clients = await ledger.clients_with_accounts(session, after=after, limit=MONTHLY_PAGE)
+            # June ends Uganda's tax year, so its run also asks for the year's certificates.
+            year = tax.tax_year_of(period.end) if period.end.month == 6 else None
             for client_id in clients:
                 await service.ask(
                     session,
@@ -305,6 +365,15 @@ class DocumentJobs:
                     period=period,
                     now=now,
                 )
+                if year is not None:
+                    await service.ask(
+                        session,
+                        client_id=client_id,
+                        kind=DocumentKind.TAX_CERTIFICATE,
+                        key=year.label,
+                        period=Period(year.first_day, year.last_day),
+                        now=now,
+                    )
             if len(clients) == MONTHLY_PAGE:
                 await enqueue(
                     session,
@@ -467,6 +536,14 @@ async def _render(session: AsyncSession, view: DocumentView, file: DocumentFile)
             first_name=holder.first_name, receipt=receipt, file_name=file.file_name
         )
     assert view.period is not None
+    if view.kind is DocumentKind.TAX_CERTIFICATE:
+        return tax_certificate_email(
+            first_name=holder.first_name,
+            tax_year=_tax_year(view).label,
+            period=view.period,
+            account_number=holder.account_number,
+            file_name=file.file_name,
+        )
     monthly = view.kind is DocumentKind.MONTHLY_STATEMENT
     return statement_email(
         kind=StatementKind.MONTHLY if monthly else StatementKind.REQUESTED,

@@ -1,0 +1,76 @@
+/**
+ * Countries that issue the documents clients bring, by ISO 3166 code. East
+ * Africa first, then the rest of Africa and the countries Uganda's residents
+ * most often come from. The API takes any two-letter code.
+ */
+export const NEARBY: { code: string; name: string }[] = [
+  { code: "UG", name: "Uganda" },
+  { code: "KE", name: "Kenya" },
+  { code: "TZ", name: "Tanzania" },
+  { code: "RW", name: "Rwanda" },
+  { code: "SS", name: "South Sudan" },
+  { code: "CD", name: "DR Congo" },
+  { code: "BI", name: "Burundi" },
+];
+
+export const OTHERS: { code: string; name: string }[] = [
+  { code: "DZ", name: "Algeria" },
+  { code: "AO", name: "Angola" },
+  { code: "AU", name: "Australia" },
+  { code: "BJ", name: "Benin" },
+  { code: "BW", name: "Botswana" },
+  { code: "BF", name: "Burkina Faso" },
+  { code: "CM", name: "Cameroon" },
+  { code: "CA", name: "Canada" },
+  { code: "CF", name: "Central African Republic" },
+  { code: "TD", name: "Chad" },
+  { code: "CN", name: "China" },
+  { code: "CG", name: "Congo" },
+  { code: "CI", name: "Côte d'Ivoire" },
+  { code: "DJ", name: "Djibouti" },
+  { code: "EG", name: "Egypt" },
+  { code: "ER", name: "Eritrea" },
+  { code: "ET", name: "Ethiopia" },
+  { code: "FR", name: "France" },
+  { code: "GA", name: "Gabon" },
+  { code: "GM", name: "Gambia" },
+  { code: "DE", name: "Germany" },
+  { code: "GH", name: "Ghana" },
+  { code: "GN", name: "Guinea" },
+  { code: "IN", name: "India" },
+  { code: "IT", name: "Italy" },
+  { code: "JP", name: "Japan" },
+  { code: "LS", name: "Lesotho" },
+  { code: "LR", name: "Liberia" },
+  { code: "LY", name: "Libya" },
+  { code: "MG", name: "Madagascar" },
+  { code: "MW", name: "Malawi" },
+  { code: "ML", name: "Mali" },
+  { code: "MU", name: "Mauritius" },
+  { code: "MA", name: "Morocco" },
+  { code: "MZ", name: "Mozambique" },
+  { code: "NA", name: "Namibia" },
+  { code: "NL", name: "Netherlands" },
+  { code: "NE", name: "Niger" },
+  { code: "NG", name: "Nigeria" },
+  { code: "PK", name: "Pakistan" },
+  { code: "SN", name: "Senegal" },
+  { code: "SL", name: "Sierra Leone" },
+  { code: "SO", name: "Somalia" },
+  { code: "ZA", name: "South Africa" },
+  { code: "SD", name: "Sudan" },
+  { code: "SE", name: "Sweden" },
+  { code: "SZ", name: "Eswatini" },
+  { code: "TG", name: "Togo" },
+  { code: "TN", name: "Tunisia" },
+  { code: "TR", name: "Türkiye" },
+  { code: "AE", name: "United Arab Emirates" },
+  { code: "GB", name: "United Kingdom" },
+  { code: "US", name: "United States" },
+  { code: "ZM", name: "Zambia" },
+  { code: "ZW", name: "Zimbabwe" },
+].sort((a, b) => a.name.localeCompare(b.name));
+
+export function countryName(code: string): string {
+  return [...NEARBY, ...OTHERS].find((country) => country.code === code)?.name ?? code;
+}

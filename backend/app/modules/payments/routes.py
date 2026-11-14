@@ -196,6 +196,15 @@ def _view(deposit: Deposit, receipt: bank.BankReceipt | None = None) -> PaymentV
     )
 
 
+class PaymentPage(Contract):
+    items: list[PaymentView]
+    next_before: PushId | None
+
+
+# Payments per page of a client's Activity list.
+CLIENT_PAGE = 50
+
+
 async def _payment_view(session: AsyncSession, deposit: Deposit) -> PaymentView:
     if deposit.method is Method.BANK_TRANSFER:
         transfer = await bank.get_bank_transfer(session, deposit.id)
@@ -376,6 +385,25 @@ def create_client_router(
                 raise ApplicationError("not_found")
             return await _payment_view(session, deposit)
 
+    @router.get("/payments")
+    async def list_payments(
+        client: CurrentClient,
+        database: Db,
+        before: Annotated[PushId | None, Query()] = None,
+    ) -> PaymentPage:
+        """The client's own payments, newest first, for the Activity list.
+
+        Each is summarised without its receipt; `GET /client/payments/{payment_id}` has the
+        detail. `next_before` is the ID to pass as `before` for the next page.
+        """
+        async with database.actor_transaction(client.actor) as session:
+            deposits = await service.list_deposits(session, limit=CLIENT_PAGE + 1, before_id=before)
+        page = deposits[:CLIENT_PAGE]
+        return PaymentPage(
+            items=[_view(deposit) for deposit in page],
+            next_before=page[-1].id if len(deposits) > CLIENT_PAGE else None,
+        )
+
     @router.get("/payments/{payment_id}")
     async def get_payment(payment_id: PushId, client: CurrentClient, database: Db) -> PaymentView:
         async with database.actor_transaction(client.actor) as session:
@@ -427,8 +455,15 @@ class BankTransferOut(Contract):
     candidates: list[StatementLineOut]
 
 
+class BankTransferInQueue(PaymentView):
+    # The step the transfer waits for: `check` (nobody has reviewed it), `second_person` (one
+    # person matched it and a different one must approve), `posting` (approved or refused, and
+    # the worker is settling it).
+    awaiting: Literal["check", "second_person", "posting"]
+
+
 class BankTransferPage(Contract):
-    items: list[PaymentView]
+    items: list[BankTransferInQueue]
     next_before: PushId | None
 
 
@@ -483,10 +518,24 @@ async def bank_transfers_in_review(
         deposits = await service.list_deposits(
             session, status=DepositStatus.IN_REVIEW, limit=PAGE, before_id=before
         )
-        items = [await _payment_view(session, deposit) for deposit in deposits]
+        items = [
+            BankTransferInQueue(
+                **vars(await _payment_view(session, deposit)),
+                awaiting=_awaiting(await bank.get_review(session, staff.actor, deposit.id)),
+            )
+            for deposit in deposits
+        ]
     return BankTransferPage(
         items=items, next_before=deposits[-1].id if len(deposits) == PAGE else None
     )
+
+
+def _awaiting(review: bank.ReviewView | None) -> Literal["check", "second_person", "posting"]:
+    if review is None:
+        return "check"
+    if review.outcome == "matched" and review.approved_by is None:
+        return "second_person"
+    return "posting"
 
 
 RECEIPT_LINK_LIFETIME = timedelta(minutes=5)
