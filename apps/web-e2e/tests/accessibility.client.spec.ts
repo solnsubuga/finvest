@@ -284,6 +284,7 @@ test("claiming an account moved from paper records meets WCAG 2.1 AA", async ({ 
   await page.getByTestId("code-input").fill("123456");
   await page.getByTestId("password-input").fill("green matooke sunday");
   await page.getByTestId("password-confirm-input").fill("green matooke sunday");
+  await page.getByTestId("terms-checkbox").click();
   await page.getByTestId("claim-complete").click();
   await typePin(page, DEMO_PIN);
   await typePin(page, DEMO_PIN);

@@ -188,8 +188,8 @@ export function createStubDocumentsClient(phone: string | null, options: Options
     return finished;
   }
 
-  // The demo accounts agreed when they signed up in March 2025; a new account agreed today.
-  const agreedAt = () => (phone && SEEDED.has(phone) ? morning("2025-03-04") : now().toISOString());
+  // The demo accounts agreed to this version the day it was published; a new account agreed today.
+  const agreedAt = () => (phone && SEEDED.has(phone) ? morning("2026-11-14") : now().toISOString());
 
   const client: DocumentsClient & { asked: string[]; downloaded: string[] } = {
     asked,
