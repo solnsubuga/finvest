@@ -49,7 +49,7 @@ function sampleChecks(): CheckDetail[] {
         { check: "screening", verdict: "pass", score: null },
         { check: "liveness", verdict: "pass", score: null },
       ],
-      phoneName: { status: "matches", registeredName: "David Mugisha" },
+      phoneName: { status: "matches", registeredName: "David Mugisha", currentNumber: true, blocksApproval: false },
       retakePhotos: [],
       clientMessage: null,
       accountNumber: null,
@@ -96,11 +96,12 @@ function sampleChecks(): CheckDetail[] {
         { check: "screening", verdict: "unsure", score: null },
         { check: "liveness", verdict: "pass", score: null },
       ],
-      phoneName: { status: "different", registeredName: "Peter Okot" },
+      phoneName: { status: "different", registeredName: "Peter Okot", currentNumber: true, blocksApproval: true },
       retakePhotos: [],
       clientMessage: null,
       accountNumber: null,
-      allowed: COMPLIANCE,
+      // The phone is registered to someone else, so the backend leaves approve out.
+      allowed: COMPLIANCE.filter((decision) => decision !== "approve"),
     }),
     sample({
       id: "-OdSample0000000004A",
