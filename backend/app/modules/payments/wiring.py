@@ -1,6 +1,6 @@
 """Choose the collections provider for this process from its settings."""
 
-from app.infrastructure.iotec import TEST_CURRENCY, IotecSettings
+from app.infrastructure.iotec import TEST_CURRENCY, IotecCurrency, IotecSettings
 from app.modules.payments.domain.provider import CollectionsProvider
 from app.modules.payments.providers.iotec import IotecCollections
 from app.modules.payments.providers.sandbox import SandboxCollections
@@ -18,11 +18,11 @@ def ensure_allowed(settings: PaymentsSettings, deployment: Deployment | None = N
 
     The sandbox, and ioTec with a test wallet, confirm payments that never happened. They may
     answer only in local development and in staging. Every process that reads the payments
-    settings calls this at start-up.
+    settings calls this at start-up. It reads no ioTec credentials, so the scheduler needs none.
     """
     if settings.provider == "sandbox":
         refused = "FINVEST_PAYMENTS_PROVIDER=sandbox"
-    elif settings.provider == "iotec" and IotecSettings().currency_code == TEST_CURRENCY:
+    elif settings.provider == "iotec" and IotecCurrency().currency_code == TEST_CURRENCY:
         # An ioTec test wallet confirms payments that never happened, like the sandbox.
         refused = "FINVEST_IOTEC_CURRENCY_CODE=ITX"
     else:

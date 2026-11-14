@@ -18,7 +18,7 @@ from datetime import datetime, timedelta
 from typing import Literal
 
 import httpx
-from pydantic import Field, SecretStr
+from pydantic import Field, SecretStr, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from app.shared.clock import Clock
@@ -30,8 +30,19 @@ REFRESH_MARGIN = timedelta(seconds=30)
 TEST_CURRENCY = "ITX"
 
 
+class IotecCurrency(BaseSettings):
+    """Only `FINVEST_IOTEC_CURRENCY_CODE`, for start-up checks in a process that holds no
+    ioTec credentials, such as the scheduler."""
+
+    model_config = SettingsConfigDict(env_prefix="FINVEST_IOTEC_", extra="ignore")
+
+    # What ioTec calls our currency. `ITX` only for an ioTec test wallet.
+    currency_code: Literal["UGX", "ITX"] = "UGX"
+
+
 class IotecSettings(BaseSettings):
-    """From `FINVEST_IOTEC_*`. Required only when `FINVEST_PAYMENTS_PROVIDER=iotec`."""
+    """From `FINVEST_IOTEC_*`. Read by the API and the worker when
+    `FINVEST_PAYMENTS_PROVIDER=iotec`. The scheduler reads only `IotecCurrency`."""
 
     model_config = SettingsConfigDict(
         env_prefix="FINVEST_IOTEC_", extra="ignore", hide_input_in_errors=True
@@ -48,6 +59,14 @@ class IotecSettings(BaseSettings):
     # The value ioTec is set to send in the `Authorization` header of its callbacks, as
     # `Bearer <token>`. Set in the ioTec portal under the wallet's callback URLs.
     callback_token: SecretStr | None = None
+
+    @field_validator("token_url", "pay_url")
+    @classmethod
+    def _https_only(cls, value: str) -> str:
+        # The token request carries the client secret, and every other request the token.
+        if not value.startswith("https://") or len(value) <= len("https://"):
+            raise ValueError("ioTec addresses must use https")
+        return value
 
     def http_client(self) -> httpx.AsyncClient:
         """A client with this configuration's timeout. The caller closes it."""
