@@ -151,6 +151,30 @@ export default function Profile() {
           />
           <View style={styles.divider} />
           <Row
+            icon="profile"
+            title="Next of kin"
+            detail="Who we contact if something happens to you"
+            onPress={() => router.push("/account/next-of-kin")}
+            testID="profile-next-of-kin"
+          />
+          <View style={styles.divider} />
+          <Row
+            icon="insights"
+            title="About your investing"
+            detail="Four questions so we suggest what suits you"
+            onPress={() => router.push("/account/investing-questions")}
+            testID="profile-investing-questions"
+          />
+          <View style={styles.divider} />
+          <Row
+            icon="download"
+            title="Language and data"
+            detail="App language, SMS receipts and a copy of your data"
+            onPress={() => router.push("/account/language")}
+            testID="profile-language"
+          />
+          <View style={styles.divider} />
+          <Row
             icon="bell"
             title="Notifications"
             detail="What we told you, and how we tell you"
@@ -173,6 +197,9 @@ export default function Profile() {
           </View>
         )}
         <Button label="Log out" onPress={signOut} loading={busy} testID="sign-out" />
+        <View style={{ alignSelf: "center" }}>
+          <TextLink label="Close my account" onPress={() => router.push("/account/close")} testID="profile-close" />
+        </View>
       </View>
     </AppPage>
   );
