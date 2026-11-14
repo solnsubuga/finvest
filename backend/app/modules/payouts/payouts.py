@@ -15,7 +15,7 @@ from dataclasses import dataclass
 from datetime import date, datetime, timedelta
 from typing import Any
 
-from sqlalchemy import Row, text
+from sqlalchemy import Row, bindparam, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.infrastructure.jobs import JobRequest, enqueue
@@ -111,6 +111,9 @@ _BY_KEY = text(
     f"SELECT {_COLUMNS} FROM payouts "  # noqa: S608 - constant column list
     "WHERE client_id = :client_id AND request_key = :request_key"
 )
+_IDS_BY_KEYS = text(
+    "SELECT request_key, id FROM payouts WHERE client_id = :client_id AND request_key IN :keys"
+).bindparams(bindparam("keys", expanding=True))
 _GET = text(f"SELECT {_COLUMNS} FROM payouts WHERE id = :id")  # noqa: S608
 _LOCK = text(f"SELECT {_COLUMNS} FROM payouts WHERE id = :id FOR UPDATE")  # noqa: S608
 _UPDATE = text(
@@ -439,6 +442,16 @@ async def queue_send(
         ),
         now=now,
     )
+
+
+async def ids_by_request_keys(
+    session: AsyncSession, client_id: str, keys: list[str]
+) -> dict[str, str]:
+    """The ID of the client's payout made under each of these request keys, where there is one."""
+    if not keys:
+        return {}
+    rows = await session.execute(_IDS_BY_KEYS, {"client_id": client_id, "keys": keys})
+    return {row.request_key: row.id for row in rows.all()}
 
 
 async def get_payout(session: AsyncSession, payout_id: str) -> PayoutView:

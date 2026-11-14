@@ -161,6 +161,8 @@ class PayoutOut(Contract):
     # Set when a paid payout came back from the bank or network. The money is safe with us, and
     # the client can send it again (`POST /client/payouts/{id}/resend`).
     returned_at: datetime | None = None
+    # The payout it was sent again as, once the client sent it again. Null until then.
+    resent_as: str | None = None
 
 
 class ResendIn(Contract):
@@ -207,7 +209,9 @@ def _destination_out(view: DestinationView) -> DestinationOut:
     )
 
 
-def _payout_out(view: PayoutView, returned: returns.ReturnView | None = None) -> PayoutOut:
+def _payout_out(
+    view: PayoutView, returned: returns.ReturnView | None = None, resent_as: str | None = None
+) -> PayoutOut:
     return PayoutOut.model_validate(
         {
             "id": view.id,
@@ -218,6 +222,7 @@ def _payout_out(view: PayoutView, returned: returns.ReturnView | None = None) ->
             "business_date": view.business_date,
             "created_at": view.created_at,
             "returned_at": None if returned is None else returned.decided_at,
+            "resent_as": resent_as,
         }
     )
 
@@ -440,17 +445,19 @@ async def list_payouts(client: CurrentClient, database: Db) -> list[PayoutOut]:
     async with database.actor_transaction(client.actor) as session:
         views = await payouts.payouts_for_client(session, client.client_id)
         returned = await returns.approved_for(session, [view.id for view in views])
-    return [_payout_out(view, returned.get(view.id)) for view in views]
+        resent = await returns.resent_as(session, client.client_id, returned)
+    return [_payout_out(view, returned.get(view.id), resent.get(view.id)) for view in views]
 
 
 @client_router.get("/payouts/{payout_id}")
 async def get_payout(payout_id: PushId, client: CurrentClient, database: Db) -> PayoutOut:
     async with database.actor_transaction(client.actor) as session:
         view = await payouts.get_payout(session, payout_id)
+        if view.client_id != client.client_id:
+            raise ApplicationError("not_found")
         returned = await returns.approved_for(session, [view.id])
-    if view.client_id != client.client_id:
-        raise ApplicationError("not_found")
-    return _payout_out(view, returned.get(view.id))
+        resent = await returns.resent_as(session, client.client_id, returned)
+    return _payout_out(view, returned.get(view.id), resent.get(view.id))
 
 
 @client_router.post("/payouts/{payout_id}/resend", status_code=201)

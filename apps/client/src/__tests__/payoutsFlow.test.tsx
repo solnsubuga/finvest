@@ -162,6 +162,13 @@ describe("payout accounts", () => {
     expect(await screen.findByTestId("payout-amount")).toHaveTextContent("UGX 2,150,000");
     expect(screen.getAllByText("On its way").length).toBeGreaterThan(0);
     expect(screen.queryByTestId("payout-resend")).toBeNull();
+
+    // The one that came back now says it was sent again, and points at the new payout.
+    await open("/payouts/payout/demo-payout-returned");
+    expect(await screen.findByText("This payout came back to us, and you sent it again. The new payout has the money now.")).toBeTruthy();
+    expect(screen.queryByTestId("payout-resend")).toBeNull();
+    await fireEvent.press(screen.getByTestId("payout-resent-as"));
+    expect(await screen.findByText("MTN +256 77• ••• 456")).toBeTruthy();
   });
 });
 

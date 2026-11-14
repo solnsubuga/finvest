@@ -110,6 +110,7 @@ function seedPayouts(nowMs: number): Payout[] {
       businessDate: iso(nowMs).slice(0, 10),
       createdAt: iso(nowMs - 2 * HOUR),
       returnedAt: null,
+      resentAs: null,
     },
     {
       id: "demo-payout-1",
@@ -120,6 +121,7 @@ function seedPayouts(nowMs: number): Payout[] {
       businessDate: iso(nowMs - 12 * 24 * HOUR).slice(0, 10),
       createdAt: iso(nowMs - 12 * 24 * HOUR),
       returnedAt: null,
+      resentAs: null,
     },
     {
       // Paid to a bank account since closed, and sent back by the bank. It waits to be sent again.
@@ -131,6 +133,7 @@ function seedPayouts(nowMs: number): Payout[] {
       businessDate: iso(nowMs - 20 * 24 * HOUR).slice(0, 10),
       createdAt: iso(nowMs - 20 * 24 * HOUR),
       returnedAt: iso(nowMs - 3 * 24 * HOUR),
+      resentAs: null,
     },
   ];
 }
@@ -157,7 +160,7 @@ export function createStubPayoutsClient(options: StubOptions = {}): PayoutsClien
   const accounts: Stored[] = options.sample === "empty" ? [] : seed(now());
   const payouts: Payout[] = options.sample === "empty" ? [] : seedPayouts(now());
   let next = 1;
-  // A payout that came back, by the payout it was sent again as. Sent again once only.
+  // The payout each one that came back was sent again as. Sent again once only.
   const resent = new Map<string, Payout>();
 
   const delayMs = options.delayMs ?? 250;
@@ -311,8 +314,10 @@ export function createStubPayoutsClient(options: StubOptions = {}): PayoutsClien
         businessDate: iso(now()).slice(0, 10),
         createdAt: iso(now()),
         returnedAt: null,
+      resentAs: null,
       };
       payouts.unshift(created);
+      payout.resentAs = created.id;
       resent.set(payoutId, created);
       return { ...created };
     },

@@ -52,7 +52,9 @@ export default function PayoutDetail() {
 function Body({ payout, account }: Read) {
   const router = useRouter();
   const copy = payoutCopy(payout);
-  const returned = payout.returnedAt !== null;
+  // Came back and still waiting for the client to choose where it goes. Once sent again, the
+  // new payout carries the money and this one only points at it.
+  const returned = payout.returnedAt !== null && payout.resentAs === null;
   return (
     <View style={{ marginTop: 20, gap: 16 }}>
       <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
@@ -61,13 +63,13 @@ function Body({ payout, account }: Read) {
       </View>
       <View style={{ backgroundColor: colors.black, borderRadius: 22, padding: 20, gap: 4 }}>
         <Txt size={fontSizes.sm} weight="semibold" color={colors.onBlackMuted}>
-          {returned ? "Came back to us" : payout.status === "paid" ? "You were paid" : "To you"}
+          {payout.returnedAt ? "Came back to us" : payout.status === "paid" ? "You were paid" : "To you"}
         </Txt>
         <Txt size={36} weight="extrabold" lineHeight={42} color={colors.white} style={{ letterSpacing: -0.8 }} testID="payout-amount">
           {formatMoney(payout.amount)}
         </Txt>
         <Txt size={fontSizes.sm} weight="semibold" color={colors.lime}>
-          {returned ? "Waiting to be sent again" : copy.label}
+          {payout.resentAs ? "Sent again" : returned ? "Waiting to be sent again" : copy.label}
         </Txt>
       </View>
       <DetailList
@@ -84,6 +86,13 @@ function Body({ payout, account }: Read) {
           label="Send it again"
           onPress={() => router.push(`/payouts/payout/resend/${payout.id}`)}
           testID="payout-resend"
+        />
+      ) : payout.resentAs ? (
+        <Button
+          label="Open the new payout"
+          variant="secondary"
+          onPress={() => router.push(`/payouts/payout/${payout.resentAs}`)}
+          testID="payout-resent-as"
         />
       ) : null}
     </View>

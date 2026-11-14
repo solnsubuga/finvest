@@ -213,6 +213,7 @@ describe("the payouts client for the real API", () => {
         businessDate: "2026-11-13",
         createdAt: "2026-11-13T09:00:00Z",
         returnedAt: null,
+        resentAs: null,
       },
     ]);
     serve(200, {
@@ -234,7 +235,9 @@ describe("the payouts client for the real API", () => {
   it("sends a payout that came back again, and names each refusal", async () => {
     const client = createApiPayoutsClient();
     serve(200, { ...payout, status: "paid", returned_at: "2026-11-12T10:00:00Z" });
-    expect(await client.getPayout(payout.id)).toMatchObject({ status: "paid", returnedAt: "2026-11-12T10:00:00Z" });
+    expect(await client.getPayout(payout.id)).toMatchObject({ status: "paid", returnedAt: "2026-11-12T10:00:00Z", resentAs: null });
+    serve(200, { ...payout, status: "paid", returned_at: "2026-11-12T10:00:00Z", resent_as: "NNNNNNNNNNNNNNNNNNNN" });
+    expect(await client.getPayout(payout.id)).toMatchObject({ resentAs: "NNNNNNNNNNNNNNNNNNNN" });
 
     const seen = serve(201, { ...payout, id: "NNNNNNNNNNNNNNNNNNNN" });
     expect(await client.resend(payout.id, ID)).toMatchObject({ id: "NNNNNNNNNNNNNNNNNNNN", returnedAt: null });

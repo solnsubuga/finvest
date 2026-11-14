@@ -58,7 +58,7 @@ export function AccountCard({ account, nowMs, onPress }: { account: PayoutAccoun
 /** One payout in the list: how much, where to, and how it stands. */
 export function PayoutCard({ payout, account, onPress }: { payout: Payout; account: PayoutAccount | undefined; onPress: () => void }) {
   const copy = payoutCopy(payout);
-  const where = account ? accountLabel(account) : payout.kind === "bank" ? "A bank account" : "Mobile money";
+  const where = account ? accountLabel(account) : payout.kind === "bank" ? "a bank account" : "mobile money";
   return (
     <Pressable
       accessibilityRole="link"

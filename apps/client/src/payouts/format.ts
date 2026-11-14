@@ -83,7 +83,15 @@ export const returnedPayoutCopy = {
     "The bank or network sent this money back to us, so it is safe with us. Choose an account and we will send it again.",
 };
 
+/** One that came back and was sent again: the new payout carries the money now. */
+export const resentPayoutCopy = {
+  label: "Sent again",
+  tone: "neutral" as Tone,
+  detail: "This payout came back to us, and you sent it again. The new payout has the money now.",
+};
+
 /** How a payout stands, as its pill and note show it. */
-export function payoutCopy(payout: Pick<Payout, "status" | "returnedAt">): { label: string; tone: Tone; detail: string } {
+export function payoutCopy(payout: Pick<Payout, "status" | "returnedAt" | "resentAs">): { label: string; tone: Tone; detail: string } {
+  if (payout.resentAs) return resentPayoutCopy;
   return payout.returnedAt ? returnedPayoutCopy : payoutStatusCopy[payout.status];
 }

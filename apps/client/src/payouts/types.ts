@@ -79,6 +79,8 @@ export type Payout = {
    * client can send it again, once, to an approved account (`resend`). ISO 8601, UTC.
    */
   returnedAt: string | null;
+  /** The payout one that came back was sent again as. Null until the client sends it again. */
+  resentAs: string | null;
 };
 
 /** The withdrawal limits in force today. Null is not set. Never the review threshold. */
