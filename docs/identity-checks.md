@@ -171,6 +171,35 @@ How an attempt goes (`app/modules/kyc/liveness.py`, `liveness_jobs.py`, `domain/
 - To confirm against ioTec's sandbox: that a request with no email still returns `verificationUrl`; that `profileImageUrl` is on an ioTec host and needs no key; whether ioTec Faces can return the client to the app when done; and what ioTec Faces asks of the client (it may also ask for the ID card, which this flow does not use).
 - The development stub passes on the first read with a stand-in capture, and its page is a placeholder.
 
+## Face confirmations
+
+Before a signed-in client changes their own password or mobile number, a passkey or authenticator app proves the device, and a live selfie proves the person ([sign-in.md](sign-in.md#changing-how-you-sign-in)). The selfie runs on the same liveness provider, and the face it captured is compared with the face on file by the same face match the hand-in uses. Only a live person whose face matches confirms the change.
+
+The face on file (`service.approved_selfie`) is the current selfie of the client's approved check, or, for a check carried over from Finvest 1.0, the selfie on the claim check staff matched. A client with neither, or with liveness off, is not asked: the passkey or app alone confirms the change. An approved check is always picked by `status = 'approved'`, since a client may also have a superseded one.
+
+How an attempt goes (`app/modules/kyc/face_confirmations.py`, `face_confirmation_jobs.py`, `domain/face_confirmations.py`):
+
+1. The client starts an attempt (`POST /client/session/confirmation/selfie`). It belongs to their identity session. The client's check is locked first, so two starts at once take turns. Any attempt still waiting is retired. A client may start 5 in a day.
+2. The worker asks the liveness provider for a page (`kyc.start_face_confirmation`) and saves it sealed. `GET /client/session/confirmation/selfie/{id}` gives the client its address while the attempt is `open`.
+3. The worker reads the page every 5 seconds (`kyc.read_face_confirmation`). Live: the capture is stored as `kyc/<check>/face-confirmations/<attempt>` and kept, and the attempt is `matching`.
+4. The worker sends the capture and the face on file to the face match (`kyc.match_face_confirmation`), then reads it every 5 seconds (`kyc.read_face_match`). Called identical at 80 or above: `passed`. Anything less: `failed` with `face_not_matched`, never a question for a person. The client tries again, or asks support, who can change a number with two staff.
+5. A passed attempt confirms a password or number change on the same session for 10 minutes. An attempt still waiting after 15 minutes is `expired`.
+
+| Status | Meaning |
+| --- | --- |
+| `starting` | Saved; the worker is asking for a liveness page. |
+| `open` | The page is ready for the client. |
+| `matching` | A live person; the capture is being compared with the face on file. |
+| `passed` | Live and matching. Confirms a change on this session for 10 minutes. |
+| `failed` | `not_live`, `no_capture`, `iotec_ended`, `iotec_unclear`, `face_not_matched`, `match_not_run`, `iotec_refused`, or `provider_uncertain` for a face match that may have arrived. |
+| `not_started` | The liveness provider refused, or may have opened a page but never confirmed it. |
+| `expired` | Waiting for 15 minutes, or replaced by a newer attempt. |
+
+- A start or a face match that may have arrived is never sent again: ioTec cannot be asked by our key, so the attempt ends, and the client starts a new one under a new key. Reads are simply repeated.
+- The database holds the rules too (migration 0391): a client starts an attempt only against their own approved check; only the worker records an answer; an attempt only moves forward; a client may only retire their own waiting attempt; a finished attempt never changes; nobody deletes one.
+- Each attempt's start and end are audit events (`kyc.face_confirmation.*`, resource `kyc_face_confirmation`). A pass keeps its score; a failure keeps none.
+- The face match adapter is `app/modules/kyc/iotec_face_match.py`: `POST /api/face-match` with the capture as `Photo1` and the face on file as `Photo2`, read back from `GET /api/face-match/{id}`. The development stub matches every face, and is refused in production with the rest of the stub.
+
 ## Phone number name
 
 When a client hands in their check, the worker asks ioTec Verify for the name the mobile network holds for the client's own phone number, the one they sign in with. It is the same lookup that proves a mobile money payout number ([payouts.md](payouts.md#mobile-money-numbers)), with the same adapter and the same name rule (`compare_names`). The code is `app/modules/kyc/phone_names.py` and `phone_name_jobs.py`, the rules `domain/phone_names.py`, and the table `kyc_phone_names` (migration 0370).

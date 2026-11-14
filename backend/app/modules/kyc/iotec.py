@@ -251,6 +251,24 @@ def _idv_outcome(answer: Mapping[str, object]) -> CheckOutcome | None:
 
 
 def _face_outcome(answer: Mapping[str, object]) -> CheckOutcome | None:
+    reading = face_match_reading(answer)
+    if reading is None:
+        return None
+    score, identical = reading
+    verdict = (
+        Verdict.PASS
+        if identical and score is not None and score >= FACE_MATCH_PASS
+        else (Verdict.UNSURE)
+    )
+    return CheckOutcome(AutomaticCheck.SELFIE_MATCH, verdict, score)
+
+
+def face_match_reading(answer: Mapping[str, object]) -> tuple[int | None, bool] | None:
+    """A face match's score as a whole percentage, and whether ioTec called the faces identical.
+
+    None when the comparison did not complete. A confidence that is not from 0.0 to 1.0 is not
+    understood, so it has no score and cannot pass. Face confirmations read answers this way too.
+    """
     if answer.get("faceMatchStatus") != "Success":
         return None
     confidence = answer.get("confidence")
@@ -260,16 +278,8 @@ def _face_outcome(answer: Mapping[str, object]) -> CheckOutcome | None:
         and not isinstance(confidence, bool)
         and 0 <= confidence <= 1
     ):
-        # A confidence from 0.0 to 1.0, shown to staff as a whole percentage. Anything else
-        # is not understood, so it has no score and cannot pass.
         score = round(confidence * 100)
-    identical = answer.get("isIdentical") is True
-    verdict = (
-        Verdict.PASS
-        if identical and score is not None and score >= FACE_MATCH_PASS
-        else (Verdict.UNSURE)
-    )
-    return CheckOutcome(AutomaticCheck.SELFIE_MATCH, verdict, score)
+    return score, answer.get("isIdentical") is True
 
 
 def _aml_outcome(answer: Mapping[str, object]) -> CheckOutcome | None:

@@ -233,6 +233,29 @@ class ClientSessionView(Contract):
     pin_set: bool = False
     # True when the PIN must be entered before anything else answers (423 `app_locked`).
     locked: bool = False
+    # When this session last used a passkey or authenticator app, at log in or to confirm.
+    # Null after a log in with a code and no confirmation since.
+    confirmed_at: datetime | None = None
+    # A change to how the client signs in works without confirming again until then. Past or
+    # null: the app asks for the passkey or app first, instead of waiting for 403
+    # `confirm_it_is_you`.
+    confirmed_until: datetime | None = None
+
+
+def client_view(client: ClientSession) -> ClientSessionView:
+    return ClientSessionView(
+        client_id=client.client_id,
+        phone=client.phone,
+        restricted_until=client.restricted_until,
+        email=client.email,
+        email_verified=client.email_verified,
+        pin_set=client.pin_set,
+        locked=client.locked,
+        confirmed_at=client.confirmed_at,
+        confirmed_until=(
+            None if client.confirmed_at is None else client.confirmed_at + CONFIRMATION_WINDOW
+        ),
+    )
 
 
 class StaffSessionView(Contract):
@@ -277,15 +300,7 @@ async def client_login_start(
 @client_router.get("/session")
 async def client_session(client: CurrentClientEvenLocked) -> ClientSessionView:
     """The signed-in client. A locked session answers too, so the app knows to ask for the PIN."""
-    return ClientSessionView(
-        client_id=client.client_id,
-        phone=client.phone,
-        restricted_until=client.restricted_until,
-        email=client.email,
-        email_verified=client.email_verified,
-        pin_set=client.pin_set,
-        locked=client.locked,
-    )
+    return client_view(client)
 
 
 async def _sign_out(

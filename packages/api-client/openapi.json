@@ -4826,6 +4826,30 @@
             "title": "Client Id",
             "type": "string"
           },
+          "confirmed_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Confirmed At"
+          },
+          "confirmed_until": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Confirmed Until"
+          },
           "email": {
             "anyOf": [
               {
@@ -5429,6 +5453,19 @@
         ],
         "title": "ConfirmWithPasskey",
         "type": "object"
+      },
+      "ConfirmationStatus": {
+        "enum": [
+          "starting",
+          "open",
+          "matching",
+          "passed",
+          "failed",
+          "not_started",
+          "expired"
+        ],
+        "title": "ConfirmationStatus",
+        "type": "string"
       },
       "Confirmed": {
         "additionalProperties": false,
@@ -7418,6 +7455,7 @@
               "app_locked",
               "pin_required",
               "confirm_it_is_you",
+              "confirm_with_selfie",
               "expired",
               "phone_taken",
               "email_taken",
@@ -19614,6 +19652,119 @@
           "methods"
         ],
         "title": "SecondSteps",
+        "type": "object"
+      },
+      "SelfieConfirmation": {
+        "additionalProperties": false,
+        "description": "One attempt. Open the `url` page while `status` is `open`.",
+        "properties": {
+          "counts_until": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Counts Until"
+          },
+          "expires_at": {
+            "format": "date-time",
+            "title": "Expires At",
+            "type": "string"
+          },
+          "failure_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Failure Code"
+          },
+          "id": {
+            "maxLength": 20,
+            "minLength": 20,
+            "pattern": "^[-0-9A-Z_a-z]{20}$",
+            "title": "Id",
+            "type": "string"
+          },
+          "status": {
+            "$ref": "#/components/schemas/ConfirmationStatus"
+          },
+          "url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Url"
+          }
+        },
+        "required": [
+          "id",
+          "status",
+          "url",
+          "failure_code",
+          "expires_at",
+          "counts_until"
+        ],
+        "title": "SelfieConfirmation",
+        "type": "object"
+      },
+      "SelfieConfirmationState": {
+        "additionalProperties": false,
+        "description": "Whether a password or number change on this session needs a live selfie, and has one.",
+        "properties": {
+          "attempts_left": {
+            "title": "Attempts Left",
+            "type": "integer"
+          },
+          "confirmed": {
+            "title": "Confirmed",
+            "type": "boolean"
+          },
+          "latest": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SelfieConfirmation"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "needed": {
+            "title": "Needed",
+            "type": "boolean"
+          },
+          "problem": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Problem"
+          }
+        },
+        "required": [
+          "needed",
+          "confirmed",
+          "problem",
+          "attempts_left",
+          "latest"
+        ],
+        "title": "SelfieConfirmationState",
         "type": "object"
       },
       "SendBack": {
@@ -39817,6 +39968,294 @@
           }
         },
         "summary": "Client Confirmation Passkey Options",
+        "tags": [
+          "client sign-in"
+        ]
+      }
+    },
+    "/client/session/confirmation/selfie": {
+      "get": {
+        "description": "Whether a password or number change here needs a live selfie, and the latest attempt.",
+        "operationId": "selfie_confirmation_client_session_confirmation_selfie_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SelfieConfirmationState"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "423": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Locked"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "summary": "Selfie Confirmation",
+        "tags": [
+          "client sign-in"
+        ]
+      },
+      "post": {
+        "description": "Start a live selfie. Any attempt still waiting is retired.\n\nIt starts as `starting`. Read it with `GET .../{id}` every few seconds until it is\n`open`, open its `url`, and read it again until it ends. A client with no approved check\nselfie is refused with `no_selfie_on_file`, and a sixth attempt in a day with\n`too_many_attempts`.",
+        "operationId": "start_selfie_confirmation_client_session_confirmation_selfie_post",
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SelfieConfirmation"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "423": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Locked"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "summary": "Start Selfie Confirmation",
+        "tags": [
+          "client sign-in"
+        ]
+      }
+    },
+    "/client/session/confirmation/selfie/{attempt_id}": {
+      "get": {
+        "description": "One of the client's own attempts.",
+        "operationId": "selfie_confirmation_attempt_client_session_confirmation_selfie__attempt_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "attempt_id",
+            "required": true,
+            "schema": {
+              "maxLength": 20,
+              "minLength": 20,
+              "pattern": "^[-0-9A-Z_a-z]{20}$",
+              "title": "Attempt Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SelfieConfirmation"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "423": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Locked"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "summary": "Selfie Confirmation Attempt",
         "tags": [
           "client sign-in"
         ]

@@ -2,8 +2,9 @@
 
 Each change needs a passkey or authenticator app used on this session in the last ten minutes
 (`current_confirmed_client`), never only a texted or emailed code, because whoever holds the SIM
-could have that. The owner chose this check on a decision card; the canvas's selfie step comes
-later (docs/sign-in.md#changing-how-you-sign-in).
+could have that. The owner chose this check on a decision card. A password or number change
+also needs a live selfie matched to the face on file, when there is one; the routes check it
+(app/modules/kyc/face_confirmations_api.py, docs/sign-in.md#changing-how-you-sign-in).
 
 * **Password.** The current password as well, then the usual rules for a new one. Every other
   session ends. The client is told by text and email.

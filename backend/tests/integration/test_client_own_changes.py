@@ -7,9 +7,14 @@ from sqlalchemy import text
 from sqlalchemy.exc import DBAPIError
 
 from app.infrastructure.database import Database
+from app.infrastructure.jobs import Worker, WorkerConfig
+from app.infrastructure.storage import MemoryStorage
+from app.modules.kyc.face_confirmation_jobs import FaceConfirmationJobs
+from app.modules.kyc.providers import DevelopmentStubFaceMatcher, DevelopmentStubLiveness
 from app.shared.actors import Actor
 from tests.support.database import TestDatabase
 from tests.support.http import HASHER, PASSWORD, Api, running_api
+from tests.support.kyc import SEALER, verify
 
 pytestmark = pytest.mark.integration
 
@@ -224,3 +229,110 @@ async def test_a_number_code_is_spent_only_on_the_session_that_asked(
     )
     assert elsewhere.status_code == 410, elsewhere.text
     assert (await account(api, client))["phone"] == old_phone
+
+
+@pytest.fixture
+async def selfie_api(test_database: TestDatabase, app_database: Database) -> AsyncIterator[Api]:
+    """The API with live selfies on, as with ioTec, so a verified client is asked for one."""
+    async with running_api(
+        test_database,
+        app_database,
+        identity_sealer=SEALER,
+        identity_liveness=DevelopmentStubLiveness(),
+        face_matcher=DevelopmentStubFaceMatcher(),
+    ) as api:
+        yield api
+
+
+async def pass_selfie(api: Api, worker: Database, client: Actor) -> None:
+    """Take a live selfie on the signed-in session, as the app and worker do."""
+    started = await api.http.post("/client/session/confirmation/selfie")
+    assert started.status_code == 201, started.text
+    attempt = started.json()["id"]
+    handlers = FaceConfirmationJobs(
+        worker,
+        SEALER,
+        DevelopmentStubLiveness(),
+        DevelopmentStubFaceMatcher(),
+        MemoryStorage(),
+        api.clock,
+    ).handlers()
+    runner = Worker(worker, handlers, WorkerConfig(), api.clock)
+    for _ in range(4):
+        while await runner.run_once():
+            pass
+        api.clock.advance(seconds=5)
+    answer = await api.http.get(f"/client/session/confirmation/selfie/{attempt}")
+    assert answer.json()["status"] == "passed", answer.text
+
+
+async def test_the_session_says_until_when_a_change_needs_no_confirmation(api: Api) -> None:
+    await api.client()
+    view = (await api.http.get("/client/session")).json()
+    assert view["confirmed_at"] is not None
+    assert view["confirmed_until"] > view["confirmed_at"]
+    client = await api.client()
+    await with_code_only(api, client)
+    view = (await api.http.get("/client/session")).json()
+    assert view["confirmed_at"] is None and view["confirmed_until"] is None
+
+
+async def test_a_verified_client_also_takes_a_live_selfie_for_a_password_or_number(
+    selfie_api: Api, worker_database: Database
+) -> None:
+    api = selfie_api
+    client = await api.client()
+    await verify(api.database, client, api.clock)
+    state = (await api.http.get("/client/session/confirmation/selfie")).json()
+    assert state["needed"] is True and state["confirmed"] is False
+    for method, path, body in (
+        ("PUT", "/client/password", {"current_password": PASSWORD, "new_password": NEW_PASSWORD}),
+        ("POST", "/client/phone-change", {"phone": "+256701555019"}),
+    ):
+        answer = await api.http.request(method, path, json=body)
+        assert answer.status_code == 403 and error(answer) == "confirm_with_selfie", path
+    # An email change needs the passkey or app only.
+    email = await api.http.put("/client/email", json={"email": "selfie@example.com"})
+    assert email.status_code == 200, email.text
+
+    await pass_selfie(api, worker_database, client)
+    assert (await api.http.get("/client/session/confirmation/selfie")).json()["confirmed"]
+    changed = await api.http.put(
+        "/client/password", json={"current_password": PASSWORD, "new_password": NEW_PASSWORD}
+    )
+    assert changed.status_code == 204, changed.text
+
+    # It counts on this session only, and for ten minutes.
+    await api.as_client(client)
+    again = await api.http.post("/client/phone-change", json={"phone": "+256701555019"})
+    assert error(again) == "confirm_with_selfie"
+
+
+async def test_the_passkey_is_asked_for_before_the_selfie(selfie_api: Api) -> None:
+    api = selfie_api
+    client = await api.client()
+    await verify(api.database, client, api.clock)
+    await with_code_only(api, client)
+    answer = await api.http.post("/client/phone-change", json={"phone": "+256701555020"})
+    assert error(answer) == "confirm_it_is_you"
+
+
+async def test_a_client_with_no_selfie_on_file_changes_with_the_passkey_alone(
+    selfie_api: Api,
+) -> None:
+    api = selfie_api
+    await api.client()
+    state = (await api.http.get("/client/session/confirmation/selfie")).json()
+    assert state == {
+        "needed": False,
+        "confirmed": False,
+        "problem": "no_selfie_on_file",
+        "attempts_left": 5,
+        "latest": None,
+    }
+    started = await api.http.post("/client/session/confirmation/selfie")
+    assert started.status_code == 422
+    changed = await api.http.put(
+        "/client/password", json={"current_password": PASSWORD, "new_password": NEW_PASSWORD}
+    )
+    assert changed.status_code == 204, changed.text
