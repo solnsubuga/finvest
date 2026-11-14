@@ -28,8 +28,10 @@ from app.modules.payouts.domain import payouts as machine
 from app.modules.payouts.domain import posting
 from app.modules.payouts.domain.destinations import DestinationKind, why_not_payable
 from app.modules.payouts.domain.limits import (
+    ClientLimits,
     WithdrawalLimits,
     check_withdrawal,
+    for_client,
     limits_in_force,
 )
 from app.modules.payouts.domain.payouts import FINAL, LedgerEffect, PayoutEvent, PayoutStatus
@@ -88,6 +90,11 @@ _COLUMNS = (
     "id, client_id, destination_id, kind, amount_minor, currency, status, business_date, "
     "provider_reference, failure_code, reviewed_by, created_at, source_account_id, "
     "in_flight_account_id, request_key, source_reference"
+)
+_CLIENT_LIMITS = text(
+    "SELECT currency, mobile_money_per_payout, mobile_money_per_day, bank_per_payout, "
+    "bank_per_day, review_above FROM payout_client_limits WHERE client_id = :client_id "
+    "ORDER BY created_at DESC, id DESC LIMIT 1"
 )
 _LIMITS = text(
     "SELECT effective_from, currency, mobile_money_per_payout, mobile_money_per_day, "
@@ -165,7 +172,10 @@ _REVIEW_EVENTS = frozenset({PayoutEvent.REVIEW_APPROVED, PayoutEvent.REVIEW_DECL
 _PERSON_EVENTS = _REVIEW_EVENTS | {PayoutEvent.CLIENT_CANCELLED}
 
 
-async def current_limits(session: AsyncSession, on: date) -> WithdrawalLimits:
+async def current_limits(
+    session: AsyncSession, on: date, *, client_id: str | None = None
+) -> WithdrawalLimits:
+    """The limits in force on `on`, tightened by the client's own when `client_id` is given."""
     rows = (await session.execute(_LIMITS)).all()
 
     def money(value: int | None, currency: Currency) -> Money | None:
@@ -184,7 +194,63 @@ async def current_limits(session: AsyncSession, on: date) -> WithdrawalLimits:
                 review_above=money(row.review_above, currency),
             )
         )
-    return limits_in_force(versions, on)
+    shared = limits_in_force(versions, on)
+    if client_id is None:
+        return shared
+    return for_client(shared, await client_limits(session, client_id))
+
+
+async def client_limits(session: AsyncSession, client_id: str) -> ClientLimits | None:
+    """The client's own stricter limits, or None when staff have set none."""
+    row = (await session.execute(_CLIENT_LIMITS, {"client_id": client_id})).one_or_none()
+    if row is None:
+        return None
+    currency = Currency(row.currency)
+
+    def money(value: int | None) -> Money | None:
+        return None if value is None else Money(int(value), currency)
+
+    found = ClientLimits(
+        mobile_money_per_payout=money(row.mobile_money_per_payout),
+        mobile_money_per_day=money(row.mobile_money_per_day),
+        bank_per_payout=money(row.bank_per_payout),
+        bank_per_day=money(row.bank_per_day),
+        review_above=money(row.review_above),
+    )
+    return None if found.empty else found
+
+
+async def set_client_limits(
+    session: AsyncSession, client_id: str, limits: ClientLimits, *, action_id: str, now: datetime
+) -> None:
+    """Record the client's own limits. Empty limits clear them.
+
+    Called only by the console module, in the staff transaction that approved the change with
+    two people. Migration 0352 refuses a version written anywhere else.
+    """
+
+    def minor(value: Money | None) -> int | None:
+        return None if value is None else value.minor
+
+    await session.execute(
+        text(
+            "INSERT INTO payout_client_limits (id, client_id, currency, mobile_money_per_payout, "
+            "mobile_money_per_day, bank_per_payout, bank_per_day, review_above, action_id, "
+            "created_at) VALUES (:id, :client_id, 'UGX', :mm_payout, :mm_day, :bank_payout, "
+            ":bank_day, :review, :action_id, :now)"
+        ),
+        {
+            "id": push_id(),
+            "client_id": client_id,
+            "mm_payout": minor(limits.mobile_money_per_payout),
+            "mm_day": minor(limits.mobile_money_per_day),
+            "bank_payout": minor(limits.bank_per_payout),
+            "bank_day": minor(limits.bank_per_day),
+            "review": minor(limits.review_above),
+            "action_id": action_id,
+            "now": now,
+        },
+    )
 
 
 async def create_payout(
@@ -246,7 +312,7 @@ async def create_payout(
     if blocked is not None:
         raise PayoutRefused(blocked.value)
 
-    limits = await current_limits(session, today)
+    limits = await current_limits(session, today, client_id=client_id)
     already = (
         await session.execute(
             _TODAY,
@@ -521,7 +587,7 @@ async def release_screened(session: AsyncSession, client_id: str, clock: Clock) 
         return []
     if clearance is not screening.Clearance.CLEAR:
         return []
-    limits = await current_limits(session, business_date(now))
+    limits = await current_limits(session, business_date(now), client_id=client_id)
     moved: list[str] = []
     for payout in waiting:
         needs_review = limits.review_above is not None and payout.amount > limits.review_above

@@ -336,7 +336,7 @@ async def check_payable_destination(
     # amount is final. Without this the money would move to the payout pending account and the
     # payout would then be refused for good. What else the client withdraws that day is
     # counted when the payout is made.
-    limits = await payouts.current_limits(session, business_date(now))
+    limits = await payouts.current_limits(session, business_date(now), client_id=client_id)
     decision = check_withdrawal(limits, view.kind, amount, Money.zero(amount.currency))
     if decision.refusal is not None:
         raise invalid("destination_id", decision.refusal.value)

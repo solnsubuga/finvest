@@ -45,6 +45,7 @@ Kind = Literal[
     "deposit_reversal",
     "deposit_receivable",
     "client_pin_reset",
+    "client_limits",
 ]
 
 
@@ -106,6 +107,7 @@ SOURCES: dict[Kind, Source] = {
     "deposit_receivable": Source("reconciliation.view", "deposit_reassignments.change"),
     # Acting for a client from their page (console `actions`), one kind per permission.
     "client_pin_reset": Source("clients.view", "client_pins.reset"),
+    "client_limits": Source("clients.view", "client_limits.change"),
 }
 
 
