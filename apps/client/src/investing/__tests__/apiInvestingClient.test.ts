@@ -203,6 +203,7 @@ describe("the investing client for the real API", () => {
       waitingForDestination: false,
       canWithdraw: false,
       withdrawalRequestedAt: null,
+      canSend: false,
     });
 
     const one = serve(200, { ...investment, interest_at_maturity_minor: null, total_at_maturity_minor: null });
@@ -389,5 +390,92 @@ describe("early withdrawal through the real API", () => {
     await expect(client.payOutMatured(request)).rejects.toEqual(new InvestingError("over_limit"));
     serve(422, refusal("validation_failed", [{ field_path: ["destination_id"], code: "destination_in_safety_wait" }]));
     await expect(client.payOutMatured(request)).rejects.toEqual(new InvestingError("account_not_ready"));
+  });
+});
+
+describe("sending an investment through the real API", () => {
+  const transfer = {
+    id: "TTTTTTTTTTTTTTTTTTTT",
+    direction: "sent",
+    other_name: "Brian K.",
+    status: "waiting",
+    amount_minor: 1000000,
+    currency: "UGX",
+    whole: false,
+    message: "For school fees",
+    requested_at: "2026-11-14T10:00:00Z",
+    finished_at: null,
+    investment_id: ID,
+    kept_investment_id: null,
+    failure_code: null,
+  };
+
+  it("finds the recipient by what the client typed and shows only their short name", async () => {
+    const seen = serve(200, { account_number: "1001005170", name: "Brian K." });
+    const found = await createApiInvestingClient().findRecipient("0772 555 170");
+    expect(seen[0]?.path).toBe("/client/transfer-recipients?to=0772%20555%20170");
+    expect(found).toEqual({ accountNumber: "1001005170", name: "Brian K." });
+  });
+
+  it("says why nobody was found, and when there were too many look-ups", async () => {
+    const client = createApiInvestingClient();
+    serve(404, refusal("not_found"));
+    await expect(client.findRecipient("1001005171")).rejects.toEqual(new InvestingError("no_such_client"));
+    serve(422, refusal("validation_failed", [{ field_path: ["query", "to"], code: "to_yourself" }]));
+    await expect(client.findRecipient("1004417263")).rejects.toEqual(new InvestingError("to_yourself"));
+    serve(429, refusal("rate_limited"));
+    await expect(client.findRecipient("1001005170")).rejects.toEqual(new InvestingError("too_many_lookups"));
+  });
+
+  it("sends once under the screen's key and reads the transfer back", async () => {
+    const seen = serve(201, transfer);
+    const sent = await createApiInvestingClient().sendInvestment({
+      investmentId: ID,
+      toAccountNumber: "1001005170",
+      amount: ugx(1_000_000),
+      message: "For school fees",
+      idempotencyKey: "s-1",
+    });
+    expect(seen[0]).toEqual({
+      method: "POST",
+      path: `/client/investments/${ID}/send`,
+      key: "s-1",
+      body: { to_account_number: "1001005170", amount_minor: 1000000, currency: "UGX", message: "For school fees" },
+    });
+    expect(sent).toMatchObject({ id: transfer.id, direction: "sent", otherName: "Brian K.", amount: ugx(1_000_000) });
+  });
+
+  it("says why a send was refused", async () => {
+    const client = createApiInvestingClient();
+    const request = { investmentId: ID, toAccountNumber: "1001005170", amount: ugx(50_000), message: null, idempotencyKey: "s" };
+    const cases: [string, InvestingError["code"]][] = [
+      ["below_product_minimum", "below_product_minimum"],
+      ["more_than_investment_value", "more_than_value"],
+      ["remainder_below_product_minimum", "remainder_below_minimum"],
+      ["matures_today", "cannot_send"],
+    ];
+    for (const [code, expected] of cases) {
+      serve(422, refusal("validation_failed", [{ field_path: ["body", "amount_minor"], code }]));
+      await expect(client.sendInvestment(request)).rejects.toEqual(new InvestingError(expected));
+    }
+    serve(409, refusal("conflict"));
+    await expect(client.sendInvestment(request)).rejects.toEqual(new InvestingError("cannot_send"));
+    serve(403, refusal("forbidden", [{ field_path: ["body"], code: "restricted_after_code_sign_in" }]));
+    await expect(client.sendInvestment(request)).rejects.toEqual(new InvestingError("restricted"));
+  });
+
+  it("lists transfers and cancels a held one", async () => {
+    serve(200, [{ ...transfer, direction: "received", status: "done", other_name: "Amara N." }]);
+    expect(await createApiInvestingClient().listTransfers()).toMatchObject([{ direction: "received", otherName: "Amara N." }]);
+    const seen = serve(200, { ...transfer, status: "cancelled" });
+    expect(await createApiInvestingClient().cancelTransfer(transfer.id)).toMatchObject({ status: "cancelled" });
+    expect(seen[0]).toMatchObject({ method: "POST", path: `/client/transfers/${transfer.id}/cancel` });
+    serve(409, refusal("conflict"));
+    await expect(createApiInvestingClient().cancelTransfer(transfer.id)).rejects.toEqual(new InvestingError("cannot_cancel"));
+  });
+
+  it("passes on whether the investment can be sent now", async () => {
+    serve(200, { ...investment, can_send: true });
+    expect((await createApiInvestingClient().getInvestment(ID)).canSend).toBe(true);
   });
 });
