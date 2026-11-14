@@ -15,6 +15,8 @@ export const KINDS = [
   "day_close",
   "dealing_order",
   "dealing_result",
+  "buffer_rules",
+  "buffer_capital",
   "rate_change",
   "migration_totals",
   "migration_sign_off",

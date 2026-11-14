@@ -74,6 +74,14 @@ def test_finance_see_a_checked_payout_account_but_cannot_approve_it() -> None:
     assert inbox([waiting("payout_account")], "me", permissions_for("support")) == []
 
 
+def test_a_payout_resolution_is_for_those_who_see_reconciliation() -> None:
+    for role in ("admin", "operations", "finance"):
+        [item] = inbox([waiting("payout_resolution")], "me", permissions_for(role))
+        assert item.can_decide is True
+    assert inbox([waiting("payout_resolution")], "me", permissions_for("compliance")) == []
+    assert inbox([waiting("payout_resolution")], "me", permissions_for("support")) == []
+
+
 def test_items_the_reader_cannot_see_are_left_out() -> None:
     items = [waiting("wording_change"), waiting("dealing_order")]
     assert inbox(items, "me", permissions_for("compliance")) == []
@@ -88,3 +96,14 @@ def test_oldest_first_then_by_kind_and_id() -> None:
     ]
     shown = inbox(items, "me", permissions_for("admin"))
     assert [i.id for i in shown] == ["a", "b", "c"]
+
+
+def test_buffer_changes_are_seen_with_the_desk_and_decided_by_who_changes_orders() -> None:
+    for kind in ("buffer_rules", "buffer_capital"):
+        assert SOURCES[kind].view == "dealing_desk.view"
+        assert SOURCES[kind].decide == "dealing_orders.change"
+    items = [waiting("buffer_rules", id="a"), waiting("buffer_capital", id="b")]
+    for role in ("admin", "finance"):
+        shown = {i.kind: i.can_decide for i in inbox(items, "me", permissions_for(role))}
+        assert shown == {"buffer_rules": True, "buffer_capital": True}
+    assert inbox(items, "me", permissions_for("support")) == []

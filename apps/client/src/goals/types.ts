@@ -51,7 +51,7 @@ export type Progress = {
   standing: Standing;
 };
 
-export type SavingStatus = "awaiting_payment" | "active" | "matured" | "cancelled" | "withdrawn";
+export type SavingStatus = "awaiting_payment" | "active" | "matured" | "cancelled" | "withdrawn" | "unwound";
 
 /** One investment made for the goal. */
 export type Saving = {

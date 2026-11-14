@@ -82,6 +82,15 @@ _GET = text(
     "WHERE source = :source AND account_reference = :account_reference "
     "AND business_date = :business_date"
 )
+_BY_ID = text(
+    "SELECT id, source, account_reference, business_date, currency, opening_minor, "
+    "closing_minor, line_count FROM reconciliation_statements WHERE id = :id"
+)
+_DAYS = text(
+    "SELECT business_date FROM reconciliation_statements WHERE source = :source "
+    "AND account_reference = :account_reference AND currency = :currency "
+    "AND business_date BETWEEN :date_from AND :date_to"
+)
 _FIND = text(
     "SELECT line.id, statement.source, statement.account_reference, statement.currency, "
     "line.value_date, line.direction, line.amount_minor, line.reference, line.narrative "
@@ -210,6 +219,46 @@ async def get_statement(
         Money(int(row.closing_minor), currency),
         row.line_count,
     )
+
+
+async def get_statement_by_id(session: AsyncSession, statement_id: str) -> ImportedStatement | None:
+    """One imported statement by its ID, for a module that was handed one to cite."""
+    row = (await session.execute(_BY_ID, {"id": statement_id})).one_or_none()
+    if row is None:
+        return None
+    currency = Currency(row.currency)
+    return ImportedStatement(
+        row.id,
+        StatementSource(row.source),
+        row.account_reference,
+        row.business_date,
+        Money(int(row.opening_minor), currency),
+        Money(int(row.closing_minor), currency),
+        row.line_count,
+    )
+
+
+async def statement_days(
+    session: AsyncSession,
+    *,
+    source: StatementSource,
+    account_reference: str,
+    currency: Currency,
+    date_from: date,
+    date_to: date,
+) -> set[date]:
+    """The days in a range that one pot has an imported statement for, in one currency."""
+    rows = await session.execute(
+        _DAYS,
+        {
+            "source": source,
+            "account_reference": account_reference,
+            "currency": currency.value,
+            "date_from": date_from,
+            "date_to": date_to,
+        },
+    )
+    return set(rows.scalars())
 
 
 async def find_statement_lines(
