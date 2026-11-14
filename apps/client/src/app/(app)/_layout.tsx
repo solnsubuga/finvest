@@ -14,12 +14,16 @@ import { useIsWide } from "@/theme/useIsWide";
  * resized across the breakpoint, because only the chrome changes.
  */
 export default function AppLayout() {
-  const { session } = useAuth();
+  const { session, pinApplies } = useAuth();
   const wide = useIsWide();
   usePushRegistration();
 
   if (!session) {
     return <Redirect href="/welcome" />;
+  }
+  // Every session of the phone app has a PIN, so a new log in chooses one first.
+  if (pinApplies && !session.pinSet) {
+    return <Redirect href="/setup/pin" />;
   }
 
   return (

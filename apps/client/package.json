@@ -63,6 +63,9 @@
     "testPathIgnorePatterns": [
       "/node_modules/",
       "/dist/"
+    ],
+    "setupFiles": [
+      "<rootDir>/src/testing/setup.ts"
     ]
   }
 }
