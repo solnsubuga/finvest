@@ -4,7 +4,14 @@ import { MemoryRouter, Route, Routes, useLocation } from "react-router";
 import { describe, expect, it, vi } from "vitest";
 import { createHttp } from "@/api/http.ts";
 import { ClientsScreen } from "./index.tsx";
-import { createHttpRecoveryApi, createStubRecoveryApi, notConnectedRecoveryApi, RecoveryError, type RecoveryApi } from "./recovery.ts";
+import {
+  createHttpRecoveryApi,
+  createStubRecoveryApi,
+  notConnectedRecoveryApi,
+  RecoveryError,
+  recoveryErrorMessage,
+  type RecoveryApi,
+} from "./recovery.ts";
 import { createStubClientsApi } from "./stub.ts";
 import { createStubSuppressionsApi } from "./suppressionsStub.ts";
 
@@ -132,5 +139,20 @@ describe("the recovery API client", () => {
     ]);
     await api.close("R1", "number_changed");
     expect(fetch).toHaveBeenCalledTimes(2);
+  });
+
+  it("says could not be reached only when Finvest could not be reached", async () => {
+    const answer = (status: number, code: string) =>
+      vi.fn(async () =>
+        new Response(JSON.stringify({ error: { code } }), { status, headers: { "Content-Type": "application/json" } }),
+      );
+    const refusal = async (status: number, code: string) => {
+      const api = createHttpRecoveryApi(createHttp("https://api.test", answer(status, code)));
+      return recoveryErrorMessage(await api.close("R1", "helped").catch((error: unknown) => error));
+    };
+    expect(await refusal(503, "unavailable")).toMatch(/could not be reached/);
+    expect(await refusal(422, "validation_failed")).toMatch(/refused this/);
+    expect(await refusal(429, "rate_limited")).toMatch(/refused this/);
+    expect(await refusal(403, "forbidden")).toBe("Your role cannot do this.");
   });
 });
