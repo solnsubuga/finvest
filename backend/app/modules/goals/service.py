@@ -772,6 +772,18 @@ def _goal(row: Row[Any]) -> Goal:
     )
 
 
+_OPEN_SAVINGS_FOR_CLIENT = text(
+    "SELECT s.investment_id, s.goal_id FROM goal_savings s JOIN goals g ON g.id = s.goal_id "
+    "WHERE s.client_id = :client_id AND g.status = 'active'"
+)
+
+
+async def open_goal_savings(session: AsyncSession, client_id: str) -> dict[str, str]:
+    """The investments saved to the client's open goals, each mapped to its goal's ID."""
+    rows = await session.execute(_OPEN_SAVINGS_FOR_CLIENT, {"client_id": client_id})
+    return {str(row.investment_id): str(row.goal_id) for row in rows.all()}
+
+
 _OPEN_FOR_CLIENT = text(
     "SELECT count(*) FROM goals WHERE client_id = :client_id AND status = 'active'"
 )
