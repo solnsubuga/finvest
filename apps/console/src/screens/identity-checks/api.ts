@@ -19,7 +19,7 @@ export type CheckStatus = (typeof CHECK_STATUSES)[number];
 export type DocumentType = "national_id" | "passport" | "driving_permit" | "refugee_id";
 export type PhotoKind = "front" | "back" | "selfie";
 export type Verdict = "pass" | "fail" | "unsure";
-export type AutomaticCheckName = "document_genuine" | "selfie_match" | "screening";
+export type AutomaticCheckName = "document_genuine" | "selfie_match" | "screening" | "liveness";
 
 /** What the signed-in person may do to a check in its current state. The backend decides. */
 export type Decision = "approve" | "reject" | "ask_for_photos" | "escalate";
@@ -38,6 +38,8 @@ export interface Photo {
   kind: PhotoKind;
   /** A short-lived signed link. Null when the photo cannot be shown. */
   url: string | null;
+  /** True for a selfie captured by a live check that saw a live person. */
+  live: boolean;
 }
 
 export interface AutomaticCheck {

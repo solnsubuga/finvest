@@ -14,7 +14,9 @@ function ago(minutes: number): string {
   return new Date(Date.now() - minutes * 60_000).toISOString();
 }
 
-const photos = (...kinds: PhotoKind[]) => kinds.map((kind) => ({ kind, url: null }));
+const photos = (...kinds: PhotoKind[]) => kinds.map((kind) => ({ kind, url: null, live: false }));
+/** The same, with the selfie captured by a live check. */
+const withLiveSelfie = (...kinds: PhotoKind[]) => photos(...kinds).map((photo) => ({ ...photo, live: photo.kind === "selfie" }));
 
 /** The whole document numbers, which the routes give out only one at a time. */
 const NUMBERS: Record<string, string> = {};
@@ -40,11 +42,12 @@ function sampleChecks(): CheckDetail[] {
       documentNumber: "CM90123456784PL",
       dateOfBirth: "1990-03-14",
       documentExpiresOn: "2031-08-02",
-      photos: photos("front", "back", "selfie"),
+      photos: withLiveSelfie("front", "back", "selfie"),
       automaticChecks: [
         { check: "document_genuine", verdict: "pass", score: null },
         { check: "selfie_match", verdict: "unsure", score: 62 },
         { check: "screening", verdict: "pass", score: null },
+        { check: "liveness", verdict: "pass", score: null },
       ],
       retakePhotos: [],
       clientMessage: null,
@@ -84,11 +87,12 @@ function sampleChecks(): CheckDetail[] {
       documentNumber: "CF85987654321QR",
       dateOfBirth: "1985-07-30",
       documentExpiresOn: "2028-05-11",
-      photos: photos("front", "back", "selfie"),
+      photos: withLiveSelfie("front", "back", "selfie"),
       automaticChecks: [
         { check: "document_genuine", verdict: "pass", score: null },
         { check: "selfie_match", verdict: "pass", score: 96 },
         { check: "screening", verdict: "unsure", score: null },
+        { check: "liveness", verdict: "pass", score: null },
       ],
       retakePhotos: [],
       clientMessage: null,

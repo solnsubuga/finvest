@@ -19,7 +19,7 @@ const CHECK = {
   document_expires_on: "2031-08-02",
   photos: [
     { id: "-NphotoFront00000001", kind: "front" },
-    { id: "-NphotoSelfie0000001", kind: "selfie" },
+    { id: "-NphotoSelfie0000001", kind: "selfie", live: true },
   ],
   automatic_checks: [{ check: "selfie_match", verdict: "unsure", score: 62 }],
   retake_photos: [],
@@ -67,8 +67,9 @@ describe("identity checks over HTTP", () => {
     expect(fetch.mock.calls[1]?.[0]).toBe(`https://api.test/staff/identity-checks/${CHECK.id}/photo-links`);
     expect(fetch.mock.calls[1]?.[1]?.method).toBe("POST");
     expect(check.photos).toEqual([
-      { kind: "front", url: "https://files.test/front?sig=1" },
-      { kind: "selfie", url: null },
+      // An older API sends no `live`, which reads as a camera photo.
+      { kind: "front", url: "https://files.test/front?sig=1", live: false },
+      { kind: "selfie", url: null, live: true },
     ]);
     expect(check).toMatchObject({ documentNumberMasked: "CM90••••••••4PL", givenNames: "David", automaticChecks: [{ score: 62 }] });
   });

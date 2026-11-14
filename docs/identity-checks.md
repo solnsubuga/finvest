@@ -227,7 +227,8 @@ Without `FINVEST_IDENTITY_DATA_KEY` the routes answer `unavailable`, and so do t
 - The device's own camera or file chooser takes each photo, and the client looks at it before it is sent. Where liveness is available, the selfie step starts a liveness check instead, opens the provider's page, and waits for the answer; a camera selfie stays as a fallback.
 - The client types the details. Nothing reads them from the photo yet.
 - During a retake the API does not say which photos were sent since staff asked, so the app remembers it for the session, and handing in confirms it.
-- In a demo build (`EXPO_PUBLIC_DEMO_AUTH=1`) an in-memory stand-in answers, and the last digit of the document number stands in for staff: 1 asks for a new selfie, 2 rejects, 3 approves.
+- In a demo build (`EXPO_PUBLIC_DEMO_AUTH=1`) an in-memory stand-in answers, and the last digit of the document number stands in for staff: 1 asks for a new selfie, 2 rejects, 3 approves. The demo offers the live selfie: its page is a placeholder, it answers on the third read, and a number ending in 4 is not a live person.
+- The live selfie (`src/identity/LiveSelfie.tsx`) starts an attempt, offers the page once it is open, and reads the attempt every 3 seconds until it ends, or when the client taps "I have finished". The page opens in the browser, because ioTec Faces cannot yet be shown inside the app. A failed or unfinished check offers another try, and "Take a photo instead" falls back to the camera. The console marks a live selfie "Taken live" and names the liveness flags.
 
 ## Not built yet
 
