@@ -41,6 +41,7 @@ from tests.support.clock import FakeClock
 from tests.support.database import TestDatabase
 from tests.support.ledger import staff, ugx
 from tests.support.payouts import FakeDisbursements, World, payout_worker
+from tests.support.settings import clear_settings, set_setting
 
 pytestmark = pytest.mark.integration
 
@@ -234,6 +235,64 @@ async def test_a_payout_deferred_every_time_stays_queued_and_the_sweep_tries_aga
     # Sweeping again sends nothing more.
     await sweep(worker, world.worker, world.clock)
     assert provider.sends_for(payout.id) == tries + 1
+
+
+@pytest.fixture
+async def settings_cleared(migrator_database: Database) -> AsyncIterator[None]:
+    await clear_settings(migrator_database)
+    yield
+    await clear_settings(migrator_database)
+
+
+def channels(*, mtn_payout: bool) -> dict[str, bool]:
+    return {
+        "mtn_pay_in": True,
+        "airtel_pay_in": True,
+        "bank_pay_in": True,
+        "mtn_payout": mtn_payout,
+        "airtel_payout": True,
+        "bank_payout": True,
+    }
+
+
+# Paused channel: a payout waits queued and goes once the channel reopens
+
+
+async def test_a_payout_waits_while_its_channel_is_paused_and_goes_when_it_reopens(
+    world: World,
+    provider: FakeDisbursements,
+    worker: Worker,
+    app_database: Database,
+    settings_cleared: None,
+) -> None:
+    # Queued before the pause, so its send job is already waiting when staff pause MTN.
+    payout = await world.request(1_000_000)
+    await set_setting(app_database, "payment_channels", channels(mtn_payout=False), world.clock)
+    provider.on_send(payout.id, Accepted("IOT-P1"))
+    await drain(worker)
+    # Nothing went to the provider and no attempt was saved, so it is still safe to send.
+    assert provider.sends_for(payout.id) == 0
+    assert await attempts(world, payout) == []
+    held = await reload(world, payout)
+    assert held.status is S.QUEUED
+    assert await world.balance(payout.in_flight_account_id) == 1_000_000
+
+    # The sweep keeps trying while the pause lasts, and still sends nothing.
+    world.clock.advance(seconds=RESEND_AFTER.total_seconds())
+    await sweep(worker, world.worker, world.clock)
+    assert provider.sends_for(payout.id) == 0
+    assert (await reload(world, payout)).status is S.QUEUED
+
+    await set_setting(app_database, "payment_channels", channels(mtn_payout=True), world.clock)
+    world.clock.advance(seconds=RESEND_AFTER.total_seconds())
+    await sweep(worker, world.worker, world.clock)
+    assert (await reload(world, payout)).status is S.SENT
+    assert provider.sends_for(payout.id) == 1
+    assert await attempts(world, payout) == ["accepted"]
+    # Sweeping again sends nothing more.
+    world.clock.advance(seconds=RESEND_AFTER.total_seconds())
+    await sweep(worker, world.worker, world.clock)
+    assert provider.sends_for(payout.id) == 1
 
 
 async def test_a_payout_the_provider_takes_nothing_of_for_hours_is_shown_to_staff(
