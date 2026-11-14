@@ -1,6 +1,6 @@
 import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { notConnectedComplianceApi, type ComplianceApi } from "./api.ts";
 import { ComplianceScreen } from "./index.tsx";
 import { createStubComplianceApi, type StubCase } from "./stub.ts";
@@ -21,6 +21,29 @@ const open = async (user: ReturnType<typeof userEvent.setup>, name: string) => {
 };
 
 describe("compliance", () => {
+  it("shows the rules as they run, the reports to the FIA and the amount on each monitoring case", async () => {
+    renderScreen();
+    const rules = (await screen.findByRole("heading", { name: "Rules that are on" })).parentElement as HTMLElement;
+    expect(rules).toHaveTextContent("UGX 20,000,000 or more");
+    expect(rules).toHaveTextContent("Within 7 days");
+    expect(rules).toHaveTextContent("Half of what came in paid out within 7 days, from UGX 5,000,000");
+    expect(rules).toHaveTextContent("Every 30 days");
+    expect(screen.getByText("Reports to the FIA this year").parentElement).toHaveTextContent("2");
+    const table = await screen.findByRole("table", { name: "Compliance cases" });
+    expect(within(table).getByRole("row", { name: /Ruth Achieng/ })).toHaveTextContent("UGX 21,500,000");
+    expect(within(table).getByRole("row", { name: /Peter Mugisha/ })).toHaveTextContent("UGX 45,000,000");
+    expect(within(table).getByRole("row", { name: /Sarah Nakato/ })).toHaveTextContent("Not a payment");
+  });
+
+  it("exports the register as a file, and says when it cannot", async () => {
+    const save = vi.fn();
+    render(<ComplianceScreen api={createStubComplianceApi(ME, "default", () => NOW)} me={ME.id} canChange save={save} />);
+    const user = userEvent.setup();
+    await user.click(await screen.findByRole("button", { name: "Export register" }));
+    await waitFor(() => expect(save).toHaveBeenCalledTimes(1));
+    expect(save.mock.calls[0]![0].filename).toBe("finvest-compliance-register-2026-11-14.csv");
+  });
+
   it("shows the figures, open cases oldest first, and payouts held for screening", async () => {
     renderScreen();
     expect(await screen.findByText("Open cases")).toBeInTheDocument();
