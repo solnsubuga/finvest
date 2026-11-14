@@ -48,9 +48,11 @@ Closing a goal is final. Its investments carry on as the client's ordinary inves
 The worker runs `goals.send_reminders` every morning at 08:00 Kampala time, so no text arrives at night. It reads every active goal and raises two notices through the notifications contract, with the goal as the link:
 
 - **`goal_top_up_due`**, three days before a monthly saving is due. Savings fall on the day of the month the goal was set up, the 28th at the latest, as the plan assumes. Only a goal with a date has a plan, so a goal with no date gets no reminder. There is none once the goal is reached, none for a saving on or after the goal's date, and none if the client saved towards the goal since the last saving date. A rollover is not a saving. Each saving date is keyed (`goal-top-up:<goal>:<date>`), so a second run tells nobody twice and a missed morning is caught up the next one, while the saving is still ahead.
-- **`goal_reached`**, the first morning the goal's value, after tax, is at its target. Keyed by the goal, so a client is told once even if the value later dips and comes back.
+- **`goal_reached`**, the first morning the goal's value, after tax, is at its target. Keyed by the goal and its target, so a client is told once even if the value later dips and comes back, and told again when they reach a target they raised after reaching the first.
 
 The words name the goal and the date, never an amount. The rule is in `domain/reminders.py`.
+
+The morning run (`goals.send_reminders`) reads 200 active goals per job. Each page is its own transaction, and a full page queues the next one, after its last goal, in that same transaction. A run over many goals never holds one long transaction, and a crash repeats one page at most.
 
 ## Rolling over
 

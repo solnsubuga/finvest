@@ -21,6 +21,7 @@ from app.infrastructure.database import Database
 from app.infrastructure.storage import FileStorage, InvalidFile, NewFile, StorageError
 from app.modules.identity.api import CurrentClient
 from app.modules.identity.codes import CodeService
+from app.modules.identity.pins_api import Pins
 from app.modules.payments.domain.bank_transfers import (
     MAX_RECEIPT_BYTES,
     RECEIPT_CONTENT_TYPES,
@@ -117,6 +118,9 @@ class NewDestination(Contract):
     phone: str | None = None
     bank_code: str | None = None
     account_number: str | None = None
+    # From POST /client/pin/confirm with action `payout_account`. The phone app asks for it
+    # when the session has a PIN; a browser sends none.
+    pin_confirmation: Annotated[str | None, Field(max_length=200)] = None
 
 
 class CodeAnswer(Contract):
@@ -307,16 +311,21 @@ async def list_destinations(
         return [await _client_out(session, view, clock, asking) for view in views]
 
 
-@client_router.post("/payout-destinations", status_code=201)
+@client_router.post(
+    "/payout-destinations", status_code=201, responses={428: {"model": ErrorEnvelope}}
+)
 async def add_destination(
-    body: NewDestination, client: CurrentClient, database: Db, clock: Time
+    body: NewDestination, client: CurrentClient, database: Db, clock: Time, pins: Pins
 ) -> DestinationOut:
     """Add a mobile money number or bank account. It starts awaiting the SMS code.
 
-    409 `conflict` if the client already has the same account saved.
+    409 `conflict` if the client already has the same account saved. On the phone app with a
+    PIN, 428 `pin_required` without a confirmation for `payout_account`; the confirmation is
+    used up only when the account is saved.
     """
     account = _account(body)
     async with database.actor_transaction(client.actor) as session:
+        await pins.spend(client, "payout_account", body.pin_confirmation, session=session)
         view = await destinations.add_destination(
             session, client.actor, account, body.holder_name, clock
         )

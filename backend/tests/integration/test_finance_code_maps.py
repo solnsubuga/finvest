@@ -58,12 +58,12 @@ async def withdraw_waiting(api: Api, name: str) -> None:
         assert rejected.status_code == 200, rejected.text
 
 
-async def test_only_admins_see_and_change_the_maps(api: Api) -> None:
-    _, finance = await signed_in_staff(api, "finance")
-    refused = await api.http.get(BASE, headers=finance)
+async def test_only_admins_and_finance_see_and_change_the_maps(api: Api) -> None:
+    _, operations = await signed_in_staff(api, "operations")
+    refused = await api.http.get(BASE, headers=operations)
     assert (refused.status_code, code(refused)) == (403, "forbidden")
     refused = await api.http.post(
-        f"{BASE}/sage/proposals", json={"accounts": {}, "reason": "x"}, headers=finance
+        f"{BASE}/sage/proposals", json={"accounts": {}, "reason": "x"}, headers=operations
     )
     assert (refused.status_code, code(refused)) == (403, "forbidden")
     assert (await api.http.get(BASE)).status_code == 401

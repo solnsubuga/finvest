@@ -42,7 +42,7 @@ function formatName(formats: readonly FormatOption[], format: JournalFormat): st
 function blocked(option: FormatOption | undefined, currency: Currency): string | null {
   if (!option) return null;
   if (!option.currencies.includes(currency)) return `${option.name} takes the journal in shillings only. Download dollar journals as the Finvest CSV.`;
-  if (!option.ready) return `No ${option.name} account codes are approved yet. An admin sets them under Settings, Accounting system codes, and a second admin approves them.`;
+  if (!option.ready) return `No ${option.name} account codes are approved yet. Finance or an admin sets them under Settings, Accounting system codes, and a second person approves them.`;
   return null;
 }
 
@@ -294,7 +294,7 @@ export function BooksSection({ api, currency, today, save }: BooksSectionProps) 
               <p className="m-0 rounded-lg bg-warning-surface p-3 text-sm leading-normal text-warning-text">
                 {option.unmapped.length === 1 ? "1 Finvest account has" : `${option.unmapped.length} Finvest accounts have`} no {option.name} code yet:{" "}
                 {option.unmapped.join(", ")}. A day that moved {option.unmapped.length === 1 ? "it" : "one of them"} cannot be downloaded for {option.name} until
-                an admin adds {option.unmapped.length === 1 ? "its code" : "their codes"} in Settings.
+                someone adds {option.unmapped.length === 1 ? "its code" : "their codes"} in Settings.
               </p>
             ) : null}
             {books.nextExport ? (

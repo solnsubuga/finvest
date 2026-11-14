@@ -11,7 +11,8 @@ from datetime import timedelta
 
 from app.infrastructure.database import Database
 from app.infrastructure.jobs import RetryPolicy, Worker, WorkerConfig
-from app.modules.payments import service
+from app.modules.payments import bank_accounts, service
+from app.modules.payments.domain.bank_accounts import BankAccount
 from app.modules.payments.domain.deposits import Network, Purpose
 from app.modules.payments.domain.outcomes import (
     SendResult,
@@ -150,3 +151,39 @@ async def reload(database: Database, deposit: Deposit) -> Deposit:
     """The deposit as the worker sees it."""
     async with database.actor_transaction(SYSTEM) as session:
         return await service.get_deposit(session, deposit.id)
+
+
+async def use_bank_account(
+    database: Database, currency: Currency, account: BankAccount, clock: Clock
+) -> None:
+    """Make `account` the one clients pay `currency` into, proposed and approved by two people.
+
+    Tests share a database and no row is ever deleted, so this only adds a change when the
+    account in use is a different one. A change another test left waiting is withdrawn first.
+    """
+    maker, checker = Actor("staff", push_id()), Actor("staff", push_id())
+    async with database.actor_transaction(maker) as session:
+        if await bank_accounts.account_in_use(session, currency) == account:
+            return
+        listed = {item.currency: item for item in await bank_accounts.list_accounts(session)}
+    left = listed[currency].proposal
+    if left is not None:
+        proposer = Actor("staff", left.proposed_by)
+        async with database.actor_transaction(proposer) as session:
+            await bank_accounts.decide(
+                session, proposer, left.id, "withdrawn", "Test set-up", clock
+            )
+    async with database.actor_transaction(maker) as session:
+        proposal = await bank_accounts.propose(
+            session,
+            maker,
+            currency,
+            bank_name=account.bank_name,
+            account_name=account.account_name,
+            account_number=account.account_number,
+            branch=account.branch,
+            reason="Test set-up",
+            clock=clock,
+        )
+    async with database.actor_transaction(checker) as session:
+        await bank_accounts.decide(session, checker, proposal.id, "approved", "Checked", clock)

@@ -50,10 +50,10 @@ describe("compliance", () => {
     expect(await screen.findByText("2 screening, 2 monitoring")).toBeInTheDocument();
     const rows = within(await screen.findByRole("table", { name: "Compliance cases" })).getAllByRole("row").slice(1);
     expect(rows.map((row) => within(row).getAllByRole("cell")[0]?.textContent)).toEqual([
-      "Sarah NakatoFV 2034 5521",
-      "Joseph OkelloFV 2034 7702",
-      "Ruth AchiengFV 2035 0118",
-      "Peter MugishaFV 2034 9930",
+      "Sarah Nakato1001005521",
+      "Joseph Okello1001007702",
+      "Ruth Achieng1001000118",
+      "Peter Mugisha1001009930",
     ]);
     const payouts = await screen.findByRole("table", { name: "Payouts held for screening" });
     expect(payouts).toHaveTextContent("UGX 15,000,000");

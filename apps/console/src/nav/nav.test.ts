@@ -40,11 +40,13 @@ describe("console menu", () => {
     ]);
   });
 
-  it("keeps team and settings away from non-admin roles", () => {
+  it("keeps team away from non-admin roles, and settings from all but admin and finance", () => {
     for (const role of ROLES.filter((r) => r !== "admin")) {
       const seen = labels(sessionFor(role));
       expect(seen).not.toContain("Team and Permissions");
-      expect(seen).not.toContain("Settings");
+      // Finance opens Settings for the bank account clients pay into.
+      if (role === "finance") expect(seen).toContain("Settings");
+      else expect(seen).not.toContain("Settings");
     }
   });
 

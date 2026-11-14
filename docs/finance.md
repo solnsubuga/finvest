@@ -83,7 +83,7 @@ A system's file names the system's accounts, so each system has an account code 
 
 * One member of staff proposes a whole map for one system, with a reason, and a different one approves or rejects it with a note. Only the proposer can withdraw it. PostgreSQL refuses the proposer deciding their own, a decided map changing, accounts being added by anyone but the proposer or after the proposal is decided, and any row being removed.
 * One proposal waits per system at a time. Exports keep using the map in use until a new one is approved.
-* Seeing the maps needs `settings.view`. Proposing and deciding need `account_codes.change`, held by the admin role only for now. Deciding also needs a passkey or app code from the last ten minutes.
+* Seeing the maps needs `settings.view`. Proposing and deciding need `account_codes.change`, held by admin and finance for now. Deciding also needs a passkey or app code from the last ten minutes.
 * Each step is an audit event: `finance.code_map_proposed` with how many codes it adds, changes and removes, then `finance.code_map_approved`, `_rejected` or `_withdrawn`. The accounts themselves are in the map, kept for good.
 * A code must be one the ledger has. A Xero code is up to 10 letters or numbers, a Sage nominal code up to 8 digits, and a QuickBooks or Zoho Books account name up to 100 characters on one line. Xero also needs the name of the tax rate written on every line, `Tax Exempt` to start with.
 * A map need not name every code. An export for a system that meets a code its approved map does not name is refused with 409 `conflict` and one field per code, `["codes", "<code>"]`, `not_mapped`, so the journal never lands on a guessed account. The Finance screen names the codes and sends the person to Settings.

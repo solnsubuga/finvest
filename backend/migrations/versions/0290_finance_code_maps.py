@@ -2,7 +2,7 @@
 format.
 
 Revision ID: 0290_finance_code_maps
-Revises: 0222_identity_recovery_requests
+Revises: 0225_identity_pin_confirmations
 
 The daily journal can be downloaded as Finvest's generic CSV or as the journal import file of
 QuickBooks Online, Xero, Sage Accounting or Zoho Books. Those four name their own accounts, so each has an
@@ -25,7 +25,7 @@ from collections.abc import Sequence
 from alembic import op
 
 revision: str = "0290_finance_code_maps"
-down_revision: str | None = "0222_identity_recovery_requests"
+down_revision: str | None = "0225_identity_pin_confirmations"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 

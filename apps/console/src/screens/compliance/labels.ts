@@ -14,23 +14,23 @@ export const CODE_LABELS: Record<string, { title: string; hint: string }> = {
   },
   large_deposit: {
     title: "Large deposit",
-    hint: "One deposit at or above UGX 20,000,000, the large cash transaction threshold.",
+    hint: "One deposit at or above the large cash transaction threshold.",
   },
   split_deposits: {
     title: "Split deposits",
-    hint: "Deposits each under UGX 20,000,000 that together reached it within 7 days.",
+    hint: "Deposits each under the large cash threshold that together reached it within a short window.",
   },
   many_deposits: {
     title: "Many deposits",
-    hint: "5 deposits within 24 hours.",
+    hint: "Many deposits within one day.",
   },
   unusual_deposit: {
     title: "Unusual deposit",
-    hint: "A deposit at least 5 times the client's usual one over the last 180 days.",
+    hint: "A deposit many times larger than the client's usual one.",
   },
   quick_withdrawal: {
     title: "Quick withdrawal",
-    hint: "A payout of at least half of what came in during the last 7 days.",
+    hint: "A payout of a large share of what came in shortly before.",
   },
 };
 

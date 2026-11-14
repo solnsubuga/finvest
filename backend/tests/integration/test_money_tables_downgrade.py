@@ -7,7 +7,8 @@ complaints register, the goals, the email delivery records, the unclaimed accoun
 complaint outcomes, the suppression lifts, the client locks, the announcements, the team
 changes, Finvest's own money in the buffer, the payments of tax to URA, the payments moved to
 the right client, next of kin, the answers to the investing questions, the requests to close an
-account, the journals sent to the accounting system or the account code maps."""
+account, the journals sent to the accounting system, the account code maps or who set the bank
+account clients pay into."""
 
 import os
 from collections.abc import Iterator
@@ -875,6 +876,35 @@ ROWS = {
         "created_at) VALUES ('-Nabc0000000000000A1', '-Nabc0000000000000B1', '+256701555013', "
         "'lost_phone', 'open', now())",
         "refusing to drop recovery requests staff have not closed",
+    ),
+    "0260_payment_bank_accounts": (
+        # The guard admits only staff proposing in their own name.
+        "ALTER TABLE payment_bank_accounts DISABLE TRIGGER payment_bank_accounts_guard; "
+        "INSERT INTO payment_bank_accounts (id, currency, bank_name, account_name, "
+        "account_number, reason, proposed_by, proposed_at) VALUES ('-Nabc0000000000000A1', "
+        "'UGX', 'Example Bank', 'Finvest Clients', '9030001234567', 'Trust account', "
+        "'-Nabc0000000000000S1', now())",
+        "refusing to drop bank accounts that hold records",
+    ),
+    "0224_identity_recovery_asks": (
+        "INSERT INTO identity_clients (id, phone, status, created_at) VALUES "
+        "('-Nabc0000000000000B1', '+256772123456', 'unclaimed', now()); "
+        "INSERT INTO identity_recovery_requests (id, client_id, contact_phone, reason, status, "
+        "created_at, asks, last_asked_at) VALUES ('-Nabc0000000000000A1', '-Nabc0000000000000B1', "
+        "'+256701555013', 'lost_phone', 'open', now(), 2, now())",
+        "refusing to drop the later asks on open recovery requests",
+    ),
+    "0225_identity_pin_confirmations": (
+        "INSERT INTO identity_clients (id, phone, status, created_at) VALUES "
+        "('-Nabc0000000000000B1', '+256772123456', 'unclaimed', now()); "
+        "INSERT INTO identity_sessions (id, actor_kind, actor_id, token_hash, second_step, "
+        "transport, created_at, last_seen_at, idle_expires_at, absolute_expires_at) "
+        "VALUES ('-Nabc0000000000000A1', 'client', '-Nabc0000000000000B1', "
+        "decode(repeat('00', 32), 'hex'), 'passkey', 'token', now(), now(), now(), now()); "
+        "INSERT INTO identity_pin_confirmations (id, session_id, action, token_hash, created_at, "
+        "expires_at) VALUES ('-Nabc0000000000000C1', '-Nabc0000000000000A1', 'withdrawal', "
+        "decode(repeat('11', 32), 'hex'), now(), now() + interval '3 minutes')",
+        "refusing to drop PIN confirmations that are not used yet",
     ),
 }
 

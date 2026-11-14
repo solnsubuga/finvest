@@ -106,7 +106,7 @@ describe("books", () => {
     expect(screen.getByText(/1 Finvest account has no Xero code yet: fees\.provider\.iotec/)).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: /^Download 11 .* for Xero$/ }));
     expect(await screen.findByRole("alert")).toHaveTextContent(
-      "This Finvest account has no code in the accounting system yet: fees.provider.iotec. An admin adds codes under Settings, Accounting system codes.",
+      "This Finvest account has no code in the accounting system yet: fees.provider.iotec. Finance or an admin adds codes under Settings, Accounting system codes.",
     );
     await user.selectOptions(picker, "csv");
     await user.click(screen.getByRole("button", { name: "Download 11 Nov 2026 to 12 Nov 2026" }));

@@ -6,6 +6,7 @@ import { notConnectedWordingsApi, WordingsError, type WordingsApi } from "./api.
 import { SettingsScreen } from "./index.tsx";
 import { checkWording, fillSample, outsideLinks } from "./rules.ts";
 import { createStubAnnouncementsApi } from "./announcementsStub.ts";
+import { createStubBankAccountsApi } from "./bankAccountsStub.ts";
 import { createStubWordingsApi } from "./stub.ts";
 
 const ME = { id: "sample-me", name: "Amina Kintu" };
@@ -16,9 +17,11 @@ function renderSettings({ api = createStubWordingsApi(ME, () => NOW), canChange 
     <SettingsScreen
       api={api}
       announcements={createStubAnnouncementsApi(ME, () => NOW)}
+      bankAccounts={createStubBankAccountsApi(ME, () => NOW, "empty")}
       directory={createStubDirectory(ME)}
       canChange={canChange}
       canSend={canSend}
+      canChangeBankAccount={false}
     />,
   );
   return { api, user: userEvent.setup() };

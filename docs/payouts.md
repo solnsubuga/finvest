@@ -195,7 +195,7 @@ In `backend/app/modules/payouts/api.py`. Every route needs a signed-in client an
 | Route | What it does |
 | --- | --- |
 | `GET /client/payout-destinations` | The client's payout accounts that are not removed, newest first |
-| `POST /client/payout-destinations` | Add one: `{kind: "mobile_money", phone, holder_name}` or `{kind: "bank", bank_code, account_number, holder_name}`. 201, awaiting the SMS code. 409 if it is already saved, or `too_many_unconfirmed_accounts` when the client already has five awaiting their code. 422 `bank_unknown` on `bank_code` for a bank not in the list |
+| `POST /client/payout-destinations` | Add one: `{kind: "mobile_money", phone, holder_name}` or `{kind: "bank", bank_code, account_number, holder_name}`. 201, awaiting the SMS code. 409 if it is already saved, or `too_many_unconfirmed_accounts` when the client already has five awaiting their code. 422 `bank_unknown` on `bank_code` for a bank not in the list. On the phone app with a PIN it needs `pin_confirmation` from `POST /client/pin/confirm` with action `payout_account`, else 428 `pin_required`; the confirmation is used only if the account is saved. A browser sends none |
 | `GET /client/payout-destinations/{id}` | One account |
 | `POST /client/payout-destinations/{id}/code` | Text the code for an account that is `awaiting_code`. 204. A new code replaces the one before. 429 past three in 15 minutes for the account, five for the client, three to the number texted, or ten for the client in a day |
 | `POST /client/payout-destinations/{id}/code/verify` | `{code}`. Moves the account to `awaiting_proof`, and for a mobile money number asks for the name its network holds in the same transaction. 401 `invalid_code` for a wrong code, 410 `expired` when none is left |

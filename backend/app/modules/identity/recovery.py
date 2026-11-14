@@ -5,7 +5,8 @@ account, and asking is limited per caller address and per number. A request for 
 account tells the account's own number (and proved email) that someone asked, so an owner who
 still has their phone hears of a stranger trying. An account has one open request at a time,
 and it is told only when that request opens, so knowing a client's number is not a way to send
-them a stream of texts.
+them a stream of texts. A later ask while it is open replaces the number to call and the reason,
+so a wrong or dead number can be corrected, and staff see how many asks came in.
 
 Known limit: an ask for a number with an account does a little more work (a read and two
 queued messages) than one without, so its response time can hint at whether the number has an
@@ -52,6 +53,10 @@ class RecoveryRequest:
     contact_phone: str
     reason: Reason
     created_at: datetime
+    # Asks while the request was open, the first included, and when the latest came. The
+    # number to call and the reason are the latest ask's.
+    asks: int
+    last_asked_at: datetime
 
 
 def _phone(value: str, field: str) -> str:
@@ -74,7 +79,8 @@ class RecoveryService:
         """Record a request. Says nothing about whether `phone` has an account.
 
         The account is told only when this opens its request: while one is already open, the
-        database records nothing new and answers with no account.
+        database keeps this ask's number and reason on it, counts it, and answers with no
+        account.
         """
         phone = _phone(phone, "phone")
         contact_phone = _phone(contact_phone, "contact_phone")
@@ -124,7 +130,8 @@ class RecoveryService:
             rows = await session.execute(
                 text(
                     "SELECT r.id, r.client_id, c.phone AS account_phone, r.contact_phone, "
-                    "r.reason, r.created_at FROM identity_recovery_requests r "
+                    "r.reason, r.created_at, r.asks, r.last_asked_at "
+                    "FROM identity_recovery_requests r "
                     "JOIN identity_clients c ON c.id = r.client_id "
                     "WHERE r.status = 'open' ORDER BY r.created_at, r.id LIMIT 200"
                 )

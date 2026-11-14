@@ -251,7 +251,7 @@ function SystemPanel({ item, codes, canChange, editing, busy, error, refused, on
         <p className="m-0 rounded-lg bg-surface-sunken p-4 text-md leading-normal text-muted">
           {canChange
             ? `Ask the accountant for the ${item.accountLabel.toLowerCase()} of each account in ${item.name}, then set them up here for a second person to approve.`
-            : `An admin who can change accounting system codes sets them up here, and a second admin approves them.`}
+            : `Someone who can change accounting system codes sets them up here, and a second person approves them.`}
         </p>
       )}
 
@@ -348,7 +348,7 @@ function Decision({
 }) {
   const [note, setNote] = useState("");
   const [tried, setTried] = useState(false);
-  if (!canChange) return <p className="m-0 text-sm text-muted">An admin who can change accounting system codes decides it.</p>;
+  if (!canChange) return <p className="m-0 text-sm text-muted">Someone who can change accounting system codes decides it.</p>;
   const missing = tried && note.trim().length === 0;
   const decide = (decision: MapDecision) => {
     setTried(true);

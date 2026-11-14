@@ -70,7 +70,7 @@ describe("accounting system codes", () => {
   it("only shows the codes to someone who cannot change them", async () => {
     renderCodes(false);
     const panel = await screen.findByRole("tabpanel", { name: "Xero" });
-    expect(within(panel).getByText("An admin who can change accounting system codes decides it.")).toBeInTheDocument();
+    expect(within(panel).getByText("Someone who can change accounting system codes decides it.")).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /Change codes|Set up codes|Approve/ })).not.toBeInTheDocument();
   });
 
