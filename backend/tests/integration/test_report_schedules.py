@@ -269,3 +269,21 @@ async def test_the_database_refuses_an_approval_by_the_proposer(
                 ),
                 {"me": proposer.id, "id": schedule["id"]},
             )
+
+
+async def test_staff_contacts_answer_only_staff_and_the_worker(
+    api: Api, app_database: Database, worker_database: Database
+) -> None:
+    reader = await api.staff("finance")
+    ask = text("SELECT email FROM identity_staff_contacts(ARRAY[:id])")
+    async with app_database.actor_transaction(reader) as session:
+        assert (await session.execute(ask, {"id": reader.id})).scalar_one() == await email_of(
+            app_database, reader
+        )
+    async with worker_database.transaction() as session:
+        assert (await session.execute(ask, {"id": reader.id})).scalar_one()
+    # A client, or the API role claiming to be the system, is refused.
+    for actor in (Actor("client", push_id()), SYSTEM):
+        with pytest.raises(DBAPIError, match="staff contacts are for staff and the worker"):
+            async with app_database.actor_transaction(actor) as session:
+                await session.execute(ask, {"id": reader.id})
