@@ -59,7 +59,7 @@ export function createStubApprovalsApi(reader: Reader, now: () => number = Date.
     ["day_close", "-NstubClose000000012", "2026-11-12", "Daniel Kato", 600],
     ["payout_account", "-NstubDest0000000088", "bank", "Peter Okello", 2900],
     ["payout_release", "-NstubRelease0000003", "-NstubPayout00000017", "Grace Auma", 70],
-    ["organisation", "-NstubOrg00000000002", "company", "Grace Auma", 90],
+    ["organisation", "-NstubOrg00000000002", "company", "Ruth Namata", 90],
   ];
   const held = new Set(reader.permissions);
   const items: ApprovalItem[] =
