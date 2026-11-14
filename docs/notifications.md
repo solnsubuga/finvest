@@ -35,7 +35,7 @@ await notifications.notify(
 - **It cannot fail your transaction over words.** Whatever the wording and the values, the texts are cut to what the table holds. Only a programming error raises: an unknown event, the wrong set of variables, a float or an empty value.
 - **Net figures only.** An amount shown to a client is after tax. No event carries a rate.
 - **No amounts in the words.** Push alerts and SMS show on a locked phone, and email sits in an inbox others may read, so no default title, body or SMS names the amount. Push and email send the in-app words, so the notification centre does not name it either. The amount is shown on the screen the notification links to. Events still carry `amount`, so the words can use it if the owner decides otherwise. A unit test holds every default to this.
-- **Link.** Optional. It names the screen the app opens when the notification is tapped, by kind and ID: `deposit`, `payout`, `investment`, `identity_check`, `payout_destination`, `statement`, `security`, `conversation`, `complaint`.
+- **Link.** Optional. It names the screen the app opens when the notification is tapped, by kind and ID: `deposit`, `payout`, `investment`, `identity_check`, `payout_destination`, `statement`, `security`, `conversation`, `complaint`, `goal`, `autoinvest_plan`.
 - **Who may call.** The transaction must act for that client, for a member of staff, or for the system in the worker. The API is never trusted as the system, so a route with nobody signed in cannot notify.
 
 Nothing personal goes into a job payload or a log. The words live in the `notifications` table, which a row policy fences to the client they belong to.
@@ -46,11 +46,13 @@ Nothing personal goes into a job payload or a log. The words live in the `notifi
 | --- | --- | --- | --- |
 | `payment_confirmed` | Payments | `amount`, `method` | Money |
 | `payment_failed` | Payments | `amount`, `method` | Money |
+| `payment_reversed` | Payments | `amount`, `method` | Money |
 | `payout_processing` | Payouts | `amount`, `destination` | Money |
 | `payout_sent` | Payouts | `amount`, `destination` | Money |
 | `payout_failed` | Payouts | `amount`, `destination` | Money |
 | `payout_declined` | Payouts | `amount`, `destination` | Money |
 | `investment_started` | Investments | `amount`, `product` | Investments |
+| `investment_booked` | Investments | `product` | Investments |
 | `investment_maturing` | Investments | `product`, `date` | Investments |
 | `investment_matured` | Investments | `amount`, `product` | Investments |
 | `investment_withdrawal_requested` | Investments | `amount`, `product` | Investments |
@@ -62,7 +64,11 @@ Nothing personal goes into a job payload or a log. The words live in the `notifi
 | `investment_transfer_failed` | Investments | `product`, `person` | Investments |
 | `interest_earned` | Investments | `amount`, `count` | Daily earnings |
 | `goal_top_up_due` | Goals | `goal`, `date` | Investments |
+| `goal_payday` | Goals | `goal` | Investments |
 | `goal_reached` | Goals | `goal` | Investments |
+| `autoinvest_run_retrying` | Automatic investing | `date` | Investments |
+| `autoinvest_run_failed` | Automatic investing | `date` | Investments |
+| `autoinvest_run_missed` | Automatic investing | `date` | Investments |
 | `kyc_approved` | Identity checks | none | Account |
 | `kyc_retake_requested` | Identity checks | none | Account |
 | `kyc_rejected` | Identity checks | none | Account |
@@ -70,12 +76,12 @@ Nothing personal goes into a job payload or a log. The words live in the `notifi
 | `organisation_returned` | Organisations | `organisation` | Account |
 | `organisation_rejected` | Organisations | `organisation` | Account |
 | `organisation_approved` | Organisations | `organisation` | Account |
-| `payout_destination_approved` | Payouts | `destination` | Account |
-| `payout_destination_refused` | Payouts | `destination` | Account |
+| `payout_destination_approved` | Payouts, when the second member of staff approves | `destination` | Account |
+| `payout_destination_refused` | Payouts, at each refusal by staff or by the network's name check, keyed by the proof refused | `destination` ("your Stanbic Bank account", "your MTN Mobile Money number") | Account |
 | `statement_ready` | Statements | `period` | Account |
 | `new_sign_in` | Sign-in | `device` | Security |
-| `password_changed` | Sign-in | none | Security |
-| `second_step_changed` | Sign-in | `change` | Security |
+| `password_changed` | Sign-in, when a client resets their password | none | Security |
+| `second_step_changed` | Sign-in, when a client adds or removes a passkey or an authenticator app. Never for staff | `change`, fixed words in `identity/notices.py` | Security |
 | `support_reply` | Support | none | Help |
 | `complaint_received` | Support | `reference`, `date` | Help |
 | `complaint_closed` | Support | `reference` | Help |
@@ -200,6 +206,7 @@ Staff can tell every client something, such as an office closure, as an `announc
 
 - **Two people.** Sending is a permission of its own, `announcements.send`, apart from changing a wording, so fewer people can tell every client at once. Only the admin role holds it for now. One member of staff with it proposes a title and a message, with a reason. A different one approves or rejects it, and a rejection says why. The proposer can withdraw their own. PostgreSQL enforces that the person who decides is never the person who proposed, that a rejection has a reason, and that a decided announcement never changes. Every step is written to the audit trail.
 - **The same word rules as a wording.** The title is at most 60 characters. The message is at most 291 characters, so that "Finvest: " and the message fit one SMS send. Both may link only to finvestug.com, contain no percent sign and no braces, and the message uses only basic letters, digits and punctuation.
+- **Who it reaches, before approving.** The console shows the approver how many active clients an approval sends it to, and how many of them chose SMS and email for news, from `GET /staff/announcements/reach`. Every one gets it in the app, and by push where they have the app. The SMS and email counts follow each client's choices, or the default for news (push only); a client with no email address still counts among those who chose email.
 - **Sending.** Approving queues the sending in the same transaction. The worker tells active clients 500 at a time, in ID order, with one job per page. Each page commits together with its job and queues the next page. The notification key is the announcement's ID, so a page that runs twice tells nobody twice. Clients who are locked or closed, and accounts carried over from Finvest 1.0 that have not been claimed, are not told.
 - **Nothing is deleted.** The list shows the latest 50 announcements with how many clients each has reached.
 
@@ -217,6 +224,7 @@ Staff can tell every client something, such as an office closure, as an `announc
 | `POST /staff/notification-wordings/{event}/proposals` | Staff with `wordings.change` | Proposes new words, with a reason |
 | `POST /staff/notification-wordings/proposals/{id}/decision` | Staff with `wordings.change` | `approved` or `rejected` by someone else, `withdrawn` by the proposer |
 | `GET /staff/announcements` | Staff with `settings.view` | The latest announcements, any waiting for a second person, and how many clients each has reached |
+| `GET /staff/announcements/reach` | Staff with `settings.view` | How many clients an announcement approved now reaches, and how many of them chose SMS and email for news |
 | `POST /staff/announcements` | Staff with `announcements.send` | Proposes a title and a message, with a reason |
 | `POST /staff/announcements/{id}/decision` | Staff with `announcements.send` | `approved`, which starts sending, or `rejected` with a reason, by someone else, or `withdrawn` by the proposer |
 | `POST /webhooks/resend` | Resend's webhook, by Svix signature | One Resend delivery event. See "Email delivery events". |

@@ -32,6 +32,7 @@ from app.shared.push_ids import push_id
 
 MONITOR_DEPOSIT_KIND = events.MONITOR_DEPOSIT_KIND
 MONITOR_PAYOUT_KIND = "screening.monitor_payout"
+MONITOR_TRANSFER_KIND = "screening.monitor_transfer"
 # How far back any rule looks.
 LOOKBACK = max(SPLIT_WINDOW, UNUSUAL_LOOKBACK, QUICK_WINDOW)
 
@@ -55,6 +56,21 @@ async def watch_payout(session: AsyncSession, payout_id: str, now: datetime) -> 
         session,
         JobRequest(
             kind=MONITOR_PAYOUT_KIND, idempotency_key=payout_id, payload={"payout_id": payout_id}
+        ),
+        now=now,
+    )
+
+
+async def watch_transfer(session: AsyncSession, transfer_id: str, now: datetime) -> None:
+    """Ask, in the caller's transaction, for a finished client-to-client transfer to be
+    monitored, for the sender and the recipient both. Investments calls it in the transaction
+    that carries the transfer out. The job carries only the transfer's ID."""
+    await enqueue(
+        session,
+        JobRequest(
+            kind=MONITOR_TRANSFER_KIND,
+            idempotency_key=transfer_id,
+            payload={"transfer_id": transfer_id},
         ),
         now=now,
     )

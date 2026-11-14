@@ -285,7 +285,7 @@ async def client_authenticator_remove(
 async def _staff_signed_in(
     request: Request, response: Response, identity: IdentityService, issued: IssuedSession
 ) -> StaffSessionView:
-    session = await identity.staff_session(issued.token)
+    session = await identity.staff_session(issued.token, caller_address(request))
     if session is None:
         raise ApplicationError("unauthorized")
     set_session_cookie(request, response, "staff", issued, request.app.state.clock.now())
@@ -403,12 +403,39 @@ routers: list[APIRouter] = [client_router, staff_router]
 
 
 class Confirmed(Contract):
-    # Approving another person's change works without asking again until then.
+    # Approving another person's change, or for a client changing how they sign in, works
+    # without asking again until then.
     confirmed_until: datetime
 
 
 class ConfirmWithPasskey(Contract):
     credential: Credential
+
+
+@client_router.post("/session/confirmation/passkey/options")
+async def client_confirmation_passkey_options(
+    request: Request, client: CurrentClient, passkeys: Passkeys
+) -> PasskeyOptions:
+    """Ask the device to sign again, for this session only."""
+    check_origin(request, "client", required=False)
+    return PasskeyOptions(public_key=await passkeys.client_reconfirm_options(client))
+
+
+@client_router.post("/session/confirmation/passkey")
+async def client_confirmation_passkey(
+    body: ConfirmWithPasskey, request: Request, client: CurrentClient, passkeys: Passkeys
+) -> Confirmed:
+    """Confirm it is you with a passkey, so sign-in changes work for the next ten minutes."""
+    check_origin(request, "client", required=False)
+    return Confirmed(confirmed_until=await passkeys.client_reconfirm(client, body.credential))
+
+
+@client_router.post("/session/confirmation/authenticator")
+async def client_confirmation_authenticator(
+    body: ConfirmCode, client: CurrentClient, authenticators: Authenticators
+) -> Confirmed:
+    """Confirm it is you with a code from the authenticator app."""
+    return Confirmed(confirmed_until=await authenticators.client_reconfirm(client, body.code))
 
 
 @staff_router.post("/session/confirmation/passkey/options")

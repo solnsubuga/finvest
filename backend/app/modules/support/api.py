@@ -111,6 +111,12 @@ class StaffSendMessage(Contract):
     key: MessageKey
 
 
+class StaffWriteFirst(Contract):
+    body: MessageBody
+    key: MessageKey
+    topic: Topic = "other"
+
+
 class InboxRow(Contract):
     conversation: ConversationItem
     client_id: PushId
@@ -267,6 +273,30 @@ async def staff_send(
     return _message(message)
 
 
+@staff_router.post("/support/clients/{client_id}/messages", status_code=201)
+async def staff_write_first(
+    client_id: PushId,
+    body: StaffWriteFirst,
+    staff: SupportReplier,
+    database: Db,
+    clock: Time,
+) -> MessageItem:
+    """Write to a client in their open chat, opening one if there is none. 404 for a client
+    who is not active."""
+    async with database.actor_transaction(staff.actor) as session:
+        message = await conversations.write_to_client(
+            session,
+            staff.actor,
+            staff.name,
+            client_id,
+            body.body,
+            body.key,
+            clock.now(),
+            topic=body.topic,
+        )
+    return _message(message)
+
+
 @staff_router.post("/support/conversations/{conversation_id}/solve")
 async def staff_solve(
     conversation_id: PushId, staff: SupportReplier, database: Db, clock: Time
@@ -400,10 +430,23 @@ class PendingOutcome(Contract):
     proposed_at: datetime
 
 
+class RejectedOutcome(Contract):
+    """The outcome a second person rejected last, and why, for the next proposal to start from."""
+
+    outcome: Outcome
+    resolution: str
+    client_accepted: bool
+    decided_by: PushId
+    decided_at: datetime
+    reason: str
+
+
 class ComplaintDetail(Contract):
     complaint: StaffComplaint
     history: list[ComplaintHistoryItem]
     pending_outcome: PendingOutcome | None
+    # Only while the latest proposal is the rejected one.
+    last_rejected: RejectedOutcome | None
 
 
 class ComplaintSummary(Contract):
@@ -622,7 +665,20 @@ async def complaint_detail(
             session, complaint_id, business_date(clock.now())
         )
         pending = await complaints.pending_outcome(session, complaint_id)
+        rejected = await complaints.last_rejected(session, complaint_id)
     return ComplaintDetail(
+        last_rejected=(
+            RejectedOutcome(
+                outcome=rejected.outcome,
+                resolution=rejected.resolution,
+                client_accepted=rejected.client_accepted,
+                decided_by=rejected.decided_by,
+                decided_at=rejected.decided_at,
+                reason=rejected.reason,
+            )
+            if rejected
+            else None
+        ),
         pending_outcome=(
             PendingOutcome(
                 id=pending.id,

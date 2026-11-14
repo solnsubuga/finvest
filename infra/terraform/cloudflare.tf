@@ -47,16 +47,62 @@ resource "cloudflare_origin_ca_certificate" "this" {
 
 # Back office behind Cloudflare Access, on top of the console's own password and passkey sign in.
 
+# Staff the console has invited. The worker adds an email when a team invite or reactivation is
+# approved and removes it on deactivation, so Terraform creates the list but never touches its
+# entries. ADMIN_ACCESS_EMAILS stays as the break-glass list that Terraform owns.
+resource "cloudflare_zero_trust_list" "staff_emails" {
+  count = length(var.admin_access_emails) > 0 ? 1 : 0
+
+  account_id  = data.cloudflare_zone.this.account.id
+  name        = "${local.name} staff invited in the console"
+  description = "Managed by the Finvest worker from console Team changes. Do not edit by hand."
+  type        = "EMAIL"
+
+  lifecycle {
+    ignore_changes = [items]
+  }
+}
+
+locals {
+  # Who Access lets in: the break-glass emails, and anyone on the console's list.
+  staff_include = concat(
+    [for e in var.admin_access_emails : { email = { email = e } }],
+    [for l in cloudflare_zero_trust_list.staff_emails : { email_list = { id = l.id } }],
+  )
+}
+
 resource "cloudflare_zero_trust_access_policy" "admin_staff" {
   count = length(var.admin_access_emails) > 0 ? 1 : 0
 
   account_id = data.cloudflare_zone.this.account.id
   name       = "${local.name} staff"
   decision   = "allow"
+  include    = local.staff_include
+}
 
-  include = [for e in var.admin_access_emails : {
-    email = {
-      email = e
+# Office networks for the back office (ADMIN_OFFICE_NETWORKS). When set, Access lets a staff
+# email in only from these addresses. The console's own office networks check on staff routes
+# stays the real control: it also covers the staff API, which this does not.
+resource "cloudflare_zero_trust_list" "office_networks" {
+  count = length(var.admin_access_emails) > 0 && length(var.admin_office_networks) > 0 ? 1 : 0
+
+  account_id = data.cloudflare_zone.this.account.id
+  name       = "${local.name} office networks"
+  type       = "IP"
+  items      = [for n in var.admin_office_networks : { value = n }]
+}
+
+resource "cloudflare_zero_trust_access_policy" "admin_office" {
+  count = length(cloudflare_zero_trust_list.office_networks)
+
+  account_id = data.cloudflare_zone.this.account.id
+  name       = "${local.name} staff in the office"
+  decision   = "allow"
+
+  include = local.staff_include
+  require = [{
+    ip_list = {
+      id = cloudflare_zero_trust_list.office_networks[0].id
     }
   }]
 }
@@ -89,7 +135,10 @@ resource "cloudflare_zero_trust_access_application" "admin" {
   session_duration = "12h"
 
   policies = [{
-    id         = cloudflare_zero_trust_access_policy.admin_staff[0].id
+    id = (length(cloudflare_zero_trust_access_policy.admin_office) > 0
+      ? cloudflare_zero_trust_access_policy.admin_office[0].id
+      : cloudflare_zero_trust_access_policy.admin_staff[0].id
+    )
     precedence = 1
   }]
 }

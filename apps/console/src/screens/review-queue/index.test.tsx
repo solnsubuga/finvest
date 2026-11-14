@@ -4,6 +4,7 @@ import { createMemoryRouter, RouterProvider } from "react-router";
 import { describe, expect, it, vi } from "vitest";
 import { createStubDirectory } from "@/directory/stub.ts";
 import { ReviewQueueError, type ReviewQueueApi } from "./api.ts";
+import { createStubWholeQueueApi, type WholeQueueApi } from "./everything.ts";
 import { ReviewQueueScreen } from "./index.tsx";
 import { compareNames, createStubReviewQueueApi, type StubCase } from "./stub.ts";
 
@@ -12,12 +13,13 @@ const NOW = Date.parse("2026-11-14T09:00:00Z");
 
 function renderScreen({
   api = createStubReviewQueueApi(ME.id, () => NOW),
-  entry = "/review-queue",
+  entry = "/review-queue?tab=accounts",
   canDecide = true,
   newKey = () => crypto.randomUUID(),
-}: { api?: ReviewQueueApi; entry?: string; canDecide?: boolean; newKey?: () => string } = {}) {
+  whole = createStubWholeQueueApi(ME.id, () => NOW),
+}: { api?: ReviewQueueApi; entry?: string; canDecide?: boolean; newKey?: () => string; whole?: WholeQueueApi } = {}) {
   const element = (
-    <ReviewQueueScreen api={api} directory={createStubDirectory(ME)} me={ME.id} canDecide={canDecide} now={() => new Date(NOW)} newKey={newKey} />
+    <ReviewQueueScreen api={api} whole={whole} directory={createStubDirectory(ME)} me={ME.id} canDecide={canDecide} now={() => new Date(NOW)} newKey={newKey} />
   );
   const router = createMemoryRouter([{ path: "/review-queue", element }], { initialEntries: [entry] });
   render(<RouterProvider router={router} />);
@@ -327,5 +329,44 @@ describe("the sample name lock", () => {
     ["Okello", "OKELLO PETER", "different"],
   ])("%s against %s is %s", (proof, id, match) => {
     expect(compareNames(proof, id)).toBe(match);
+  });
+});
+
+describe("review queue: everything waiting", () => {
+  it("lists everything longest waiting first, with the three tiles", async () => {
+    renderScreen({ entry: "/review-queue" });
+    const list = await screen.findByRole("list", { name: "Waiting" });
+    const items = within(list).getAllByRole("listitem");
+    expect(items).toHaveLength(8);
+    expect(items[0]).toHaveTextContent("Payout with no answer");
+    expect(items[0]).toHaveTextContent("Waiting 1 day");
+    expect(screen.getByText("Waiting for a person").nextSibling).toHaveTextContent("8");
+    expect(screen.getByText("Cleared automatically today").nextSibling).toHaveTextContent("214");
+    expect(screen.getByText("Oldest waiting").nextSibling).toHaveTextContent("1 day");
+    expect(await screen.findByRole("tab", { name: "Everything waiting (8)" })).toHaveAttribute("aria-selected", "true");
+    expect(within(items[3]!).getByRole("link", { name: "Open" })).toHaveAttribute(
+      "href",
+      "/review-queue?tab=held&payout=sample-payout-joan",
+    );
+  });
+
+  it("filters by group", async () => {
+    const { user, router } = renderScreen({ entry: "/review-queue" });
+    await user.click(await screen.findByRole("button", { name: "Withdrawals (3)" }));
+    expect(router.state.location.search).toBe("?group=withdrawals");
+    const items = within(screen.getByRole("list", { name: "Waiting" })).getAllByRole("listitem");
+    expect(items).toHaveLength(3);
+    expect(screen.getByRole("button", { name: "Withdrawals (3)" })).toHaveAttribute("aria-pressed", "true");
+  });
+
+  it("shows an empty queue", async () => {
+    renderScreen({ entry: "/review-queue", whole: createStubWholeQueueApi(ME.id, () => NOW, "empty") });
+    expect(await screen.findByRole("heading", { name: "Nothing is waiting" })).toBeInTheDocument();
+    expect(screen.getByText("Oldest waiting").nextSibling).toHaveTextContent("Nothing waiting");
+  });
+
+  it("says when the queue cannot be loaded", async () => {
+    renderScreen({ entry: "/review-queue", whole: createStubWholeQueueApi(ME.id, () => NOW, "error") });
+    expect(await screen.findByRole("alert")).toHaveTextContent("The queue could not be loaded");
   });
 });

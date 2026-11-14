@@ -1,14 +1,17 @@
 import { useCallback, useState } from "react";
-import { StyleSheet, View } from "react-native";
+import { Pressable, StyleSheet, View } from "react-native";
 import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
 
 import { BackButton } from "@/components/BackButton";
+import { Icon } from "@/components/Icon";
 import { Card, Notice } from "@/components/Blocks";
 import { Button, TextLink } from "@/components/Button";
 import { Screen } from "@/components/Screen";
 import { Eyebrow, Title, Txt } from "@/components/Txt";
 import { useGoals } from "@/goals/GoalsProvider";
+import { LockCard, paydayLine } from "@/goals/Keep";
 import { goalSubtitle, ProgressBar, StandingBadge } from "@/goals/Parts";
+import { savingLine } from "@/goals/savings";
 import { describeGoalError, Goal, Saving } from "@/goals/types";
 import { formatDay, formatMoney } from "@/payments/format";
 import { DetailList, Loading } from "@/payments/Parts";
@@ -133,12 +136,51 @@ export default function GoalDetail() {
                   saving={saving}
                   first={index === 0}
                   onPay={() => router.push(`/pay/${saving.investmentId}`)}
+                  onOpen={() => router.push(`/investment/${saving.investmentId}`)}
                 />
               ))}
             </Card>
           )}
 
+          {open && goal.savings.some((saving) => saving.status === "active") && !goal.lockedUntil ? (
+            <Txt size={12} color={colors.muted} testID="goal-take-out-note">
+              Need some of it sooner? Open a saving to take it out early. Each saving comes out
+              whole, with the interest it has earned after tax and no fee, and stops counting towards
+              this goal.
+            </Txt>
+          ) : null}
+
           <DetailList rows={facts(goal)} />
+
+          <LockCard goal={goal} onChanged={(changed) => setState({ status: "ready", goal: changed })} />
+
+          {open ? (
+            <Pressable
+              style={styles.payday}
+              onPress={() => router.push(`/goals/payday/${goalId}`)}
+              accessibilityRole="link"
+              accessibilityLabel={`Payday reminder. ${paydayLine(goal) ?? "Not set"}`}
+              testID="goal-payday"
+            >
+              <View style={{ flex: 1, gap: 2 }}>
+                <Txt size={14} weight="bold">
+                  Payday reminder
+                </Txt>
+                <Txt size={12} color={colors.muted}>
+                  {paydayLine(goal) ?? "Tell us when you are paid, and we remind you to save that morning"}
+                </Txt>
+              </View>
+              <Icon name="chevron" size={16} strokeWidth={2.2} />
+            </Pressable>
+          ) : null}
+
+          {open ? (
+            <TextLink
+              label="Change name, target or date"
+              onPress={() => router.push(`/goals/edit/${goalId}`)}
+              testID="goal-edit"
+            />
+          ) : null}
 
           {open ? (
             confirmClose ? (
@@ -148,6 +190,12 @@ export default function GoalDetail() {
                   Your investments keep running and earning, and stay in your portfolio. Nothing more is
                   saved to this goal, and a closed goal cannot be opened again.
                 </Txt>
+                {goal.lockedUntil && !goal.unlockRequestedAt ? (
+                  <Txt size={13} color={colors.muted} testID="close-locked-note">
+                    This goal is locked, so closing it starts the 7 day wait: its savings are free 7 days
+                    after you close it.
+                  </Txt>
+                ) : null}
                 {closeError ? <Notice tone="danger">{closeError}</Notice> : null}
                 <Button label="Close goal" onPress={close} loading={closing} height={48} testID="close-yes" />
                 <TextLink label="Keep it" onPress={() => setConfirmClose(false)} underline={false} />
@@ -183,34 +231,59 @@ function facts(goal: Goal) {
   return rows;
 }
 
-function SavingRow({ saving, first, onPay }: { saving: Saving; first: boolean; onPay: () => void }) {
+function SavingRow({
+  saving,
+  first,
+  onPay,
+  onOpen,
+}: {
+  saving: Saving;
+  first: boolean;
+  onPay: () => void;
+  onOpen: () => void;
+}) {
   const waiting = saving.status === "awaiting_payment";
-  return (
-    <View style={[styles.row, !first && styles.divider]}>
-      <View style={[styles.dot, { backgroundColor: waiting ? colors.neutral : colors.black }]} />
+  const counts = saving.status === "active";
+  const line = waiting ? "Waiting for your payment" : savingLine(saving);
+  const body = (
+    <>
+      <View style={[styles.dot, { backgroundColor: counts ? colors.black : colors.neutral }]} />
       <View style={{ flex: 1 }}>
         <Txt size={14} weight="bold">
           {saving.productName}
         </Txt>
         <Txt size={12} color={colors.muted}>
-          {waiting
-            ? "Waiting for your payment"
-            : saving.maturityDate
-              ? `Started ${formatDay(saving.startDate ?? "")}, matures ${formatDay(saving.maturityDate)}`
-              : "Running"}
+          {line}
         </Txt>
       </View>
-      {waiting ? (
-        // Its own width, so the label is never squeezed by a long product name.
+    </>
+  );
+  if (waiting) {
+    return (
+      <View style={[styles.row, !first && styles.divider]}>
+        {body}
+        {/* Its own width, so the label is never squeezed by a long product name. */}
         <View style={{ minWidth: 88 }}>
           <Button label="Pay" onPress={onPay} height={40} variant="primary" testID={`pay-${saving.investmentId}`} />
         </View>
-      ) : (
-        <Txt size={14} weight="bold">
-          {formatMoney(saving.value).replace("UGX ", "")}
-        </Txt>
-      )}
-    </View>
+      </View>
+    );
+  }
+  const amount = formatMoney(saving.value).replace("UGX ", "");
+  return (
+    <Pressable
+      style={[styles.row, !first && styles.divider]}
+      onPress={onOpen}
+      accessibilityRole="link"
+      accessibilityLabel={`${saving.productName}. ${line}. ${formatMoney(saving.value)}`}
+      testID={`saving-${saving.investmentId}`}
+    >
+      {body}
+      <Txt size={14} weight="bold" color={counts ? colors.ink : colors.muted}>
+        {amount}
+      </Txt>
+      <Icon name="chevron" size={16} strokeWidth={2.2} />
+    </Pressable>
   );
 }
 
@@ -222,6 +295,17 @@ const styles = StyleSheet.create({
   row: { flexDirection: "row", alignItems: "center", gap: 12, paddingVertical: 12, paddingHorizontal: 16 },
   divider: { borderTopWidth: 1, borderTopColor: colors.divider },
   dot: { width: 10, height: 10, borderRadius: 5 },
+  payday: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: 20,
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+  },
   confirm: {
     backgroundColor: colors.surface,
     borderWidth: 1,

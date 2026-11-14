@@ -671,14 +671,33 @@ async def test_an_outcome_is_rejected_with_a_reason_or_withdrawn_by_its_proposer
         with pytest.raises(ApplicationError) as raised:
             await decide(person, first.id, decision, "Because")  # type: ignore[arg-type]
         assert raised.value.code == "forbidden"
+
+    async def last() -> complaints.RejectedOutcome | None:
+        async with app_database.actor_transaction(maker) as session:
+            return await complaints.last_rejected(session, view.id)
+
+    assert await last() is None
     rejected = await decide(checker, first.id, "rejected", "The bank statement shows the error")
     assert rejected.status == "new"
+    # The next proposal can start from the rejected one and what was asked.
+    found = await last()
+    assert found is not None
+    assert (found.outcome, found.resolution, found.client_accepted, found.decided_by) == (
+        "not_upheld",
+        "No error found.",
+        False,
+        checker.id,
+    )
+    assert found.reason == "The bank statement shows the error"
     # A decided proposal is not decided again.
     with pytest.raises(ApplicationError) as raised:
         await decide(checker, first.id, "confirmed", None)
     assert raised.value.code == "conflict"
     second = await propose()
+    # A newer proposal, waiting or withdrawn, replaces the rejected one.
+    assert await last() is None
     await decide(maker, second.id, "withdrawn", None)
+    assert await last() is None
     third = await propose()
     closed = await decide(checker, third.id, "confirmed", None)
     assert closed.status == "closed" and closed.outcome == "not_upheld"
@@ -1092,6 +1111,7 @@ async def test_complaints_over_http(api: Api) -> None:
     proposal = proposed.json()
     assert (proposal["proposed_by"], proposal["outcome"]) == (grace.id, "upheld")
     assert (await api.http.get(route)).json()["pending_outcome"] == proposal
+    assert (await api.http.get(route)).json()["last_rejected"] is None
     confirm = {"proposal_id": proposal["id"], "decision": "confirmed"}
     assert (await api.http.post(f"{route}/outcome/decision", json=confirm)).status_code == 403
     await api.staff("support")

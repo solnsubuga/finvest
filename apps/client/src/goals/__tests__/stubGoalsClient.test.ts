@@ -35,6 +35,19 @@ describe("the demo goals", () => {
     expect(await goals.listGoals()).toHaveLength(1);
   });
 
+  it("changes a goal, works out its plan again, and refuses a closed goal", async () => {
+    const goals = client();
+    const made = await goals.createGoal(school, "key-0000000010");
+    const changed = await goals.updateGoal(made.id, { ...school, name: "  University   fees ", target: ugx(4_000_000) });
+    expect(changed.name).toBe("University fees");
+    expect(changed.plan?.saving.minor).toBeGreaterThan(made.plan?.saving.minor ?? 0);
+    await expect(goals.updateGoal(made.id, { ...school, targetDate: "2027-01-01" })).rejects.toEqual(
+      new GoalError("sooner_than_every_term"),
+    );
+    await goals.closeGoal(made.id);
+    await expect(goals.updateGoal(made.id, school)).rejects.toEqual(new GoalError("closed"));
+  });
+
   it("refuses a date sooner than every term", async () => {
     await expect(
       client().createGoal({ ...school, targetDate: "2027-01-01" }, "key-0000000002"),
@@ -77,5 +90,46 @@ describe("the demo goals", () => {
 
   it("answers not found for a goal it does not have", async () => {
     await expect(client().getGoal("nope")).rejects.toEqual(new GoalError("not_found"));
+  });
+});
+
+describe("a saving taken out early in the demo", () => {
+  it("is listed as withdrawn and leaves the goal's value", async () => {
+    const goals = await createStubGoalsClient({ delayMs: 0, now: () => NOW, seeded: true }).listGoals();
+    const emergency = goals.find((goal) => goal.name === "Emergency fund");
+    const withdrawn = emergency?.savings.filter((saving) => saving.status === "withdrawn") ?? [];
+    expect(withdrawn).toHaveLength(1);
+    expect(withdrawn[0]?.value.minor).toBeGreaterThan(250_000);
+    const running = emergency?.savings.find((saving) => saving.status === "active");
+    expect(emergency?.progress.value).toEqual(running?.value);
+  });
+
+  it("locks a goal until its date and unlocks it seven days after asking", async () => {
+    const goals = client();
+    const made = await goals.createGoal(school, "key-0000000040");
+    expect(made).toMatchObject({ lockedUntil: null, unlockRequestedAt: null, payday: null });
+    await expect(goals.unlockGoal(made.id)).rejects.toEqual(new GoalError("invalid"));
+
+    const locked = await goals.lockGoal(made.id);
+    expect(locked).toMatchObject({ lockedUntil: "2027-11-13", unlockRequestedAt: null });
+    const asked = await goals.unlockGoal(made.id);
+    expect(asked.lockedUntil).toBe("2026-11-20");
+    expect(asked.unlockRequestedAt).not.toBeNull();
+    // Asking again changes nothing; locking again cancels the ask.
+    expect((await goals.unlockGoal(made.id)).unlockRequestedAt).toBe(asked.unlockRequestedAt);
+    expect(await goals.lockGoal(made.id)).toMatchObject({ lockedUntil: "2027-11-13", unlockRequestedAt: null });
+
+    const closed = await goals.closeGoal(made.id);
+    expect(closed).toMatchObject({ lockedUntil: "2026-11-20" });
+    expect(closed.unlockRequestedAt).not.toBeNull();
+  });
+
+  it("refuses to lock a goal with no date, and names a payday from 1 to 31", async () => {
+    const goals = client();
+    const made = await goals.createGoal({ ...school, targetDate: null }, "key-0000000041");
+    await expect(goals.lockGoal(made.id)).rejects.toEqual(new GoalError("invalid"));
+    expect((await goals.setPayday(made.id, 31)).payday).toBe(31);
+    expect((await goals.setPayday(made.id, null)).payday).toBeNull();
+    await expect(goals.setPayday(made.id, 32)).rejects.toEqual(new GoalError("invalid"));
   });
 });

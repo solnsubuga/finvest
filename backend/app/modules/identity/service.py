@@ -5,7 +5,7 @@ returns a login challenge. It never opens a session. A second step, a passkey or
 code, turns the challenge into a session with `open_session`.
 """
 
-from collections.abc import Collection
+from collections.abc import Collection, Sequence
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from typing import Literal
@@ -37,6 +37,8 @@ from app.modules.identity.domain.sessions import (
 )
 from app.modules.identity.hashing import PasswordHasher
 from app.modules.notifications.service import Channel, queue_message
+from app.modules.platform_settings import service as platform_settings
+from app.modules.platform_settings.domain.catalogue import StaffIdleMinutes
 from app.shared.actors import Actor
 from app.shared.clock import Clock
 from app.shared.errors import ApplicationError, ErrorCode, FieldProblem
@@ -53,6 +55,9 @@ ADDRESS_ATTEMPTS = 50
 TOUCH_INTERVAL = timedelta(minutes=1)
 # Approving another person's change needs a second step this recent.
 CONFIRMATION_WINDOW = timedelta(minutes=10)
+# A sign-in with one of these confirms it is the client. A texted or emailed code, and the code
+# that proved the number at sign up, never do: whoever holds the SIM could have them.
+STRONG_STEPS: frozenset[SecondStep] = frozenset({"passkey", "authenticator"})
 
 logger = structlog.get_logger()
 
@@ -76,6 +81,10 @@ class ClientSession:
     # The phone app's PIN for this session. A locked session answers nothing but the PIN.
     pin_set: bool = False
     locked: bool = False
+    # When the client last used a passkey or authenticator app on this session: signing in
+    # with one, or confirming it is them again. None when only a texted or emailed code, or the
+    # sign up code, was used. A change to how they sign in needs this in the last ten minutes.
+    confirmed_at: datetime | None = None
 
     @property
     def actor(self) -> Actor:
@@ -346,9 +355,9 @@ class IdentityService:
         """Open a session inside the caller's transaction, so it commits with what proved it."""
         if actor.kind not in ("client", "staff"):
             raise ValueError("Only a client or a staff member has a session")
-        policy = self._policies.get((actor.kind, transport))
-        if policy is None:
+        if (actor.kind, transport) not in self._policies:
             raise ApplicationError("validation_failed")  # staff use the web console only
+        policy = await self._policy(session, actor.kind, transport, now)
         idle, absolute = policy.expiry(now, now)
         token = new_token()
         session_id = push_id(self.clock)
@@ -437,15 +446,36 @@ class IdentityService:
                 now=now,
             )
 
-    async def _touch(self, token: str, kind: AccountKind):  # type: ignore[no-untyped-def]
-        """Find a live session by token and push its idle expiry forward."""
+    async def _policy(
+        self, session: AsyncSession, kind: AccountKind, transport: Transport, now: datetime
+    ) -> SessionPolicy:
+        """The lifetime of a session. A staff session's idle time is set on Settings once two
+        people have approved one; until then it is the deploy's `staff_session_idle_minutes`."""
+        policy = self._policies[(kind, transport)]
+        if kind != "staff":
+            return policy
+        approved = await platform_settings.approved(session, "staff_idle_minutes")
+        if not isinstance(approved, StaffIdleMinutes):
+            return policy
+        return SessionPolicy(
+            min(timedelta(minutes=approved.minutes), policy.absolute), policy.absolute
+        )
+
+    async def _touch(  # type: ignore[no-untyped-def]
+        self, token: str, kind: AccountKind, address: str | None = None
+    ):
+        """Find a live session by token and push its idle expiry forward.
+
+        A staff session is refused, untouched, from outside the office networks set on Settings.
+        """
         now = self.clock.now()
         async with self.database.transaction() as session:
             row = (
                 await session.execute(
                     text(
                         "SELECT id, actor_id, transport, created_at, last_seen_at, "
-                        "idle_expires_at, reverified_at, EXISTS (SELECT FROM identity_app_pins "
+                        "idle_expires_at, reverified_at, second_step, "
+                        "EXISTS (SELECT FROM identity_app_pins "
                         "WHERE session_id = identity_sessions.id) AS pin_set "
                         "FROM identity_sessions "
                         "WHERE token_hash = :hash AND actor_kind = :kind AND revoked_at IS NULL "
@@ -456,7 +486,20 @@ class IdentityService:
             ).one_or_none()
             if row is None:
                 return None, None
-            idle, _ = self._policies[(kind, row.transport)].expiry(row.created_at, now)
+            policy = await self._policy(session, kind, row.transport, now)
+            if row.last_seen_at + policy.idle <= now:
+                # Idle for longer than a shorter idle time approved since it was last used.
+                return None, None
+            if kind == "staff":
+                networks = await platform_settings.office_networks(session, now)
+                if not networks.allows(address):
+                    raise ApplicationError(
+                        "forbidden",
+                        fields=[
+                            FieldProblem(field_path=["network"], code="outside_office_network")
+                        ],
+                    )
+            idle, _ = policy.expiry(row.created_at, now)
             # Judged before this request counts as use. A locked session stays locked, and its
             # idle time keeps running, until the PIN opens it.
             locked = is_locked(pin_set=row.pin_set, last_seen_at=row.last_seen_at, now=now)
@@ -498,10 +541,15 @@ class IdentityService:
             locked=is_locked(
                 pin_set=row.pin_set, last_seen_at=row.last_seen_at, now=self.clock.now()
             ),
+            confirmed_at=row.reverified_at
+            or (row.created_at if row.second_step in STRONG_STEPS else None),
         )
 
-    async def staff_session(self, token: str) -> StaffSession | None:
-        row, account = await self._touch(token, "staff")
+    async def staff_session(self, token: str, address: str | None = None) -> StaffSession | None:
+        """The signed-in member of staff, or None. `address` is where the request came from,
+        checked against the office networks: outside them, or unknown while networks are set,
+        is `forbidden`."""
+        row, account = await self._touch(token, "staff", address)
         if row is None or account is None:
             return None
         return StaffSession(
@@ -542,6 +590,32 @@ class IdentityService:
                 details={"second_step": second_step},
             )
         logger.info("staff_reconfirmed", second_step=second_step)
+        return now + CONFIRMATION_WINDOW
+
+    async def confirm_client(self, client: ClientSession, second_step: SecondStep) -> datetime:
+        """Note that the client just used a passkey or their authenticator app on this session."""
+        now = self.clock.now()
+        async with self.database.transaction() as session:
+            confirmed = await session.scalar(
+                text(
+                    "UPDATE identity_sessions SET reverified_at = :now WHERE id = :id "
+                    "AND actor_kind = 'client' AND actor_id = :client AND revoked_at IS NULL "
+                    "RETURNING true"
+                ),
+                {"now": now, "id": client.session_id, "client": client.client_id},
+            )
+            if not confirmed:
+                raise ApplicationError("unauthorized")
+            await trail.note(
+                session,
+                self.clock,
+                client.actor,
+                "identity.session.reconfirmed",
+                resource_type="session",
+                resource_id=client.session_id,
+                details={"second_step": second_step},
+            )
+        logger.info("client_reconfirmed", second_step=second_step)
         return now + CONFIRMATION_WINDOW
 
     async def sign_out(self, token: str, kind: AccountKind) -> None:
@@ -703,6 +777,25 @@ async def active_client_ids(session: AsyncSession, *, after: str | None, limit: 
     return [row.id for row in rows]
 
 
+async def count_active_clients(session: AsyncSession, among: Sequence[str] | None = None) -> int:
+    """How many clients `active_client_ids` would list, of all or of `among` only.
+
+    Other modules call this instead of reading identity tables, to say before a message to every
+    client how many it reaches.
+    """
+    return int(
+        (
+            await session.execute(
+                text(
+                    "SELECT count(*) FROM identity_clients WHERE status = 'active' "
+                    "AND (CAST(:among AS text[]) IS NULL OR id = ANY(CAST(:among AS text[])))"
+                ),
+                {"among": None if among is None else list(among)},
+            )
+        ).scalar_one()
+    )
+
+
 def _staff_only(actor: Actor) -> None:
     if actor.kind != "staff":
         raise ValueError("Only a member of staff does this")
@@ -761,6 +854,56 @@ async def staff_names(session: AsyncSession, staff_ids: Collection[str]) -> dict
         {"ids": sorted(set(staff_ids))},
     )
     return {row.id: row.name for row in rows.all()}
+
+
+@dataclass(frozen=True, slots=True)
+class StaffContact:
+    """Where to reach a member of staff, and whether they may still be sent anything."""
+
+    id: str
+    email: str
+    name: str
+    role: Role
+    active: bool
+
+
+async def staff_contacts(
+    session: AsyncSession, staff_ids: Collection[str]
+) -> dict[str, StaffContact]:
+    """The email address, name, role and status of these members of staff, for the worker that
+    sends them their scheduled reports. An ID with no account is left out.
+
+    The worker cannot read the staff table, which holds sign-in secrets, so this asks a database
+    function that answers these columns and nothing else.
+    """
+    if not staff_ids:
+        return {}
+    rows = await session.execute(
+        text("SELECT id, email, name, role, status FROM identity_staff_contacts(:ids)"),
+        {"ids": sorted(set(staff_ids))},
+    )
+    return {
+        row.id: StaffContact(
+            id=row.id,
+            email=row.email,
+            name=row.name,
+            role=row.role,
+            active=row.status == "active",
+        )
+        for row in rows.all()
+    }
+
+
+async def active_staff_roles(session: AsyncSession) -> list[tuple[str, str, Role]]:
+    """Every active member of staff as (id, name, role), by name, for a screen that picks who
+    may be sent something their role allows."""
+    rows = await session.execute(
+        text(
+            "SELECT id, name, role FROM identity_staff WHERE status = 'active' "
+            "ORDER BY lower(name), id"
+        )
+    )
+    return [(row.id, row.name, row.role) for row in rows.all()]
 
 
 async def active_staff_names(session: AsyncSession) -> dict[str, str]:

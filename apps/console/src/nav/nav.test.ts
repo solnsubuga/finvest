@@ -40,12 +40,12 @@ describe("console menu", () => {
     ]);
   });
 
-  it("keeps team away from non-admin roles, and settings from all but admin and finance", () => {
+  it("keeps team away from non-admin roles, and settings from all but admin, finance and operations", () => {
     for (const role of ROLES.filter((r) => r !== "admin")) {
       const seen = labels(sessionFor(role));
       expect(seen).not.toContain("Team and Permissions");
-      // Finance opens Settings for the bank account clients pay into.
-      if (role === "finance") expect(seen).toContain("Settings");
+      // Finance opens Settings for the bank account and the limits, operations to pause a channel or keep the calendar.
+      if (role === "finance" || role === "operations") expect(seen).toContain("Settings");
       else expect(seen).not.toContain("Settings");
     }
   });

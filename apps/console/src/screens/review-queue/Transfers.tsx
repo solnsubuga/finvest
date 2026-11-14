@@ -6,7 +6,7 @@ import { HeldForm, type Confirmations, type Stage } from "./Held.tsx";
 import { formatAmount, formatMoment, timeAgo } from "./labels.ts";
 import { useNames } from "./names.ts";
 import { Empty, Failure, Loading, Notice, Panel, Pill, QueueButton, Row, Section, type Load } from "./Parts.tsx";
-import { TransfersError, transfersErrorMessage, type HeldTransfer, type TransfersApi } from "./transfers.ts";
+import { describePurpose, TransfersError, transfersErrorMessage, type HeldTransfer, type TransfersApi } from "./transfers.ts";
 
 /** Refusals after which the list on screen is out of date, so it is read again. */
 const RELOAD_AFTER = new Set(["conflict", "not_found"]);
@@ -245,6 +245,7 @@ function TransferReview({
           <Row name="To" value={person(recipient, transfer.recipientName)} />
           <Row name="Shown to each other as" value={`${transfer.senderName} and ${transfer.recipientName}`} />
           <Row name="Asked for" value={formatMoment(transfer.requestedAt)} />
+          <Row name="Why it is sent" value={describePurpose(transfer)} />
           <Row name="Message" value={transfer.message ?? "None"} />
           <Row name="Money" value="Still in the sender's investment. Nothing moves until it is let through." />
         </Section>

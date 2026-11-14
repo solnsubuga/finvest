@@ -20,7 +20,12 @@ def test_a_database_at_the_head_needs_nothing() -> None:
     assert "schema head" in schema_relation({_chain()[0]})
 
 
-def test_an_older_known_revision_needs_forward_migrations() -> None:
+def test_an_older_known_revision_needs_forward_migrations(monkeypatch: pytest.MonkeyPatch) -> None:
+    # Every migration safe beside the running release, whatever the head happens to declare.
+    script = scripts()
+    for revision in script.walk_revisions():
+        monkeypatch.setattr(revision.module, "zero_downtime", True, raising=False)
+    monkeypatch.setattr(release_preflight, "scripts", lambda: script)
     message = schema_relation({_chain()[1]})
     assert "forward migrations" in message
     assert STOP_PREVIOUS not in message

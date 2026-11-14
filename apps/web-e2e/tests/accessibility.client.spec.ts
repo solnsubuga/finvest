@@ -1,7 +1,7 @@
 import AxeBuilder from "@axe-core/playwright";
 import { expect, test, type Page } from "@playwright/test";
 
-import { DEMO_PIN, leaveForSixMinutes, typePin } from "./pin";
+import { createPin, DEMO_PIN, leaveForSixMinutes, typePin } from "./pin";
 
 // Every main screen of the client app, checked against WCAG 2.1 A and AA with axe, on a phone
 // and on a wide window. The app runs on its sample sign-in (apps/client/src/auth/stubAuthClient.ts).
@@ -17,6 +17,9 @@ const SIGNED_IN = [
   "/invest",
   "/goals",
   "/goals/new",
+  "/goals/demo-goal-1",
+  "/goals/edit/demo-goal-1",
+  "/goals/payday/demo-goal-1",
   "/insights",
   "/documents",
   "/help",
@@ -34,6 +37,9 @@ const SIGNED_IN = [
   "/security",
   "/security/devices",
   "/security/passkeys",
+  "/security/password",
+  "/security/phone",
+  "/security/email",
   "/payouts",
   "/payouts/add",
   "/payouts/history",
@@ -147,6 +153,43 @@ test("the PIN lock, its reset and the sign out after wrong PINs meet WCAG 2.1 AA
   expect(await violations(page), "signed out").toEqual([]);
 });
 
+test("freezing the account and the frozen screen meet WCAG 2.1 AA", async ({ page }) => {
+  await page.goto("/");
+  await page.getByText("Log in", { exact: true }).first().click();
+  await page.getByTestId("phone-input").fill(DEMO_PHONE);
+  await page.getByTestId("password-input").fill(DEMO_PASSWORD);
+  await page.getByTestId("login-submit").click();
+  await page.getByTestId("use-passkey").click();
+  await createPin(page);
+  await expect(page.getByText("Welcome, Amara")).toBeVisible();
+  await visit(page, "/account/freeze");
+  await expect(page.getByTestId("freeze-confirm")).toBeVisible();
+  expect(await violations(page), "freeze your account").toEqual([]);
+  await page.getByTestId("freeze-reason").fill("Lost my phone");
+  await page.getByTestId("freeze-confirm").click();
+  await expect(page.getByTestId("account-frozen")).toBeVisible();
+  expect(await violations(page), "your account is frozen").toEqual([]);
+});
+
+test("confirming it is you before a sign-in change meets WCAG 2.1 AA", async ({ page }) => {
+  await page.goto("/");
+  await page.getByText("Log in", { exact: true }).first().click();
+  await page.getByTestId("phone-input").fill(DEMO_PHONE);
+  await page.getByTestId("password-input").fill(DEMO_PASSWORD);
+  await page.getByTestId("login-submit").click();
+  // A texted code is not enough for a sign-in change, so the card asks for more.
+  await page.getByTestId("use-code").click();
+  await page.getByTestId("code-input").fill("123456");
+  await page.getByTestId("code-submit").click();
+  await createPin(page);
+  await expect(page.getByText("Welcome, Amara")).toBeVisible();
+  await visit(page, "/security/email");
+  await page.getByTestId("email-input").fill("nakato@example.com");
+  await page.getByTestId("email-change").click();
+  await expect(page.getByTestId("confirm-it-is-you")).toBeVisible();
+  expect(await violations(page), "confirm it is you").toEqual([]);
+});
+
 test("confirming a new payout account with the PIN meets WCAG 2.1 AA", async ({ page }) => {
   await page.goto("/");
   await page.getByText("Log in", { exact: true }).first().click();
@@ -217,6 +260,8 @@ test("sending an investment to someone meets WCAG 2.1 AA at every step", async (
   await page.getByTestId("find-recipient").click();
   await expect(page.getByTestId("recipient")).toBeVisible();
   await page.getByTestId("send-amount").fill("1000000");
+  await page.getByTestId("send-purpose-other").click();
+  await page.getByTestId("send-purpose-note").fill("Our shared plot");
   await check("filled in");
   await page.getByTestId("review-send").click();
   await expect(page.getByTestId("send-confirm")).toBeVisible();

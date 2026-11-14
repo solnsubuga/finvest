@@ -1,4 +1,6 @@
 locals {
+  ssh_sources = distinct(compact(concat(var.ssh_source_addresses, [var.provisioner_address])))
+
   name = "finvest-${var.environment}"
 
   # Every public hostname points at the one host. Caddy routes by hostname.
@@ -85,13 +87,15 @@ resource "digitalocean_firewall" "app" {
   name        = local.name
   droplet_ids = [digitalocean_droplet.app.id]
 
-  inbound_rule {
-    protocol   = "tcp"
-    port_range = "22"
-    source_addresses = distinct(compact(concat(
-      var.ssh_source_addresses,
-      [var.provisioner_address],
-    )))
+  # SSH only from SSH_SOURCE_ADDRESSES (optional) and the Provision or deploy run while it works.
+  # With neither, there is no SSH rule at all.
+  dynamic "inbound_rule" {
+    for_each = length(local.ssh_sources) > 0 ? [local.ssh_sources] : []
+    content {
+      protocol         = "tcp"
+      port_range       = "22"
+      source_addresses = inbound_rule.value
+    }
   }
 
   # Web traffic only from Cloudflare, so nobody can skip the edge.

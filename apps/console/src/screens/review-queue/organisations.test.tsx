@@ -44,8 +44,8 @@ describe("review queue: company and group accounts", () => {
     renderScreen({ canReviewOrganisations: false });
     await screen.findByRole("tab", { name: /Payout accounts/ });
     expect(screen.queryByRole("tab", { name: /Company accounts/ })).toBeNull();
-    // Asked for by address anyway, it shows payout accounts instead.
-    expect(screen.getByRole("tab", { name: /Payout accounts/ })).toHaveAttribute("aria-selected", "true");
+    // Asked for by address anyway, it shows everything waiting instead.
+    expect(screen.getByRole("tab", { name: /Everything waiting/ })).toHaveAttribute("aria-selected", "true");
   });
 
   it("lists what waits and shows each signatory by the name on their ID", async () => {

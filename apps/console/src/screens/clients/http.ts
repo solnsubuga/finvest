@@ -45,6 +45,7 @@ interface PageJson {
     created_at: string;
   }[];
   locks: LockJson[];
+  freezes: { id: string; frozen_at: string; reason: string | null }[];
   conversation: { id: string; topic: string; status: string; last_message_at: string; waiting_since: string | null } | null;
   complaints:
     | { id: string; reference: string; category: string; summary: string; status: string; received_at: string; due_on: string; overdue: boolean }[]
@@ -106,6 +107,7 @@ export function toPage(json: PageJson): ClientPage {
       createdAt: item.created_at,
     })),
     locks: json.locks.map(toLock),
+    freezes: json.freezes.map((item) => ({ id: item.id, frozenAt: item.frozen_at, reason: item.reason })),
     conversation: json.conversation
       ? {
           id: json.conversation.id,

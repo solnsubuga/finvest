@@ -10,12 +10,16 @@
  * Figures are only ever in the PDF, after tax. The list carries none.
  */
 
-/** `tax_certificate` covers Uganda's tax year, 1 July to 30 June, and shows the tax withheld. */
+/**
+ * `tax_certificate` covers Uganda's tax year, 1 July to 30 June, and shows the tax withheld.
+ * `investment_note` confirms an investment started.
+ */
 export type DocumentKind =
   | "monthly_statement"
   | "requested_statement"
   | "receipt"
-  | "tax_certificate";
+  | "tax_certificate"
+  | "investment_note";
 export type DocumentStatus = "pending" | "ready" | "failed";
 
 export type DocumentItem = {
@@ -36,6 +40,10 @@ export type DocumentItem = {
    * whose figures may still change. Null when every figure is final.
    */
   notFinalFrom: string | null;
+  /** What the PDF and its email call it: "ST-", "RC-", "TC-" or "IN-" and the ID. */
+  reference: string;
+  /** For an investment note, whether it confirms the investment started or ended. */
+  note: "started" | "ended" | null;
 };
 
 /** Why a statement could not be asked for, from the backend's field codes. */

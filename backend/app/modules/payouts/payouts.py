@@ -28,13 +28,17 @@ from app.modules.payouts.domain import payouts as machine
 from app.modules.payouts.domain import posting
 from app.modules.payouts.domain.destinations import DestinationKind, why_not_payable
 from app.modules.payouts.domain.limits import (
+    ClientLimits,
     WithdrawalLimits,
     check_withdrawal,
+    for_client,
     limits_in_force,
 )
 from app.modules.payouts.domain.payouts import FINAL, LedgerEffect, PayoutEvent, PayoutStatus
 from app.modules.payouts.domain.posting import PayoutTerms
 from app.modules.payouts.domain.sending import HELD_UP_AFTER, SEND_ATTEMPTS
+from app.modules.platform_settings import service as platform_settings
+from app.modules.platform_settings.domain.catalogue import PAYOUT_BY_NETWORK
 from app.modules.screening import contract as screening
 from app.shared.actors import SYSTEM, Actor
 from app.shared.business_day import business_date
@@ -88,6 +92,11 @@ _COLUMNS = (
     "id, client_id, destination_id, kind, amount_minor, currency, status, business_date, "
     "provider_reference, failure_code, reviewed_by, created_at, source_account_id, "
     "in_flight_account_id, request_key, source_reference"
+)
+_CLIENT_LIMITS = text(
+    "SELECT currency, mobile_money_per_payout, mobile_money_per_day, bank_per_payout, "
+    "bank_per_day, review_above FROM payout_client_limits WHERE client_id = :client_id "
+    "ORDER BY created_at DESC, id DESC LIMIT 1"
 )
 _LIMITS = text(
     "SELECT effective_from, currency, mobile_money_per_payout, mobile_money_per_day, "
@@ -165,7 +174,10 @@ _REVIEW_EVENTS = frozenset({PayoutEvent.REVIEW_APPROVED, PayoutEvent.REVIEW_DECL
 _PERSON_EVENTS = _REVIEW_EVENTS | {PayoutEvent.CLIENT_CANCELLED}
 
 
-async def current_limits(session: AsyncSession, on: date) -> WithdrawalLimits:
+async def current_limits(
+    session: AsyncSession, on: date, *, client_id: str | None = None
+) -> WithdrawalLimits:
+    """The limits in force on `on`, tightened by the client's own when `client_id` is given."""
     rows = (await session.execute(_LIMITS)).all()
 
     def money(value: int | None, currency: Currency) -> Money | None:
@@ -184,7 +196,63 @@ async def current_limits(session: AsyncSession, on: date) -> WithdrawalLimits:
                 review_above=money(row.review_above, currency),
             )
         )
-    return limits_in_force(versions, on)
+    shared = limits_in_force(versions, on)
+    if client_id is None:
+        return shared
+    return for_client(shared, await client_limits(session, client_id))
+
+
+async def client_limits(session: AsyncSession, client_id: str) -> ClientLimits | None:
+    """The client's own stricter limits, or None when staff have set none."""
+    row = (await session.execute(_CLIENT_LIMITS, {"client_id": client_id})).one_or_none()
+    if row is None:
+        return None
+    currency = Currency(row.currency)
+
+    def money(value: int | None) -> Money | None:
+        return None if value is None else Money(int(value), currency)
+
+    found = ClientLimits(
+        mobile_money_per_payout=money(row.mobile_money_per_payout),
+        mobile_money_per_day=money(row.mobile_money_per_day),
+        bank_per_payout=money(row.bank_per_payout),
+        bank_per_day=money(row.bank_per_day),
+        review_above=money(row.review_above),
+    )
+    return None if found.empty else found
+
+
+async def set_client_limits(
+    session: AsyncSession, client_id: str, limits: ClientLimits, *, action_id: str, now: datetime
+) -> None:
+    """Record the client's own limits. Empty limits clear them.
+
+    Called only by the console module, in the staff transaction that approved the change with
+    two people. Migration 0352 refuses a version written anywhere else.
+    """
+
+    def minor(value: Money | None) -> int | None:
+        return None if value is None else value.minor
+
+    await session.execute(
+        text(
+            "INSERT INTO payout_client_limits (id, client_id, currency, mobile_money_per_payout, "
+            "mobile_money_per_day, bank_per_payout, bank_per_day, review_above, action_id, "
+            "created_at) VALUES (:id, :client_id, 'UGX', :mm_payout, :mm_day, :bank_payout, "
+            ":bank_day, :review, :action_id, :now)"
+        ),
+        {
+            "id": push_id(),
+            "client_id": client_id,
+            "mm_payout": minor(limits.mobile_money_per_payout),
+            "mm_day": minor(limits.mobile_money_per_day),
+            "bank_payout": minor(limits.bank_per_payout),
+            "bank_day": minor(limits.bank_per_day),
+            "review": minor(limits.review_above),
+            "action_id": action_id,
+            "now": now,
+        },
+    )
 
 
 async def create_payout(
@@ -245,8 +313,13 @@ async def create_payout(
     blocked = why_not_payable(destination.state, now, restricted_since=restricted_since)
     if blocked is not None:
         raise PayoutRefused(blocked.value)
+    if actor.kind == "client" and not await _channel_open(session, destination, now):
+        # Paused on Settings, during an outage. The client asks again once it reopens. A payout
+        # the system asks for, when an investment matures, is still made and waits in the
+        # queue or with staff as it always does.
+        raise PayoutRefused("channel_paused")
 
-    limits = await current_limits(session, today)
+    limits = await current_limits(session, today, client_id=client_id)
     already = (
         await session.execute(
             _TODAY,
@@ -312,6 +385,17 @@ async def create_payout(
     await screening.watch_payout(session, payout_id, now)
     await _audit(session, actor, "payouts.payout_requested", payout_id, clock)
     return await get_payout(session, payout_id)
+
+
+async def _channel_open(
+    session: AsyncSession, destination: destinations.DestinationView, now: datetime
+) -> bool:
+    channels = await platform_settings.payment_channels(session, now)
+    if destination.kind is DestinationKind.BANK:
+        return channels.is_open("bank_payout")
+    return destination.network is not None and channels.is_open(
+        PAYOUT_BY_NETWORK[destination.network]
+    )
 
 
 async def apply_event(
@@ -521,7 +605,7 @@ async def release_screened(session: AsyncSession, client_id: str, clock: Clock) 
         return []
     if clearance is not screening.Clearance.CLEAR:
         return []
-    limits = await current_limits(session, business_date(now))
+    limits = await current_limits(session, business_date(now), client_id=client_id)
     moved: list[str] = []
     for payout in waiting:
         needs_review = limits.review_above is not None and payout.amount > limits.review_above
@@ -607,6 +691,45 @@ class HeldUpPayout:
     # Why the last send took nothing, when it is ours to fix: `wallet_short` means Finvest's
     # own ioTec wallet does not hold enough to pay. None when the provider gave no such reason.
     waiting_for: str | None = None
+
+
+_PAID_WITHOUT_REVIEW = text(
+    "SELECT count(*) AS paid FROM payouts WHERE status = 'paid' AND kind = 'mobile_money' "
+    "AND reviewed_by IS NULL AND updated_at >= :since AND updated_at < :until"
+)
+
+
+async def paid_without_review(session: AsyncSession, *, since: datetime, until: datetime) -> int:
+    """Mobile money payouts that ended paid from `since` up to `until` without a member of
+    staff releasing them. For the review queue's figures. Bank payouts are always batched by
+    people, so they never count. Zero outside a staff transaction."""
+    row = (await session.execute(_PAID_WITHOUT_REVIEW, {"since": since, "until": until})).one()
+    return int(row.paid)
+
+
+@dataclass(frozen=True, slots=True)
+class PayoutRecord:
+    """A payout with when it last changed, which for a final payout is when it ended."""
+
+    payout: PayoutView
+    updated_at: datetime
+
+
+_REQUESTED_BETWEEN = text(
+    f"SELECT {_COLUMNS}, updated_at FROM payouts "  # noqa: S608 - constant column list
+    "WHERE created_at >= :since AND created_at < :until ORDER BY created_at, id LIMIT :limit"
+)
+
+
+async def payouts_requested_between(
+    session: AsyncSession, *, since: datetime, until: datetime, limit: int
+) -> list[PayoutRecord]:
+    """Payouts asked for from `since` up to `until`, oldest first, at most `limit`. For staff
+    reports. Empty outside a staff transaction."""
+    rows = await session.execute(
+        _REQUESTED_BETWEEN, {"since": since, "until": until, "limit": max(1, limit)}
+    )
+    return [PayoutRecord(_view(row), row.updated_at) for row in rows.all()]
 
 
 async def held_up(session: AsyncSession, now: datetime, *, limit: int = 50) -> list[HeldUpPayout]:

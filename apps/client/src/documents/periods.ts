@@ -161,9 +161,3 @@ export function taxYearLabel(from: string): string {
   const [year] = parts(from);
   return `${year}-${String((year + 1) % 100).padStart(2, "0")}`;
 }
-
-/** The receipt's reference, "RC-…", from its file name. */
-export function receiptReference(document: DocumentItem): string | null {
-  const match = /receipt (\S+)\.pdf$/i.exec(document.fileName ?? "");
-  return match?.[1] ?? null;
-}

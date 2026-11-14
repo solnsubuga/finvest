@@ -6,7 +6,7 @@ The code is `backend/app/modules/support` and migration `0100_support`. The modu
 
 ## Help chat
 
-A client has one chat with Finvest, not a list of tickets. The first message opens a conversation. Staff answer in it. When staff mark it solved, the client's next message opens a new one, and the app still shows the earlier messages above it.
+A client has one chat with Finvest, not a list of tickets. The first message opens a conversation. Staff answer in it, and may write first when they follow something up, such as the money of a term that ended and waits because its payout could not be made. When staff mark it solved, the client's next message opens a new one, and the app still shows the earlier messages above it.
 
 | Route | Who | Use |
 | --- | --- | --- |
@@ -16,6 +16,7 @@ A client has one chat with Finvest, not a list of tickets. The first message ope
 | `GET /staff/support/conversations` | `support.view` | The inbox. The client who has waited longest comes first. `status` is `open` or `solved`. |
 | `GET /staff/support/conversations/{id}` | `support.view` | One conversation with its messages. Marks it read by staff. |
 | `POST /staff/support/conversations/{id}/messages` | `support.reply` | Reply. The client gets the `support_reply` notification. |
+| `POST /staff/support/clients/{client_id}/messages` | `support.reply` | Write to a client first: `{body, key, topic?}`. It goes into the client's open chat, or opens one (migration 0332), and the client gets the `support_reply` notification. A chat staff open is not waiting for staff. 404 for a client who is not active or carried over from Finvest 1.0, so nobody is written to after closing their account. |
 | `POST /staff/support/conversations/{id}/solve` | `support.reply` | Mark it solved. |
 | `PUT /staff/support/conversations/{id}/topic` | `support.reply` | Correct the topic. |
 | `GET /staff/support/saved-replies` | `support.view` | Replies staff reuse. |
@@ -28,7 +29,7 @@ Rules:
 - **A message is plain text of up to 2,000 characters.** Control characters are refused.
 - **The client sees a first name.** A reply shows "Grace", never a member of staff's full name or ID.
 - **The app asks for new messages.** There is no web socket. The app calls `GET /client/support/chat?after=` every few seconds while Help is open, and the notification brings the client back when it is closed.
-- **Staff see the client by ID.** The inbox returns `client_id`. The console looks up the name through the client record it already shows. The support module does not read identity tables.
+- **Staff see the client by ID.** The inbox returns `client_id`. The console looks up the name through the client record it already shows. The support module does not read identity tables; writing first asks `identity.service.client_contact` only whether the client may still be written to.
 - **Topics** are `deposit`, `withdrawal`, `investment`, `identity`, `account` and `other`.
 
 ## Complaints
@@ -42,7 +43,7 @@ A complaint is a regulated record. It gets a reference such as `C-1001`, a deadl
 | `GET /client/complaints/{id}` | Client | One complaint with its status, deadline and outcome. |
 | `GET /staff/complaints` | `complaints.view` | The register and its figures. `show` is `open`, `closed` or `all`. |
 | `POST /staff/complaints` | `complaints.manage` | Log a complaint that came by chat, phone, email, letter or in person, with a `client_key`. |
-| `GET /staff/complaints/{id}` | `complaints.view` | One complaint with its history and any outcome waiting to be confirmed (`pending_outcome`). |
+| `GET /staff/complaints/{id}` | `complaints.view` | One complaint with its history and any outcome waiting to be confirmed (`pending_outcome`), and the last rejected outcome while it is the latest (`last_rejected`). |
 | `PUT /staff/complaints/{id}/owner` | `complaints.manage` | Give it to a member of staff. |
 | `POST /staff/complaints/{id}/status` | `complaints.manage` | Move it to `investigating`, `waiting_for_client` or `escalated`, with a note. |
 | `POST /staff/complaints/{id}/notes` | `complaints.manage` | Record what was found or done. |
@@ -55,6 +56,7 @@ Rules:
 - **Statuses.** `new`, `investigating`, `waiting_for_client`, `escalated`, `closed`. Any open status can move to any other open status or to closed. Closed is final.
 - **Closing needs an outcome.** `upheld`, `partly_upheld` or `not_upheld`, what was done about it, and whether the client accepted it. The client reads the outcome and what was done.
 - **Closing takes two people.** One member of staff proposes the outcome. A different one confirms it, which closes the complaint, or rejects it with a reason. Whoever logged the complaint never confirms its outcome. One proposal waits at a time, and the proposer may withdraw it. A decided proposal never changes. PostgreSQL holds all of this, and refuses a close that does not match an outcome the closer confirmed (migration 0101).
+- **A rejected outcome is the starting point for the next one.** The complaint detail carries `last_rejected` while the latest proposal is a rejected one: its outcome, resolution, whether the client accepted, who rejected it, when, and the reason. The console fills the propose form from it and shows the reason above, so staff change only what was asked. It is empty once a newer proposal waits or is withdrawn.
 - **Logged once.** The app and the console send a `client_key` with each new complaint. The same key from the same person returns the complaint it logged the first time, so a request repeated after a lost answer never enters a complaint twice. The same key with other details (client, category, how it came, summary, details or amount) is refused with `idempotency_key_reused`, as other keyed commands are.
 - **What the client said never changes.** The category, summary, details, amount, how it arrived, when it arrived and the deadline are fixed once logged. The database refuses a change, and the API role is not granted one.
 - **Closed by the person acting.** The database refuses a close that names another member of staff, and the person closing is the one who confirmed the outcome.

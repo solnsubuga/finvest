@@ -28,6 +28,7 @@ from app.modules.identity.service import client_contact
 from app.modules.investments.jobs import InvestmentJobs
 from app.modules.kyc.jobs import ProviderJobs, sweep_unanswered
 from app.modules.kyc.liveness_jobs import LivenessJobs
+from app.modules.kyc.phone_name_jobs import PhoneNameJobs
 from app.modules.kyc.service import SWEEP_UNANSWERED
 from app.modules.kyc.settings import KycSettings
 from app.modules.migration.jobs import MigrationJobs
@@ -40,11 +41,13 @@ from app.modules.notifications.settings import EmailHashSettings
 from app.modules.organisations.jobs import OrganisationJobs
 from app.modules.payments.bank_transfers import BankTransferJobs
 from app.modules.payments.jobs import DepositJobs
+from app.modules.payments.reversals import ReversalJobs
 from app.modules.payments.settings import PaymentsSettings
 from app.modules.payments.wiring import collections_provider
 from app.modules.payouts.jobs import PayoutJobs, release_screened
 from app.modules.payouts.name_lookup_jobs import NameLookupJobs
 from app.modules.payouts.wiring import PayoutNameSettings, disbursements_provider
+from app.modules.reports.jobs import ReportJobs
 from app.modules.screening.domain.provider import ScreeningSubject
 from app.modules.screening.jobs import ScreeningJobs
 from app.modules.screening.monitor_jobs import MonitoringJobs
@@ -64,7 +67,6 @@ def handlers(
     kinds: dict[str, JobHandler | Handler] = {
         SWEEP_UNANSWERED: sweep_unanswered(clock),
         **InvestmentJobs(database, clock).handlers(),
-        **AutoinvestJobs(database, clock).handlers(),
         **DealingJobs(clock).handlers(),
         **GoalJobs(database, clock).handlers(),
         **OrganisationJobs(database, clock).handlers(),
@@ -77,6 +79,15 @@ def handlers(
             email=EmailSettings().transport(),
             # Tax certificates print the TIN a client gave, which only this key opens.
             sealer=identity.sealer() if identity.identity_data_key is not None else None,
+            links=settings.email_links(),
+        ).handlers()
+    )
+    kinds.update(
+        ReportJobs(
+            database,
+            clock,
+            email=EmailSettings().transport(),
+            console=settings.staff_console(),
             links=settings.email_links(),
         ).handlers()
     )
@@ -128,9 +139,16 @@ def handlers(
     # Bank transfers are settled from a staff review and call no provider, so they run even
     # where mobile money is turned off.
     kinds.update(BankTransferJobs(database, clock).handlers())
+    kinds.update(ReversalJobs(database, clock).handlers())
     collections = collections_provider(PaymentsSettings(), clock)
     if collections is not None:
         kinds.update(DepositJobs(database, collections, clock).handlers())
+    # Runs ask for mobile money payments, so they are asked for only with a provider.
+    kinds.update(
+        AutoinvestJobs(
+            database, clock, collections.name if collections is not None else None
+        ).handlers()
+    )
     disbursements = disbursements_provider(PaymentsSettings(), clock)
     if disbursements is not None:
         kinds.update(PayoutJobs(database, disbursements, clock).handlers())
@@ -138,6 +156,8 @@ def handlers(
     if names is not None:
         # Without a provider, a mobile money number waits for its name and its lookup waits.
         kinds.update(NameLookupJobs(database, names, clock).handlers())
+        # The same lookup, for the phone number of a client handing in their identity check.
+        kinds.update(PhoneNameJobs(database, names, clock).handlers())
     kinds.update(
         notification_jobs.handlers(
             database,
