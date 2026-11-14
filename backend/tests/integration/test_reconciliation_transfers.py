@@ -58,6 +58,7 @@ async def propose(
             value_date=DAY,
             provider_reference=provider_reference or reference(),
             reason="Daily sweep of collected mobile money",
+            idempotency_key=key(),
             clock=clock,
         )
 
@@ -111,7 +112,9 @@ async def test_a_sweep_is_posted_only_when_a_second_person_approves(
     async with app_database.actor_transaction(proposer) as session:
         assert (await transfers.get_transfer(session, proposed.id)).proposed_by != proposer.id
     async with app_database.actor_transaction(checker) as session:
-        approved = await transfers.approve(session, checker, proposed.id, fake_clock)
+        approved = await transfers.approve(
+            session, checker, proposed.id, idempotency_key=key(), clock=fake_clock
+        )
         assert (await ledger.get_balance(session, fees.id)).minor == fees_before + 10_000
 
     assert (approved.status, approved.decided_by) == (TransferStatus.APPROVED, checker.id)
@@ -123,7 +126,9 @@ async def test_a_sweep_is_posted_only_when_a_second_person_approves(
     }
     async with app_database.actor_transaction(checker) as session:
         with pytest.raises(TransferError) as twice:
-            await transfers.approve(session, checker, proposed.id, fake_clock)
+            await transfers.approve(
+                session, checker, proposed.id, idempotency_key=key(), clock=fake_clock
+            )
         assert twice.value.code == "transfer_already_decided"
         actions = (
             await session.execute(
@@ -152,18 +157,28 @@ async def test_the_proposer_cannot_approve_and_a_decline_posts_nothing(
             value_date=DAY,
             provider_reference=reference(),
             reason="Sweep",
+            idempotency_key=key(),
             clock=fake_clock,
         )
         with pytest.raises(TransferError) as same:
-            await transfers.approve(session, proposer, proposed.id, fake_clock)
+            await transfers.approve(
+                session, proposer, proposed.id, idempotency_key=key(), clock=fake_clock
+            )
         assert same.value.code == "transfer_needs_second_person"
 
     checker = staff()
     async with app_database.actor_transaction(checker) as session:
         with pytest.raises(ApplicationError):
-            await transfers.decline(session, checker, proposed.id, " ", fake_clock)
+            await transfers.decline(
+                session, checker, proposed.id, " ", idempotency_key=key(), clock=fake_clock
+            )
         declined = await transfers.decline(
-            session, checker, proposed.id, "Not on the bank statement", fake_clock
+            session,
+            checker,
+            proposed.id,
+            "Not on the bank statement",
+            idempotency_key=key(),
+            clock=fake_clock,
         )
     assert (declined.status, declined.ledger_entry_id) == (TransferStatus.DECLINED, None)
 
@@ -194,6 +209,7 @@ async def test_a_sweep_is_recorded_once_and_only_by_staff_for_a_day_that_has_com
                 value_date=DAY,
                 provider_reference=reference(),
                 reason="x",
+                idempotency_key=key(),
                 clock=fake_clock,
             )
     proposer = staff()
@@ -216,6 +232,7 @@ async def test_a_sweep_is_recorded_once_and_only_by_staff_for_a_day_that_has_com
                 value_date=date(2026, 11, 14),
                 provider_reference=reference(),
                 reason="x",
+                idempotency_key=key(),
                 clock=fake_clock,
             )
         assert future.value.code == "transfer_in_the_future"
@@ -230,6 +247,7 @@ async def test_a_sweep_is_recorded_once_and_only_by_staff_for_a_day_that_has_com
                 value_date=closed_day,
                 provider_reference=reference(),
                 reason="x",
+                idempotency_key=key(),
                 clock=fake_clock,
             )
         assert closed.value.code == "transfer_in_a_closed_day"
@@ -245,7 +263,9 @@ async def test_two_approvals_at_once_post_once(
         checker = staff()
         try:
             async with app_database.actor_transaction(checker) as session:
-                await transfers.approve(session, checker, proposed.id, fake_clock)
+                await transfers.approve(
+                    session, checker, proposed.id, idempotency_key=key(), clock=fake_clock
+                )
         except TransferError as refused:
             return refused.code
         return "approved"
@@ -305,7 +325,9 @@ async def test_a_sweep_larger_than_the_books_hold_is_not_posted(
     checker = staff()
     async with app_database.actor_transaction(checker) as session:
         with pytest.raises(TransferError) as refused:
-            await transfers.approve(session, checker, proposed.id, fake_clock)
+            await transfers.approve(
+                session, checker, proposed.id, idempotency_key=key(), clock=fake_clock
+            )
         assert refused.value.code == "transfer_more_than_the_pot_holds"
         assert (await transfers.get_transfer(session, proposed.id)).status is (
             TransferStatus.PROPOSED

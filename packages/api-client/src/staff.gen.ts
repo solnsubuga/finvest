@@ -1118,6 +1118,12 @@ export const MessageItem = z.object({
 });
 export type MessageItem = z.infer<typeof MessageItem>;
 
+export const MoneyIn = z.object({
+  currency: z.enum(["UGX", "USD"]),
+  minor: z.number().int(),
+});
+export type MoneyIn = z.infer<typeof MoneyIn>;
+
 export const MonthOut = z.object({
   due_on: z.string(),
   month: z.string(),
@@ -1317,15 +1323,11 @@ export const PhotoLinks = z.object({
 });
 export type PhotoLinks = z.infer<typeof PhotoLinks>;
 
-export const PotOut = z.object({
+export const PotIn = z.object({
   account_reference: z.string(),
-  currency: z.enum(["UGX", "USD"]),
-  last_closing: MoneyOut.nullable(),
-  last_statement_date: z.string().nullable(),
-  name: z.string(),
   source: z.enum(["iotec", "bank"]),
 });
-export type PotOut = z.infer<typeof PotOut>;
+export type PotIn = z.infer<typeof PotIn>;
 
 export const ProductKind = z.enum(["treasury_bill", "fixed_income"]);
 export type ProductKind = z.infer<typeof ProductKind>;
@@ -1966,6 +1968,41 @@ export const TeamView = z.object({
 });
 export type TeamView = z.infer<typeof TeamView>;
 
+export const TransferIn = z.object({
+  from_pot: PotIn,
+  provider_reference: z.string(),
+  reason: z.string(),
+  received: MoneyIn,
+  sent: MoneyIn,
+  to_pot: PotIn,
+  value_date: z.string(),
+});
+export type TransferIn = z.infer<typeof TransferIn>;
+
+export const ReconciliationTransfersApiPotOut = z.object({
+  account_reference: z.string(),
+  name: z.string(),
+  source: z.enum(["iotec", "bank"]),
+});
+export type ReconciliationTransfersApiPotOut = z.infer<typeof ReconciliationTransfersApiPotOut>;
+
+export const TransferOut = z.object({
+  decided_by: z.string().nullable(),
+  fee: MoneyOut,
+  from_pot: ReconciliationTransfersApiPotOut,
+  id: z.string(),
+  ledger_entry_id: z.string().nullable(),
+  proposed_at: z.string(),
+  proposed_by: z.string(),
+  provider_reference: z.string(),
+  received: MoneyOut,
+  sent: MoneyOut,
+  status: z.enum(["proposed", "approved", "declined"]),
+  to_pot: ReconciliationTransfersApiPotOut,
+  value_date: z.string(),
+});
+export type TransferOut = z.infer<typeof TransferOut>;
+
 export const TrialSummaryView = z.object({
   as_of: z.string(),
   clients_sha256: z.string(),
@@ -2017,6 +2054,16 @@ export const ReconciliationApiMatchIn = z.object({
   statement_line_id: z.string(),
 });
 export type ReconciliationApiMatchIn = z.infer<typeof ReconciliationApiMatchIn>;
+
+export const ReconciliationApiPotOut = z.object({
+  account_reference: z.string(),
+  currency: z.enum(["UGX", "USD"]),
+  last_closing: MoneyOut.nullable(),
+  last_statement_date: z.string().nullable(),
+  name: z.string(),
+  source: z.enum(["iotec", "bank"]),
+});
+export type ReconciliationApiPotOut = z.infer<typeof ReconciliationApiPotOut>;
 
 /** Every route, by method and path, with what it takes and what it answers. */
 export const operations = {
@@ -3691,6 +3738,69 @@ export const operations = {
     status: 201,
     response: z.record(z.string(), z.unknown()),
   },
+  "GET /staff/reconciliation/pot-transfers": {
+    method: "GET",
+    path: "/staff/reconciliation/pot-transfers",
+    params: z.object({}),
+    query: z.object({
+    limit: z.number().int().optional(),
+  }),
+    body: null,
+    bodyKind: null,
+    idempotent: false,
+    status: 200,
+    response: z.array(TransferOut),
+  },
+  "POST /staff/reconciliation/pot-transfers": {
+    method: "POST",
+    path: "/staff/reconciliation/pot-transfers",
+    params: z.object({}),
+    query: z.object({}),
+    body: TransferIn,
+    bodyKind: "json",
+    idempotent: true,
+    status: 201,
+    response: TransferOut,
+  },
+  "GET /staff/reconciliation/pot-transfers/{transfer_id}": {
+    method: "GET",
+    path: "/staff/reconciliation/pot-transfers/{transfer_id}",
+    params: z.object({
+    transfer_id: z.string(),
+  }),
+    query: z.object({}),
+    body: null,
+    bodyKind: null,
+    idempotent: false,
+    status: 200,
+    response: TransferOut,
+  },
+  "POST /staff/reconciliation/pot-transfers/{transfer_id}/approve": {
+    method: "POST",
+    path: "/staff/reconciliation/pot-transfers/{transfer_id}/approve",
+    params: z.object({
+    transfer_id: z.string(),
+  }),
+    query: z.object({}),
+    body: null,
+    bodyKind: null,
+    idempotent: true,
+    status: 200,
+    response: TransferOut,
+  },
+  "POST /staff/reconciliation/pot-transfers/{transfer_id}/decline": {
+    method: "POST",
+    path: "/staff/reconciliation/pot-transfers/{transfer_id}/decline",
+    params: z.object({
+    transfer_id: z.string(),
+  }),
+    query: z.object({}),
+    body: ReasonIn,
+    bodyKind: "json",
+    idempotent: true,
+    status: 200,
+    response: TransferOut,
+  },
   "GET /staff/reconciliation/pots": {
     method: "GET",
     path: "/staff/reconciliation/pots",
@@ -3700,7 +3810,7 @@ export const operations = {
     bodyKind: null,
     idempotent: false,
     status: 200,
-    response: z.array(PotOut),
+    response: z.array(ReconciliationApiPotOut),
   },
   "GET /staff/reconciliation/statements": {
     method: "GET",

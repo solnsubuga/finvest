@@ -6527,6 +6527,30 @@
         "title": "MobileMoneyPayment",
         "type": "object"
       },
+      "MoneyIn": {
+        "additionalProperties": false,
+        "properties": {
+          "currency": {
+            "enum": [
+              "UGX",
+              "USD"
+            ],
+            "title": "Currency",
+            "type": "string"
+          },
+          "minor": {
+            "exclusiveMinimum": 0.0,
+            "title": "Minor",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "minor",
+          "currency"
+        ],
+        "title": "MoneyIn",
+        "type": "object"
+      },
       "MoneyOut": {
         "additionalProperties": false,
         "properties": {
@@ -8139,46 +8163,13 @@
         "title": "PlanStatus",
         "type": "string"
       },
-      "PotOut": {
+      "PotIn": {
         "additionalProperties": false,
-        "description": "A place real money sits, with its last imported statement day.",
         "properties": {
           "account_reference": {
+            "maxLength": 40,
+            "minLength": 1,
             "title": "Account Reference",
-            "type": "string"
-          },
-          "currency": {
-            "enum": [
-              "UGX",
-              "USD"
-            ],
-            "title": "Currency",
-            "type": "string"
-          },
-          "last_closing": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/MoneyOut"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "last_statement_date": {
-            "anyOf": [
-              {
-                "format": "date",
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Last Statement Date"
-          },
-          "name": {
-            "title": "Name",
             "type": "string"
           },
           "source": {
@@ -8192,13 +8183,9 @@
         },
         "required": [
           "source",
-          "account_reference",
-          "name",
-          "currency",
-          "last_statement_date",
-          "last_closing"
+          "account_reference"
         ],
-        "title": "PotOut",
+        "title": "PotIn",
         "type": "object"
       },
       "PreferenceChange": {
@@ -13597,6 +13584,154 @@
         "title": "TotalsView",
         "type": "object"
       },
+      "TransferIn": {
+        "additionalProperties": false,
+        "description": "A transfer that has already been made, as the provider or bank shows it.",
+        "properties": {
+          "from_pot": {
+            "$ref": "#/components/schemas/PotIn"
+          },
+          "provider_reference": {
+            "maxLength": 100,
+            "minLength": 1,
+            "title": "Provider Reference",
+            "type": "string"
+          },
+          "reason": {
+            "maxLength": 500,
+            "minLength": 1,
+            "title": "Reason",
+            "type": "string"
+          },
+          "received": {
+            "$ref": "#/components/schemas/MoneyIn"
+          },
+          "sent": {
+            "$ref": "#/components/schemas/MoneyIn"
+          },
+          "to_pot": {
+            "$ref": "#/components/schemas/PotIn"
+          },
+          "value_date": {
+            "format": "date",
+            "title": "Value Date",
+            "type": "string"
+          }
+        },
+        "required": [
+          "from_pot",
+          "to_pot",
+          "sent",
+          "received",
+          "value_date",
+          "provider_reference",
+          "reason"
+        ],
+        "title": "TransferIn",
+        "type": "object"
+      },
+      "TransferOut": {
+        "additionalProperties": false,
+        "properties": {
+          "decided_by": {
+            "anyOf": [
+              {
+                "maxLength": 20,
+                "minLength": 20,
+                "pattern": "^[-0-9A-Z_a-z]{20}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Decided By"
+          },
+          "fee": {
+            "$ref": "#/components/schemas/MoneyOut"
+          },
+          "from_pot": {
+            "$ref": "#/components/schemas/app__modules__reconciliation__transfers_api__PotOut"
+          },
+          "id": {
+            "maxLength": 20,
+            "minLength": 20,
+            "pattern": "^[-0-9A-Z_a-z]{20}$",
+            "title": "Id",
+            "type": "string"
+          },
+          "ledger_entry_id": {
+            "anyOf": [
+              {
+                "maxLength": 20,
+                "minLength": 20,
+                "pattern": "^[-0-9A-Z_a-z]{20}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ledger Entry Id"
+          },
+          "proposed_at": {
+            "format": "date-time",
+            "title": "Proposed At",
+            "type": "string"
+          },
+          "proposed_by": {
+            "maxLength": 20,
+            "minLength": 20,
+            "pattern": "^[-0-9A-Z_a-z]{20}$",
+            "title": "Proposed By",
+            "type": "string"
+          },
+          "provider_reference": {
+            "title": "Provider Reference",
+            "type": "string"
+          },
+          "received": {
+            "$ref": "#/components/schemas/MoneyOut"
+          },
+          "sent": {
+            "$ref": "#/components/schemas/MoneyOut"
+          },
+          "status": {
+            "enum": [
+              "proposed",
+              "approved",
+              "declined"
+            ],
+            "title": "Status",
+            "type": "string"
+          },
+          "to_pot": {
+            "$ref": "#/components/schemas/app__modules__reconciliation__transfers_api__PotOut"
+          },
+          "value_date": {
+            "format": "date",
+            "title": "Value Date",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "from_pot",
+          "to_pot",
+          "sent",
+          "received",
+          "fee",
+          "value_date",
+          "provider_reference",
+          "status",
+          "proposed_by",
+          "proposed_at",
+          "decided_by",
+          "ledger_entry_id"
+        ],
+        "title": "TransferOut",
+        "type": "object"
+      },
       "TrialHistoryView": {
         "additionalProperties": false,
         "properties": {
@@ -14630,6 +14765,96 @@
           "exceptions"
         ],
         "title": "PositionOut",
+        "type": "object"
+      },
+      "app__modules__reconciliation__api__PotOut": {
+        "additionalProperties": false,
+        "description": "A place real money sits, with its last imported statement day.",
+        "properties": {
+          "account_reference": {
+            "title": "Account Reference",
+            "type": "string"
+          },
+          "currency": {
+            "enum": [
+              "UGX",
+              "USD"
+            ],
+            "title": "Currency",
+            "type": "string"
+          },
+          "last_closing": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/MoneyOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "last_statement_date": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Statement Date"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "source": {
+            "enum": [
+              "iotec",
+              "bank"
+            ],
+            "title": "Source",
+            "type": "string"
+          }
+        },
+        "required": [
+          "source",
+          "account_reference",
+          "name",
+          "currency",
+          "last_statement_date",
+          "last_closing"
+        ],
+        "title": "PotOut",
+        "type": "object"
+      },
+      "app__modules__reconciliation__transfers_api__PotOut": {
+        "additionalProperties": false,
+        "properties": {
+          "account_reference": {
+            "title": "Account Reference",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "source": {
+            "enum": [
+              "iotec",
+              "bank"
+            ],
+            "title": "Source",
+            "type": "string"
+          }
+        },
+        "required": [
+          "source",
+          "account_reference",
+          "name"
+        ],
+        "title": "PotOut",
         "type": "object"
       },
       "app__modules__support__api__Amount": {
@@ -36800,6 +37025,500 @@
         ]
       }
     },
+    "/staff/reconciliation/pot-transfers": {
+      "get": {
+        "description": "Transfers waiting for a second person, oldest first.",
+        "operationId": "waiting_staff_reconciliation_pot_transfers_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 50,
+              "maximum": 100,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/TransferOut"
+                  },
+                  "title": "Response Waiting Staff Reconciliation Pot Transfers Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          }
+        },
+        "summary": "Waiting",
+        "tags": [
+          "staff reconciliation"
+        ]
+      },
+      "post": {
+        "description": "Record a transfer that has been made. Nothing is posted until someone else approves it.\n\n422 `pot_unknown`, `transfer_same_pot`, `currency_not_supported`,\n`transfer_received_more_than_sent`, `transfer_fee_not_allowed` (a transfer out of the bank\ncannot carry a fee yet) or `transfer_in_the_future`; 409 `transfer_in_a_closed_day` or\n`transfer_already_recorded` for a provider reference already recorded from that pot.",
+        "operationId": "record_staff_reconciliation_pot_transfers_post",
+        "parameters": [
+          {
+            "description": "A value the caller chooses once per intended action and sends again on every retry of it. Pattern: `[A-Za-z0-9._:-]{8,128}`.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "A value the caller chooses once per intended action and sends again on every retry of it. Pattern: `[A-Za-z0-9._:-]{8,128}`.",
+              "title": "Idempotency-Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TransferIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TransferOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          }
+        },
+        "summary": "Record",
+        "tags": [
+          "staff reconciliation"
+        ]
+      }
+    },
+    "/staff/reconciliation/pot-transfers/{transfer_id}": {
+      "get": {
+        "description": "One transfer, in any status.",
+        "operationId": "get_transfer_staff_reconciliation_pot_transfers__transfer_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "transfer_id",
+            "required": true,
+            "schema": {
+              "maxLength": 20,
+              "minLength": 20,
+              "pattern": "^[-0-9A-Z_a-z]{20}$",
+              "title": "Transfer Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TransferOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          }
+        },
+        "summary": "Get Transfer",
+        "tags": [
+          "staff reconciliation"
+        ]
+      }
+    },
+    "/staff/reconciliation/pot-transfers/{transfer_id}/approve": {
+      "post": {
+        "description": "The second signature, which posts the transfer. 403 `transfer_needs_second_person` for\nwhoever recorded it; 409 `transfer_already_decided` or `transfer_more_than_the_pot_holds`\nwhen the books say the sending pot never held that much.",
+        "operationId": "approve_staff_reconciliation_pot_transfers__transfer_id__approve_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "transfer_id",
+            "required": true,
+            "schema": {
+              "maxLength": 20,
+              "minLength": 20,
+              "pattern": "^[-0-9A-Z_a-z]{20}$",
+              "title": "Transfer Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "A value the caller chooses once per intended action and sends again on every retry of it. Pattern: `[A-Za-z0-9._:-]{8,128}`.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "A value the caller chooses once per intended action and sends again on every retry of it. Pattern: `[A-Za-z0-9._:-]{8,128}`.",
+              "title": "Idempotency-Key"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TransferOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          }
+        },
+        "summary": "Approve",
+        "tags": [
+          "staff reconciliation"
+        ]
+      }
+    },
+    "/staff/reconciliation/pot-transfers/{transfer_id}/decline": {
+      "post": {
+        "description": "A second person refuses it, with a reason. Nothing is posted. 403\n`transfer_needs_second_person`; 409 `transfer_already_decided`.",
+        "operationId": "decline_staff_reconciliation_pot_transfers__transfer_id__decline_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "transfer_id",
+            "required": true,
+            "schema": {
+              "maxLength": 20,
+              "minLength": 20,
+              "pattern": "^[-0-9A-Z_a-z]{20}$",
+              "title": "Transfer Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "A value the caller chooses once per intended action and sends again on every retry of it. Pattern: `[A-Za-z0-9._:-]{8,128}`.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "A value the caller chooses once per intended action and sends again on every retry of it. Pattern: `[A-Za-z0-9._:-]{8,128}`.",
+              "title": "Idempotency-Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReasonIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TransferOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          }
+        },
+        "summary": "Decline",
+        "tags": [
+          "staff reconciliation"
+        ]
+      }
+    },
     "/staff/reconciliation/pots": {
       "get": {
         "description": "Every pot closed each day, with its last imported statement.",
@@ -36810,7 +37529,7 @@
               "application/json": {
                 "schema": {
                   "items": {
-                    "$ref": "#/components/schemas/PotOut"
+                    "$ref": "#/components/schemas/app__modules__reconciliation__api__PotOut"
                   },
                   "title": "Response Pots Staff Reconciliation Pots Get",
                   "type": "array"
