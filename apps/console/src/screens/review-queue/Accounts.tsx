@@ -293,12 +293,14 @@ function AccountReview({ account, client, who, me, busy, error, canDecide, onDec
       </div>
 
       {account.check ? (
+        <div className="flex flex-wrap gap-5">
         <Section title={account.status === "in_review" ? "The check, waiting for a second person" : "The check"}>
           <Row name="Name on the proof" value={account.check.proofName} />
           <Row name="Against the ID" value={account.check.nameMatch === "exact" ? "The same names" : "Partly the same"} />
           {account.check.statementDate ? <Row name="Statement date" value={formatDay(account.check.statementDate)} /> : null}
           <Row name="Checked by" value={`${capitalise(who(account.check.checkedBy))}, ${formatMoment(account.check.checkedAt)}`} />
         </Section>
+        </div>
       ) : null}
 
       {account.check?.nameMatch === "partial" && account.status === "in_review" ? (

@@ -190,12 +190,14 @@ function HeldReview({
         )}
       </div>
 
+      <div className="flex flex-wrap gap-5">
       <Section title="The withdrawal">
         <Row name="Paid to" value={KIND_LABELS[payout.kind]} />
         <Row name="Asked for" value={formatMoment(payout.createdAt)} />
         <Row name="Business day" value={formatDay(payout.businessDate)} />
         <Row name="Money" value="Set aside from the client's holding" />
       </Section>
+      </div>
 
       <p className="m-0 text-md leading-normal text-muted">
         It is held because it is above the review limit. The client asked for it, so you are the second person. The account
