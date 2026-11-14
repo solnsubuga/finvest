@@ -649,6 +649,12 @@ ROWS = {
         "'tax_certificate', '2026-27', DATE '2026-07-01', DATE '2027-06-30', now())",
         "refusing to drop tax certificates",
     ),
+    "0143_investment_notes": (
+        "INSERT INTO documents (id, client_id, kind, idempotency_key, source_id, requested_at) "
+        "VALUES ('-Nabc0000000000000A1', '-Nabc0000000000000B1', 'investment_note', "
+        "'started:-Nabc0000000000000C1', '-Nabc0000000000000C1', now())",
+        "refusing to drop investment notes",
+    ),
     "0141_document_emails": (
         # Only the worker queues an email, and only for a ready document. The migrator owns
         # both tables, so it sets their guards aside to write the row this test needs.
