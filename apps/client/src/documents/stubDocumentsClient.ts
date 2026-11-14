@@ -33,8 +33,11 @@ function morning(day: string): string {
   return new Date(Date.parse(`${day}T06:10:00Z`) - KAMPALA_OFFSET_MS).toISOString();
 }
 
+/** How many months back the oldest demo statement is. */
+const OLDEST_MONTH = 3;
+
 function seed(today: string, now: Date): DocumentItem[] {
-  const monthly = [1, 2, 3].map((back): DocumentItem => {
+  const monthly = [1, 2, OLDEST_MONTH].map((back): DocumentItem => {
     const from = shiftMonth(today, -back, 1);
     const to = shiftMonth(today, -back + 1, 0);
     const sent = shiftMonth(today, -back + 1, 1);
@@ -49,6 +52,8 @@ function seed(today: string, now: Date): DocumentItem[] {
       finishedAt: morning(sent),
       fileName: `Finvest statement ${label}.pdf`,
       byteSize: 48_000,
+      // The oldest month was made before Excel copies existed, so it has only the PDF.
+      spreadsheetByteSize: back >= OLDEST_MONTH ? null : 9_000,
       notFinalFrom: null,
       reference: `ST-demo-monthly-${back}`,
       note: null,
@@ -67,6 +72,7 @@ function seed(today: string, now: Date): DocumentItem[] {
     finishedAt: earlier,
     fileName: "Finvest statement requested.pdf",
     byteSize: 61_000,
+    spreadsheetByteSize: 12_000,
     notFinalFrom: today,
     reference: "ST-demo-requested-1",
     note: null,
@@ -88,6 +94,7 @@ function seed(today: string, now: Date): DocumentItem[] {
       finishedAt: morning(day),
       fileName: `Finvest receipt ${reference}.pdf`,
       byteSize: 22_000,
+      spreadsheetByteSize: null,
       notFinalFrom: null,
       reference,
       note: null,
@@ -108,6 +115,7 @@ function seed(today: string, now: Date): DocumentItem[] {
     finishedAt: morning(`${starts + 1}-07-02`),
     fileName: `Finvest tax certificate ${taxYearLabel(`${starts}-07-01`)}.pdf`,
     byteSize: 41_000,
+    spreadsheetByteSize: null,
     notFinalFrom: null,
     reference: "TC-demo-tax-certificate-1",
     note: null,
@@ -124,6 +132,7 @@ function seed(today: string, now: Date): DocumentItem[] {
     finishedAt: morning(shiftMonth(today, -1, 11)),
     fileName: "Finvest investment note IN-Pq31wXb7.pdf",
     byteSize: 24_000,
+    spreadsheetByteSize: null,
     notFinalFrom: null,
     reference: "IN-Pq31wXb7",
     note: "started",
@@ -180,6 +189,7 @@ export function createStubDocumentsClient(phone: string | null, options: Options
           finishedAt: now().toISOString(),
           fileName: "Finvest statement requested.pdf",
           byteSize: 58_000,
+          spreadsheetByteSize: 11_000,
           notFinalFrom: (document.dateTo ?? "") >= today() ? today() : null,
           investmentId: null,
           depositId: null,
@@ -242,6 +252,7 @@ export function createStubDocumentsClient(phone: string | null, options: Options
         finishedAt: null,
         fileName: null,
         byteSize: null,
+        spreadsheetByteSize: null,
         notFinalFrom: null,
         reference: `ST-demo-asked-${asked.length + 1}`,
         note: null,
@@ -253,12 +264,12 @@ export function createStubDocumentsClient(phone: string | null, options: Options
       documents = [document, ...items];
       return document;
     },
-    async download(document) {
+    async download(document, format = "pdf") {
       await wait();
-      if (document.status !== "ready") {
+      if (document.status !== "ready" || (format === "xlsx" && document.spreadsheetByteSize === null)) {
         throw new DocumentsError("not_found");
       }
-      downloaded.push(document.id);
+      downloaded.push(format === "xlsx" ? `${document.id}.xlsx` : document.id);
     },
   };
   return client;

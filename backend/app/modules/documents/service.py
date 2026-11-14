@@ -91,6 +91,8 @@ class DocumentView:
     byte_size: int | None
     # For a statement the client asked for: the first day whose figures were not yet final.
     not_final_from: date | None = None
+    # A statement's Excel copy, once built. None for every other kind and older statements.
+    spreadsheet_byte_size: int | None = None
 
     @property
     def reference(self) -> str:
@@ -113,7 +115,9 @@ class DocumentFile:
 
 _COLUMNS = (
     "id, client_id, kind, idempotency_key, period_start, period_end, source_id, status, "
-    "failure_code, requested_at, finished_at, file_name, byte_size, not_final_from"
+    "failure_code, requested_at, finished_at, file_name, byte_size, not_final_from, "
+    "(SELECT s.byte_size FROM document_spreadsheets s WHERE s.document_id = documents.id) "
+    "AS spreadsheet_byte_size"
 )
 _INSERT = text(
     "INSERT INTO documents (id, client_id, kind, idempotency_key, period_start, period_end, "
@@ -294,6 +298,24 @@ async def client_file(session: AsyncSession, client: Actor, document_id: str) ->
     return DocumentFile(row.file_name, bytes(row.content))
 
 
+_SPREADSHEET = text(
+    "SELECT d.client_id, s.file_name, s.content FROM document_spreadsheets s "
+    "JOIN documents d ON d.id = s.document_id WHERE s.document_id = :id AND d.status = 'ready'"
+)
+
+
+async def client_spreadsheet(
+    session: AsyncSession, client: Actor, document_id: str
+) -> DocumentFile:
+    """The Excel copy of one of the client's ready statements."""
+    if client.kind != "client":
+        raise ApplicationError("forbidden")
+    row = (await session.execute(_SPREADSHEET, {"id": document_id})).one_or_none()
+    if row is None or row.client_id != client.id:
+        raise ApplicationError("not_found")
+    return DocumentFile(row.file_name, bytes(row.content))
+
+
 async def document_file(session: AsyncSession, document_id: str) -> DocumentFile | None:
     """The PDF of a ready document, for the worker that emails it."""
     row = (await session.execute(_FILE, {"id": document_id})).one_or_none()
@@ -345,4 +367,5 @@ def _view(row: Row[Any]) -> DocumentView:
         file_name=row.file_name,
         byte_size=row.byte_size,
         not_final_from=row.not_final_from,
+        spreadsheet_byte_size=row.spreadsheet_byte_size,
     )

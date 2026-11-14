@@ -28,7 +28,7 @@ import {
   STATEMENT_POLL_LIMIT,
   STATEMENT_POLL_MS,
 } from "@/documents/poll";
-import { Agreement, agreementUrl, DocumentItem, DocumentsError } from "@/documents/types";
+import { Agreement, agreementUrl, DocumentItem, DocumentsError, FileFormat } from "@/documents/types";
 import { formatDateTime } from "@/payments/format";
 import { newIdempotencyKey } from "@/payments/idempotency";
 import { Loading } from "@/payments/Parts";
@@ -50,10 +50,16 @@ type AgreementsState = { status: "loading" } | { status: "error" } | { status: "
 /** The black card: asking for a statement, then following it until it is ready. */
 type Request =
   | { step: "form" }
-  | { step: "making"; document: DocumentItem }
-  | { step: "slow"; document: DocumentItem }
-  | { step: "ready"; document: DocumentItem }
-  | { step: "failed"; document: DocumentItem };
+  | { step: "making"; document: DocumentItem; format: FileFormat }
+  | { step: "slow"; document: DocumentItem; format: FileFormat }
+  | { step: "ready"; document: DocumentItem; format: FileFormat }
+  | { step: "failed"; document: DocumentItem; format: FileFormat };
+
+/** The file the client chose on the form. Every statement is made as both. */
+const FORMATS: { format: FileFormat; label: string }[] = [
+  { format: "pdf", label: "PDF, signed" },
+  { format: "xlsx", label: "Excel" },
+];
 
 /**
  * Documents: ask for a statement of any period up to a year, and download
@@ -112,7 +118,10 @@ export default function Documents() {
           return;
         }
         if (document.status !== "pending") {
-          setRequest({ step: document.status, document });
+          const finished = document.status;
+          setRequest((current) =>
+            current.step === "form" ? current : { step: finished, document, format: current.format },
+          );
           void fetchList();
           return;
         }
@@ -124,7 +133,7 @@ export default function Documents() {
       }
       if (reads >= limit) {
         setRequest((current) =>
-          current.step === "making" ? { step: "slow", document: current.document } : current,
+          current.step === "making" ? { step: "slow", document: current.document, format: current.format } : current,
         );
         return;
       }
@@ -137,9 +146,11 @@ export default function Documents() {
     };
   }, [client, following, fetchList, light]);
 
-  const asked = (document: DocumentItem) => {
+  const asked = (document: DocumentItem, format: FileFormat) => {
     setRequest(
-      document.status === "pending" ? { step: "making", document } : { step: document.status, document },
+      document.status === "pending"
+        ? { step: "making", document, format }
+        : { step: document.status, document, format },
     );
     void fetchList();
   };
@@ -195,13 +206,14 @@ export default function Documents() {
   );
 }
 
-function StatementForm({ onAsked }: { onAsked: (document: DocumentItem) => void }) {
+function StatementForm({ onAsked }: { onAsked: (document: DocumentItem, format: FileFormat) => void }) {
   const client = useDocuments();
   const today = kampalaToday();
   const initial = quickPeriod("last_3_months", today);
   const [fromText, setFromText] = useState(formatLongDay(initial.from));
   const [toText, setToText] = useState(formatLongDay(initial.to));
   const [choosing, setChoosing] = useState(false);
+  const [format, setFormat] = useState<FileFormat>("pdf");
   const [sending, setSending] = useState(false);
   const [failure, setFailure] = useState<string | null>(null);
   // One key per period: a retry of the same period asks once, a new period asks again.
@@ -242,7 +254,7 @@ function StatementForm({ onAsked }: { onAsked: (document: DocumentItem) => void 
     setSending(true);
     setFailure(null);
     try {
-      onAsked(await client.requestStatement(from, to, key.current.value));
+      onAsked(await client.requestStatement(from, to, key.current.value), format);
     } catch (error) {
       setFailure(requestFailure(error, from, to, today));
     } finally {
@@ -306,6 +318,32 @@ function StatementForm({ onAsked }: { onAsked: (document: DocumentItem) => void 
           </Txt>
         ) : null}
       </View>
+      <View style={{ gap: 6 }}>
+        <Txt size={fontSizes.sm} weight="bold" color={colors.white} nativeID="statement-include-label">
+          Include
+        </Txt>
+        <View style={styles.dateBox} aria-labelledby="statement-include-label" testID="statement-include">
+          <Txt size={15} weight="bold" color={colors.white} style={{ flex: 1 }}>
+            All investments and goals
+          </Txt>
+        </View>
+      </View>
+      <View style={{ gap: 6 }}>
+        <Txt size={fontSizes.sm} weight="bold" color={colors.white}>
+          Format
+        </Txt>
+        <View style={styles.chips} accessibilityRole="radiogroup" accessibilityLabel="Format">
+          {FORMATS.map((option) => (
+            <Chip
+              key={option.format}
+              label={option.label}
+              selected={format === option.format}
+              onPress={() => setFormat(option.format)}
+              testID={`format-${option.format}`}
+            />
+          ))}
+        </View>
+      </View>
       <Button
         label="Make statement"
         variant="lime"
@@ -319,8 +357,10 @@ function StatementForm({ onAsked }: { onAsked: (document: DocumentItem) => void 
           {failure}
         </Txt>
       ) : null}
-      <Txt size={fontSizes.sm} color={colors.onBlackMuted}>
-        We keep it here to download, and email the PDF to you if your profile has an email address.
+      <Txt size={fontSizes.sm} color={colors.onBlackMuted} testID="statement-format-note">
+        {format === "xlsx"
+          ? "The Excel file has the same figures, for your own records. Banks and embassies accept the signed PDF: it carries your account number and a code they can check on our website. We make both, and email the PDF."
+          : "Banks and embassies accept the signed PDF. It carries your account number and a code they can check on our website. We keep it here to download, and email it to you if your profile has an email address."}{" "}
         Any period up to one year.
       </Txt>
     </View>
@@ -350,7 +390,7 @@ function StatementProgress({
 }: {
   request: Exclude<Request, { step: "form" }>;
   onAnother: () => void;
-  onAsked: (document: DocumentItem) => void;
+  onAsked: (document: DocumentItem, format: FileFormat) => void;
 }) {
   const client = useDocuments();
   const { document } = request;
@@ -393,7 +433,7 @@ function StatementProgress({
       setRetryFailed(false);
       try {
         // A new key: the failed statement stays failed, and this is a new one.
-        onAsked(await client.requestStatement(document.dateFrom, document.dateTo, newIdempotencyKey()));
+        onAsked(await client.requestStatement(document.dateFrom, document.dateTo, newIdempotencyKey()), request.format);
       } catch {
         setRetryFailed(true);
       } finally {
@@ -438,7 +478,7 @@ function StatementProgress({
           {period}
         </Txt>
       </View>
-      <DownloadButton document={document} />
+      <DownloadButton document={document} format={request.format} />
       <Button label="Make another" variant="outlineOnDark" onPress={onAnother} testID="statement-another" />
       {document.notFinalFrom ? (
         <Txt size={fontSizes.sm} color={colors.onBlackMuted}>
@@ -446,8 +486,9 @@ function StatementProgress({
         </Txt>
       ) : null}
       <Txt size={fontSizes.sm} color={colors.onBlackMuted}>
-        If your profile has an email address, we email it to you too. It can take a few minutes to
-        arrive.
+        {request.format === "xlsx"
+          ? "If your profile has an email address, we email you the signed PDF too. It can take a few minutes to arrive."
+          : "If your profile has an email address, we email it to you too. It can take a few minutes to arrive."}
       </Txt>
     </View>
   );
@@ -457,23 +498,48 @@ function notFinalCopy(day: string): string {
   return `Figures from ${formatLongDay(day)} may still change until our books for that day are closed. The PDF says so too.`;
 }
 
-/** The lime "Download PDF" on the ready card. */
-function DownloadButton({ document }: { document: DocumentItem }) {
-  const { download, state } = useDownload(document);
+/**
+ * The lime download on the ready card, in the format the client chose, and
+ * the other format beside it. A statement whose Excel copy is missing offers
+ * only the PDF.
+ */
+function DownloadButton({ document, format }: { document: DocumentItem; format: FileFormat }) {
+  const excel = document.spreadsheetByteSize !== null;
+  const first: FileFormat = format === "xlsx" && excel ? "xlsx" : "pdf";
+  const { download, state } = useDownload(document, first);
+  const other = useDownload(document, first === "pdf" ? "xlsx" : "pdf");
+  const name = first === "xlsx" ? "Excel" : "PDF";
   return (
     <View style={{ gap: 8 }}>
       <Button
-        label={state === "done" ? "Downloaded" : state === "held" ? "Download on mobile data" : "Download PDF"}
+        label={state === "done" ? "Downloaded" : state === "held" ? "Download on mobile data" : `Download ${name}`}
         variant="lime"
         loading={state === "busy"}
         onPress={download}
         testID="statement-download"
       />
-      {state === "failed" ? (
+      {excel ? (
+        <Button
+          label={
+            other.state === "done"
+              ? "Downloaded"
+              : other.state === "held"
+                ? "Download on mobile data"
+                : first === "xlsx"
+                  ? "Download the signed PDF"
+                  : "Download Excel"
+          }
+          variant="outlineOnDark"
+          loading={other.state === "busy"}
+          onPress={other.download}
+          testID="statement-download-other"
+        />
+      ) : null}
+      {state === "failed" || other.state === "failed" ? (
         <Txt size={fontSizes.sm} weight="semibold" color={ON_BLACK_DANGER} accessibilityRole="alert">
           The download did not finish. Try again.
         </Txt>
-      ) : state === "held" ? (
+      ) : state === "held" || other.state === "held" ? (
         <Txt size={fontSizes.sm} weight="semibold" color={colors.white} accessibilityRole="alert" testID="statement-held">
           {HELD_COPY}
         </Txt>
@@ -485,7 +551,7 @@ function DownloadButton({ document }: { document: DocumentItem }) {
 /** "held": the client chose Wi-Fi only and is on mobile data. The next tap downloads anyway. */
 type DownloadState = "idle" | "busy" | "held" | "done" | "failed";
 
-function useDownload(document: DocumentItem) {
+function useDownload(document: DocumentItem, format: FileFormat = "pdf") {
   const client = useDocuments();
   const shouldHold = useDownloadGate();
   const [state, setState] = useState<DownloadState>("idle");
@@ -497,7 +563,7 @@ function useDownload(document: DocumentItem) {
         setState("held");
         return;
       }
-      await client.download(document).then(
+      await client.download(document, format).then(
         () => setState("done"),
         () => setState("failed"),
       );
@@ -693,7 +759,10 @@ function rowText(document: DocumentItem): { title: string; subtitle: string } {
 
 function DocumentRow({ document, first }: { document: DocumentItem; first: boolean }) {
   const { title, subtitle } = rowText(document);
-  const { download, state } = useDownload(document);
+  const { download, state: pdfState } = useDownload(document);
+  const excel = useDownload(document, "xlsx");
+  // What the row says follows the last download that needs saying.
+  const state = excel.state === "failed" || excel.state === "held" ? excel.state : pdfState;
   return (
     <View style={[styles.row, !first && styles.rowDivider]}>
       <View style={styles.pdfTile}>
@@ -713,19 +782,39 @@ function DocumentRow({ document, first }: { document: DocumentItem; first: boole
           {state === "failed" ? "The download did not finish. Try again." : state === "held" ? HELD_COPY : subtitle}
         </Txt>
       </View>
+      {document.status === "ready" && document.spreadsheetByteSize !== null ? (
+        <Pressable
+          onPress={excel.download}
+          disabled={excel.state === "busy"}
+          accessibilityRole="button"
+          accessibilityLabel={
+            excel.state === "held" ? `Download ${title} as Excel on mobile data` : `Download ${title} as Excel`
+          }
+          style={({ pressed }) => [styles.excelButton, pressed && { opacity: 0.7 }]}
+          testID={`download-xlsx-${document.id}`}
+        >
+          {excel.state === "busy" ? (
+            <ActivityIndicator color={colors.ink} accessibilityLabel="Downloading" />
+          ) : (
+            <Txt size={fontSizes.sm} weight="extrabold">
+              {excel.state === "done" ? "Saved" : "Excel"}
+            </Txt>
+          )}
+        </Pressable>
+      ) : null}
       {document.status === "ready" ? (
         <Pressable
           onPress={download}
-          disabled={state === "busy"}
+          disabled={pdfState === "busy"}
           accessibilityRole="button"
-          accessibilityLabel={state === "held" ? `Download ${title} on mobile data` : `Download ${title}`}
+          accessibilityLabel={pdfState === "held" ? `Download ${title} on mobile data` : `Download ${title}`}
           style={({ pressed }) => [styles.roundButton, pressed && { opacity: 0.7 }]}
           testID={`download-${document.id}`}
         >
-          {state === "busy" ? (
+          {pdfState === "busy" ? (
             <ActivityIndicator color={colors.ink} accessibilityLabel="Downloading" />
           ) : (
-            <Icon name={state === "done" ? "check" : "download"} size={20} />
+            <Icon name={pdfState === "done" ? "check" : "download"} size={20} />
           )}
         </Pressable>
       ) : document.status === "pending" ? (
@@ -852,6 +941,16 @@ const styles = StyleSheet.create({
     height: 44,
     borderRadius: radii.md,
     backgroundColor: colors.surfaceSunken,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  excelButton: {
+    height: 44,
+    minWidth: 64,
+    paddingHorizontal: 12,
+    borderRadius: 22,
+    borderWidth: 1.5,
+    borderColor: colors.borderStrong,
     alignItems: "center",
     justifyContent: "center",
   },

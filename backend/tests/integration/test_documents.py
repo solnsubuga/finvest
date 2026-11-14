@@ -12,6 +12,7 @@ from urllib.parse import quote
 
 import httpx
 import pytest
+from openpyxl import load_workbook
 from pypdf import PdfReader
 from sqlalchemy import text
 from sqlalchemy.exc import DBAPIError
@@ -23,6 +24,7 @@ from app.infrastructure.email import EmailDeferred, EmailMessage, EmailRejected,
 from app.infrastructure.jobs import JobRequest, Worker, WorkerConfig, enqueue
 from app.infrastructure.sealing import Sealer
 from app.modules.documents import building, pdf, service
+from app.modules.documents.domain import formatting
 from app.modules.documents.domain.emails import receipt_email
 from app.modules.documents.domain.statements import (
     ActivityKind,
@@ -954,6 +956,19 @@ async def test_a_client_asks_for_and_downloads_a_statement_over_http(
     assert download.content.startswith(b"%PDF-")
     assert len(download.content) == listed[0]["byte_size"]
 
+    # The Excel copy, beside it.
+    workbook = await api.get(f"/client/documents/{item['id']}/spreadsheet")
+    assert workbook.status_code == 200
+    assert workbook.headers["content-type"] == (
+        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    )
+    assert workbook.headers["cache-control"] == "no-store"
+    assert workbook.headers["content-disposition"] == (
+        "attachment; filename*=UTF-8''" + quote(f"Finvest statement {asked_period().label}.xlsx")
+    )
+    assert workbook.content.startswith(b"PK")
+    assert len(workbook.content) == listed[0]["spreadsheet_byte_size"]
+
 
 # Emailing ----------------------------------------------------------------------------------------
 
@@ -1417,3 +1432,59 @@ async def test_a_check_is_written_once_by_the_worker_and_the_api_cannot_list_cod
         assert (
             await session.execute(text("SELECT count(*) FROM documents_check('%')"))
         ).scalar_one() == 0
+
+
+# The Excel copy ----------------------------------------------------------------------------------
+
+
+async def test_a_statement_has_an_excel_copy_with_the_same_figures(
+    app_database: Database, worker_database: Database, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    drawn = drawn_statements(monkeypatch)
+    client, _ = await invested(app_database, worker_database)
+    asked = await ask(app_database, client)
+    await run_jobs(worker_database)
+    statement = drawn[asked.reference]
+    async with app_database.actor_transaction(client) as session:
+        found = await service.client_spreadsheet(session, client, asked.id)
+        view = await service.client_document(session, client, asked.id)
+    assert view.spreadsheet_byte_size == len(found.content)
+    book = load_workbook(BytesIO(found.content))
+    facts = {row[0]: row[1] for row in book["Summary"].iter_rows(values_only=True) if row[0]}
+    assert facts["Statement"] == statement.reference
+    closing = statement.summaries[0]
+    assert facts[f"Value on {formatting.day(statement.period.end)}"] == closing.closing.minor
+    lines = list(book["What happened"].iter_rows(min_row=2, values_only=True))
+    assert len(lines) == max(1, len(statement.activity))
+
+    # Only the client whose statement it is reads it.
+    other, _ = await invested(app_database, worker_database)
+    with pytest.raises(ApplicationError) as refused:
+        async with app_database.actor_transaction(other) as session:
+            await service.client_spreadsheet(session, other, asked.id)
+    assert refused.value.code == "not_found"
+
+
+async def test_an_excel_copy_is_written_once_by_the_worker(
+    app_database: Database, worker_database: Database
+) -> None:
+    client, _ = await invested(app_database, worker_database)
+    asked = await ask(app_database, client)
+    await run_jobs(worker_database)
+    for statement in (
+        "UPDATE document_spreadsheets SET content = '\\x00' WHERE document_id = :id",
+        "DELETE FROM document_spreadsheets WHERE document_id = :id",
+    ):
+        with pytest.raises(DBAPIError):
+            async with worker_database.actor_transaction(SYSTEM) as session:
+                await session.execute(text(statement), {"id": asked.id})
+    with pytest.raises(DBAPIError):
+        async with app_database.actor_transaction(client) as session:
+            await session.execute(
+                text(
+                    "INSERT INTO document_spreadsheets (document_id, file_name, content, sha256, "
+                    "byte_size, created_at) SELECT document_id, file_name, content, sha256, "
+                    "byte_size, created_at FROM document_spreadsheets WHERE document_id = :id"
+                ),
+                {"id": asked.id},
+            )

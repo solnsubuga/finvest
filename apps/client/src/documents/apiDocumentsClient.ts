@@ -2,8 +2,9 @@ import type { DocumentItem as ApiDocument } from "@finvest/api-client/client";
 
 import { api, ApiError } from "@/api/http";
 
+import { EXCEL } from "./fileTypes";
 import { savePdf } from "./savePdf";
-import { Agreement, DocumentItem, DocumentsClient, DocumentsError, PeriodProblem } from "./types";
+import { Agreement, DocumentItem, DocumentsClient, DocumentsError, FileFormat, PeriodProblem } from "./types";
 
 /**
  * The Documents screen's contract, answered by the real API
@@ -28,6 +29,7 @@ export function fromApi(item: ApiDocument): DocumentItem {
     finishedAt: item.finished_at,
     fileName: item.file_name,
     byteSize: item.byte_size,
+    spreadsheetByteSize: item.spreadsheet_byte_size,
     notFinalFrom: item.not_final_from,
     reference: item.reference,
     note: item.note,
@@ -88,16 +90,26 @@ export function createApiDocumentsClient(): DocumentsClient {
           }),
         ),
       ),
-    download: (document) =>
+    download: (document, format = "pdf") =>
       wrap(async () => {
         if (document.status !== "ready") throw new DocumentsError("not_found");
-        await savePdf(`/client/documents/${encodeURIComponent(document.id)}/file`, safeFileName(document));
+        const id = encodeURIComponent(document.id);
+        if (format === "xlsx") {
+          if (document.spreadsheetByteSize === null) throw new DocumentsError("not_found");
+          await savePdf(`/client/documents/${id}/spreadsheet`, safeFileName(document, "xlsx"), EXCEL);
+          return;
+        }
+        await savePdf(`/client/documents/${id}/file`, safeFileName(document));
       }),
   };
 }
 
-/** The name the PDF is saved under: the API's own, kept to plain characters. */
-export function safeFileName(document: DocumentItem): string {
+/**
+ * The name the file is saved under: the API's own, kept to plain characters.
+ * The Excel copy takes the PDF's name with its own ending, as the API names it.
+ */
+export function safeFileName(document: DocumentItem, format: FileFormat = "pdf"): string {
   const name = (document.fileName ?? "").replace(/[^A-Za-z0-9 ._-]/g, "").trim();
-  return /\.pdf$/i.test(name) ? name : `Finvest document ${document.id.replace(/[^A-Za-z0-9_-]/g, "")}.pdf`;
+  const pdf = /\.pdf$/i.test(name) ? name : `Finvest document ${document.id.replace(/[^A-Za-z0-9_-]/g, "")}.pdf`;
+  return format === "xlsx" ? pdf.replace(/\.pdf$/i, ".xlsx") : pdf;
 }

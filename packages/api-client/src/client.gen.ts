@@ -551,6 +551,7 @@ export const DocumentItem = z.object({
   note: z.enum(["started", "ended"]).nullable(),
   reference: z.string(),
   requested_at: z.string(),
+  spreadsheet_byte_size: z.number().int().nullable(),
   status: z.enum(["pending", "ready", "failed"]),
 });
 export type DocumentItem = z.infer<typeof DocumentItem>;
@@ -1791,6 +1792,19 @@ export const operations = {
   "GET /client/documents/{document_id}/file": {
     method: "GET",
     path: "/client/documents/{document_id}/file",
+    params: z.object({
+    document_id: z.string(),
+  }),
+    query: z.object({}),
+    body: null,
+    bodyKind: null,
+    idempotent: false,
+    status: 200,
+    response: null,
+  },
+  "GET /client/documents/{document_id}/spreadsheet": {
+    method: "GET",
+    path: "/client/documents/{document_id}/spreadsheet",
     params: z.object({
     document_id: z.string(),
   }),

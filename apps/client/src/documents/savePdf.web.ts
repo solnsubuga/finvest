@@ -1,15 +1,17 @@
 import { API_URL } from "@/api/config";
 
+import { PDF, SavedType } from "./fileTypes";
+
 /**
- * In a browser: fetch the PDF with the session cookie and hand it to the
- * browser as a download under its own name. Nothing is kept by the page.
+ * In a browser: fetch the PDF, or a statement's Excel copy, with the session
+ * cookie and hand it to the browser as a download under its own name. Nothing is kept by the page.
  */
-export async function savePdf(path: string, fileName: string): Promise<void> {
+export async function savePdf(path: string, fileName: string, type: SavedType = PDF): Promise<void> {
   const response = await fetch(`${API_URL}${path}`, {
     credentials: "include",
-    headers: { Accept: "application/pdf" },
+    headers: { Accept: type.mimeType },
   });
-  if (!response.ok || !(response.headers.get("content-type") ?? "").startsWith("application/pdf")) {
+  if (!response.ok || !(response.headers.get("content-type") ?? "").startsWith(type.mimeType)) {
     throw new Error(`download_failed_${response.status}`);
   }
   const url = URL.createObjectURL(await response.blob());
