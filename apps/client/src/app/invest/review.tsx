@@ -15,6 +15,7 @@ import { useLoaded } from "@/investing/useLoaded";
 import { newIdempotencyKey } from "@/payments/idempotency";
 import { DetailList, Loading } from "@/payments/Parts";
 import { colors, fontSizes, radii } from "@/theme";
+import { IdCheckPrompt } from "@/identity/Parts";
 
 const CHOICES: AtMaturity[] = ["roll_over", "pay_out"];
 
@@ -29,6 +30,8 @@ export default function Review() {
   const [atMaturity, setAtMaturity] = useState<AtMaturity>("roll_over");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Refused because the ID check is not approved yet: the error then opens it.
+  const [needsId, setNeedsId] = useState(false);
   // One key per request: a double tap or a retry after a lost answer saves one investment.
   // After a try whose outcome is unknown the choice is locked, so trying again sends the
   // same request. After a definite refusal nothing was saved, so the next try gets a new key.
@@ -63,6 +66,7 @@ export default function Review() {
       // Replace, so Back from paying does not land on a confirm button that saves another one.
       router.replace(`/pay/${investment.id}`);
     } catch (caught) {
+      setNeedsId(caught instanceof InvestingError && caught.code === "not_verified");
       const unknown = !(caught instanceof InvestingError) || caught.code === "unavailable";
       if (unknown) {
         setLocked(true);
@@ -146,7 +150,7 @@ export default function Review() {
               </Txt>
             </View>
           ) : null}
-          {error ? <Notice tone="danger">{error}</Notice> : null}
+          {error ? (needsId ? <IdCheckPrompt message={error} /> : <Notice tone="danger">{error}</Notice>) : null}
           <Txt size={fontSizes.xs} color={colors.muted}>
             This rate is held for 72 hours while you pay. Your term starts on the day your payment is confirmed.
           </Txt>

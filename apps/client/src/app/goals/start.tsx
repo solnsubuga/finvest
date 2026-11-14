@@ -15,6 +15,7 @@ import { formatDay, formatMoney } from "@/payments/format";
 import { DetailList } from "@/payments/Parts";
 import { newIdempotencyKey } from "@/payments/idempotency";
 import { colors } from "@/theme";
+import { IdCheckPrompt } from "@/identity/Parts";
 
 const MINIMUM = 100_000;
 
@@ -42,6 +43,8 @@ export default function StartGoal() {
   const [amount, setAmount] = useState(groupDigits(String(suggested)));
   const [busy, setBusy] = useState<"now" | "later" | null>(null);
   const [error, setError] = useState<string | null>(null);
+  // Refused because the ID check is not approved yet: the error then opens it.
+  const [needsId, setNeedsId] = useState(false);
   const [fieldError, setFieldError] = useState<string | null>(null);
   const [goalKey] = useState(newIdempotencyKey);
   const [savingKey] = useState(newIdempotencyKey);
@@ -84,6 +87,7 @@ export default function StartGoal() {
         router.replace(`/goals/${goal.id}`);
       }
     } catch (caught) {
+      setNeedsId(caught instanceof GoalError && caught.code === "not_verified");
       if (caught instanceof GoalError && caught.code === "below_minimum") {
         setFieldError(describeGoalError(caught));
       } else {
@@ -147,7 +151,7 @@ export default function StartGoal() {
           Every saving is its own investment, so nothing sits idle. If a payment does not go through,
           nothing is taken and you can try again.
         </Notice>
-        {error ? <Notice tone="danger">{error}</Notice> : null}
+        {error ? (needsId ? <IdCheckPrompt message={error} /> : <Notice tone="danger">{error}</Notice>) : null}
         {locked ? (
           <Notice tone="warning">
             Your goal is set up and its first saving may already have reached us, so the amount is

@@ -127,6 +127,14 @@ export default function Profile() {
         </Card>
         <Card padded={false}>
           <Row
+            icon="shield"
+            title="ID check and account number"
+            detail="Confirm who you are, and see your account number"
+            onPress={() => router.push("/id-check")}
+            testID="profile-id-check"
+          />
+          <View style={styles.divider} />
+          <Row
             icon="key"
             title="Sign in and security"
             detail="Passkey, authenticator app, SMS codes and devices"
