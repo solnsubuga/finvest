@@ -92,6 +92,8 @@ async def pass_kyc(world: World, client: Person, reviewer: Person) -> str:
         assert check.id in [item.id for item in queue]
         await kyc.approve(session, SEALER, reviewer.actor, check.id, "Documents match", world.clock)
         assert await kyc.verified_name(session, client.id) is not None
+    # The worker sends the client the approval notice, as it would at once.
+    await world.drain()
     return check.id
 
 
