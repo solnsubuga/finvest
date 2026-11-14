@@ -1,7 +1,7 @@
 """Send investment notes again, by two people.
 
 Revision ID: 0335_note_reissues
-Revises: 0321_finance_month_closes
+Revises: 0390_staff_access_sync
 
 `note_reissues` keeps each request staff make to email investment notes again: one client's, or
 every client's, for the notes issued between two days. One member of staff proposes with a
@@ -20,7 +20,7 @@ from collections.abc import Sequence
 from alembic import op
 
 revision: str = "0335_note_reissues"
-down_revision: str | None = "0321_finance_month_closes"
+down_revision: str | None = "0390_staff_access_sync"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 
