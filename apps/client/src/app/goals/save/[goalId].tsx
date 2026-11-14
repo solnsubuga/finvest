@@ -15,6 +15,7 @@ import { formatMoney } from "@/payments/format";
 import { newIdempotencyKey } from "@/payments/idempotency";
 import { Loading } from "@/payments/Parts";
 import { colors } from "@/theme";
+import { IdCheckPrompt } from "@/identity/Parts";
 
 const MINIMUM = 100_000;
 
@@ -28,6 +29,8 @@ export default function SaveToGoal() {
   const [amount, setAmount] = useState("");
   const [fieldError, setFieldError] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  // Refused because the ID check is not approved yet: the error then opens it.
+  const [needsId, setNeedsId] = useState(false);
   const [busy, setBusy] = useState(false);
   const [idempotencyKey] = useState(newIdempotencyKey);
   // After a try whose answer was lost the saving may already exist. A retry must be the same
@@ -64,6 +67,7 @@ export default function SaveToGoal() {
       const saving = await client.saveToGoal(goalId, { currency: "UGX", minor: value }, idempotencyKey);
       router.replace(`/pay/${saving.investmentId}`);
     } catch (caught) {
+      setNeedsId(caught instanceof GoalError && caught.code === "not_verified");
       if (caught instanceof GoalError && caught.code === "below_minimum") {
         setFieldError(describeGoalError(caught));
       } else {
@@ -122,7 +126,7 @@ export default function SaveToGoal() {
             This saving is invested the day it is paid, in the same Treasury bill as the rest of the goal,
             and rolls over when it matures.
           </Notice>
-          {error ? <Notice tone="danger">{error}</Notice> : null}
+          {error ? (needsId ? <IdCheckPrompt message={error} /> : <Notice tone="danger">{error}</Notice>) : null}
           {locked ? (
             <Notice tone="warning">
               Your saving may already have reached us, so its amount is fixed. Pressing Continue to pay

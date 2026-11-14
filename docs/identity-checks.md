@@ -127,9 +127,18 @@ The client is told, in the same transaction as the decision, when their check is
 
 Without `FINVEST_IDENTITY_DATA_KEY` the routes answer `unavailable`, and so do the photo routes when file storage is not configured.
 
+## In the client app
+
+`apps/client/src/app/id-check` follows the canvas order: choose the document and country, the front, the back (not for a passport), the details, then the selfie, which hands the check in. Home shows what the check needs next until it is approved, Profile links to it, and the invest, goal, plan and bank transfer screens open it when they are refused for an unapproved client. After approval the screen shows the account number. The client is notified when the check is approved or rejected and when staff ask for photos again, never when it is escalated, and the notification opens the ID check screen.
+
+- The device's own camera or file chooser takes each photo, and the client looks at it before it is sent. There is no live frame detection or liveness guidance yet.
+- The client types the details. Nothing reads them from the photo yet.
+- During a retake the API does not say which photos were sent since staff asked, so the app remembers it for the session, and handing in confirms it.
+- In a demo build (`EXPO_PUBLIC_DEMO_AUTH=1`) an in-memory stand-in answers, and the last digit of the document number stands in for staff: 1 asks for a new selfie, 2 rejects, 3 approves.
+
 ## Not built yet
 
-- The console and the client app calling these routes. Both still use sample data.
+- The console calling these routes. It still uses sample data.
 - Replacing the identity data key. Do not rotate it yet: a sealed value records which key sealed it and an old key can still be read, but nothing seals the rows again, and the document fingerprints are made with the current key only, so the one-document rule would stop matching earlier clients.
 - Checking that the name matches the name registered on the client's mobile money number.
 - Company, joint and group accounts. Only personal accounts are issued.

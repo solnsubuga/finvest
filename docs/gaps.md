@@ -14,7 +14,7 @@ The client app talks to the real API for sign-in, investing, paying, goals, auto
 
 | Gap | Why it blocks launch | Routes already built |
 | --- | --- | --- |
-| **Identity check.** No screen lets a client hand in their details, ID document and selfie, or see the check's progress. | A new client is never approved, so never gets an account number, so cannot pay by bank transfer or be paid out. | `GET /client/identity-check`, `PUT .../details`, `PUT .../document`, `PUT .../photos/{kind}`, `POST .../submit` |
+| ~~**Identity check.** No screen lets a client hand in their details, ID document and selfie, or see the check's progress.~~ Closed by the client identity check screens PR (apps/client/src/app/id-check). | ~~A new client is never approved, so never gets an account number, so cannot pay by bank transfer or be paid out.~~ | `GET /client/identity-check`, `PUT .../details`, `PUT .../document`, `PUT .../photos/{kind}`, `POST .../submit` |
 | ~~**Payout accounts and payouts.** No screen adds a mobile money number or bank account, enters its code, uploads proof, or lists payouts. The early withdrawal screen lists approved accounts, but a client has no way to make one.~~ Closed by the client payout screens PR (see [payouts.md](payouts.md), "Client screens"). | No client can ever be paid out, at maturity or early. | `/client/payout-destinations` (all six), `GET /client/payouts`, `GET /client/payouts/{id}`, `GET /client/withdrawal-limits` |
 | ~~**Maturity choice after investing.** The choice is made at review, but cannot be changed afterwards, and paying out at maturity is never asked for.~~ Closed by the client payout screens PR. | The roadmap requires changing the choice before the maturity date. | `PUT /client/investments/{id}/at-maturity`, `POST /client/investments/{id}/pay-out` |
 | **Claiming an account carried over from Finvest 1.0.** No screen opens the invitation link, sends the code, sets the password or reports a problem. | Switch day sends every Finvest 1.0 client a link ([launch.md](launch.md), T+85). Without the screen the link leads nowhere. | `GET /client/claim`, `POST /client/claim/start`, `.../complete`, `.../problem` |
@@ -41,11 +41,10 @@ Every console screen is built, but eight of them only work on the sample sign-in
 | Dealing Desk | Sample data only; the buffer tab is being connected | `/staff/dealing/desk`, `/staff/dealing/orders` (seven) | Dealing desk thread (PRs #262, #265) |
 | Automatic Investing | Sample data only | None: the staff routes are not built ([automatic-investing.md](automatic-investing.md)) | Phase 4 |
 
-Five screens are still the placeholder page:
+Four screens are still the placeholder page. The Review Queue is connected to `/staff/payout-destinations` and the held payout routes (`/staff/payouts/held`, `.../approve`, `.../decline`).
 
 | Screen | What it needs | Routes |
 | --- | --- | --- |
-| Review Queue | Payout accounts waiting for a proof check and its second approval, and payouts held for approval | `/staff/payout-destinations` (six); held payouts need routes (see Backend) |
 | Money Movement | Payouts that are held up or stranded, and deposits under way | `GET /staff/payouts/held-up`; stranded payouts in PR #263 (payouts thread) |
 | Maturities | The daily maturity run and its exceptions | `GET /staff/interest-runs` covers interest only; a maturity run read route is needed |
 | Finance | Day close, fee income, withholding tax owed and the accounting export | Reconciliation routes below; tax in the tax certificates thread |
@@ -67,7 +66,7 @@ Staff routes with no screen at all: `/staff/phone-changes` (three; the Clients s
 | **Anti-money-laundering.** Nothing is built: no sanctions or politically exposed person screening, no transaction monitoring rules, no Financial Intelligence Authority report. | Listed on the roadmap's back office checklist and likely a licence condition. | None. Needs the owner's choice of list source first (below). |
 | **Next of kin and the suitability questions.** Not built. | Listed on the roadmap and "usually asked for by the regulator". | None |
 | **The real device checks** in [launch.md](launch.md) have not been run. | A launch condition. | Engineering, once Android and iPhone builds exist |
-| **Web end-to-end tests** cover 6 client and 6 console journeys. The identity check and the claim have none, because their screens do not exist yet. Payout accounts have theirs. | Each new screen above should add its journey. | Each screen's thread |
+| **Web end-to-end tests** cover 7 client and 6 console journeys. The claim has none, because its screen does not exist yet. Payout accounts and the identity check have theirs. | Each new screen above should add its journey. | Each screen's thread |
 
 ### Follow-ups owed from reviews
 

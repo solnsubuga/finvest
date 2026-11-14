@@ -36,6 +36,13 @@ const queueItem = (amount: string) =>
   within(screen.getByRole("list", { name: "Bank transfers" })).getByRole("button", { name: new RegExp(amount) });
 
 describe("bank transfers on the reconciliation screen", () => {
+  it("counts transfers whose check the list does not name, and labels them as waiting", async () => {
+    renderScreen({ api: createStubBankTransfersApi(ME, 0, "unsorted", () => NOW) });
+    await transfer("UGX 10,000,000");
+    expect(screen.getByText("4 waiting to be checked. Open one to see whether it needs matching or a second person.")).toBeInTheDocument();
+    expect(within(screen.getByRole("list", { name: "Bank transfers" })).getAllByText("Waiting for a check")).toHaveLength(4);
+  });
+
   it("lists what waits and opens the newest, with its receipt and its candidate lines", async () => {
     renderScreen();
     const card = await transfer("UGX 10,000,000");

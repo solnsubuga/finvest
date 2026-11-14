@@ -24,6 +24,7 @@ from app.modules.payments import bank_transfers
 from app.modules.payouts import destinations, resolutions
 from app.modules.reconciliation import day_close, transfers
 from app.modules.support import complaints
+from app.modules.tax import service as tax
 
 
 async def waiting_for(session: AsyncSession, staff: StaffSession, now: datetime) -> list[InboxItem]:
@@ -67,6 +68,8 @@ async def waiting_for(session: AsyncSession, staff: StaffSession, now: datetime)
         found += await _investment_corrections(session, staff)
     if "payout_resolution" in kinds:
         found += await _payout_resolutions(session)
+    if "tax_remittance" in kinds:
+        found += await _tax_remittances(session)
     return inbox(found, staff.staff_id, staff.permissions)
 
 
@@ -267,4 +270,18 @@ async def _payout_resolutions(session: AsyncSession) -> list[Waiting]:
     return [
         Waiting("payout_resolution", r.id, r.outcome.value, r.proposed_by, r.proposed_at)
         for r in await resolutions.waiting(session)
+    ]
+
+
+async def _tax_remittances(session: AsyncSession) -> list[Waiting]:
+    # The subject is the month and currency, never an amount.
+    return [
+        Waiting(
+            "tax_remittance",
+            r.id,
+            f"{r.month.year:04d}-{r.month.month:02d} {r.amount.currency.value}",
+            r.proposed_by,
+            r.proposed_at,
+        )
+        for r in await tax.waiting(session)
     ]

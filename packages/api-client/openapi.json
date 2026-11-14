@@ -362,7 +362,8 @@
               "announcement",
               "payout_account",
               "investment_correction",
-              "payout_resolution"
+              "payout_resolution",
+              "tax_remittance"
             ],
             "title": "Kind",
             "type": "string"
@@ -711,6 +712,63 @@
         "title": "Body_add_photo_client_identity_check_photos__kind__put",
         "type": "object"
       },
+      "Body_import_statement_staff_reconciliation_statements_post": {
+        "properties": {
+          "account_reference": {
+            "maxLength": 40,
+            "minLength": 1,
+            "title": "Account Reference",
+            "type": "string"
+          },
+          "closing_balance": {
+            "maxLength": 32,
+            "minLength": 1,
+            "title": "Closing Balance",
+            "type": "string"
+          },
+          "file": {
+            "contentMediaType": "application/octet-stream",
+            "description": "CSV in a known layout, at most 2 MiB",
+            "title": "File",
+            "type": "string"
+          },
+          "format": {
+            "const": "standard",
+            "default": "standard",
+            "title": "Format",
+            "type": "string"
+          },
+          "opening_balance": {
+            "maxLength": 32,
+            "minLength": 1,
+            "title": "Opening Balance",
+            "type": "string"
+          },
+          "source": {
+            "enum": [
+              "iotec",
+              "bank"
+            ],
+            "title": "Source",
+            "type": "string"
+          },
+          "statement_date": {
+            "format": "date",
+            "title": "Statement Date",
+            "type": "string"
+          }
+        },
+        "required": [
+          "source",
+          "account_reference",
+          "statement_date",
+          "opening_balance",
+          "closing_balance",
+          "file"
+        ],
+        "title": "Body_import_statement_staff_reconciliation_statements_post",
+        "type": "object"
+      },
       "Body_pay_by_bank_transfer_client_investments__investment_id__payments_bank_transfer_post": {
         "properties": {
           "amount_minor": {
@@ -851,7 +909,7 @@
           },
           "movements": {
             "items": {
-              "$ref": "#/components/schemas/MovementOut"
+              "$ref": "#/components/schemas/app__modules__dealing__buffer_api__MovementOut"
             },
             "title": "Movements",
             "type": "array"
@@ -2117,6 +2175,55 @@
         "title": "ClientSignedIn",
         "type": "object"
       },
+      "CloseOut": {
+        "additionalProperties": false,
+        "properties": {
+          "decided_by": {
+            "anyOf": [
+              {
+                "maxLength": 20,
+                "minLength": 20,
+                "pattern": "^[-0-9A-Z_a-z]{20}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Decided By"
+          },
+          "id": {
+            "maxLength": 20,
+            "minLength": 20,
+            "pattern": "^[-0-9A-Z_a-z]{20}$",
+            "title": "Id",
+            "type": "string"
+          },
+          "prepared_by": {
+            "maxLength": 20,
+            "minLength": 20,
+            "pattern": "^[-0-9A-Z_a-z]{20}$",
+            "title": "Prepared By",
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "prepared",
+              "closed"
+            ],
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "status",
+          "prepared_by",
+          "decided_by"
+        ],
+        "title": "CloseOut",
+        "type": "object"
+      },
       "CodeAnswer": {
         "additionalProperties": false,
         "properties": {
@@ -2764,6 +2871,62 @@
         "title": "Currency",
         "type": "string"
       },
+      "DayOut": {
+        "additionalProperties": false,
+        "description": "One business day. While it is open, the figures are worked out now; once prepared or\nclosed, `close` holds who signed. `blockers` is every reason it cannot be prepared yet.",
+        "properties": {
+          "blockers": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Blockers",
+            "type": "array"
+          },
+          "business_date": {
+            "format": "date",
+            "title": "Business Date",
+            "type": "string"
+          },
+          "close": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CloseOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "last_closed": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Closed"
+          },
+          "positions": {
+            "items": {
+              "$ref": "#/components/schemas/app__modules__reconciliation__api__PositionOut"
+            },
+            "title": "Positions",
+            "type": "array"
+          }
+        },
+        "required": [
+          "business_date",
+          "last_closed",
+          "close",
+          "blockers",
+          "positions"
+        ],
+        "title": "DayOut",
+        "type": "object"
+      },
       "DecideAnnouncement": {
         "additionalProperties": false,
         "properties": {
@@ -3032,7 +3195,7 @@
           },
           "positions": {
             "items": {
-              "$ref": "#/components/schemas/PositionOut"
+              "$ref": "#/components/schemas/app__modules__dealing__api__PositionOut"
             },
             "title": "Positions",
             "type": "array"
@@ -4010,6 +4173,47 @@
           "details"
         ],
         "title": "EventView",
+        "type": "object"
+      },
+      "ExceptionOut": {
+        "additionalProperties": false,
+        "properties": {
+          "difference": {
+            "$ref": "#/components/schemas/MoneyOut"
+          },
+          "kind": {
+            "enum": [
+              "missing_in_ledger",
+              "missing_in_statement",
+              "amount_differs",
+              "direction_differs",
+              "duplicate_reference"
+            ],
+            "title": "Kind",
+            "type": "string"
+          },
+          "movements": {
+            "items": {
+              "$ref": "#/components/schemas/app__modules__reconciliation__api__MovementOut"
+            },
+            "title": "Movements",
+            "type": "array"
+          },
+          "statement_lines": {
+            "items": {
+              "$ref": "#/components/schemas/LineOut"
+            },
+            "title": "Statement Lines",
+            "type": "array"
+          }
+        },
+        "required": [
+          "kind",
+          "difference",
+          "statement_lines",
+          "movements"
+        ],
+        "title": "ExceptionOut",
         "type": "object"
       },
       "Facets": {
@@ -5264,6 +5468,61 @@
         "title": "LimitsOut",
         "type": "object"
       },
+      "LineOut": {
+        "additionalProperties": false,
+        "description": "A statement line still unpaired. `counterparty_hint` is the bank's narrative.",
+        "properties": {
+          "amount": {
+            "$ref": "#/components/schemas/MoneyOut"
+          },
+          "counterparty_hint": {
+            "title": "Counterparty Hint",
+            "type": "string"
+          },
+          "direction": {
+            "enum": [
+              "in",
+              "out"
+            ],
+            "title": "Direction",
+            "type": "string"
+          },
+          "id": {
+            "maxLength": 20,
+            "minLength": 20,
+            "pattern": "^[-0-9A-Z_a-z]{20}$",
+            "title": "Id",
+            "type": "string"
+          },
+          "reference": {
+            "title": "Reference",
+            "type": "string"
+          },
+          "suggested_movements": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Suggested Movements",
+            "type": "array"
+          },
+          "value_date": {
+            "format": "date",
+            "title": "Value Date",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "value_date",
+          "direction",
+          "amount",
+          "reference",
+          "counterparty_hint",
+          "suggested_movements"
+        ],
+        "title": "LineOut",
+        "type": "object"
+      },
       "LinkView": {
         "additionalProperties": false,
         "properties": {
@@ -5776,29 +6035,6 @@
         "title": "MarkRead",
         "type": "object"
       },
-      "MatchIn": {
-        "additionalProperties": false,
-        "properties": {
-          "outcome": {
-            "const": "matched",
-            "title": "Outcome",
-            "type": "string"
-          },
-          "statement_line_id": {
-            "maxLength": 20,
-            "minLength": 20,
-            "pattern": "^[-0-9A-Z_a-z]{20}$",
-            "title": "Statement Line Id",
-            "type": "string"
-          }
-        },
-        "required": [
-          "outcome",
-          "statement_line_id"
-        ],
-        "title": "MatchIn",
-        "type": "object"
-      },
       "MaturityChoice": {
         "additionalProperties": false,
         "properties": {
@@ -5947,6 +6183,29 @@
         "title": "MobileMoneyPayment",
         "type": "object"
       },
+      "MoneyOut": {
+        "additionalProperties": false,
+        "properties": {
+          "currency": {
+            "enum": [
+              "UGX",
+              "USD"
+            ],
+            "title": "Currency",
+            "type": "string"
+          },
+          "minor": {
+            "title": "Minor",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "minor",
+          "currency"
+        ],
+        "title": "MoneyOut",
+        "type": "object"
+      },
       "MoneyView": {
         "additionalProperties": false,
         "properties": {
@@ -5968,6 +6227,90 @@
           "currency"
         ],
         "title": "MoneyView",
+        "type": "object"
+      },
+      "MonthOut": {
+        "additionalProperties": false,
+        "properties": {
+          "due_on": {
+            "format": "date",
+            "title": "Due On",
+            "type": "string"
+          },
+          "month": {
+            "title": "Month",
+            "type": "string"
+          },
+          "outstanding": {
+            "$ref": "#/components/schemas/AmountOut"
+          },
+          "overdue": {
+            "title": "Overdue",
+            "type": "boolean"
+          },
+          "remitted": {
+            "$ref": "#/components/schemas/AmountOut"
+          },
+          "waiting": {
+            "$ref": "#/components/schemas/AmountOut"
+          },
+          "withheld": {
+            "$ref": "#/components/schemas/AmountOut"
+          }
+        },
+        "required": [
+          "month",
+          "withheld",
+          "remitted",
+          "waiting",
+          "outstanding",
+          "due_on",
+          "overdue"
+        ],
+        "title": "MonthOut",
+        "type": "object"
+      },
+      "MonthReportOut": {
+        "additionalProperties": false,
+        "properties": {
+          "currency": {
+            "$ref": "#/components/schemas/Currency"
+          },
+          "gross": {
+            "$ref": "#/components/schemas/AmountOut"
+          },
+          "month": {
+            "title": "Month",
+            "type": "string"
+          },
+          "payees": {
+            "items": {
+              "$ref": "#/components/schemas/PayeeOut"
+            },
+            "title": "Payees",
+            "type": "array"
+          },
+          "summary": {
+            "$ref": "#/components/schemas/MonthOut"
+          },
+          "tins_shown": {
+            "title": "Tins Shown",
+            "type": "boolean"
+          },
+          "withheld": {
+            "$ref": "#/components/schemas/AmountOut"
+          }
+        },
+        "required": [
+          "month",
+          "currency",
+          "gross",
+          "withheld",
+          "summary",
+          "payees",
+          "tins_shown"
+        ],
+        "title": "MonthReportOut",
         "type": "object"
       },
       "MonthView": {
@@ -6080,118 +6423,6 @@
           "reason"
         ],
         "title": "MovementIn",
-        "type": "object"
-      },
-      "MovementOut": {
-        "additionalProperties": false,
-        "properties": {
-          "allowed": {
-            "items": {
-              "$ref": "#/components/schemas/Step"
-            },
-            "title": "Allowed",
-            "type": "array"
-          },
-          "amount": {
-            "$ref": "#/components/schemas/AmountOut"
-          },
-          "bank_reference": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Bank Reference"
-          },
-          "decided_at": {
-            "anyOf": [
-              {
-                "format": "date-time",
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Decided At"
-          },
-          "decided_by": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Decided By"
-          },
-          "decision_reason": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Decision Reason"
-          },
-          "direction": {
-            "$ref": "#/components/schemas/Direction"
-          },
-          "id": {
-            "title": "Id",
-            "type": "string"
-          },
-          "proposed_at": {
-            "format": "date-time",
-            "title": "Proposed At",
-            "type": "string"
-          },
-          "proposed_by": {
-            "title": "Proposed By",
-            "type": "string"
-          },
-          "reason": {
-            "title": "Reason",
-            "type": "string"
-          },
-          "status": {
-            "$ref": "#/components/schemas/MovementStatus"
-          },
-          "value_date": {
-            "anyOf": [
-              {
-                "format": "date",
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Value Date"
-          }
-        },
-        "required": [
-          "id",
-          "direction",
-          "amount",
-          "bank_reference",
-          "value_date",
-          "reason",
-          "status",
-          "proposed_by",
-          "proposed_at",
-          "decided_by",
-          "decided_at",
-          "decision_reason",
-          "allowed"
-        ],
-        "title": "MovementOut",
         "type": "object"
       },
       "MovementStatus": {
@@ -6950,6 +7181,64 @@
         "title": "PayOutRequest",
         "type": "object"
       },
+      "PayeeOut": {
+        "additionalProperties": false,
+        "properties": {
+          "account_number": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Account Number"
+          },
+          "client_id": {
+            "title": "Client Id",
+            "type": "string"
+          },
+          "gross": {
+            "$ref": "#/components/schemas/AmountOut"
+          },
+          "name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name"
+          },
+          "tax": {
+            "$ref": "#/components/schemas/AmountOut"
+          },
+          "tin": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tin"
+          }
+        },
+        "required": [
+          "client_id",
+          "name",
+          "account_number",
+          "tin",
+          "gross",
+          "tax"
+        ],
+        "title": "PayeeOut",
+        "type": "object"
+      },
       "PaymentView": {
         "additionalProperties": false,
         "properties": {
@@ -7433,56 +7722,66 @@
         "title": "PlanStatus",
         "type": "string"
       },
-      "PositionOut": {
+      "PotOut": {
         "additionalProperties": false,
+        "description": "A place real money sits, with its last imported statement day.",
         "properties": {
-          "bills_held": {
-            "$ref": "#/components/schemas/AmountOut"
-          },
-          "clients_owed": {
-            "$ref": "#/components/schemas/AmountOut"
-          },
-          "cover": {
-            "$ref": "#/components/schemas/Cover"
-          },
-          "discount_only": {
-            "title": "Discount Only",
-            "type": "boolean"
-          },
-          "face_held": {
-            "$ref": "#/components/schemas/AmountOut"
-          },
-          "lot_size": {
-            "$ref": "#/components/schemas/AmountOut"
-          },
-          "on_order": {
-            "$ref": "#/components/schemas/AmountOut"
-          },
-          "product_code": {
-            "title": "Product Code",
+          "account_reference": {
+            "title": "Account Reference",
             "type": "string"
           },
-          "product_name": {
-            "title": "Product Name",
+          "currency": {
+            "enum": [
+              "UGX",
+              "USD"
+            ],
+            "title": "Currency",
             "type": "string"
           },
-          "to_buy": {
-            "$ref": "#/components/schemas/AmountOut"
+          "last_closing": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/MoneyOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "last_statement_date": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Statement Date"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "source": {
+            "enum": [
+              "iotec",
+              "bank"
+            ],
+            "title": "Source",
+            "type": "string"
           }
         },
         "required": [
-          "product_code",
-          "product_name",
-          "discount_only",
-          "lot_size",
-          "clients_owed",
-          "bills_held",
-          "to_buy",
-          "on_order",
-          "face_held",
-          "cover"
+          "source",
+          "account_reference",
+          "name",
+          "currency",
+          "last_statement_date",
+          "last_closing"
         ],
-        "title": "PositionOut",
+        "title": "PotOut",
         "type": "object"
       },
       "PreferenceChange": {
@@ -8523,6 +8822,22 @@
         "title": "ReasonBody",
         "type": "object"
       },
+      "ReasonIn": {
+        "additionalProperties": false,
+        "properties": {
+          "reason": {
+            "maxLength": 500,
+            "minLength": 1,
+            "title": "Reason",
+            "type": "string"
+          }
+        },
+        "required": [
+          "reason"
+        ],
+        "title": "ReasonIn",
+        "type": "object"
+      },
       "ReceiptLinkOut": {
         "additionalProperties": false,
         "properties": {
@@ -8766,6 +9081,196 @@
         ],
         "title": "ReleaseOut",
         "type": "object"
+      },
+      "RemittanceIn": {
+        "additionalProperties": false,
+        "properties": {
+          "amount_minor": {
+            "maximum": 1000000000000000.0,
+            "minimum": 1.0,
+            "title": "Amount Minor",
+            "type": "integer"
+          },
+          "bank_reference": {
+            "maxLength": 100,
+            "minLength": 1,
+            "title": "Bank Reference",
+            "type": "string"
+          },
+          "currency": {
+            "$ref": "#/components/schemas/Currency"
+          },
+          "month": {
+            "pattern": "^[0-9]{4}-[0-9]{2}$",
+            "title": "Month",
+            "type": "string"
+          },
+          "note": {
+            "maxLength": 500,
+            "minLength": 1,
+            "title": "Note",
+            "type": "string"
+          },
+          "paid_on": {
+            "format": "date",
+            "title": "Paid On",
+            "type": "string"
+          },
+          "ura_reference": {
+            "maxLength": 100,
+            "minLength": 1,
+            "title": "Ura Reference",
+            "type": "string"
+          }
+        },
+        "required": [
+          "currency",
+          "month",
+          "amount_minor",
+          "ura_reference",
+          "bank_reference",
+          "paid_on",
+          "note"
+        ],
+        "title": "RemittanceIn",
+        "type": "object"
+      },
+      "RemittanceOut": {
+        "additionalProperties": false,
+        "properties": {
+          "allowed": {
+            "items": {
+              "$ref": "#/components/schemas/app__modules__tax__api__Step"
+            },
+            "title": "Allowed",
+            "type": "array"
+          },
+          "amount": {
+            "$ref": "#/components/schemas/AmountOut"
+          },
+          "bank_reference": {
+            "title": "Bank Reference",
+            "type": "string"
+          },
+          "decided_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Decided At"
+          },
+          "decided_by": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Decided By"
+          },
+          "decided_by_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Decided By Name"
+          },
+          "decision_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Decision Reason"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "month": {
+            "title": "Month",
+            "type": "string"
+          },
+          "note": {
+            "title": "Note",
+            "type": "string"
+          },
+          "paid_on": {
+            "format": "date",
+            "title": "Paid On",
+            "type": "string"
+          },
+          "proposed_at": {
+            "format": "date-time",
+            "title": "Proposed At",
+            "type": "string"
+          },
+          "proposed_by": {
+            "title": "Proposed By",
+            "type": "string"
+          },
+          "proposed_by_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Proposed By Name"
+          },
+          "status": {
+            "$ref": "#/components/schemas/RemittanceStatus"
+          },
+          "ura_reference": {
+            "title": "Ura Reference",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "month",
+          "amount",
+          "ura_reference",
+          "bank_reference",
+          "paid_on",
+          "note",
+          "status",
+          "proposed_by",
+          "proposed_by_name",
+          "proposed_at",
+          "decided_by",
+          "decided_by_name",
+          "decided_at",
+          "decision_reason",
+          "allowed"
+        ],
+        "title": "RemittanceOut",
+        "type": "object"
+      },
+      "RemittanceStatus": {
+        "enum": [
+          "proposed",
+          "approved",
+          "declined"
+        ],
+        "title": "RemittanceStatus",
+        "type": "string"
       },
       "Removal": {
         "additionalProperties": false,
@@ -9186,6 +9691,7 @@
                 "dealing_desk.view",
                 "dealing_orders.change",
                 "finance.view",
+                "tax_remittances.change",
                 "products.view",
                 "rates.view",
                 "rates.change",
@@ -9321,7 +9827,7 @@
         "properties": {
           "allowed": {
             "items": {
-              "$ref": "#/components/schemas/Step"
+              "$ref": "#/components/schemas/app__modules__dealing__buffer_api__Step"
             },
             "title": "Allowed",
             "type": "array"
@@ -11648,6 +12154,7 @@
                 "dealing_desk.view",
                 "dealing_orders.change",
                 "finance.view",
+                "tax_remittances.change",
                 "products.view",
                 "rates.view",
                 "rates.change",
@@ -11769,6 +12276,56 @@
         "title": "StatementLineOut",
         "type": "object"
       },
+      "StatementOut": {
+        "additionalProperties": false,
+        "properties": {
+          "account_reference": {
+            "title": "Account Reference",
+            "type": "string"
+          },
+          "business_date": {
+            "format": "date",
+            "title": "Business Date",
+            "type": "string"
+          },
+          "closing": {
+            "$ref": "#/components/schemas/MoneyOut"
+          },
+          "id": {
+            "maxLength": 20,
+            "minLength": 20,
+            "pattern": "^[-0-9A-Z_a-z]{20}$",
+            "title": "Id",
+            "type": "string"
+          },
+          "line_count": {
+            "title": "Line Count",
+            "type": "integer"
+          },
+          "opening": {
+            "$ref": "#/components/schemas/MoneyOut"
+          },
+          "source": {
+            "enum": [
+              "iotec",
+              "bank"
+            ],
+            "title": "Source",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "source",
+          "account_reference",
+          "business_date",
+          "opening",
+          "closing",
+          "line_count"
+        ],
+        "title": "StatementOut",
+        "type": "object"
+      },
       "StatementRequest": {
         "additionalProperties": false,
         "properties": {
@@ -11789,16 +12346,6 @@
         ],
         "title": "StatementRequest",
         "type": "object"
-      },
-      "Step": {
-        "enum": [
-          "approve",
-          "send_back",
-          "decline",
-          "withdraw"
-        ],
-        "title": "Step",
-        "type": "string"
       },
       "StrandedPayoutOut": {
         "additionalProperties": false,
@@ -11952,6 +12499,39 @@
           "open_lift"
         ],
         "title": "SuppressionView",
+        "type": "object"
+      },
+      "TaxScreenOut": {
+        "additionalProperties": false,
+        "properties": {
+          "currency": {
+            "$ref": "#/components/schemas/Currency"
+          },
+          "held_for_ura": {
+            "$ref": "#/components/schemas/AmountOut"
+          },
+          "months": {
+            "items": {
+              "$ref": "#/components/schemas/MonthOut"
+            },
+            "title": "Months",
+            "type": "array"
+          },
+          "remittances": {
+            "items": {
+              "$ref": "#/components/schemas/RemittanceOut"
+            },
+            "title": "Remittances",
+            "type": "array"
+          }
+        },
+        "required": [
+          "currency",
+          "held_for_ura",
+          "months",
+          "remittances"
+        ],
+        "title": "TaxScreenOut",
         "type": "object"
       },
       "TeamMemberView": {
@@ -12779,6 +13359,180 @@
         "title": "ComplaintSummary",
         "type": "object"
       },
+      "app__modules__dealing__api__PositionOut": {
+        "additionalProperties": false,
+        "properties": {
+          "bills_held": {
+            "$ref": "#/components/schemas/AmountOut"
+          },
+          "clients_owed": {
+            "$ref": "#/components/schemas/AmountOut"
+          },
+          "cover": {
+            "$ref": "#/components/schemas/Cover"
+          },
+          "discount_only": {
+            "title": "Discount Only",
+            "type": "boolean"
+          },
+          "face_held": {
+            "$ref": "#/components/schemas/AmountOut"
+          },
+          "lot_size": {
+            "$ref": "#/components/schemas/AmountOut"
+          },
+          "on_order": {
+            "$ref": "#/components/schemas/AmountOut"
+          },
+          "product_code": {
+            "title": "Product Code",
+            "type": "string"
+          },
+          "product_name": {
+            "title": "Product Name",
+            "type": "string"
+          },
+          "to_buy": {
+            "$ref": "#/components/schemas/AmountOut"
+          }
+        },
+        "required": [
+          "product_code",
+          "product_name",
+          "discount_only",
+          "lot_size",
+          "clients_owed",
+          "bills_held",
+          "to_buy",
+          "on_order",
+          "face_held",
+          "cover"
+        ],
+        "title": "PositionOut",
+        "type": "object"
+      },
+      "app__modules__dealing__buffer_api__MovementOut": {
+        "additionalProperties": false,
+        "properties": {
+          "allowed": {
+            "items": {
+              "$ref": "#/components/schemas/app__modules__dealing__buffer_api__Step"
+            },
+            "title": "Allowed",
+            "type": "array"
+          },
+          "amount": {
+            "$ref": "#/components/schemas/AmountOut"
+          },
+          "bank_reference": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Bank Reference"
+          },
+          "decided_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Decided At"
+          },
+          "decided_by": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Decided By"
+          },
+          "decision_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Decision Reason"
+          },
+          "direction": {
+            "$ref": "#/components/schemas/Direction"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "proposed_at": {
+            "format": "date-time",
+            "title": "Proposed At",
+            "type": "string"
+          },
+          "proposed_by": {
+            "title": "Proposed By",
+            "type": "string"
+          },
+          "reason": {
+            "title": "Reason",
+            "type": "string"
+          },
+          "status": {
+            "$ref": "#/components/schemas/MovementStatus"
+          },
+          "value_date": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Value Date"
+          }
+        },
+        "required": [
+          "id",
+          "direction",
+          "amount",
+          "bank_reference",
+          "value_date",
+          "reason",
+          "status",
+          "proposed_by",
+          "proposed_at",
+          "decided_by",
+          "decided_at",
+          "decision_reason",
+          "allowed"
+        ],
+        "title": "MovementOut",
+        "type": "object"
+      },
+      "app__modules__dealing__buffer_api__Step": {
+        "enum": [
+          "approve",
+          "send_back",
+          "decline",
+          "withdraw"
+        ],
+        "title": "Step",
+        "type": "string"
+      },
       "app__modules__goals__api__PlanView": {
         "additionalProperties": false,
         "description": "An estimate at today's rates, after tax. Never a promise.",
@@ -12875,6 +13629,195 @@
         "title": "Amount",
         "type": "object"
       },
+      "app__modules__payments__routes__MatchIn": {
+        "additionalProperties": false,
+        "properties": {
+          "outcome": {
+            "const": "matched",
+            "title": "Outcome",
+            "type": "string"
+          },
+          "statement_line_id": {
+            "maxLength": 20,
+            "minLength": 20,
+            "pattern": "^[-0-9A-Z_a-z]{20}$",
+            "title": "Statement Line Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "outcome",
+          "statement_line_id"
+        ],
+        "title": "MatchIn",
+        "type": "object"
+      },
+      "app__modules__reconciliation__api__MatchIn": {
+        "additionalProperties": false,
+        "properties": {
+          "entry_id": {
+            "maxLength": 20,
+            "minLength": 20,
+            "pattern": "^[-0-9A-Z_a-z]{20}$",
+            "title": "Entry Id",
+            "type": "string"
+          },
+          "line_no": {
+            "minimum": 1.0,
+            "title": "Line No",
+            "type": "integer"
+          },
+          "reason": {
+            "maxLength": 500,
+            "minLength": 1,
+            "title": "Reason",
+            "type": "string"
+          },
+          "statement_line_id": {
+            "maxLength": 20,
+            "minLength": 20,
+            "pattern": "^[-0-9A-Z_a-z]{20}$",
+            "title": "Statement Line Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "statement_line_id",
+          "entry_id",
+          "line_no",
+          "reason"
+        ],
+        "title": "MatchIn",
+        "type": "object"
+      },
+      "app__modules__reconciliation__api__MovementOut": {
+        "additionalProperties": false,
+        "description": "A ledger movement on the pot still unpaired. `id` is \"<entry ID>:<line number>\".",
+        "properties": {
+          "amount": {
+            "$ref": "#/components/schemas/MoneyOut"
+          },
+          "direction": {
+            "enum": [
+              "in",
+              "out"
+            ],
+            "title": "Direction",
+            "type": "string"
+          },
+          "effective_date": {
+            "format": "date",
+            "title": "Effective Date",
+            "type": "string"
+          },
+          "entry_id": {
+            "maxLength": 20,
+            "minLength": 20,
+            "pattern": "^[-0-9A-Z_a-z]{20}$",
+            "title": "Entry Id",
+            "type": "string"
+          },
+          "entry_type": {
+            "title": "Entry Type",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "line_no": {
+            "title": "Line No",
+            "type": "integer"
+          },
+          "reference": {
+            "title": "Reference",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "entry_id",
+          "line_no",
+          "effective_date",
+          "direction",
+          "amount",
+          "reference",
+          "entry_type"
+        ],
+        "title": "MovementOut",
+        "type": "object"
+      },
+      "app__modules__reconciliation__api__PositionOut": {
+        "additionalProperties": false,
+        "properties": {
+          "account_reference": {
+            "title": "Account Reference",
+            "type": "string"
+          },
+          "exceptions": {
+            "items": {
+              "$ref": "#/components/schemas/ExceptionOut"
+            },
+            "title": "Exceptions",
+            "type": "array"
+          },
+          "ledger_closing": {
+            "$ref": "#/components/schemas/MoneyOut"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "open_exceptions_count": {
+            "title": "Open Exceptions Count",
+            "type": "integer"
+          },
+          "open_exceptions_total": {
+            "$ref": "#/components/schemas/MoneyOut"
+          },
+          "source": {
+            "enum": [
+              "iotec",
+              "bank"
+            ],
+            "title": "Source",
+            "type": "string"
+          },
+          "statement_closing": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/MoneyOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "unexplained": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/MoneyOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "source",
+          "account_reference",
+          "name",
+          "statement_closing",
+          "ledger_closing",
+          "open_exceptions_total",
+          "open_exceptions_count",
+          "unexplained",
+          "exceptions"
+        ],
+        "title": "PositionOut",
+        "type": "object"
+      },
       "app__modules__support__api__Amount": {
         "additionalProperties": false,
         "description": "An amount in the smallest unit of its currency: whole shillings, or cents.",
@@ -12951,6 +13894,14 @@
         ],
         "title": "ComplaintSummary",
         "type": "object"
+      },
+      "app__modules__tax__api__Step": {
+        "enum": [
+          "approve",
+          "decline"
+        ],
+        "title": "Step",
+        "type": "string"
       }
     }
   },
@@ -30130,14 +31081,14 @@
               "schema": {
                 "discriminator": {
                   "mapping": {
-                    "matched": "#/components/schemas/MatchIn",
+                    "matched": "#/components/schemas/app__modules__payments__routes__MatchIn",
                     "not_matched": "#/components/schemas/NotMatchedIn"
                   },
                   "propertyName": "outcome"
                 },
                 "oneOf": [
                   {
-                    "$ref": "#/components/schemas/MatchIn"
+                    "$ref": "#/components/schemas/app__modules__payments__routes__MatchIn"
                   },
                   {
                     "$ref": "#/components/schemas/NotMatchedIn"
@@ -32796,6 +33747,780 @@
         ]
       }
     },
+    "/staff/reconciliation/days/{day}": {
+      "get": {
+        "description": "Each pot at the end of the day, with every exception still open on it.",
+        "operationId": "get_day_staff_reconciliation_days__day__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "day",
+            "required": true,
+            "schema": {
+              "format": "date",
+              "title": "Day",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DayOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          }
+        },
+        "summary": "Get Day",
+        "tags": [
+          "staff reconciliation"
+        ]
+      }
+    },
+    "/staff/reconciliation/days/{day}/approve": {
+      "post": {
+        "description": "The second signature, by someone who neither prepared the close nor imported one of the\nday's statements. It closes the ledger through the day. 409 `close_not_prepared`,\n`close_needs_second_person`, `close_needs_someone_who_did_not_import` or\n`close_changed_since_prepared`, after which the close is sent back to be prepared again.",
+        "operationId": "approve_staff_reconciliation_days__day__approve_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "day",
+            "required": true,
+            "schema": {
+              "format": "date",
+              "title": "Day",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CloseOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          }
+        },
+        "summary": "Approve",
+        "tags": [
+          "staff reconciliation"
+        ]
+      }
+    },
+    "/staff/reconciliation/days/{day}/prepare": {
+      "post": {
+        "description": "The first signature. 409 with the first thing that blocks the close.",
+        "operationId": "prepare_staff_reconciliation_days__day__prepare_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "day",
+            "required": true,
+            "schema": {
+              "format": "date",
+              "title": "Day",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CloseOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          }
+        },
+        "summary": "Prepare",
+        "tags": [
+          "staff reconciliation"
+        ]
+      }
+    },
+    "/staff/reconciliation/days/{day}/refresh": {
+      "post": {
+        "description": "Bring in the ledger's movements up to the day and pair what the records and references\npair. Safe to run again.",
+        "operationId": "refresh_staff_reconciliation_days__day__refresh_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "day",
+            "required": true,
+            "schema": {
+              "format": "date",
+              "title": "Day",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          }
+        },
+        "summary": "Refresh",
+        "tags": [
+          "staff reconciliation"
+        ]
+      }
+    },
+    "/staff/reconciliation/days/{day}/send-back": {
+      "post": {
+        "description": "Decline or withdraw a prepared close, with a reason, so it can be prepared again.",
+        "operationId": "send_back_staff_reconciliation_days__day__send_back_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "day",
+            "required": true,
+            "schema": {
+              "format": "date",
+              "title": "Day",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReasonIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          }
+        },
+        "summary": "Send Back",
+        "tags": [
+          "staff reconciliation"
+        ]
+      }
+    },
+    "/staff/reconciliation/matches": {
+      "post": {
+        "description": "A person pairs a line with a movement, with a reason. 409 `line_already_matched`,\n`movement_already_matched`, `match_not_found` or `match_not_same_money`.",
+        "operationId": "match_by_hand_staff_reconciliation_matches_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/app__modules__reconciliation__api__MatchIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          }
+        },
+        "summary": "Match By Hand",
+        "tags": [
+          "staff reconciliation"
+        ]
+      }
+    },
+    "/staff/reconciliation/pots": {
+      "get": {
+        "description": "Every pot closed each day, with its last imported statement.",
+        "operationId": "pots_staff_reconciliation_pots_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/PotOut"
+                  },
+                  "title": "Response Pots Staff Reconciliation Pots Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          }
+        },
+        "summary": "Pots",
+        "tags": [
+          "staff reconciliation"
+        ]
+      }
+    },
+    "/staff/reconciliation/statements": {
+      "get": {
+        "description": "One pot's statements in a range of days, at most 100, oldest first. 422\n`date_range_reversed` when `date_to` is before `date_from`.",
+        "operationId": "list_statements_staff_reconciliation_statements_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "source",
+            "required": true,
+            "schema": {
+              "enum": [
+                "iotec",
+                "bank"
+              ],
+              "title": "Source",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "account_reference",
+            "required": true,
+            "schema": {
+              "maxLength": 40,
+              "minLength": 1,
+              "title": "Account Reference",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "date_from",
+            "required": true,
+            "schema": {
+              "format": "date",
+              "title": "Date From",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "date_to",
+            "required": true,
+            "schema": {
+              "format": "date",
+              "title": "Date To",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/StatementOut"
+                  },
+                  "title": "Response List Statements Staff Reconciliation Statements Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          }
+        },
+        "summary": "List Statements",
+        "tags": [
+          "staff reconciliation"
+        ]
+      },
+      "post": {
+        "description": "Import one pot's statement for one ended day, whole or not at all.\n\nThe balances are as the statement prints them, such as `1,500,000`. 422 names the problem\nand, for a row, its number, never its contents. 409 `statement_already_imported`,\n`statement_day_out_of_order`, `statement_opening_balance_differs` or\n`statement_day_not_over`.",
+        "operationId": "import_statement_staff_reconciliation_statements_post",
+        "requestBody": {
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_import_statement_staff_reconciliation_statements_post"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StatementOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          }
+        },
+        "summary": "Import Statement",
+        "tags": [
+          "staff reconciliation"
+        ]
+      }
+    },
     "/staff/session": {
       "get": {
         "operationId": "staff_session_staff_session_get",
@@ -34088,6 +35813,579 @@
         "summary": "Retire Saved Reply",
         "tags": [
           "staff support"
+        ]
+      }
+    },
+    "/staff/tax": {
+      "get": {
+        "operationId": "get_tax_staff_tax_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "currency",
+            "required": false,
+            "schema": {
+              "$ref": "#/components/schemas/Currency",
+              "default": "UGX"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TaxScreenOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          }
+        },
+        "summary": "Get Tax",
+        "tags": [
+          "tax"
+        ]
+      }
+    },
+    "/staff/tax/months/{month}": {
+      "get": {
+        "operationId": "get_month_staff_tax_months__month__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "month",
+            "required": true,
+            "schema": {
+              "pattern": "^[0-9]{4}-[0-9]{2}$",
+              "title": "Month",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "currency",
+            "required": false,
+            "schema": {
+              "$ref": "#/components/schemas/Currency",
+              "default": "UGX"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MonthReportOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          }
+        },
+        "summary": "One month's withholding, client by client",
+        "tags": [
+          "tax"
+        ]
+      }
+    },
+    "/staff/tax/months/{month}/payees.csv": {
+      "get": {
+        "operationId": "export_month_staff_tax_months__month__payees_csv_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "month",
+            "required": true,
+            "schema": {
+              "pattern": "^[0-9]{4}-[0-9]{2}$",
+              "title": "Month",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "currency",
+            "required": false,
+            "schema": {
+              "$ref": "#/components/schemas/Currency",
+              "default": "UGX"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "text/csv": {}
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          }
+        },
+        "summary": "One month's withholding as a CSV file for URA's return",
+        "tags": [
+          "tax"
+        ]
+      }
+    },
+    "/staff/tax/remittances": {
+      "post": {
+        "operationId": "propose_remittance_staff_tax_remittances_post",
+        "parameters": [
+          {
+            "description": "A value the caller chooses once per intended action and sends again on every retry of it. Pattern: `[A-Za-z0-9._:-]{8,128}`.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "A value the caller chooses once per intended action and sends again on every retry of it. Pattern: `[A-Za-z0-9._:-]{8,128}`.",
+              "title": "Idempotency-Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RemittanceIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TaxScreenOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          }
+        },
+        "summary": "Record a payment to URA for a second person to approve",
+        "tags": [
+          "tax"
+        ]
+      }
+    },
+    "/staff/tax/remittances/{remittance_id}/approve": {
+      "post": {
+        "operationId": "approve_remittance_staff_tax_remittances__remittance_id__approve_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "remittance_id",
+            "required": true,
+            "schema": {
+              "title": "Remittance Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "A value the caller chooses once per intended action and sends again on every retry of it. Pattern: `[A-Za-z0-9._:-]{8,128}`.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "A value the caller chooses once per intended action and sends again on every retry of it. Pattern: `[A-Za-z0-9._:-]{8,128}`.",
+              "title": "Idempotency-Key"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TaxScreenOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          }
+        },
+        "summary": "Approve a payment to URA as the second person, which posts it",
+        "tags": [
+          "tax"
+        ]
+      }
+    },
+    "/staff/tax/remittances/{remittance_id}/decline": {
+      "post": {
+        "operationId": "decline_remittance_staff_tax_remittances__remittance_id__decline_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "remittance_id",
+            "required": true,
+            "schema": {
+              "title": "Remittance Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "A value the caller chooses once per intended action and sends again on every retry of it. Pattern: `[A-Za-z0-9._:-]{8,128}`.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "A value the caller chooses once per intended action and sends again on every retry of it. Pattern: `[A-Za-z0-9._:-]{8,128}`.",
+              "title": "Idempotency-Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DeclineIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TaxScreenOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          }
+        },
+        "summary": "Decline a payment to URA",
+        "tags": [
+          "tax"
         ]
       }
     },

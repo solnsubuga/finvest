@@ -234,7 +234,7 @@ function LastColumn({ investment }: { investment: Investment }) {
   if (investment.status === "cancelled") return <span className="text-muted">Not paid in time</span>;
   // The early withdrawal's payout is followed on Money Movement: this view does not carry it.
   if (investment.status === "withdrawn") return <span>Withdrawn early</span>;
-  if (investment.status === "unwound") return <span className="text-muted">Undone, the money waits with the client</span>;
+  if (investment.status === "unwound") return <span className="text-muted">Undone, the money is waiting to start or to be refunded</span>;
   if (investment.status === "matured") {
     if (investment.rolledIntoId) return <span>Rolled over into a new term</span>;
     if (investment.payoutRefusal) {

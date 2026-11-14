@@ -17,7 +17,8 @@ import { formatExact } from "./format.ts";
  * The rules here stand in for the backend's: the screen itself decides nothing.
  */
 
-export type StubCase = "sample" | "empty" | "error";
+/** `unsorted` lists the queue as the real list does today, without saying which check each waits for. */
+export type StubCase = "sample" | "empty" | "error" | "unsorted";
 
 const ugx = (minor: number): Amount => ({ minor, currency: "UGX" });
 
@@ -140,7 +141,7 @@ function receiptImage(stored: Stored): string {
 }
 
 export function createStubBankTransfersApi(me: string, delayMs = 150, which: StubCase = "sample", now = () => new Date()): BankTransfersApi {
-  const transfers = which === "sample" ? sample(now(), me) : [];
+  const transfers = which === "sample" || which === "unsorted" ? sample(now(), me) : [];
   const used = new Set<string>();
   const replies = new Map<string, TransferDetail>();
 
@@ -220,7 +221,7 @@ export function createStubBankTransfersApi(me: string, delayMs = 150, which: Stu
           .filter((stored) => stored.status === "in_review")
           .map((stored) => {
             const { id, amount, sentOn, bankName, submittedAt } = detail(stored);
-            return { id, amount, sentOn, bankName, submittedAt, stage: stage(stored) };
+            return { id, amount, sentOn, bankName, submittedAt, stage: which === "unsorted" ? ("in_review" as const) : stage(stored) };
           })
           .sort((a, b) => b.submittedAt.localeCompare(a.submittedAt)),
       ),
