@@ -22,7 +22,7 @@ def settings(**overrides):
         "SITE_DOMAINS": "finvestug.com,www.finvestug.com",
         "BACKEND_IMAGE": f"ghcr.io/solnsubuga/finvest-backend@{DIGEST}",
         "CONSOLE_IMAGE": f"ghcr.io/solnsubuga/finvest-console@{DIGEST}",
-        "APP_IMAGE": f"ghcr.io/solnsubuga/finvest-app@{DIGEST}",
+        "APP_IMAGE": f"ghcr.io/solnsubuga/finvest-client@{DIGEST}",
         "SITE_IMAGE": f"ghcr.io/solnsubuga/finvest-site@{DIGEST}",
         "DATABASE_HOST": "private-finvest-production.db.ondigitalocean.com",
         "DATABASE_PORT": "25060",

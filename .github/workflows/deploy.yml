@@ -73,7 +73,7 @@ jobs:
           {
             echo "backend=ghcr.io/${REPOSITORY,,}-backend"
             echo "console=ghcr.io/${REPOSITORY,,}-console"
-            echo "app=ghcr.io/${REPOSITORY,,}-app"
+            echo "app=ghcr.io/${REPOSITORY,,}-client"
             echo "site=ghcr.io/${REPOSITORY,,}-site"
             echo "site_url=https://${domains[0]:-}"
             echo "app_url=https://$APP_DOMAIN"
