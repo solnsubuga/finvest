@@ -113,7 +113,7 @@ Not decided yet: nothing here pays interest out. Accrued interest sits in `clien
 
 On its maturity date a fixed-term investment has earned its last day. The scheduler fires `investments.mature` at 01:00 Kampala time, after the interest run, and the worker closes every active investment whose maturity date has come. Each is closed in its own savepoint, in one transaction with all its money moves. If the interest run has not reached the last days, they are posted first. Nothing is paid past the maturity date, however late the run is.
 
-The client chooses what happens at maturity, from review and confirm up to the day before maturity. Rolling over is the default. Paying out needs one of the client's own approved payout destinations (`payouts.destinations.usable_destination`). The database refuses a change on or after the maturity date, by its own clock. Only the client can change the choice. Staff cannot.
+The client chooses what happens at maturity, from review and confirm up to the day before maturity. Rolling over is the default. To give them time, the scheduler fires `investments.tell_maturing` at 08:15 Kampala time, and every active investment maturing within the next seven days, and not on the day itself, gets one `investment_maturing` notice. It is keyed by the investment, so a missed morning is caught up the next one and nobody is told twice. An investment with an early withdrawal requested is not told. Paying out needs one of the client's own approved payout destinations (`payouts.destinations.usable_destination`). The database refuses a change on or after the maturity date, by its own clock. Only the client can change the choice. Staff cannot.
 
 | Choice | What the run does | Ledger entry |
 | --- | --- | --- |

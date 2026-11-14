@@ -42,6 +42,7 @@ CANCEL_UNPAID_KIND = "investments.cancel_unpaid"
 ACCRUE_KIND = "investments.accrue_interest"
 MATURE_KIND = "investments.mature"
 TELL_EARNINGS_KIND = "investments.tell_earnings"
+TELL_MATURING_KIND = "investments.tell_maturing"
 logger = structlog.get_logger()
 
 
@@ -57,6 +58,7 @@ class InvestmentJobs:
             ACCRUE_KIND: self.accrue_interest,
             MATURE_KIND: self.mature,
             TELL_EARNINGS_KIND: self.tell_earnings,
+            TELL_MATURING_KIND: self.tell_maturing,
             corrections.APPLY_KIND: self.apply_correction,
             WITHDRAW_KIND: self.withdraw_early,
             PAY_EARLY_WITHDRAWAL_KIND: self.pay_early_withdrawal,
@@ -250,6 +252,33 @@ class InvestmentJobs:
 
         await context.apply(effect)
         logger.info("interest_earnings_told", run_date=run_date.isoformat(), told=told)
+
+    async def tell_maturing(self, job: ClaimedJob, context: JobContext) -> None:
+        """Tell clients their investment matures soon, so they can choose what happens.
+
+        A page of investments per transaction only the current holder of the job can commit.
+        Each notice is keyed by the investment, so a retry tells nobody twice.
+        """
+        run_date = _run_date(job.payload)
+        told = 0
+        after = ""
+        async with context.kept_alive():
+            while True:
+                async with self._database.actor_transaction(SYSTEM) as session:
+                    await job_queue.lock_fenced(session, job)
+                    page = await maturity.tell_maturing_batch(
+                        session, run_date, self._clock, after=after
+                    )
+                if page.last_id is None:
+                    break
+                after = page.last_id
+                told += page.told
+
+        async def effect(_: AsyncSession) -> Mapping[str, object]:
+            return {"run_date": run_date.isoformat(), "told": told}
+
+        await context.apply(effect)
+        logger.info("maturing_told", run_date=run_date.isoformat(), told=told)
 
     async def mature(self, job: ClaimedJob, context: JobContext) -> None:
         """Close every investment whose term ended on or before the day this run is for.

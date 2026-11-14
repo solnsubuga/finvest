@@ -51,7 +51,7 @@ Nothing personal goes into a job payload or a log. The words live in the `notifi
 | `payout_failed` | Payouts | `amount`, `destination` | Money |
 | `payout_declined` | Payouts | `amount`, `destination` | Money |
 | `investment_started` | Investments | `amount`, `product` | Investments |
-| `investment_maturing` | Investments | `product`, `date` | Investments |
+| `investment_maturing` | Investments, from the morning run (`investments.tell_maturing`, 08:15 Kampala), once per investment, when it matures within seven days and the choice is still open | `product`, `date` | Investments |
 | `investment_matured` | Investments | `amount`, `product` | Investments |
 | `investment_withdrawal_requested` | Investments | `amount`, `product` | Investments |
 | `investment_withdrawal_paid` | Investments | `amount`, `product` | Investments |
@@ -70,12 +70,12 @@ Nothing personal goes into a job payload or a log. The words live in the `notifi
 | `organisation_returned` | Organisations | `organisation` | Account |
 | `organisation_rejected` | Organisations | `organisation` | Account |
 | `organisation_approved` | Organisations | `organisation` | Account |
-| `payout_destination_approved` | Payouts | `destination` | Account |
-| `payout_destination_refused` | Payouts | `destination` | Account |
+| `payout_destination_approved` | Payouts, when the second member of staff approves | `destination` | Account |
+| `payout_destination_refused` | Payouts, at each refusal by staff or by the network's name check, keyed by the proof refused | `destination` ("your Stanbic Bank account", "your MTN Mobile Money number") | Account |
 | `statement_ready` | Statements | `period` | Account |
 | `new_sign_in` | Sign-in | `device` | Security |
-| `password_changed` | Sign-in | none | Security |
-| `second_step_changed` | Sign-in | `change` | Security |
+| `password_changed` | Sign-in, when a client resets their password | none | Security |
+| `second_step_changed` | Sign-in, when a client adds or removes a passkey or an authenticator app. Never for staff | `change`, fixed words in `identity/notices.py` | Security |
 | `support_reply` | Support | none | Help |
 | `complaint_received` | Support | `reference`, `date` | Help |
 | `complaint_closed` | Support | `reference` | Help |

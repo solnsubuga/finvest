@@ -9,11 +9,11 @@ from sqlalchemy.exc import DBAPIError
 from app.infrastructure.database import Database
 from app.infrastructure.jobs import JobRequest, Worker, WorkerConfig, enqueue
 from app.modules.audit import service as audit
-from app.modules.investments import accrual
+from app.modules.investments import accrual, maturity
 from app.modules.investments import service as investments
 from app.modules.investments.domain.investments import AtMaturity, InvestmentStatus
 from app.modules.investments.holdings import HOLDING
-from app.modules.investments.jobs import MATURE_KIND, InvestmentJobs
+from app.modules.investments.jobs import MATURE_KIND, TELL_MATURING_KIND, InvestmentJobs
 from app.modules.ledger import service as ledger
 from app.modules.payouts import payouts
 from app.modules.payouts.domain import posting as payout_posting
@@ -394,6 +394,95 @@ async def test_the_scheduled_job_closes_everything_that_is_due(
     assert closed.rolled_into_id is not None
     # What it rolled into is not due for another term.
     assert (await reload(worker_database, closed.rolled_into_id)).status is ACTIVE
+
+
+async def maturing_notices(worker_database: Database, investment_id: str) -> list[str]:
+    async with worker_database.actor_transaction(SYSTEM) as session:
+        rows = await session.execute(
+            text(
+                "SELECT body FROM notifications WHERE event = 'investment_maturing' "
+                "AND link_kind = 'investment' AND link_id = :id"
+            ),
+            {"id": investment_id},
+        )
+        return [row.body for row in rows]
+
+
+async def tell_maturing(worker_database: Database, run_date: date) -> None:
+    after = ""
+    while True:
+        async with worker_database.actor_transaction(SYSTEM) as session:
+            page = await maturity.tell_maturing_batch(
+                session, run_date, at(run_date), after=after, limit=50
+            )
+        if page.last_id is None:
+            return
+        after = page.last_id
+
+
+async def test_a_client_is_told_once_a_week_before_maturity(
+    app_database: Database, worker_database: Database
+) -> None:
+    investment = await started(app_database, worker_database, NOW)
+    assert investment.maturity_date == day(91)
+    # Eight days before is too early.
+    await tell_maturing(worker_database, day(83))
+    assert await maturing_notices(worker_database, investment.id) == []
+    # Seven days before, they are told, with the date, while they can still choose.
+    await tell_maturing(worker_database, day(84))
+    expected = [
+        f"Your 91 Day Treasury Bill matures on {day(91).day} {day(91):%b} {day(91).year}. "
+        "Choose to reinvest or cash out in the app."
+    ]
+    assert await maturing_notices(worker_database, investment.id) == expected
+    # Never twice, even when a later morning runs again.
+    await tell_maturing(worker_database, day(85))
+    assert await maturing_notices(worker_database, investment.id) == expected
+
+
+async def test_a_missed_morning_is_caught_up_and_the_maturity_day_is_not_told(
+    app_database: Database, worker_database: Database
+) -> None:
+    late = await started(app_database, worker_database, NOW)
+    # The run for the maturity date itself says nothing: the choice has closed.
+    await tell_maturing(worker_database, day(91))
+    assert await maturing_notices(worker_database, late.id) == []
+    # Three days before, still inside the week, it is told.
+    await tell_maturing(worker_database, day(88))
+    assert len(await maturing_notices(worker_database, late.id)) == 1
+
+
+async def test_the_scheduled_job_tells_who_is_maturing(
+    app_database: Database, worker_database: Database
+) -> None:
+    investment = await started(app_database, worker_database, NOW)
+    clock = at(day(85), 8)
+    queue = "tell" + "".join(c for c in push_id().lower() if c.isalnum())
+    async with worker_database.actor_transaction(SYSTEM) as session:
+        job_id = await enqueue(
+            session,
+            JobRequest(
+                kind=TELL_MATURING_KIND,
+                idempotency_key=f"investments.tell_maturing@{push_id()}",
+                # 08:15 in Kampala is 05:15 UTC.
+                payload={"scheduled_for": f"{day(85).isoformat()}T05:15:00+00:00", "data": {}},
+                queue=queue,
+            ),
+            now=clock.now(),
+        )
+    runner = Worker(
+        worker_database,
+        InvestmentJobs(worker_database, clock).handlers(),
+        WorkerConfig(queue=queue),
+        clock,
+    )
+    assert await runner.run_once() == 1
+    async with worker_database.actor_transaction(SYSTEM) as session:
+        status = await session.scalar(
+            text("SELECT status FROM jobs WHERE id = :id"), {"id": job_id}
+        )
+    assert status == "succeeded"
+    assert len(await maturing_notices(worker_database, investment.id)) == 1
 
 
 # What the database enforces ---------------------------------------------------------------------
