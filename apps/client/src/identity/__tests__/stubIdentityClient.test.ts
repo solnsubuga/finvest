@@ -74,3 +74,31 @@ describe("the demo identity check", () => {
     await expect(client.getCheck()).resolves.toMatchObject({ status: "approved" });
   });
 });
+
+describe("the demo's live selfie", () => {
+  it("is offered only when switched on, and its capture becomes the selfie", async () => {
+    const off = createStubIdentityClient({ delayMs: 0 });
+    await expect(off.getLiveness()).resolves.toMatchObject({ available: false, problem: null });
+
+    const client = createStubIdentityClient({ delayMs: 0, liveness: true, now: NOW });
+    await expect(client.getLiveness()).resolves.toMatchObject({ available: true, problem: "no_check" });
+    await client.chooseDocument("passport", "UG");
+    const started = await client.startLiveness();
+    expect(started.status).toBe("starting");
+    let state = await client.getLiveness();
+    expect(state.latest).toMatchObject({ status: "open" });
+    for (let read = 0; read < 3 && state.latest?.status === "open"; read++) state = await client.getLiveness();
+    expect(state.latest).toMatchObject({ status: "passed", photoUsed: true, url: null });
+    await expect(client.getCheck()).resolves.toMatchObject({ photos: ["selfie"], liveSelfie: true });
+    expect(state.attemptsLeft).toBe(9);
+  });
+
+  it("replaces a waiting check when another starts", async () => {
+    const client = createStubIdentityClient({ delayMs: 0, liveness: true, now: NOW });
+    await client.chooseDocument("national_id", "UG");
+    const first = await client.startLiveness();
+    const second = await client.startLiveness();
+    expect(second.id).not.toBe(first.id);
+    await expect(client.getLiveness()).resolves.toMatchObject({ latest: { id: second.id } });
+  });
+});
