@@ -20,6 +20,7 @@ from app.infrastructure.storage import FileStorage, InvalidFile, NewFile, Storag
 from app.modules.identity.api import CurrentClient, require_confirmed, require_permission
 from app.modules.identity.service import StaffSession
 from app.modules.kyc import liveness, service
+from app.modules.kyc import phone_names as phone_lookups
 from app.modules.kyc.domain.checks import (
     CheckStatus,
     DocumentType,
@@ -30,6 +31,7 @@ from app.modules.kyc.domain.checks import (
     staff_moves,
 )
 from app.modules.kyc.domain.liveness import LivenessProvider, LivenessStatus
+from app.modules.kyc.domain.phone_names import PhoneName
 from app.modules.kyc.domain.provider import AutomaticCheck, IdentityProvider, Verdict
 from app.modules.screening import contract as screening
 from app.modules.screening.contract import Outcome as ScreeningOutcome
@@ -168,6 +170,13 @@ class LivenessState(Contract):
     latest: LivenessAttempt | None
 
 
+class PhoneNameOut(Contract):
+    status: PhoneName
+    # The network's name, once it gave one.
+    registered_name: str | None
+    answered_at: datetime | None
+
+
 class StaffCheck(QueueEntry):
     client_id: PushId
     document_country: str
@@ -189,6 +198,9 @@ class StaffCheck(QueueEntry):
     # Where the client stands with sanctions and PEP screening, or null if never screened.
     # Anything but `clear` is a reason to look before approving.
     screening: ScreeningOutcome | None
+    # The name the mobile network holds for the client's phone number, and how it compares
+    # with the name on the ID, or null if it was not looked up. A hint for the person deciding.
+    phone_name: PhoneNameOut | None
 
 
 class DocumentNumber(Contract):
@@ -257,12 +269,28 @@ def _name(surname: str | None, given_names: str | None) -> str | None:
 
 
 async def _staff_check_now(session: AsyncSession, view: service.CheckView) -> StaffCheck:
-    """The staff view with the client's screening standing, read in the same transaction."""
+    """The staff view with the client's screening standing and phone name, read in the same
+    transaction."""
     standing = await screening.latest_outcome(session, view.client_id)
-    return _staff_check(view, None if standing is None else standing.outcome)
+    phone = await phone_lookups.phone_name_for_check(session, view.id)
+    return _staff_check(
+        view,
+        None if standing is None else standing.outcome,
+        None
+        if phone is None
+        else PhoneNameOut(
+            status=phone.status,
+            registered_name=phone.registered_name,
+            answered_at=phone.answered_at,
+        ),
+    )
 
 
-def _staff_check(view: service.CheckView, screening_outcome: ScreeningOutcome | None) -> StaffCheck:
+def _staff_check(
+    view: service.CheckView,
+    screening_outcome: ScreeningOutcome | None,
+    phone_name: PhoneNameOut | None,
+) -> StaffCheck:
     details = view.details
     return StaffCheck(
         id=view.id,
@@ -293,6 +321,7 @@ def _staff_check(view: service.CheckView, screening_outcome: ScreeningOutcome | 
             if status in staff_moves(view.status)
         ],
         screening=screening_outcome,
+        phone_name=phone_name,
     )
 
 
@@ -477,7 +506,14 @@ def create_routers(
     async def submit(client: CurrentClient, request: Request) -> ClientCheck:
         """Hand the check in. Answers which photos or details are missing if it is not ready."""
         async with database(request).actor_transaction(client.actor) as session:
-            view = await service.submit(session, seal(), client.actor, provider, clock(request))
+            view = await service.submit(
+                session,
+                seal(),
+                client.actor,
+                provider,
+                clock(request),
+                phone_names=request.app.state.payout_names_on,
+            )
         return _client_check(view)
 
     # Staff -----------------------------------------------------------------------------------
