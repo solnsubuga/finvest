@@ -51,7 +51,7 @@ Nothing personal goes into a job payload or a log. The words live in the `notifi
 | `payout_failed` | Payouts | `amount`, `destination` | Money |
 | `payout_declined` | Payouts | `amount`, `destination` | Money |
 | `investment_started` | Investments | `amount`, `product` | Investments |
-| `investment_maturing` | Investments, from the morning run (`investments.tell_maturing`, 08:15 Kampala), once per investment, when it matures within seven days and the choice is still open | `product`, `date` | Investments |
+| `investment_maturing` | Investments | `product`, `date` | Investments |
 | `investment_matured` | Investments | `amount`, `product` | Investments |
 | `investment_withdrawal_requested` | Investments | `amount`, `product` | Investments |
 | `investment_withdrawal_paid` | Investments | `amount`, `product` | Investments |
