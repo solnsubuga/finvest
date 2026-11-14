@@ -169,10 +169,17 @@ class NameCheck(StrEnum):
 
 
 def name_check(
-    latest: LookupStatus | None, asked_at: datetime | None, count: int, now: datetime
+    latest: LookupStatus | None,
+    asked_at: datetime | None,
+    count: int,
+    now: datetime,
+    *,
+    deciding: bool = False,
 ) -> NameCheck:
+    """Where a number's lookup stands for the client. `deciding`: a name that waited for the ID
+    is being compared now, after the client asked again."""
     if latest is LookupStatus.FOUND:
-        return NameCheck.WAITING_FOR_ID
+        return NameCheck.CHECKING if deciding else NameCheck.WAITING_FOR_ID
     refused = why_not_again(latest, asked_at, count, now)
     if refused is CheckAgain.IN_PROGRESS:
         return NameCheck.CHECKING

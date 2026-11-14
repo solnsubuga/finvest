@@ -83,7 +83,14 @@ def _codes(request: Request) -> CodeService:
     return codes
 
 
+def _names_on(request: Request) -> bool:
+    on: bool = request.app.state.payout_names_on
+    return on
+
+
 Codes = Annotated[CodeService, Depends(_codes)]
+# Whether a provider reads the names networks hold. Off, numbers wait and nothing is asked.
+NamesOn = Annotated[bool, Depends(_names_on)]
 Db = Annotated[Database, Depends(_database)]
 Files = Annotated[FileStorage, Depends(_storage)]
 Time = Annotated[Clock, Depends(_clock)]
@@ -219,8 +226,11 @@ def _destination_out(view: DestinationView, name_check: NameCheck | None = None)
     )
 
 
-async def _client_out(session: AsyncSession, view: DestinationView, clock: Clock) -> DestinationOut:
-    return _destination_out(view, await name_lookups.name_check_for(session, view, clock))
+async def _client_out(
+    session: AsyncSession, view: DestinationView, clock: Clock, asking: bool
+) -> DestinationOut:
+    check = await name_lookups.name_check_for(session, view, clock, asking=asking)
+    return _destination_out(view, check)
 
 
 def _payout_out(
@@ -289,12 +299,12 @@ async def banks(client: CurrentClient) -> list[BankOut]:
 
 @client_router.get("/payout-destinations")
 async def list_destinations(
-    client: CurrentClient, database: Db, clock: Time
+    client: CurrentClient, database: Db, clock: Time, asking: NamesOn
 ) -> list[DestinationOut]:
     """The client's payout accounts that are not removed, newest first."""
     async with database.actor_transaction(client.actor) as session:
         views = await destinations.destinations_for_client(session, client.client_id)
-        return [await _client_out(session, view, clock) for view in views]
+        return [await _client_out(session, view, clock, asking) for view in views]
 
 
 @client_router.post("/payout-destinations", status_code=201)
@@ -315,11 +325,11 @@ async def add_destination(
 
 @client_router.get("/payout-destinations/{destination_id}")
 async def get_destination(
-    destination_id: PushId, client: CurrentClient, database: Db, clock: Time
+    destination_id: PushId, client: CurrentClient, database: Db, clock: Time, asking: NamesOn
 ) -> DestinationOut:
     async with database.actor_transaction(client.actor) as session:
         view = await _own_destination(session, client.client_id, destination_id)
-        return await _client_out(session, view, clock)
+        return await _client_out(session, view, clock, asking)
 
 
 @client_router.delete("/payout-destinations/{destination_id}", status_code=204)
@@ -369,6 +379,7 @@ async def verify_code(
     database: Db,
     clock: Time,
     codes: Codes,
+    asking: NamesOn,
 ) -> DestinationOut:
     """Enter the texted code. The account moves on to `awaiting_proof` in the same transaction
     that spends the code. 401 `invalid_code` for a wrong code, which still counts as a try;
@@ -382,10 +393,10 @@ async def verify_code(
         )
         if right:
             view = await destinations.confirm_code(session, client.actor, destination_id, clock)
-            if view.kind is DestinationKind.MOBILE_MONEY:
+            if asking and view.kind is DestinationKind.MOBILE_MONEY:
                 # Saved with the code spent, so a confirmed number is always looked up.
                 await name_lookups.ask(session, client.actor, view, clock)
-            out = await _client_out(session, view, clock)
+            out = await _client_out(session, view, clock, asking)
     # A wrong try is committed above, so it counts, and only then refused.
     if not right:
         raise ApplicationError("invalid_code")
@@ -394,7 +405,7 @@ async def verify_code(
 
 @client_router.post("/payout-destinations/{destination_id}/name-check")
 async def check_name_again(
-    destination_id: PushId, client: CurrentClient, database: Db, clock: Time
+    destination_id: PushId, client: CurrentClient, database: Db, clock: Time, asking: NamesOn
 ) -> DestinationOut:
     """Ask again for the name the network holds for a mobile money number.
 
@@ -402,12 +413,16 @@ async def check_name_again(
     ID is approved. The answer comes later: the number stays `awaiting_proof` with
     `name_check` `checking` until it does. 409 `name_check_in_progress`,
     `name_check_limit_reached`, `client_not_verified`, `destination_not_awaiting_proof` or
-    `name_check_not_for_this_account`.
+    `name_check_not_for_this_account`. Once a name that waited for the ID is being compared,
+    `name_check` is `checking`. While no provider reads names, every ask is 409
+    `name_check_in_progress`: the number waits and none of its lookups are used up.
     """
     async with database.actor_transaction(client.actor) as session:
         await _own_destination(session, client.client_id, destination_id)
+        if not asking:
+            raise _refused("name_check_in_progress")
         view = await name_lookups.check_again(session, client.actor, destination_id, clock)
-        return await _client_out(session, view, clock)
+        return await _client_out(session, view, clock, asking)
 
 
 @client_router.post("/payout-destinations/{destination_id}/proof")

@@ -49,7 +49,7 @@ export const rejectionCopy: Record<RejectionReason, string> = {
   proof_wrong_document: "That document does not prove the account is yours. Send a statement, a bank letter or a photo of the card.",
   suspected_fraud: "This account cannot be used. Talk to us in Help if you think this is a mistake.",
   network_name_unavailable:
-    "The network has no name registered for this number, so we cannot check it is yours. Use a number registered in your name.",
+    "The network could not give us a name for this number, so we cannot check it is yours. Use a number registered in your name.",
 };
 
 /** Whether the client can send new proof after this refusal. A different name and suspected fraud are final. */
