@@ -147,6 +147,10 @@ jobs:
           FINVEST_EMAIL_FROM: ${{ vars.FINVEST_EMAIL_FROM }}
           FINVEST_EMAIL_RESEND_API_KEY: ${{ secrets.FINVEST_EMAIL_RESEND_API_KEY }}
           FINVEST_EMAIL_FIDIBA_ENVIRONMENT: ${{ vars.FINVEST_EMAIL_FIDIBA_ENVIRONMENT }}
+          FINVEST_SMS_BACKEND: ${{ vars.FINVEST_SMS_BACKEND }}
+          FINVEST_SMS_IOTEC_CLIENT_ID: ${{ vars.FINVEST_SMS_IOTEC_CLIENT_ID }}
+          FINVEST_SMS_IOTEC_API_KEY: ${{ secrets.FINVEST_SMS_IOTEC_API_KEY }}
+          FINVEST_SMS_IOTEC_BASE_URL: ${{ vars.FINVEST_SMS_IOTEC_BASE_URL }}
           RESEND_HOOK_SECRET: ${{ secrets.RESEND_HOOK_SECRET }}
           STOP_BEFORE_MIGRATE: ${{ vars.STOP_BEFORE_MIGRATE }}
         run: python3 infra/deployment/prepare_release.py "$RUNNER_TEMP/finvest-release"
