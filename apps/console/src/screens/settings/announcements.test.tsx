@@ -22,7 +22,7 @@ const card = (name: string) => screen.findByRole("article", { name });
 describe("reachSentence", () => {
   it("names one client and says when nobody chose SMS or email", () => {
     expect(reachSentence({ clients: 1, sms: 0, email: 0 })).toBe(
-      "Approving sends it straight away to 1 active client, in the app and by push. None of them chose SMS or email for news.",
+      "Approving sends it straight away to 1 active client, in the app, and by push where they have it. None of them chose SMS or email for news.",
     );
   });
 });
@@ -47,7 +47,7 @@ describe("settings: announcements", () => {
     const { user } = renderSection();
     const waiting = await card("Office closed on Monday");
     expect(waiting).toHaveTextContent(
-      "Approving sends it straight away to 1,284 active clients, in the app and by push. 96 of them also get it by SMS and 310 by email, as they chose for news. It cannot be called back.",
+      "Approving sends it straight away to 1,284 active clients, in the app, and by push where they have it. 96 of them also get it by SMS and 310 by email, as they chose for news. It cannot be called back.",
     );
     await user.click(within(waiting).getByRole("button", { name: "Approve and send" }));
     await waitFor(async () => expect(await card("Office closed on Monday")).toHaveTextContent("Sent to 1,284 clients"));

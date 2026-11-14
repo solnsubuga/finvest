@@ -419,5 +419,5 @@ export function reachSentence(reach: AnnouncementReach | null): string {
     reach.sms === 0 && reach.email === 0
       ? "None of them chose SMS or email for news."
       : `${count(reach.sms)} of them also get it by SMS and ${count(reach.email)} by email, as they chose for news.`;
-  return `Approving sends it straight away to ${clients}, in the app and by push. ${extra}`;
+  return `Approving sends it straight away to ${clients}, in the app, and by push where they have it. ${extra}`;
 }
