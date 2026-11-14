@@ -623,6 +623,31 @@ async def paid_without_review(session: AsyncSession, *, since: datetime, until: 
     return int(row.paid)
 
 
+@dataclass(frozen=True, slots=True)
+class PayoutRecord:
+    """A payout with when it last changed, which for a final payout is when it ended."""
+
+    payout: PayoutView
+    updated_at: datetime
+
+
+_REQUESTED_BETWEEN = text(
+    f"SELECT {_COLUMNS}, updated_at FROM payouts "  # noqa: S608 - constant column list
+    "WHERE created_at >= :since AND created_at < :until ORDER BY created_at, id LIMIT :limit"
+)
+
+
+async def payouts_requested_between(
+    session: AsyncSession, *, since: datetime, until: datetime, limit: int
+) -> list[PayoutRecord]:
+    """Payouts asked for from `since` up to `until`, oldest first, at most `limit`. For staff
+    reports. Empty outside a staff transaction."""
+    rows = await session.execute(
+        _REQUESTED_BETWEEN, {"since": since, "until": until, "limit": max(1, limit)}
+    )
+    return [PayoutRecord(_view(row), row.updated_at) for row in rows.all()]
+
+
 async def held_up(session: AsyncSession, now: datetime, *, limit: int = 50) -> list[HeldUpPayout]:
     """Payouts held up at the provider, longest first. Empty outside a staff transaction.
 

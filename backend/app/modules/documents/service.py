@@ -261,6 +261,22 @@ async def monthly_asked(session: AsyncSession, label: str) -> bool:
     return bool((await session.execute(_MONTH_ASKED, {"label": label})).scalar_one())
 
 
+_MONTHLY_FOR = text(
+    f"SELECT {_COLUMNS} FROM documents "  # noqa: S608 - constant column list
+    "WHERE kind = 'monthly_statement' AND idempotency_key = :label "
+    "ORDER BY client_id, id LIMIT :limit"
+)
+
+
+async def monthly_statements(
+    session: AsyncSession, label: str, *, limit: int
+) -> list[DocumentView]:
+    """Every client's monthly statement for `label` (`2026-10`), by client, at most `limit`.
+    Staff and the worker only: a client sees their own."""
+    rows = await session.execute(_MONTHLY_FOR, {"label": label, "limit": max(1, limit)})
+    return [_view(row) for row in rows.all()]
+
+
 def _view(row: Row[Any]) -> DocumentView:
     return DocumentView(
         id=row.id,

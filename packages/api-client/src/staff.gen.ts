@@ -580,6 +580,23 @@ export const CaseProposeIn = z.object({
 });
 export type CaseProposeIn = z.infer<typeof CaseProposeIn>;
 
+export const ReportOut = z.object({
+  about: z.string(),
+  by_currency: z.boolean(),
+  date_from: z.string(),
+  date_to: z.string(),
+  key: z.enum(["daily_position", "deposits_and_withdrawals", "interest_and_tax", "maturity_ladder", "identity_and_risk", "client_statements", "complaints_quarterly"]),
+  name: z.string(),
+  period: z.enum(["day", "days", "month", "quarter", "ahead", "now"]),
+});
+export type ReportOut = z.infer<typeof ReportOut>;
+
+export const CatalogueOut = z.object({
+  reports: z.array(ReportOut),
+  today: z.string(),
+});
+export type CatalogueOut = z.infer<typeof CatalogueOut>;
+
 export const ChangeView = z.object({
   about_you: z.boolean(),
   current_role: z.enum(["admin", "operations", "finance", "compliance", "support"]).nullable(),
@@ -5699,6 +5716,34 @@ export const operations = {
     bodyKind: "json",
     idempotent: false,
     status: 204,
+    response: null,
+  },
+  "GET /staff/reports": {
+    method: "GET",
+    path: "/staff/reports",
+    params: z.object({}),
+    query: z.object({}),
+    body: null,
+    bodyKind: null,
+    idempotent: false,
+    status: 200,
+    response: CatalogueOut,
+  },
+  "GET /staff/reports/{key}.csv": {
+    method: "GET",
+    path: "/staff/reports/{key}.csv",
+    params: z.object({
+    key: z.enum(["daily_position", "deposits_and_withdrawals", "interest_and_tax", "maturity_ladder", "identity_and_risk", "client_statements", "complaints_quarterly"]),
+  }),
+    query: z.object({
+    date_from: z.string(),
+    date_to: z.string(),
+    currency: z.enum(["UGX", "USD"]).optional(),
+  }),
+    body: null,
+    bodyKind: null,
+    idempotent: false,
+    status: 200,
     response: null,
   },
   "GET /staff/review-queue": {
