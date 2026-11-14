@@ -24,6 +24,18 @@ from tests.support.database import TestDatabase
 pytestmark = pytest.mark.integration
 
 ROWS = {
+    "0310_identity_unlock_keys": (
+        "INSERT INTO identity_clients (id, phone, status, created_at) VALUES "
+        "('-Nabc0000000000000B1', '+256772123456', 'unclaimed', now()); "
+        "INSERT INTO identity_sessions (id, actor_kind, actor_id, token_hash, second_step, "
+        "transport, created_at, last_seen_at, idle_expires_at, absolute_expires_at) "
+        "VALUES ('-Nabc0000000000000A1', 'client', '-Nabc0000000000000B1', "
+        "decode(repeat('00', 32), 'hex'), 'passkey', 'token', now(), now(), now(), now()); "
+        "INSERT INTO identity_app_pins (session_id, pin_hash, created_at, unlock_key_hash, "
+        "unlock_key_set_at) VALUES ('-Nabc0000000000000A1', 'x', now(), "
+        "decode(repeat('00', 32), 'hex'), now())",
+        "refusing to drop unlock keys that are in use",
+    ),
     "0183_monitoring_transfers": (
         "BEGIN; SELECT set_config('finvest.actor_kind', 'system', true); "
         "INSERT INTO monitoring_transactions (id, client_id, kind, source_id, currency, "
