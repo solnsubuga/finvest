@@ -1,7 +1,7 @@
 import AxeBuilder from "@axe-core/playwright";
 import { expect, test, type Page } from "@playwright/test";
 
-import { DEMO_PIN, leaveForSixMinutes, typePin } from "./pin";
+import { createPin, DEMO_PIN, leaveForSixMinutes, typePin } from "./pin";
 
 // Every main screen of the client app, checked against WCAG 2.1 A and AA with axe, on a phone
 // and on a wide window. The app runs on its sample sign-in (apps/client/src/auth/stubAuthClient.ts).
@@ -147,6 +147,24 @@ test("the PIN lock, its reset and the sign out after wrong PINs meet WCAG 2.1 AA
   }
   await expect(page.getByText("Signed out for your safety")).toBeVisible();
   expect(await violations(page), "signed out").toEqual([]);
+});
+
+test("freezing the account and the frozen screen meet WCAG 2.1 AA", async ({ page }) => {
+  await page.goto("/");
+  await page.getByText("Log in", { exact: true }).first().click();
+  await page.getByTestId("phone-input").fill(DEMO_PHONE);
+  await page.getByTestId("password-input").fill(DEMO_PASSWORD);
+  await page.getByTestId("login-submit").click();
+  await page.getByTestId("use-passkey").click();
+  await createPin(page);
+  await expect(page.getByText("Welcome, Amara")).toBeVisible();
+  await visit(page, "/account/freeze");
+  await expect(page.getByTestId("freeze-confirm")).toBeVisible();
+  expect(await violations(page), "freeze your account").toEqual([]);
+  await page.getByTestId("freeze-reason").fill("Lost my phone");
+  await page.getByTestId("freeze-confirm").click();
+  await expect(page.getByTestId("account-frozen")).toBeVisible();
+  expect(await violations(page), "your account is frozen").toEqual([]);
 });
 
 test("confirming a new payout account with the PIN meets WCAG 2.1 AA", async ({ page }) => {
