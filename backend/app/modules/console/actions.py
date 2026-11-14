@@ -416,6 +416,11 @@ def _check_client(status: str) -> None:
         )
 
 
+async def get(session: AsyncSession, action_id: str) -> ClientAction:
+    """One action, as it stands now. Not found if there is none."""
+    return await _by_id(session, action_id)
+
+
 async def _by_id(session: AsyncSession, action_id: str) -> ClientAction:
     row = (await session.execute(_BY_ID, {"id": action_id})).one_or_none()
     if row is None:

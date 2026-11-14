@@ -1,5 +1,6 @@
 """Sending a client a statement of chosen dates, with two members of staff."""
 
+import uuid
 from collections.abc import AsyncIterator
 from datetime import timedelta
 
@@ -27,6 +28,7 @@ async def propose(api: Api, client: Actor, days_back: int = 30, ahead: int = 0) 
     today = business_date(api.clock.now())
     return await api.http.post(
         f"/staff/clients/{client.id}/actions",
+        headers={"Idempotency-Key": uuid.uuid4().hex},
         json={
             "kind": "statement",
             "reason": "Client asked on the phone for a statement for their bank",
@@ -68,6 +70,7 @@ async def test_a_statement_two_people_agree_is_asked_for_and_queued(
     assert [item["kind"] for item in inbox if item["id"] == action["id"]] == ["client_statement"]
     approved = await api.http.post(
         f"/staff/clients/actions/{action['id']}/decision",
+        headers={"Idempotency-Key": uuid.uuid4().hex},
         json={"decision": "approved", "reason": "Checked the dates"},
     )
     assert approved.status_code == 200, approved.text
@@ -92,6 +95,7 @@ async def test_a_period_a_client_could_not_ask_for_is_refused(api: Api) -> None:
     assert too_long.status_code == 422
     missing = await api.http.post(
         f"/staff/clients/{client.id}/actions",
+        headers={"Idempotency-Key": uuid.uuid4().hex},
         json={"kind": "statement", "reason": "Asked"},
     )
     assert missing.status_code == 422
