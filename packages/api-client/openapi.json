@@ -12461,6 +12461,20 @@
             ],
             "title": "Ledger Entry Id"
           },
+          "line": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ReturnLineOut"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The line that brought the money back. Null once it leaves the search window."
+          },
+          "payout": {
+            "$ref": "#/components/schemas/ReturnedPayoutOut"
+          },
           "payout_id": {
             "maxLength": 20,
             "minLength": 20,
@@ -12514,7 +12528,9 @@
           "decided_by",
           "decided_at",
           "decision_reason",
-          "ledger_entry_id"
+          "ledger_entry_id",
+          "payout",
+          "line"
         ],
         "title": "ReturnOut",
         "type": "object"
@@ -12596,6 +12612,63 @@
           "holder_name"
         ],
         "title": "ReturnablePayoutOut",
+        "type": "object"
+      },
+      "ReturnedPayoutOut": {
+        "additionalProperties": false,
+        "description": "The payout a return names and where it went. The account is masked.",
+        "properties": {
+          "amount": {
+            "$ref": "#/components/schemas/MoneyView"
+          },
+          "bank_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Bank Name"
+          },
+          "holder_name": {
+            "title": "Holder Name",
+            "type": "string"
+          },
+          "kind": {
+            "enum": [
+              "bank",
+              "mobile_money"
+            ],
+            "title": "Kind",
+            "type": "string"
+          },
+          "masked_account": {
+            "title": "Masked Account",
+            "type": "string"
+          },
+          "network": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Network"
+          }
+        },
+        "required": [
+          "kind",
+          "amount",
+          "bank_name",
+          "network",
+          "masked_account",
+          "holder_name"
+        ],
+        "title": "ReturnedPayoutOut",
         "type": "object"
       },
       "ReviewIn": {

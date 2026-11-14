@@ -353,12 +353,18 @@ async def test_staff_pick_the_paid_payout_and_its_line_coming_back(
     assert [each.id for each in lines] == [line]
 
     # Once a return names the payout and the line, neither is offered again.
-    await propose(app_database, payout.id, line, staff())
+    proposed = await propose(app_database, payout.id, line, staff())
     async with app_database.actor_transaction(staff()) as session:
         found = await returns.returnable(session, amount=ugx(amount), now=datetime.now(UTC))
         lines = await returns.return_lines(session, payout.id)
+        shown = await returns.details(session, proposed)
     assert found == []
     assert lines == []
+    # The second person sees the payout, where it went and the line itself, not only IDs.
+    assert (shown.payout.id, shown.payout.amount, shown.network) == (payout.id, ugx(amount), "mtn")
+    assert "•" in shown.masked_account
+    assert shown.line is not None
+    assert (shown.line.id, shown.line.amount) == (line, ugx(amount))
 
 
 async def test_only_a_paid_payout_has_lines_to_pick(world: World, app_database: Database) -> None:
@@ -385,3 +391,27 @@ async def test_the_picker_routes_answer_staff(
     assert listed.json()[0]["kind"] == "mobile_money"
     assert offered.status_code == 200, offered.text
     assert [each["id"] for each in offered.json()] == [line]
+
+
+async def test_a_waiting_return_carries_what_the_second_person_checks(
+    world: World, test_database: TestDatabase, app_database: Database
+) -> None:
+    amount = 1_234_888
+    payout = await paid_by_phone(world, amount)
+    line = await MTN.statement(app_database, (("waiting", amount),))
+    proposed = await propose(app_database, payout.id, line, staff())
+    async with running_api(test_database, app_database) as api:
+        api.clock.current = datetime.now(UTC)
+        await api.staff(role="operations")
+        one = await api.http.get(f"/staff/payout-returns/{proposed.id}")
+        waiting = await api.http.get("/staff/payout-returns")
+    assert one.status_code == 200, one.text
+    body = one.json()
+    assert body["payout"]["amount"] == {"minor": amount, "currency": "UGX"}
+    assert body["payout"]["kind"] == "mobile_money"
+    assert body["payout"]["network"] == "mtn"
+    assert body["line"]["id"] == line
+    assert body["line"]["amount"] == {"minor": amount, "currency": "UGX"}
+    assert body["line"]["reference"].startswith("waiting-")
+    assert waiting.status_code == 200, waiting.text
+    assert body in waiting.json()

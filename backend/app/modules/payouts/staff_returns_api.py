@@ -11,6 +11,7 @@ from typing import Annotated, Literal
 
 from fastapi import APIRouter, Depends, Query, Request
 from pydantic import Field
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.idempotency import IdempotencyKey
 from app.infrastructure.database import Database
@@ -19,6 +20,7 @@ from app.modules.identity.service import StaffSession
 from app.modules.payouts import returns
 from app.modules.payouts.api import MoneyView
 from app.modules.payouts.returns import ReturnRefused
+from app.modules.reconciliation.statements import StatementLineView
 from app.shared.clock import Clock
 from app.shared.contracts import Contract, PushId
 from app.shared.errors import ApplicationError, ErrorEnvelope, FieldProblem
@@ -65,20 +67,15 @@ class ReasonIn(Contract):
     reason: Reason
 
 
-class ReturnOut(Contract):
-    id: PushId
-    payout_id: PushId
-    client_id: PushId
-    statement_line_id: PushId
-    reason: str
-    status: Literal["proposed", "approved", "declined", "withdrawn"]
-    proposed_by: PushId
-    proposed_at: datetime
-    decided_by: PushId | None
-    decided_at: datetime | None
-    decision_reason: str | None
-    # The `payout.returned` entry the approval posted.
-    ledger_entry_id: PushId | None
+class ReturnedPayoutOut(Contract):
+    """The payout a return names and where it went. The account is masked."""
+
+    kind: Literal["bank", "mobile_money"]
+    amount: MoneyView
+    bank_name: str | None
+    network: str | None
+    masked_account: str
+    holder_name: str
 
 
 class ReturnablePayoutOut(Contract):
@@ -105,7 +102,42 @@ class ReturnLineOut(Contract):
     narrative: str
 
 
-def _out(view: returns.ReturnView) -> ReturnOut:
+class ReturnOut(Contract):
+    id: PushId
+    payout_id: PushId
+    client_id: PushId
+    statement_line_id: PushId
+    reason: str
+    status: Literal["proposed", "approved", "declined", "withdrawn"]
+    proposed_by: PushId
+    proposed_at: datetime
+    decided_by: PushId | None
+    decided_at: datetime | None
+    decision_reason: str | None
+    # The `payout.returned` entry the approval posted.
+    ledger_entry_id: PushId | None
+    payout: ReturnedPayoutOut
+    line: ReturnLineOut | None = Field(
+        description="The line that brought the money back. Null once it leaves the search window."
+    )
+
+
+def _money(amount: Money) -> MoneyView:
+    return MoneyView(minor=amount.minor, currency=amount.currency.value)
+
+
+def _line(line: StatementLineView) -> ReturnLineOut:
+    return ReturnLineOut(
+        id=line.id,
+        value_date=line.value_date,
+        amount=_money(line.amount),
+        reference=line.reference,
+        narrative=line.counterparty_hint,
+    )
+
+
+async def _out(session: AsyncSession, view: returns.ReturnView) -> ReturnOut:
+    found = await returns.details(session, view)
     return ReturnOut(
         id=view.id,
         payout_id=view.payout_id,
@@ -119,6 +151,15 @@ def _out(view: returns.ReturnView) -> ReturnOut:
         decided_at=view.decided_at,
         decision_reason=view.decision_reason,
         ledger_entry_id=view.ledger_entry_id,
+        payout=ReturnedPayoutOut(
+            kind=found.payout.kind.value,
+            amount=_money(found.payout.amount),
+            bank_name=found.bank_name,
+            network=found.network,
+            masked_account=found.masked_account,
+            holder_name=found.holder_name,
+        ),
+        line=None if found.line is None else _line(found.line),
     )
 
 
@@ -133,7 +174,7 @@ async def waiting(staff: Viewer, database: Db) -> list[ReturnOut]:
     """Returns waiting for a second person, oldest first, at most 100."""
     async with database.actor_transaction(staff.actor) as session:
         found = await returns.waiting(session, limit=100)
-    return [_out(each) for each in found]
+        return [await _out(session, each) for each in found]
 
 
 @staff_router.get("/payout-returns/returnable")
@@ -176,23 +217,14 @@ async def return_lines(payout_id: PushId, staff: Viewer, database: Db) -> list[R
             found = await returns.return_lines(session, payout_id)
     except ReturnRefused as error:
         raise _refused(error) from None
-    return [
-        ReturnLineOut(
-            id=line.id,
-            value_date=line.value_date,
-            amount=MoneyView(minor=line.amount.minor, currency=line.amount.currency.value),
-            reference=line.reference,
-            narrative=line.counterparty_hint,
-        )
-        for line in found
-    ]
+    return [_line(line) for line in found]
 
 
 @staff_router.get("/payout-returns/{return_id}")
 async def get_return(return_id: PushId, staff: Viewer, database: Db) -> ReturnOut:
     async with database.actor_transaction(staff.actor) as session:
         view = await returns.get_return(session, return_id)
-    return _out(view)
+        return await _out(session, view)
 
 
 @staff_router.post("/payouts/{payout_id}/returns", status_code=201)
@@ -217,9 +249,10 @@ async def propose(
                 idempotency_key=idempotency_key,
                 clock=clock,
             )
+            out = await _out(session, view)
     except ReturnRefused as error:
         raise _refused(error) from None
-    return _out(view)
+    return out
 
 
 @staff_router.post("/payout-returns/{return_id}/approve")
@@ -243,9 +276,10 @@ async def approve(
                 idempotency_key=idempotency_key,
                 clock=clock,
             )
+            out = await _out(session, view)
     except ReturnRefused as error:
         raise _refused(error) from None
-    return _out(view)
+    return out
 
 
 @staff_router.post("/payout-returns/{return_id}/decline")
@@ -259,9 +293,10 @@ async def decline(
             view = await returns.decline(
                 session, staff.actor, return_id, reason=body.reason, clock=clock
             )
+            out = await _out(session, view)
     except ReturnRefused as error:
         raise _refused(error) from None
-    return _out(view)
+    return out
 
 
 @staff_router.post("/payout-returns/{return_id}/withdraw")
@@ -274,6 +309,7 @@ async def withdraw(
             view = await returns.withdraw(
                 session, staff.actor, return_id, reason=body.reason, clock=clock
             )
+            out = await _out(session, view)
     except ReturnRefused as error:
         raise _refused(error) from None
-    return _out(view)
+    return out

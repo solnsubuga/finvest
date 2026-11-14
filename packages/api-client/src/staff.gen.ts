@@ -2008,6 +2008,16 @@ export const ReturnLineOut = z.object({
 });
 export type ReturnLineOut = z.infer<typeof ReturnLineOut>;
 
+export const ReturnedPayoutOut = z.object({
+  amount: MoneyView,
+  bank_name: z.string().nullable(),
+  holder_name: z.string(),
+  kind: z.enum(["bank", "mobile_money"]),
+  masked_account: z.string(),
+  network: z.string().nullable(),
+});
+export type ReturnedPayoutOut = z.infer<typeof ReturnedPayoutOut>;
+
 export const ReturnOut = z.object({
   client_id: z.string(),
   decided_at: z.string().nullable(),
@@ -2015,6 +2025,8 @@ export const ReturnOut = z.object({
   decision_reason: z.string().nullable(),
   id: z.string(),
   ledger_entry_id: z.string().nullable(),
+  line: ReturnLineOut.nullable(),
+  payout: ReturnedPayoutOut,
   payout_id: z.string(),
   proposed_at: z.string(),
   proposed_by: z.string(),
