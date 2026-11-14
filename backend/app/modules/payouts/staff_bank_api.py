@@ -82,6 +82,16 @@ class ReasonIn(Contract):
     reason: Reason
 
 
+class BatchItemOut(Contract):
+    payout_id: PushId
+    client_id: PushId
+    amount: MoneyView
+    bank_name: str | None
+    # The approved account, masked. The whole number is only in the transfer file.
+    masked_account: str
+    holder_name: str
+
+
 class BatchOut(Contract):
     id: PushId
     currency: CurrencyCode
@@ -94,6 +104,8 @@ class BatchOut(Contract):
     decision_reason: str | None
     payout_ids: list[PushId]
     total: MoneyView
+    # Each payout with its masked account: on one batch, and on a prepared batch in the list.
+    items: list[BatchItemOut] | None = None
 
 
 class SettlementIn(Contract):
@@ -154,7 +166,20 @@ def _payout(payout: PayoutView) -> BankPayoutOut:
     )
 
 
-def _batch(view: bank_payouts.BatchView) -> BatchOut:
+def _item(item: bank_payouts.BatchItem) -> BatchItemOut:
+    return BatchItemOut(
+        payout_id=item.payout_id,
+        client_id=item.client_id,
+        amount=_money(item.amount),
+        bank_name=item.bank_name,
+        masked_account=item.masked_account,
+        holder_name=item.holder_name,
+    )
+
+
+def _batch(
+    view: bank_payouts.BatchView, items: list[bank_payouts.BatchItem] | None = None
+) -> BatchOut:
     return BatchOut(
         id=view.id,
         currency=view.currency.value,
@@ -167,6 +192,7 @@ def _batch(view: bank_payouts.BatchView) -> BatchOut:
         decision_reason=view.decision_reason,
         payout_ids=list(view.payout_ids),
         total=_money(view.total),
+        items=None if items is None else [_item(each) for each in items],
     )
 
 
@@ -230,19 +256,30 @@ async def list_batches(
         "approved",
     ],
 ) -> list[BatchOut]:
-    """Batches in these statuses, newest first, at most 100."""
+    """Batches in these statuses, newest first, at most 100. A prepared batch carries its
+    `items`, for the second person to check; open one to see the items of any other."""
     async with database.actor_transaction(staff.actor) as session:
         found = await bank_payouts.batches(
             session, [BatchStatus(each) for each in status], limit=100
         )
-    return [_batch(each) for each in found]
+        out = [
+            _batch(
+                each,
+                await bank_payouts.batch_items(session, each)
+                if each.status is BatchStatus.PREPARED
+                else None,
+            )
+            for each in found
+        ]
+    return out
 
 
 @staff_router.get("/payout-bank-batches/{batch_id}")
 async def get_batch(batch_id: PushId, staff: Viewer, database: Db) -> BatchOut:
     async with database.actor_transaction(staff.actor) as session:
         view = await bank_payouts.get_batch(session, batch_id)
-    return _batch(view)
+        items = await bank_payouts.batch_items(session, view)
+    return _batch(view, items)
 
 
 @staff_router.post("/payout-bank-batches", status_code=201)

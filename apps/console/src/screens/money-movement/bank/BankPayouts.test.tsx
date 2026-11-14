@@ -1,6 +1,7 @@
 import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
+import { createStubDirectory } from "@/directory/stub.ts";
 import { BankPayoutsError, notConnectedBankPayoutsApi, type BankPayoutsApi } from "./api.ts";
 import { BankPayouts } from "./BankPayouts.tsx";
 import { createStubBankPayoutsApi } from "./stub.ts";
@@ -9,7 +10,7 @@ const ME = "-Nstaff000000000000A";
 
 function renderSection(api: BankPayoutsApi = createStubBankPayoutsApi(ME, 0), canChange = true, save = vi.fn()) {
   let keys = 0;
-  render(<BankPayouts api={api} me={ME} canChange={canChange} newKey={() => `key-${++keys}`} save={save} />);
+  render(<BankPayouts api={api} me={ME} canChange={canChange} newKey={() => `key-${++keys}`} save={save} directory={createStubDirectory()} />);
   return { user: userEvent.setup(), save };
 }
 
@@ -43,6 +44,25 @@ describe("bank payouts", () => {
     expect(await within(form).findByText(/Batch prepared/)).toBeInTheDocument();
     expect(within(table).getAllByRole("rowheader")).toHaveLength(2);
     expect(within(batches()).getAllByRole("article")).toHaveLength(3);
+  });
+
+  it("lists each payout of a batch for the second person, with its account masked", async () => {
+    renderSection();
+    const batch = await screen.findByRole("article", { name: "Batch of UGX 5,000,000" });
+    const table = await within(batch).findByRole("table", { name: "Payouts in this batch" });
+    const rows = within(table).getAllByRole("row").slice(1);
+    expect(rows.map((row) => within(row).getByRole("rowheader").textContent)).toEqual(["UGX 3,000,000", "UGX 2,000,000"]);
+    expect(rows[0]).toHaveTextContent(/••••\s\d{4}/);
+    expect(await within(rows[0]!).findAllByText("Kira Road Savings Group")).toHaveLength(2);
+    // An approved batch's payouts are in its file, not on the card.
+    const approved = screen.getByRole("article", { name: "Batch of UGX 7,350,000" });
+    expect(within(approved).queryByRole("table")).not.toBeInTheDocument();
+  });
+
+  it("names the clients waiting through the directory", async () => {
+    renderSection();
+    const table = await screen.findByRole("table", { name: /waiting to be sent/ });
+    expect(await within(table).findByText("Peter Okello")).toBeInTheDocument();
   });
 
   it("shows each currency's payouts on its own", async () => {
