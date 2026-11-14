@@ -90,11 +90,6 @@ export const BodyAddDocumentClientOrganisationsOrganisationIdDocumentsKindPut = 
 });
 export type BodyAddDocumentClientOrganisationsOrganisationIdDocumentsKindPut = z.infer<typeof BodyAddDocumentClientOrganisationsOrganisationIdDocumentsKindPut>;
 
-export const BodyAddPhotoClientClaimCheckPhotosKindPut = z.object({
-  photo: Upload,
-});
-export type BodyAddPhotoClientClaimCheckPhotosKindPut = z.infer<typeof BodyAddPhotoClientClaimCheckPhotosKindPut>;
-
 export const BodyAddPhotoClientIdentityCheckPhotosKindPut = z.object({
   photo: Upload,
 });
@@ -131,9 +126,6 @@ export type ChangeBody = z.infer<typeof ChangeBody>;
 
 export const CheckStatus = z.enum(["draft", "submitted", "needs_review", "with_compliance", "awaiting_client", "approved", "rejected"]);
 export type CheckStatus = z.infer<typeof CheckStatus>;
-
-export const ClaimCheckStatus = z.enum(["draft", "needs_review", "awaiting_client", "matched", "not_matched"]);
-export type ClaimCheckStatus = z.infer<typeof ClaimCheckStatus>;
 
 export const ClaimComplete = z.object({
   challenge_id: z.string(),
@@ -238,23 +230,6 @@ export const ClientCheckEnvelope = z.object({
   check: ClientCheck.nullable(),
 });
 export type ClientCheckEnvelope = z.infer<typeof ClientCheckEnvelope>;
-
-export const ClientClaimCheck = z.object({
-  client_message: z.string().nullable(),
-  id: z.string(),
-  missing: z.array(z.string()),
-  photos: z.array(ClientPhoto),
-  retake_photos: z.array(PhotoKind),
-  retaken: z.array(PhotoKind),
-  status: ClaimCheckStatus,
-  submitted_at: z.string().nullable(),
-});
-export type ClientClaimCheck = z.infer<typeof ClientClaimCheck>;
-
-export const ClientClaimCheckEnvelope = z.object({
-  check: ClientClaimCheck.nullable(),
-});
-export type ClientClaimCheckEnvelope = z.infer<typeof ClientClaimCheckEnvelope>;
 
 export const ClosureView = z.object({
   cancelled_at: z.string().nullable(),
@@ -1638,52 +1613,6 @@ export const operations = {
     idempotent: false,
     status: 200,
     response: ClaimStateView,
-  },
-  "GET /client/claim-check": {
-    method: "GET",
-    path: "/client/claim-check",
-    params: z.object({}),
-    query: z.object({}),
-    body: null,
-    bodyKind: null,
-    idempotent: false,
-    status: 200,
-    response: ClientClaimCheckEnvelope,
-  },
-  "POST /client/claim-check": {
-    method: "POST",
-    path: "/client/claim-check",
-    params: z.object({}),
-    query: z.object({}),
-    body: null,
-    bodyKind: null,
-    idempotent: false,
-    status: 200,
-    response: ClientClaimCheck,
-  },
-  "PUT /client/claim-check/photos/{kind}": {
-    method: "PUT",
-    path: "/client/claim-check/photos/{kind}",
-    params: z.object({
-    kind: PhotoKind,
-  }),
-    query: z.object({}),
-    body: BodyAddPhotoClientClaimCheckPhotosKindPut,
-    bodyKind: "multipart",
-    idempotent: false,
-    status: 200,
-    response: ClientClaimCheck,
-  },
-  "POST /client/claim-check/submit": {
-    method: "POST",
-    path: "/client/claim-check/submit",
-    params: z.object({}),
-    query: z.object({}),
-    body: null,
-    bodyKind: null,
-    idempotent: false,
-    status: 200,
-    response: ClientClaimCheck,
   },
   "POST /client/claim/complete": {
     method: "POST",
