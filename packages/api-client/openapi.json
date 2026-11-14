@@ -168,7 +168,8 @@
           "kind": {
             "enum": [
               "pin_reset",
-              "withdrawal_limits"
+              "withdrawal_limits",
+              "statement"
             ],
             "title": "Kind",
             "type": "string"
@@ -203,6 +204,16 @@
             "title": "Reason",
             "type": "string"
           },
+          "statement": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/StatementPeriod"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "status": {
             "enum": [
               "proposed",
@@ -232,6 +243,7 @@
           "decided_at",
           "decision_reason",
           "limits",
+          "statement",
           "yours"
         ],
         "title": "ActionView",
@@ -251,7 +263,8 @@
             "items": {
               "enum": [
                 "pin_reset",
-                "withdrawal_limits"
+                "withdrawal_limits",
+                "statement"
               ],
               "type": "string"
             },
@@ -651,7 +664,8 @@
               "compliance_case",
               "bank_account_change",
               "client_pin_reset",
-              "client_limits"
+              "client_limits",
+              "client_statement"
             ],
             "title": "Kind",
             "type": "string"
@@ -12133,7 +12147,8 @@
           "kind": {
             "enum": [
               "pin_reset",
-              "withdrawal_limits"
+              "withdrawal_limits",
+              "statement"
             ],
             "title": "Kind",
             "type": "string"
@@ -12153,6 +12168,16 @@
             "minLength": 1,
             "title": "Reason",
             "type": "string"
+          },
+          "statement": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/StatementPeriod"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "required": [
@@ -14638,7 +14663,8 @@
                 "organisations.review",
                 "client_notes.write",
                 "client_pins.reset",
-                "client_limits.change"
+                "client_limits.change",
+                "client_statements.send"
               ],
               "type": "string"
             },
@@ -18511,7 +18537,8 @@
                 "organisations.review",
                 "client_notes.write",
                 "client_pins.reset",
-                "client_limits.change"
+                "client_limits.change",
+                "client_statements.send"
               ],
               "type": "string"
             },
@@ -19130,6 +19157,28 @@
           "line_count"
         ],
         "title": "StatementOut",
+        "type": "object"
+      },
+      "StatementPeriod": {
+        "additionalProperties": false,
+        "description": "The days a statement covers, both included, as on a client's own request.",
+        "properties": {
+          "date_from": {
+            "format": "date",
+            "title": "Date From",
+            "type": "string"
+          },
+          "date_to": {
+            "format": "date",
+            "title": "Date To",
+            "type": "string"
+          }
+        },
+        "required": [
+          "date_from",
+          "date_to"
+        ],
+        "title": "StatementPeriod",
         "type": "object"
       },
       "StatementRequest": {

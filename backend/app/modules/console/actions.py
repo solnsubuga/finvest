@@ -12,12 +12,15 @@ Each kind needs its own permission (`PERMISSIONS`) and has its own effect (`_app
 - `withdrawal_limits`, with `client_limits.change`: sets the client's own stricter withdrawal
   limits, or clears them (`payouts.set_client_limits`). `details` holds each limit in whole
   shillings, or null for none of that sort.
+- `statement`, with `client_statements.send`: asks documents for a statement of the period in
+  `details` (`date_from`, `date_to`), which the worker builds, puts in the app and emails to
+  the client's proved address (`documents.staff_statement`).
 """
 
 import json
 from collections.abc import Collection
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import date, datetime
 from typing import Any, Literal, get_args
 
 import structlog
@@ -27,6 +30,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.modules.audit import service as audit
 from app.modules.audit.domain.events import AuditActor, AuditEvent
+from app.modules.documents import service as documents
+from app.modules.documents.domain.statements import Period, PeriodRefused, requested_period
 from app.modules.identity import pin_resets
 from app.modules.identity.client_locks import client_status
 from app.modules.identity.domain.permissions import Permission
@@ -41,7 +46,7 @@ from app.shared.push_ids import push_id
 
 RESOURCE = "client_action"
 MAX_REASON = 500
-Kind = Literal["pin_reset", "withdrawal_limits"]
+Kind = Literal["pin_reset", "withdrawal_limits", "statement"]
 KINDS: tuple[Kind, ...] = get_args(Kind)
 Decision = Literal["approved", "rejected", "withdrawn"]
 Status = Literal["proposed", "approved", "rejected", "withdrawn"]
@@ -51,6 +56,7 @@ logger = structlog.get_logger()
 PERMISSIONS: dict[Kind, Permission] = {
     "pin_reset": "client_pins.reset",
     "withdrawal_limits": "client_limits.change",
+    "statement": "client_statements.send",
 }
 LIMIT_FIELDS = (
     "mobile_money_per_payout",
@@ -124,6 +130,8 @@ async def propose(
     details = details or {}
     if kind == "withdrawal_limits":
         await _check_limits(session, details, clock)
+    elif kind == "statement":
+        statement_period(details, clock.now())
     elif details:
         raise ApplicationError(
             "validation_failed",
@@ -217,6 +225,39 @@ async def _apply(session: AsyncSession, action: ClientAction, now: datetime) -> 
             action_id=action.id,
             now=now,
         )
+    elif action.kind == "statement":
+        await documents.staff_statement(
+            session,
+            action.client_id,
+            statement_period(action.details, now),
+            action_id=action.id,
+            now=now,
+        )
+
+
+def statement_period(details: dict[str, Any], now: datetime) -> Period:
+    """The period a `statement` action holds, checked as a client's own request is."""
+    try:
+        start = date.fromisoformat(str(details["date_from"]))
+        end = date.fromisoformat(str(details["date_to"]))
+    except (KeyError, ValueError):
+        raise ApplicationError(
+            "validation_failed",
+            fields=[FieldProblem(field_path=["body", "statement"], code="required")],
+        ) from None
+    if set(details) != {"date_from", "date_to"}:
+        raise ApplicationError(
+            "validation_failed",
+            fields=[FieldProblem(field_path=["body", "statement"], code="required")],
+        )
+    try:
+        return requested_period(start, end, today=business_date(now))
+    except PeriodRefused as refused:
+        field = "date_to" if refused.code == "period_in_future" else "date_from"
+        raise ApplicationError(
+            "validation_failed",
+            fields=[FieldProblem(field_path=["body", "statement", field], code=refused.code)],
+        ) from None
 
 
 def client_limits(details: dict[str, Any]) -> ClientLimits:

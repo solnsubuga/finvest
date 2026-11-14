@@ -6,7 +6,7 @@ person. Proposing or deciding an action needs the permission its kind names (see
 Every action takes two people: one proposes, a different one approves.
 """
 
-from datetime import datetime
+from datetime import date, datetime
 from typing import Annotated, Any, Literal
 
 from fastapi import APIRouter, Depends, Request
@@ -41,6 +41,8 @@ ActionDecider = Annotated[StaffSession, Depends(require_confirmed("clients.view"
 Reason = Annotated[str, Field(min_length=1, max_length=actions.MAX_REASON)]
 ActionKind = actions.Kind
 MAX_AMOUNT = 10**15
+# A date as an ISO string in JSON, as on a client's own statement request.
+IsoDate = Annotated[date, Field(strict=False)]
 NoteBody = Annotated[str, Field(min_length=1, max_length=notes.MAX_BODY)]
 
 
@@ -97,6 +99,13 @@ class LimitsView(Contract):
     review_above: int | None
 
 
+class StatementPeriod(Contract):
+    """The days a statement covers, both included, as on a client's own request."""
+
+    date_from: IsoDate
+    date_to: IsoDate
+
+
 class ClientLimitsView(Contract):
     # The limits for every client today.
     shared: LimitsView
@@ -122,6 +131,8 @@ class ActionView(Contract):
     decision_reason: str | None
     # For `withdrawal_limits`, the limits it sets. All null clears the client's own limits.
     limits: LimitsView | None
+    # For `statement`, the days it covers.
+    statement: StatementPeriod | None
     # The proposer can withdraw it. Anyone else who holds the kind's permission decides it.
     yours: bool
 
@@ -137,6 +148,8 @@ class ProposeAction(Contract):
     reason: Reason
     # Required for `withdrawal_limits`, and only there.
     limits: LimitsIn | None = None
+    # Required for `statement`, and only there.
+    statement: StatementPeriod | None = None
 
 
 class DecideAction(Contract):
@@ -226,19 +239,24 @@ async def client_withdrawal_limits(
 
 
 def _details(body: ProposeAction) -> dict[str, Any]:
-    if body.kind != "withdrawal_limits":
-        if body.limits is not None:
+    """The details of the kind, which must be the only details sent."""
+    given = {"limits": body.limits, "statement": body.statement}
+    wanted = {"withdrawal_limits": "limits", "statement": "statement"}.get(body.kind)
+    for name, value in given.items():
+        if name != wanted and value is not None:
             raise ApplicationError(
                 "validation_failed",
-                fields=[FieldProblem(field_path=["body", "limits"], code="not_allowed")],
+                fields=[FieldProblem(field_path=["body", name], code="not_allowed")],
             )
+    if wanted is None:
         return {}
-    if body.limits is None:
+    value = given[wanted]
+    if value is None:
         raise ApplicationError(
             "validation_failed",
-            fields=[FieldProblem(field_path=["body", "limits"], code="required")],
+            fields=[FieldProblem(field_path=["body", wanted], code="required")],
         )
-    return body.limits.model_dump()
+    return value.model_dump(mode="json")
 
 
 def _limits(limits: WithdrawalLimits | ClientLimits) -> LimitsView:
@@ -285,6 +303,9 @@ def _action(action: actions.ClientAction, staff: StaffSession) -> ActionView:
         decision_reason=action.decision_reason,
         limits=_limits(actions.client_limits(action.details))
         if action.kind == "withdrawal_limits"
+        else None,
+        statement=StatementPeriod.model_validate(action.details)
+        if action.kind == "statement"
         else None,
         yours=action.proposed_by == staff.staff_id,
     )

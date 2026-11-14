@@ -8,7 +8,8 @@ complaint outcomes, the suppression lifts, the client locks, the announcements, 
 changes, Finvest's own money in the buffer, the payments of tax to URA, the payments moved to
 the right client, next of kin, the answers to the investing questions, the requests to close an
 account, the journals sent to the accounting system, who set the bank account clients pay
-into, why a payout send waited, or staff notes, actions and withdrawal limits for a client."""
+into, why a payout send waited, or staff notes, actions, withdrawal limits and statements sent
+for a client."""
 
 import os
 from collections.abc import Iterator
@@ -999,6 +1000,17 @@ ROWS = {
         "proposed_at) VALUES ('-Nabc0000000000000A1', '-Nabc0000000000000B1', "
         "'withdrawal_limits', '{}', 'Lower them', '-Nabc0000000000000S1', now())",
         "refusing to drop client withdrawal limits that hold records",
+    ),
+    "0353_documents_staff_statements": (
+        "ALTER TABLE console_client_actions DISABLE TRIGGER console_client_actions_guard; "
+        "INSERT INTO identity_clients (id, phone, status, created_at) VALUES "
+        "('-Nabc0000000000000B1', '+256772123456', 'unclaimed', now()); "
+        "INSERT INTO identity_staff (id, email, name, role, created_at) "
+        "VALUES ('-Nabc0000000000000S1', 'ada@example.com', 'Ada Nakato', 'support', now()); "
+        "INSERT INTO console_client_actions (id, client_id, kind, details, reason, proposed_by, "
+        "proposed_at) VALUES ('-Nabc0000000000000A1', '-Nabc0000000000000B1', 'statement', "
+        "'{}', 'Asked for one', '-Nabc0000000000000S1', now())",
+        "refusing to drop statements staff sent that hold records",
     ),
 }
 

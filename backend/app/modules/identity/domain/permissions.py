@@ -133,6 +133,9 @@ Permission = Literal[
     # Proposing or deciding a client's own stricter withdrawal limits, or clearing them. They
     # only ever lower the shared limits. Always takes a second person. Not a screen.
     "client_limits.change",
+    # Proposing or deciding to send a client a statement of chosen dates, which reaches the app
+    # and their proved email as one they asked for. Always takes a second person. Not a screen.
+    "client_statements.send",
 ]
 PERMISSIONS: tuple[Permission, ...] = get_args(Permission)
 
@@ -174,6 +177,7 @@ ROLE_PERMISSIONS: dict[Role, frozenset[Permission]] = {
             "client_notes.write",
             "client_pins.reset",
             "client_limits.change",
+            "client_statements.send",
         }
     ),
     "finance": frozenset(
@@ -232,6 +236,7 @@ ROLE_PERMISSIONS: dict[Role, frozenset[Permission]] = {
             "client_notes.write",
             "client_pins.reset",
             "client_limits.change",
+            "client_statements.send",
         }
     ),
     # Support answers clients and logs and works complaints. Closing one is for operations and
@@ -247,6 +252,7 @@ ROLE_PERMISSIONS: dict[Role, frozenset[Permission]] = {
             "email_suppressions.lift",
             "client_notes.write",
             "client_pins.reset",
+            "client_statements.send",
         }
     ),
 }
