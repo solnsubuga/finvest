@@ -97,6 +97,7 @@ describe("labels", () => {
     expect(runReason(null, 1, "failed")).toMatch(/once more/);
     expect(runReason(null, 2, "failed")).toMatch(/Tried twice/);
     expect(runReason("late", 1, "missed")).toMatch(/rather than collect late/);
+    expect(runReason("closing_account", 1, "missed")).toMatch(/close your account was being checked/);
     expect(runReason(null, 1, "paid")).toBeNull();
   });
 });

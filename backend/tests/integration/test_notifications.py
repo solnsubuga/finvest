@@ -46,7 +46,7 @@ def own_queue(monkeypatch: pytest.MonkeyPatch) -> str:
 
 
 def an_address() -> str:
-    return f"person{next(_numbers)}-{push_id()[-6:].lower().replace('_', 'x')}@example.com"
+    return f"person{next(_numbers)}-{push_id()[-6:].encode().hex()}@example.com"
 
 
 def a_worker(

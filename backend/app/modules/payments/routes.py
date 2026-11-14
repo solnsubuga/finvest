@@ -8,7 +8,6 @@ A bank transfer arrives as a form with the receipt file. The file is stored firs
 transaction, then the transfer is saved pointing at it, so a saved transfer always has its file.
 """
 
-from collections.abc import Mapping
 from datetime import date, datetime, timedelta
 from typing import Annotated, Literal
 
@@ -24,8 +23,8 @@ from app.modules.identity.api import CurrentClient, require_confirmed, require_p
 from app.modules.identity.service import ClientSession, StaffSession
 from app.modules.investments import holdings
 from app.modules.kyc import service as kyc
+from app.modules.payments import bank_accounts, service
 from app.modules.payments import bank_transfers as bank
-from app.modules.payments import service
 from app.modules.payments.domain.bank_transfers import (
     MAX_RECEIPT_BYTES,
     RECEIPT_CONTENT_TYPES,
@@ -44,12 +43,10 @@ from app.modules.payments.domain.deposits import (
 )
 from app.modules.payments.domain.provider import CollectionsProvider
 from app.modules.payments.service import Deposit, DepositRequest
-from app.modules.payments.settings import BankAccountDetails
 from app.modules.reconciliation.statements import StatementLineView
 from app.shared.clock import Clock
 from app.shared.contracts import Contract, PushId
 from app.shared.errors import ApplicationError, ErrorEnvelope, FieldProblem
-from app.shared.money import Currency
 
 logger = structlog.get_logger()
 
@@ -212,12 +209,8 @@ async def _payment_view(session: AsyncSession, deposit: Deposit) -> PaymentView:
     return _view(deposit)
 
 
-def create_client_router(
-    collections: CollectionsProvider | None,
-    bank_accounts: Mapping[Currency, BankAccountDetails] | None = None,
-) -> APIRouter:
+def create_client_router(collections: CollectionsProvider | None) -> APIRouter:
     router = APIRouter(prefix="/client", tags=["client payments"], responses=_REFUSALS)
-    accounts = dict(bank_accounts or {})
 
     @router.get("/investments/{investment_id}/bank-transfer-details")
     async def bank_transfer_details(
@@ -228,7 +221,8 @@ def create_client_router(
         The same refusals as paying: 404 if it is not the client's, 409 if it can no longer be
         paid or already has a payment under way or paid (fetch that from
         `GET /client/investments/{investment_id}/payment`). 503 if no account is set for the
-        investment's currency, so the app offers mobile money instead.
+        investment's currency, so the app offers mobile money instead. The account is the one
+        staff last approved on the console's Settings screen.
         """
         async with database.actor_transaction(client.actor) as session:
             payable = await holdings.payable_investment(
@@ -240,7 +234,7 @@ def create_client_router(
             if live is not None:
                 raise ApplicationError("conflict")
             holder = await kyc.account_holder(session, client.client_id)
-        account = accounts.get(payable.amount.currency)
+            account = await bank_accounts.account_in_use(session, payable.amount.currency)
         if account is None or holder is None:
             raise ApplicationError("unavailable")
         return BankTransferDetails(

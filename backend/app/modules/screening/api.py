@@ -8,19 +8,22 @@ the last few minutes. Closing a case always takes two people.
 Clients never see any of this: telling a client they matched a list could tip them off.
 """
 
-from datetime import datetime
+from datetime import datetime, time
 from typing import Annotated, Any, Literal
 
-from fastapi import APIRouter, Depends, Query, Request
+from fastapi import APIRouter, Depends, Query, Request, Response
 from pydantic import Field
 
 from app.api.idempotency import IdempotencyKey
 from app.infrastructure.database import Database
+from app.modules.audit import service as audit
+from app.modules.audit.domain.events import AuditActor, AuditEvent
 from app.modules.identity.api import require_confirmed, require_permission
 from app.modules.identity.service import StaffSession
 from app.modules.kyc import service as kyc
 from app.modules.payouts import payouts
 from app.modules.screening import service
+from app.modules.screening.domain import monitoring
 from app.modules.screening.domain.cases import (
     MAX_TEXT,
     OUTCOMES,
@@ -30,6 +33,9 @@ from app.modules.screening.domain.cases import (
     Decision,
     ProposalStatus,
 )
+from app.modules.screening.domain.register import RegisterRow, register_csv
+from app.modules.screening.domain.standing import RESCREEN_EVERY
+from app.shared.business_day import KAMPALA, business_date
 from app.shared.clock import Clock
 from app.shared.contracts import Contract, PushId
 from app.shared.errors import ErrorEnvelope
@@ -99,6 +105,11 @@ class CaseProposalOut(Contract):
     decision_note: str | None
 
 
+class CaseAmountOut(Contract):
+    minor: int
+    currency: Literal["UGX", "USD"]
+
+
 class CaseOut(Contract):
     id: PushId
     client: ClientOut
@@ -111,6 +122,8 @@ class CaseOut(Contract):
     closed_at: datetime | None
     # The open proposal, if a first person has made one.
     waiting: CaseProposalOut | None
+    # For a monitoring case, the payment that raised it (for split deposits, their total).
+    amount: CaseAmountOut | None
 
 
 class RunOut(Contract):
@@ -180,6 +193,35 @@ class SummaryOut(Contract):
     pending: int
     last_screened_at: datetime | None
     payouts_waiting: int
+    # Cases closed since 1 January (Kampala) with a report owed to the Financial Intelligence
+    # Authority.
+    reports_to_fia_this_year: int
+
+
+class MonitoringRulesOut(Contract):
+    """The transaction monitoring rules as they run, read from the rules themselves."""
+
+    currency: Literal["UGX", "USD"]
+    # One deposit at or above this opens a case.
+    large_deposit_minor: int
+    # Deposits under the large amount that together reach it within this many days.
+    split_deposits_days: int
+    # This many deposits or more within this many hours.
+    many_deposits_count: int
+    many_deposits_hours: int
+    # A deposit at least this many times the client's usual one, and at least the floor, once
+    # the client has made this many deposits in the lookback.
+    unusual_multiple: int
+    unusual_floor_minor: int
+    unusual_history: int
+    unusual_lookback_days: int
+    # A payout of at least this share of what came in within the window, above the floor.
+    quick_withdrawal_days: int
+    quick_withdrawal_share_numerator: int
+    quick_withdrawal_share_denominator: int
+    quick_withdrawal_floor_minor: int
+    # Approved clients are screened again this often.
+    rescreen_every_days: int
 
 
 class HeldAmountOut(Contract):
@@ -255,7 +297,19 @@ def _case(case: service.Case, identities: dict[str, kyc.Identity]) -> CaseOut:
         outcome=case.outcome.value if case.outcome else None,
         closed_at=case.closed_at,
         waiting=_proposal(case.waiting) if case.waiting else None,
+        amount=_amount(case.detail),
     )
+
+
+def _amount(detail: dict[str, Any]) -> CaseAmountOut | None:
+    minor = monitoring.case_amount_minor(detail)
+    if minor is None:
+        return None
+    return CaseAmountOut(minor=minor, currency=monitoring.RULE_CURRENCY.value)
+
+
+def _year_start(now: datetime) -> datetime:
+    return datetime.combine(business_date(now).replace(month=1, day=1), time(), KAMPALA)
 
 
 def _run(run: service.Run) -> RunOut:
@@ -293,7 +347,8 @@ def create_router(screening_provider: str) -> APIRouter:
     async def compliance_summary(staff: Viewers, database: Db, clock: Time) -> SummaryOut:
         """What is waiting, and whether screening is running."""
         async with database.actor_transaction(staff.actor) as session:
-            found = await service.summary(session, clock.now())
+            now = clock.now()
+            found = await service.summary(session, now, year_start=_year_start(now))
             waiting = len(await payouts.waiting_for_screening(session, limit=200))
         return SummaryOut(
             screening_on=screening_provider != "none",
@@ -308,6 +363,78 @@ def create_router(screening_provider: str) -> APIRouter:
             pending=found.pending,
             last_screened_at=found.last_screened_at,
             payouts_waiting=waiting,
+            reports_to_fia_this_year=found.reported_this_year,
+        )
+
+    @router.get("/rules")
+    async def monitoring_rules(staff: Viewers) -> MonitoringRulesOut:
+        """The monitoring rules that open cases, and how often clients are screened again."""
+        return MonitoringRulesOut(
+            currency=monitoring.RULE_CURRENCY.value,
+            large_deposit_minor=monitoring.LARGE_AMOUNT,
+            split_deposits_days=monitoring.SPLIT_WINDOW.days,
+            many_deposits_count=monitoring.MANY_COUNT,
+            many_deposits_hours=int(monitoring.MANY_WINDOW.total_seconds()) // 3600,
+            unusual_multiple=monitoring.UNUSUAL_MULTIPLE,
+            unusual_floor_minor=monitoring.UNUSUAL_FLOOR,
+            unusual_history=monitoring.UNUSUAL_HISTORY,
+            unusual_lookback_days=monitoring.UNUSUAL_LOOKBACK.days,
+            quick_withdrawal_days=monitoring.QUICK_WINDOW.days,
+            quick_withdrawal_share_numerator=monitoring.QUICK_SHARE[0],
+            quick_withdrawal_share_denominator=monitoring.QUICK_SHARE[1],
+            quick_withdrawal_floor_minor=monitoring.QUICK_FLOOR,
+            rescreen_every_days=RESCREEN_EVERY.days,
+        )
+
+    @router.get(
+        "/cases.csv",
+        response_class=Response,
+        responses={200: {"content": {"text/csv": {}}}},
+        summary="Every compliance case as a CSV file: the register",
+    )
+    async def export_register(staff: Viewers, database: Db, clock: Time) -> Response:
+        """Newest first, with each client's account number and name. Every export is on the audit
+        trail. More than 10,000 cases is refused with `too_many_cases`."""
+        async with database.actor_transaction(staff.actor) as session:
+            cases = await service.register(session)
+            identities = await kyc.identities(session, sorted({c.client_id for c in cases}))
+            await audit.record(
+                session,
+                AuditEvent(
+                    category="access",
+                    action="compliance.register_exported",
+                    resource_type="compliance_register",
+                    resource_id="all",
+                    actor=AuditActor.staff(staff.staff_id),
+                    details={"cases": len(cases)},
+                ),
+                clock,
+            )
+        rows = []
+        for case in cases:
+            found = identities.get(case.client_id)
+            rows.append(
+                RegisterRow(
+                    case_id=case.id,
+                    opened_at=case.opened_at,
+                    source=case.source.value,
+                    code=case.code,
+                    amount_minor=monitoring.case_amount_minor(case.detail),
+                    account_number=found.account_number if found else None,
+                    name=found.verified_name if found else None,
+                    status=case.status.value,
+                    outcome=case.outcome.value if case.outcome else None,
+                    closed_at=case.closed_at,
+                )
+            )
+        name = f"finvest-compliance-register-{business_date(clock.now()).isoformat()}.csv"
+        return Response(
+            content=register_csv(rows),
+            media_type="text/csv; charset=utf-8",
+            headers={
+                "Content-Disposition": f'attachment; filename="{name}"',
+                "Cache-Control": "no-store",
+            },
         )
 
     @router.get("/payouts")

@@ -3,6 +3,7 @@ import { StyleSheet, View } from "react-native";
 import { Redirect, Stack, useRouter } from "expo-router";
 
 import { useAuth } from "@/auth/AuthProvider";
+import { stepOf } from "@/auth/signupSteps";
 import { formatE164 } from "@/auth/phone";
 import { AuthError, describeAuthError } from "@/auth/types";
 import { BackButton } from "@/components/BackButton";
@@ -30,7 +31,7 @@ const NEXT_STEPS = [
 
 export default function SignupCode() {
   const router = useRouter();
-  const { client, signup, setTicket } = useAuth();
+  const { client, signup, setTicket, pinApplies } = useAuth();
   const [code, setCode] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -74,7 +75,7 @@ export default function SignupCode() {
       <Stack.Screen options={{ title: "Enter your code" }} />
       <View style={styles.top}>
         <BackButton fallback="/signup" />
-        <StepProgress step={1} of={4} />
+        <StepProgress {...stepOf("code", pinApplies)} />
       </View>
       <View style={{ marginTop: 36, gap: 12 }}>
         <Title>Enter the code we sent you</Title>

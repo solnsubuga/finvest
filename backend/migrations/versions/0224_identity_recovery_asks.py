@@ -1,7 +1,7 @@
 """Keep the latest call-back number when someone asks again while their request is open.
 
 Revision ID: 0224_identity_recovery_asks
-Revises: 0222_identity_recovery_requests
+Revises: 0260_payment_bank_accounts
 
 Under 0222 a second ask while a request was open recorded nothing, so a person who gave a wrong
 number to call, or whose phone died, could not correct it, and staff called a dead number. Now a
@@ -19,7 +19,7 @@ worker's roles may still only close it.
 from alembic import op
 
 revision = "0224_identity_recovery_asks"
-down_revision = "0222_identity_recovery_requests"
+down_revision = "0260_payment_bank_accounts"
 branch_labels = None
 depends_on = None
 # The running release only writes these rows through identity_request_recovery, which this

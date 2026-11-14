@@ -1,6 +1,6 @@
 import type { AutoinvestApiPlanView as PlanView, ProductOut, RunView } from "@finvest/api-client/client";
 
-import { api, ApiError } from "@/api/http";
+import { api, ApiError, isAccountClosing } from "@/api/http";
 
 import { AutoinvestClient, AutoinvestError, Plan, PlanProduct, Run } from "./types";
 
@@ -68,6 +68,7 @@ export function toAutoinvestError(error: unknown, call: Call = "other"): Autoinv
       // Nobody invests before their identity check is approved.
       return new AutoinvestError("not_verified");
     case "conflict":
+      if (isAccountClosing(error)) return new AutoinvestError("account_closing");
       // Creating: the most open plans at once. Anything else: the plan has stopped.
       return new AutoinvestError(call === "create" ? "too_many_plans" : "stopped");
     case "validation_failed": {

@@ -511,10 +511,10 @@ async def test_sweeps_do_not_pile_up_reads_of_an_uncertain_deposit(
     assert (
         await count(
             worker_database,
-            "SELECT count(*) FROM jobs WHERE kind = :kind AND idempotency_key LIKE :key "
+            "SELECT count(*) FROM jobs WHERE kind = :kind AND starts_with(idempotency_key, :key) "
             "AND status = 'pending'",
             kind=service.VERIFY_KIND,
-            key=f"{deposit.id}:uncertain:%",
+            key=f"{deposit.id}:uncertain:",
         )
         == 1
     )
@@ -547,10 +547,10 @@ async def test_a_sweep_reaches_every_uncertain_deposit_however_many_there_are(
         assert (
             await count(
                 worker_database,
-                "SELECT count(*) FROM jobs WHERE kind = :kind AND idempotency_key LIKE :key "
-                "AND status = 'pending'",
+                "SELECT count(*) FROM jobs WHERE kind = :kind "
+                "AND starts_with(idempotency_key, :key) AND status = 'pending'",
                 kind=service.VERIFY_KIND,
-                key=f"{deposit.id}:uncertain:%",
+                key=f"{deposit.id}:uncertain:",
             )
             == 1
         )

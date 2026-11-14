@@ -10,12 +10,8 @@ from typing import Literal, Self
 from pydantic import Field, SecretStr, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-from app.infrastructure.email.message import TAG, InvalidEmail, Sender
+from app.infrastructure.email.message import InvalidEmail, Sender
 from app.infrastructure.email.transports import DisabledTransport, EmailTransport, ResendTransport
-
-# The tag the shared webhook router at hooks.fidiba.com routes Resend's events by. The name is
-# fixed by the router. The value names this environment: `app_finvest_prod` in production.
-ENVIRONMENT_TAG = "fidiba_environment"
 
 
 class EmailSettings(BaseSettings):
@@ -32,11 +28,8 @@ class EmailSettings(BaseSettings):
     resend_api_key: SecretStr | None = None
     resend_api_url: str = "https://api.resend.com"
     timeout_seconds: float = Field(default=30, gt=0, le=120)
-    # `FINVEST_EMAIL_FIDIBA_ENVIRONMENT`. Without it, messages still send, but the router cannot
-    # return their delivery events to this environment.
-    fidiba_environment: str | None = None
 
-    @field_validator("sender", "resend_api_key", "fidiba_environment", mode="before")
+    @field_validator("sender", "resend_api_key", mode="before")
     @classmethod
     def blank_is_unset(cls, value: object) -> object:
         # Compose passes unset variables as empty strings.
@@ -56,8 +49,6 @@ class EmailSettings(BaseSettings):
             raise ValueError("FINVEST_EMAIL_RESEND_API_KEY is required for Resend")
         if not self.resend_api_url.startswith("https://"):
             raise ValueError("FINVEST_EMAIL_RESEND_API_URL must use https")
-        if self.fidiba_environment is not None and not TAG.fullmatch(self.fidiba_environment):
-            raise ValueError("FINVEST_EMAIL_FIDIBA_ENVIRONMENT is not a valid tag value")
         return self
 
     def transport(self) -> EmailTransport:
@@ -72,5 +63,4 @@ class EmailSettings(BaseSettings):
             sender=sender,
             base_url=self.resend_api_url,
             timeout=self.timeout_seconds,
-            tags={ENVIRONMENT_TAG: self.fidiba_environment} if self.fidiba_environment else None,
         )
