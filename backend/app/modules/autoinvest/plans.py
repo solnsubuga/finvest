@@ -29,6 +29,7 @@ from app.modules.autoinvest.domain.plans import (
     check_day,
     first_run,
 )
+from app.modules.closures.pending import refuse_if_closing
 from app.modules.investments import service as investments
 from app.modules.investments.domain.investments import AtMaturity
 from app.modules.kyc import service as kyc
@@ -166,6 +167,7 @@ async def create_plan(
     payer = await _checked(session, client_id, terms, account_phone, clock)
 
     async def command() -> Receipt:
+        await refuse_if_closing(session, client_id)
         await session.execute(_CLIENT_LOCK, {"lock": f"finvest.autoinvest.client:{client_id}"})
         count = (await session.execute(_COUNT_OPEN, {"client_id": client_id})).scalar_one()
         if count >= MAX_OPEN_PLANS:
@@ -239,6 +241,7 @@ async def pause_plan(session: AsyncSession, client: Actor, plan_id: str, clock: 
 async def resume_plan(session: AsyncSession, client: Actor, plan_id: str, clock: Clock) -> Plan:
     """Runs again from the next due day after today. Days that passed while paused are not
     made up. Resuming an active plan changes nothing."""
+    await refuse_if_closing(session, _client_id(client))
     return await _move(session, client, plan_id, PlanStatus.ACTIVE, clock)
 
 
