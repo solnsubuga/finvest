@@ -77,14 +77,14 @@ CREATE UNIQUE INDEX uq_withdrawal_limit_changes_open
 
 GUARD = """
 CREATE FUNCTION finvest_withdrawal_limit_changes_guard() RETURNS trigger
-    LANGUAGE plpgsql SET search_path = pg_catalog, public, pg_temp
+    LANGUAGE plpgsql SET search_path = pg_catalog, pg_temp
     AS $$
     BEGIN
-        IF finvest_actor_kind() IS DISTINCT FROM 'staff' THEN
+        IF public.finvest_actor_kind() IS DISTINCT FROM 'staff' THEN
             RAISE EXCEPTION 'only staff change the withdrawal limits' USING ERRCODE = '42501';
         END IF;
         IF TG_OP = 'INSERT' THEN
-            IF NEW.status <> 'proposed' OR NEW.proposed_by <> finvest_actor_id()
+            IF NEW.status <> 'proposed' OR NEW.proposed_by <> public.finvest_actor_id()
                 OR NEW.limits_id IS NOT NULL
             THEN
                 RAISE EXCEPTION 'a limits change starts as a proposal by the acting member of staff'
@@ -95,7 +95,7 @@ CREATE FUNCTION finvest_withdrawal_limit_changes_guard() RETURNS trigger
         IF OLD.status <> 'proposed' THEN
             RAISE EXCEPTION 'a decided limits change never changes' USING ERRCODE = '42501';
         END IF;
-        IF NEW.status = 'proposed' OR NEW.decided_by IS DISTINCT FROM finvest_actor_id()
+        IF NEW.status = 'proposed' OR NEW.decided_by IS DISTINCT FROM public.finvest_actor_id()
             OR (to_jsonb(NEW) - ARRAY['status', 'decided_by', 'decided_at', 'decision_reason',
                                      'limits_id'])
                <> (to_jsonb(OLD) - ARRAY['status', 'decided_by', 'decided_at', 'decision_reason',
@@ -106,7 +106,7 @@ CREATE FUNCTION finvest_withdrawal_limit_changes_guard() RETURNS trigger
         END IF;
         -- An approval names the version it made, with exactly these limits, from this proposer.
         IF NEW.status = 'approved' AND NOT EXISTS (
-            SELECT FROM withdrawal_limits l WHERE l.id = NEW.limits_id
+            SELECT FROM public.withdrawal_limits l WHERE l.id = NEW.limits_id
                 AND l.effective_from = NEW.effective_from AND l.currency = NEW.currency
                 AND l.mobile_money_per_payout = NEW.mobile_money_per_payout
                 AND l.mobile_money_per_day IS NOT DISTINCT FROM NEW.mobile_money_per_day
@@ -139,7 +139,28 @@ RULES = [
     "WITH CHECK (finvest_actor_kind() = 'staff')",
     "CREATE POLICY withdrawal_limit_changes_worker ON withdrawal_limit_changes FOR SELECT "
     f"TO {WORKER_ROLE} USING (true)",
+    # Until now one member of staff could insert a version naming a colleague as proposer. A
+    # version is now only ever the approval of a waiting change someone else proposed, with
+    # exactly its limits.
+    "DROP POLICY withdrawal_limits_app_insert ON withdrawal_limits",
+    f"CREATE POLICY withdrawal_limits_app_insert ON withdrawal_limits FOR INSERT TO {APP_ROLE} "  # noqa: S608 - constant role name
+    "WITH CHECK (finvest_actor_kind() = 'staff' AND approved_by = finvest_actor_id() "
+    "AND EXISTS (SELECT FROM withdrawal_limit_changes c WHERE c.status = 'proposed' "
+    "AND c.proposed_by = withdrawal_limits.proposed_by AND c.proposed_by <> finvest_actor_id() "
+    "AND c.effective_from = withdrawal_limits.effective_from "
+    "AND c.currency = withdrawal_limits.currency "
+    "AND c.mobile_money_per_payout = withdrawal_limits.mobile_money_per_payout "
+    "AND c.mobile_money_per_day IS NOT DISTINCT FROM withdrawal_limits.mobile_money_per_day "
+    "AND c.bank_per_payout IS NOT DISTINCT FROM withdrawal_limits.bank_per_payout "
+    "AND c.bank_per_day IS NOT DISTINCT FROM withdrawal_limits.bank_per_day "
+    "AND c.review_above IS NOT DISTINCT FROM withdrawal_limits.review_above))",
 ]
+
+# Migration 0031's rule, put back on a downgrade.
+OLD_INSERT_POLICY = (
+    f"CREATE POLICY withdrawal_limits_app_insert ON withdrawal_limits FOR INSERT TO {APP_ROLE} "
+    "WITH CHECK (finvest_actor_kind() = 'staff' AND approved_by = finvest_actor_id())"
+)
 
 
 def split(sql: str) -> list[str]:
@@ -166,5 +187,7 @@ $$
 def downgrade() -> None:
     # Who changed the limits, and when, is kept. A downgrade never erases it.
     op.execute(EMPTY_GUARD)
+    op.execute("DROP POLICY withdrawal_limits_app_insert ON withdrawal_limits")
+    op.execute(OLD_INSERT_POLICY)
     op.execute("DROP TABLE withdrawal_limit_changes")
     op.execute("DROP FUNCTION finvest_withdrawal_limit_changes_guard()")
