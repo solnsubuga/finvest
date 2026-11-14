@@ -175,7 +175,7 @@ describe("goals", () => {
 
   it("opens a running saving, where it can be taken out early", async () => {
     await signIn("772123456");
-    await screen.findByText("Welcome, Amara");
+    await screen.findByTestId("home");
     await fireEvent.press(screen.getByLabelText("Goals"));
     await fireEvent.press(await screen.findByText("School fees, Term 1"));
     expect(await screen.findByTestId("goal-take-out-note")).toBeTruthy();
