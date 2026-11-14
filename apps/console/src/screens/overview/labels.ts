@@ -11,6 +11,7 @@ const at = (path: string) => () => path;
 export const KIND_INFO: Record<Kind, KindInfo> = {
   wording_change: { label: "Client message wording", path: at("/settings") },
   announcement: { label: "Announcement to clients", path: at("/settings") },
+  account_code_map: { label: "Accounting system codes", path: at("/settings") },
   ledger_correction: { label: "Ledger correction", path: at("/finance") },
   pot_transfer: { label: "Transfer between pots", path: at("/reconciliation") },
   bank_transfer_match: { label: "Bank transfer match", path: at("/reconciliation") },

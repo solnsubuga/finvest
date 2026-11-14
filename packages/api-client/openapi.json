@@ -420,7 +420,8 @@
               "deposit_reassignment",
               "payout_release",
               "account_closure",
-              "compliance_case"
+              "compliance_case",
+              "account_code_map"
             ],
             "title": "Kind",
             "type": "string"
@@ -3589,6 +3590,31 @@
         "title": "CodeAnswer",
         "type": "object"
       },
+      "CodeMapsOut": {
+        "additionalProperties": false,
+        "properties": {
+          "codes": {
+            "items": {
+              "$ref": "#/components/schemas/LedgerCodeOut"
+            },
+            "title": "Codes",
+            "type": "array"
+          },
+          "systems": {
+            "items": {
+              "$ref": "#/components/schemas/SystemMapOut"
+            },
+            "title": "Systems",
+            "type": "array"
+          }
+        },
+        "required": [
+          "codes",
+          "systems"
+        ],
+        "title": "CodeMapsOut",
+        "type": "object"
+      },
       "ComplaintDetail": {
         "additionalProperties": false,
         "properties": {
@@ -4352,6 +4378,32 @@
           "reason"
         ],
         "title": "DecideChange",
+        "type": "object"
+      },
+      "DecideCodeMap": {
+        "additionalProperties": false,
+        "properties": {
+          "decision": {
+            "enum": [
+              "approved",
+              "rejected",
+              "withdrawn"
+            ],
+            "title": "Decision",
+            "type": "string"
+          },
+          "reason": {
+            "maxLength": 500,
+            "minLength": 1,
+            "title": "Reason",
+            "type": "string"
+          }
+        },
+        "required": [
+          "decision",
+          "reason"
+        ],
+        "title": "DecideCodeMap",
         "type": "object"
       },
       "DecideIn": {
@@ -5666,6 +5718,9 @@
             ],
             "title": "Exported By Name"
           },
+          "format": {
+            "$ref": "#/components/schemas/Format"
+          },
           "id": {
             "title": "Id",
             "type": "string"
@@ -5683,7 +5738,8 @@
           "debit_total",
           "exported_by",
           "exported_by_name",
-          "exported_at"
+          "exported_at",
+          "format"
         ],
         "title": "ExportOut",
         "type": "object"
@@ -5876,6 +5932,13 @@
             "title": "Exports",
             "type": "array"
           },
+          "formats": {
+            "items": {
+              "$ref": "#/components/schemas/FormatOut"
+            },
+            "title": "Formats",
+            "type": "array"
+          },
           "income": {
             "$ref": "#/components/schemas/IncomeOut"
           },
@@ -5916,9 +5979,60 @@
           "closed_through",
           "sent_through",
           "next_export",
-          "exports"
+          "exports",
+          "formats"
         ],
         "title": "FinanceScreenOut",
+        "type": "object"
+      },
+      "Format": {
+        "enum": [
+          "csv",
+          "quickbooks",
+          "xero",
+          "sage"
+        ],
+        "title": "Format",
+        "type": "string"
+      },
+      "FormatOut": {
+        "additionalProperties": false,
+        "description": "A file the journal can be downloaded as, and whether it can be now.",
+        "properties": {
+          "currencies": {
+            "items": {
+              "$ref": "#/components/schemas/Currency"
+            },
+            "title": "Currencies",
+            "type": "array"
+          },
+          "format": {
+            "$ref": "#/components/schemas/Format"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "ready": {
+            "title": "Ready",
+            "type": "boolean"
+          },
+          "unmapped": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Unmapped",
+            "type": "array"
+          }
+        },
+        "required": [
+          "format",
+          "name",
+          "ready",
+          "unmapped",
+          "currencies"
+        ],
+        "title": "FormatOut",
         "type": "object"
       },
       "Frequency": {
@@ -6935,7 +7049,60 @@
         "title": "JoinGroup",
         "type": "object"
       },
+      "JournalRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "currency": {
+            "$ref": "#/components/schemas/Currency",
+            "default": "UGX"
+          },
+          "date_from": {
+            "format": "date",
+            "title": "Date From",
+            "type": "string"
+          },
+          "date_to": {
+            "format": "date",
+            "title": "Date To",
+            "type": "string"
+          },
+          "format": {
+            "$ref": "#/components/schemas/Format",
+            "default": "csv"
+          }
+        },
+        "required": [
+          "date_from",
+          "date_to"
+        ],
+        "title": "JournalRequest",
+        "type": "object"
+      },
       "JsonValue": {},
+      "LedgerCodeOut": {
+        "additionalProperties": false,
+        "properties": {
+          "code": {
+            "title": "Code",
+            "type": "string"
+          },
+          "kind": {
+            "title": "Kind",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "code",
+          "name",
+          "kind"
+        ],
+        "title": "LedgerCodeOut",
+        "type": "object"
+      },
       "LiftView": {
         "additionalProperties": false,
         "properties": {
@@ -7763,6 +7930,133 @@
           "details"
         ],
         "title": "MakeComplaint",
+        "type": "object"
+      },
+      "MapVersionOut": {
+        "additionalProperties": false,
+        "properties": {
+          "accounts": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "title": "Accounts",
+            "type": "object"
+          },
+          "decided_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Decided At"
+          },
+          "decided_by": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Decided By"
+          },
+          "decided_by_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Decided By Name"
+          },
+          "decision_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Decision Reason"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "proposed_at": {
+            "format": "date-time",
+            "title": "Proposed At",
+            "type": "string"
+          },
+          "proposed_by": {
+            "title": "Proposed By",
+            "type": "string"
+          },
+          "proposed_by_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Proposed By Name"
+          },
+          "reason": {
+            "title": "Reason",
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "proposed",
+              "approved",
+              "rejected",
+              "withdrawn"
+            ],
+            "title": "Status",
+            "type": "string"
+          },
+          "tax_rate": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tax Rate"
+          },
+          "yours": {
+            "title": "Yours",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "id",
+          "accounts",
+          "tax_rate",
+          "reason",
+          "status",
+          "proposed_by",
+          "proposed_by_name",
+          "proposed_at",
+          "decided_by",
+          "decided_by_name",
+          "decided_at",
+          "decision_reason",
+          "yours"
+        ],
+        "title": "MapVersionOut",
         "type": "object"
       },
       "MarkRead": {
@@ -10711,6 +11005,44 @@
         "title": "ProposeChange",
         "type": "object"
       },
+      "ProposeCodeMap": {
+        "additionalProperties": false,
+        "properties": {
+          "accounts": {
+            "additionalProperties": {
+              "maxLength": 100,
+              "type": "string"
+            },
+            "maxProperties": 1000,
+            "title": "Accounts",
+            "type": "object"
+          },
+          "reason": {
+            "maxLength": 500,
+            "minLength": 1,
+            "title": "Reason",
+            "type": "string"
+          },
+          "tax_rate": {
+            "anyOf": [
+              {
+                "maxLength": 50,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tax Rate"
+          }
+        },
+        "required": [
+          "accounts",
+          "reason"
+        ],
+        "title": "ProposeCodeMap",
+        "type": "object"
+      },
       "ProposeIn": {
         "additionalProperties": false,
         "description": "`paid` names the ioTec statement line that carries the payout's ID; `failed` names an\nioTec statement for a day at least three days after the send.",
@@ -12817,6 +13149,7 @@
                 "wordings.change",
                 "email_suppressions.lift",
                 "announcements.send",
+                "account_codes.change",
                 "migration.view",
                 "bank_transfers.change",
                 "deposit_reassignments.change",
@@ -16272,6 +16605,7 @@
                 "wordings.change",
                 "email_suppressions.lift",
                 "announcements.send",
+                "account_codes.change",
                 "migration.view",
                 "bank_transfers.change",
                 "deposit_reassignments.change",
@@ -16911,6 +17245,86 @@
           "not_carried"
         ],
         "title": "SwitchView",
+        "type": "object"
+      },
+      "System": {
+        "description": "An accounting system with its own account codes, and so its own code map.",
+        "enum": [
+          "quickbooks",
+          "xero",
+          "sage"
+        ],
+        "title": "System",
+        "type": "string"
+      },
+      "SystemMapOut": {
+        "additionalProperties": false,
+        "properties": {
+          "account_label": {
+            "title": "Account Label",
+            "type": "string"
+          },
+          "active": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/MapVersionOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "default_tax_rate": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Default Tax Rate"
+          },
+          "history": {
+            "items": {
+              "$ref": "#/components/schemas/MapVersionOut"
+            },
+            "title": "History",
+            "type": "array"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "needs_tax_rate": {
+            "title": "Needs Tax Rate",
+            "type": "boolean"
+          },
+          "proposal": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/MapVersionOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "system": {
+            "$ref": "#/components/schemas/System"
+          }
+        },
+        "required": [
+          "system",
+          "name",
+          "account_label",
+          "needs_tax_rate",
+          "default_tax_rate",
+          "active",
+          "proposal",
+          "history"
+        ],
+        "title": "SystemMapOut",
         "type": "object"
       },
       "TaxScreenOut": {
@@ -33164,9 +33578,9 @@
       }
     },
     "/staff/compliance/cases.csv": {
-      "get": {
+      "post": {
         "description": "Newest first, with each client's account number and name. Every export is on the audit\ntrail. More than 10,000 cases is refused with `too_many_cases`.",
-        "operationId": "export_register_staff_compliance_cases_csv_get",
+        "operationId": "export_register_staff_compliance_cases_csv_post",
         "responses": {
           "200": {
             "content": {
@@ -36747,40 +37161,247 @@
         ]
       }
     },
-    "/staff/finance/journal.csv": {
+    "/staff/finance/account-codes": {
       "get": {
-        "operationId": "export_journal_staff_finance_journal_csv_get",
+        "operationId": "get_code_maps_staff_finance_account_codes_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CodeMapsOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          }
+        },
+        "summary": "Each accounting system's account code map",
+        "tags": [
+          "finance"
+        ]
+      }
+    },
+    "/staff/finance/account-codes/proposals/{map_id}/decision": {
+      "post": {
+        "operationId": "decide_code_map_staff_finance_account_codes_proposals__map_id__decision_post",
         "parameters": [
           {
-            "in": "query",
-            "name": "date_from",
+            "in": "path",
+            "name": "map_id",
             "required": true,
             "schema": {
-              "format": "date",
-              "title": "Date From",
+              "maxLength": 20,
+              "minLength": 20,
+              "pattern": "^[-0-9A-Z_a-z]{20}$",
+              "title": "Map Id",
               "type": "string"
-            }
-          },
-          {
-            "in": "query",
-            "name": "date_to",
-            "required": true,
-            "schema": {
-              "format": "date",
-              "title": "Date To",
-              "type": "string"
-            }
-          },
-          {
-            "in": "query",
-            "name": "currency",
-            "required": false,
-            "schema": {
-              "$ref": "#/components/schemas/Currency",
-              "default": "UGX"
             }
           }
         ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DecideCodeMap"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CodeMapsOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          }
+        },
+        "summary": "Approve or reject someone else's code map, or withdraw your own",
+        "tags": [
+          "finance"
+        ]
+      }
+    },
+    "/staff/finance/account-codes/{system}/proposals": {
+      "post": {
+        "description": "Exports keep the map in use until a different member of staff approves this one.",
+        "operationId": "propose_code_map_staff_finance_account_codes__system__proposals_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "system",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/System"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ProposeCodeMap"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CodeMapsOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          }
+        },
+        "summary": "Propose a whole new account code map for one accounting system",
+        "tags": [
+          "finance"
+        ]
+      }
+    },
+    "/staff/finance/journal.csv": {
+      "post": {
+        "operationId": "export_journal_staff_finance_journal_csv_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/JournalRequest"
+              }
+            }
+          },
+          "required": true
+        },
         "responses": {
           "200": {
             "content": {

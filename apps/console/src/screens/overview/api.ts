@@ -27,6 +27,7 @@ export const KINDS = [
   "suppression_lift",
   "complaint_outcome",
   "announcement",
+  "account_code_map",
   "payout_account",
   "deposit_reassignment",
   "tax_remittance",

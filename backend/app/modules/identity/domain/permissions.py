@@ -83,6 +83,10 @@ Permission = Literal[
     # a wording, so it is a permission of its own and can be given to fewer people. Seeing
     # announcements is `settings.view`.
     "announcements.send",
+    # Proposing or deciding the account code map of an accounting system: which of its accounts
+    # each Finvest ledger code is posted to in the daily journal. Seeing the maps is
+    # `settings.view`. A map takes effect only once a second person approves it.
+    "account_codes.change",
     "migration.view",
     # Matching a client's bank transfer to the statement, refusing it, or approving someone
     # else's match: this confirms money. Seeing the transfers is `reconciliation.view`. Not a

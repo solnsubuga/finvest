@@ -7,7 +7,7 @@ complaints register, the goals, the email delivery records, the unclaimed accoun
 complaint outcomes, the suppression lifts, the client locks, the announcements, the team
 changes, Finvest's own money in the buffer, the payments of tax to URA, the payments moved to
 the right client, next of kin, the answers to the investing questions, the requests to close an
-account or the journals sent to the accounting system."""
+account, the journals sent to the accounting system or the account code maps."""
 
 import os
 from collections.abc import Iterator
@@ -860,6 +860,13 @@ ROWS = {
         "INSERT INTO identity_app_pins (session_id, pin_hash, created_at) "
         "VALUES ('-Nabc0000000000000A1', 'x', now())",
         "refusing to drop app PINs that are in use",
+    ),
+    "0290_finance_code_maps": (
+        "BEGIN; SELECT set_config('finvest.actor_kind', 'staff', true); "
+        "SELECT set_config('finvest.actor_id', '-Nabc0000000000000S1', true); "
+        "INSERT INTO finance_code_maps (id, system, reason, proposed_by, proposed_at) "
+        "VALUES ('-Nabc0000000000000A1', 'sage', 'Test', '-Nabc0000000000000S1', now()); COMMIT",
+        "refusing to drop the account code maps",
     ),
     "0222_identity_recovery_requests": (
         "INSERT INTO identity_clients (id, phone, status, created_at) VALUES "

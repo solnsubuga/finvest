@@ -83,7 +83,8 @@ def _amount(money: Money) -> str:
     return money.to_major()
 
 
-def _cell(text: str) -> str:
+def safe_cell(text: str) -> str:
+    """The text, with a leading quote when a spreadsheet would run it as a formula."""
     value = text.strip()
     return f"'{value}" if value.startswith(_FORMULA_STARTS) else value
 
@@ -97,8 +98,8 @@ def journal_csv(currency: Currency, lines: list[JournalLine]) -> str:
             (
                 line.effective_date.isoformat(),
                 journal_reference(currency, line.effective_date),
-                _cell(line.code),
-                _cell(line.name),
+                safe_cell(line.code),
+                safe_cell(line.name),
                 line.kind,
                 currency.value,
                 _amount(line.debits),

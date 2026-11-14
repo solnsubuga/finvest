@@ -14,6 +14,7 @@ from app.modules.dealing import buffer, capital
 from app.modules.dealing import orders as dealing
 from app.modules.dealing.domain.capital import Direction
 from app.modules.dealing.domain.orders import OrderStatus
+from app.modules.finance import code_maps
 from app.modules.identity import client_locks, phone_changes, team
 from app.modules.identity.service import StaffSession
 from app.modules.investments import service as investments
@@ -80,6 +81,8 @@ async def waiting_for(session: AsyncSession, staff: StaffSession, now: datetime)
         found += await _closures(session)
     if "compliance_case" in kinds:
         found += await _compliance_cases(session)
+    if "account_code_map" in kinds:
+        found += await _code_maps(session)
     return inbox(found, staff.staff_id, staff.permissions)
 
 
@@ -326,4 +329,12 @@ async def _compliance_cases(session: AsyncSession) -> list[Waiting]:
     return [
         Waiting("compliance_case", p.id, p.outcome.value, p.proposed_by, p.proposed_at)
         for p in await screening.waiting_proposals(session)
+    ]
+
+
+async def _code_maps(session: AsyncSession) -> list[Waiting]:
+    # The subject is the accounting system, never an account.
+    return [
+        Waiting("account_code_map", m.id, m.system.value, m.proposed_by, m.proposed_at)
+        for m in await code_maps.waiting(session)
     ]
