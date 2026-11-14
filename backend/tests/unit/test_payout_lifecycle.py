@@ -42,6 +42,9 @@ EXPECTED: dict[tuple[PayoutStatus, PayoutEvent], tuple[PayoutStatus, LedgerEffec
     (S.SENT, E.STAFF_RESOLVED_FAILED): (S.FAILED, L.PARK),
     (S.UNCERTAIN, E.STAFF_RESOLVED_PAID): (S.PAID, L.SETTLE),
     (S.UNCERTAIN, E.STAFF_RESOLVED_FAILED): (S.FAILED, L.PARK),
+    (S.QUEUED, E.BANK_BATCH_APPROVED): (S.SENT, L.NONE),
+    (S.SENT, E.BANK_SETTLED_PAID): (S.PAID, L.SETTLE),
+    (S.SENT, E.BANK_SETTLED_FAILED): (S.FAILED, L.PARK),
 }
 EVERY_PAIR = list(itertools.product(PayoutStatus, PayoutEvent))
 SEND_RESULTS = [event for event in PayoutEvent if event.value.startswith("send_")]

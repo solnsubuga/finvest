@@ -51,6 +51,11 @@ class PayoutEvent(StrEnum):
     # Two staff members settled a payout the provider cannot answer for, from the statement.
     STAFF_RESOLVED_PAID = "staff_resolved_paid"
     STAFF_RESOLVED_FAILED = "staff_resolved_failed"
+    # A bank payout, paid by staff from the trust account. A second person approves the batch
+    # it is in, and later a settlement from the trust statement.
+    BANK_BATCH_APPROVED = "bank_batch_approved"
+    BANK_SETTLED_PAID = "bank_settled_paid"
+    BANK_SETTLED_FAILED = "bank_settled_failed"
 
 
 class LedgerEffect(StrEnum):
@@ -109,6 +114,9 @@ _TABLE: dict[tuple[PayoutStatus, PayoutEvent], Transition] = {
     (_S.SENT, _E.STAFF_RESOLVED_FAILED): _FAILED,
     (_S.UNCERTAIN, _E.STAFF_RESOLVED_PAID): _PAID,
     (_S.UNCERTAIN, _E.STAFF_RESOLVED_FAILED): _FAILED,
+    (_S.QUEUED, _E.BANK_BATCH_APPROVED): Transition(_S.SENT),
+    (_S.SENT, _E.BANK_SETTLED_PAID): _PAID,
+    (_S.SENT, _E.BANK_SETTLED_FAILED): _FAILED,
 }
 
 
@@ -126,6 +134,14 @@ def apply(status: PayoutStatus, event: PayoutEvent) -> Transition:
 
 # A person's word replaces the provider's, so it takes two people and is always audited.
 NEEDS_TWO_PEOPLE = frozenset({PayoutEvent.STAFF_RESOLVED_PAID, PayoutEvent.STAFF_RESOLVED_FAILED})
+# Paying a bank payout from the trust account. Each step is a second person's approval.
+BANK_EVENTS = frozenset(
+    {
+        PayoutEvent.BANK_BATCH_APPROVED,
+        PayoutEvent.BANK_SETTLED_PAID,
+        PayoutEvent.BANK_SETTLED_FAILED,
+    }
+)
 
 
 def staff_may_resolve(status: PayoutStatus, *, provider_has_answer: bool) -> bool:

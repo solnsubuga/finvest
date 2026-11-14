@@ -59,6 +59,7 @@ from app.modules.payouts.domain.sending import (
     SendStep,
     after_send,
     after_status,
+    bank_label,
     destination_label,
     next_read,
 )
@@ -394,7 +395,9 @@ async def tell_client(session: AsyncSession, payout: PayoutView, now: datetime) 
         idempotency_key=payout.id,
         variables={
             "amount": payout.amount,
-            "destination": destination_label(destination.network or ""),
+            "destination": bank_label(destination.bank_code)
+            if destination.kind is DestinationKind.BANK
+            else destination_label(destination.network or ""),
         },
         link=notifications.Link("payout", payout.id),
         now=now,
