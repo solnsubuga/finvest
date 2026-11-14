@@ -5,7 +5,7 @@ Revises: 0372_kyc_liveness_transactions
 
 `identity_terms_acceptances` holds one row per document a client agreed to: the terms, or the
 privacy notice, with the version (the day its wording took effect) and how they agreed, at
-sign-up or when claiming an account carried over from Finvest 1.0. The API writes the rows in
+sign-up or when claiming an account moved over from paper records. The API writes the rows in
 the transaction that creates or claims the account, before anyone is signed in, so inserting
 needs no actor, as for the account itself. A row is never changed or deleted. A client reads
 their own, and staff read every client's. See docs/documents.md#terms-you-accepted.

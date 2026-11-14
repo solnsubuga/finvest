@@ -10,7 +10,7 @@ const SITE = "https://finvestug.com";
 
 /**
  * "I agree to the terms and the privacy notice": the tick box at sign-up and when claiming an
- * account carried over from Finvest 1.0, with links to read both first. The server records
+ * account moved over from paper records, with links to read both first. The server records
  * which versions were agreed to, and Documents shows them under "Terms you accepted".
  */
 export function TermsAgreement({

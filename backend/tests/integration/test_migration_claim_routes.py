@@ -71,7 +71,7 @@ async def test_a_client_claims_from_the_link_and_is_signed_in(api: Api) -> None:
         "identity_step": "selfie",
         "problem_reported": False,
     }
-    # Claiming is when the client agrees to Finvest 2.0's terms and privacy notice.
+    # Claiming is when the client agrees to the terms and privacy notice.
     agreed = await api.http.get("/client/terms-acceptances", headers=bearer)
     assert sorted((i["document"], i["version"], i["via"]) for i in agreed.json()["items"]) == [
         ("privacy", CURRENT_VERSIONS["privacy"], "claim"),
