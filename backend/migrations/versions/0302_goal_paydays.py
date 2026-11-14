@@ -27,6 +27,19 @@ def upgrade() -> None:
     op.execute(f"GRANT UPDATE (payday) ON goals TO {APP_ROLE}")
 
 
+EMPTY_GUARD = """
+DO $$
+BEGIN
+    IF EXISTS (SELECT FROM goals WHERE payday IS NOT NULL) THEN
+        RAISE EXCEPTION 'refusing to drop the paydays clients named';
+    END IF;
+END
+$$
+"""
+
+
 def downgrade() -> None:
+    # A payday is a client's own choice; a downgrade never erases it.
+    op.execute(EMPTY_GUARD)
     op.execute(f"REVOKE UPDATE (payday) ON goals FROM {APP_ROLE}")
     op.execute("ALTER TABLE goals DROP COLUMN payday")
