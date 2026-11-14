@@ -202,6 +202,7 @@ In each of the `staging` and `production` GitHub environments, beside what Terra
 | `FINVEST_IDENTITY_PROVIDER` | Variable | Unset (manual review) until the ioTec Verify credentials exist, then `iotec` ([docs/identity-checks.md](../docs/identity-checks.md)). API and worker. |
 | `FINVEST_IOTEC_VERIFY_CLIENT_ID`, `FINVEST_IOTEC_VERIFY_API_KEY` | Secrets | From the ioTec Verify portal (Management, Settings, Configuration). Required once the provider is `iotec`. API and worker. |
 | `FINVEST_IOTEC_VERIFY_BASE_URL` | Variable, optional | Defaults to `https://verify-api.iotec.io`. |
+| `FINVEST_PAYOUT_NAME_PROVIDER` | Variable | Unset (`none`) until the ioTec Verify credentials exist, then `iotec`: the worker reads the name a network holds for a payout number with the same Verify credentials. Until then a new payout number waits for proof. Worker only. |
 | `FINVEST_SMS_BACKEND`, `FINVEST_SMS_IOTEC_CLIENT_ID` | Variables | `iotec`, and the client id from the ioTec Messaging portal (Management, Settings, Configuration). Only the worker gets them; it sends every SMS. |
 | `FINVEST_SMS_IOTEC_API_KEY` | Secret | The ioTec Messaging API key from the same page. Worker only. |
 | `FINVEST_SMS_IOTEC_BASE_URL` | Variable, optional | Defaults to `https://messaging-api.iotec.io`. The host's firewall already allows outbound HTTPS. |
