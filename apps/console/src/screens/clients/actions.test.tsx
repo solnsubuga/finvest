@@ -1,4 +1,4 @@
-import { render, screen, within } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router";
 import { describe, expect, it, vi } from "vitest";
@@ -31,7 +31,8 @@ describe("acting for a client", () => {
     await user.type(within(card).getByLabelText(/Note for the audit trail/), "Called the client back on their number");
     await user.click(within(card).getByRole("button", { name: "Approve and sign out of the app" }));
     expect(await screen.findByRole("status")).toHaveTextContent("signed out of the phone app");
-    expect(screen.queryByRole("article")).not.toBeInTheDocument();
+    // The notice shows as soon as the approval answers; the list is fetched again after it.
+    await waitFor(() => expect(screen.queryByRole("article")).not.toBeInTheDocument());
     expect(within(screen.getByRole("list", { name: "Decided actions, newest first" })).getAllByRole("listitem")).toHaveLength(2);
   });
 

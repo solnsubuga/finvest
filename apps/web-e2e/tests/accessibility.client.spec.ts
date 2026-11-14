@@ -182,7 +182,7 @@ test("confirming it is you before a sign-in change meets WCAG 2.1 AA", async ({ 
   await page.getByTestId("code-input").fill("123456");
   await page.getByTestId("code-submit").click();
   await createPin(page);
-  await expect(page.getByText("Welcome, Amara")).toBeVisible();
+  await expect(page.getByTestId("home")).toBeVisible();
   await visit(page, "/security/email");
   await page.getByTestId("email-input").fill("nakato@example.com");
   await page.getByTestId("email-change").click();

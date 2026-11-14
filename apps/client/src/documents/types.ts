@@ -44,6 +44,10 @@ export type DocumentItem = {
   reference: string;
   /** For an investment note, whether it confirms the investment started or ended. */
   note: "started" | "ended" | null;
+  /** The investment an investment note confirms. Null on every other kind. */
+  investmentId: string | null;
+  /** The payment a receipt is for. Null on every other kind. */
+  depositId: string | null;
 };
 
 /** Why a statement could not be asked for, from the backend's field codes. */

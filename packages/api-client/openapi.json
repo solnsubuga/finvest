@@ -1,6 +1,59 @@
 {
   "components": {
     "schemas": {
+      "AccessSyncView": {
+        "additionalProperties": false,
+        "description": "Where Cloudflare Access stands for one member of staff.",
+        "properties": {
+          "error_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error Code"
+          },
+          "requested_at": {
+            "format": "date-time",
+            "title": "Requested At",
+            "type": "string"
+          },
+          "state": {
+            "enum": [
+              "waiting",
+              "in_access",
+              "removed",
+              "failed",
+              "not_set_up"
+            ],
+            "title": "State",
+            "type": "string"
+          },
+          "synced_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Synced At"
+          }
+        },
+        "required": [
+          "state",
+          "error_code",
+          "requested_at",
+          "synced_at"
+        ],
+        "title": "AccessSyncView",
+        "type": "object"
+      },
       "AccountView": {
         "additionalProperties": false,
         "properties": {
@@ -25192,6 +25245,16 @@
       "TeamMemberView": {
         "additionalProperties": false,
         "properties": {
+          "access": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/AccessSyncView"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "created_at": {
             "format": "date-time",
             "title": "Created At",
@@ -25262,7 +25325,8 @@
           "has_passkey",
           "has_authenticator",
           "created_at",
-          "last_signed_in_at"
+          "last_signed_in_at",
+          "access"
         ],
         "title": "TeamMemberView",
         "type": "object"
@@ -70598,6 +70662,92 @@
           }
         },
         "summary": "Decide Change",
+        "tags": [
+          "staff team"
+        ]
+      }
+    },
+    "/staff/team/members/{staff_id}/access-sync": {
+      "post": {
+        "description": "Bring Cloudflare Access in line with the team again for one person, such as after it\nfailed. The worker does it shortly after.",
+        "operationId": "request_access_sync_staff_team_members__staff_id__access_sync_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "staff_id",
+            "required": true,
+            "schema": {
+              "maxLength": 20,
+              "minLength": 20,
+              "pattern": "^[-0-9A-Z_a-z]{20}$",
+              "title": "Staff Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AccessSyncView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          }
+        },
+        "summary": "Request Access Sync",
         "tags": [
           "staff team"
         ]

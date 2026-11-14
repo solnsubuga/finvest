@@ -28,6 +28,10 @@ import { BooksSection } from "./Books.tsx";
 import { notConnectedBooksApi, BooksError, type BooksApi } from "./books.ts";
 import { createHttpBooksApi } from "./booksHttp.ts";
 import { createStubBooksApi } from "./booksStub.ts";
+import { MonthCloseSection } from "./MonthClose.tsx";
+import { notConnectedMonthCloseApi, type MonthCloseApi } from "./monthClose.ts";
+import { createHttpMonthCloseApi } from "./monthCloseHttp.ts";
+import { createStubMonthCloseApi } from "./monthCloseStub.ts";
 
 const SUMMARY = "Finvest's income and costs, the books by account, the journal for the accounting system, and tax held for URA.";
 const INPUT = "w-full rounded-lg border border-border-strong bg-surface px-3 py-2.5 text-md font-medium text-ink";
@@ -59,9 +63,11 @@ interface FinanceScreenProps {
   newKey?: () => string;
   today?: () => string;
   save?: (exported: TaxExport) => void;
+  /** Closing the month, with the reader's own staff ID. Left out, the screen does not offer it. */
+  monthClose?: { api: MonthCloseApi; me: string } | null;
 }
 
-export function FinanceScreen({ api, booksApi, canPay, newKey = () => crypto.randomUUID(), today = kampalaToday, save = saveFile }: FinanceScreenProps) {
+export function FinanceScreen({ api, booksApi, canPay, newKey = () => crypto.randomUUID(), today = kampalaToday, save = saveFile, monthClose = null }: FinanceScreenProps) {
   const [currency, setCurrency] = useState<Currency>("UGX");
   const [load, setLoad] = useState<Load>({ state: "loading" });
   const [detail, setDetail] = useState<Detail | null>(null);
@@ -168,6 +174,7 @@ export function FinanceScreen({ api, booksApi, canPay, newKey = () => crypto.ran
   const top = (
     <>
       {header}
+      {monthClose ? <MonthCloseSection api={monthClose.api} me={monthClose.me} newKey={newKey} /> : null}
       {booksApi ? <BooksSection key={currency} api={booksApi} currency={currency} today={today()} save={save} /> : null}
       {booksApi ? <h2 className="m-0 mt-4 text-xl font-extrabold">Withholding tax</h2> : null}
     </>
@@ -745,5 +752,21 @@ export default function FinancePage() {
     const base = apiBaseUrl();
     return base ? createHttpBooksApi(createHttp(base)) : notConnectedBooksApi;
   });
-  return <FinanceScreen api={api} booksApi={booksApi} canPay={session ? can(session, "tax_remittances.change") : false} />;
+  const [monthCloseApi] = useState<MonthCloseApi>(() => {
+    if (isStubAuth() && session) {
+      const sample = new URLSearchParams(window.location.search).get("sample");
+      if (sample === "offline") return notConnectedMonthCloseApi;
+      return createStubMonthCloseApi({ id: session.staffId, name: session.name }, { empty: sample === "empty" });
+    }
+    const base = apiBaseUrl();
+    return base ? createHttpMonthCloseApi(createHttp(base)) : notConnectedMonthCloseApi;
+  });
+  return (
+    <FinanceScreen
+      api={api}
+      booksApi={booksApi}
+      canPay={session ? can(session, "tax_remittances.change") : false}
+      monthClose={session ? { api: monthCloseApi, me: session.staffId } : null}
+    />
+  );
 }

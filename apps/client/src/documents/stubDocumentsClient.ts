@@ -52,6 +52,8 @@ function seed(today: string, now: Date): DocumentItem[] {
       notFinalFrom: null,
       reference: `ST-demo-monthly-${back}`,
       note: null,
+      investmentId: null,
+      depositId: null,
     };
   });
   const earlier = new Date(now.getTime() - 25 * 60 * 1000).toISOString();
@@ -68,12 +70,15 @@ function seed(today: string, now: Date): DocumentItem[] {
     notFinalFrom: today,
     reference: "ST-demo-requested-1",
     note: null,
+    investmentId: null,
+    depositId: null,
   };
   const receipts = [
-    { id: "demo-receipt-1", reference: "RC-Pq30vNa2", day: shiftMonth(today, -1, 10) },
-    { id: "demo-receipt-2", reference: "RC-Pq7Tz2Lm", day: shiftMonth(today, -4, 18) },
+    // The first demo payment is `d1`, so its receipt screen can offer this PDF.
+    { id: "demo-receipt-1", reference: "RC-Pq30vNa2", day: shiftMonth(today, -1, 10), depositId: "d1" },
+    { id: "demo-receipt-2", reference: "RC-Pq7Tz2Lm", day: shiftMonth(today, -4, 18), depositId: null },
   ].map(
-    ({ id, reference, day }): DocumentItem => ({
+    ({ id, reference, day, depositId }): DocumentItem => ({
       id,
       kind: "receipt",
       status: "ready",
@@ -86,6 +91,8 @@ function seed(today: string, now: Date): DocumentItem[] {
       notFinalFrom: null,
       reference,
       note: null,
+      investmentId: null,
+      depositId,
     }),
   );
   // The last tax year that has ended, 1 July to 30 June, issued on 2 July.
@@ -104,6 +111,8 @@ function seed(today: string, now: Date): DocumentItem[] {
     notFinalFrom: null,
     reference: "TC-demo-tax-certificate-1",
     note: null,
+    investmentId: null,
+    depositId: null,
   };
   const note: DocumentItem = {
     id: "demo-investment-note-1",
@@ -118,6 +127,9 @@ function seed(today: string, now: Date): DocumentItem[] {
     notFinalFrom: null,
     reference: "IN-Pq31wXb7",
     note: "started",
+    // The demo's first investment, the 91 day bill.
+    investmentId: "demo-investment-seed-1",
+    depositId: null,
   };
   const endNote: DocumentItem = {
     ...note,
@@ -169,6 +181,8 @@ export function createStubDocumentsClient(phone: string | null, options: Options
           fileName: "Finvest statement requested.pdf",
           byteSize: 58_000,
           notFinalFrom: (document.dateTo ?? "") >= today() ? today() : null,
+          investmentId: null,
+          depositId: null,
         };
     documents = all().map((item) => (item.id === document.id ? finished : item));
     return finished;
@@ -221,6 +235,8 @@ export function createStubDocumentsClient(phone: string | null, options: Options
         notFinalFrom: null,
         reference: `ST-demo-asked-${asked.length + 1}`,
         note: null,
+        investmentId: null,
+        depositId: null,
       };
       asked.push(document.id);
       keys.set(idempotencyKey, document.id);
