@@ -59,13 +59,22 @@ function usable(methods: readonly string[]): SecondStep[] {
   );
 }
 
-export function toSession(view: { phone: string; restricted_until: string | null }, now: number = Date.now()): Session {
+type SessionView = {
+  phone: string;
+  restricted_until: string | null;
+  email?: string | null;
+  email_verified?: boolean;
+};
+
+export function toSession(view: SessionView, now: number = Date.now()): Session {
   const until = view.restricted_until ? Date.parse(view.restricted_until) : NaN;
   return {
     phone: view.phone,
     // The name is known only after the identity check, which the session does not carry yet.
     displayName: null,
     restricted: Number.isFinite(until) && until > now,
+    email: view.email ?? null,
+    emailVerified: Boolean(view.email && view.email_verified),
   };
 }
 
@@ -215,6 +224,14 @@ export function createApiAuthClient(): AuthClient {
     turnOffAuthenticator: () =>
       wrap(async () => {
         await api("DELETE /client/authenticator", {});
+      }),
+
+    sendEmailProof: () =>
+      wrap(async () => ((await api("POST /client/email/verification", {})).sent ? "sent" : "proved")),
+
+    confirmEmail: (token) =>
+      wrap(async () => {
+        await api("POST /client/email/verification/confirm", { body: { token } });
       }),
 
     signOut: async () => {

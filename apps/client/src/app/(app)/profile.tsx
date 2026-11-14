@@ -1,15 +1,16 @@
-import { useState } from "react";
+import { useCallback, useState } from "react";
 import { Pressable, StyleSheet, View } from "react-native";
-import { useRouter } from "expo-router";
+import { useFocusEffect, useRouter } from "expo-router";
 
 import { useAuth } from "@/auth/AuthProvider";
 import { formatE164 } from "@/auth/phone";
+import { describeAuthError } from "@/auth/types";
 import { AppPage } from "@/components/AppPage";
-import { Card } from "@/components/Blocks";
+import { Card, Notice } from "@/components/Blocks";
 import { Button, TextLink } from "@/components/Button";
 import { Icon, IconName } from "@/components/Icon";
 import { Txt } from "@/components/Txt";
-import { colors, COLUMN_WIDTH, fontSizes } from "@/theme";
+import { colors, COLUMN_WIDTH, fontSizes, radii } from "@/theme";
 import { useIsWide } from "@/theme/useIsWide";
 
 export default function Profile() {
@@ -17,10 +18,53 @@ export default function Profile() {
   const { client, session, setSession } = useAuth();
   const wide = useIsWide();
   const [busy, setBusy] = useState(false);
+  const [sending, setSending] = useState(false);
+  const [emailNote, setEmailNote] = useState<{ tone: "neutral" | "danger"; text: string } | null>(null);
+
+  // A link opened in another tab or on another device proves the address
+  // there, so Profile asks again each time it comes into view.
+  useFocusEffect(
+    useCallback(() => {
+      let live = true;
+      client
+        .restoreSession()
+        .then((fresh) => {
+          if (live && fresh) {
+            setSession(fresh);
+          }
+        })
+        .catch(() => {
+          // Offline: keep what is shown.
+        });
+      return () => {
+        live = false;
+      };
+    }, [client, setSession]),
+  );
 
   if (!session) {
     return null;
   }
+
+  const sendLink = async () => {
+    setSending(true);
+    setEmailNote(null);
+    try {
+      const result = await client.sendEmailProof();
+      if (result === "proved") {
+        setSession({ ...session, emailVerified: true });
+      } else {
+        setEmailNote({
+          tone: "neutral",
+          text: `We emailed a link to ${session.email ?? "your address"}. Open it within 24 hours, on any device. Only the newest link works.`,
+        });
+      }
+    } catch (caught) {
+      setEmailNote({ tone: "danger", text: describeAuthError(caught) });
+    } finally {
+      setSending(false);
+    }
+  };
 
   const signOut = async () => {
     setBusy(true);
@@ -42,6 +86,43 @@ export default function Profile() {
               Mobile number
             </Txt>
             <Txt weight="semibold">{formatE164(session.phone)}</Txt>
+          </View>
+        </Card>
+        <Card>
+          <View style={{ gap: 4 }} testID="profile-email">
+            <View style={styles.emailTop}>
+              <Txt size={fontSizes.sm} color={colors.muted}>
+                Email
+              </Txt>
+              {session.email ? (
+                <View style={[styles.badge, session.emailVerified ? styles.proved : styles.notProved]}>
+                  <Txt size={12} weight="bold">
+                    {session.emailVerified ? "Proved" : "Not proved yet"}
+                  </Txt>
+                </View>
+              ) : null}
+            </View>
+            <Txt weight="semibold">{session.email ?? "No email address"}</Txt>
+            <Txt size={fontSizes.sm} color={colors.muted}>
+              {session.email
+                ? session.emailVerified
+                  ? "Statements and receipts are emailed here."
+                  : "We email statements and receipts only to an address you have proved is yours."
+                : "We email statements and receipts only to a proved address. Ask us in Help to add one."}
+            </Txt>
+            {session.email && !session.emailVerified ? (
+              <View style={{ marginTop: 10, gap: 10 }}>
+                {emailNote ? <Notice tone={emailNote.tone}>{emailNote.text}</Notice> : null}
+                <Button
+                  label={emailNote?.tone === "neutral" ? "Send another link" : "Email me a link"}
+                  variant="secondary"
+                  height={48}
+                  onPress={sendLink}
+                  loading={sending}
+                  testID="send-email-proof"
+                />
+              </View>
+            ) : null}
           </View>
         </Card>
         <Card padded={false}>
@@ -122,4 +203,8 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   divider: { height: 1, backgroundColor: colors.border, marginHorizontal: 16 },
+  emailTop: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 8 },
+  badge: { borderRadius: radii.pill, paddingVertical: 2, paddingHorizontal: 10 },
+  proved: { backgroundColor: colors.lime },
+  notProved: { backgroundColor: colors.surfaceSunken },
 });
