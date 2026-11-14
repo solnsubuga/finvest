@@ -155,7 +155,9 @@ Decided by the owner on 13 November 2026: receivable, then recover. The original
 
 **The money is still in `client.awaiting_start`.** Staff propose an exact reversal of the deposit entry and a second person approves it.
 
-**The money has moved on**, for example the investment has started, so a reversal would overdraw the account. Staff propose a forward entry `payment.deposit_correction`:
+**The investment has started and is still running.** Staff first unwind it with `/staff/investment-corrections` (see [investing.md](investing.md)), which moves the principal back to `client.awaiting_start`, takes back the interest so far and has the desk release the bills. The deposit is then reversed as above. An unwind is refused once the money has left: the investment matured and was paid out, it was withdrawn early, or a refund went out.
+
+**The money has left**, so there is nothing to reverse. Staff propose a forward entry `payment.deposit_correction`:
 
 | Debit | Credit |
 | --- | --- |
@@ -282,5 +284,5 @@ ioTec's test numbers: `011177777x` succeed, `011177799x` fail, `011177778x` stay
 - Trying the adapter against ioTec's test wallet, which needs the credentials and a staging deploy.
 - Paying for a goal over HTTP. The routes take investments only.
 - Provider limits and fees.
-- The receivable correction commands. Moving a transfer credited to the wrong client is built.
+- The receivable correction commands, for a mistaken credit whose money has already left. A running investment is unwound through investment corrections, and moving a transfer credited to the wrong client is built.
 - Words of their own for a refused bank transfer, so the client is told about it as well as seeing it in the app. The notifications module owns the event list.
