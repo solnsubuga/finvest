@@ -26,6 +26,11 @@ export type Session = {
 };
 
 /** What checking a PIN said. Out of tries signs the phone out instead (`signed_out`). */
+/** Why someone cannot get in. There is no free text, so nothing personal is kept. */
+export type RecoveryReason = "lost_phone" | "new_number" | "no_codes" | "other";
+
+export type RecoveryAsk = { phone: string; contactPhone: string; reason: RecoveryReason };
+
 export type PinCheck = { unlocked: boolean; triesLeft: number };
 
 export type AuthErrorCode =
@@ -186,6 +191,12 @@ export interface AuthClient {
    */
   confirmAuthenticatorSetup(code: string): Promise<void>;
 
+  /**
+   * Locked out: ask Finvest to call back on `contactPhone` about the account on
+   * `phone`. It answers the same way whether or not the number has an account,
+   * and the account's own number and email are told someone asked.
+   */
+  requestRecovery(ask: RecoveryAsk): Promise<void>;
   /**
    * Forgot password, step 1: texts a code if the number has an account. It
    * answers the same way whether or not it does, so it cannot be used to find
