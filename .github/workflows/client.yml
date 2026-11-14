@@ -106,8 +106,8 @@ jobs:
             exit 1
           fi
           # Nor the demo identity check, which approves identities nobody checked, nor the demo's
-          # hook that says what the guided selfie camera sees.
-          if grep -rIl -e "demo-check-" -e "Your selfie is too dark to match" -e "faces.iotec.io/demo/" -e "finvestDemoFace" dist; then
+          # hook that says what the guided selfie camera sees, nor its stand-in for Regula's liveness.
+          if grep -rIl -e "demo-check-" -e "Your selfie is too dark to match" -e "faces.iotec.io/demo/" -e "finvestDemoFace" -e "regula-demo-finish" dist; then
             echo "The demo identity check was bundled into a production build" >&2
             exit 1
           fi

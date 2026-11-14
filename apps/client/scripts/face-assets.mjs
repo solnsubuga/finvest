@@ -1,6 +1,6 @@
 // Copies the guided selfie's face detector into public/face/, which the web build serves at
 // /face: the MediaPipe library and WebAssembly runtime from node_modules, and the model kept in
-// face-model/.
+// face-model/. Also copies Regula's liveness web component into public/regula/.
 // See face-model/README.md. Run before `expo export --platform web` and `expo start --web`.
 import { createHash } from "node:crypto";
 import { copyFileSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
@@ -41,3 +41,14 @@ writeFileSync(
     'globalThis.dispatchEvent(new Event("finvest-face-vision"));\n',
 );
 console.log(`Face detector copied to ${out}`);
+
+// Regula's liveness web component (docs/identity-checks.md#regula-liveness), served at /regula
+// and loaded only on the live selfie. It fetches its own WebAssembly worker from Regula.
+const regula = join(app, "public", "regula");
+mkdirSync(regula, { recursive: true });
+copyFileSync(
+  // The package exports only its ES module, so its script is read from the package's folder.
+  join(app, "node_modules", "@regulaforensics", "vp-frontend-face-components", "dist", "main.iife.js"),
+  join(regula, "face-components.js"),
+);
+console.log(`Regula liveness component copied to ${regula}`);

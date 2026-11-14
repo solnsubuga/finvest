@@ -15,6 +15,7 @@ import { useIdentity } from "@/identity/IdentityProvider";
 import { FaceReading } from "@/identity/guidance";
 import { GuidedCapture } from "@/identity/GuidedCapture";
 import { LiveSelfie } from "@/identity/LiveSelfie";
+import { regulaCanRun } from "@/identity/regula/RegulaRun";
 import { Frame } from "@/identity/PhotoFrame";
 import { StepTop } from "@/identity/Parts";
 import { checkPhoto, photoProblemCopy } from "@/identity/photo";
@@ -160,6 +161,24 @@ export default function TakePhoto() {
   ) : (
     <StepTop step={kind} documentType={check.documentType} guided={check.guidedSelfie} fallback="/id-check" />
   );
+
+  if (selfie && check.guidedSelfie && !camera && regulaCanRun()) {
+    // With Regula, the guided selfie starts with Regula's liveness in the app, whose capture is
+    // the selfie; the head turns follow. The guided camera stays as the fallback.
+    return (
+      <>
+        <Stack.Screen options={{ title }} />
+        <LiveSelfie
+          check={check}
+          top={top}
+          frame={<Frame selfie />}
+          onCamera={chooseCamera}
+          onDone={afterUpload}
+          regula
+        />
+      </>
+    );
+  }
 
   if (selfie && check.guidedSelfie) {
     // The guided selfie: the live camera finds the face and takes it when it is right.

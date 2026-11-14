@@ -184,6 +184,14 @@ Regula's liveness runs in the app with Regula's own capture and guidance, not on
 
 - Still to confirm against Regula's cloud: whether `portrait` is a link or the image itself, and the host it points to, and how the cloud signs requests in.
 
+In the client app (`apps/client/src/identity/regula/`):
+
+- With the guided selfie, the selfie step starts with a live check when the API offers one and the build knows Regula's Face service (`EXPO_PUBLIC_REGULA_FACE_URL`, https only, the same address as `FINVEST_REGULA_FACE_URL`). Otherwise it is the guided camera selfie, which the client can also choose at any time.
+- When the attempt opens with a `regula-liveness:<tag>` page, the app runs Regula's liveness with that tag at once, one session per attempt: Regula's Face SDK on a phone (`@regulaforensics/face-sdk` with `face-core-basic`, a native module, so a development build), and Regula's `<face-liveness>` web component in a browser, served from `/regula` and loaded only on this screen. Either talks to Regula's Face service directly.
+- When the session ends with a transaction, the app sends it once and reads `GET /liveness` every few seconds until the attempt passes or fails. Whatever the SDK says about the person is ignored. A transaction that could not be sent is kept on the screen to send again. A session the client closed, or that could not run, is not opened again by itself.
+- A passed attempt goes on to the four head turns.
+- The web component fetches its WebAssembly worker from `wasm.regulaforensics.com`, so the web app's CSP must allow that host (`script-src`, `worker-src`, `connect-src`) as well as the Face service address (`connect-src`), and keep `'wasm-unsafe-eval'`. The demo build, with no Face service, has a stand-in for Regula's screen.
+
 ## Guided selfie
 
 With Regula (`FINVEST_IDENTITY_PROVIDER=regula`), the selfie is the guided one, by the owner's decision (2026-11-14). The client takes the straight-on selfie, then a frame for each of four poses: turn left, turn right, look up, look down. The app checks each frame on the phone and guides the client. The API checks it again before keeping it, because the phone can be wrong or tampered with. The rules are in `domain/poses.py`, the frames in `poses.py`, and the table is `kyc_pose_frames` (migration 0371).
@@ -304,7 +312,7 @@ Without `FINVEST_IDENTITY_DATA_KEY` the routes answer `unavailable`, and so do t
 - The console calling these routes. It still uses sample data.
 - Replacing the identity data key. Do not rotate it yet: a sealed value records which key sealed it and an old key can still be read, but nothing seals the rows again, and the document fingerprints are made with the current key only, so the one-document rule would stop matching earlier clients.
 - Company, joint and group accounts. Only personal accounts are issued.
-- Regula's liveness in the client app: running Regula's SDK for a `regula-liveness:<tag>` page and sending the transaction ID ([Regula liveness](#regula-liveness)). Until it is built, a client with Regula cannot finish a liveness attempt and takes the camera selfie instead, so `liveness` is not run.
+- Trying Regula's liveness on a real phone and against Regula's cloud. The app side is built ([Regula liveness](#regula-liveness)) but has only been run against stand-ins.
 - Face confirmations with Regula. They are off until they take a session reported from the app.
 - The pose frames in the console. The client app takes the guided selfie ([Guided selfie](#guided-selfie)).
 - The Regula containers in `infra/`, with their licence. That is the infrastructure thread's.

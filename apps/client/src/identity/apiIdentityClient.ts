@@ -72,12 +72,16 @@ export function toAttempt(attempt: ApiAttempt): LivenessAttempt {
   };
 }
 
-type Action = "read" | "document" | "photo" | "pose" | "details" | "submit" | "liveness";
+type Action = "read" | "document" | "photo" | "pose" | "details" | "submit" | "liveness" | "transaction";
 
 export function toIdentityError(error: unknown, action: Action): IdentityError {
   if (error instanceof IdentityError) return error;
   if (!(error instanceof ApiError)) return new IdentityError("unavailable");
   if (error.code === "offline" || error.code === "timeout") return new IdentityError("offline");
+  // A live check that ended, or already took another session, is not found or in conflict.
+  if (action === "transaction" && (error.code === "not_found" || error.code === "conflict")) {
+    return new IdentityError("liveness_ended");
+  }
   switch (error.code) {
     case "not_found":
       return new IdentityError("not_found");
@@ -232,6 +236,19 @@ export function createApiIdentityClient(): IdentityClient {
         return toAttempt(await api("POST /client/identity-check/liveness", {}));
       } catch (error) {
         throw toIdentityError(error, "liveness");
+      }
+    },
+
+    async reportLivenessTransaction(attemptId, transactionId) {
+      try {
+        return toAttempt(
+          await api("POST /client/identity-check/liveness/{attempt_id}/transaction", {
+            params: { attempt_id: attemptId },
+            body: { transaction_id: transactionId },
+          }),
+        );
+      } catch (error) {
+        throw toIdentityError(error, "transaction");
       }
     },
   };
