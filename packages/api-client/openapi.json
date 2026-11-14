@@ -12942,6 +12942,14 @@
             ],
             "title": "Answered At"
           },
+          "blocks_approval": {
+            "title": "Blocks Approval",
+            "type": "boolean"
+          },
+          "current_number": {
+            "title": "Current Number",
+            "type": "boolean"
+          },
           "registered_name": {
             "anyOf": [
               {
@@ -12960,7 +12968,9 @@
         "required": [
           "status",
           "registered_name",
-          "answered_at"
+          "answered_at",
+          "current_number",
+          "blocks_approval"
         ],
         "title": "PhoneNameOut",
         "type": "object"

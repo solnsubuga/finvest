@@ -27,6 +27,7 @@ from app.modules.payouts.domain.name_lookups import (
     Unanswerable,
 )
 from app.shared.actors import SYSTEM, Actor
+from app.shared.errors import ApplicationError
 from app.shared.push_ids import push_id
 from tests.integration.test_payout_name_lookups import FakeNames
 from tests.support.clock import FakeClock
@@ -97,6 +98,18 @@ async def phone_of(api: Api, client: Actor) -> str:
     return phone
 
 
+async def allowed_for(api: Api, check_id: str) -> list[str]:
+    async with api.database.actor_transaction(new_staff()) as session:
+        view = await kyc.check_for_staff(session, SEALER, check_id)
+        return list((await kyc_api._staff_check_now(session, view)).allowed)
+
+
+async def approve(api: Api, check_id: str) -> kyc.CheckView:
+    staff = new_staff()
+    async with api.database.actor_transaction(staff) as session:
+        return await kyc.approve(session, SEALER, staff, check_id, "Checked", api.clock)
+
+
 async def test_without_a_provider_nothing_is_looked_up(api: Api) -> None:
     _, check_id = await handed_in(api, on=False)
     assert await shown(api, check_id) is None
@@ -125,10 +138,15 @@ async def test_the_network_name_is_compared_with_the_name_on_the_id(
     assert found is not None
     assert (found.status, found.registered_name) == (status, network_name)
     assert found.answered_at is not None
-    # A hint only: the check still waits for a person, whatever the network said.
+    # The check still waits for a person, whatever the network said.
     async with api.database.actor_transaction(new_staff()) as session:
         view = await kyc.check_for_staff(session, SEALER, check_id)
     assert view.status is CheckStatus.NEEDS_REVIEW
+    assert found.current_number
+    assert found.blocks_approval is (status is PhoneName.DIFFERENT)
+    allowed = await allowed_for(api, check_id)
+    assert ("approve" in allowed) is (status is not PhoneName.DIFFERENT)
+    assert "reject" in allowed
 
 
 async def test_no_name_and_no_answer(api: Api, worker_database: Database) -> None:
@@ -211,25 +229,42 @@ async def test_only_the_worker_answers_and_an_answer_is_final(
 ) -> None:
     client, check_id = await handed_in(api)
     other, _ = await handed_in(api)
-    # A client cannot write an answer, or ask for a lookup of someone else's check.
-    for statement, values in [
+    mine, theirs = await phone_of(api, client), await phone_of(api, other)
+    queued = (
+        "INSERT INTO kyc_phone_names (id, check_id, number, phone, status, created_at, "
+        "updated_at) VALUES (:id, :check, 2, :phone, 'queued', now(), now())"
+    )
+    # The client's own check and number is the only lookup a client may ask for.
+    async with api.database.actor_transaction(client) as session:
+        await session.execute(text(queued), {"id": push_id(), "check": check_id, "phone": mine})
+    refused: list[tuple[Actor, str, dict[str, str]]] = [
+        # An answer written by the client.
         (
-            "INSERT INTO kyc_phone_names (id, check_id, number, status, registered_name, "
+            client,
+            "INSERT INTO kyc_phone_names (id, check_id, number, phone, status, registered_name, "
             "name_match, request_id, answered_at, created_at, updated_at) VALUES (:id, :check, "
-            "2, 'found', 'Amara Nakato', 'exact', gen_random_uuid(), now(), now(), now())",
-            {"id": push_id(), "check": check_id},
+            "3, :phone, 'found', 'Amara Nakato', 'exact', gen_random_uuid(), now(), now(), now())",
+            {"id": push_id(), "check": check_id, "phone": mine},
+        ),
+        # Someone else's number on their own check.
+        (
+            client,
+            queued.replace(" 2,", " 3,"),
+            {"id": push_id(), "check": check_id, "phone": theirs},
+        ),
+        # Their own number on someone else's check.
+        (
+            other,
+            queued.replace(" 2,", " 3,"),
+            {"id": push_id(), "check": check_id, "phone": theirs},
         ),
         (
-            "INSERT INTO kyc_phone_names (id, check_id, number, status, created_at, updated_at) "
-            "VALUES (:id, :check, 2, 'queued', now(), now())",
-            {"id": push_id(), "check": check_id},
-        ),
-        (
+            client,
             "UPDATE kyc_phone_names SET status = 'unanswered' WHERE check_id = :check",
             {"check": check_id},
         ),
-    ]:
-        acting = other if "'queued'" in statement else client
+    ]
+    for acting, statement, values in refused:
         with pytest.raises(DBAPIError):
             async with api.database.actor_transaction(acting) as session:
                 await session.execute(text(statement), values)
@@ -249,3 +284,37 @@ async def test_only_the_worker_answers_and_an_answer_is_final(
             await session.execute(
                 text("DELETE FROM kyc_phone_names WHERE check_id = :check"), {"check": check_id}
             )
+
+
+async def test_a_different_name_blocks_approval_until_the_client_is_on_their_own_number(
+    api: Api, worker_database: Database, migrator_database: Database
+) -> None:
+    client, check_id = await handed_in(api)
+    names = FakeNames(answers=[Found("Brian Okello")])
+    await run_all(worker(worker_database, names, api.clock), api.clock)
+    with pytest.raises(ApplicationError) as refused:
+        await approve(api, check_id)
+    assert refused.value.code == "conflict"
+    assert [(f.field_path, f.code) for f in refused.value.fields] == [
+        (["phone_name"], "phone_name_different")
+    ]
+
+    # The client moves to a number in their own name (two staff do this in the console).
+    new_phone = "+2567" + (await phone_of(api, client))[-8:-1] + "9"
+    async with migrator_database.transaction() as session:
+        await session.execute(
+            text("UPDATE identity_clients SET phone = :phone WHERE id = :id"),
+            {"phone": new_phone, "id": client.id},
+        )
+    old = await shown(api, check_id)
+    assert old is not None and not old.current_number and not old.blocks_approval
+    # Handing in again looks the new number up, even though the old one was answered.
+    async with api.database.actor_transaction(client) as session:
+        asked = await phone_names.ask_at_hand_in(session, check_id, client.id or "", api.clock)
+    assert asked is not None and asked.phone == new_phone and asked.number == 2
+    names = FakeNames(answers=[Found("Amara Nakato")])
+    await run_all(worker(worker_database, names, api.clock), api.clock)
+    assert [number for number, _ in names.sent] == [new_phone[1:]]
+    now = await shown(api, check_id)
+    assert now is not None and now.status is PhoneName.MATCHES and now.current_number
+    assert (await approve(api, check_id)).status is CheckStatus.APPROVED

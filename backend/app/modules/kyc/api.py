@@ -175,6 +175,10 @@ class PhoneNameOut(Contract):
     # The network's name, once it gave one.
     registered_name: str | None
     answered_at: datetime | None
+    # False once the client's number has changed since: the result is about an earlier number.
+    current_number: bool
+    # True when this result stops the check being approved.
+    blocks_approval: bool
 
 
 class StaffCheck(QueueEntry):
@@ -199,7 +203,8 @@ class StaffCheck(QueueEntry):
     # Anything but `clear` is a reason to look before approving.
     screening: ScreeningOutcome | None
     # The name the mobile network holds for the client's phone number, and how it compares
-    # with the name on the ID, or null if it was not looked up. A hint for the person deciding.
+    # with the name on the ID, or null if it was not looked up. A different name on the
+    # client's current number blocks approval, so `approve` is left out of `allowed`.
     phone_name: PhoneNameOut | None
 
 
@@ -282,6 +287,8 @@ async def _staff_check_now(session: AsyncSession, view: service.CheckView) -> St
             status=phone.status,
             registered_name=phone.registered_name,
             answered_at=phone.answered_at,
+            current_number=phone.current_number,
+            blocks_approval=phone.blocks_approval,
         ),
     )
 
@@ -319,6 +326,9 @@ def _staff_check(
             decision
             for status, decision in _DECISIONS.items()
             if status in staff_moves(view.status)
+            and not (
+                decision == "approve" and phone_name is not None and phone_name.blocks_approval
+            )
         ],
         screening=screening_outcome,
         phone_name=phone_name,

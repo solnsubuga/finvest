@@ -6,12 +6,14 @@ Revises: 0333_maturity_pay_interest
 When a client hands in their identity check, the worker asks ioTec Verify for the name the
 mobile network holds for the client's own phone number, the same lookup a mobile money payout
 number gets. The name is compared with the name the client confirmed from their document, and
-staff see the network's name and how it compares on the check. It never approves or rejects a
-client: a person decides. See docs/identity-checks.md#phone-number-name.
+staff see the network's name and how it compares on the check. A name that differs from the
+ID's blocks approval (the owner's decision), until the client is on a number in their own name.
+It never rejects a client on its own. See docs/identity-checks.md#phone-number-name.
 
 `kyc_phone_names` holds each lookup. The client asks for one in the transaction that hands the
-check in; only the worker records what ioTec said, and an answer is final. A check has at most
-three, one at a time, because each costs a fee at ioTec.
+check in, for the number on their account at that moment; only the worker records what ioTec
+said, and an answer is final. A check has at most three for each number, one at a time, because
+each costs a fee at ioTec.
 """
 
 from collections.abc import Sequence
@@ -32,6 +34,9 @@ CREATE TABLE kyc_phone_names (
     id push_id NOT NULL,
     check_id push_id NOT NULL,
     number smallint NOT NULL,
+    -- The number looked up, as on the client's account (E.164), so a later change of number is
+    -- looked up afresh.
+    phone varchar(16) COLLATE "C" NOT NULL,
     status varchar(16) NOT NULL,
     request_id uuid,
     registered_name varchar(120),
@@ -43,7 +48,7 @@ CREATE TABLE kyc_phone_names (
     CONSTRAINT pk_kyc_phone_names PRIMARY KEY (id),
     CONSTRAINT fk_kyc_phone_names_check FOREIGN KEY (check_id) REFERENCES kyc_checks (id),
     CONSTRAINT uq_kyc_phone_names_number UNIQUE (check_id, number),
-    CONSTRAINT ck_kyc_phone_names_number CHECK (number BETWEEN 1 AND 3),
+    CONSTRAINT ck_kyc_phone_names_number CHECK (number BETWEEN 1 AND 30),
     CONSTRAINT ck_kyc_phone_names_status CHECK (
         status IN ('queued', 'sent', 'found', 'no_name', 'unanswered')),
     CONSTRAINT ck_kyc_phone_names_name CHECK (
@@ -76,8 +81,8 @@ CREATE FUNCTION finvest_kyc_phone_names_guard() RETURNS trigger
         IF NOT (finvest_actor_kind() = 'system' AND current_user = '{WORKER_ROLE}') THEN
             RAISE EXCEPTION 'only the worker records a phone name lookup' USING ERRCODE = '42501';
         END IF;
-        IF (NEW.id, NEW.check_id, NEW.number, NEW.created_at)
-               IS DISTINCT FROM (OLD.id, OLD.check_id, OLD.number, OLD.created_at) THEN
+        IF (NEW.id, NEW.check_id, NEW.number, NEW.phone, NEW.created_at)
+               IS DISTINCT FROM (OLD.id, OLD.check_id, OLD.number, OLD.phone, OLD.created_at) THEN
             RAISE EXCEPTION 'a phone name lookup is for one check, once' USING ERRCODE = '42501';
         END IF;
         IF OLD.request_id IS NOT NULL AND NEW.request_id IS DISTINCT FROM OLD.request_id THEN
@@ -106,12 +111,14 @@ RULES = [
     # The subquery runs under the kyc_checks policies: staff see every lookup, a client their own.
     f"CREATE POLICY kyc_phone_names_app_read ON kyc_phone_names FOR SELECT TO {APP_ROLE} "  # noqa: S608 - constant role name
     "USING (check_id IN (SELECT id FROM kyc_checks))",
-    # A client asks only for a lookup of their own check, with nothing answered yet.
+    # A client asks only for a lookup of their own check and their own number, with nothing
+    # answered yet.
     f"CREATE POLICY kyc_phone_names_app_insert ON kyc_phone_names FOR INSERT TO {APP_ROLE} "  # noqa: S608 - constant role name
     "WITH CHECK (finvest_actor_kind() = 'client' AND status = 'queued' "
     "AND request_id IS NULL AND registered_name IS NULL AND name_match IS NULL "
     "AND answered_at IS NULL AND error_code IS NULL "
-    "AND check_id IN (SELECT id FROM kyc_checks))",
+    "AND check_id IN (SELECT id FROM kyc_checks) "
+    "AND phone = (SELECT c.phone FROM identity_clients c WHERE c.id = finvest_actor_id()))",
     f"CREATE POLICY kyc_phone_names_worker_read ON kyc_phone_names FOR SELECT "
     f"TO {WORKER_ROLE} USING (true)",
     f"CREATE POLICY kyc_phone_names_worker_update ON kyc_phone_names FOR UPDATE "

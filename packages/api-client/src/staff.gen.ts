@@ -2158,6 +2158,8 @@ export type PhoneName = z.infer<typeof PhoneName>;
 
 export const PhoneNameOut = z.object({
   answered_at: z.string().nullable(),
+  blocks_approval: z.boolean(),
+  current_number: z.boolean(),
   registered_name: z.string().nullable(),
   status: PhoneName,
 });
