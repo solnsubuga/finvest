@@ -176,7 +176,7 @@ export default function MaturityChoiceScreen() {
                         <View style={{ flex: 1, gap: 2 }}>
                           <Txt weight="bold">{candidate.name}</Txt>
                           <Txt size={fontSizes.sm} color={colors.muted}>
-                            {`${formatMoney(candidate.progress.value)} of ${formatMoney(candidate.target).replace("UGX ", "")}${
+                            {`${formatMoney(candidate.progress.value)} of ${formatMoney(candidate.target).replace(`${candidate.target.currency} `, "")}${
                               candidate.lockedUntil ? `. Locked until ${formatDay(candidate.lockedUntil)}` : ""
                             }`}
                           </Txt>
