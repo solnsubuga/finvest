@@ -63,6 +63,19 @@ async def actions(database: Database, check_id: str) -> list[str]:
     return [event.action for event in reversed(events)]
 
 
+async def told(database: Database, client: Actor, check_id: str) -> list[str]:
+    """What the client was told about this check, oldest first."""
+    async with database.actor_transaction(client) as session:
+        rows = await session.execute(
+            text(
+                "SELECT event FROM notifications WHERE link_kind = 'identity_check' "
+                "AND link_id = :id ORDER BY created_at, id"
+            ),
+            {"id": check_id},
+        )
+        return list(rows.scalars())
+
+
 def refused(error: pytest.ExceptionInfo[ApplicationError]) -> tuple[str, list[tuple[str, str]]]:
     return error.value.code, [
         (str(problem.field_path[0]), problem.code) for problem in error.value.fields
@@ -187,12 +200,13 @@ async def test_without_a_provider_staff_approve_and_the_account_number_is_issued
     assert seen is not None
     assert seen.account_number == number.value
     assert await actions(app_database, check_id) == ["kyc.check.submitted", "kyc.check.approved"]
+    assert await told(app_database, client, check_id) == ["kyc_approved"]
 
 
 async def test_a_staff_decision_needs_a_reason(
     app_database: Database, fake_clock: FakeClock
 ) -> None:
-    _, check_id = await in_review(app_database, fake_clock)
+    client, check_id = await in_review(app_database, fake_clock)
     staff = new_staff()
     with pytest.raises(ApplicationError) as error:
         async with app_database.actor_transaction(staff) as session:
@@ -203,12 +217,13 @@ async def test_a_staff_decision_needs_a_reason(
         view = await kyc.check_for_staff(session, SEALER, check_id)
     assert view.status is CheckStatus.NEEDS_REVIEW
     assert view.account_number is None
+    assert await told(app_database, client, check_id) == []
 
 
 async def test_the_worker_approves_a_clean_result_when_that_is_switched_on(
     app_database: Database, worker_database: Database, fake_clock: FakeClock
 ) -> None:
-    _, check_id = await submitted(app_database, fake_clock)
+    client, check_id = await submitted(app_database, fake_clock)
     async with worker_database.actor_transaction(SYSTEM) as session:
         view = await kyc.record_provider_result(
             session,
@@ -227,18 +242,21 @@ async def test_the_worker_approves_a_clean_result_when_that_is_switched_on(
     assert view.provider_reference == "fake-reference"
     assert view.automatic_checks == all_passed()
     assert await actions(app_database, check_id) == ["kyc.check.submitted", "kyc.check.approved"]
+    assert await told(app_database, client, check_id) == ["kyc_approved"]
 
 
 async def test_a_clean_result_goes_to_a_person_unless_approval_is_switched_on(
     app_database: Database, worker_database: Database, fake_clock: FakeClock
 ) -> None:
-    _, check_id = await submitted(app_database, fake_clock)
+    client, check_id = await submitted(app_database, fake_clock)
     async with worker_database.actor_transaction(SYSTEM) as session:
         view = await kyc.record_provider_result(
             session, SEALER, check_id, 1, "fake-reference", all_passed(), fake_clock
         )
     assert view.status is CheckStatus.NEEDS_REVIEW
     assert view.review_flags == ("automatic_checks_passed",)
+    # Waiting for a person is not news for the client.
+    assert await told(app_database, client, check_id) == []
     assert view.automatic_checks == all_passed()
     assert view.account_number is None
     staff = new_staff()
@@ -352,6 +370,7 @@ async def test_staff_ask_for_one_photo_and_the_client_retakes_only_that(
     assert asked.status is CheckStatus.AWAITING_CLIENT
     assert asked.retake_photos == {PhotoKind.SELFIE}
     assert asked.client_message == "Your selfie was too dark. Please retake it facing a window."
+    assert await told(app_database, client, check_id) == ["kyc_retake_requested"]
     old_selfie = next(photo.id for photo in asked.photos if photo.kind is PhotoKind.SELFIE)
 
     fake_clock.advance(minutes=5)
@@ -379,6 +398,16 @@ async def test_staff_ask_for_one_photo_and_the_client_retakes_only_that(
         assert kept.scalar_one() == fake_clock.now()
     assert "kyc.check.photos_requested" in await actions(app_database, check_id)
 
+    # Sent back again after the second submission, the client is told again.
+    async with app_database.actor_transaction(staff) as session:
+        await kyc.ask_for_photos(
+            session, SEALER, staff, check_id, frozenset({PhotoKind.SELFIE}), "Again", fake_clock
+        )
+    assert await told(app_database, client, check_id) == [
+        "kyc_retake_requested",
+        "kyc_retake_requested",
+    ]
+
 
 async def test_compliance_decides_an_escalated_check_and_a_rejection_is_final(
     app_database: Database, fake_clock: FakeClock
@@ -405,6 +434,8 @@ async def test_compliance_decides_an_escalated_check_and_a_rejection_is_final(
     assert rejected.status is CheckStatus.REJECTED
     assert rejected.account_number is None
     assert rejected.client_message == "We cannot open an account for you."
+    # Escalating told the client nothing. The rejection does.
+    assert await told(app_database, client, check_id) == ["kyc_rejected"]
     with pytest.raises(ApplicationError) as error:
         async with app_database.actor_transaction(staff) as session:
             await kyc.approve(session, SEALER, staff, check_id, "Changed my mind", fake_clock)

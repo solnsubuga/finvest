@@ -123,12 +123,13 @@ The review queue, under `/staff/identity-checks`. Reading needs the permission `
 
 The API stores each photo in the shared private storage (`app.infrastructure.storage`) under `kyc/<check>/<photo>`, never the browser. Everything that can refuse a photo runs first: the check must take a photo of that kind now, the type and size must be allowed, and the file must start the way a file of its type does. Then the file is stored, outside any transaction, and only then is its row saved with its size and SHA-256. If saving the row fails, the file is deleted. Read links are never stored or logged.
 
+The client is told, in the same transaction as the decision, when their check is approved (by staff or by the worker), rejected, or sent back for new photos: the events `kyc_approved`, `kyc_rejected` and `kyc_retake_requested`, linked to the check. The approval and rejection are keyed by the check, and a request for photos by the check and its submission, so a check sent back twice tells the client twice. Escalating a check, or sending it to a person, tells the client nothing.
+
 Without `FINVEST_IDENTITY_DATA_KEY` the routes answer `unavailable`, and so do the photo routes when file storage is not configured.
 
 ## Not built yet
 
 - The console and the client app calling these routes. Both still use sample data.
 - Replacing the identity data key. Do not rotate it yet: a sealed value records which key sealed it and an old key can still be read, but nothing seals the rows again, and the document fingerprints are made with the current key only, so the one-document rule would stop matching earlier clients.
-- Notifications when a check is approved or needs a new photo.
 - Checking that the name matches the name registered on the client's mobile money number.
 - Company, joint and group accounts. Only personal accounts are issued.
