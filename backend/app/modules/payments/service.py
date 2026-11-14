@@ -527,6 +527,8 @@ async def apply_move(
         if paid_into is None:
             paid_into = _wallet(deposit, move.post.currency)
         entry_id = await _post_confirmed(session, deposit, move.post, paid_into, clock)
+        if move.charge is not None:
+            await _post_charge(session, deposit, move.charge, paid_into, clock)
     await session.execute(
         _UPDATE,
         {
@@ -625,6 +627,11 @@ async def schedule_status_read(
     )
 
 
+# The names the expense accounts already carry: reconciliation opened `fees.provider.iotec` as
+# "ioTec fees" for sweeps between pots, and the ledger finds an account by its code.
+_PROVIDER_NAMES = {"iotec": "ioTec"}
+
+
 def _wallet(deposit: Deposit, currency: Currency) -> AccountSpec:
     if deposit.network is None:
         raise RuntimeError("A bank transfer is posted to the bank account it was found in")
@@ -667,6 +674,41 @@ async def _post_confirmed(
         clock,
     )
     return entry.id
+
+
+async def _post_charge(
+    session: AsyncSession, deposit: Deposit, charge: Money, paid_from: AccountSpec, clock: Clock
+) -> None:
+    """The provider's charge for this deposit, taken from our wallet, as Finvest's own cost.
+
+    It is its own entry beside the deposit's, so the deposit's entry still shows the client's
+    whole payment arriving, as the provider's statement does. The charge is already rounded up
+    to a whole shilling, so a fractional charge leaves the wallet a little under the ledger, and
+    that shows as a difference at reconciliation (decided by the owner, 2026-11-14).
+    """
+    wallet = await ledger.open_account(session, paid_from, clock)
+    fees = await ledger.open_account(
+        session,
+        AccountSpec(
+            f"fees.provider.{deposit.provider}",
+            AccountKind.EXPENSE,
+            charge.currency,
+            f"{_PROVIDER_NAMES.get(deposit.provider, deposit.provider)} fees",
+        ),
+        clock,
+    )
+    await ledger.post_entry(
+        session,
+        EntryDraft(
+            entry_type="payment.provider_charge",
+            effective_date=business_date(clock.now()),
+            lines=(debit(fees.id, charge), credit(wallet.id, charge)),
+            idempotency_key=f"deposit-charge:{deposit.id}",
+            source_type="payment.deposit",
+            source_id=deposit.id,
+        ),
+        clock,
+    )
 
 
 async def record_event(

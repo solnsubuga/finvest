@@ -220,8 +220,8 @@ export function BooksSection({ api, currency, today, save }: BooksSectionProps) 
             <Lines heading="Costs" lines={books.income.costs} empty="No costs yet" />
             <Row name="Net" value={formatAmount(books.income.net)} strong />
             <p className="m-0 text-sm leading-normal text-muted">
-              Finvest charges clients no fees. ioTec&rsquo;s charge on each mobile money payment in is not booked yet, so it is missing from the costs until the
-              accountant agrees how to book it.
+              Finvest charges clients no fees. ioTec fees include ioTec&rsquo;s charge on each mobile money payment in, rounded up to a whole shilling. Bank
+              charges on the trust account are not booked yet, so they are missing from the costs.
             </p>
           </div>
 

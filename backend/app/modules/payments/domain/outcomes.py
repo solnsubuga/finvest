@@ -123,15 +123,28 @@ class Pending:
 
 @dataclass(frozen=True, slots=True)
 class Confirmed:
-    """The provider says the money moved. `amount` is what the provider says moved."""
+    """The provider says the money moved. `amount` is what the provider says moved.
+
+    `charge` is what the provider took from Finvest's own wallet for it, already rounded up to
+    a whole unit, or None when the provider did not say. The client is credited `amount` in
+    full: the charge is Finvest's cost.
+    """
 
     provider_reference: str
     amount: Money
+    charge: Money | None = None
 
     def __post_init__(self) -> None:
         _checked(self.provider_reference, required=True)
         if not isinstance(self.amount, Money) or not self.amount.is_positive:
             raise InvalidOutcome("A confirmed amount is positive Money")
+        if self.charge is not None and (
+            not isinstance(self.charge, Money)
+            or self.charge.currency is not self.amount.currency
+            or self.charge.minor < 0
+            or self.charge.minor >= self.amount.minor
+        ):
+            raise InvalidOutcome("A charge is Money in the same currency, below the amount")
 
 
 @dataclass(frozen=True, slots=True)
