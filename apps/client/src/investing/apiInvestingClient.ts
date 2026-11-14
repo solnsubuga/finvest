@@ -1,11 +1,11 @@
-import type { ClientInvestmentOut, ClientTransferOut, DestinationOut, ProductOut, QuoteOut } from "@finvest/api-client/client";
+import type { ClientInvestmentOut, ClientTransferOut, DestinationOut, PortfolioView, ProductOut, QuoteOut } from "@finvest/api-client/client";
 
 import { api, ApiError, isAccountClosing } from "@/api/http";
 import { banksOrNone, nameOf } from "@/payouts/banks";
 import { accountLabel } from "@/payouts/format";
 import type { Bank } from "@/payouts/types";
 
-import { Amount, Currency, Investment, InvestingClient, InvestingError, PayoutAccount, Product, Quote, Transfer } from "./types";
+import { Amount, Currency, Investment, InvestingClient, InvestingError, PayoutAccount, Portfolio, Product, Quote, Transfer } from "./types";
 
 /**
  * The investing screens' contract, answered by the real API (`/client/products`,
@@ -91,6 +91,42 @@ export function toTransfer(view: ClientTransferOut): Transfer {
     investmentId: view.investment_id,
     keptInvestmentId: view.kept_investment_id,
     failureCode: view.failure_code,
+  };
+}
+
+export function toPortfolio(view: PortfolioView): Portfolio {
+  const currency = view.currency === "USD" ? "USD" : "UGX";
+  const m = (minor: number) => money(minor, currency);
+  return {
+    currency,
+    invested: m(view.invested_minor),
+    worth: m(view.worth_minor),
+    interestSoFar: m(view.interest_so_far_minor),
+    earningPerDay: m(view.earning_per_day_minor),
+    interestToday: m(view.interest_today_minor),
+    activeCount: view.active_count,
+    awaitingPaymentCount: view.awaiting_payment_count,
+    outsideGoals: { worth: m(view.outside_goals.worth_minor), count: view.outside_goals.count },
+    inGoals: { worth: m(view.in_goals.worth_minor), count: view.in_goals.count },
+    openGoals: view.open_goals,
+    products: view.products.map((share) => ({
+      productCode: share.product_code,
+      productName: share.product_name,
+      worth: m(share.worth_minor),
+      count: share.count,
+      percent: share.percent,
+    })),
+    nextMaturity: view.next_maturity
+      ? {
+          investmentId: view.next_maturity.investment_id,
+          productName: view.next_maturity.product_name,
+          on: view.next_maturity.on,
+          atMaturity: view.next_maturity.at_maturity,
+          termDays: view.next_maturity.term_days,
+          daysEarned: view.next_maturity.days_earned,
+          daysLeft: view.next_maturity.days_left,
+        }
+      : null,
   };
 }
 
@@ -206,6 +242,13 @@ async function wrap<T>(work: () => Promise<T>, call: Call = "other"): Promise<T>
 
 export function createApiInvestingClient(): InvestingClient {
   return {
+    getPortfolio: (currency = "UGX") =>
+      wrap(async () => {
+        const view = await api("GET /client/portfolio", { query: { currency } });
+        if (view.currency !== currency) throw new InvestingError("unavailable");
+        return toPortfolio(view);
+      }),
+
     listProducts: () => wrap(async () => (await api("GET /client/products", {})).map(toProduct)),
 
     quote: (productCode, amount) =>

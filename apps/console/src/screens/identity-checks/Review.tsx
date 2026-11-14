@@ -188,6 +188,12 @@ export function Review({ check, busy, error, onDecide, onShowNumber, canDecide =
       </div>
 
       <Outcome check={check} />
+      {check.phoneName?.blocksApproval ? (
+        <p role="note" className="m-0 rounded-lg bg-warning-surface px-4 py-3 text-md leading-normal text-warning-text">
+          This client cannot be approved: their phone number is registered to {check.phoneName.registeredName ?? "someone else"}.
+          Reject the check, or ask the client to move to a number in their own name and hand the check in again.
+        </p>
+      ) : null}
       {check.allowed.length > 0 && canDecide ? (
         <DecisionForm key={`${check.id}:${check.status}`} check={check} busy={busy} error={error} onDecide={onDecide} />
       ) : check.allowed.length > 0 ? (
