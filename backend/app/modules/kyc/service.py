@@ -858,8 +858,8 @@ class ApprovedSelfie:
     """The face on file for an approved client, to compare a new live selfie with."""
 
     check_id: str
-    # Exactly one is set: a selfie on the approved check, or, for a check carried over from
-    # Finvest 1.0, the selfie the client took when they claimed it and staff matched.
+    # Exactly one is set: a selfie on the approved check, or, for a check carried over at
+    # the switch (source finvest1, no photos), the selfie on the claim check staff matched.
     photo_id: str | None
     claim_photo_id: str | None
     photo: PhotoRef

@@ -31,7 +31,7 @@ CREATE TABLE kyc_face_confirmations (
     id push_id NOT NULL,
     client_id push_id NOT NULL,
     -- The client's approved check, and the selfie the capture is compared with: one on the
-    -- check, or for a check carried over from Finvest 1.0, the one on its matched claim.
+    -- check, or for a check carried over at the switch, the one on its matched claim.
     check_id push_id NOT NULL,
     reference_photo_id push_id,
     reference_claim_photo_id push_id,
