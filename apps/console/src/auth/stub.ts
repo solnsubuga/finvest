@@ -54,6 +54,10 @@ export const STUB_ROLE_PERMISSIONS: Record<Role, readonly Permission[]> = {
     "organisations.review",
     "identity_checks.review",
     "client_phones.change",
+    // Operations pauses a channel in an outage and keeps the calendar. The rest of Settings is read only.
+    "settings.view",
+    "payment_channels.change",
+    "calendar.change",
   ],
   finance: [
     "overview.view",
@@ -83,6 +87,10 @@ export const STUB_ROLE_PERMISSIONS: Record<Role, readonly Permission[]> = {
     // The trust account clients pay into is finance's to keep right, on Settings.
     "settings.view",
     "bank_accounts.change",
+    "payment_channels.change",
+    "calendar.change",
+    "statement_layouts.change",
+    "withdrawal_limits.change",
   ],
   compliance: [
     "overview.view",
