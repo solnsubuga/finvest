@@ -33,6 +33,7 @@ import { newIdempotencyKey } from "@/payments/idempotency";
 import { Loading } from "@/payments/Parts";
 import { Network } from "@/payments/types";
 import { colors, fontSizes, radii } from "@/theme";
+import { IdCheckPrompt } from "@/identity/Parts";
 
 const NETWORKS: Network[] = ["mtn", "airtel"];
 const MONTH_DAYS = [1, 5, 10, 15, 20, 25, 28, 31];
@@ -69,6 +70,8 @@ export default function NewPlan() {
   const [network, setNetwork] = useState<Network>(likelyNetwork(nationalDigits(payer)));
   const [amountError, setAmountError] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  // Refused because the ID check is not approved yet: the error then opens it.
+  const [needsId, setNeedsId] = useState(false);
   const [busy, setBusy] = useState(false);
   // Set once a try may have been saved before its answer was lost. From then on every try must
   // be the same plan under the same key, so nothing on the form can change.
@@ -123,6 +126,7 @@ export default function NewPlan() {
       });
       router.replace(`/autoinvest/${plan.id}`);
     } catch (caught) {
+      setNeedsId(caught instanceof AutoinvestError && caught.code === "not_verified");
       if (
         caught instanceof AutoinvestError &&
         (caught.code === "below_minimum" || caught.code === "amount_too_large")
@@ -166,7 +170,7 @@ export default function NewPlan() {
         <Loading label="Loading products" />
       ) : (
         <View style={{ marginTop: 20, gap: 18 }}>
-          {error ? <Notice tone="danger">{error}</Notice> : null}
+          {error ? (needsId ? <IdCheckPrompt message={error} /> : <Notice tone="danger">{error}</Notice>) : null}
           {locked ? (
             <Notice tone="warning">
               Your plan may already have reached us, so its details are fixed. Pressing Start plan

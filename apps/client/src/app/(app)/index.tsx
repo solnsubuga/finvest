@@ -9,6 +9,7 @@ import { Notice } from "@/components/Blocks";
 import { Icon } from "@/components/Icon";
 import { LinkCard } from "@/components/LinkCard";
 import { Txt } from "@/components/Txt";
+import { IdCheckCard } from "@/identity/IdCheckCard";
 import { colors } from "@/theme";
 import { useIsWide } from "@/theme/useIsWide";
 
@@ -45,6 +46,7 @@ export default function Home() {
           accounts you have used before.
         </Notice>
       ) : null}
+      <IdCheckCard />
       {onlySms ? (
         <Pressable
           accessibilityRole="link"
