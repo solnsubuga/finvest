@@ -211,6 +211,8 @@ class PrepareRelease(unittest.TestCase):
             "FINVEST_SIGMA360_BASE_URL": "https://api.sigma360.com/external/v2",
             "FINVEST_CUSTODIAN_READER": "claude",
             "FINVEST_ANTHROPIC_API_KEY": "a" * 40,
+            "FINVEST_OPENAI_API_KEY": "o" * 40,
+            "FINVEST_GEMINI_API_KEY": "g" * 40,
             "FINVEST_CUSTODIAN_READER_MODEL": "reader-model",
         }
         api_only = {"FINVEST_IOTEC_CALLBACK_TOKEN": "c" * 43}
@@ -227,7 +229,7 @@ class PrepareRelease(unittest.TestCase):
         for service in ("worker", "scheduler"):
             self.assertNotIn("FINVEST_IOTEC_CALLBACK_TOKEN", files[service])
         self.assertFalse(
-            [name for name in files["migrate"] if any(k in name for k in ("IOTEC", "PROVIDER", "SIGMA360", "CUSTODIAN", "ANTHROPIC"))]
+            [name for name in files["migrate"] if any(k in name for k in ("IOTEC", "PROVIDER", "SIGMA360", "CUSTODIAN", "ANTHROPIC", "OPENAI", "GEMINI"))]
         )
 
     def test_cloudflare_staff_list_settings_reach_the_worker_only(self):
