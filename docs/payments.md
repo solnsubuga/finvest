@@ -190,9 +190,9 @@ The database enforces:
 
 ## The provider
 
-ioTec Pay is the chosen provider. Its API details are not confirmed, so the only adapter today is a sandbox that moves no money. Any adapter implements `CollectionsProvider` in `domain/provider.py`: request a collection, read its status, and check and parse a callback. An adapter sorts every failure into rejected, deferred or uncertain and never raises. If one does raise, the deposit is treated as uncertain.
+ioTec Pay is the chosen provider, and there is a sandbox that moves no money for development. Any adapter implements `CollectionsProvider` in `domain/provider.py`: request a collection, read its status, and check and parse a callback. An adapter sorts every failure into rejected, deferred or uncertain and never raises. If one does raise, the deposit is treated as uncertain.
 
-`FINVEST_PAYMENTS_PROVIDER` chooses the adapter. The default is `disabled`: no deposit can be sent and the callback address answers 404. `sandbox` is set by the local Compose stack. The sandbox confirms payments that never happened, so the API, the worker and the scheduler refuse to start with it unless `FINVEST_ENVIRONMENT` is unset (local development and tests), `local` or `staging`. Any other value, including a name we do not know, is treated as production. In the sandbox, the last two digits of the payer's number choose the result:
+`FINVEST_PAYMENTS_PROVIDER` chooses the adapter: `disabled`, `sandbox` or `iotec`. The default is `disabled`: no deposit can be sent and the callback address answers 404. `sandbox` is set by the local Compose stack. The sandbox confirms payments that never happened, so the API, the worker and the scheduler refuse to start with it unless `FINVEST_ENVIRONMENT` is unset (local development and tests), `local` or `staging`. Any other value, including a name we do not know, is treated as production. In the sandbox, the last two digits of the payer's number choose the result:
 
 | Number ends in | Result |
 | --- | --- |
@@ -204,9 +204,56 @@ ioTec Pay is the chosen provider. Its API details are not confirmed, so the only
 | 06 | Confirmed for a different amount |
 | Anything else | Approved after six seconds |
 
+### ioTec Pay
+
+`providers/iotec.py` follows ioTec's published API (https://iotec.io/api-docs/pay).
+
+- **Token.** It authenticates with a client credentials token from `id.iotec.io`. The token is cached in `app.infrastructure.iotec`, shared with payouts, and refreshed 30 seconds before it expires.
+- **Collecting.** A collection is `POST /api/collections/collect` with:
+  - `category` `MobileMoney`
+  - the payer's number as `256…`
+  - the amount in whole shillings
+  - the deposit ID as `externalId`
+  - `transactionChargesCategory` `ChargeWallet`, so the client pays exactly the investment's amount and ioTec's charge falls on our wallet.
+- **Reading the status.** The status is read by ioTec's ID, or by the deposit ID when the answer to the send was lost.
+
+How a send ends:
+
+| What happened | Result |
+| --- | --- |
+| No token, or the connection never opened | Deferred: nothing was sent |
+| 401 or 403 (after one retry with a new token), 429 | Deferred |
+| 400 or 404 | Rejected (`other`) |
+| 200, `Failed`, `Rejected`, `Cancelled` or `RolledBack` | Rejected, with ioTec's ID |
+| 200, any other known status | Accepted |
+| A timeout or a dropped connection after sending, a 5xx, an answer we cannot read | Uncertain, never sent again |
+
+A status read turns:
+
+- `Success` into `Confirmed`, for the amount ioTec reports, which must be a whole number in our currency.
+- `Pending`, `SentToVendor`, `AwaitingApproval` and `Scheduled` into `Pending`.
+- 404 into `NotFound`.
+- Anything else into `Unavailable`, which decides nothing.
+
+ioTec's `statusCode` is matched loosely to our rejection codes, because ioTec does not publish the list.
+
+Callbacks go to `/provider-callbacks/collections/iotec`. In the ioTec portal, the wallet's collection callback is set with the security header `Authorization: Bearer <FINVEST_IOTEC_CALLBACK_TOKEN>`. A callback without that exact header is refused. A callback is only a hint to read the status. Each status change is its own notice, keyed `<ioTec ID>:<status>`.
+
+Settings, from `FINVEST_IOTEC_*`:
+
+| Setting | Meaning |
+| --- | --- |
+| `CLIENT_ID`, `CLIENT_SECRET` | The API credentials ioTec emailed at sign-up. A secret: GitHub environment secrets only. |
+| `WALLET_ID` | The ioTec Pay wallet collections are paid into. |
+| `CALLBACK_TOKEN` | The token ioTec sends on callbacks. A secret. Without it, callbacks are refused and the worker's status reads carry every payment through. |
+| `CURRENCY_CODE` | `UGX`, or `ITX` for an ioTec test wallet. `ITX` is refused outside local and staging, as the sandbox is. |
+| `TOKEN_URL`, `PAY_URL`, `TIMEOUT_SECONDS` | Default to `https://id.iotec.io/connect/token`, `https://pay.iotec.io` and 30 seconds. |
+
+ioTec's test numbers: `011177777x` succeed, `011177799x` fail, `011177778x` stay pending and `011177779x` stay with the network. A deposit is collected from the account's own number, so trying a test wallet needs a staging client whose number is one of these, such as `+256111777771`.
+
 ## Not built yet
 
-- The ioTec adapter, which needs ioTec's API details, callback signature scheme and sandbox access.
+- Trying the adapter against ioTec's test wallet, which needs the credentials and a staging deploy.
 - Paying for a goal over HTTP. The routes take investments only.
 - Provider limits and fees.
 - The receivable correction commands. Moving a transfer credited to the wrong client is built.

@@ -11,14 +11,14 @@ class PaymentsSettings(BaseSettings):
 
     `disabled` is the default: with no provider chosen, no deposit can be started and the
     callback address answers 404. `sandbox` moves no money and must never be set in production.
-    The ioTec adapter joins this list when its API details are confirmed.
+    `iotec` is ioTec Pay, configured by `FINVEST_IOTEC_*` (`app.infrastructure.iotec`).
     """
 
     model_config = SettingsConfigDict(
         env_prefix="FINVEST_PAYMENTS_", extra="ignore", hide_input_in_errors=True
     )
 
-    provider: Literal["disabled", "sandbox"] = "disabled"
+    provider: Literal["disabled", "sandbox", "iotec"] = "disabled"
     sandbox_notice_secret: SecretStr | None = None
 
 
