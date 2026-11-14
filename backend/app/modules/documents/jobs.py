@@ -234,13 +234,20 @@ class DocumentJobs:
                 return DocumentStatus.READY, None, pdf.receipt_pdf(receipt), None
             if view.kind is DocumentKind.INVESTMENT_NOTE:
                 assert view.source_id is not None
-                note, _ = await building.investment_note(
-                    session,
-                    client_id=view.client_id,
-                    investment_id=view.source_id,
-                    reference=note_reference(view.id),
-                    clock=self._clock,
-                )
+                try:
+                    note, _ = await building.investment_note(
+                        session,
+                        client_id=view.client_id,
+                        investment_id=view.source_id,
+                        reference=note_reference(view.id),
+                        clock=self._clock,
+                    )
+                except ApplicationError as error:
+                    if error.code != "not_found":
+                        raise
+                    # Staff undid it: it started by mistake and was never really the
+                    # client's. Nothing to confirm, show or send.
+                    return DocumentStatus.EMPTY, None, None, None
                 drawn_note = pdf.investment_note_pdf(
                     note, issued_on=business_date(self._clock.now())
                 )
