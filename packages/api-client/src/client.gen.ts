@@ -956,6 +956,7 @@ export const SendRequest = z.object({
   currency: Currency,
   message: z.string().nullable().optional(),
   to_account_number: z.string(),
+  whole: z.boolean().optional(),
 });
 export type SendRequest = z.infer<typeof SendRequest>;
 

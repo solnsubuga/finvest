@@ -93,6 +93,9 @@ class SendRequest(Contract):
     amount_minor: AmountMinor
     currency: Currency
     message: Annotated[str, Field(max_length=MAX_MESSAGE_LENGTH)] | None = None
+    # Send everything: the whole value when the request is saved, and the interest added before
+    # it moves. `amount_minor` is then the value the client was shown.
+    whole: bool = False
 
 
 class ClientTransferOut(Contract):
@@ -249,6 +252,7 @@ async def send_investment(
             restricted_until=client.restricted_until,
             idempotency_key=key,
             clock=clock,
+            whole=body.whole,
         )
         view = await transfers.client_transfer(session, client.actor, transfer.id)
     return _client_out(view)
