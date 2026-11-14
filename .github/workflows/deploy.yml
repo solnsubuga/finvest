@@ -1,6 +1,6 @@
 name: Reusable Deploy
 
-# Ported from Fidiba's deploy.yml. Builds the backend, console and website images, pushes them to GHCR and
+# Ported from Fidiba's deploy.yml. Builds the backend, console, client app and website images, pushes them to GHCR and
 # deploys their immutable digests to one environment's host with infra/deployment/deploy.sh.
 # Called by Deploy Staging (main) and Deploy Production (release). Every setting it reads was
 # written into the GitHub environment by the Provision workflow, apart from the app's own
@@ -73,6 +73,7 @@ jobs:
           {
             echo "backend=ghcr.io/${REPOSITORY,,}-backend"
             echo "console=ghcr.io/${REPOSITORY,,}-console"
+            echo "app=ghcr.io/${REPOSITORY,,}-app"
             echo "site=ghcr.io/${REPOSITORY,,}-site"
             echo "site_url=https://${domains[0]:-}"
             echo "app_url=https://$APP_DOMAIN"
@@ -100,6 +101,21 @@ jobs:
           cache-from: type=gha,scope=console-${{ inputs.environment }}
           cache-to: type=gha,scope=console-${{ inputs.environment }},mode=max
       - uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        id: app
+        with:
+          context: .
+          file: infra/deployment/app.Dockerfile
+          platforms: linux/amd64
+          push: true
+          # The client app's web version, built for this environment's API. Regula's Face
+          # service is optional: without it the selfie uses the guided camera alone.
+          build-args: |
+            EXPO_PUBLIC_API_URL=${{ steps.images.outputs.api_url }}
+            EXPO_PUBLIC_REGULA_FACE_URL=${{ vars.FINVEST_REGULA_FACE_URL }}
+          tags: ${{ steps.images.outputs.app }}:${{ inputs.environment }}-${{ inputs.revision }}
+          cache-from: type=gha,scope=app-${{ inputs.environment }}
+          cache-to: type=gha,scope=app-${{ inputs.environment }},mode=max
+      - uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
         id: site
         with:
           context: .
@@ -118,6 +134,7 @@ jobs:
         env:
           BACKEND_IMAGE: ${{ steps.images.outputs.backend }}@${{ steps.backend.outputs.digest }}
           CONSOLE_IMAGE: ${{ steps.images.outputs.console }}@${{ steps.console.outputs.digest }}
+          APP_IMAGE: ${{ steps.images.outputs.app }}@${{ steps.app.outputs.digest }}
           SITE_IMAGE: ${{ steps.images.outputs.site }}@${{ steps.site.outputs.digest }}
           SITE_PUBLISHED: ${{ vars.SITE_PUBLISHED }}
           SITE_DOMAINS: ${{ vars.SITE_DOMAINS }}

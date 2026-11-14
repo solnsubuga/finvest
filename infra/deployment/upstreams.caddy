@@ -12,3 +12,6 @@
 (site_upstream) {
 	reverse_proxy site-blue:8080
 }
+(app_upstream) {
+	reverse_proxy app-blue:8080
+}
