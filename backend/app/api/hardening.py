@@ -33,6 +33,8 @@ BODY_LIMITS: dict[str, int] = {
     # An identity document photo: at most 10 MiB, plus the multipart framing. The edge allows
     # 12 MiB on the same path.
     "/client/identity-check/photos/": 11 * 1024 * 1024,
+    # The selfie and ID photo of a client claiming an account carried over from Finvest 1.0.
+    "/client/claim-check/photos/": 11 * 1024 * 1024,
 }
 
 

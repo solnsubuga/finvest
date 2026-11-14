@@ -441,6 +441,20 @@ ROWS = {
         "now(), now(), '1001004827', 'finvest1', 'FV1-0001', now(), now())",
         "refusing to drop identity checks carried over from Finvest 1.0",
     ),
+    "0053_kyc_claim_checks": (
+        "INSERT INTO account_numbers (number, issued_at) VALUES ('1001004827', now()); "
+        "INSERT INTO kyc_checks (id, client_id, status, document_type, document_country, "
+        "surname, given_names, document_number_sealed, date_of_birth_sealed, "
+        "document_fingerprint, details_confirmed_at, decided_at, account_number, source, "
+        "legacy_reference, created_at, updated_at) VALUES ('-Nabc0000000000000A1', "
+        "'-Nabc0000000000000B1', 'approved', 'national_id', 'UG', 'NAKATO', 'Amara', "
+        "decode(repeat('00', 40), 'hex'), decode(repeat('00', 40), 'hex'), repeat('0', 64), "
+        "now(), now(), '1001004827', 'finvest1', 'FV1-0001', now(), now()); "
+        "INSERT INTO kyc_claim_checks (id, client_id, check_id, created_at, updated_at) "
+        "VALUES ('-Nabc0000000000000C1', '-Nabc0000000000000B1', '-Nabc0000000000000A1', "
+        "now(), now())",
+        "refusing to drop claim checks that hold records",
+    ),
     "0006_passkeys": (
         "INSERT INTO identity_passkeys (id, actor_kind, actor_id, credential_id, public_key, "
         "sign_count, transports, name, created_at) VALUES ('-Nabc0000000000000A1', 'staff', "
