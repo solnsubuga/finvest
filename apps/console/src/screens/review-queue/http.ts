@@ -19,8 +19,8 @@ import {
   type PayoutAccountDetail,
   type ProofKind,
   type Release,
-  type RejectionReason,
   type ReviewQueueApi,
+  type ShownRejection,
   type ReviewQueueErrorCode,
 } from "./api.ts";
 
@@ -43,7 +43,8 @@ export interface AccountJson {
   status: AccountStatus;
   proof_kind: ProofKind | null;
   check: CheckJson | null;
-  rejection_reason: RejectionReason | null;
+  network_name?: string | null;
+  rejection_reason: ShownRejection | null;
   approved_by: string | null;
   approved_at: string | null;
   payable_from: string | null;
@@ -96,6 +97,7 @@ export function toAccount(json: AccountJson): PayoutAccount {
           checkedAt: json.check.checked_at,
         }
       : null,
+    networkName: json.network_name ?? null,
     rejectionReason: json.rejection_reason,
     approvedBy: json.approved_by,
     approvedAt: json.approved_at,
@@ -137,6 +139,8 @@ const NAMED: readonly ReviewQueueErrorCode[] = [
   "statement_date_required",
   "statement_too_old",
   "proof_kind_not_accepted",
+  "proof_name_required",
+  "proof_name_from_network",
   "client_not_verified",
   "destination_not_checked",
   "account_in_use",
@@ -197,7 +201,7 @@ export function createHttpReviewQueueApi(http: Http): ReviewQueueApi {
     openAccount: (id) => call(async () => toAccountDetail(await http.request<AccountDetailJson>("GET", account(id)))),
     check: (id, check) =>
       act(id, "/check", {
-        proof_name: check.proofName,
+        ...(check.proofName !== null ? { proof_name: check.proofName } : {}),
         ...(check.statementDate ? { statement_date: check.statementDate } : {}),
         reason: check.reason,
       }),

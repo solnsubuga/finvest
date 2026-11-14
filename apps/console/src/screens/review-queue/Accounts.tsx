@@ -21,6 +21,7 @@ import {
   PROOF_LABELS,
   providerName,
   REJECTION_LABELS,
+  SHOWN_REJECTION_LABELS,
   timeAgo,
 } from "./labels.ts";
 import { useNames } from "./names.ts";
@@ -288,6 +289,9 @@ function AccountReview({ account, client, who, me, busy, error, canDecide, onDec
               )
             }
           />
+          {account.proofKind === "network_registered_name" ? (
+            <Row name="Registered name on the number" value={account.networkName ?? "Not read yet"} />
+          ) : null}
           <Row name="Name on the client's ID" value={account.idName ?? "No approved identity check"} />
         </Section>
       </div>
@@ -341,7 +345,7 @@ function Outcome({ account }: { account: PayoutAccountDetail }) {
       "Approved."
     );
   } else if (account.status === "rejected") {
-    const reason = account.rejectionReason ? REJECTION_LABELS[account.rejectionReason] : null;
+    const reason = account.rejectionReason ? SHOWN_REJECTION_LABELS[account.rejectionReason] : null;
     text =
       account.rejectionReason === "suspected_fraud"
         ? "Proof refused for suspected fraud. This is final: the account can only be removed."
@@ -404,11 +408,15 @@ function DecisionForm({
   }, [confirming]);
 
   const needsDate = account.proofKind === "bank_statement";
+  // A number is checked with the name its network holds. Nobody types it.
+  const fromNetwork = account.proofKind === "network_registered_name";
+  // Until the network's name is read there is nothing to check, and the backend would refuse it.
+  const nothingToCheck = action === "check" && fromNetwork && !account.networkName;
 
   function problems(): FieldErrors {
     const found: FieldErrors = {};
     if (action === "check") {
-      if (!proofName.trim()) found.proofName = "Type the name exactly as the proof shows it.";
+      if (!fromNetwork && !proofName.trim()) found.proofName = "Type the name exactly as the proof shows it.";
       if (needsDate && !statementDate) found.statementDate = "Give the date printed on the statement.";
     }
     if (action === "reject" && !rejectionReason) found.rejectionReason = "Choose why the proof is refused.";
@@ -430,7 +438,10 @@ function DecisionForm({
     setConfirming(false);
     const why = reason.trim();
     if (action === "check") {
-      onDecide({ action, check: { proofName: proofName.trim(), statementDate: needsDate ? statementDate : null, reason: why } });
+      onDecide({
+        action,
+        check: { proofName: fromNetwork ? null : proofName.trim(), statementDate: needsDate ? statementDate : null, reason: why },
+      });
     } else if (action === "reject") {
       onDecide({ action, rejectionReason: rejectionReason as RejectionReason, reason: why });
     } else {
@@ -468,7 +479,18 @@ function DecisionForm({
         ))}
       </div>
 
-      {action === "check" ? (
+      {nothingToCheck ? (
+        <Notice>
+          The network has not given a name for this number yet, so there is nothing to check. You can still refuse the proof
+          or remove the account.
+        </Notice>
+      ) : action === "check" && fromNetwork ? (
+        <p className="m-0 text-md leading-normal">
+          You are checking the name the network holds, <strong>{account.networkName}</strong>, against the
+          name on the ID{account.idName ? <>, <strong>{account.idName}</strong></> : null}. Finvest compares them, and a
+          different name is never approved.
+        </p>
+      ) : action === "check" ? (
         <>
           <div className="flex flex-col gap-1.5">
             <Label htmlFor={`${ids}-name`}>Name on the proof</Label>
@@ -537,21 +559,23 @@ function DecisionForm({
         </div>
       ) : null}
 
-      <div className="flex flex-col gap-1.5">
-        <Label htmlFor={`${ids}-reason`}>Reason for your decision</Label>
-        <Input
-          id={`${ids}-reason`}
-          value={reason}
-          maxLength={MAX_REASON}
-          onChange={(event) => setReason(event.target.value)}
-          aria-invalid={errors.reason ? true : undefined}
-          aria-describedby={`${ids}-reason-help`}
-          className={FIELD}
-        />
-        <FieldNote id={`${ids}-reason-help`} error={errors.reason}>
-          {action === "remove" ? "Recorded as an operator control. The client does not see it." : "Kept in the audit trail. The client does not see it."}
-        </FieldNote>
-      </div>
+      {nothingToCheck ? null : (
+        <div className="flex flex-col gap-1.5">
+          <Label htmlFor={`${ids}-reason`}>Reason for your decision</Label>
+          <Input
+            id={`${ids}-reason`}
+            value={reason}
+            maxLength={MAX_REASON}
+            onChange={(event) => setReason(event.target.value)}
+            aria-invalid={errors.reason ? true : undefined}
+            aria-describedby={`${ids}-reason-help`}
+            className={FIELD}
+          />
+          <FieldNote id={`${ids}-reason-help`} error={errors.reason}>
+            {action === "remove" ? "Recorded as an operator control. The client does not see it." : "Kept in the audit trail. The client does not see it."}
+          </FieldNote>
+        </div>
+      )}
 
       {error ? <ErrorNote>{error}</ErrorNote> : null}
 
@@ -567,7 +591,7 @@ function DecisionForm({
             </Button>
           </div>
         </div>
-      ) : (
+      ) : nothingToCheck ? null : (
         <Button variant={action === "approve" || action === "check" ? "primary" : "secondary"} disabled={busy} onClick={() => attempt()} className="h-12 self-start px-6">
           {busy ? "Saving" : action === "check" && account.check ? "Check again" : ACTION_LABELS[action]}
         </Button>

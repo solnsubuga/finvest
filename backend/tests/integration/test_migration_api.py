@@ -78,7 +78,7 @@ def code(response: httpx.Response) -> tuple[int, str]:
 
 def sheets(stated_interest: int) -> dict[str, Any]:
     """One client with one investment. Over 34 days the formula gives 11,643 before tax."""
-    ref = f"INV-{push_id()[-8:].replace('_', 'x').replace('-', 'x')}"
+    ref = f"INV-{push_id()[-8:].encode().hex()}"
     return {
         "ref": ref.upper(),
         "body": {

@@ -1,9 +1,7 @@
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field, SecretStr
+from pydantic import SecretStr
 from pydantic_settings import BaseSettings, SettingsConfigDict
-
-from app.shared.money import Currency
 
 
 class PaymentsSettings(BaseSettings):
@@ -20,33 +18,6 @@ class PaymentsSettings(BaseSettings):
 
     provider: Literal["disabled", "sandbox", "iotec"] = "disabled"
     sandbox_notice_secret: SecretStr | None = None
-
-
-class BankAccountDetails(BaseModel):
-    """One account clients pay into by bank transfer, as the client is shown it."""
-
-    model_config = ConfigDict(frozen=True, extra="forbid")
-
-    bank_name: str = Field(min_length=1)
-    account_name: str = Field(min_length=1)
-    account_number: str = Field(min_length=1)
-    branch: str | None = None
-
-
-class BankTransferSettings(BaseSettings):
-    """The accounts clients pay into by bank transfer, one per currency.
-
-    From `FINVEST_BANK_TRANSFER_ACCOUNTS`, a JSON object keyed by currency, for example
-    `{"UGX": {"bank_name": "...", "account_name": "...", "account_number": "...",
-    "branch": null}}`. These are the details printed on an invoice, not a secret, but they are
-    set per deployment, so they are not written into the code. A currency with no account
-    cannot be paid by transfer: the details route answers `unavailable`. Each account must be
-    the bank pot whose statement reconciliation imports, or a transfer can never be matched.
-    """
-
-    model_config = SettingsConfigDict(env_prefix="FINVEST_BANK_TRANSFER_", extra="ignore")
-
-    accounts: dict[Currency, BankAccountDetails] = {}
 
 
 class Deployment(BaseSettings):

@@ -420,7 +420,8 @@
               "deposit_reassignment",
               "payout_release",
               "account_closure",
-              "compliance_case"
+              "compliance_case",
+              "bank_account_change"
             ],
             "title": "Kind",
             "type": "string"
@@ -619,6 +620,119 @@
         ],
         "title": "AutomaticCheck",
         "type": "string"
+      },
+      "BankAccountList": {
+        "additionalProperties": false,
+        "properties": {
+          "accounts": {
+            "items": {
+              "$ref": "#/components/schemas/CurrencyBankAccountView"
+            },
+            "title": "Accounts",
+            "type": "array"
+          }
+        },
+        "required": [
+          "accounts"
+        ],
+        "title": "BankAccountList",
+        "type": "object"
+      },
+      "BankAccountProposalView": {
+        "additionalProperties": false,
+        "properties": {
+          "account": {
+            "$ref": "#/components/schemas/BankAccountText"
+          },
+          "currency": {
+            "enum": [
+              "UGX",
+              "USD"
+            ],
+            "title": "Currency",
+            "type": "string"
+          },
+          "id": {
+            "maxLength": 20,
+            "minLength": 20,
+            "pattern": "^[-0-9A-Z_a-z]{20}$",
+            "title": "Id",
+            "type": "string"
+          },
+          "proposed_at": {
+            "format": "date-time",
+            "title": "Proposed At",
+            "type": "string"
+          },
+          "proposed_by": {
+            "maxLength": 20,
+            "minLength": 20,
+            "pattern": "^[-0-9A-Z_a-z]{20}$",
+            "title": "Proposed By",
+            "type": "string"
+          },
+          "reason": {
+            "title": "Reason",
+            "type": "string"
+          },
+          "yours": {
+            "title": "Yours",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "id",
+          "currency",
+          "account",
+          "reason",
+          "proposed_by",
+          "proposed_at",
+          "yours"
+        ],
+        "title": "BankAccountProposalView",
+        "type": "object"
+      },
+      "BankAccountText": {
+        "additionalProperties": false,
+        "properties": {
+          "account_name": {
+            "maxLength": 100,
+            "minLength": 1,
+            "title": "Account Name",
+            "type": "string"
+          },
+          "account_number": {
+            "maxLength": 40,
+            "minLength": 1,
+            "title": "Account Number",
+            "type": "string"
+          },
+          "bank_name": {
+            "maxLength": 100,
+            "minLength": 1,
+            "title": "Bank Name",
+            "type": "string"
+          },
+          "branch": {
+            "anyOf": [
+              {
+                "maxLength": 100,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Branch"
+          }
+        },
+        "required": [
+          "bank_name",
+          "account_name",
+          "account_number"
+        ],
+        "title": "BankAccountText",
+        "type": "object"
       },
       "BankOut": {
         "additionalProperties": false,
@@ -1517,6 +1631,29 @@
         "title": "BufferScreenOut",
         "type": "object"
       },
+      "CaseAmountOut": {
+        "additionalProperties": false,
+        "properties": {
+          "currency": {
+            "enum": [
+              "UGX",
+              "USD"
+            ],
+            "title": "Currency",
+            "type": "string"
+          },
+          "minor": {
+            "title": "Minor",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "minor",
+          "currency"
+        ],
+        "title": "CaseAmountOut",
+        "type": "object"
+      },
       "CaseDetailOut": {
         "additionalProperties": false,
         "properties": {
@@ -1607,6 +1744,16 @@
       "CaseOut": {
         "additionalProperties": false,
         "properties": {
+          "amount": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CaseAmountOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "client": {
             "$ref": "#/components/schemas/ClientOut"
           },
@@ -1692,7 +1839,8 @@
           "status",
           "outcome",
           "closed_at",
-          "waiting"
+          "waiting",
+          "amount"
         ],
         "title": "CaseOut",
         "type": "object"
@@ -3709,6 +3857,31 @@
         "title": "ComplaintNote",
         "type": "object"
       },
+      "ConfirmBody": {
+        "additionalProperties": false,
+        "properties": {
+          "action": {
+            "enum": [
+              "withdrawal",
+              "payout_account"
+            ],
+            "title": "Action",
+            "type": "string"
+          },
+          "pin": {
+            "maxLength": 16,
+            "minLength": 1,
+            "title": "Pin",
+            "type": "string"
+          }
+        },
+        "required": [
+          "pin",
+          "action"
+        ],
+        "title": "ConfirmBody",
+        "type": "object"
+      },
       "ConfirmCode": {
         "additionalProperties": false,
         "properties": {
@@ -4186,6 +4359,59 @@
         "title": "Currency",
         "type": "string"
       },
+      "CurrencyBankAccountView": {
+        "additionalProperties": false,
+        "properties": {
+          "changed_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Changed At"
+          },
+          "currency": {
+            "enum": [
+              "UGX",
+              "USD"
+            ],
+            "title": "Currency",
+            "type": "string"
+          },
+          "in_use": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/BankAccountText"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "proposal": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/BankAccountProposalView"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "currency",
+          "in_use",
+          "changed_at",
+          "proposal"
+        ],
+        "title": "CurrencyBankAccountView",
+        "type": "object"
+      },
       "DayOut": {
         "additionalProperties": false,
         "description": "One business day. While it is open, the figures are worked out now; once prepared or\nclosed, `close` holds who signed. `blockers` is every reason it cannot be prepared yet.",
@@ -4292,6 +4518,32 @@
           "decision"
         ],
         "title": "DecideAnnouncement",
+        "type": "object"
+      },
+      "DecideBankAccount": {
+        "additionalProperties": false,
+        "properties": {
+          "decision": {
+            "enum": [
+              "approved",
+              "rejected",
+              "withdrawn"
+            ],
+            "title": "Decision",
+            "type": "string"
+          },
+          "reason": {
+            "maxLength": 500,
+            "minLength": 1,
+            "title": "Reason",
+            "type": "string"
+          }
+        },
+        "required": [
+          "decision",
+          "reason"
+        ],
+        "title": "DecideBankAccount",
         "type": "object"
       },
       "DecideChange": {
@@ -5326,6 +5578,7 @@
               "second_step_missing",
               "sign_in_again",
               "app_locked",
+              "pin_required",
               "confirm_it_is_you",
               "expired",
               "phone_taken",
@@ -8128,6 +8381,90 @@
         "title": "MoneyView",
         "type": "object"
       },
+      "MonitoringRulesOut": {
+        "additionalProperties": false,
+        "description": "The transaction monitoring rules as they run, read from the rules themselves.",
+        "properties": {
+          "currency": {
+            "enum": [
+              "UGX",
+              "USD"
+            ],
+            "title": "Currency",
+            "type": "string"
+          },
+          "large_deposit_minor": {
+            "title": "Large Deposit Minor",
+            "type": "integer"
+          },
+          "many_deposits_count": {
+            "title": "Many Deposits Count",
+            "type": "integer"
+          },
+          "many_deposits_hours": {
+            "title": "Many Deposits Hours",
+            "type": "integer"
+          },
+          "quick_withdrawal_days": {
+            "title": "Quick Withdrawal Days",
+            "type": "integer"
+          },
+          "quick_withdrawal_floor_minor": {
+            "title": "Quick Withdrawal Floor Minor",
+            "type": "integer"
+          },
+          "quick_withdrawal_share_denominator": {
+            "title": "Quick Withdrawal Share Denominator",
+            "type": "integer"
+          },
+          "quick_withdrawal_share_numerator": {
+            "title": "Quick Withdrawal Share Numerator",
+            "type": "integer"
+          },
+          "rescreen_every_days": {
+            "title": "Rescreen Every Days",
+            "type": "integer"
+          },
+          "split_deposits_days": {
+            "title": "Split Deposits Days",
+            "type": "integer"
+          },
+          "unusual_floor_minor": {
+            "title": "Unusual Floor Minor",
+            "type": "integer"
+          },
+          "unusual_history": {
+            "title": "Unusual History",
+            "type": "integer"
+          },
+          "unusual_lookback_days": {
+            "title": "Unusual Lookback Days",
+            "type": "integer"
+          },
+          "unusual_multiple": {
+            "title": "Unusual Multiple",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "currency",
+          "large_deposit_minor",
+          "split_deposits_days",
+          "many_deposits_count",
+          "many_deposits_hours",
+          "unusual_multiple",
+          "unusual_floor_minor",
+          "unusual_history",
+          "unusual_lookback_days",
+          "quick_withdrawal_days",
+          "quick_withdrawal_share_numerator",
+          "quick_withdrawal_share_denominator",
+          "quick_withdrawal_floor_minor",
+          "rescreen_every_days"
+        ],
+        "title": "MonitoringRulesOut",
+        "type": "object"
+      },
       "MonthOut": {
         "additionalProperties": false,
         "properties": {
@@ -8433,6 +8770,18 @@
               }
             ],
             "title": "Phone"
+          },
+          "pin_confirmation": {
+            "anyOf": [
+              {
+                "maxLength": 200,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pin Confirmation"
           }
         },
         "required": [
@@ -9858,6 +10207,38 @@
         "title": "PinChecked",
         "type": "object"
       },
+      "PinConfirmed": {
+        "additionalProperties": false,
+        "description": "A right PIN gives `confirmation`: send it with the action, once, within three minutes.\nOtherwise `tries_left` before this device signs out.",
+        "properties": {
+          "confirmation": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Confirmation"
+          },
+          "confirmed": {
+            "title": "Confirmed",
+            "type": "boolean"
+          },
+          "tries_left": {
+            "title": "Tries Left",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "confirmed",
+          "tries_left",
+          "confirmation"
+        ],
+        "title": "PinConfirmed",
+        "type": "object"
+      },
       "PlanCountsView": {
         "additionalProperties": false,
         "properties": {
@@ -10519,6 +10900,26 @@
           "reason"
         ],
         "title": "ProposeAnnouncement",
+        "type": "object"
+      },
+      "ProposeBankAccount": {
+        "additionalProperties": false,
+        "properties": {
+          "account": {
+            "$ref": "#/components/schemas/BankAccountText"
+          },
+          "reason": {
+            "maxLength": 500,
+            "minLength": 1,
+            "title": "Reason",
+            "type": "string"
+          }
+        },
+        "required": [
+          "account",
+          "reason"
+        ],
+        "title": "ProposeBankAccount",
         "type": "object"
       },
       "ProposeChange": {
@@ -11504,6 +11905,10 @@
             "title": "Account Phone",
             "type": "string"
           },
+          "asks": {
+            "title": "Asks",
+            "type": "integer"
+          },
           "client_id": {
             "maxLength": 20,
             "minLength": 20,
@@ -11527,6 +11932,11 @@
             "title": "Id",
             "type": "string"
           },
+          "last_asked_at": {
+            "format": "date-time",
+            "title": "Last Asked At",
+            "type": "string"
+          },
           "reason": {
             "enum": [
               "lost_phone",
@@ -11544,7 +11954,9 @@
           "account_phone",
           "contact_phone",
           "reason",
-          "created_at"
+          "created_at",
+          "asks",
+          "last_asked_at"
         ],
         "title": "RecoveryView",
         "type": "object"
@@ -12709,6 +13121,7 @@
                 "audit.view",
                 "settings.view",
                 "wordings.change",
+                "bank_accounts.change",
                 "email_suppressions.lift",
                 "announcements.send",
                 "migration.view",
@@ -16164,6 +16577,7 @@
                 "audit.view",
                 "settings.view",
                 "wordings.change",
+                "bank_accounts.change",
                 "email_suppressions.lift",
                 "announcements.send",
                 "migration.view",
@@ -16552,6 +16966,10 @@
             "title": "Provider",
             "type": "string"
           },
+          "reports_to_fia_this_year": {
+            "title": "Reports To Fia This Year",
+            "type": "integer"
+          },
           "screened_last_30_days": {
             "title": "Screened Last 30 Days",
             "type": "integer"
@@ -16581,7 +16999,8 @@
           "not_run_last_30_days",
           "pending",
           "last_screened_at",
-          "payouts_waiting"
+          "payouts_waiting",
+          "reports_to_fia_this_year"
         ],
         "title": "SummaryOut",
         "type": "object"
@@ -24156,7 +24575,7 @@
     },
     "/client/investments/{investment_id}/bank-transfer-details": {
       "get": {
-        "description": "Where to send a bank transfer for this investment, for exactly the amount owed.\n\nThe same refusals as paying: 404 if it is not the client's, 409 if it can no longer be\npaid or already has a payment under way or paid (fetch that from\n`GET /client/investments/{investment_id}/payment`). 503 if no account is set for the\ninvestment's currency, so the app offers mobile money instead.",
+        "description": "Where to send a bank transfer for this investment, for exactly the amount owed.\n\nThe same refusals as paying: 404 if it is not the client's, 409 if it can no longer be\npaid or already has a payment under way or paid (fetch that from\n`GET /client/investments/{investment_id}/payment`). 503 if no account is set for the\ninvestment's currency, so the app offers mobile money instead. The account is the one\nstaff last approved on the console's Settings screen.",
         "operationId": "bank_transfer_details_client_investments__investment_id__bank_transfer_details_get",
         "parameters": [
           {
@@ -26537,7 +26956,7 @@
         ]
       },
       "post": {
-        "description": "Add a mobile money number or bank account. It starts awaiting the SMS code.\n\n409 `conflict` if the client already has the same account saved.",
+        "description": "Add a mobile money number or bank account. It starts awaiting the SMS code.\n\n409 `conflict` if the client already has the same account saved. On the phone app with a\nPIN, 428 `pin_required` without a confirmation for `payout_account`; the confirmation is\nused up only when the account is saved.",
         "operationId": "add_destination_client_payout_destinations_post",
         "requestBody": {
           "content": {
@@ -26609,6 +27028,16 @@
               }
             },
             "description": "Unprocessable Content"
+          },
+          "428": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Precondition Required"
           }
         },
         "summary": "Add Destination",
@@ -27461,6 +27890,16 @@
             },
             "description": "Locked"
           },
+          "428": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Precondition Required"
+          },
           "429": {
             "content": {
               "application/json": {
@@ -27473,6 +27912,108 @@
           }
         },
         "summary": "Set Pin",
+        "tags": [
+          "client sign-in"
+        ]
+      }
+    },
+    "/client/pin/confirm": {
+      "post": {
+        "description": "Confirm one action with the PIN. The fifth wrong PIN in a row signs this device out.",
+        "operationId": "confirm_client_pin_confirm_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ConfirmBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PinConfirmed"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "423": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Locked"
+          },
+          "428": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Precondition Required"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          }
+        },
+        "summary": "Confirm",
         "tags": [
           "client sign-in"
         ]
@@ -27552,6 +28093,16 @@
               }
             },
             "description": "Locked"
+          },
+          "428": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Precondition Required"
           },
           "429": {
             "content": {
@@ -33052,6 +33603,74 @@
         ]
       }
     },
+    "/staff/compliance/cases.csv": {
+      "get": {
+        "description": "Newest first, with each client's account number and name. Every export is on the audit\ntrail. More than 10,000 cases is refused with `too_many_cases`.",
+        "operationId": "export_register_staff_compliance_cases_csv_get",
+        "responses": {
+          "200": {
+            "content": {
+              "text/csv": {}
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          }
+        },
+        "summary": "Every compliance case as a CSV file: the register",
+        "tags": [
+          "staff compliance"
+        ]
+      }
+    },
     "/staff/compliance/cases/{case_id}": {
       "get": {
         "description": "One case: what raised it, what the screen found, and every proposal to close it.",
@@ -33780,6 +34399,78 @@
           }
         },
         "summary": "Withdraw",
+        "tags": [
+          "staff compliance"
+        ]
+      }
+    },
+    "/staff/compliance/rules": {
+      "get": {
+        "description": "The monitoring rules that open cases, and how often clients are screened again.",
+        "operationId": "monitoring_rules_staff_compliance_rules_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MonitoringRulesOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          }
+        },
+        "summary": "Monitoring Rules",
         "tags": [
           "staff compliance"
         ]
@@ -40264,6 +40955,271 @@
         "summary": "Propose Wording",
         "tags": [
           "staff message wordings"
+        ]
+      }
+    },
+    "/staff/payments/bank-accounts": {
+      "get": {
+        "description": "The account clients pay each currency into, and any change waiting for a decision.",
+        "operationId": "list_bank_accounts_staff_payments_bank_accounts_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BankAccountList"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          }
+        },
+        "summary": "List Bank Accounts",
+        "tags": [
+          "staff bank accounts"
+        ]
+      }
+    },
+    "/staff/payments/bank-accounts/proposals/{proposal_id}/decision": {
+      "post": {
+        "description": "Approve or reject another person's proposal, or withdraw your own.\n\nApproved details are what clients are shown from the next time they open the transfer\nscreen.",
+        "operationId": "decide_bank_account_staff_payments_bank_accounts_proposals__proposal_id__decision_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "proposal_id",
+            "required": true,
+            "schema": {
+              "maxLength": 20,
+              "minLength": 20,
+              "pattern": "^[-0-9A-Z_a-z]{20}$",
+              "title": "Proposal Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DecideBankAccount"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BankAccountProposalView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          }
+        },
+        "summary": "Decide Bank Account",
+        "tags": [
+          "staff bank accounts"
+        ]
+      }
+    },
+    "/staff/payments/bank-accounts/{currency}/proposals": {
+      "post": {
+        "description": "Put new account details forward. A different member of staff must approve them.\n\n409 if a change for this currency is already waiting.",
+        "operationId": "propose_bank_account_staff_payments_bank_accounts__currency__proposals_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "currency",
+            "required": true,
+            "schema": {
+              "enum": [
+                "UGX",
+                "USD"
+              ],
+              "title": "Currency",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ProposeBankAccount"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BankAccountProposalView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          }
+        },
+        "summary": "Propose Bank Account",
+        "tags": [
+          "staff bank accounts"
         ]
       }
     },

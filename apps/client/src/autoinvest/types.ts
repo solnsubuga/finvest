@@ -88,6 +88,8 @@ export type AutoinvestErrorCode =
   | "stopped"
   /** A detail was refused for a reason the screen does not name. Nothing was saved. */
   | "invalid"
+  /** A request to close the account is waiting for staff, so nothing new starts. */
+  | "account_closing"
   | "unavailable";
 
 export class AutoinvestError extends Error {
@@ -114,6 +116,7 @@ export interface AutoinvestClient {
 }
 
 const messages: Record<AutoinvestErrorCode, string> = {
+  account_closing: "Your request to close your account is being checked, so nothing new can start. To carry on, go to Profile, then Close account, and choose Keep my account open.",
   below_minimum: "That is less than the smallest amount this product takes.",
   amount_too_large: "A plan can collect up to UGX 5,000,000 at a time.",
   too_many_plans: "You already have 10 plans. Stop one to start another.",

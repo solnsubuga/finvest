@@ -5,7 +5,6 @@ from datetime import date, datetime
 import pytest
 
 from app.modules.documents.domain.emails import (
-    DOCUMENTS_LINK,
     receipt_email,
     statement_email,
     tax_certificate_email,
@@ -23,6 +22,7 @@ from app.modules.documents.domain.statements import (
 from app.modules.documents.pdf import receipt_pdf, statement_pdf, tax_certificate_pdf
 from app.modules.tax import service as tax
 from app.shared.business_day import KAMPALA
+from app.shared.email_layout import Links
 from app.shared.money import Currency, Money
 
 
@@ -142,7 +142,7 @@ def test_a_statement_email_carries_no_figures() -> None:
             assert "$" not in body
             assert "%" not in body.replace("100%", "")
         assert "1001 004 827" in mail.text
-        assert DOCUMENTS_LINK in mail.html
+        assert "https://app.finvestug.com/documents" in mail.html
 
 
 def test_a_requested_statement_email_says_when_it_was_asked_for() -> None:
@@ -278,3 +278,31 @@ def test_a_tax_certificate_email_carries_no_figures_and_no_rate() -> None:
     assert "1001 004 827" in mail.text
     links = re.findall(r'href="([^"]+)"', mail.html)
     assert all(re.fullmatch(r"https://(app\.)?finvestug\.com(/[a-z]*)?", link) for link in links)
+
+
+def test_document_emails_link_to_the_app_and_site_they_are_given() -> None:
+    links = Links(app="https://app.staging.example", site="https://staging.example")
+    period = Period(date(2026, 10, 1), date(2026, 10, 31))
+    mails = [
+        statement_email(
+            kind=StatementKind.MONTHLY,
+            first_name="Amara",
+            period=period,
+            account_number="1001004827",
+            file_name="Finvest statement October 2026.pdf",
+            links=links,
+        ),
+        tax_certificate_email(
+            first_name="Amara",
+            tax_year="2025/26",
+            period=period,
+            account_number="1001004827",
+            file_name="Finvest tax certificate.pdf",
+            links=links,
+        ),
+    ]
+    for mail in mails:
+        assert "https://app.staging.example/documents" in mail.html
+        assert "https://app.staging.example/documents" in mail.text
+        assert 'href="https://staging.example"' in mail.html
+        assert "app.finvestug.com" not in mail.html

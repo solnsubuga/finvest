@@ -1,6 +1,6 @@
 import type { ClientInvestmentOut, DestinationOut, ProductOut, QuoteOut } from "@finvest/api-client/client";
 
-import { api, ApiError } from "@/api/http";
+import { api, ApiError, isAccountClosing } from "@/api/http";
 import { banksOrNone, nameOf } from "@/payouts/banks";
 import { accountLabel } from "@/payouts/format";
 import type { Bank } from "@/payouts/types";
@@ -120,6 +120,7 @@ export function toInvestingError(error: unknown, call: Call = "other"): Investin
       // signed-in client gets here.
       return new InvestingError("not_verified");
     case "conflict":
+      if (isAccountClosing(error)) return new InvestingError("account_closing");
       // Withdrawing: not running, already asked for, too close to maturity, or switched off.
       // Investing: the most investments waiting for payment at once.
       // Changing the maturity choice: too close to maturity. Paying out: already sent or rolled over.

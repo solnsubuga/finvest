@@ -56,7 +56,7 @@ class Case:
 
     def __init__(self, extra: int | None = None) -> None:
         self.extra = next(_shillings) if extra is None else extra
-        self.ref = f"INV-{push_id()[-8:].replace('_', 'x')}"
+        self.ref = f"INV-{push_id()[-8:].encode().hex()}"
         self.stated = 11_643 + self.extra
         self.key = f"investment:{self.ref.upper()}"
         self.figures = (self.stated, 11_643, 1_746, 1_746)

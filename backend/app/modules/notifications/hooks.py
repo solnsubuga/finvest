@@ -1,4 +1,4 @@
-"""The address Resend's delivery events reach, through the router at hooks.fidiba.com.
+"""The address Resend's delivery events reach: `POST /webhooks/resend` on the API.
 
 Nobody is signed in here. A request is believed only when its Svix signature checks out with
 `RESEND_HOOK_SECRET`. The route saves the event once and answers at once; the worker does the

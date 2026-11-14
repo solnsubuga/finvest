@@ -1,7 +1,7 @@
 """Record that a payout waits because Finvest's own ioTec wallet is short, and raise it.
 
 Revision ID: 0270_payout_wallet_short
-Revises: 0222_identity_recovery_requests
+Revises: 0225_identity_pin_confirmations
 
 A send that took nothing ends `deferred`, and the sweep sends it again. Most deferrals clear on
 their own, but one because Finvest's wallet does not hold enough to pay only clears when staff
@@ -20,7 +20,7 @@ from collections.abc import Sequence
 from alembic import op
 
 revision: str = "0270_payout_wallet_short"
-down_revision: str | None = "0222_identity_recovery_requests"
+down_revision: str | None = "0225_identity_pin_confirmations"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 

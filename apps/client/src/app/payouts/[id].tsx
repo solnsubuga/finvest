@@ -1,4 +1,4 @@
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Platform, Pressable, StyleSheet, View } from "react-native";
 import { Stack, useLocalSearchParams, useRouter } from "expo-router";
 
@@ -15,9 +15,10 @@ import { chooseReceiptFile, photographReceipt } from "@/payments/pickReceipt";
 import { checkReceipt, PickedFile, receiptProblemCopy } from "@/payments/receipt";
 import { ReceiptFile } from "@/payments/types";
 import { accountProvider, accountStatusPill, canProveAgain, isPayable, proofKindCopy, rejectionCopy } from "@/payouts/format";
+import { NAME_DECISION_READ_AGAIN_MS } from "@/payouts/timing";
 import { Pill, useFocusLoaded } from "@/payouts/Parts";
 import { usePayouts } from "@/payouts/PayoutsProvider";
-import { describePayoutsError, PayoutAccount, PayoutsClient, PayoutsError, ProofKind } from "@/payouts/types";
+import { describePayoutsError, PayoutAccount, PayoutsClient, PayoutsError, PayoutsErrorCode, ProofKind } from "@/payouts/types";
 import { colors, fontSizes, radii } from "@/theme";
 
 /**
@@ -115,7 +116,13 @@ function steps(account: PayoutAccount, nowMs: number): Step[] {
     { label: "Code entered", state: state(0, false), note: at === 0 ? "Your turn" : undefined },
     account.kind === "bank"
       ? { label: "Proof sent", state: state(1, false), note: at === 1 ? "Your turn" : undefined }
-      : { label: "Name checked with the network", state: state(1, true) },
+      : {
+          label: "Name checked with the network",
+          // Only a lookup in flight is ours. One that went unanswered waits for the client to ask
+          // again, and one at the limit has stopped, so neither shows as moving.
+          state: state(1, !account.nameCheck || account.nameCheck === "checking"),
+          note: at === 1 && account.nameCheck === "not_answered" ? "Your turn" : undefined,
+        },
     {
       label: account.status === "rejected" ? "Not approved" : "Checked by our team",
       state: account.status === "rejected" ? "later" : state(2, true),
@@ -138,10 +145,7 @@ function NextStep({ account, nowMs, codeSent, onChanged }: NextProps & { nowMs: 
       return account.kind === "bank" ? (
         <SendProof account={account} onChanged={onChanged} />
       ) : (
-        <Notice tone="neutral">
-          We are checking the name the network holds for this number against the name on your ID. We will tell you when
-          it is approved.
-        </Notice>
+        <NameCheckStep account={account} onChanged={onChanged} />
       );
     case "in_review":
       return (
@@ -169,6 +173,101 @@ function NextStep({ account, nowMs, codeSent, onChanged }: NextProps & { nowMs: 
             <SendProof account={account} onChanged={onChanged} again />
           ) : null}
         </View>
+      );
+  }
+}
+
+/** A mobile money number waiting for the name its network holds to be read and compared. */
+function NameCheckStep({ account, onChanged }: Omit<NextProps, "codeSent">) {
+  const client = usePayouts();
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  // Asked again once the ID was approved: the comparison is queued, so the answer still says
+  // waiting. Show that it is under way and read the account again shortly.
+  const [comparing, setComparing] = useState(false);
+
+  useEffect(() => {
+    if (!comparing) return;
+    const timer = setTimeout(async () => {
+      try {
+        onChanged(await client.getAccount(account.id));
+      } catch {
+        // Could not read it: show the card again, so the client can ask once more.
+      }
+      setComparing(false);
+    }, NAME_DECISION_READ_AGAIN_MS);
+    return () => clearTimeout(timer);
+  }, [comparing, client, account.id, onChanged]);
+
+  const again = async () => {
+    setBusy(true);
+    setError(null);
+    try {
+      const answered = await client.checkNameAgain(account.id);
+      onChanged(answered);
+      if (answered.status === "awaiting_proof" && answered.nameCheck === "waiting_for_id") setComparing(true);
+    } catch (caught) {
+      // These say the screen is out of date: show where the account is instead.
+      if (!(await movedOn(caught, client, account.id, onChanged, STALE_NAME_CHECK))) {
+        setError(describePayoutsError(caught));
+      }
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  if (comparing) {
+    return (
+      <View testID="name-check-comparing">
+        <Notice tone="neutral">
+          We are comparing the name the network holds with the name on your ID now. This takes a few seconds.
+        </Notice>
+      </View>
+    );
+  }
+
+  switch (account.nameCheck) {
+    case "not_answered":
+      return (
+        <Card>
+          <View style={{ gap: 14 }} testID="name-check-not-answered">
+            <Txt weight="bold">The network did not answer</Txt>
+            <Txt size={fontSizes.sm} color={colors.muted}>
+              We asked the network for the name this number is registered in, but no answer came. Check again and we will
+              ask once more.
+            </Txt>
+            {error ? <Notice tone="danger">{error}</Notice> : null}
+            <Button label="Check again" onPress={again} loading={busy} testID="name-check-again" />
+          </View>
+        </Card>
+      );
+    case "waiting_for_id":
+      return (
+        <Card>
+          <View style={{ gap: 14 }} testID="name-check-waiting-for-id">
+            <Txt weight="bold">Waiting for your ID check</Txt>
+            <Txt size={fontSizes.sm} color={colors.muted}>
+              The network told us the name on this number. We compare it with the name on your ID once your ID check is
+              approved. When it is, come back and check again.
+            </Txt>
+            {error ? <Notice tone="danger">{error}</Notice> : null}
+            <Button label="Check again" onPress={again} loading={busy} testID="name-check-again" />
+          </View>
+        </Card>
+      );
+    case "limit_reached":
+      return (
+        <Notice tone="warning">
+          We have asked the network for this number&apos;s name several times and no answer came. Remove the number and add
+          it again later, or use another account.
+        </Notice>
+      );
+    default:
+      return (
+        <Notice tone="neutral">
+          We are checking the name the network holds for this number against the name on your ID. We will tell you when
+          it is approved.
+        </Notice>
       );
   }
 }
@@ -245,13 +344,16 @@ function EnterCode({ account, codeSent, onChanged }: NextProps) {
 }
 
 /** When the account is no longer at the step shown, reads it again and shows where it is. */
+const STALE_NAME_CHECK: readonly PayoutsErrorCode[] = ["moved_on", "name_check_in_progress", "name_check_limit_reached"];
+
 async function movedOn(
   caught: unknown,
   client: PayoutsClient,
   accountId: string,
   onChanged: (account: PayoutAccount) => void,
+  codes: readonly PayoutsErrorCode[] = ["moved_on"],
 ): Promise<boolean> {
-  if (!(caught instanceof PayoutsError) || caught.code !== "moved_on") return false;
+  if (!(caught instanceof PayoutsError) || !codes.includes(caught.code)) return false;
   try {
     onChanged(await client.getAccount(accountId));
     return true;

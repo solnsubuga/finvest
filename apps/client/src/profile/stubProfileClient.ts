@@ -1,3 +1,5 @@
+import { setDemoClosing } from "@/demo/closing";
+
 import {
   Closure,
   NextOfKin,
@@ -140,12 +142,14 @@ export function createStubProfileClient(account: string | null): ProfileClient {
         ...closure,
         request: { id: "-NstubClosure0000001", status: "requested", reason, requestedAt: new Date().toISOString(), declineNote: null },
       };
+      setDemoClosing(true);
       return closure;
     },
     async cancelClosure(requestId) {
       await reach();
       if (closure.request?.id !== requestId) throw new ProfileError("conflict");
       closure = { ...closure, request: { ...closure.request, status: "cancelled" } };
+      setDemoClosing(false);
       return closure;
     },
     async downloadMyData() {

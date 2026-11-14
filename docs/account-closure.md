@@ -15,6 +15,22 @@ A client can close their Finvest account from Profile, once nothing is left in i
 
 The checks run when the client asks, when staff prepare, and again in the transaction that closes the account, so an investment started or a payment made after the request still stops it.
 
+## While a request waits
+
+Nothing new starts while a request is `requested` or `prepared`, and nothing ever starts once it is `closed`. Each of these is refused with `conflict` and the field problem `account` / `closing`:
+
+| Refused | Where |
+| --- | --- |
+| A new investment, including a goal's saving | `investments.holdings` |
+| A payment in, by mobile money or bank transfer receipt | `payments.service.insert_deposit` |
+| A new goal | `goals.service.open_goal` |
+| A new automatic plan, or resuming a paused one | `autoinvest.plans` |
+| An automatic run, new or a retry | `autoinvest.runs`: recorded as missed with code `closing_account` |
+
+Every module asks through `closures/pending.py`, which calls `closure_pending`, a SECURITY DEFINER function from migration `0233_closure_pending`, so no other module reads `closure_requests` and the worker needs no grant on it. The function takes a share lock on the open request. A start that runs while the approval is being saved waits for it and then sees the account closed. Cancelling the request or a decline lifts the pause at once.
+
+One gap is left on purpose: an investment checked before the request existed and saved after it. It is still caught, because staff prepare and approve in later transactions, and each checks the blockers again.
+
 ## Two people
 
 1. **The client asks** (`POST /client/account-closure`), with an optional reason, from a sign-in in the last 10 minutes. A refusal lists the blockers as field problems with `field_path` `["blockers"]`. One open request per client.
