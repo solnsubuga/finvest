@@ -203,7 +203,7 @@ In each of the `prod` and `dev` GitHub environments, beside what Terraform write
 | `FINVEST_SMS_IOTEC_API_KEY` | Secret | The ioTec Messaging API key from the same page. Worker only. |
 | `FINVEST_SMS_IOTEC_BASE_URL` | Variable, optional | Defaults to `https://messaging-api.iotec.io`. The host's firewall already allows outbound HTTPS. |
 | `FINVEST_EMAIL_HASH_KEY` | Secret | `python3 -c "import secrets; print(secrets.token_urlsafe(32))"`, one per environment. It keys the hash under which email addresses are kept on the suppression list and in delivery events, and reaches the API and worker only. Never change it once set: every stored hash would stop matching. Keep an offline copy. |
-| `FINVEST_EMAIL_RESEND_API_KEY` | Secret | The Resend key, once email is set up |
+| `FINVEST_RESEND_API_KEY` | Secret | The Resend key, once email is set up. Deploy hands it to the worker as `FINVEST_EMAIL_RESEND_API_KEY`. |
 | `FINVEST_EMAIL_BACKEND`, `FINVEST_EMAIL_FROM` | Variables | `resend` and `Finvest <no-reply@finvestug.com>` |
 | `FINVEST_EMAIL_FIDIBA_ENVIRONMENT` | Variable | The router tag, `app_finvest_prod` in production. The worker tags every message with it, so the hooks.fidiba.com router sends Resend's delivery events back to `https://<api>/webhooks/resend`. |
 | `RESEND_HOOK_SECRET` | Secret | The router's hook secret (`whsec_...`), not the Resend API key. Only the API gets it, to check each delivery event. Without it the webhook answers 404 and delivery events are lost. |
