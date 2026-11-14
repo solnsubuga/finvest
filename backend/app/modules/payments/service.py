@@ -25,10 +25,12 @@ from app.infrastructure.idempotency import Receipt, run_once
 from app.infrastructure.jobs import JobRequest, enqueue, publish
 from app.modules.audit import service as audit
 from app.modules.audit.domain.events import AuditActor, AuditEvent
+from app.modules.closures.pending import refuse_if_closing
 from app.modules.documents.events import RECEIPT_ON_DEPOSIT
 from app.modules.investments.events import START_ON_DEPOSIT
 from app.modules.ledger import service as ledger
 from app.modules.ledger.domain.entries import AccountKind, AccountSpec, EntryDraft, credit, debit
+from app.modules.notifications import contract as notifications
 from app.modules.payments.domain.deposits import (
     APPROVAL_WINDOW,
     UNSENT_EXPIRY,
@@ -289,6 +291,8 @@ async def insert_deposit(session: AsyncSession, values: dict[str, object]) -> No
         row = (await session.execute(_SELECT_LIVE, {"purpose_id": values["purpose_id"]})).first()
         return DepositExists(row.id, DepositStatus(row.status)) if row else None
 
+    # No money comes in while two people check the account is clear to close, whichever way.
+    await refuse_if_closing(session, str(values["client_id"]))
     if values["purpose_type"] == Purpose.INVESTMENT.value:
         existing = await live_deposit()
         if existing:
@@ -539,6 +543,7 @@ async def apply_move(
     await record_event(session, deposit.id, deposit.status, move.status, move.code, cause, now)
     if move.status.is_final:
         await _record_settled(session, deposit, move, cause, clock)
+        await _tell_client(session, deposit, move.status, now)
     if move.status is DepositStatus.CONFIRMED:
         await publish_confirmed(session, deposit, now)
     logger.info(
@@ -547,6 +552,37 @@ async def apply_move(
     moved = await find_deposit(session, deposit.id)
     assert moved is not None
     return moved
+
+
+# How the client is told where the money came from: "We received your payment from {method}."
+_METHOD_LABELS = {
+    Method.MTN: "MTN Mobile Money",
+    Method.AIRTEL: "Airtel Money",
+    Method.BANK_TRANSFER: "your bank",
+}
+
+
+async def _tell_client(
+    session: AsyncSession, deposit: Deposit, status: DepositStatus, now: datetime
+) -> None:
+    """Tell the client their payment was received, or that it did not go through.
+
+    A refused bank transfer is not told this way. The words for a failed payment say no money
+    was taken, which is true of a mobile money prompt but not of a transfer that reached the
+    bank: the client sees the reason on the payment in the app, and the money is returned or
+    matched by staff.
+    """
+    if status is DepositStatus.FAILED and deposit.method is Method.BANK_TRANSFER:
+        return
+    await notifications.notify(
+        session,
+        event_name="payment_confirmed" if status is DepositStatus.CONFIRMED else "payment_failed",
+        client_id=deposit.client_id,
+        idempotency_key=deposit.id,
+        variables={"amount": deposit.amount, "method": _METHOD_LABELS[deposit.method]},
+        link=notifications.Link("deposit", deposit.id),
+        now=now,
+    )
 
 
 async def publish_confirmed(session: AsyncSession, deposit: Deposit, now: datetime) -> None:

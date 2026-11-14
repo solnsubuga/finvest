@@ -51,6 +51,7 @@ function sampleAccounts(me: string, now: number): PayoutAccountDetail[] {
   const base = {
     status: "in_review" as const,
     rejectionReason: null,
+    networkName: null,
     approvedBy: null,
     approvedAt: null,
     payableFrom: null,
@@ -68,6 +69,7 @@ function sampleAccounts(me: string, now: number): PayoutAccountDetail[] {
       holderName: "Amara Nakato",
       idName: "NAKATO AMARA",
       proofKind: "network_registered_name",
+      networkName: "AMARA NAKATO",
       proofLink: null,
       check: null,
       createdAt: new Date(now - 3 * HOUR).toISOString(),
@@ -150,6 +152,7 @@ function sampleAccounts(me: string, now: number): PayoutAccountDetail[] {
       holderName: "David Mugisha",
       idName: null,
       proofKind: "network_registered_name",
+      networkName: "DAVID MUGISHA",
       proofLink: null,
       check: null,
       createdAt: new Date(now - 50 * 60_000).toISOString(),
@@ -217,6 +220,7 @@ function listed(account: PayoutAccountDetail): PayoutAccount {
     status: account.status,
     proofKind: account.proofKind,
     check: account.check ? { ...account.check } : null,
+    networkName: account.networkName,
     rejectionReason: account.rejectionReason,
     approvedBy: account.approvedBy,
     approvedAt: account.approvedAt,
@@ -309,7 +313,11 @@ export function createStubReviewQueueApi(me: string, clock: () => number = Date.
       answer(() => {
         const account = inReview(id);
         if (account.idName === null) throw new ReviewQueueError("client_not_verified");
-        const match = compareNames(check.proofName, account.idName);
+        const network = account.proofKind === "network_registered_name";
+        if (network && check.proofName !== null) throw new ReviewQueueError("proof_name_from_network");
+        const read = network ? account.networkName : check.proofName;
+        if (read === null) throw new ReviewQueueError("proof_name_required");
+        const match = compareNames(read, account.idName);
         if (match === "different") throw new ReviewQueueError("name_different");
         let statementDate: string | null = null;
         if (account.proofKind === "bank_statement") {
@@ -320,7 +328,7 @@ export function createStubReviewQueueApi(me: string, clock: () => number = Date.
           statementDate = check.statementDate;
         }
         account.check = {
-          proofName: check.proofName,
+          proofName: read,
           nameMatch: match,
           statementDate,
           checkedBy: me,

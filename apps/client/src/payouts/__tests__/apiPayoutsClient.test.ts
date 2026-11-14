@@ -97,6 +97,7 @@ describe("the payouts client for the real API", () => {
       status: "approved",
       proofKind: null,
       rejectionReason: null,
+      nameCheck: null,
       payableFrom: "2026-11-14T09:00:00Z",
       firstPaidAt: null,
       createdAt: "2026-11-13T09:00:00Z",
@@ -141,6 +142,14 @@ describe("the payouts client for the real API", () => {
       account_number: "9030012344821",
       holder_name: "Amara Nakato",
     });
+    // A phone with a PIN sends its confirmation; a refusal for it says to enter the PIN again.
+    seen = serve(201, destination({ kind: "mobile_money", network: "mtn", bank_code: null }));
+    await client.addAccount({ kind: "mobile_money", phone: "+256772123456", holderName: "Amara Nakato", pinConfirmation: "token" });
+    expect(seen[0]!.body).toMatchObject({ pin_confirmation: "token" });
+    serve(428, refusal("pin_required"));
+    await expect(
+      client.addAccount({ kind: "mobile_money", phone: "+256772123456", holderName: "Amara Nakato", pinConfirmation: "old" }),
+    ).rejects.toMatchObject({ code: "pin_required" });
   });
 
   it("says why an account was refused", async () => {
@@ -260,5 +269,28 @@ describe("the payouts client for the real API", () => {
     await expect(resend()).rejects.toEqual(new PayoutsError("invalid"));
     serve(503, refusal("unavailable"));
     await expect(resend()).rejects.toEqual(new PayoutsError("unavailable"));
+  });
+
+  it("asks the network for a number's name again, and names each refusal", async () => {
+    const seen = serve(200, destination({ kind: "mobile_money", network: "airtel", bank_code: null, status: "awaiting_proof", name_check: "checking" }));
+    const account = await createApiPayoutsClient().checkNameAgain(ID);
+    expect(account).toMatchObject({ status: "awaiting_proof", nameCheck: "checking" });
+    expect(seen.map((call) => `${call.method} ${call.path}`)).toContain(`POST /client/payout-destinations/${ID}/name-check`);
+    const refusals: [string, PayoutsError["code"]][] = [
+      ["name_check_in_progress", "name_check_in_progress"],
+      ["name_check_limit_reached", "name_check_limit_reached"],
+      ["client_not_verified", "id_not_approved"],
+      ["destination_not_awaiting_proof", "moved_on"],
+    ];
+    for (const [reason, expected] of refusals) {
+      serve(409, refusal("conflict", [{ field_path: ["body"], code: reason }]));
+      await expect(createApiPayoutsClient().checkNameAgain(ID)).rejects.toEqual(new PayoutsError(expected));
+    }
+  });
+
+  it("has no name check for an account the API sends without one", async () => {
+    serve(200, [destination()]);
+    const [account] = await createApiPayoutsClient().listAccounts();
+    expect(account?.nameCheck).toBeNull();
   });
 });

@@ -66,4 +66,30 @@ describe("payout returns over HTTP", () => {
     const error = await api(fetch).propose("key", RETURN.payout_id, RETURN.statement_line_id, "x").catch((caught: unknown) => caught);
     expect(returnsErrorMessage(error)).toContain("A payout comes back once.");
   });
+
+  it("reads the paid payouts by amount and the lines that could be one coming back", async () => {
+    const payout = {
+      id: "-NpayoutA00000000001",
+      client_id: "-Nclient00000000000A",
+      kind: "bank",
+      amount: { minor: 2_750_000, currency: "UGX" },
+      paid_at: "2026-11-12T09:00:00Z",
+      bank_name: "Centenary Bank",
+      network: null,
+      masked_account: "•••• 4417",
+      holder_name: "Amara Nakato",
+    };
+    const line = { id: "-NlineA0000000000001", value_date: "2026-11-13", amount: payout.amount, reference: "RTN 1", narrative: "Returned" };
+    const fetch = vi
+      .fn<typeof globalThis.fetch>()
+      .mockImplementationOnce(() => reply(200, [payout]))
+      .mockImplementationOnce(() => reply(200, [line]));
+    const api = createHttpReturnsApi(createHttp("https://api.test", fetch, () => Promise.resolve(false)));
+    const [found] = await api.listReturnable({ minor: 2_750_000, currency: "UGX" });
+    expect(fetch.mock.calls[0]?.[0]).toBe("https://api.test/staff/payout-returns/returnable?amount_minor=2750000&currency=UGX");
+    expect(found).toMatchObject({ id: payout.id, kind: "bank", bankName: "Centenary Bank", maskedAccount: "•••• 4417", paidAt: payout.paid_at });
+    const lines = await api.listReturnLines(payout.id);
+    expect(fetch.mock.calls[1]?.[0]).toBe(`https://api.test/staff/payouts/${payout.id}/return-lines`);
+    expect(lines).toEqual([{ id: line.id, valueDate: "2026-11-13", amount: payout.amount, reference: "RTN 1", narrative: "Returned" }]);
+  });
 });

@@ -29,6 +29,7 @@ export function toAccount(view: DestinationOut, banks: Bank[]): PayoutAccount {
     status: view.status,
     proofKind: view.proof_kind,
     rejectionReason: view.rejection_reason,
+    nameCheck: view.name_check ?? null,
     payableFrom: view.payable_from,
     firstPaidAt: view.first_paid_at,
     createdAt: view.created_at,
@@ -87,6 +88,8 @@ export function toPayoutsError(error: unknown): PayoutsError {
   switch (error.code) {
     case "not_found":
       return new PayoutsError("not_found");
+    case "pin_required":
+      return new PayoutsError("pin_required");
     case "invalid_code":
       return new PayoutsError("invalid_code");
     case "expired":
@@ -102,6 +105,9 @@ export function toPayoutsError(error: unknown): PayoutsError {
     case "conflict":
       if (codes.includes("payout_not_returned")) return new PayoutsError("not_returned");
       if (codes.includes("too_many_unconfirmed_accounts")) return new PayoutsError("too_many_unconfirmed");
+      if (codes.includes("name_check_in_progress")) return new PayoutsError("name_check_in_progress");
+      if (codes.includes("name_check_limit_reached")) return new PayoutsError("name_check_limit_reached");
+      if (codes.includes("client_not_verified")) return new PayoutsError("id_not_approved");
       // A conflict with no reason is the same account saved twice. Any other reason means the
       // account is no longer at the step the screen showed.
       return new PayoutsError(codes.length === 0 ? "already_saved" : "moved_on");
@@ -150,23 +156,32 @@ export function createApiPayoutsClient(): PayoutsClient {
         ),
       ),
 
-    addAccount: (account) =>
-      wrap(async () =>
+    addAccount: (account) => {
+      // Only a phone with a PIN sends one; a browser leaves it out.
+      const pin = account.pinConfirmation ? { pin_confirmation: account.pinConfirmation } : {};
+      return wrap(async () =>
         toAccount(
           await api("POST /client/payout-destinations", {
             body:
               account.kind === "mobile_money"
-                ? { kind: "mobile_money", phone: account.phone, holder_name: account.holderName.trim() }
+                ? {
+                    kind: "mobile_money",
+                    phone: account.phone,
+                    holder_name: account.holderName.trim(),
+                    ...pin,
+                  }
                 : {
                     kind: "bank",
                     bank_code: account.bankCode,
                     account_number: account.accountNumber,
                     holder_name: account.holderName.trim(),
+                    ...pin,
                   },
           }),
           await banksOrNone(),
         ),
-      ),
+      );
+    },
 
     sendCode: (accountId) =>
       wrap(async () => {
@@ -179,6 +194,16 @@ export function createApiPayoutsClient(): PayoutsClient {
           await api("POST /client/payout-destinations/{destination_id}/code/verify", {
             params: { destination_id: accountId },
             body: { code },
+          }),
+          await banksOrNone(),
+        ),
+      ),
+
+    checkNameAgain: (accountId) =>
+      wrap(async () =>
+        toAccount(
+          await api("POST /client/payout-destinations/{destination_id}/name-check", {
+            params: { destination_id: accountId },
           }),
           await banksOrNone(),
         ),

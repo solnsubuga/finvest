@@ -94,3 +94,23 @@ test("on the dealing desk an order is approved by a second person, never its pre
   await approve.first().click();
   await expect(page.getByText("Approved, waiting for the result").first()).toBeVisible();
 });
+
+test("staff open a client who asked to be called back, then close the request", async ({ page }) => {
+  await signIn(page, "admin@finvest.test");
+  await page.getByRole("button", { name: "Use passkey" }).click();
+  await landed(page);
+  await visit(page, "/clients");
+  const requests = page.getByRole("list", { name: "Requests for a call back" });
+  await expect(requests.getByRole("article")).toHaveCount(2);
+
+  const card = page.getByRole("article", { name: "Request for +256 772 123 456" });
+  await card.getByRole("button", { name: "Open the client" }).click();
+  await expect(page).toHaveURL(/client=-NstubClient00000042/);
+  await expect(page.getByText("+256 772 123 456").first()).toBeVisible();
+
+  await page.goBack();
+  await card.getByRole("button", { name: "Close the request" }).click();
+  await card.getByRole("button", { name: "Number changed" }).click();
+  await expect(page.getByText(/Closed as “Number changed”/)).toBeVisible();
+  await expect(requests.getByRole("article")).toHaveCount(1);
+});

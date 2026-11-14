@@ -1,5 +1,7 @@
 import { expect, test, type Page } from "@playwright/test";
 
+import { createPin, DEMO_PIN, leaveForSixMinutes, typePin } from "./pin";
+
 // The client app's sample sign-in (apps/client/src/auth/stubAuthClient.ts). Demo values, not
 // credentials for any real system.
 const DEMO_PHONE = "772123456";
@@ -38,6 +40,12 @@ test("a new client signs up with a texted code and a password", async ({ page })
   await id(page, "password-confirm-input").fill("green matooke sunday");
   await id(page, "password-submit").click();
 
+  await expect(page.getByText("3 of 4")).toBeVisible();
+  await createPin(page);
+  // The browser can make a passkey, so sign up ends by offering one.
+  await expect(page.getByText("4 of 4")).toBeVisible();
+  await id(page, "offer-not-now").click();
+
   await expect(page.getByText("Welcome to Finvest")).toBeVisible();
 });
 
@@ -62,6 +70,7 @@ test("a client signs in with the password and an authenticator code", async ({ p
   await expect(id(page, "code-input")).toHaveValue("");
   await id(page, "code-input").fill(DEMO_CODE);
   await id(page, "code-submit").click();
+  await createPin(page);
   await expect(page.getByText("Welcome, Amara")).toBeVisible();
 });
 
@@ -70,6 +79,7 @@ test("a client pays for an investment by mobile money from their own number", as
 }) => {
   await logIn(page);
   await id(page, "use-passkey").click();
+  await createPin(page);
   await expect(page.getByText("Welcome, Amara")).toBeVisible();
   // The phone's tab bar and the wide sidebar both name it Invest.
   await page
@@ -93,6 +103,7 @@ test("a client pays for an investment by mobile money from their own number", as
 test("a client adds a mobile money number to be paid to, and enters the texted code", async ({ page }) => {
   await logIn(page);
   await id(page, "use-passkey").click();
+  await createPin(page);
   await expect(page.getByText("Welcome, Amara")).toBeVisible();
   // The phone's tab bar and the wide sidebar both name it Profile.
   await page
@@ -109,6 +120,12 @@ test("a client adds a mobile money number to be paid to, and enters the texted c
   await id(page, "holder-name-input").fill("Amara Nakato");
   await id(page, "payout-account-save").click();
 
+  // On a phone with a PIN (and in the demo), adding a payout account is confirmed with it.
+  await expect(page.getByText("Enter your PIN to add this payout account")).toBeVisible();
+  await typePin(page, "90817");
+  await expect(page.getByText("That PIN is not right. 4 tries left before this phone is signed out.")).toBeVisible();
+  await typePin(page, DEMO_PIN);
+
   await expect(page.getByText(/We texted a code to \+256 70• ••• 012/)).toBeVisible();
   await id(page, "code-input").fill("000000");
   await id(page, "payout-code-submit").click();
@@ -119,6 +136,73 @@ test("a client adds a mobile money number to be paid to, and enters the texted c
   // A mobile money number is checked against the name the network holds, not by proof.
   await expect(page.getByText(/We are checking the name the network holds for this number/)).toBeVisible();
   await expect(id(page, "proof-upload")).toHaveCount(0);
+});
+
+test("a PIN that is too simple is refused, and two that differ start again", async ({ page }) => {
+  await logIn(page);
+  await id(page, "use-passkey").click();
+  await expect(page.getByText("Create a 5 digit PIN")).toBeVisible();
+  await typePin(page, "12345");
+  await expect(page.getByText(/That PIN is too easy to guess/)).toBeVisible();
+  await typePin(page, DEMO_PIN);
+  await typePin(page, "48152");
+  await expect(page.getByText("Those PINs did not match. Choose your PIN again.")).toBeVisible();
+  await createPin(page);
+  await expect(page.getByText("Welcome, Amara")).toBeVisible();
+});
+
+test("the app locks in the background and opens with the PIN, after a wrong one", async ({ page }) => {
+  await page.clock.install();
+  await logIn(page);
+  await id(page, "use-passkey").click();
+  await createPin(page);
+  await expect(page.getByText("Welcome, Amara")).toBeVisible();
+
+  await leaveForSixMinutes(page);
+  await expect(page.getByText("Enter your PIN to open the app on this phone")).toBeVisible();
+  await expect(page.getByText("Welcome, Amara")).toHaveCount(0);
+  await typePin(page, "90817");
+  await expect(
+    page.getByText("That PIN is not right. 4 tries left before this phone is signed out."),
+  ).toBeVisible();
+  await typePin(page, DEMO_PIN);
+  await expect(page.getByText("Welcome, Amara")).toBeVisible();
+});
+
+test("five wrong PINs sign the phone out, and the client logs in again", async ({ page }) => {
+  await page.clock.install();
+  await logIn(page);
+  await id(page, "use-passkey").click();
+  await createPin(page);
+  await expect(page.getByText("Welcome, Amara")).toBeVisible();
+
+  await leaveForSixMinutes(page);
+  for (let tries = 5; tries > 1; tries -= 1) {
+    await typePin(page, "90817");
+    await expect(page.getByText(new RegExp(`${tries - 1} tr(y|ies) left`))).toBeVisible();
+  }
+  await typePin(page, "90817");
+  await expect(page.getByText("Signed out for your safety")).toBeVisible();
+  await id(page, "pin-log-in-again").click();
+  await expect(page.getByText("Welcome back")).toBeVisible();
+});
+
+test("a client who lost their phone asks to be called back", async ({ page }) => {
+  await page.goto("/");
+  await page.getByText("Log in", { exact: true }).first().click();
+  await page.getByText("I changed my number or cannot get in").click();
+  await expect(page.getByText("Get back into your account").last()).toBeVisible();
+  await id(page, "recover-phone").click();
+
+  await shown(page, "call-back-submit").click();
+  await expect(page.getByText("Enter the number on your account, like 772 123 456.")).toBeVisible();
+  await shown(page, "reason-new_number").click();
+  await shown(page, "account-phone-input").fill(DEMO_PHONE);
+  await shown(page, "contact-phone-input").fill("701555013");
+  await shown(page, "call-back-submit").click();
+
+  await expect(page.getByText("We will call you").last()).toBeVisible();
+  await expect(page.getByText(/If that number has a Finvest account/)).toBeVisible();
 });
 
 // A 1 by 1 pixel PNG: the browser reads it as a picture, and the demo takes any photo.
@@ -145,6 +229,7 @@ async function upToTheSelfie(page: Page) {
   await id(page, "use-authenticator").click();
   await id(page, "code-input").fill(DEMO_CODE);
   await id(page, "code-submit").click();
+  await createPin(page);
 
   await id(page, "home-id-check").click();
   await expect(page.getByText("Which ID will you use?")).toBeVisible();

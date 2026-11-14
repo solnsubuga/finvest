@@ -29,9 +29,23 @@ A provider that does not answer raises `ProviderUnavailable` and the job asks ag
 
 | Setting | Values |
 | --- | --- |
-| `FINVEST_SCREENING_PROVIDER` | `none` (default): nothing is screened and each screen is recorded as not run. `development-stub`: for a developer's own machine; surname `SANCTIONED` matches a sanctions list and `POLITICIAN` a PEP list. Refused in production. The Sigma360 adapter adds `sigma360`. Set it on the API and the worker alike: the API reads it to decide whether a payout waits for a screen. |
+| `FINVEST_SCREENING_PROVIDER` | `none` (default): nothing is screened and each screen is recorded as not run. `development-stub`: for a developer's own machine; surname `SANCTIONED` matches a sanctions list and `POLITICIAN` a PEP list. Refused in production. `sigma360`: Sigma360, below. Set it on the API and the worker alike: the API reads it to decide whether a payout waits for a screen. |
+| `FINVEST_SIGMA360_API_KEY` | Secret. Needed for `sigma360`, on the API and the worker, which both refuse to start without it. Sent as it is in the `Authorization` header; a key that needs a scheme is set with it, such as `Bearer <key>`. |
+| `FINVEST_SIGMA360_FILTER_SET_ID` | Needed for `sigma360`: the number of the filter set made in Sigma360's console (Settings > Filter Sets). |
+| `FINVEST_SIGMA360_BASE_URL` | Optional. Defaults to `https://api.sigma360.com/external/v2`; must be https. |
 
 A provider needs `FINVEST_IDENTITY_DATA_KEY`, because the date of birth is sealed with it. The worker refuses to start without it.
+
+### Sigma360
+
+`sigma360.py`, built from Sigma360's published API description (`https://docs.sigma360.com/openapi.json`, v2.0.1) before an account existed, so it is to be tried against a test key first. One synchronous search per person, `POST /screening/full-single`:
+
+- Sent: the full name, `entityType: person`, the filter set, the date of birth and issuing country when known, `createAlerts: false`, and the screen's run ID as `customerKey` so staff can find the search in Sigma360's console. Never the ID number.
+- Each result row is one match: Sigma360's `sigmaID` for the entity, the matched name, the strength (`matchStrength` from 0 to 1, as a percentage), and the source names. Its category is the most severe found: `sanctions` for a sanctions indicator, then `pep` for a PEP indicator or political positions, then `adverse_media` for an adverse media indicator or news, otherwise `other`.
+- A strength missing or outside 0 to 1 is shown as 100, so it is never ranked as weak. A row, or an answer, that cannot be read makes the screen unavailable and it is asked again: it is never taken as clear.
+- 400 is refused (`sigma360_refused`). 401, 403, 429, a 5xx, a timeout or a lost answer are unavailable and asked again; a search only reads, so asking again is safe.
+- Ongoing monitoring and webhooks exist in Sigma360's API and are not used yet.
+- To confirm with Sigma360: coverage of Ugandan PEPs and the Financial Intelligence Authority's lists, the indicator category names (matched loosely here on "sanction", "pep" or "political", "media" or "news"), whether the key needs a scheme, and a test key.
 
 ## A screen
 
@@ -117,7 +131,7 @@ Each job carries only an ID. A transaction is recorded once, whatever the job do
 | Unusual deposit | `unusual_deposit` | A deposit of UGX 5,000,000 or more that is at least 5 times the client's median deposit over the last 180 days, once they have 3 earlier deposits in that time | Deposit |
 | Quick withdrawal | `quick_withdrawal` | A payout of at least half of what came in during the last 7 days, when that was UGX 5,000,000 or more | Payout |
 
-All thresholds are decided for now ([decisions.md](decisions.md)). UGX 20,000,000 follows the Financial Intelligence Authority's large cash transaction threshold, to confirm with counsel. The median, not the mean, is the usual deposit, so one big deposit does not hide the next.
+The owner kept all thresholds as built on 2026-11-14 ([decisions.md](decisions.md)), and counsel reviews them later. UGX 20,000,000 follows the Financial Intelligence Authority's large cash transaction threshold, which that review confirms. The median, not the mean, is the usual deposit, so one big deposit does not hide the next.
 
 A rule that fires opens a `monitoring` case with the rule as its code and what the rule saw (transaction IDs and figures) as its detail. Staff close it with two people as `no_concern` or `report_to_fia`. A monitoring case does not hold payouts: a large payout already goes to staff review, and holding money on a rule's guess would tip a client off as surely as telling them.
 
@@ -158,8 +172,10 @@ All under `/staff/compliance`. Reading needs `compliance.view` (Admin, Complianc
 
 | Route | What it does |
 | --- | --- |
-| `GET /summary` | Whether screening is on, open cases, proposals waiting, and screens in the last 30 days |
-| `GET /cases?status=open&source=` | Cases, open ones oldest first |
+| `GET /summary` | Whether screening is on, open cases, proposals waiting, screens in the last 30 days, and cases closed since 1 January (Kampala) as `report_to_fia` |
+| `GET /rules` | The monitoring thresholds and the rescreening interval, read from `domain/monitoring.py` and `domain/standing.py` so the screen never shows a copy that has gone stale |
+| `GET /cases?status=open&source=` | Cases, open ones oldest first. A monitoring case carries `amount`: the payment that raised it, or for split deposits their total |
+| `GET /cases.csv` | The register: every case newest first, with the client's account number and name, how it closed and when, as a CSV file. Each export is an audit event, `compliance.register_exported`. More than 10,000 cases is `422 too_many_cases`. |
 | `GET /cases/{id}` | One case, the screen and its matches, every proposal, where the client stands, and what the reader may do |
 | `POST /cases/{id}/proposals` | Propose an outcome. `409 proposal_waiting` or `case_closed`; `422 outcome_does_not_fit_case`. |
 | `POST /proposals/{id}/approve` | Close the case. Needs a recent second step. The proposer gets `403`. |

@@ -76,6 +76,10 @@ Permission = Literal[
     # Proposing or deciding a change to the words of a client message. Seeing them is
     # `settings.view`. Not a screen: the console's own list gains it with the wordings screen.
     "wordings.change",
+    # Proposing or deciding the bank account clients pay into by transfer, on the Settings
+    # screen. Seeing it is `settings.view`. Approving changes where every client's transfer
+    # goes, so it always takes a second person. Not a screen.
+    "bank_accounts.change",
     # Proposing or deciding to email again an address that bounced for good or complained.
     # Seeing the suppression list is `clients.view`. Not a screen.
     "email_suppressions.lift",
@@ -186,6 +190,10 @@ ROLE_PERMISSIONS: dict[Role, frozenset[Permission]] = {
             "migration.view",
             "migration.sign_off",
             "investment_corrections.change",
+            # The trust account clients pay into is finance's to keep right. Settings is where
+            # it is set, so finance can open Settings, read only apart from that account.
+            "settings.view",
+            "bank_accounts.change",
         }
     ),
     "compliance": frozenset(

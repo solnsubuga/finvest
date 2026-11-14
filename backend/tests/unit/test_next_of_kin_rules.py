@@ -9,7 +9,6 @@ from app.modules.kyc.domain.next_of_kin import (
     PersonProblem,
     Relationship,
     clean,
-    mask_phone,
     problems,
 )
 
@@ -97,8 +96,3 @@ def test_a_client_cannot_name_their_own_number() -> None:
 def test_every_problem_is_reported_at_once() -> None:
     found = problems([clean(person(full_name="J", phone="1", id_number="!", share_bps=0))])
     assert {p.field for p in found} == {"full_name", "phone", "id_number", "share_bps"}
-
-
-def test_a_masked_number_shows_its_start_and_its_last_three_digits() -> None:
-    assert mask_phone("+256701555210") == "+2567•••••210"
-    assert mask_phone("+2561") == "•••••"

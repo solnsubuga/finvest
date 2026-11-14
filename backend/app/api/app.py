@@ -1,6 +1,6 @@
 """Build the one FastAPI application. Modules add their routers here."""
 
-from collections.abc import AsyncIterator, Mapping
+from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
@@ -68,19 +68,16 @@ from app.modules.notifications import suppressions_api
 from app.modules.notifications.settings import EmailHashSettings
 from app.modules.organisations import api as organisations_api
 from app.modules.payments import api as payments_api
-from app.modules.payments import reassignment_routes
+from app.modules.payments import bank_account_routes, reassignment_routes
 from app.modules.payments import routes as payment_routes
 from app.modules.payments.domain.provider import CollectionsProvider
-from app.modules.payments.settings import (
-    BankAccountDetails,
-    BankTransferSettings,
-    PaymentsSettings,
-)
+from app.modules.payments.settings import PaymentsSettings
 from app.modules.payments.wiring import collections_provider
 from app.modules.payouts import api as payouts_api
 from app.modules.payouts import staff_api as payouts_staff_api
 from app.modules.payouts import (
     staff_bank_api,
+    staff_bulk_api,
     staff_held_api,
     staff_payouts_api,
     staff_returns_api,
@@ -96,7 +93,6 @@ from app.modules.support import api as support_api
 from app.modules.tax import api as tax_api
 from app.shared.clock import Clock, SystemClock
 from app.shared.errors import ErrorEnvelope
-from app.shared.money import Currency
 
 
 def create_app(
@@ -107,7 +103,6 @@ def create_app(
     *,
     collections: CollectionsProvider | None = None,
     storage: FileStorage | None = None,
-    bank_accounts: Mapping[Currency, BankAccountDetails] | None = None,
     email_hooks: WebhookVerifier | None = None,
     identity_sealer: Sealer | None = None,
     identity_provider: IdentityProvider | None = None,
@@ -122,8 +117,6 @@ def create_app(
     collections = collections or collections_provider(PaymentsSettings(), clock)
     iotec_wallet = iotec_wallet or wallet_balances(PaymentsSettings(), clock)
     storage = storage or StorageSettings().storage()
-    if bank_accounts is None:
-        bank_accounts = BankTransferSettings().accounts
     email_hooks = email_hooks or ResendHookSettings().verifier()
     # Read at start-up, so production refuses to start without the key.
     email_hash_key = (email_hash or EmailHashSettings()).key()
@@ -153,6 +146,7 @@ def create_app(
     app.state.settings = settings
     app.state.database = database
     app.state.clock = clock
+    app.state.operations_cache = health.OperationsCache()
     app.state.email_hash_key = email_hash_key
     app.state.storage = storage
     app.state.iotec_wallet = iotec_wallet
@@ -231,6 +225,7 @@ def create_app(
         *staff_payouts_api.routers,
         *staff_held_api.routers,
         *staff_bank_api.routers,
+        *staff_bulk_api.routers,
         *staff_returns_api.routers,
         *reconciliation_api.routers,
         *pot_transfers_api.routers,
@@ -241,8 +236,10 @@ def create_app(
     for router in (*goals_api.routers, *autoinvest_api.routers):
         app.include_router(router)
     app.include_router(notification_hooks.create_router(email_hooks))
-    app.include_router(payment_routes.create_client_router(collections, bank_accounts))
+    app.include_router(payment_routes.create_client_router(collections))
     app.include_router(payment_routes.staff_router)
+    for router in bank_account_routes.routers:
+        app.include_router(router)
     for router in reassignment_routes.routers:
         app.include_router(router)
     app.include_router(migration_api.router)

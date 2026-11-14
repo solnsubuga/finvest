@@ -8,8 +8,10 @@ from sqlalchemy import text
 from sqlalchemy.exc import DBAPIError
 
 from app.infrastructure.database import Database
-from app.modules.kyc import next_of_kin
+from app.modules.kyc import next_of_kin, risk
 from app.modules.kyc.domain.next_of_kin import Person, Relationship
+from app.modules.kyc.risk import MAX_ANSWERS_A_DAY
+from app.shared.errors import ApplicationError
 from tests.support.database import TestDatabase
 from tests.support.http import Api, running_api
 from tests.support.kyc import SEALER
@@ -262,6 +264,36 @@ async def test_incomplete_answers_are_refused_and_earlier_answers_are_kept(api: 
     await api.staff()
     history = (await api.http.get(f"/staff/clients/{client.id}/profile")).json()["risk"]
     assert [r["profile"] for r in history] == ["careful", "balanced"]
+
+
+async def test_answers_past_the_daily_cap_are_refused_until_a_day_has_passed(api: Api) -> None:
+    client = await api.client()
+    for _ in range(MAX_ANSWERS_A_DAY):
+        answered = await api.http.put("/client/risk-profile", json={"answers": ANSWERS})
+        assert answered.status_code == 200, answered.text
+        api.clock.advance(minutes=1)
+    refused = await api.http.put("/client/risk-profile", json={"answers": ANSWERS})
+    assert refused.status_code == 429
+    assert refused.json()["error"]["code"] == "rate_limited"
+    api.clock.advance(days=1)
+    await api.as_client(client)
+    again = await api.http.put("/client/risk-profile", json={"answers": ANSWERS})
+    assert again.status_code == 200, again.text
+
+
+async def test_answers_sent_at_once_stay_under_the_cap(api: Api) -> None:
+    client = await api.client()
+
+    async def send() -> int:
+        async with api.database.actor_transaction(client) as session:
+            try:
+                await risk.answer(session, client, ANSWERS, api.clock)
+            except ApplicationError:
+                return 0
+        return 1
+
+    taken = await asyncio.gather(*(send() for _ in range(MAX_ANSWERS_A_DAY + 3)))
+    assert sum(taken) == MAX_ANSWERS_A_DAY
 
 
 async def test_nobody_changes_or_removes_answers(app_database: Database, api: Api) -> None:

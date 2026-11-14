@@ -1,4 +1,4 @@
-import { Bank, Limits, NewAccount, Payout, PayoutAccount, PayoutsClient, PayoutsError } from "./types";
+import { Bank, Limits, NameCheck, NewAccount, Payout, PayoutAccount, PayoutsClient, PayoutsError } from "./types";
 
 /**
  * In-memory payout accounts and payouts for the demo build and tests. It refuses what the
@@ -14,6 +14,8 @@ export const RETURNED_DEMO_PAYOUT = "demo-payout-returned";
 const HOUR = 60 * 60 * 1000;
 const MAX_AWAITING_CODE = 5;
 const MAX_WRONG_CODES = 5;
+/** Lookups of the name a network holds, per number, as the backend allows. */
+const MAX_NAME_CHECKS = 3;
 /** The demo's mobile money limit per payout, as `getLimits` answers it. */
 const MOBILE_MONEY_PER_PAYOUT = 5_000_000;
 const NETWORKS: Record<string, "mtn" | "airtel"> = { "76": "mtn", "77": "mtn", "78": "mtn", "39": "mtn", "70": "airtel", "74": "airtel", "75": "airtel", "20": "airtel" };
@@ -32,13 +34,26 @@ export const DEMO_BANKS: readonly Bank[] = [
   { code: "standard_chartered", name: "Standard Chartered" },
 ];
 
-type Stored = Omit<PayoutAccount, "bankName"> & { number: string; removed: boolean; wrongCodes: number; codeSent: boolean };
+type Stored = Omit<PayoutAccount, "bankName"> & {
+  number: string;
+  removed: boolean;
+  wrongCodes: number;
+  codeSent: boolean;
+  nameChecks: number;
+  /** Asked again once the ID was approved: the worker compares the name on the next read. */
+  decisionQueued?: boolean;
+};
+
+/** A demo Airtel number stuck at its name check, or refused for having no name. */
+export type NameCheckSample = NameCheck | "no_name";
 
 export type StubOptions = {
   /** "empty" is a new client with no accounts and no payouts. */
   sample?: "default" | "empty";
   /** Every read fails as if offline, to show the error states. */
   offline?: boolean;
+  /** Adds an Airtel number at this point of its name check. */
+  nameCheck?: NameCheckSample;
   now?: () => number;
   /** How long each call takes, so the loading states show. Tests use 0. */
   delayMs?: number;
@@ -49,7 +64,16 @@ function iso(ms: number): string {
 }
 
 function seed(nowMs: number): Stored[] {
-  const base = { proofKind: null, rejectionReason: null, firstPaidAt: null, removed: false, wrongCodes: 0, codeSent: false };
+  const base = {
+    proofKind: null,
+    rejectionReason: null,
+    nameCheck: null,
+    firstPaidAt: null,
+    removed: false,
+    wrongCodes: 0,
+    codeSent: false,
+    nameChecks: 0,
+  };
   // The first two match the investing demo's approved accounts, so a withdrawal there lands here.
   return [
     {
@@ -97,6 +121,30 @@ function seed(nowMs: number): Stored[] {
       createdAt: iso(nowMs - 6 * 24 * HOUR),
     },
   ];
+}
+
+function seedNameCheck(sample: NameCheckSample, nowMs: number): Stored {
+  const refused = sample === "no_name";
+  return {
+    id: "demo-account-airtel",
+    kind: "mobile_money",
+    network: "airtel",
+    bankCode: null,
+    number: "256751234789",
+    account: "+256 75• ••• 789",
+    holderName: "Amara Nakato",
+    status: refused ? "rejected" : "awaiting_proof",
+    proofKind: refused ? "network_registered_name" : null,
+    rejectionReason: refused ? "network_name_unavailable" : null,
+    nameCheck: refused ? null : sample,
+    payableFrom: null,
+    firstPaidAt: null,
+    createdAt: iso(nowMs - 2 * HOUR),
+    removed: false,
+    wrongCodes: 0,
+    codeSent: false,
+    nameChecks: sample === "limit_reached" ? MAX_NAME_CHECKS : 1,
+  };
 }
 
 function seedPayouts(nowMs: number): Payout[] {
@@ -151,13 +199,14 @@ function parsePhone(typed: string): string {
 }
 
 function view(account: Stored): PayoutAccount {
-  const { number: _number, removed: _removed, wrongCodes: _wrong, codeSent: _sent, ...shown } = account;
+  const { number: _number, removed: _removed, wrongCodes: _wrong, codeSent: _sent, nameChecks: _checks, ...shown } = account;
   return { ...shown, bankName: DEMO_BANKS.find((bank) => bank.code === account.bankCode)?.name ?? null };
 }
 
 export function createStubPayoutsClient(options: StubOptions = {}): PayoutsClient {
   const now = options.now ?? (() => Date.now());
   const accounts: Stored[] = options.sample === "empty" ? [] : seed(now());
+  if (options.nameCheck) accounts.push(seedNameCheck(options.nameCheck, now()));
   const payouts: Payout[] = options.sample === "empty" ? [] : seedPayouts(now());
   let next = 1;
   // The payout each one that came back was sent again as. Sent again once only.
@@ -191,7 +240,15 @@ export function createStubPayoutsClient(options: StubOptions = {}): PayoutsClien
 
     async getAccount(accountId) {
       await reachable();
-      return view(find(accountId));
+      const account = find(accountId);
+      if (account.decisionQueued) {
+        // The worker has compared the name by now. The demo client's ID matches.
+        account.decisionQueued = false;
+        account.status = "in_review";
+        account.proofKind = "network_registered_name";
+        account.nameCheck = null;
+      }
+      return view(account);
     },
 
     async addAccount(account: NewAccount) {
@@ -224,12 +281,14 @@ export function createStubPayoutsClient(options: StubOptions = {}): PayoutsClien
         status: "awaiting_code",
         proofKind: null,
         rejectionReason: null,
+        nameCheck: null,
         payableFrom: null,
         firstPaidAt: null,
         createdAt: iso(now()),
         removed: false,
         wrongCodes: 0,
         codeSent: false,
+        nameChecks: 0,
       };
       accounts.push(created);
       return view(created);
@@ -254,6 +313,28 @@ export function createStubPayoutsClient(options: StubOptions = {}): PayoutsClien
       }
       account.status = "awaiting_proof";
       account.codeSent = false;
+      if (account.kind === "mobile_money") {
+        // The backend asks the network for the name in the same step. The demo never answers.
+        account.nameCheck = "checking";
+        account.nameChecks = 1;
+      }
+      return view(account);
+    },
+
+    async checkNameAgain(accountId) {
+      await reachable();
+      const account = find(accountId);
+      if (account.kind !== "mobile_money" || account.status !== "awaiting_proof") throw new PayoutsError("moved_on");
+      if (account.nameCheck === "checking") throw new PayoutsError("name_check_in_progress");
+      if (account.nameCheck === "waiting_for_id") {
+        // As the backend does, this only queues the worker's comparison and answers with the
+        // account as it is. The next read shows the result.
+        account.decisionQueued = true;
+        return view(account);
+      }
+      if (account.nameChecks >= MAX_NAME_CHECKS) throw new PayoutsError("name_check_limit_reached");
+      account.nameChecks += 1;
+      account.nameCheck = "checking";
       return view(account);
     },
 

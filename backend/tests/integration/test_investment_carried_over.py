@@ -45,7 +45,8 @@ def opening_balances(currency: Currency = Currency.UGX) -> AccountSpec:
 
 
 def reference() -> str:
-    return f"FV1-INV-{push_id()[-8:].replace('-', 'x').replace('_', 'y')}"
+    # Hex, so two IDs never give one reference: "-" and "_" have no letter of their own to take.
+    return f"FV1-INV-{push_id()[-8:].encode().hex()}"
 
 
 async def carry_over(

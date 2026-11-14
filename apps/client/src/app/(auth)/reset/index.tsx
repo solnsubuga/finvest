@@ -49,7 +49,7 @@ export default function ResetStart() {
           <Button label="Send a code" onPress={submit} loading={busy} testID="reset-submit" />
           <TextLink
             label="I changed my number or cannot get in"
-            onPress={() => router.push({ pathname: "/unavailable", params: { topic: "locked-out" } })}
+            onPress={() => router.push("/recover")}
           />
         </>
       }

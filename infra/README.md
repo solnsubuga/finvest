@@ -199,7 +199,10 @@ In each of the `prod` and `dev` GitHub environments, beside what Terraform write
 | `FINVEST_IOTEC_VERIFY_CLIENT_ID`, `FINVEST_IOTEC_VERIFY_API_KEY` | Secrets | From the ioTec Verify portal (Management, Settings, Configuration). Required once the provider is `iotec`. API and worker. |
 | `FINVEST_IOTEC_VERIFY_BASE_URL` | Variable, optional | Defaults to `https://verify-api.iotec.io`. |
 | `FINVEST_PAYOUT_NAME_PROVIDER` | Variable | Unset (`none`) until the ioTec Verify credentials exist, then `iotec`: the worker reads the name a network holds for a payout number with the same Verify credentials. Until then a new payout number waits for proof. The API and worker get it. |
-| `FINVEST_SCREENING_PROVIDER` | Variable | Unset (`none`) until the owner's screening account exists ([docs/screening.md](../docs/screening.md)): every screen is recorded as not run. `development-stub` is refused in production. The API and worker get it; the provider's credentials will be added with its adapter. |
+| `FINVEST_SCREENING_PROVIDER` | Variable | Unset (`none`) until the owner's Sigma360 account exists ([docs/screening.md](../docs/screening.md)), then `sigma360`. While `none`, every screen is recorded as not run. `development-stub` is refused in production. The API and worker get it. |
+| `FINVEST_SIGMA360_API_KEY` | Secret | The Sigma360 API key. Required once the provider is `sigma360`. API and worker. |
+| `FINVEST_SIGMA360_FILTER_SET_ID` | Variable | The number of the filter set in Sigma360's console. Required once the provider is `sigma360`. API and worker. |
+| `FINVEST_SIGMA360_BASE_URL` | Variable, optional | Defaults to `https://api.sigma360.com/external/v2`, and must be https. The host's firewall already allows outbound HTTPS. |
 | `FINVEST_SMS_BACKEND`, `FINVEST_SMS_IOTEC_CLIENT_ID` | Variables | `iotec`, and the client id from the ioTec Messaging portal (Management, Settings, Configuration). Only the worker gets them; it sends every SMS. |
 | `FINVEST_SMS_IOTEC_API_KEY` | Secret | The ioTec Messaging API key from the same page. Worker only. |
 | `FINVEST_SMS_IOTEC_BASE_URL` | Variable, optional | Defaults to `https://messaging-api.iotec.io`. The host's firewall already allows outbound HTTPS. |
@@ -208,7 +211,6 @@ In each of the `prod` and `dev` GitHub environments, beside what Terraform write
 | `FINVEST_EMAIL_BACKEND`, `FINVEST_EMAIL_FROM` | Variables | `resend` and `Finvest <no-reply@finvestug.com>` |
 | `RESEND_HOOK_SECRET` | Secret | The signing secret (`whsec_...`) of the webhook in Finvest's own Resend account, pointed at `https://<api>/webhooks/resend`. Not the Resend API key. Only the API gets it, to check each delivery event. Without it the webhook answers 404 and delivery events are lost. |
 | `FINVEST_CLIENT_SIGNUP_OPEN` | Variable | `true` opens client sign-up on the API. Leave it unset in production until switch day ([docs/launch.md](../docs/launch.md)). In staging, set it only for the pen test weeks. Anything else keeps sign-up closed. |
-| `FINVEST_BANK_TRANSFER_ACCOUNTS` | Variable | The trust account clients pay bank transfers into, as JSON keyed by currency: `{"UGX": {"bank_name": "...", "account_name": "...", "account_number": "...", "branch": null}}`. It must be the account whose statements reconciliation imports. Not a secret. Until it is set, paying by bank transfer is unavailable and the app offers mobile money. |
 | `SITE_PUBLISHED` | Variable, production only | The owner's decision, nobody else's: `true` puts the public website live at the production address. Set it when the owner launches the website. |
 | `SITE_INDEXABLE` | Variable, production only | `true` lets search engines index the website. Leave it unset until launch. Staging, the API, the back office and the client app address always send `X-Robots-Tag: noindex`, whatever this says. |
 

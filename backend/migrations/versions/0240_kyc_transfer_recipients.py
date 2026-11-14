@@ -1,7 +1,7 @@
 """Let a client find another approved client to send an investment to.
 
 Revision ID: 0240_kyc_transfer_recipients
-Revises: 0076_migration_carry_resolutions
+Revises: 0225_identity_pin_confirmations
 
 A client's row policies show them only their own identity check, so finding someone else by
 account number needs a narrow way through. `finvest_kyc_transfer_recipient` answers, for one
@@ -17,7 +17,7 @@ from collections.abc import Sequence
 from alembic import op
 
 revision: str = "0240_kyc_transfer_recipients"
-down_revision: str | None = "0222_identity_recovery_requests"
+down_revision: str | None = "0225_identity_pin_confirmations"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 

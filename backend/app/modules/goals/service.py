@@ -23,6 +23,7 @@ from sqlalchemy.exc import DBAPIError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.infrastructure.idempotency import Receipt, run_once
+from app.modules.closures.pending import refuse_if_closing
 from app.modules.goals.domain.goals import (
     MAX_ACTIVE_GOALS,
     GoalCategory,
@@ -280,6 +281,7 @@ async def open_goal(
     caller's command holds the key. Also used for a member's own goal in a group goal."""
     today = business_date(clock.now())
     cleaned = _checked(name, target, target_date, today)
+    await refuse_if_closing(session, client_id)
     await session.execute(_CLIENT_LOCK, {"lock": f"finvest.goals.client:{client_id}"})
     active = (await session.execute(_COUNT_ACTIVE, {"client_id": client_id})).scalar_one()
     if active >= MAX_ACTIVE_GOALS:

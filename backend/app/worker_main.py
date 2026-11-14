@@ -77,6 +77,7 @@ def handlers(
             email=EmailSettings().transport(),
             # Tax certificates print the TIN a client gave, which only this key opens.
             sealer=identity.sealer() if identity.identity_data_key is not None else None,
+            links=settings.email_links(),
         ).handlers()
     )
     if identity.identity_data_key is not None:
@@ -145,6 +146,7 @@ def handlers(
             SmsSettings().transport(),
             # A link in a message may only point to the console or the client app.
             link_origins=[*settings.staff_allowed_origins, *settings.client_allowed_origins],
+            links=settings.email_links(),
         )
     )
     # Read at start-up, so production refuses to start without the key.

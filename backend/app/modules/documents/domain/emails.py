@@ -8,6 +8,10 @@ A statement or tax certificate email carries no figures. The figures are in the 
 so a message that shows on a locked phone says nothing about what the client holds. A receipt
 shows the amount received, because that is what a receipt is.
 
+The attached PDF is locked with the client's date of birth, so whoever else reads the mailbox
+cannot open it. Each email says how to open it. The copy in the app, behind sign-in, is not
+locked.
+
 Every value is escaped before it goes into HTML. Links go only to Finvest's own app.
 """
 
@@ -19,7 +23,13 @@ from app.modules.documents.domain.receipts import Receipt
 from app.modules.documents.domain.statements import Period, StatementKind
 from app.shared import email_layout as layout
 
-DOCUMENTS_LINK = f"{layout.APP}/documents"
+DOCUMENTS_PATH = "/documents"
+LOCKED = "Password protected"
+# Said the same way in every email, so a client learns it once.
+HOW_TO_OPEN = (
+    "To open the PDF, type your date of birth as eight digits: day, month, then year. For "
+    "5 March 1990, that is 05031990. In the app, under Documents, it opens without a password."
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -37,6 +47,7 @@ def statement_email(
     account_number: str,
     file_name: str,
     requested_at: datetime | None = None,
+    links: layout.Links = layout.PRODUCTION,
 ) -> Rendered:
     """The email a statement PDF is attached to: the monthly one or one the client asked for."""
     account = formatting.account_number(account_number)
@@ -71,23 +82,35 @@ def statement_email(
     detail = f"Account {account}"
     body = (
         layout.paragraphs(lines)
-        + layout.attachment(file_name, detail)
-        + layout.button("Open Documents", DOCUMENTS_LINK)
+        + layout.attachment(file_name, f"{detail} · {LOCKED}")
+        + layout.paragraphs([HOW_TO_OPEN])
+        + layout.button("Open Documents", links.in_app(DOCUMENTS_PATH))
         + layout.paragraphs(closing)
     )
     text = "\n\n".join(
-        [*lines, f"Attached: {file_name} ({detail})", f"Open Documents: {DOCUMENTS_LINK}", *closing]
+        [
+            *lines,
+            f"Attached: {file_name} ({detail}, {LOCKED.lower()})",
+            HOW_TO_OPEN,
+            f"Open Documents: {links.in_app(DOCUMENTS_PATH)}",
+            *closing,
+        ]
     )
     return Rendered(
         subject,
         text + "\n\n" + layout.FOOTER_TEXT,
         layout.page(
-            preheader=f"Your statement is attached as a PDF. {detail}.", title=title, body=body
+            preheader=f"Your statement is attached as a PDF. {detail}.",
+            title=title,
+            body=body,
+            links=links,
         ),
     )
 
 
-def receipt_email(*, first_name: str, receipt: Receipt, file_name: str) -> Rendered:
+def receipt_email(
+    *, first_name: str, receipt: Receipt, file_name: str, links: layout.Links = layout.PRODUCTION
+) -> Rendered:
     """The email sent for every payment Finvest receives, with the receipt PDF attached."""
     amount = formatting.money(receipt.amount)
     facts = [
@@ -118,16 +141,17 @@ def receipt_email(*, first_name: str, receipt: Receipt, file_name: str) -> Rende
         + hero
         + layout.facts(facts)
         + layout.attachment(
-            file_name, f"Account {formatting.account_number(receipt.account_number)}"
+            file_name, f"Account {formatting.account_number(receipt.account_number)} · {LOCKED}"
         )
-        + layout.paragraphs(closing)
+        + layout.paragraphs([HOW_TO_OPEN, *closing])
     )
     text = "\n\n".join(
         [
             *lines,
             f"Amount: {amount}",
             *(f"{label}: {value}" for label, value in facts),
-            f"Attached: {file_name}",
+            f"Attached: {file_name} ({LOCKED.lower()})",
+            HOW_TO_OPEN,
             *closing,
         ]
     )
@@ -138,12 +162,19 @@ def receipt_email(*, first_name: str, receipt: Receipt, file_name: str) -> Rende
             preheader=f"{amount} received for {receipt.paid_for}. Your receipt is attached.",
             title="Payment received",
             body=body,
+            links=links,
         ),
     )
 
 
 def tax_certificate_email(
-    *, first_name: str, tax_year: str, period: Period, account_number: str, file_name: str
+    *,
+    first_name: str,
+    tax_year: str,
+    period: Period,
+    account_number: str,
+    file_name: str,
+    links: layout.Links = layout.PRODUCTION,
 ) -> Rendered:
     """The email the yearly withholding tax certificate is attached to. No figures, no rate."""
     detail = f"Account {formatting.account_number(account_number)}"
@@ -160,12 +191,19 @@ def tax_certificate_email(
     ]
     body = (
         layout.paragraphs(lines)
-        + layout.attachment(file_name, detail)
-        + layout.button("Open Documents", DOCUMENTS_LINK)
+        + layout.attachment(file_name, f"{detail} · {LOCKED}")
+        + layout.paragraphs([HOW_TO_OPEN])
+        + layout.button("Open Documents", links.in_app(DOCUMENTS_PATH))
         + layout.paragraphs(closing)
     )
     text = "\n\n".join(
-        [*lines, f"Attached: {file_name} ({detail})", f"Open Documents: {DOCUMENTS_LINK}", *closing]
+        [
+            *lines,
+            f"Attached: {file_name} ({detail}, {LOCKED.lower()})",
+            HOW_TO_OPEN,
+            f"Open Documents: {links.in_app(DOCUMENTS_PATH)}",
+            *closing,
+        ]
     )
     return Rendered(
         f"Your Finvest tax certificate for {tax_year}",
@@ -174,5 +212,6 @@ def tax_certificate_email(
             preheader=f"Your withholding tax certificate is attached as a PDF. {detail}.",
             title=f"Your {tax_year} tax certificate",
             body=body,
+            links=links,
         ),
     )

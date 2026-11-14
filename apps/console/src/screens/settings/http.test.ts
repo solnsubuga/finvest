@@ -145,8 +145,9 @@ describe("announcements over HTTP", () => {
       .mockImplementationOnce(() => reply(200, { ...ANNOUNCEMENT, status: "rejected", decided_by: "-Nstaff000000000000C", decision_reason: "Not now" }));
     const api = createHttpAnnouncementsApi(createHttp("https://api.test", fetch));
     expect((await api.list())[0]).toMatchObject({ proposedBy: "-Nstaff000000000000B", decidedBy: null, told: 0 });
-    const proposed = await api.propose({ title: "New bills", message: "Open now.", reason: "Auction" });
+    const proposed = await api.propose({ title: "New bills", message: "Open now.", reason: "Auction" }, "key-1");
     expect(proposed.yours).toBe(true);
+    expect((fetch.mock.calls[1]?.[1]?.headers as Record<string, string>)["Idempotency-Key"]).toBe("key-1");
     expect(JSON.parse(String(fetch.mock.calls[1]?.[1]?.body))).toEqual({ title: "New bills", message: "Open now.", reason: "Auction" });
     const decided = await api.decide(ANNOUNCEMENT.id, "rejected", "Not now");
     expect(fetch.mock.calls[2]?.[0]).toBe(`https://api.test/staff/announcements/${ANNOUNCEMENT.id}/decision`);
@@ -158,7 +159,7 @@ describe("announcements over HTTP", () => {
       refusal(422, "validation_failed", [{ field_path: ["message"], code: "outside_link" }]),
     );
     const error = await createHttpAnnouncementsApi(createHttp("https://api.test", invalid))
-      .propose({ title: "t", message: "m", reason: "r" })
+      .propose({ title: "t", message: "m", reason: "r" }, "key-2")
       .catch((caught: unknown) => caught);
     expect(error).toBeInstanceOf(AnnouncementsError);
     expect((error as AnnouncementsError).problems).toEqual([{ field: "message", code: "outside_link" }]);

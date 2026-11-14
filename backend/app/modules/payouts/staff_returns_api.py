@@ -6,10 +6,10 @@ minutes. Every step needs a reason; proposing and approving take an `Idempotency
 are in `returns.py` and migration 0044.
 """
 
-from datetime import datetime
+from datetime import date, datetime
 from typing import Annotated, Literal
 
-from fastapi import APIRouter, Depends, Request
+from fastapi import APIRouter, Depends, Query, Request
 from pydantic import Field
 
 from app.api.idempotency import IdempotencyKey
@@ -17,10 +17,12 @@ from app.infrastructure.database import Database
 from app.modules.identity.api import require_confirmed, require_permission
 from app.modules.identity.service import StaffSession
 from app.modules.payouts import returns
+from app.modules.payouts.api import MoneyView
 from app.modules.payouts.returns import ReturnRefused
 from app.shared.clock import Clock
 from app.shared.contracts import Contract, PushId
 from app.shared.errors import ApplicationError, ErrorEnvelope, FieldProblem
+from app.shared.money import Currency, Money
 
 _REFUSALS: dict[int | str, dict[str, object]] = {
     401: {"model": ErrorEnvelope},
@@ -79,6 +81,30 @@ class ReturnOut(Contract):
     ledger_entry_id: PushId | None
 
 
+class ReturnablePayoutOut(Contract):
+    """A paid payout that could have come back. The account is masked."""
+
+    id: PushId
+    client_id: PushId
+    kind: Literal["bank", "mobile_money"]
+    amount: MoneyView
+    paid_at: datetime
+    bank_name: str | None
+    network: str | None
+    masked_account: str
+    holder_name: str
+
+
+class ReturnLineOut(Contract):
+    """A statement line coming in that could be the payout coming back."""
+
+    id: PushId
+    value_date: date
+    amount: MoneyView
+    reference: str
+    narrative: str
+
+
 def _out(view: returns.ReturnView) -> ReturnOut:
     return ReturnOut(
         id=view.id,
@@ -108,6 +134,58 @@ async def waiting(staff: Viewer, database: Db) -> list[ReturnOut]:
     async with database.actor_transaction(staff.actor) as session:
         found = await returns.waiting(session, limit=100)
     return [_out(each) for each in found]
+
+
+@staff_router.get("/payout-returns/returnable")
+async def returnable(
+    staff: Viewer,
+    database: Db,
+    clock: Time,
+    amount_minor: Annotated[int | None, Query(gt=0)] = None,
+    currency: Literal["UGX", "USD"] = "UGX",
+) -> list[ReturnablePayoutOut]:
+    """Paid payouts from the last 120 days with no open or approved return, newest paid first,
+    at most 100. With `amount_minor`, only payouts of that amount in `currency`."""
+    amount = None if amount_minor is None else Money(amount_minor, Currency(currency))
+    async with database.actor_transaction(staff.actor) as session:
+        found = await returns.returnable(session, amount=amount, now=clock.now(), limit=100)
+    return [
+        ReturnablePayoutOut(
+            id=each.payout.id,
+            client_id=each.payout.client_id,
+            kind=each.payout.kind.value,
+            amount=MoneyView(
+                minor=each.payout.amount.minor, currency=each.payout.amount.currency.value
+            ),
+            paid_at=each.paid_at,
+            bank_name=each.bank_name,
+            network=each.network,
+            masked_account=each.masked_account,
+            holder_name=each.holder_name,
+        )
+        for each in found
+    ]
+
+
+@staff_router.get("/payouts/{payout_id}/return-lines")
+async def return_lines(payout_id: PushId, staff: Viewer, database: Db) -> list[ReturnLineOut]:
+    """Statement lines that could be this paid payout coming back, named by no open or approved
+    return. 409 `payout_not_paid`."""
+    try:
+        async with database.actor_transaction(staff.actor) as session:
+            found = await returns.return_lines(session, payout_id)
+    except ReturnRefused as error:
+        raise _refused(error) from None
+    return [
+        ReturnLineOut(
+            id=line.id,
+            value_date=line.value_date,
+            amount=MoneyView(minor=line.amount.minor, currency=line.amount.currency.value),
+            reference=line.reference,
+            narrative=line.counterparty_hint,
+        )
+        for line in found
+    ]
 
 
 @staff_router.get("/payout-returns/{return_id}")

@@ -32,12 +32,17 @@ interface AnnouncementsSectionProps {
   directory: Directory;
   /** `announcements.send`: propose and decide. The API checks it again. */
   canChange: boolean;
+  /** A fresh idempotency key for each new announcement. */
+  newKey?: () => string;
 }
 
 /** Words sent to every active client, agreed by two people. */
-export function AnnouncementsSection({ api, directory, canChange }: AnnouncementsSectionProps) {
+export function AnnouncementsSection({ api, directory, canChange, newKey = () => crypto.randomUUID() }: AnnouncementsSectionProps) {
   const [load, setLoad] = useState<Load>({ state: "loading" });
   const [writing, setWriting] = useState(false);
+  // One key for each new announcement, kept while its form is open, so sending it again after a
+  // lost answer cannot propose it twice. A refused one can be corrected and sent with the same key.
+  const [proposalKey, setProposalKey] = useState(newKey);
   const [busy, setBusy] = useState(false);
   const [failed, setFailed] = useState<{ on: string; message: string; problems: readonly AnnouncementProblem[] } | null>(null);
   const [names, setNames] = useState<Record<string, string | null>>({});
@@ -118,6 +123,7 @@ export function AnnouncementsSection({ api, directory, canChange }: Announcement
             className="px-[18px]"
             onClick={() => {
               setWriting(true);
+              setProposalKey(newKey());
               setFailed(null);
             }}
           >
@@ -156,7 +162,7 @@ export function AnnouncementsSection({ api, directory, canChange }: Announcement
                 setFailed(null);
               }}
               onSubmit={(input) =>
-                run("new", () => api.propose(input)).then((done) => {
+                run("new", () => api.propose(input, proposalKey)).then((done) => {
                   if (done) setWriting(false);
                   return done;
                 })

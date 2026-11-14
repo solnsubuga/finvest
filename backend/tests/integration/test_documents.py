@@ -6,10 +6,12 @@ import secrets
 from collections.abc import AsyncIterator, Awaitable, Callable, Iterator
 from dataclasses import replace
 from datetime import date, timedelta
+from io import BytesIO
 from urllib.parse import quote
 
 import httpx
 import pytest
+from pypdf import PdfReader
 from sqlalchemy import text
 from sqlalchemy.exc import DBAPIError
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -18,6 +20,7 @@ from app.api.app import create_app
 from app.infrastructure.database import Database
 from app.infrastructure.email import EmailDeferred, EmailMessage, EmailRejected, SendResult
 from app.infrastructure.jobs import JobRequest, Worker, WorkerConfig, enqueue
+from app.infrastructure.sealing import Sealer
 from app.modules.documents import building, pdf, service
 from app.modules.documents.domain.emails import receipt_email
 from app.modules.documents.domain.statements import (
@@ -199,9 +202,14 @@ async def run_jobs(
     clock: FakeClock = LATER,
     through: date | None = ALL_CLOSED,
     email: FakeEmail | None = None,
+    sealer: Sealer | None = SEALER,
 ) -> int:
     jobs = DocumentJobs(
-        worker_database, clock, email=email or FakeEmail(), closed_through=closed(through)
+        worker_database,
+        clock,
+        email=email or FakeEmail(),
+        closed_through=closed(through),
+        sealer=sealer,
     )
     runner = Worker(
         worker_database,
@@ -965,13 +973,57 @@ async def test_a_ready_statement_is_emailed_once_with_its_pdf_attached(
     assert message.subject == f"Your Finvest statement, {PERIOD.label}"
     assert message.idempotency_key == f"document:{asked.id}"
     (attached,) = message.attachments
-    assert (attached.file_name, attached.content) == (stored.file_name, stored.content)
+    assert attached.file_name == stored.file_name
+    # The emailed copy is locked with the client's date of birth, 22 June 1994. Opened, it is
+    # the stored file. The copy in the app is not locked.
+    assert not PdfReader(BytesIO(stored.content)).is_encrypted
+    locked = PdfReader(BytesIO(attached.content))
+    assert locked.is_encrypted
+    assert not locked.decrypt("wrong")
+    assert locked.decrypt("22061994")
+    assert [page.extract_text() for page in locked.pages] == [
+        page.extract_text() for page in PdfReader(BytesIO(stored.content)).pages
+    ]
+    assert "05031990" in message.text and "date of birth" in message.html
     # The email carries no figures: they are in the PDF.
     assert "UGX" not in message.text and "UGX" not in message.html
     assert await emails_of(worker_database, asked.id) == [("sent", None)]
     # Run again: nothing more is sent.
     assert await run_jobs(worker_database, email=email) == 0
     assert len(email.sent) == 1
+
+
+async def test_an_email_waits_for_a_worker_with_the_identity_key_and_needs_a_date_of_birth(
+    http: tuple[httpx.AsyncClient, IdentityService],
+    app_database: Database,
+    worker_database: Database,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _, identity = http
+    client = await client_with_email(identity, app_database, worker_database)
+    asked = await ask(app_database, client)
+    email = FakeEmail()
+    # Without the key there is no date of birth to lock it with, and it is never sent unlocked.
+    await run_jobs(worker_database, email=email, sealer=None)
+    assert email.sent == []
+    assert await emails_of(worker_database, asked.id) == [("queued", None)]
+    async with worker_database.actor_transaction(SYSTEM) as session:
+        code = await session.scalar(
+            text(
+                "SELECT last_error_code FROM jobs WHERE idempotency_key = :key AND queue = :queue"
+            ),
+            {"key": f"document-email:{asked.id}", "queue": service.QUEUE},
+        )
+    assert code == "identity_key_missing"
+
+    # A client with no identity check on record has no password to type: nothing is sent.
+    async def no_check(session: AsyncSession, sealer: Sealer, client_id: str) -> None:
+        return None
+
+    monkeypatch.setattr(kyc, "screening_subject", no_check)
+    await run_jobs(worker_database, FakeClock(LATER.now() + timedelta(minutes=5)), email=email)
+    assert email.sent == []
+    assert await emails_of(worker_database, asked.id) == [("skipped", "no_date_of_birth")]
 
 
 async def test_a_client_with_no_email_address_is_recorded_as_skipped(
@@ -1081,6 +1133,57 @@ async def test_a_deferred_email_waits_and_a_refused_one_is_recorded(
     later = FakeClock(LATER.now() + timedelta(minutes=5))
     await run_jobs(worker_database, later, email=FakeEmail(EmailRejected("Resend rejected it")))
     assert await emails_of(worker_database, asked.id) == [("failed", "email_rejected")]
+
+
+async def expire_emails(worker_database: Database, clock: FakeClock) -> None:
+    """Run the daily sweep alone, as the scheduler starts it."""
+    async with worker_database.actor_transaction(SYSTEM) as session:
+        await enqueue(
+            session,
+            JobRequest(
+                kind=service.EXPIRE_EMAILS_KIND,
+                idempotency_key=f"documents.expire_emails:{clock.now():%Y-%m-%d}",
+                payload={},
+                queue=service.QUEUE,
+                max_age=timedelta(hours=20),
+            ),
+            now=clock.now(),
+        )
+    jobs = DocumentJobs(worker_database, clock, email=FakeEmail(), closed_through=closed(None))
+    handlers = {service.EXPIRE_EMAILS_KIND: jobs.handlers()[service.EXPIRE_EMAILS_KIND]}
+    runner = Worker(worker_database, handlers, WorkerConfig(queue=service.QUEUE), clock)
+    assert await runner.run_once()
+
+
+async def test_an_email_whose_job_ended_unsent_is_closed_as_expired_after_a_week(
+    http: tuple[httpx.AsyncClient, IdentityService],
+    app_database: Database,
+    worker_database: Database,
+) -> None:
+    _, identity = http
+    client = await client_with_email(identity, app_database, worker_database)
+    resend_down = FakeEmail(EmailDeferred("Resend is unreachable"))
+    ended = await ask(app_database, client)
+    await run_jobs(worker_database, email=resend_down)
+    # Two days on, the retry is past its age: the worker fails the job without sending.
+    await run_jobs(worker_database, FakeClock(LATER.now() + timedelta(days=2)), email=resend_down)
+    assert await emails_of(worker_database, ended.id) == [("queued", None)]
+    # Another email whose job is still waiting to be retried.
+    waiting = await ask(app_database, client)
+    await run_jobs(worker_database, email=resend_down)
+    assert await emails_of(worker_database, waiting.id) == [("queued", None)]
+
+    # Within the week, nothing is closed.
+    await expire_emails(worker_database, FakeClock(LATER.now() + timedelta(days=6)))
+    assert await emails_of(worker_database, ended.id) == [("queued", None)]
+    await expire_emails(worker_database, FakeClock(LATER.now() + timedelta(days=8)))
+    assert await emails_of(worker_database, ended.id) == [("failed", "expired")]
+    # A job that is still waiting is left to finish, however old the email.
+    assert await emails_of(worker_database, waiting.id) == [("queued", None)]
+    # The document itself stays in the app.
+    async with app_database.actor_transaction(client) as session:
+        listed = await service.client_documents(session, client)
+    assert ended.id in {view.id for view in listed}
 
 
 async def test_only_a_ready_document_is_queued_for_email_and_a_sent_one_never_changes(

@@ -18,11 +18,11 @@ by deleting them; the return is its own entry. Migration 0044 holds each rule in
 """
 
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import date, datetime, timedelta
 from enum import StrEnum
 from typing import Any, Literal
 
-from sqlalchemy import Row, text
+from sqlalchemy import Row, bindparam, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.infrastructure.idempotency import Receipt, run_once
@@ -32,18 +32,27 @@ from app.modules.ledger import service as ledger
 from app.modules.notifications import contract as notifications
 from app.modules.payouts import destinations, payouts
 from app.modules.payouts.domain import posting
+from app.modules.payouts.domain.banks import find_bank
 from app.modules.payouts.domain.destinations import DestinationKind
 from app.modules.payouts.domain.payouts import PayoutStatus
 from app.modules.payouts.domain.sending import bank_label, destination_label
 from app.modules.payouts.payouts import PayoutView
+from app.modules.reconciliation import statements
+from app.modules.reconciliation.domain.statements import Direction, StatementSource
+from app.modules.reconciliation.statements import StatementLineView
 from app.shared.actors import Actor
 from app.shared.business_day import business_date
 from app.shared.clock import Clock
 from app.shared.errors import ApplicationError
+from app.shared.money import Money
 from app.shared.push_ids import push_id
 
 PROPOSE_OPERATION = "payouts.propose_return"
 APPROVE_OPERATION = "payouts.approve_return"
+
+# How far back the picker looks for a paid payout that came back, and how long after it was
+# paid its returning line is looked for on the statement.
+RETURN_WINDOW = timedelta(days=120)
 
 
 class ReturnStatus(StrEnum):
@@ -85,6 +94,19 @@ class ReturnView:
         return f"return:{self.id}"
 
 
+@dataclass(frozen=True, slots=True)
+class ReturnablePayout:
+    """A paid payout with no open or approved return, as staff pick the one that came back:
+    where it went, masked, and when it was paid."""
+
+    payout: PayoutView
+    paid_at: datetime
+    bank_name: str | None
+    network: str | None
+    masked_account: str
+    holder_name: str
+
+
 _COLUMNS = (
     "id, payout_id, client_id, statement_line_id, reason, status, proposed_by, proposed_at, "
     "decided_by, decided_at, decision_reason, ledger_entry_id"
@@ -112,6 +134,21 @@ _APPROVED_FOR = text(
     f"SELECT {_COLUMNS} FROM payout_returns "  # noqa: S608
     "WHERE payout_id = ANY(:payout_ids) AND status = 'approved'"
 )
+# Paid payouts no open or approved return names, paid since :since, newest first.
+_RETURNABLE = text(
+    "SELECT p.id, p.updated_at AS paid_at FROM payouts p WHERE p.status = 'paid' "
+    "AND p.updated_at >= :since "
+    "AND (CAST(:amount_minor AS bigint) IS NULL "
+    "     OR (p.amount_minor = :amount_minor AND p.currency = :currency)) "
+    "AND NOT EXISTS (SELECT FROM payout_returns r WHERE r.payout_id = p.id "
+    "AND r.status IN ('proposed', 'approved')) "
+    "ORDER BY p.updated_at DESC, p.id DESC LIMIT :limit"
+)
+_PAID_AT = text("SELECT updated_at FROM payouts WHERE id = :id AND status = 'paid'")
+_LINES_IN_USE = text(
+    "SELECT statement_line_id FROM payout_returns WHERE statement_line_id IN :ids "
+    "AND status IN ('proposed', 'approved')"
+).bindparams(bindparam("ids", expanding=True))
 _DECIDE = text(
     "UPDATE payout_returns SET status = :status, decided_by = :decided_by, decided_at = :now, "
     "decision_reason = :reason, ledger_entry_id = :ledger_entry_id WHERE id = :id"
@@ -295,6 +332,71 @@ async def resend(
         request_key=returned.resend_key,
         clock=clock,
     )
+
+
+async def returnable(
+    session: AsyncSession, *, amount: Money | None, now: datetime, limit: int = 100
+) -> list[ReturnablePayout]:
+    """Paid payouts that could still come back, newest paid first, from the last 120 days.
+    With an amount, only payouts of that amount, to find the one a line coming in is.
+    Staff transactions only."""
+    rows = await session.execute(
+        _RETURNABLE,
+        {
+            "since": now - RETURN_WINDOW,
+            "amount_minor": None if amount is None else amount.minor,
+            "currency": None if amount is None else amount.currency.value,
+            "limit": max(1, min(limit, 100)),
+        },
+    )
+    found: list[ReturnablePayout] = []
+    for row in rows.all():
+        payout = await payouts.get_payout(session, row.id)
+        destination = await destinations.get_destination(session, payout.destination_id)
+        bank = find_bank(destination.bank_code or "")
+        found.append(
+            ReturnablePayout(
+                payout=payout,
+                paid_at=row.paid_at,
+                bank_name=None if bank is None else bank.name,
+                network=destination.network,
+                masked_account=destination.masked_account,
+                holder_name=destination.holder_name,
+            )
+        )
+    return found
+
+
+async def return_lines(session: AsyncSession, payout_id: str) -> list[StatementLineView]:
+    """The statement lines that could be this paid payout coming back: on the pot it was paid
+    from, coming in, for its amount and currency, from the day it was paid, and named by no
+    open or approved return. The database checks the one chosen again."""
+    payout = await payouts.get_payout(session, payout_id)
+    paid_at = (await session.execute(_PAID_AT, {"id": payout_id})).scalar_one_or_none()
+    if paid_at is None:
+        raise ReturnRefused("payout_not_paid")
+    destination = await destinations.get_destination(session, payout.destination_id)
+    if payout.kind is DestinationKind.BANK:
+        source, pot = StatementSource.BANK, "trust"
+    else:
+        source, pot = StatementSource.IOTEC, destination.network or ""
+    paid_on: date = business_date(paid_at)
+    found = await statements.find_statement_lines(
+        session,
+        source=source,
+        date_from=paid_on,
+        date_to=paid_on + RETURN_WINDOW,
+        amount=payout.amount,
+    )
+    lines = [
+        line for line in found if line.account_reference == pot and line.direction is Direction.IN
+    ]
+    if not lines:
+        return []
+    in_use = set(
+        (await session.execute(_LINES_IN_USE, {"ids": [line.id for line in lines]})).scalars()
+    )
+    return [line for line in lines if line.id not in in_use]
 
 
 async def get_return(session: AsyncSession, return_id: str) -> ReturnView:

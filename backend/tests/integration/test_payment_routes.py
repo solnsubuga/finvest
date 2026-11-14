@@ -31,8 +31,8 @@ from app.modules.kyc.providers import ManualProvider
 from app.modules.ledger import service as ledger
 from app.modules.payments import bank_transfers as bank
 from app.modules.payments.bank_transfers import BankTransferJobs
+from app.modules.payments.domain.bank_accounts import BankAccount
 from app.modules.payments.domain.outcomes import Accepted, Pending
-from app.modules.payments.settings import BankAccountDetails
 from app.modules.reconciliation import statements
 from app.modules.reconciliation.domain.pots import CASH_POTS
 from app.modules.reconciliation.domain.statements import CsvFormat, StatementSource, parse_csv
@@ -47,7 +47,7 @@ from tests.support.investments import request as request_investment
 from tests.support.kyc import SEALER, ready_draft
 from tests.support.ledger import staff as new_staff
 from tests.support.ledger import ugx
-from tests.support.payments import FakeCollections, drain
+from tests.support.payments import FakeCollections, drain, use_bank_account
 
 pytestmark = pytest.mark.integration
 
@@ -151,12 +151,12 @@ async def api(test_database: TestDatabase, app_database: Database) -> AsyncItera
         HASHER,
         collections=collections,
         storage=storage,
-        bank_accounts={Currency.UGX: TRUST_ACCOUNT},
     )
+    await use_bank_account(app_database, Currency.UGX, TRUST_ACCOUNT, clock)
     yield Api(app, app.state.identity, clock, app_database, collections, storage)
 
 
-TRUST_ACCOUNT = BankAccountDetails(
+TRUST_ACCOUNT = BankAccount(
     bank_name="Example Bank Uganda",
     account_name="Finvest Clients Trust Account",
     account_number="9030001234567",
@@ -256,27 +256,89 @@ async def test_a_client_is_shown_where_to_send_a_transfer_until_a_payment_starts
         ).status_code == 409
 
 
-async def test_without_an_account_for_the_currency_no_details_are_shown(
-    test_database: TestDatabase, app_database: Database
+async def test_until_two_people_set_an_account_no_details_are_shown(
+    api: Api, migrator_database: Database
 ) -> None:
-    settings = test_database.settings("finvest_app")
-    clock = FakeClock(now())
-    app = create_app(
-        settings,
-        app_database,
-        clock,
-        HASHER,
-        collections=FakeCollections(),
-        storage=MemoryStorage(),
-        bank_accounts={},
-    )
-    api = Api(app, app.state.identity, clock, app_database, FakeCollections(), MemoryStorage())
-    async with api.http() as http:
+    async with migrator_database.transaction() as session:
+        await session.execute(text("TRUNCATE payment_bank_accounts"))
+    async with api.http() as http, api.http() as maker, api.http() as checker:
         client, _ = await api.client(http)
         investment = await request_investment(api.database, client, api.clock)
-        answer = await http.get(f"/client/investments/{investment.id}/bank-transfer-details")
+        url = f"/client/investments/{investment.id}/bank-transfer-details"
+        answer = await http.get(url)
         assert answer.status_code == 503
         assert answer.json()["error"]["code"] == "unavailable"
+
+        await api.staff(maker)
+        await api.staff(checker)
+        listed = (await maker.get("/staff/payments/bank-accounts")).json()["accounts"]
+        assert [(a["currency"], a["in_use"], a["proposal"]) for a in listed] == [
+            ("UGX", None, None),
+            ("USD", None, None),
+        ]
+        proposed = await maker.post(
+            "/staff/payments/bank-accounts/UGX/proposals",
+            json={
+                "account": {
+                    "bank_name": "Example Bank Uganda",
+                    "account_name": "Finvest Clients Trust Account",
+                    "account_number": "9030 0012 34567",
+                    "branch": "Kampala Road",
+                },
+                "reason": "The trust account, from the bank's letter",
+            },
+        )
+        assert proposed.status_code == 201, proposed.text
+        proposal = proposed.json()
+        assert proposal["yours"] is True
+        assert proposal["account"]["account_number"] == "9030001234567"
+        # Still nothing for the client while it waits.
+        assert (await http.get(url)).status_code == 503
+        seen = (await checker.get("/staff/payments/bank-accounts")).json()["accounts"][0]
+        assert seen["proposal"]["id"] == proposal["id"] and seen["proposal"]["yours"] is False
+        inbox = (await checker.get("/staff/approvals")).json()["items"]
+        assert any(
+            item["kind"] == "bank_account_change" and item["id"] == proposal["id"] for item in inbox
+        )
+
+        decision = f"/staff/payments/bank-accounts/proposals/{proposal['id']}/decision"
+        own = await maker.post(decision, json={"decision": "approved", "reason": "Mine"})
+        assert own.status_code == 403
+        approved = await checker.post(decision, json={"decision": "approved", "reason": "Checked"})
+        assert approved.status_code == 200, approved.text
+        shown = await http.get(url)
+        assert shown.status_code == 200
+        assert shown.json()["account_number"] == "9030001234567"
+        listed = (await maker.get("/staff/payments/bank-accounts")).json()["accounts"]
+        assert listed[0]["in_use"]["bank_name"] == "Example Bank Uganda"
+        assert listed[0]["changed_at"] is not None and listed[0]["proposal"] is None
+
+
+async def test_only_staff_who_may_change_the_account_propose_or_decide(api: Api) -> None:
+    async with api.http() as support, api.http() as operations, api.http() as client_http:
+        await api.staff(support, role="support")
+        await api.staff(operations, role="operations")
+        await api.client(client_http)
+        body = {
+            "account": {
+                "bank_name": "Bank",
+                "account_name": "Finvest",
+                "account_number": "1234567",
+                "branch": None,
+            },
+            "reason": "Why",
+        }
+        for http in (support, operations):
+            assert (await http.get("/staff/payments/bank-accounts")).status_code == 403
+            assert (
+                await http.post("/staff/payments/bank-accounts/UGX/proposals", json=body)
+            ).status_code == 403
+        assert (await client_http.get("/staff/payments/bank-accounts")).status_code == 401
+        assert (
+            await client_http.post("/staff/payments/bank-accounts/UGX/proposals", json=body)
+        ).status_code == 401
+    assert "bank_accounts.change" in ROLE_PERMISSIONS["finance"]
+    assert "bank_accounts.change" not in ROLE_PERMISSIONS["operations"]
 
 
 async def test_a_client_cannot_pay_for_someone_elses_investment_or_see_their_payment(
@@ -463,6 +525,19 @@ async def test_a_bank_transfer_is_checked_by_one_person_and_approved_by_another(
         await drain(worker)
         done = (await client_http.get(f"/client/payments/{payment['id']}")).json()
         assert done["status"] == "confirmed" and done["confirmed_at"] is not None
+        assert await told(worker_database, payment["id"]) == [
+            ("payment_confirmed", "We received your payment from your bank.")
+        ]
+
+
+async def told(worker_database: Database, deposit_id: str) -> list[tuple[str, str]]:
+    """What the client was told about a payment, oldest first."""
+    async with worker_database.actor_transaction(SYSTEM) as session:
+        rows = await session.execute(
+            text("SELECT event, body FROM notifications WHERE link_id = :id ORDER BY created_at"),
+            {"id": deposit_id},
+        )
+        return [(row.event, row.body) for row in rows]
 
 
 async def test_a_transfer_into_the_trust_account_is_the_money_dealing_and_the_day_close_see(
@@ -549,6 +624,8 @@ async def test_a_refused_transfer_says_why_and_staff_without_the_permission_are_
         await drain(worker)
         seen = (await client_http.get(f"/client/payments/{payment_id}")).json()
         assert seen["status"] == "failed" and seen["failure"] == "name_differs"
+        # Not told "no money was taken": the transfer may have reached the bank.
+        assert await told(worker_database, payment_id) == []
         assert (
             await client_http.get(f"/client/investments/{investment.id}/payment")
         ).status_code == 404

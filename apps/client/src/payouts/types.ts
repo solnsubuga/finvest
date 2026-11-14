@@ -38,6 +38,14 @@ export type RejectionReason =
 
 export type ProofKind = "bank_statement" | "bank_letter" | "bank_card";
 
+/**
+ * For a mobile money number `awaiting_proof`: where the lookup of the name its network holds
+ * stands. `checking`: asked, no answer yet. `not_answered`: no answer came; ask again with
+ * `checkNameAgain`. `limit_reached`: no answer came and no lookup is left. `waiting_for_id`: a
+ * name came and is compared once the client's ID is approved; ask again then.
+ */
+export type NameCheck = "checking" | "not_answered" | "limit_reached" | "waiting_for_id";
+
 export type PayoutAccount = {
   id: string;
   kind: AccountKind;
@@ -54,15 +62,21 @@ export type PayoutAccount = {
   status: AccountStatus;
   proofKind: ProofKind | "network_registered_name" | null;
   rejectionReason: RejectionReason | null;
+  /** Mobile money `awaiting_proof` only, otherwise null. */
+  nameCheck: NameCheck | null;
   /** Approval plus the 24 hour safety wait. Null until approved. ISO 8601, UTC. */
   payableFrom: string | null;
   firstPaidAt: string | null;
   createdAt: string;
 };
 
-export type NewAccount =
+export type NewAccount = (
   | { kind: "mobile_money"; phone: string; holderName: string }
-  | { kind: "bank"; bankCode: string; accountNumber: string; holderName: string };
+  | { kind: "bank"; bankCode: string; accountNumber: string; holderName: string }
+) & {
+  /** From confirming with the PIN, on a phone with one. Used once, only if the account is saved. */
+  pinConfirmation?: string | null;
+};
 
 /** `processing` covers everything from queued to the provider's answer. */
 export type PayoutStatus = "in_review" | "processing" | "paid" | "failed" | "cancelled";
@@ -105,6 +119,8 @@ export interface PayoutsClient {
   /** Texts a code: to the mobile money number itself, or to the client's own number for a bank account. */
   sendCode(accountId: string): Promise<void>;
   verifyCode(accountId: string, code: string): Promise<PayoutAccount>;
+  /** Mobile money only: look up the name the network holds again, after no answer came. */
+  checkNameAgain(accountId: string): Promise<PayoutAccount>;
   /** Bank accounts only. Sends the proof to staff. */
   uploadProof(accountId: string, proofKind: ProofKind, file: ReceiptFile): Promise<PayoutAccount>;
   /** For good. A payout already on its way is not stopped. */
@@ -142,6 +158,10 @@ export type PayoutsErrorCode =
   | "over_mobile_money_limit"
   | "over_limit"
   | "invalid"
+  | "name_check_in_progress"
+  | "name_check_limit_reached"
+  | "id_not_approved"
+  | "pin_required"
   | "unavailable";
 
 export class PayoutsError extends Error {
@@ -174,6 +194,10 @@ const messages: Record<PayoutsErrorCode, string> = {
   over_mobile_money_limit: "This is more than a mobile money payout can take. Choose a bank account instead.",
   over_limit: "This is more than today's withdrawal limit for that account. Choose another account, or try tomorrow.",
   invalid: "We could not accept that. Check the details and try again.",
+  name_check_in_progress: "We are still checking this number with the network. Try again in a few minutes.",
+  name_check_limit_reached: "We have tried to check this number several times. Remove it and add it again later.",
+  id_not_approved: "We can only compare the name once your ID check is approved.",
+  pin_required: "Your PIN confirmation ran out or was already used. Try again and enter your PIN.",
   unavailable: "We could not reach Finvest. Check your connection and try again.",
 };
 

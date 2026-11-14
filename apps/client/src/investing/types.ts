@@ -100,6 +100,8 @@ export type EarlyWithdrawal = {
   destinationId: string;
   /** Made for this request and sent with every try, so a double tap asks once. */
   idempotencyKey: string;
+  /** From confirming with the PIN, on a phone with one. A browser sends none. */
+  pinConfirmation?: string | null;
 };
 
 export type MaturityChoice = {
@@ -113,6 +115,8 @@ export type MaturedPayOut = {
   investmentId: string;
   /** One of the client's approved accounts past its first day. */
   destinationId: string;
+  /** From confirming with the PIN, on a phone with one. A browser sends none. */
+  pinConfirmation?: string | null;
 };
 
 export type NewInvestment = {
@@ -159,6 +163,10 @@ export type InvestingErrorCode =
   | "already_sent"
   | "over_mobile_money_limit"
   | "over_limit"
+  /** A request to close the account is waiting for staff, so nothing new starts. */
+  | "account_closing"
+  /** The PIN confirmation ran out or was already used. */
+  | "pin_required"
   | "unavailable";
 
 export class InvestingError extends Error {
@@ -172,6 +180,7 @@ export class InvestingError extends Error {
 }
 
 const messages: Record<InvestingErrorCode, string> = {
+  account_closing: "Your request to close your account is being checked, so nothing new can start. To carry on, go to Profile, then Close account, and choose Keep my account open.",
   below_minimum: "That is below the smallest amount for this product.",
   product_not_open: "This product is not taking new investments right now.",
   not_verified: "You can invest once your ID check is approved.",
@@ -185,6 +194,7 @@ const messages: Record<InvestingErrorCode, string> = {
   already_sent: "This money is already on its way to you. Open your payouts to follow it.",
   over_mobile_money_limit: "That is more than mobile money can take in one payout. Choose a bank account instead.",
   over_limit: "That is more than your withdrawal limit allows today. Choose a bank account, or try again tomorrow.",
+  pin_required: "Your PIN confirmation ran out or was already used. Try again and enter your PIN.",
   unavailable: "We could not reach Finvest. Check your connection and try again.",
 };
 

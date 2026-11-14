@@ -9,14 +9,14 @@ from sqlalchemy import text
 from sqlalchemy.exc import DBAPIError
 
 from app.infrastructure.database import Database
-from app.infrastructure.jobs import Worker, WorkerConfig
+from app.infrastructure.jobs import JobRequest, Worker, WorkerConfig, enqueue
 from app.modules.goals import reminders
 from app.modules.goals import service as goals
 from app.modules.goals.domain.goals import MAX_ACTIVE_GOALS, GoalCategory, GoalStatus, Standing
 from app.modules.goals.domain.plans import add_months
 from app.modules.goals.domain.reminders import next_due
 from app.modules.goals.events import FOLLOW_ROLLOVER_KIND
-from app.modules.goals.jobs import GoalJobs
+from app.modules.goals.jobs import SEND_REMINDERS_KIND, GoalJobs
 from app.modules.investments import service as investments
 from app.modules.investments.domain.investments import AtMaturity, InvestmentStatus
 from app.shared.actors import SYSTEM, Actor
@@ -815,10 +815,98 @@ async def test_a_reached_goal_is_told_once(
     await remind(worker_database, DAY + timedelta(days=1))
     seen = await told(worker_database, client)
     assert [(event, k, link) for event, k, link, _ in seen] == [
-        ("goal_reached", f"goal-reached:{goal.id}", "goal")
+        ("goal_reached", f"goal-reached:{goal.id}:1000000", "goal")
     ]
     assert "New roof" in seen[0][3]
     assert "UGX" not in seen[0][3]
+
+
+async def test_a_raised_target_is_told_again_when_it_is_reached(
+    app_database: Database, worker_database: Database
+) -> None:
+    client = await approved_client(app_database, NOW)
+    goal = await new_goal(app_database, client, name="New roof", target=ugx(1_000_000))
+    await started_saving(app_database, worker_database, client, goal.id, ugx(1_000_000))
+    await remind(worker_database, DAY)
+    async with app_database.actor_transaction(client) as session:
+        await goals.update_goal(
+            session,
+            client,
+            goal.id,
+            name=goal.name,
+            category=goal.category,
+            target=ugx(2_000_000),
+            target_date=goal.target_date,
+            clock=NOW,
+        )
+    # Not reached yet: nothing new.
+    await remind(worker_database, DAY + timedelta(days=1))
+    assert len(await told(worker_database, client)) == 1
+    await started_saving(app_database, worker_database, client, goal.id, ugx(1_000_000))
+    await remind(worker_database, DAY + timedelta(days=2))
+    await remind(worker_database, DAY + timedelta(days=3))
+    seen = await told(worker_database, client)
+    assert [k for event, k, _, _ in seen if event == "goal_reached"] == [
+        f"goal-reached:{goal.id}:1000000",
+        f"goal-reached:{goal.id}:2000000",
+    ]
+
+
+async def test_the_reminder_run_goes_a_page_at_a_time(
+    app_database: Database, worker_database: Database, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    client = await approved_client(app_database, NOW)
+    made = [
+        await new_goal(app_database, client, name=f"Goal {n}", target=ugx(1_000_000))
+        for n in range(3)
+    ]
+    for goal in made:
+        await started_saving(app_database, worker_database, client, goal.id, ugx(1_000_000))
+    monkeypatch.setattr(reminders, "BATCH", 2)
+    first = min(goal.id for goal in made)
+    first_key = key()
+    async with worker_database.actor_transaction(SYSTEM) as session:
+        # Start just before this test's goals, so the shared database's other goals are skipped.
+        await enqueue(
+            session,
+            JobRequest(
+                kind=SEND_REMINDERS_KIND, idempotency_key=first_key, payload={"after": first[:-1]}
+            ),
+            now=at(DAY, hour=5).now(),
+        )
+    runner = Worker(
+        worker_database,
+        GoalJobs(worker_database, at(DAY, hour=5)).handlers(),
+        WorkerConfig(),
+        at(DAY, hour=5),
+    )
+    while await runner.run_once():
+        pass
+    async with worker_database.actor_transaction(SYSTEM) as session:
+        # Follow this run's own chain of pages: each full page queues the next under
+        # "after:<its job id>". Goals that other tests make meanwhile can fall between this
+        # test's goals and add pages, so which page holds which goal is not checked.
+        pages = (
+            await session.execute(
+                text(
+                    "WITH RECURSIVE chain AS ("
+                    " SELECT id, status, payload ->> 'after' AS after, 1 AS n FROM jobs"
+                    " WHERE kind = :kind AND idempotency_key = :key"
+                    " UNION ALL"
+                    " SELECT j.id, j.status, j.payload ->> 'after', c.n + 1 FROM jobs j"
+                    " JOIN chain c ON j.kind = :kind AND j.idempotency_key = 'after:' || c.id"
+                    ") SELECT status, after FROM chain ORDER BY n"
+                ),
+                {"kind": SEND_REMINDERS_KIND, "key": first_key},
+            )
+        ).all()
+    # Three goals at two a page take at least two pages, each queued by the one before.
+    assert len(pages) >= 2
+    assert all(page.status == "succeeded" for page in pages)
+    seen = await told(worker_database, client)
+    assert sorted(k for event, k, _, _ in seen if event == "goal_reached") == sorted(
+        f"goal-reached:{goal.id}:1000000" for goal in made
+    )
 
 
 async def test_a_saving_due_in_three_days_is_reminded_once(

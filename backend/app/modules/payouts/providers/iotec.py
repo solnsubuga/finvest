@@ -16,13 +16,22 @@ to do next:
 | What happened | Send | Status read |
 | --- | --- | --- |
 | No token, or the connection was never made | `Deferred`: nothing reached ioTec | `Unavailable` |
-| 401 twice, 404, 429, or a 400 about our wallet or its balance | `Deferred` | `Unavailable` |
+| Our wallet's balance, read first, is below the amount | `Deferred` (wallet short) | |
+| A 400 or a `Failed` send answer about our balance | `Deferred` (wallet short) | |
+| Any other 400 about our wallet, such as "Invalid wallet" | `Deferred` | |
+| 401 twice, 404 or 429 | `Deferred` | `Unavailable` |
 | Any other 400 | `Rejected` | `Unavailable` |
 | No answer after sending, a 5xx, or an answer we cannot read | `Uncertain` | `Unavailable` |
 | 404 on a status read | | `NotFound` |
 
-A 400 about the wallet is ours to fix, not the client's, so it waits rather than failing the
-payout: the sweep keeps trying, and staff see the payout as held up after two hours.
+A short wallet is ours to fix, not the client's, so the payout waits rather than failing: the
+send is deferred with `DeferReason.WALLET_SHORT`, the sweep keeps trying, and staff see it at
+once (`GET /staff/payouts/held-up` and `/health/operations`). Before each send the wallet's
+balance is read (`GET /api/wallet-balance/{walletId}`, `actualBalance`); a balance that cannot
+be read does not stop the send, because ioTec refuses one it cannot pay. A `Failed` answer to
+the send itself means ioTec took nothing, so one whose `statusCode` or `statusMessage` is about
+our wallet is deferred too. A status read that later says `Failed` is not sorted this way: the
+payout fails and the client can send it again, as for any failed payout.
 
 Nothing here logs. A phone number, an amount or ioTec's own message text never leaves this file
 except in the request to ioTec.
@@ -42,6 +51,7 @@ from app.infrastructure.iotec import IotecSettings, IotecTokens, IotecUnavailabl
 from app.modules.payments.domain.outcomes import (
     Accepted,
     Confirmed,
+    DeferReason,
     Deferred,
     NotFound,
     Pending,
@@ -62,6 +72,9 @@ _PAID = frozenset({"Success"})
 _FAILED = frozenset({"Failed", "Rejected", "Cancelled", "RolledBack"})
 # Words in a 400 that mean our wallet, not the client's number, is the problem.
 _OURS = ("wallet", "balance", "insufficient", "fund")
+# Of those, the words that mean the wallet is short of money, which a top-up fixes. "Invalid
+# wallet" is ours too, but a top-up does not fix it.
+_SHORT = ("balance", "insufficient", "fund")
 # Shown to the client on their mobile money message. No amount, no name.
 _PAYEE_NOTE = "Finvest payout"
 
@@ -94,6 +107,9 @@ class IotecDisbursements:
             "payeeNote": _PAYEE_NOTE,
         }
 
+        if await self._wallet_short(request.amount):
+            return Deferred(reason=DeferReason.WALLET_SHORT)
+
         def call(token: str) -> Awaitable[httpx.Response]:
             return self._http.post(
                 self._url("/api/disbursements/disburse"), json=body, headers=_auth(token)
@@ -117,7 +133,11 @@ class IotecDisbursements:
         if status == 429:
             return Deferred(_retry_after(answer))
         if status == 400:
-            return Deferred() if _about_our_wallet(answer) else Rejected(RejectionCode.OTHER)
+            if not _about(answer, _OURS):
+                return Rejected(RejectionCode.OTHER)
+            if _about(answer, _SHORT):
+                return Deferred(reason=DeferReason.WALLET_SHORT)
+            return Deferred()
         if status != 200:
             return Uncertain(UncertainReason.PROVIDER_ERROR)
         try:
@@ -129,8 +149,36 @@ class IotecDisbursements:
         except _Unreadable:
             return Uncertain(UncertainReason.PROVIDER_ERROR)
         if state in _FAILED:
+            if _says(found, ("statusCode", "statusMessage"), _SHORT):
+                # ioTec took nothing, for want of money in our wallet: wait, do not fail it.
+                return Deferred(reason=DeferReason.WALLET_SHORT)
             return Rejected(RejectionCode.OTHER, reference)
         return Accepted(reference)
+
+    async def _wallet_short(self, amount: Money) -> bool:
+        """Whether the wallet's balance is known to be below `amount`. False when unknown."""
+
+        def call(token: str) -> Awaitable[httpx.Response]:
+            return self._http.get(
+                self._url(f"/api/wallet-balance/{self._settings.wallet_id}"), headers=_auth(token)
+            )
+
+        try:
+            answer = await self._authorised(call)
+        except (IotecUnavailable, httpx.TransportError):
+            return False
+        if answer.status_code != 200:
+            return False
+        try:
+            found = _read(answer)
+        except _Unreadable:
+            return False
+        if found.get("currency") != self._settings.currency_code:
+            return False
+        balance = found.get("actualBalance")
+        if isinstance(balance, bool) or not isinstance(balance, Decimal | int):
+            return False
+        return Decimal(balance) < amount.minor
 
     async def disbursement_status(
         self, *, request_id: str, provider_reference: str | None
@@ -215,16 +263,18 @@ def _reference(found: dict[str, Any]) -> str:
     return reference
 
 
-def _about_our_wallet(answer: httpx.Response) -> bool:
-    """Whether ioTec's refusal is about Finvest's wallet. Its text is read here and dropped."""
+def _about(answer: httpx.Response, words: tuple[str, ...]) -> bool:
+    """Whether ioTec's refusal holds one of `words`. Its text is read here and dropped."""
     try:
         found = json.loads(answer.content)
     except ValueError:
         return False
-    if not isinstance(found, dict):
-        return False
-    text = " ".join(str(found.get(key) or "") for key in ("code", "message")).lower()
-    return any(word in text for word in _OURS)
+    return isinstance(found, dict) and _says(found, ("code", "message"), words)
+
+
+def _says(found: dict[str, Any], keys: tuple[str, ...], words: tuple[str, ...]) -> bool:
+    text = " ".join(str(found.get(key) or "") for key in keys).lower()
+    return any(word in text for word in words)
 
 
 def _retry_after(answer: httpx.Response) -> int | None:
