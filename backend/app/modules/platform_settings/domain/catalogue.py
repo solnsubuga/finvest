@@ -87,6 +87,11 @@ class PaymentChannels:
         return channel in self.open
 
 
+# Which channel a mobile money network uses, for paying in and for paying out.
+PAY_IN_BY_NETWORK: dict[str, Channel] = {"mtn": "mtn_pay_in", "airtel": "airtel_pay_in"}
+PAYOUT_BY_NETWORK: dict[str, Channel] = {"mtn": "mtn_payout", "airtel": "airtel_payout"}
+
+
 def _channels(value: Any) -> PaymentChannels:
     if not isinstance(value, dict) or set(value) != set(CHANNELS):
         raise _refuse(["value"], "channels_incomplete")
