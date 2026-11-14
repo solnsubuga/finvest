@@ -123,6 +123,13 @@ export function RecoverySection({ api, onOpenClient }: { api: RecoveryApi; onOpe
                   <dt className="text-muted">Asked</dt>
                   <dd className="m-0">{formatTime(item.createdAt)}</dd>
                 </dl>
+                {item.asks > 1 ? (
+                  // A later ask replaces the number to call, so a changed number needs care.
+                  <p className="m-0 rounded-lg bg-warning-surface px-3 py-2 text-sm font-semibold text-warning-text">
+                    Asked {item.asks} times, last at {formatTime(item.lastAskedAt)}. Each ask can change the number to
+                    call, so check it is really them before you change anything.
+                  </p>
+                ) : null}
                 {closing === item.id ? (
                   <fieldset className="m-0 flex flex-col gap-2 border-0 p-0">
                     <legend className="mb-1 text-sm font-bold">How did the call end?</legend>
