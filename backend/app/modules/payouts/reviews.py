@@ -2,15 +2,19 @@
 
 A payout above the review threshold in force starts held, with its money already reserved. One
 member of staff approves it, and it is queued and sent, or declines it, and the money goes back
-to where it came from. The client asked for it, so the staff member is the second person. Both
-need a reason and an idempotency key: a retried request returns what the first one did.
+to where it came from and the client is told (`payout_declined`). The client asked for it, so
+the staff member is the second person. Both need a reason and an idempotency key: a retried
+request returns what the first one did.
 """
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.infrastructure.idempotency import Receipt, run_once
-from app.modules.payouts import payouts
+from app.modules.notifications import contract as notifications
+from app.modules.payouts import destinations, payouts
+from app.modules.payouts.domain.destinations import DestinationKind
 from app.modules.payouts.domain.payouts import IllegalTransition, PayoutEvent, PayoutStatus
+from app.modules.payouts.domain.sending import destination_label
 from app.modules.payouts.payouts import PayoutView
 from app.shared.actors import Actor
 from app.shared.clock import Clock
@@ -83,6 +87,8 @@ async def _review(
         except IllegalTransition:
             # Cancelled by the client or decided by someone else since it was read.
             raise ReviewRefused("payout_not_held") from None
+        if event is PayoutEvent.REVIEW_DECLINED:
+            await _tell_declined(session, moved, clock)
         return Receipt(200, {"payout_id": moved.id})
 
     done = await run_once(
@@ -95,3 +101,23 @@ async def _review(
         command=command,
     )
     return await payouts.get_payout(session, str(done.receipt.response["payout_id"]))
+
+
+async def _tell_declined(session: AsyncSession, payout: PayoutView, clock: Clock) -> None:
+    """In the same transaction as the decline, so the client is told once and only if it holds."""
+    destination = await destinations.get_destination(session, payout.destination_id)
+    await notifications.notify(
+        session,
+        event_name="payout_declined",
+        client_id=payout.client_id,
+        idempotency_key=payout.id,
+        variables={
+            "amount": payout.amount,
+            # Never the number itself.
+            "destination": "your bank account"
+            if destination.kind is DestinationKind.BANK
+            else destination_label(destination.network or ""),
+        },
+        link=notifications.Link("payout", payout.id),
+        now=clock.now(),
+    )
