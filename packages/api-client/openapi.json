@@ -588,6 +588,123 @@
         "title": "BankTransferDetails",
         "type": "object"
       },
+      "BankTransferInQueue": {
+        "additionalProperties": false,
+        "properties": {
+          "amount": {
+            "$ref": "#/components/schemas/MoneyView"
+          },
+          "awaiting": {
+            "enum": [
+              "check",
+              "second_person",
+              "posting"
+            ],
+            "title": "Awaiting",
+            "type": "string"
+          },
+          "confirmed_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Confirmed At"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "failure": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Failure"
+          },
+          "id": {
+            "maxLength": 20,
+            "minLength": 20,
+            "pattern": "^[-0-9A-Z_a-z]{20}$",
+            "title": "Id",
+            "type": "string"
+          },
+          "investment_id": {
+            "maxLength": 20,
+            "minLength": 20,
+            "pattern": "^[-0-9A-Z_a-z]{20}$",
+            "title": "Investment Id",
+            "type": "string"
+          },
+          "method": {
+            "enum": [
+              "mtn",
+              "airtel",
+              "bank_transfer"
+            ],
+            "title": "Method",
+            "type": "string"
+          },
+          "payer": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Payer"
+          },
+          "receipt": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ReceiptView"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "status": {
+            "enum": [
+              "created",
+              "sending",
+              "awaiting_approval",
+              "uncertain",
+              "in_review",
+              "confirmed",
+              "failed"
+            ],
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "investment_id",
+          "method",
+          "status",
+          "amount",
+          "failure",
+          "payer",
+          "receipt",
+          "created_at",
+          "confirmed_at",
+          "awaiting"
+        ],
+        "title": "BankTransferInQueue",
+        "type": "object"
+      },
       "BankTransferOut": {
         "additionalProperties": false,
         "properties": {
@@ -655,7 +772,7 @@
         "properties": {
           "items": {
             "items": {
-              "$ref": "#/components/schemas/PaymentView"
+              "$ref": "#/components/schemas/BankTransferInQueue"
             },
             "title": "Items",
             "type": "array"

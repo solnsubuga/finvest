@@ -161,6 +161,21 @@ export const ReceiptView = z.object({
 });
 export type ReceiptView = z.infer<typeof ReceiptView>;
 
+export const BankTransferInQueue = z.object({
+  amount: MoneyView,
+  awaiting: z.enum(["check", "second_person", "posting"]),
+  confirmed_at: z.string().nullable(),
+  created_at: z.string(),
+  failure: z.string().nullable(),
+  id: z.string(),
+  investment_id: z.string(),
+  method: z.enum(["mtn", "airtel", "bank_transfer"]),
+  payer: z.string().nullable(),
+  receipt: ReceiptView.nullable(),
+  status: z.enum(["created", "sending", "awaiting_approval", "uncertain", "in_review", "confirmed", "failed"]),
+});
+export type BankTransferInQueue = z.infer<typeof BankTransferInQueue>;
+
 export const PaymentView = z.object({
   amount: MoneyView,
   confirmed_at: z.string().nullable(),
@@ -213,7 +228,7 @@ export const BankTransferOut = z.object({
 export type BankTransferOut = z.infer<typeof BankTransferOut>;
 
 export const BankTransferPage = z.object({
-  items: z.array(PaymentView),
+  items: z.array(BankTransferInQueue),
   next_before: z.string().nullable(),
 });
 export type BankTransferPage = z.infer<typeof BankTransferPage>;
