@@ -1,7 +1,7 @@
 """The switch from Finvest 1.0: a proposal, a second person's decision, and the accounts it made.
 
 Revision ID: 0074_migration_switch
-Revises: 0073_migration_difference_places
+Revises: 0044_payout_returns
 
 One member of staff proposes the switch with the two sheets of the trial that cleared every
 check. A different member of staff approves or rejects it. An approval creates the account of
@@ -22,7 +22,7 @@ from collections.abc import Sequence
 from alembic import op
 
 revision: str = "0074_migration_switch"
-down_revision: str | None = "0073_migration_difference_places"
+down_revision: str | None = "0044_payout_returns"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 
