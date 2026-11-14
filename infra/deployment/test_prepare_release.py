@@ -218,7 +218,10 @@ class PrepareRelease(unittest.TestCase):
             "FINVEST_IOTEC_VERIFY_API_KEY": "v" * 32,
             "FINVEST_IOTEC_VERIFY_BASE_URL": "https://verify-api.iotec.io",
             "FINVEST_PAYOUT_NAME_PROVIDER": "iotec",
-            "FINVEST_SCREENING_PROVIDER": "none",
+            "FINVEST_SCREENING_PROVIDER": "sigma360",
+            "FINVEST_SIGMA360_API_KEY": "k" * 32,
+            "FINVEST_SIGMA360_FILTER_SET_ID": "42",
+            "FINVEST_SIGMA360_BASE_URL": "https://api.sigma360.com/external/v2",
         }
         api_only = {"FINVEST_IOTEC_CALLBACK_TOKEN": "c" * 43}
         pr.prepare(self.out, settings(**everywhere, **api_and_worker, **api_only))
