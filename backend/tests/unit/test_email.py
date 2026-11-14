@@ -18,6 +18,7 @@ from app.infrastructure.email import (
     Sender,
 )
 from app.modules.notifications.domain.templates import InvalidTemplate, render, render_sms
+from app.shared.email_layout import Links
 
 API_KEY = "re_test_not_a_real_key"
 ADDRESS = "ada@example.com"
@@ -329,3 +330,16 @@ def test_a_notice_email_opens_the_app_and_escapes_its_words() -> None:
     assert rendered.html.count('href="https://app.finvestug.com"') == 1
     assert "Open Finvest: https://app.finvestug.com" in rendered.text
     assert "under Notifications" in rendered.text
+
+
+def test_email_buttons_and_footer_use_the_links_they_are_given() -> None:
+    links = Links(app="https://app.staging.example", site="https://staging.example")
+    notice = render("client_notice", {"title": "Withdrawal sent", "body": "Sent."}, links=links)
+    assert 'href="https://app.staging.example"' in notice.html
+    assert "Open Finvest: https://app.staging.example" in notice.text
+    assert 'href="https://staging.example"' in notice.html
+    signed_in = render(
+        "new_sign_in", {"device": "Chrome on Android", "when": "14 Nov, 09:00"}, links=links
+    )
+    assert "https://app.staging.example/security" in signed_in.html
+    assert "app.finvestug.com" not in signed_in.html + notice.html

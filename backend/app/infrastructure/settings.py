@@ -11,6 +11,8 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 from sqlalchemy.engine import make_url
 from sqlalchemy.exc import ArgumentError
 
+from app.shared.email_layout import PRODUCTION, Links
+
 
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(
@@ -39,6 +41,8 @@ class Settings(BaseSettings):
     # check. It must be one of the allowed client origins. Unset, it is the allowed client origin
     # when exactly one is set, and no link is sent when there are several.
     client_app_origin: str | None = None
+    # The public website, which the footer of every email links to.
+    public_site_origin: str = PRODUCTION.site
     # Passkeys (WebAuthn). The site a passkey belongs to: `finvestug.com` for clients, so one
     # passkey works on the web and in the phone apps, and the console's own host for staff.
     # Unset turns passkeys off for that audience.
@@ -87,15 +91,13 @@ class Settings(BaseSettings):
     @classmethod
     def exact_origins(cls, value: list[str]) -> list[str]:
         for origin in value:
-            scheme, _, rest = origin.partition("://")
-            if (
-                scheme not in ("http", "https")
-                or not rest
-                or "/" in rest
-                or origin != origin.strip()
-            ):
-                raise ValueError("Allowed origins are exact scheme://host[:port] values")
+            _exact_origin(origin)
         return value
+
+    @field_validator("public_site_origin")
+    @classmethod
+    def exact_site(cls, value: str) -> str:
+        return _exact_origin(value)
 
     @field_validator("authenticator_key", mode="before")
     @classmethod
@@ -157,6 +159,11 @@ class Settings(BaseSettings):
             return self.client_allowed_origins[0]
         return None
 
+    def email_links(self) -> Links:
+        """Where the buttons and footer of an email point: this deployment's client app and
+        website. Without a client app origin they are production's, the only environment."""
+        return Links(app=self.client_app() or PRODUCTION.app, site=self.public_site_origin)
+
     @model_validator(mode="after")
     def root_cert_needs_tls(self) -> Self:
         if self.database_ssl_root_cert is not None and self.database_ssl_mode != "verify-full":
@@ -174,3 +181,10 @@ class Settings(BaseSettings):
         if self.database_ssl_mode == "disable":
             return {"ssl": False}
         return {"ssl": ssl.create_default_context(cafile=self.database_ssl_root_cert)}
+
+
+def _exact_origin(origin: str) -> str:
+    scheme, _, rest = origin.partition("://")
+    if scheme not in ("http", "https") or not rest or "/" in rest or origin != origin.strip():
+        raise ValueError("Allowed origins are exact scheme://host[:port] values")
+    return origin
