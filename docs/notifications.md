@@ -8,6 +8,8 @@ The code is `backend/app/modules/notifications` and migration `0090_notification
 
 **Who owns which words.** This module's catalogue (`domain/wording.py`) holds every notice to a client, and staff may change it with a second person's approval. `domain/templates.py` holds only the messages that carry a code or a set-up link (sign-in and signup codes, password reset, the staff set-up link, and the link that invites a Finvest 1.0 client to claim their account). Those are fixed in code, so no change in Settings can turn them into a phishing message. A link in any of them, by email or by text, must point to the console or the client app, or the worker refuses to send it. Neither adds text of the other kind.
 
+**How an email looks.** Every email Finvest sends, from a sign-in code to a withdrawal notice to a monthly statement, is drawn with the parts in `backend/app/shared/email_layout.py`: the black band with the wordmark, a white card with one heading, and the footer that says Finvest never asks for a password, PIN or code. The design is section 9, "Emails", of the [design canvas](design.md). A code sits in a large grey box, a "Not you?" warning in a black box, and a link behind one button, written out below it for a mail app that hides the button. A notice email shows the notification's title and body and an Open Finvest button to the app, where the amount is shown. Emails have no images, so opening one fetches nothing.
+
 ## Raising an event from another module
 
 A module tells a client something by calling one function, in the same database transaction as the change it reports:

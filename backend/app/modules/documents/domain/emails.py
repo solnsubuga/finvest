@@ -1,9 +1,8 @@
 """The emails that carry a statement, a receipt or a tax certificate. Pure: data in, subject
 and bodies out.
 
-Each email has an HTML body and a plain-text body. The HTML is tables with inline styles so
-it looks the same in Gmail, Outlook and phone mail apps, and it has no images: nothing is
-fetched when it is opened, so it cannot track anyone and no client blocks it.
+Each email has an HTML body and a plain-text body. The HTML is built from the parts in
+`app.shared.email_layout`, the look every Finvest email shares.
 
 A statement or tax certificate email carries no figures. The figures are in the attached PDF,
 so a message that shows on a locked phone says nothing about what the client holds. A receipt
@@ -12,25 +11,15 @@ shows the amount received, because that is what a receipt is.
 Every value is escaped before it goes into HTML. Links go only to Finvest's own app.
 """
 
-import html
-from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import datetime
 
 from app.modules.documents.domain import formatting
 from app.modules.documents.domain.receipts import Receipt
 from app.modules.documents.domain.statements import Period, StatementKind
+from app.shared import email_layout as layout
 
-APP = "https://app.finvestug.com"
-DOCUMENTS_LINK = f"{APP}/documents"
-
-_BLACK = "#0D0D0D"
-_INK = "#141414"
-_MUTED = "#5E5E5A"
-_LIME = "#B6EB0A"
-_GROUND = "#F4F5F0"
-_LINE = "#E3E6DD"
-_FONT = "'Plus Jakarta Sans', 'Segoe UI', Roboto, Helvetica, Arial, sans-serif"
+DOCUMENTS_LINK = f"{layout.APP}/documents"
 
 
 @dataclass(frozen=True, slots=True)
@@ -38,93 +27,6 @@ class Rendered:
     subject: str
     text: str
     html: str
-
-
-def _e(value: str) -> str:
-    return html.escape(value, quote=True)
-
-
-def _paragraphs(lines: Sequence[str]) -> str:
-    return "".join(
-        f'<p style="margin:0 0 16px;font-size:16px;line-height:1.55;color:{_INK}">{_e(line)}</p>'
-        for line in lines
-    )
-
-
-def _button(label: str, link: str) -> str:
-    return (
-        '<table role="presentation" cellpadding="0" cellspacing="0" style="margin:8px 0 24px">'
-        f'<tr><td style="border-radius:24px;background:{_BLACK}">'
-        f'<a href="{_e(link)}" style="display:inline-block;padding:14px 28px;font-family:{_FONT};'
-        f'font-size:15px;font-weight:700;color:#FFFFFF;text-decoration:none;border-radius:24px">'
-        f"{_e(label)}</a></td></tr></table>"
-    )
-
-
-def _attachment(name: str, detail: str) -> str:
-    return (
-        '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" '
-        f'style="margin:0 0 24px;border:1px solid {_LINE};border-radius:16px">'
-        '<tr><td width="64" style="padding:14px 0 14px 16px" valign="middle">'
-        '<div style="width:44px;height:44px;line-height:44px;border-radius:12px;'
-        f"background:{_GROUND};"
-        f'text-align:center;font-size:11px;font-weight:800;color:{_BLACK}">PDF</div></td>'
-        '<td style="padding:14px 16px 14px 8px" valign="middle">'
-        f'<div style="font-size:15px;font-weight:700;color:{_INK}">{_e(name)}</div>'
-        f'<div style="font-size:13px;color:{_MUTED};padding-top:2px">{_e(detail)}</div>'
-        "</td></tr></table>"
-    )
-
-
-def _facts(rows: Sequence[tuple[str, str]]) -> str:
-    cells = "".join(
-        f'<tr><td style="padding:12px 0;border-top:1px solid {_LINE};font-size:14px;'
-        f'color:{_MUTED}">'
-        f"{_e(label)}</td>"
-        f'<td align="right" style="padding:12px 0;border-top:1px solid {_LINE};font-size:14px;'
-        f'font-weight:700;color:{_INK}">{_e(value)}</td></tr>'
-        for label, value in rows
-    )
-    return (
-        '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" '
-        f'style="margin:0 0 24px;border-bottom:1px solid {_LINE}">{cells}</table>'
-    )
-
-
-def _page(*, preheader: str, title: str, body: str) -> str:
-    return (
-        '<!doctype html><html lang="en"><head><meta charset="utf-8">'
-        '<meta name="viewport" content="width=device-width,initial-scale=1">'
-        '<meta name="color-scheme" content="light only">'
-        f"<title>{_e(title)}</title></head>"
-        f'<body style="margin:0;padding:0;background:{_GROUND};font-family:{_FONT}">'
-        f'<div style="display:none;max-height:0;overflow:hidden;opacity:0">{_e(preheader)}</div>'
-        '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" '
-        f'style="background:{_GROUND}">'
-        '<tr><td align="center" style="padding:24px 12px">'
-        '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" '
-        'style="max-width:600px;background:#FFFFFF;border-radius:20px;overflow:hidden">'
-        f'<tr><td style="background:{_BLACK};padding:22px 28px">'
-        '<span style="font-size:22px;font-weight:800;color:#FFFFFF;letter-spacing:-0.3px">'
-        "finvest</span>"
-        f'<span style="font-size:22px;font-weight:800;color:{_LIME}">.</span></td></tr>'
-        f'<tr><td style="padding:32px 28px 8px;font-family:{_FONT}">'
-        f'<h1 style="margin:0 0 20px;font-size:24px;line-height:1.25;font-weight:800;color:{_INK}">'
-        f"{_e(title)}</h1>{body}</td></tr>"
-        f'<tr><td style="padding:20px 28px 28px;border-top:1px solid {_LINE};font-size:12px;'
-        f'line-height:1.6;color:{_MUTED};font-family:{_FONT}">'
-        "Finvest will never ask for your password, PIN or a code by email, phone or text. "
-        "If a message asks for one, it is not from us.<br>"
-        f'Finvest, Kampala, Uganda. <a href="https://finvestug.com" style="color:{_MUTED}">'
-        "finvestug.com</a></td></tr>"
-        "</table></td></tr></table></body></html>"
-    )
-
-
-_TEXT_FOOTER = (
-    "Finvest will never ask for your password, PIN or a code by email, phone or text. "
-    "If a message asks for one, it is not from us.\n\nFinvest, Kampala, Uganda. finvestug.com\n"
-)
 
 
 def statement_email(
@@ -168,18 +70,20 @@ def statement_email(
         ]
     detail = f"Account {account}"
     body = (
-        _paragraphs(lines)
-        + _attachment(file_name, detail)
-        + _button("Open Documents", DOCUMENTS_LINK)
-        + _paragraphs(closing)
+        layout.paragraphs(lines)
+        + layout.attachment(file_name, detail)
+        + layout.button("Open Documents", DOCUMENTS_LINK)
+        + layout.paragraphs(closing)
     )
     text = "\n\n".join(
         [*lines, f"Attached: {file_name} ({detail})", f"Open Documents: {DOCUMENTS_LINK}", *closing]
     )
     return Rendered(
         subject,
-        text + "\n\n" + _TEXT_FOOTER,
-        _page(preheader=f"Your statement is attached as a PDF. {detail}.", title=title, body=body),
+        text + "\n\n" + layout.FOOTER_TEXT,
+        layout.page(
+            preheader=f"Your statement is attached as a PDF. {detail}.", title=title, body=body
+        ),
     )
 
 
@@ -196,25 +100,27 @@ def receipt_email(*, first_name: str, receipt: Receipt, file_name: str) -> Rende
     lines = [f"Hello {first_name},", "Thank you. We received your payment."]
     hero = (
         '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" '
-        f'style="margin:0 0 20px;background:{_GROUND};border-radius:16px">'
+        f'style="margin:0 0 20px;background:{layout.GROUND};border-radius:16px">'
         '<tr><td align="center" style="padding:24px 16px">'
-        f'<div style="display:inline-block;font-size:12px;font-weight:700;background:#E9F7B5;'
-        f'color:#2A3800;border-radius:999px;padding:4px 10px">Received</div>'
-        f'<div style="font-size:34px;font-weight:800;letter-spacing:-0.8px;color:{_INK};'
-        f'padding-top:10px">{_e(amount)}</div>'
-        f'<div style="font-size:14px;color:{_MUTED};padding-top:4px">'
-        f"Paid for {_e(receipt.paid_for)}</div></td></tr></table>"
+        f'<div style="display:inline-block;font-size:12px;font-weight:700;background:{layout.PILL};'
+        f'color:{layout.PILL_INK};border-radius:999px;padding:4px 10px">Received</div>'
+        f'<div style="font-size:34px;font-weight:800;letter-spacing:-0.8px;color:{layout.INK};'
+        f'padding-top:10px">{layout.escape(amount)}</div>'
+        f'<div style="font-size:14px;color:{layout.MUTED};padding-top:4px">'
+        f"Paid for {layout.escape(receipt.paid_for)}</div></td></tr></table>"
     )
     closing = [
         "Your receipt is attached as a PDF, and you can find this payment under Activity in "
         "the app. If anything here looks wrong, tell us through Help in the app.",
     ]
     body = (
-        _paragraphs(lines)
+        layout.paragraphs(lines)
         + hero
-        + _facts(facts)
-        + _attachment(file_name, f"Account {formatting.account_number(receipt.account_number)}")
-        + _paragraphs(closing)
+        + layout.facts(facts)
+        + layout.attachment(
+            file_name, f"Account {formatting.account_number(receipt.account_number)}"
+        )
+        + layout.paragraphs(closing)
     )
     text = "\n\n".join(
         [
@@ -227,8 +133,8 @@ def receipt_email(*, first_name: str, receipt: Receipt, file_name: str) -> Rende
     )
     return Rendered(
         f"Receipt: we received {amount}",
-        text + "\n\n" + _TEXT_FOOTER,
-        _page(
+        text + "\n\n" + layout.FOOTER_TEXT,
+        layout.page(
             preheader=f"{amount} received for {receipt.paid_for}. Your receipt is attached.",
             title="Payment received",
             body=body,
@@ -253,18 +159,18 @@ def tax_certificate_email(
         "in the app.",
     ]
     body = (
-        _paragraphs(lines)
-        + _attachment(file_name, detail)
-        + _button("Open Documents", DOCUMENTS_LINK)
-        + _paragraphs(closing)
+        layout.paragraphs(lines)
+        + layout.attachment(file_name, detail)
+        + layout.button("Open Documents", DOCUMENTS_LINK)
+        + layout.paragraphs(closing)
     )
     text = "\n\n".join(
         [*lines, f"Attached: {file_name} ({detail})", f"Open Documents: {DOCUMENTS_LINK}", *closing]
     )
     return Rendered(
         f"Your Finvest tax certificate for {tax_year}",
-        text + "\n\n" + _TEXT_FOOTER,
-        _page(
+        text + "\n\n" + layout.FOOTER_TEXT,
+        layout.page(
             preheader=f"Your withholding tax certificate is attached as a PDF. {detail}.",
             title=f"Your {tax_year} tax certificate",
             body=body,
