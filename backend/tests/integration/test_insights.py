@@ -191,6 +191,14 @@ async def test_a_payout_that_came_back_comes_off_paid_out_in_the_month_it_came_b
         worker_database,
         client_id=client.id,
         code="client.payout_in_flight",
+        entry_type="payout.reserve",
+        amount=80_000,
+        on=end_of(LAST_MONTH, 1),
+    )
+    await post(
+        worker_database,
+        client_id=client.id,
+        code="client.payout_in_flight",
         entry_type="payout.settle",
         amount=80_000,
         on=end_of(LAST_MONTH),
