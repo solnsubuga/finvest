@@ -1,6 +1,6 @@
 /**
- * Bank payouts over the real API: `/staff/payouts/bank/*`, `/staff/payout-bank-batches` and
- * `/staff/payout-bank-settlements` (docs/payouts.md).
+ * Bank payouts over the real API: `/staff/payouts/bank/*`, `/staff/payout-bank-batches`,
+ * `/staff/payout-bank-settlements` and `/staff/payout-bank-bulk-settlements` (docs/payouts.md).
  */
 
 import { ApiError, type Http } from "@/api/http.ts";
@@ -12,6 +12,8 @@ import {
   type BankPayoutsErrorCode,
   type Batch,
   type BatchStatus,
+  type BulkDebit,
+  type BulkSettlement,
   type Currency,
   type Outcome,
   type SentBankPayout,
@@ -63,6 +65,33 @@ interface SettlementJson {
   status: "proposed" | "approved" | "declined" | "withdrawn";
   proposed_by: string;
   proposed_at: string;
+  bulk_id?: string | null;
+}
+
+interface LineJson {
+  id: string;
+  value_date: string;
+  amount: Amount;
+  reference: string;
+  narrative: string;
+}
+
+interface BulkDebitJson {
+  batch: BatchJson;
+  payouts: PayoutJson[];
+  lines: LineJson[];
+}
+
+interface BulkJson {
+  id: string;
+  batch_id: string;
+  statement_line_id: string;
+  reason: string;
+  status: BulkSettlement["status"];
+  proposed_by: string;
+  proposed_at: string;
+  payout_ids: string[];
+  total: Amount;
 }
 
 interface SentJson {
@@ -120,6 +149,35 @@ function toSettlement(json: SettlementJson | null): Settlement | null {
     reason: json.reason,
     proposedBy: json.proposed_by,
     proposedAt: json.proposed_at,
+    bulkId: json.bulk_id ?? null,
+  };
+}
+
+export function toBulkDebit(json: BulkDebitJson): BulkDebit {
+  return {
+    batch: toBatch(json.batch),
+    payouts: json.payouts.map(toPayout),
+    lines: json.lines.map((line) => ({
+      id: line.id,
+      valueDate: line.value_date,
+      amount: line.amount,
+      reference: line.reference,
+      narrative: line.narrative,
+    })),
+  };
+}
+
+export function toBulk(json: BulkJson): BulkSettlement {
+  return {
+    id: json.id,
+    batchId: json.batch_id,
+    statementLineId: json.statement_line_id,
+    reason: json.reason,
+    status: json.status,
+    proposedBy: json.proposed_by,
+    proposedAt: json.proposed_at,
+    payoutIds: json.payout_ids,
+    total: json.total,
   };
 }
 
@@ -148,6 +206,12 @@ const NAMED: ReadonlySet<string> = new Set<BankPayoutsErrorCode>([
   "settlement_already_decided",
   "proposed_by_you",
   "not_proposed_by_you",
+  "bulk_payouts_invalid",
+  "payout_not_in_batch",
+  "payout_not_to_settle",
+  "statement_line_not_this_batch",
+  "amounts_do_not_add_up",
+  "settlement_in_bulk",
 ]);
 
 export function toBankPayoutsError(error: unknown): BankPayoutsError {
@@ -176,6 +240,7 @@ export function toBankPayoutsError(error: unknown): BankPayoutsError {
 export function createHttpBankPayoutsApi(http: Http): BankPayoutsApi {
   const batch = (id: string, action = "") => `/staff/payout-bank-batches/${encodeURIComponent(id)}${action ? `/${action}` : ""}`;
   const settlement = (id: string, action: string) => `/staff/payout-bank-settlements/${encodeURIComponent(id)}/${action}`;
+  const bulk = (id: string, action: string) => `/staff/payout-bank-bulk-settlements/${encodeURIComponent(id)}/${action}`;
 
   async function call<T>(run: () => Promise<T>): Promise<T> {
     try {
@@ -234,6 +299,29 @@ export function createHttpBankPayoutsApi(http: Http): BankPayoutsApi {
     withdrawSettlement: (id, reason) =>
       call(async () => {
         await http.request("POST", settlement(id, "withdraw"), { reason });
+      }),
+    getBulkDebit: (batchId) => call(async () => toBulkDebit(await http.request<BulkDebitJson>("GET", batch(batchId, "bulk-debit")))),
+    listBulks: () => call(async () => (await http.request<BulkJson[]>("GET", "/staff/payout-bank-bulk-settlements")).map(toBulk)),
+    proposeBulk: (key, batchId, statementLineId, payoutIds, reason) =>
+      call(async () => {
+        await http.request(
+          "POST",
+          batch(batchId, "bulk-settlements"),
+          { statement_line_id: statementLineId, payout_ids: payoutIds, reason },
+          { idempotencyKey: key },
+        );
+      }),
+    approveBulk: (key, id, reason) =>
+      call(async () => {
+        await http.request("POST", bulk(id, "approve"), { reason }, { idempotencyKey: key });
+      }),
+    declineBulk: (id, reason) =>
+      call(async () => {
+        await http.request("POST", bulk(id, "decline"), { reason });
+      }),
+    withdrawBulk: (id, reason) =>
+      call(async () => {
+        await http.request("POST", bulk(id, "withdraw"), { reason });
       }),
   };
 }

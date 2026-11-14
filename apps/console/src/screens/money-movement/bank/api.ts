@@ -67,6 +67,38 @@ export interface Settlement {
   reason: string;
   proposedBy: string;
   proposedAt: string;
+  /** Set when this payout is one of a bulk debit: it is decided only with the bulk. */
+  bulkId: string | null;
+}
+
+/** A trust statement line going out, as the first person picks a bulk debit. */
+export interface StatementLine {
+  id: string;
+  /** `YYYY-MM-DD`. */
+  valueDate: string;
+  amount: Amount;
+  reference: string;
+  narrative: string;
+}
+
+/** An approved batch's payouts still to settle, and the lines that could be their one debit. */
+export interface BulkDebit {
+  batch: Batch;
+  payouts: BankPayout[];
+  lines: StatementLine[];
+}
+
+/** Many payouts of one batch settled from one debit line, waiting for a second person. */
+export interface BulkSettlement {
+  id: string;
+  batchId: string;
+  statementLineId: string;
+  reason: string;
+  status: "proposed" | "approved" | "declined" | "withdrawn";
+  proposedBy: string;
+  proposedAt: string;
+  payoutIds: string[];
+  total: Amount;
 }
 
 export interface SentBankPayout {
@@ -105,6 +137,14 @@ export interface BankPayoutsApi {
   approveSettlement(key: string, settlementId: string, reason: string): Promise<void>;
   declineSettlement(settlementId: string, reason: string): Promise<void>;
   withdrawSettlement(settlementId: string, reason: string): Promise<void>;
+  /** For an approved batch: its payouts still to settle and the lines that could be their debit. */
+  getBulkDebit(batchId: string): Promise<BulkDebit>;
+  /** Bulk debits waiting for a second person. */
+  listBulks(): Promise<BulkSettlement[]>;
+  proposeBulk(key: string, batchId: string, statementLineId: string, payoutIds: string[], reason: string): Promise<void>;
+  approveBulk(key: string, bulkId: string, reason: string): Promise<void>;
+  declineBulk(bulkId: string, reason: string): Promise<void>;
+  withdrawBulk(bulkId: string, reason: string): Promise<void>;
 }
 
 export type BankPayoutsErrorCode =
@@ -133,7 +173,13 @@ export type BankPayoutsErrorCode =
   | "settlement_already_proposed"
   | "settlement_already_decided"
   | "proposed_by_you"
-  | "not_proposed_by_you";
+  | "not_proposed_by_you"
+  | "bulk_payouts_invalid"
+  | "payout_not_in_batch"
+  | "payout_not_to_settle"
+  | "statement_line_not_this_batch"
+  | "amounts_do_not_add_up"
+  | "settlement_in_bulk";
 
 export class BankPayoutsError extends Error {
   constructor(readonly code: BankPayoutsErrorCode) {
@@ -171,6 +217,13 @@ const MESSAGES: Record<BankPayoutsErrorCode, string> = {
   settlement_already_decided: "This proposal has already been decided. The list has been refreshed.",
   proposed_by_you: "You proposed this, so a different person must decide it.",
   not_proposed_by_you: "Only the person who proposed this can withdraw it.",
+  bulk_payouts_invalid: "Choose between 1 and 200 payouts, each once.",
+  payout_not_in_batch: "One of these payouts is not in this batch.",
+  payout_not_to_settle: "One of these payouts is settled already or has another proposal open. The list has been refreshed.",
+  statement_line_not_this_batch:
+    "That line is not money going out of the trust account, in the batch's currency, on or after the day the batch was approved.",
+  amounts_do_not_add_up: "The payouts chosen do not add up to the line. Choose the payouts the bank paid in that debit.",
+  settlement_in_bulk: "This payout is part of a bulk debit. Decide the bulk debit, below, instead.",
 };
 
 export function bankPayoutsErrorMessage(error: unknown): string {
@@ -193,4 +246,10 @@ export const notConnectedBankPayoutsApi: BankPayoutsApi = {
   approveSettlement: notConnected,
   declineSettlement: notConnected,
   withdrawSettlement: notConnected,
+  getBulkDebit: notConnected,
+  listBulks: notConnected,
+  proposeBulk: notConnected,
+  approveBulk: notConnected,
+  declineBulk: notConnected,
+  withdrawBulk: notConnected,
 };
