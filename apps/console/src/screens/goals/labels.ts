@@ -31,5 +31,6 @@ export const SAVING_LABELS: Record<SavingStatus, string> = {
   matured: "Matured",
   withdrawn: "Withdrawn early",
   unwound: "Undone",
+  transferred: "Sent to another client",
   cancelled: "Cancelled",
 };

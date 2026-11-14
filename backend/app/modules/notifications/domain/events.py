@@ -65,6 +65,19 @@ _SPECS = (
         "investment_withdrawal_requested", Category.INVESTMENTS, "investments", "amount", "product"
     ),
     _event("investment_withdrawal_paid", Category.INVESTMENTS, "investments", "amount", "product"),
+    # Sending an investment to another client. `person` is the other client's short name, the
+    # first given name and the surname's initial. Never the amount in the words.
+    _event("investment_sent", Category.INVESTMENTS, "investments", "amount", "product", "person"),
+    _event(
+        "investment_received", Category.INVESTMENTS, "investments", "amount", "product", "person"
+    ),
+    # Large: waiting for staff before it moves.
+    _event("investment_transfer_held", Category.INVESTMENTS, "investments", "product", "person"),
+    _event(
+        "investment_transfer_declined", Category.INVESTMENTS, "investments", "product", "person"
+    ),
+    # It could not be done, for example the investment matured first. Nothing moved.
+    _event("investment_transfer_failed", Category.INVESTMENTS, "investments", "product", "person"),
     _event("interest_earned", Category.EARNINGS, "investments", "amount", "count"),
     # The account.
     _event("kyc_approved", Category.ACCOUNT, "kyc"),

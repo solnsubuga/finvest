@@ -34,6 +34,7 @@ const ACTIONS: readonly { permission: Permission; label: string; under: ScreenPe
   { permission: "tax_remittances.change", label: "Pay withholding tax to URA", under: "finance.view" },
   { permission: "rates.change", label: "Change rates", under: "rates.view" },
   { permission: "investment_corrections.change", label: "Undo investments and refund", under: "investments.view" },
+  { permission: "investment_transfers.change", label: "Let large investment transfers through", under: "review_queue.view" },
   { permission: "team.change", label: "Change the team", under: "team.view" },
   { permission: "audit.view", label: "Read the audit trail", under: "reports.view" },
   { permission: "wordings.change", label: "Change client messages", under: "settings.view" },

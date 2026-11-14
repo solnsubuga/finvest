@@ -74,6 +74,8 @@ async def waiting_for(session: AsyncSession, staff: StaffSession, now: datetime)
         found += await _reassignments(session)
     if "payout_release" in kinds:
         found += await _payout_releases(session)
+    if "investment_transfer" in kinds:
+        found += await _investment_transfers(session, staff)
     return inbox(found, staff.staff_id, staff.permissions)
 
 
@@ -304,4 +306,14 @@ async def _payout_releases(session: AsyncSession) -> list[Waiting]:
     return [
         Waiting("payout_release", r.id, r.payout_id, r.proposed_by, r.proposed_at)
         for r in await reviews.waiting(session)
+    ]
+
+
+async def _investment_transfers(session: AsyncSession, staff: StaffSession) -> list[Waiting]:
+    # Only those with a release proposed wait for a second person. The subject is the
+    # transfer's ID, never the clients or the amount.
+    return [
+        Waiting("investment_transfer", t.id, t.id, t.release_proposed_by, t.release_proposed_at)
+        for t in await investments.held_transfers(session, staff.actor)
+        if t.release_proposed_by is not None and t.release_proposed_at is not None
     ]

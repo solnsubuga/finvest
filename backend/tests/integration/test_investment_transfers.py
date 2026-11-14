@@ -1,0 +1,526 @@
+"""Sending an investment to another client, against real PostgreSQL: the request, the two
+people who let a large one through, the worker's single ledger entry, and the fences."""
+
+import asyncio
+import secrets
+from datetime import timedelta
+
+import pytest
+from sqlalchemy import text
+from sqlalchemy.exc import DBAPIError
+
+from app.infrastructure.database import Database
+from app.modules.audit import service as audit
+from app.modules.investments import accrual, transfers
+from app.modules.investments import service as investments
+from app.modules.investments.domain.investments import InvestmentStatus
+from app.modules.investments.domain.transfers import TransferStatus
+from app.modules.investments.holdings import HOLDING
+from app.modules.ledger import service as ledger
+from app.shared.actors import SYSTEM, Actor
+from app.shared.errors import ApplicationError
+from app.shared.money import Money
+from app.shared.push_ids import push_id
+from tests.support.clock import AsyncBarrier, FakeClock
+from tests.support.investments import (
+    PRESENT,
+    account_balance,
+    approved_destination,
+    at,
+    pay,
+    request,
+    today,
+)
+from tests.support.kyc import verify
+from tests.support.ledger import key, ugx
+from tests.support.ledger import staff as new_staff
+
+pytestmark = pytest.mark.integration
+
+
+async def person(app_database: Database, *, verified: bool = True) -> tuple[Actor, str]:
+    """A client with a sign-in account and, unless told otherwise, an approved identity check.
+    Returns the client and their mobile number."""
+    client_id = push_id()
+    phone = f"+256772{secrets.randbelow(1_000_000):06d}"
+    async with app_database.transaction() as session:
+        await session.execute(
+            text(
+                "INSERT INTO identity_clients (id, phone, password_hash, password_changed_at, "
+                "created_at) VALUES (:id, :phone, 'x', now(), now())"
+            ),
+            {"id": client_id, "phone": phone},
+        )
+    client = Actor("client", client_id)
+    if verified:
+        await verify(app_database, client, PRESENT)
+    return client, phone
+
+
+async def number_of(app_database: Database, client: Actor) -> str:
+    async with app_database.actor_transaction(client) as session:
+        found = await session.scalar(
+            text("SELECT account_number FROM kyc_checks WHERE client_id = :id"), {"id": client.id}
+        )
+    assert isinstance(found, str)
+    return found
+
+
+async def running(
+    app_database: Database, worker_database: Database, client: Actor, amount: int = 5_000_000
+) -> investments.Investment:
+    investment = await request(app_database, client, PRESENT, amount=ugx(amount))
+    await pay(worker_database, investment, investment.amount, PRESENT)
+    async with worker_database.actor_transaction(SYSTEM) as session:
+        return await investments.start_investment(
+            session, investment.id, confirmed_on=today(), clock=PRESENT
+        )
+
+
+async def earn(worker_database: Database, investment_id: str) -> investments.Investment:
+    """Interest posted for the next few days. The database only knows today, so the run is
+    dated ahead rather than the investment started in the past."""
+    day = today() + timedelta(days=3)
+    async with worker_database.actor_transaction(SYSTEM) as session:
+        await accrual.accrue_investment(session, investment_id, day, at(day))
+        return await investments.get_investment(session, investment_id)
+
+
+async def send(
+    app_database: Database,
+    client: Actor,
+    investment_id: str,
+    to: str,
+    amount: Money,
+    *,
+    idempotency_key: str | None = None,
+    restricted_until: object = None,
+) -> transfers.Transfer:
+    async with app_database.actor_transaction(client) as session:
+        return await transfers.send_investment(
+            session,
+            client,
+            investment_id,
+            to_account_number=to,
+            amount=amount,
+            message="For the wedding",
+            restricted_until=restricted_until,  # type: ignore[arg-type]
+            idempotency_key=idempotency_key or key(),
+            clock=PRESENT,
+        )
+
+
+async def carry_out(
+    worker_database: Database, transfer_id: str, clock: FakeClock = PRESENT
+) -> transfers.Transfer:
+    async with worker_database.actor_transaction(SYSTEM) as session:
+        return await transfers.carry_out(session, transfer_id, clock)
+
+
+async def investment(worker_database: Database, investment_id: str) -> investments.Investment:
+    async with worker_database.actor_transaction(SYSTEM) as session:
+        return await investments.get_investment(session, investment_id)
+
+
+async def interest_owed(worker_database: Database, item: investments.Investment) -> int:
+    async with worker_database.actor_transaction(SYSTEM) as session:
+        account = await ledger.open_account(session, accrual.interest_account(item), FakeClock())
+        return (await ledger.get_balance(session, account.id)).minor
+
+
+async def notices(app_database: Database, client: Actor, event: str) -> list[str]:
+    async with app_database.actor_transaction(client) as session:
+        rows = await session.execute(
+            text("SELECT body FROM notifications WHERE client_id = :id AND event = :event"),
+            {"id": client.id, "event": event},
+        )
+        return [row.body for row in rows.all()]
+
+
+async def jobs_for(worker_database: Database, transfer_id: str) -> int:
+    async with worker_database.actor_transaction(SYSTEM) as session:
+        found = await session.scalar(
+            text("SELECT count(*) FROM jobs WHERE kind = :kind AND idempotency_key = :id"),
+            {"kind": transfers.CARRY_OUT_KIND, "id": transfer_id},
+        )
+    return int(found or 0)
+
+
+async def test_part_of_an_investment_moves_to_the_recipient_in_one_entry(
+    app_database: Database, worker_database: Database
+) -> None:
+    sender, _ = await person(app_database)
+    recipient, _ = await person(app_database)
+    source = await earn(worker_database, (await running(app_database, worker_database, sender)).id)
+    earned = source.accrued_net.minor
+    assert earned > 0
+    value = 5_000_000 + earned
+
+    asked = await send(
+        app_database, sender, source.id, await number_of(app_database, recipient), ugx(1_000_000)
+    )
+    assert (asked.status, asked.held, asked.whole) == (TransferStatus.WAITING, False, False)
+    assert (asked.sender_name, asked.recipient_name) == ("Amara N.", "Amara N.")
+    assert await jobs_for(worker_database, asked.id) == 1
+
+    done = await carry_out(worker_database, asked.id)
+    assert done.status is TransferStatus.DONE
+    assert done.sent == ugx(1_000_000)
+    assert done.received_investment_id is not None and done.kept_investment_id is not None
+
+    closed = await investment(worker_database, source.id)
+    received = await investment(worker_database, done.received_investment_id)
+    kept = await investment(worker_database, done.kept_investment_id)
+    assert closed.status is InvestmentStatus.TRANSFERRED
+    assert (received.client_id, received.amount) == (recipient.id, ugx(1_000_000))
+    assert (kept.client_id, kept.amount) == (sender.id, ugx(value - 1_000_000))
+    for opened in (received, kept):
+        assert opened.status is InvestmentStatus.ACTIVE
+        assert opened.start_date == today()
+        assert opened.maturity_date == source.maturity_date
+        assert (opened.terms.annual_rate_bps, opened.terms.tax_bps) == (
+            source.terms.annual_rate_bps,
+            source.terms.tax_bps,
+        )
+        assert opened.accrued_gross.is_zero
+    # The old holding and its interest are empty; the new holdings hold exactly the split.
+    assert await account_balance(worker_database, closed, HOLDING) == 0
+    assert await interest_owed(worker_database, closed) == 0
+    assert await account_balance(worker_database, received, HOLDING) == 1_000_000
+    assert await account_balance(worker_database, kept, HOLDING) == value - 1_000_000
+    async with worker_database.actor_transaction(SYSTEM) as session:
+        assert await ledger.find_balance_drift(session) == []
+    # Running it again changes nothing.
+    assert await carry_out(worker_database, asked.id) == done
+
+    # Both are told, without the amount.
+    assert await notices(app_database, sender, "investment_sent") == [
+        f"Your {source.product_name} went to Amara N.. See what you kept in the app."
+    ]
+    received_notice = await notices(app_database, recipient, "investment_received")
+    assert len(received_notice) == 1 and "1,000,000" not in received_notice[0]
+
+    async with app_database.actor_transaction(recipient) as session:
+        seen = await transfers.client_transfers(session, recipient)
+        theirs = await investments.client_investment(
+            session, recipient, done.received_investment_id, PRESENT
+        )
+    assert [(t.direction, t.investment_id, t.amount) for t in seen] == [
+        ("received", done.received_investment_id, ugx(1_000_000))
+    ]
+    assert theirs.value == ugx(1_000_000)
+    async with app_database.actor_transaction(new_staff()) as session:
+        events = await audit.events_for_resource(session, "investment_transfer", asked.id)
+    assert [event.action for event in events][:2] == [
+        "investments.transfer.done",
+        "investments.transfer.requested",
+    ]
+
+
+async def test_sending_the_whole_value_leaves_the_sender_nothing(
+    app_database: Database, worker_database: Database
+) -> None:
+    sender, _ = await person(app_database)
+    recipient, _ = await person(app_database)
+    source = await earn(worker_database, (await running(app_database, worker_database, sender)).id)
+    value = source.amount + source.accrued_net
+
+    asked = await send(
+        app_database, sender, source.id, await number_of(app_database, recipient), value
+    )
+    assert asked.whole
+    done = await carry_out(worker_database, asked.id)
+    assert done.kept_investment_id is None and done.received_investment_id is not None
+    received = await investment(worker_database, done.received_investment_id)
+    assert received.amount == value
+
+
+async def test_a_large_transfer_waits_for_two_members_of_staff(
+    app_database: Database, worker_database: Database
+) -> None:
+    sender, _ = await person(app_database)
+    recipient, _ = await person(app_database)
+    source = await running(app_database, worker_database, sender, amount=12_000_000)
+
+    asked = await send(
+        app_database, sender, source.id, await number_of(app_database, recipient), ugx(11_000_000)
+    )
+    assert (asked.status, asked.held) == (TransferStatus.HELD, True)
+    assert await jobs_for(worker_database, asked.id) == 0
+    assert len(await notices(app_database, sender, "investment_transfer_held")) == 1
+
+    first, second = new_staff(), new_staff()
+    async with app_database.actor_transaction(first) as session:
+        proposed = await transfers.propose_release(
+            session, first, asked.id, "Known family", PRESENT
+        )
+    assert proposed.status is TransferStatus.RELEASE_PROPOSED
+    async with app_database.actor_transaction(first) as session:
+        with pytest.raises(ApplicationError) as refused:
+            await transfers.approve_release(session, first, asked.id, "Mine", PRESENT)
+    assert refused.value.code == "forbidden"
+    # Nor can the proposer get round it in the database.
+    async with app_database.actor_transaction(first) as session:
+        with pytest.raises(DBAPIError, match="second member of staff"):
+            await session.execute(
+                text(
+                    "UPDATE investment_transfers SET status = 'waiting', released_by = :me, "
+                    "released_at = now() WHERE id = :id"
+                ),
+                {"me": first.id, "id": asked.id},
+            )
+    async with app_database.actor_transaction(second) as session:
+        released = await transfers.approve_release(session, second, asked.id, "Checked", PRESENT)
+    assert released.status is TransferStatus.WAITING
+    assert await jobs_for(worker_database, asked.id) == 1
+    done = await carry_out(worker_database, asked.id)
+    assert done.status is TransferStatus.DONE
+
+
+async def test_small_transfers_on_one_day_add_up_to_the_review(
+    app_database: Database, worker_database: Database
+) -> None:
+    sender, _ = await person(app_database)
+    recipient, _ = await person(app_database)
+    to = await number_of(app_database, recipient)
+    first = await running(app_database, worker_database, sender, amount=6_000_000)
+    second = await running(app_database, worker_database, sender, amount=6_000_000)
+
+    assert (await send(app_database, sender, first.id, to, ugx(6_000_000))).held is False
+    assert (await send(app_database, sender, second.id, to, ugx(6_000_000))).held is True
+
+
+async def test_a_held_transfer_can_be_declined_or_cancelled_and_nothing_moves(
+    app_database: Database, worker_database: Database
+) -> None:
+    sender, _ = await person(app_database)
+    recipient, _ = await person(app_database)
+    to = await number_of(app_database, recipient)
+    source = await running(app_database, worker_database, sender, amount=12_000_000)
+
+    asked = await send(app_database, sender, source.id, to, ugx(11_000_000))
+    reviewer = new_staff()
+    async with app_database.actor_transaction(reviewer) as session:
+        declined = await transfers.decline_transfer(
+            session, reviewer, asked.id, "Could not confirm the recipient", PRESENT
+        )
+    assert declined.status is TransferStatus.DECLINED
+    assert len(await notices(app_database, sender, "investment_transfer_declined")) == 1
+    assert (await investment(worker_database, source.id)).status is InvestmentStatus.ACTIVE
+
+    again = await send(app_database, sender, source.id, to, ugx(11_000_000))
+    async with app_database.actor_transaction(sender) as session:
+        cancelled = await transfers.cancel_transfer(session, sender, again.id, PRESENT)
+    assert cancelled.status is TransferStatus.CANCELLED
+    async with app_database.actor_transaction(sender) as session:
+        with pytest.raises(ApplicationError) as refused:
+            await transfers.cancel_transfer(session, sender, again.id, PRESENT)
+    assert refused.value.code == "conflict"
+
+
+async def test_a_transfer_that_can_no_longer_be_made_fails_and_moves_nothing(
+    app_database: Database, worker_database: Database
+) -> None:
+    sender, _ = await person(app_database)
+    recipient, _ = await person(app_database)
+    source = await running(app_database, worker_database, sender)
+    asked = await send(
+        app_database, sender, source.id, await number_of(app_database, recipient), ugx(1_000_000)
+    )
+    assert source.maturity_date is not None
+
+    # The worker reaches it only on the maturity date: the maturity run decides it now.
+    failed = await carry_out(worker_database, asked.id, at(source.maturity_date))
+    assert (failed.status, failed.failure_code) == (TransferStatus.FAILED, "matures_today")
+    assert (await investment(worker_database, source.id)).status is InvestmentStatus.ACTIVE
+    assert await account_balance(worker_database, source, HOLDING) == 5_000_000
+    assert len(await notices(app_database, sender, "investment_transfer_failed")) == 1
+
+
+async def test_what_a_client_cannot_send(app_database: Database, worker_database: Database) -> None:
+    sender, _ = await person(app_database)
+    recipient, _ = await person(app_database)
+    stranger, _ = await person(app_database, verified=False)
+    to = await number_of(app_database, recipient)
+    source = await running(app_database, worker_database, sender)
+
+    async def refused(**changes: object) -> ApplicationError:
+        arguments: dict[str, object] = {"to": to, "amount": ugx(1_000_000)}
+        arguments.update(changes)
+        with pytest.raises(ApplicationError) as raised:
+            await send(
+                app_database,
+                changes.pop("client", sender),  # type: ignore[arg-type]
+                source.id,
+                arguments["to"],  # type: ignore[arg-type]
+                arguments["amount"],  # type: ignore[arg-type]
+                restricted_until=changes.get("restricted_until"),
+            )
+        return raised.value
+
+    def field(error: ApplicationError) -> tuple[str, str]:
+        problem = error.fields[0]
+        return str(problem.field_path[-1]), problem.code
+
+    assert field(await refused(amount=ugx(50_000))) == ("amount_minor", "below_product_minimum")
+    assert field(await refused(amount=ugx(4_950_000))) == (
+        "amount_minor",
+        "remainder_below_product_minimum",
+    )
+    assert field(await refused(to=await number_of(app_database, sender))) == ("to", "to_yourself")
+    assert field(await refused(to="1009999990")) == ("to", "no_such_client")
+    restricted = await refused(restricted_until=PRESENT.now() + timedelta(hours=3))
+    assert (restricted.code, field(restricted)) == (
+        "forbidden",
+        ("body", "restricted_after_code_sign_in"),
+    )
+    # Someone else's investment is not found.
+    async with app_database.actor_transaction(recipient) as session:
+        with pytest.raises(ApplicationError) as hidden:
+            await transfers.send_investment(
+                session,
+                recipient,
+                source.id,
+                to_account_number=to,
+                amount=ugx(1_000_000),
+                message=None,
+                restricted_until=None,
+                idempotency_key=key(),
+                clock=PRESENT,
+            )
+    assert hidden.value.code == "not_found"
+    # A client who is not approved is not found as a recipient.
+    async with app_database.actor_transaction(sender) as session:
+        with pytest.raises(ApplicationError) as missing:
+            await transfers.find_recipient(session, sender, "0" + "7" * 9)
+    assert missing.value.code == "not_found"
+    assert stranger.id is not None
+
+
+async def test_a_recipient_is_found_by_number_or_phone_and_shown_by_first_name(
+    app_database: Database, worker_database: Database
+) -> None:
+    sender, sender_phone = await person(app_database)
+    recipient, phone = await person(app_database)
+    number = await number_of(app_database, recipient)
+    async with app_database.actor_transaction(sender) as session:
+        by_number = await transfers.find_recipient(session, sender, f"{number[:4]} {number[4:]}")
+        by_phone = await transfers.find_recipient(session, sender, "0" + phone[4:])
+        with pytest.raises(ApplicationError) as yourself:
+            await transfers.find_recipient(session, sender, sender_phone)
+    assert by_number == by_phone == transfers.RecipientView(number, "Amara N.")
+    assert yourself.value.fields[0].code == "to_yourself"
+
+
+async def test_an_open_transfer_stops_an_early_withdrawal_and_a_second_transfer(
+    app_database: Database, worker_database: Database
+) -> None:
+    sender, _ = await person(app_database)
+    recipient, _ = await person(app_database)
+    to = await number_of(app_database, recipient)
+    source = await running(app_database, worker_database, sender, amount=12_000_000)
+    destination_id = await approved_destination(app_database, sender, PRESENT)
+    await send(app_database, sender, source.id, to, ugx(11_000_000))
+
+    with pytest.raises(ApplicationError) as second:
+        await send(app_database, sender, source.id, to, ugx(1_000_000))
+    assert second.value.code == "conflict"
+    async with app_database.actor_transaction(sender) as session:
+        with pytest.raises(ApplicationError) as withdrawal:
+            await investments.request_withdrawal(
+                session,
+                sender,
+                source.id,
+                destination_id=destination_id,
+                idempotency_key=key(),
+                clock=FakeClock(PRESENT.now() + timedelta(days=2)),
+            )
+    assert withdrawal.value.code == "conflict"
+
+
+async def test_a_repeated_request_is_the_same_transfer(
+    app_database: Database, worker_database: Database
+) -> None:
+    sender, _ = await person(app_database)
+    recipient, _ = await person(app_database)
+    to = await number_of(app_database, recipient)
+    source = await running(app_database, worker_database, sender)
+    same = key()
+    first = await send(app_database, sender, source.id, to, ugx(1_000_000), idempotency_key=same)
+    again = await send(app_database, sender, source.id, to, ugx(1_000_000), idempotency_key=same)
+    assert again.id == first.id
+    with pytest.raises(ApplicationError):
+        await send(app_database, sender, source.id, to, ugx(2_000_000), idempotency_key=same)
+
+
+async def test_two_transfers_of_one_investment_at_once_make_one(
+    app_database: Database, worker_database: Database
+) -> None:
+    sender, _ = await person(app_database)
+    recipient, _ = await person(app_database)
+    to = await number_of(app_database, recipient)
+    source = await running(app_database, worker_database, sender)
+    barrier = AsyncBarrier(2)
+
+    async def attempt() -> str:
+        await barrier.wait()
+        try:
+            await send(app_database, sender, source.id, to, ugx(1_000_000))
+        except ApplicationError as error:
+            return error.code
+        return "sent"
+
+    outcomes = sorted(await asyncio.gather(attempt(), attempt()))
+    assert outcomes == ["conflict", "sent"]
+
+
+async def test_the_database_fences_who_does_what(
+    app_database: Database, worker_database: Database
+) -> None:
+    sender, _ = await person(app_database)
+    recipient, _ = await person(app_database)
+    to = await number_of(app_database, recipient)
+    source = await running(app_database, worker_database, sender)
+    asked = await send(app_database, sender, source.id, to, ugx(1_000_000))
+
+    # A client cannot record an outcome, nor change what is sent.
+    async with app_database.actor_transaction(sender) as session:
+        with pytest.raises(DBAPIError):
+            await session.execute(
+                text(
+                    "UPDATE investment_transfers SET status = 'cancelled', cancelled_at = now() "
+                    "WHERE id = :id"
+                ),
+                {"id": asked.id},
+            )
+    # The recipient sees a transfer only once it is done, and cannot change it.
+    async with app_database.actor_transaction(recipient) as session:
+        with pytest.raises(ApplicationError):
+            await transfers.client_transfer(session, recipient, asked.id)
+    # Nobody but the worker opens an investment for a transfer, or closes one as transferred.
+    async with app_database.actor_transaction(sender) as session:
+        with pytest.raises(DBAPIError):
+            await session.execute(
+                text(
+                    "UPDATE investments SET status = 'transferred', transferred_at = now(), "
+                    "transfer_entry_id = :id WHERE id = :investment"
+                ),
+                {"id": push_id(), "investment": source.id},
+            )
+    # A client cannot ask on someone else's behalf.
+    async with app_database.actor_transaction(recipient) as session:
+        with pytest.raises(DBAPIError):
+            await session.execute(
+                text(
+                    "INSERT INTO investment_transfers (id, investment_id, sender_client_id, "
+                    "recipient_client_id, sender_name, recipient_name, currency, amount_minor, "
+                    "whole, status, held, requested_at) VALUES (:id, :investment, :sender, "
+                    ":recipient, 'A.', 'B.', 'UGX', 100000, false, 'waiting', false, now())"
+                ),
+                {
+                    "id": push_id(),
+                    "investment": source.id,
+                    "sender": sender.id,
+                    "recipient": recipient.id,
+                },
+            )

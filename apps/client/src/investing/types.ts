@@ -20,7 +20,7 @@ export type ProductKind = "treasury_bill" | "fixed_income";
 export type ProductStatus = "live" | "paused";
 export type InterestPaid = "at_maturity" | "monthly";
 export type AtMaturity = "roll_over" | "pay_out";
-export type InvestmentStatus = "awaiting_payment" | "active" | "matured" | "cancelled" | "withdrawn" | "unwound";
+export type InvestmentStatus = "awaiting_payment" | "active" | "matured" | "cancelled" | "withdrawn" | "unwound" | "transferred";
 
 export type Product = {
   code: string;

@@ -142,6 +142,11 @@ The code is `backend/app/modules/investments/api.py`. Amounts are integers in th
 | `GET /client/investments`, `GET /client/investments/{id}` | Signed-in client | Their portfolio and one investment, after tax. |
 | `PUT /client/investments/{id}/at-maturity` | Signed-in client | `{at_maturity, destination_id?}`, up to the day before maturity. |
 | `POST /client/investments/{id}/pay-out` | Signed-in client | `{destination_id}`: send on money that matured and is waiting. A refusal from payouts is a 422 on `destination_id` with the payouts code. |
+| `GET /client/transfer-recipients?to=` | Signed-in client | The client an account number or mobile number belongs to, shown as "Brian K.". 20 look-ups in 15 minutes. |
+| `POST /client/investments/{id}/send` | Signed-in client, `Idempotency-Key` | `{to_account_number, amount_minor, currency, message?}`: send part or all of a running investment to another client. See [Sending an investment to another client](#sending-an-investment-to-another-client). |
+| `GET /client/transfers`, `GET /client/transfers/{id}`, `POST /client/transfers/{id}/cancel` | Signed-in client | What they sent and received, and cancelling one held for staff. |
+| `GET /staff/investment-transfers?status=&limit=`, `GET /staff/investment-transfers/held` | `review_queue.view` | Transfers and their state, and those held for two people. |
+| `POST /staff/investment-transfers/{id}/release`, `/approve`, `/withdraw`, `/decline` | `investment_transfers.change` | Proposing, approving or withdrawing the release of a held transfer, with a second person enforced in the database, or declining it. |
 | `GET /staff/products`, `GET /staff/products/{code}/rates` | `products.view`, `rates.view` | Products with the rate and tax in force and the next approved one, and each product's rate history. |
 | `GET /staff/rate-proposals?status=` | `rates.view` | Rate changes and their state. |
 | `POST /staff/rate-proposals`, `POST /staff/rate-proposals/{id}/approve`, `/send-back`, `/withdraw` | `rates.change` | Proposing and deciding rate changes, with the second person enforced in the database. |
@@ -250,6 +255,37 @@ The two consumers are wired: `dealing.events.FUND_EARLY_WITHDRAWAL` is named in 
 
 The database fences each step (migration 0064). Only the client asks, once, while the investment runs, before the maturity date and by the database clock. Only the worker withdraws an investment someone asked for. A withdrawn investment changes only to record its payout, once. Accrual and the choice for maturity stop at the request.
 
+## Sending an investment to another client
+
+A client sends part or all of a running investment to another approved client, from the investment's Send screen. Nothing is cashed out and no money leaves Finvest: the ledger moves the holding from one client to the other. The code is `backend/app/modules/investments/transfers.py` (rules in `domain/transfers.py`), and the table is `investment_transfers` (migration 0241).
+
+**The recipient.** The sender types a Finvest account number or a mobile number (`GET /client/transfer-recipients?to=`). The recipient must have an approved identity check and an active sign-in account. They are shown by their first given name and the initial of their surname ("Brian K."), enough to confirm the right person without telling a stranger a full name from a phone number. The name comes through `finvest_kyc_transfer_recipient` (migration 0240), a definer function that answers only for approved checks, because a client cannot read another client's check. Look-ups are throttled to 20 in 15 minutes per client. A client cannot send to themselves.
+
+**The request** (`POST /client/investments/{id}/send`, with an idempotency key) names the recipient's account number, the amount and an optional message of up to 140 characters. It is refused while the client's sign-in is restricted after a code sign-in, and when the investment is not running, has an early withdrawal asked, matures today or has matured, already has an open transfer, or is in another currency. The recipient gets at least the product's minimum, and the sender keeps nothing or at least the minimum, so no investment is ever smaller than the product allows. `can_send` on the client's investment says whether the Send button shows.
+
+**The hold.** A transfer is held for two members of staff when it, with everything else the client sent that day, is above the size at which a payout is held for review (`review_above` in payouts), or when its currency has no such size set. Splitting one large transfer into small ones does not avoid the review. One person proposes letting it through with a reason, and a different person approves; the proposer may withdraw the proposal. One person may decline, with a reason, and the sender may cancel it while it is held. Proposing, approving and declining need `investment_transfers.change`, held by admin, operations and compliance. Held transfers with a proposal show in the approvals inbox as `investment_transfer`.
+
+**The move.** A transfer that is not held, or is released, queues `investments.carry_out_transfer`, keyed by the transfer. The worker checks the investment again (still running, no withdrawal asked, before the maturity date, enough value) and otherwise marks the transfer `failed` with the refusal code and tells the sender, and nothing moves. It posts the interest due up to today first, then posts `investment.transferred` (key `investment-transfer:<id>`) in one entry:
+
+| Line | Account | Amount |
+| --- | --- | --- |
+| debit | `client.holding`, sender, old investment | principal |
+| debit | `client.interest_accrued`, sender, old investment | interest after tax so far |
+| credit | `client.holding`, recipient, new investment | the amount sent |
+| credit | `client.holding`, sender, new investment | what is left, if anything |
+
+The old investment closes as `transferred`. Two new investments start today in the same product, on the same rate, tax and maturity date, with `term_days` the days left: the recipient's for exactly the amount sent (`source_type` `transfer_received`), and the sender's for the rest (`transfer_kept`). The interest the sender had earned becomes part of what they keep, as at a rollover, and the tax on it stays held. Interest earned between the request and the move only grows what the sender keeps. When the sender sent the whole value at the request (`whole`), the recipient gets the whole value at the move, including that interest, and the sender keeps nothing. The recipient's investment rolls over at maturity by default and they can change it; the sender's keeps their choice and payout destination. Both earn from the next day, so no day is paid twice and none is missed.
+
+The move publishes `investments.transferred` with `{investment_id, new_investment_id}` to the goals rollover consumer when the sender kept something, so a goal follows the sender's new investment. The recipient's investment belongs to no goal.
+
+**Notices.** The sender gets `investment_sent` and the recipient `investment_received`, both naming the other person by their shown name. A held transfer tells the sender (`investment_transfer_held`), as does a decline (`investment_transfer_declined`) and a failure (`investment_transfer_failed`). No notice names the amount. Statements show the old investment as "Sent to another client", with "Investment sent" and "Investment received" lines.
+
+**What each person sees.** `GET /client/transfers` lists what the client sent and, once done, what they received, with the other person's shown name. The recipient sees a transfer only once it is done, so a held or declined transfer is never shown to them. Staff list transfers with `GET /staff/investment-transfers` and the held ones with `/held`.
+
+**What the database enforces** (migration 0241). Only the sender inserts a transfer, from their own running investment with no withdrawal asked, to an approved client who is someone else, stamped near the database's clock, with no decision set. One open transfer per investment. What was asked for never changes. Only staff propose, approve or decline, and never approve their own proposal; only the sender cancels; only the worker finishes one, and a finished one never changes. Only the worker opens the two investments, from a transfer that is waiting, with the product, rate, tax, currency and remaining term of the old one and exactly the amounts above. Only the worker closes the old one, and a transferred investment never changes. An early withdrawal is refused while a transfer is open.
+
+Audit events on resource `investment_transfer`: `investments.transfer.requested` (with whether it was held), `.release_proposed`, `.release_withdrawn`, `.released`, `.declined`, `.cancelled`, `.done` and `.failed`, and `investments.transferred` on the old investment. Details carry IDs and codes only.
+
 ## Undoing a mistake
 
 Two staff commands correct money that went the wrong way. Both are maker and checker: one person proposes with a reason, and a different person approves, sends back with a note, or the proposer withdraws it. The code is `backend/app/modules/investments/corrections.py`, and the table is `investment_corrections` (migration 0066). Proposing and deciding need `investment_corrections.change`, held by admin and finance for now. Each one shows in the approvals inbox as `investment_correction`, and the console proposes and decides them on the Investments page.
@@ -274,4 +310,4 @@ Audit events on resource `investment_correction`: `investments.correction.propos
 
 ## Not built yet
 
-Editing a product, the monthly coupon for open terms, and the early withdrawal screen in the client app. The dealing desk is its own module: see [dealing-desk.md](dealing-desk.md).
+Editing a product, the monthly coupon for open terms, and the early withdrawal screen in the client app. The client app's Send screens and the console's held transfers follow the transfers backend in their own pull requests. The dealing desk is its own module: see [dealing-desk.md](dealing-desk.md).

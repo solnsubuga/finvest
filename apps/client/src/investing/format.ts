@@ -76,6 +76,7 @@ export const statusLabel: Record<InvestmentStatus, string> = {
   withdrawn: "Withdrawn early",
   // The API never sends one to a client; the label is here so every status has one.
   unwound: "Reversed",
+  transferred: "Sent to another client",
 };
 
 /**

@@ -46,6 +46,7 @@ from app.modules.identity.phone_changes import PhoneChangeService
 from app.modules.identity.service import IdentityService
 from app.modules.insights import api as insights_api
 from app.modules.investments import api as investments_api
+from app.modules.investments import transfers_api as investment_transfers_api
 from app.modules.kyc import api as kyc_api
 from app.modules.kyc import claims_api as kyc_claims_api
 from app.modules.kyc.domain.liveness import LivenessProvider
@@ -224,7 +225,7 @@ def create_app(
     app.include_router(migration_api.router)
     app.include_router(migration_claims_api.router)
     app.include_router(insights_api.router)
-    for router in investments_api.routers:
+    for router in (*investments_api.routers, *investment_transfers_api.routers):
         app.include_router(router)
     for router in kyc_api.create_routers(
         identity_sealer, identity_provider, storage, identity_liveness
