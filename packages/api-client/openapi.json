@@ -4551,6 +4551,16 @@
             ],
             "title": "Kind",
             "type": "string"
+          },
+          "release": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ReleaseOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "required": [
@@ -4560,7 +4570,8 @@
           "kind",
           "amount",
           "business_date",
-          "created_at"
+          "created_at",
+          "release"
         ],
         "title": "HeldPayoutOut",
         "type": "object"
@@ -8658,6 +8669,102 @@
           "note"
         ],
         "title": "Rejection",
+        "type": "object"
+      },
+      "ReleaseOut": {
+        "additionalProperties": false,
+        "description": "A proposal to send a held payout. It waits for a different person to approve it.",
+        "properties": {
+          "decided_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Decided At"
+          },
+          "decided_by": {
+            "anyOf": [
+              {
+                "maxLength": 20,
+                "minLength": 20,
+                "pattern": "^[-0-9A-Z_a-z]{20}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Decided By"
+          },
+          "decision_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Decision Reason"
+          },
+          "id": {
+            "maxLength": 20,
+            "minLength": 20,
+            "pattern": "^[-0-9A-Z_a-z]{20}$",
+            "title": "Id",
+            "type": "string"
+          },
+          "payout_id": {
+            "maxLength": 20,
+            "minLength": 20,
+            "pattern": "^[-0-9A-Z_a-z]{20}$",
+            "title": "Payout Id",
+            "type": "string"
+          },
+          "proposed_at": {
+            "format": "date-time",
+            "title": "Proposed At",
+            "type": "string"
+          },
+          "proposed_by": {
+            "maxLength": 20,
+            "minLength": 20,
+            "pattern": "^[-0-9A-Z_a-z]{20}$",
+            "title": "Proposed By",
+            "type": "string"
+          },
+          "reason": {
+            "title": "Reason",
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "proposed",
+              "approved",
+              "declined",
+              "withdrawn"
+            ],
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "payout_id",
+          "reason",
+          "status",
+          "proposed_by",
+          "proposed_at",
+          "decided_by",
+          "decided_at",
+          "decision_reason"
+        ],
+        "title": "ReleaseOut",
         "type": "object"
       },
       "Removal": {
@@ -30666,6 +30773,216 @@
         ]
       }
     },
+    "/staff/payout-releases/{release_id}/approve": {
+      "post": {
+        "description": "A different person approves, and the payout is queued to be sent. 403 `proposed_by_you`;\n409 `release_already_decided` or `payout_not_held`.",
+        "operationId": "approve_release_staff_payout_releases__release_id__approve_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "release_id",
+            "required": true,
+            "schema": {
+              "maxLength": 20,
+              "minLength": 20,
+              "pattern": "^[-0-9A-Z_a-z]{20}$",
+              "title": "Release Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "A value the caller chooses once per intended action and sends again on every retry of it. Pattern: `[A-Za-z0-9._:-]{8,128}`.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "A value the caller chooses once per intended action and sends again on every retry of it. Pattern: `[A-Za-z0-9._:-]{8,128}`.",
+              "title": "Idempotency-Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReviewIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReviewedPayoutOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          }
+        },
+        "summary": "Approve Release",
+        "tags": [
+          "staff payouts"
+        ]
+      }
+    },
+    "/staff/payout-releases/{release_id}/withdraw": {
+      "post": {
+        "description": "The proposer takes their proposal back. 403 `not_proposed_by_you`; 409\n`release_already_decided`.",
+        "operationId": "withdraw_release_staff_payout_releases__release_id__withdraw_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "release_id",
+            "required": true,
+            "schema": {
+              "maxLength": 20,
+              "minLength": 20,
+              "pattern": "^[-0-9A-Z_a-z]{20}$",
+              "title": "Release Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReviewIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReleaseOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          }
+        },
+        "summary": "Withdraw Release",
+        "tags": [
+          "staff payouts"
+        ]
+      }
+    },
     "/staff/payout-resolutions/{resolution_id}/approve": {
       "post": {
         "description": "A different person approves. The payout moves to the outcome and its entry is posted.",
@@ -31200,123 +31517,9 @@
         ]
       }
     },
-    "/staff/payouts/{payout_id}/approve": {
-      "post": {
-        "description": "Release a held payout to be sent. 409 `payout_not_held` once it is no longer held.",
-        "operationId": "approve_held_staff_payouts__payout_id__approve_post",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "payout_id",
-            "required": true,
-            "schema": {
-              "maxLength": 20,
-              "minLength": 20,
-              "pattern": "^[-0-9A-Z_a-z]{20}$",
-              "title": "Payout Id",
-              "type": "string"
-            }
-          },
-          {
-            "description": "A value the caller chooses once per intended action and sends again on every retry of it. Pattern: `[A-Za-z0-9._:-]{8,128}`.",
-            "in": "header",
-            "name": "Idempotency-Key",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "description": "A value the caller chooses once per intended action and sends again on every retry of it. Pattern: `[A-Za-z0-9._:-]{8,128}`.",
-              "title": "Idempotency-Key"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/ReviewIn"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ReviewedPayoutOut"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "401": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelope"
-                }
-              }
-            },
-            "description": "Unauthorized"
-          },
-          "403": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelope"
-                }
-              }
-            },
-            "description": "Forbidden"
-          },
-          "404": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelope"
-                }
-              }
-            },
-            "description": "Not Found"
-          },
-          "409": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelope"
-                }
-              }
-            },
-            "description": "Conflict"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelope"
-                }
-              }
-            },
-            "description": "Unprocessable Content"
-          }
-        },
-        "summary": "Approve Held",
-        "tags": [
-          "staff payouts"
-        ]
-      }
-    },
     "/staff/payouts/{payout_id}/decline": {
       "post": {
-        "description": "Cancel a held payout and give its money back. 409 `payout_not_held` once it is no\nlonger held.",
+        "description": "Cancel a held payout and give its money back, closing any open proposal. One person's\nstep. 409 `payout_not_held` once it is no longer held.",
         "operationId": "decline_held_staff_payouts__payout_id__decline_post",
         "parameters": [
           {
@@ -31423,6 +31626,120 @@
           }
         },
         "summary": "Decline Held",
+        "tags": [
+          "staff payouts"
+        ]
+      }
+    },
+    "/staff/payouts/{payout_id}/release": {
+      "post": {
+        "description": "The first person proposes sending a held payout. A different person must approve it.\n409 `payout_not_held` or `release_already_proposed`.",
+        "operationId": "propose_release_staff_payouts__payout_id__release_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "payout_id",
+            "required": true,
+            "schema": {
+              "maxLength": 20,
+              "minLength": 20,
+              "pattern": "^[-0-9A-Z_a-z]{20}$",
+              "title": "Payout Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "A value the caller chooses once per intended action and sends again on every retry of it. Pattern: `[A-Za-z0-9._:-]{8,128}`.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "A value the caller chooses once per intended action and sends again on every retry of it. Pattern: `[A-Za-z0-9._:-]{8,128}`.",
+              "title": "Idempotency-Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReviewIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReleaseOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          }
+        },
+        "summary": "Propose Release",
         "tags": [
           "staff payouts"
         ]
