@@ -119,7 +119,7 @@ The pots closed today are the two ioTec wallets and the trust bank account (`dom
 
 ## Staff routes
 
-In `backend/app/modules/reconciliation/api.py`. Everything needs `reconciliation.view`. Approving a close also needs the second step in the last ten minutes (403 `confirm_it_is_you`). Refusals carry their code in `fields`.
+In `backend/app/modules/reconciliation/api.py`. Reading needs `reconciliation.view`. Every `POST` needs `reconciliation.change`, held by finance and admin. Approving a close also needs the second step in the last ten minutes (403 `confirm_it_is_you`). Refusals carry their code in `fields`.
 
 | Route | What it does |
 | --- | --- |
@@ -139,7 +139,7 @@ The journeys import ioTec's statements and sign every day off through these rout
 
 ### In the console
 
-"Close the day" on the Reconciliation screen (`apps/console/src/screens/reconciliation/dayclose/`) opens the first day not yet closed. For each pot it shows the statement's closing balance, the ledger's, the open differences and what is unexplained, with every open line and movement. Staff import a missing statement there, pair a line with one of its `suggested_movements` and a reason, and prepare the close once nothing blocks it. Anyone else then sees approve and send back, and the person who prepared it can only take it back. The screen decides nothing: it words what the routes answer and reloads the day after any refusal. These routes take no idempotency key, since none of them moves money and a repeat is refused rather than done twice.
+"Close the day" on the Reconciliation screen (`apps/console/src/screens/reconciliation/dayclose/`) opens the first day not yet closed. For each pot it shows the statement's closing balance, the ledger's, the open differences and what is unexplained, with every open line and movement. Staff import a missing statement there, pair a line with one of its `suggested_movements` and a reason, and prepare the close once nothing blocks it. Anyone else then sees approve and send back, and the person who prepared it can only take it back. Someone without `reconciliation.change` sees the day and nothing to press. The screen decides nothing: it words what the routes answer and reloads the day after any refusal. These routes take no idempotency key, since none of them moves money and a repeat is refused rather than done twice.
 
 ## Transfers between pots
 

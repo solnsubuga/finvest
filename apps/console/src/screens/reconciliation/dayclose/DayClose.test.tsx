@@ -111,6 +111,16 @@ describe("closing the day", () => {
     expect(getDay.mock.calls.map((call) => call[0])).toEqual(["2026-11-14", "2026-11-12"]);
   });
 
+  it("lets someone who can only see reconciliation read the day, and nothing more", async () => {
+    render(<DayClose api={createStubDayCloseApi(ME, 0, "prepared", now)} canAct={false} now={now} />);
+    const close = await status();
+    expect(within(close).getByRole("heading", { name: "Prepared, waiting for a second person" })).toBeInTheDocument();
+    expect(within(close).getByText(/You can see this day/)).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Approve and close the day" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Send back" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Refresh the matches" })).not.toBeInTheDocument();
+  });
+
   it("shows a failure with a way to try again", async () => {
     renderDay("error");
     const alert = await screen.findByRole("alert");

@@ -69,7 +69,7 @@ async def upload(
 
 
 async def test_staff_import_a_statement_and_list_it(api: Api) -> None:
-    await api.staff("operations")
+    await api.staff("finance")
     day, opening = await next_day(api.database)
     reference = push_id()
     csv = HEADER + f'{day.isoformat()},Collection,{reference},"1,500,000",\n'
@@ -206,3 +206,25 @@ async def test_reconciliation_needs_its_permission(api: Api) -> None:
     day = (business_date(api.clock.now()) - timedelta(days=1)).isoformat()
     assert (await api.http.get(f"/staff/reconciliation/days/{day}")).status_code == 403
     assert (await api.http.post(f"/staff/reconciliation/days/{day}/prepare")).status_code == 403
+
+
+async def test_seeing_reconciliation_does_not_let_you_change_it(api: Api) -> None:
+    # Operations holds `reconciliation.view` but not `reconciliation.change`.
+    await api.staff("operations")
+    day, opening = await next_day(api.database)
+    assert (await api.http.get("/staff/reconciliation/pots")).status_code == 200
+    assert (await api.http.get(f"/staff/reconciliation/days/{day.isoformat()}")).status_code == 200
+    imported = await upload(api, day, f"{opening:,}", f"{opening:,}", HEADER)
+    assert (imported.status_code, code(imported)) == (403, "forbidden")
+    for path in ("refresh", "prepare", "approve"):
+        refused = await api.http.post(f"/staff/reconciliation/days/{day.isoformat()}/{path}")
+        assert (refused.status_code, code(refused)) == (403, "forbidden"), path
+    sent_back = await api.http.post(
+        f"/staff/reconciliation/days/{day.isoformat()}/send-back", json={"reason": "No"}
+    )
+    assert sent_back.status_code == 403
+    matched = await api.http.post(
+        "/staff/reconciliation/matches",
+        json={"statement_line_id": push_id(), "entry_id": push_id(), "line_no": 1, "reason": "No"},
+    )
+    assert matched.status_code == 403

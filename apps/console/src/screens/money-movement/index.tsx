@@ -27,7 +27,7 @@ interface MoneyMovementScreenProps {
   api: PayoutsApi;
   /** The signed-in member of staff. */
   me: string;
-  /** Whether this person holds `reconciliation.view`, which settling a payout needs. */
+  /** Whether this person holds `reconciliation.change`, which settling a payout needs. */
   canSettle: boolean;
   /** Makes the idempotency key for one command. Every try at the same command carries the same key. */
   newKey?: () => string;
@@ -295,5 +295,5 @@ export default function MoneyMovementPage() {
   const { session } = useAuth();
   const me = session?.staffId ?? "";
   const [api] = useState<PayoutsApi>(() => defaultApi(me));
-  return <MoneyMovementScreen api={api} me={me} canSettle={session ? can(session, "reconciliation.view") : false} />;
+  return <MoneyMovementScreen api={api} me={me} canSettle={session ? can(session, "reconciliation.change") : false} />;
 }
