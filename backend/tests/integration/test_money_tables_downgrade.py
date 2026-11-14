@@ -8,7 +8,8 @@ complaint outcomes, the suppression lifts, the client locks, the announcements, 
 changes, Finvest's own money in the buffer, the payments of tax to URA, the payments moved to
 the right client, next of kin, the answers to the investing questions, the requests to close an
 account, the journals sent to the accounting system, who set the bank account clients pay
-into, why a payout send waited, the account code maps or the deposits taken back as mistakes."""
+into, why a payout send waited, the account code maps, the deposits taken back as mistakes or
+why an investment was sent to another client."""
 
 import os
 from collections.abc import Iterator
@@ -805,6 +806,23 @@ ROWS = {
         "ALTER TABLE investment_transfers ENABLE TRIGGER USER; "
         "ALTER TABLE investments ENABLE TRIGGER USER; COMMIT",
         "refusing to drop the record of investment transfers",
+    ),
+    "0243_transfer_purposes": (
+        "BEGIN; ALTER TABLE investments DISABLE TRIGGER USER; "
+        "ALTER TABLE investment_transfers DISABLE TRIGGER USER; "
+        "INSERT INTO investments (id, client_id, product_id, currency, principal_minor, "
+        "annual_rate_bps, tax_bps, term_days, at_maturity, created_at, pay_by, updated_at) "
+        "VALUES ('-Nabc0000000000000A1', '-Nabc0000000000000B1', 'FvProduct1TREA91_001', "
+        "'UGX', 1000000, 1250, 1500, 91, 'roll_over', now(), now() + interval '72 hours', "
+        "now()); "
+        "INSERT INTO investment_transfers (id, investment_id, sender_client_id, "
+        "recipient_client_id, sender_name, recipient_name, currency, amount_minor, whole, "
+        "purpose, status, held, requested_at) VALUES ('-Nabc0000000000000T1', "
+        "'-Nabc0000000000000A1', '-Nabc0000000000000B1', '-Nabc0000000000000B2', 'Amara N.', "
+        "'Brian K.', 'UGX', 500000, false, 'gift', 'waiting', false, now()); "
+        "ALTER TABLE investment_transfers ENABLE TRIGGER USER; "
+        "ALTER TABLE investments ENABLE TRIGGER USER; COMMIT",
+        "refusing to drop why investments were sent",
     ),
     "0242_organisations": (
         "BEGIN; ALTER TABLE organisations DISABLE TRIGGER USER; "

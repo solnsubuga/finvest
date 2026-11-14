@@ -2770,6 +2770,9 @@ export const StaffSessionView = z.object({
 });
 export type StaffSessionView = z.infer<typeof StaffSessionView>;
 
+export const TransferPurpose = z.enum(["family_support", "gift", "loan_repayment", "business", "other"]);
+export type TransferPurpose = z.infer<typeof TransferPurpose>;
+
 export const TransferStatus = z.enum(["waiting", "held", "release_proposed", "done", "failed", "declined", "cancelled"]);
 export type TransferStatus = z.infer<typeof TransferStatus>;
 
@@ -2788,6 +2791,8 @@ export const StaffTransferOut = z.object({
   investment_id: z.string(),
   kept_investment_id: z.string().nullable(),
   message: z.string().nullable(),
+  purpose: TransferPurpose.nullable(),
+  purpose_note: z.string().nullable(),
   received_investment_id: z.string().nullable(),
   recipient_client_id: z.string(),
   recipient_name: z.string(),

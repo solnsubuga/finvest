@@ -285,6 +285,8 @@ The move publishes `investments.transferred` with `{investment_id, new_investmen
 
 **Notices.** The sender gets `investment_sent` and the recipient `investment_received`, both naming the other person by their shown name. A held transfer tells the sender (`investment_transfer_held`), as does a decline (`investment_transfer_declined`) and a failure (`investment_transfer_failed`). No notice names the amount. Statements show the old investment as "Sent to another client", with "Investment sent" and "Investment received" lines.
 
+**Why it is sent.** The sender picks a `purpose`: `family_support`, `gift`, `loan_repayment`, `business` or `other`, and with `other` a `purpose_note` of their own words (required, at most 140 characters; refused with any other purpose as `only_for_other`). It is kept for anti money laundering, shown to staff on `GET /staff/investment-transfers` and never to the recipient. Migration 0243 refuses a new transfer without one and any change to it; transfers saved before it have none.
+
 **Closing an account.** While a client's request to close waits for staff, they cannot send (`conflict`, field problem `account` / `closing`, as for anything else new; see [client-profile.md](client-profile.md)), and nobody can send to them: the sender is told `to` / `no_such_client`, so a stranger learns nothing about their account. Both checks use `closures/pending.py`.
 
 **What each person sees.** `GET /client/transfers` lists what the client sent and, once done, what they received, with the other person's shown name. The recipient sees a transfer only once it is done, so a held or declined transfer is never shown to them. Staff list transfers with `GET /staff/investment-transfers` and the held ones with `/held`.
