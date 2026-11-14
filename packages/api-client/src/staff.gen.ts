@@ -432,6 +432,7 @@ export const BulkOut = z.object({
   decided_by: z.string().nullable(),
   decision_reason: z.string().nullable(),
   id: z.string(),
+  line: BulkDebitLineOut.nullable(),
   payout_ids: z.array(z.string()),
   proposed_at: z.string(),
   proposed_by: z.string(),

@@ -1676,6 +1676,17 @@
             "title": "Id",
             "type": "string"
           },
+          "line": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/BulkDebitLineOut"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The bulk debit line itself, for the second person to check."
+          },
           "payout_ids": {
             "items": {
               "maxLength": 20,
@@ -1735,7 +1746,8 @@
           "decided_at",
           "decision_reason",
           "payout_ids",
-          "total"
+          "total",
+          "line"
         ],
         "title": "BulkOut",
         "type": "object"
