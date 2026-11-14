@@ -664,6 +664,24 @@ ROWS = {
         "'-Nabc0000000000000S1', now())",
         "refusing to drop the record of the switch",
     ),
+    "0075_migration_carry_problems": (
+        "INSERT INTO migration_trials (id, as_of, clients_sha256, investments_sha256, "
+        "error_count, warning_count, problems, summary, new_totals, differing, ran_by, ran_at) "
+        "VALUES ('-Nabc0000000000000A1', DATE '2026-11-13', repeat('0', 64), repeat('0', 64), "
+        "0, 0, '[]', '{}', '{}', '{}', '-Nabc0000000000000S1', now()); "
+        "INSERT INTO migration_switches (id, trial_id, as_of, clients_sha256, "
+        "investments_sha256, proposed_by, proposed_at) VALUES ('-Nabc0000000000000W1', "
+        "'-Nabc0000000000000A1', DATE '2026-11-13', repeat('0', 64), repeat('0', 64), "
+        "'-Nabc0000000000000S1', now()); "
+        "INSERT INTO migration_switch_decisions (switch_id, outcome, decided_by, decided_at) "
+        "VALUES ('-Nabc0000000000000W1', 'approved', '-Nabc0000000000000S2', now()); "
+        "INSERT INTO migration_carried_clients (legacy_client_ref, switch_id, client_id, "
+        "carried_by, carried_at) VALUES ('1', '-Nabc0000000000000W1', '-Nabc0000000000000C1', "
+        "'-Nabc0000000000000S2', now()); "
+        "INSERT INTO migration_carry_problems (switch_id, legacy_client_ref, code, noted_at) "
+        "VALUES ('-Nabc0000000000000W1', '1', 'document_taken', now())",
+        "refusing to drop the clients the switch could not carry over",
+    ),
     "0152_client_locks": (
         "BEGIN; SELECT set_config('finvest.actor_kind', 'staff', true); "
         "SELECT set_config('finvest.actor_id', '-Nabc0000000000000S1', true); "
