@@ -177,6 +177,13 @@ class GoalView(Contract):
     plan: PlanView | None
     savings: list[SavingView]
     saving_rule: SavingRuleView | None
+    # The day of the month the client is paid and nudged to save, 1 to 31, or null.
+    payday: int | None
+
+
+class Payday(Contract):
+    # 1 to 31, or null to stop the payday nudge.
+    day: int | None
 
 
 class GoalList(Contract):
@@ -277,6 +284,7 @@ def _goal_view(goal: service.ClientGoal) -> GoalView:
         plan=None if goal.plan is None else _plan_view(goal.plan),
         savings=[_saving_view(s) for s in goal.savings],
         saving_rule=None if goal.saving_rule is None else _rule_view(goal.saving_rule),
+        payday=goal.payday,
     )
 
 
@@ -390,6 +398,20 @@ async def update_goal(
             target_date=body.target_date,
             clock=clock,
         )
+    return _goal_view(goal)
+
+
+@client_router.put("/{goal_id}/payday")
+async def set_payday(
+    goal_id: PushId,
+    body: Payday,
+    client: CurrentClient,
+    database: DatabaseDep,
+    clock: ClockDep,
+) -> GoalView:
+    """Name the day the client is paid, so they are nudged to save that morning."""
+    async with database.actor_transaction(client.actor) as session:
+        goal = await service.set_payday(session, client.actor, goal_id, body.day, clock)
     return _goal_view(goal)
 
 

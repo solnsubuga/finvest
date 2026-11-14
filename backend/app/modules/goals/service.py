@@ -68,6 +68,8 @@ class Goal:
     created_at: datetime
     updated_at: datetime
     closed_at: datetime | None
+    # The day of the month the client is paid, 1 to 31, when they named one.
+    payday: int | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -111,6 +113,8 @@ class ClientGoal:
     savings: list[investments.ClientInvestment]
     # The monthly saving collected by itself, if the client set one up and has not ended it.
     saving_rule: ClientSavingRule | None = None
+    # The day of the month the client is nudged to save, when they named their payday.
+    payday: int | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -122,7 +126,7 @@ class StaffGoal:
 
 _COLUMNS = (
     "id, client_id, name, category, currency, target_minor, target_date, product_code, status, "
-    "created_at, updated_at, closed_at"
+    "created_at, updated_at, closed_at, payday"
 )
 _BY_ID = text(f"SELECT {_COLUMNS} FROM goals WHERE id = :id")  # noqa: S608
 _BY_ID_LOCKED = text(f"SELECT {_COLUMNS} FROM goals WHERE id = :id FOR UPDATE")  # noqa: S608
@@ -353,6 +357,28 @@ async def update_goal(
             "now": clock.now(),
         },
     )
+    return await client_goal(session, client, goal.id, clock)
+
+
+_SET_PAYDAY = text("UPDATE goals SET payday = :payday, updated_at = :now WHERE id = :id")
+
+
+async def set_payday(
+    session: AsyncSession, client: Actor, goal_id: str, payday: int | None, clock: Clock
+) -> ClientGoal:
+    """Name the day of the month the client is paid, or clear it with None.
+
+    On that morning the client is nudged to save towards the goal (`reminders.py`). A day past
+    the end of a shorter month falls on its last day. A closed goal is refused with `conflict`.
+    """
+    if payday is not None and not 1 <= payday <= 31:
+        raise ApplicationError(
+            "validation_failed", fields=[FieldProblem(field_path=["day"], code="invalid_day")]
+        )
+    goal = await _own_goal(session, client, goal_id, lock=True)
+    if goal.status is not GoalStatus.ACTIVE:
+        raise ApplicationError("conflict")
+    await session.execute(_SET_PAYDAY, {"id": goal.id, "payday": payday, "now": clock.now()})
     return await client_goal(session, client, goal.id, clock)
 
 
@@ -735,6 +761,7 @@ async def _client_view(
         plan=plan,
         savings=savings,
         saving_rule=await client_rule(session, goal.id),
+        payday=goal.payday,
     )
 
 
@@ -769,6 +796,7 @@ def _goal(row: Row[Any]) -> Goal:
         created_at=row.created_at,
         updated_at=row.updated_at,
         closed_at=row.closed_at,
+        payday=row.payday,
     )
 
 

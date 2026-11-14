@@ -7796,6 +7796,17 @@
             "title": "Name",
             "type": "string"
           },
+          "payday": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Payday"
+          },
           "plan": {
             "anyOf": [
               {
@@ -7863,7 +7874,8 @@
           "progress",
           "plan",
           "savings",
-          "saving_rule"
+          "saving_rule",
+          "payday"
         ],
         "title": "GoalView",
         "type": "object"
@@ -12193,6 +12205,27 @@
           "holder_name"
         ],
         "title": "PayableAccount",
+        "type": "object"
+      },
+      "Payday": {
+        "additionalProperties": false,
+        "properties": {
+          "day": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Day"
+          }
+        },
+        "required": [
+          "day"
+        ],
+        "title": "Payday",
         "type": "object"
       },
       "PayeeOut": {
@@ -30283,6 +30316,102 @@
           }
         },
         "summary": "Close Goal",
+        "tags": [
+          "goals"
+        ]
+      }
+    },
+    "/client/goals/{goal_id}/payday": {
+      "put": {
+        "description": "Name the day the client is paid, so they are nudged to save that morning.",
+        "operationId": "set_payday_client_goals__goal_id__payday_put",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "goal_id",
+            "required": true,
+            "schema": {
+              "maxLength": 20,
+              "minLength": 20,
+              "pattern": "^[-0-9A-Z_a-z]{20}$",
+              "title": "Goal Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Payday"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GoalView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          }
+        },
+        "summary": "Set Payday",
         "tags": [
           "goals"
         ]

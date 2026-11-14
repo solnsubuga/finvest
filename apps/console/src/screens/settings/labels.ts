@@ -29,6 +29,7 @@ const EVENT_LABELS: Record<string, string> = {
   interest_earned: "Daily earnings",
   goal_top_up_due: "Goal saving due soon",
   goal_reached: "Goal reached",
+  goal_payday: "Payday nudge to save",
   kyc_approved: "Identity check approved",
   kyc_retake_requested: "Identity photo needed again",
   kyc_rejected: "Identity check not approved",
