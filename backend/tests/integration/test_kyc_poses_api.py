@@ -1,5 +1,6 @@
 """The guided selfie through the API, with a fake face quality service, on real PostgreSQL."""
 
+import asyncio
 from collections.abc import AsyncIterator
 from dataclasses import dataclass, field
 
@@ -7,12 +8,14 @@ import httpx
 import pytest
 from sqlalchemy import text
 from sqlalchemy.exc import DBAPIError
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.app import create_app
 from app.infrastructure.database import Database
 from app.infrastructure.storage import MemoryStorage
 from app.modules.identity.service import IdentityService
-from app.modules.kyc.domain.poses import FrameReading, Quality, QualityUnavailable
+from app.modules.kyc import poses
+from app.modules.kyc.domain.poses import FrameReading, Pose, Quality, QualityUnavailable
 from app.modules.kyc.providers import ManualProvider
 from app.shared.actors import Actor
 from app.shared.push_ids import push_id
@@ -317,3 +320,53 @@ async def test_the_database_refuses_frames_once_handed_in_and_never_rewrites_one
             await session.execute(
                 text("DELETE FROM kyc_pose_frames WHERE check_id = :id"), {"id": check_id}
             )
+
+
+async def test_two_uploads_of_one_pose_at_once_take_turns(api: Guided) -> None:
+    client = await ready(api)
+    selfie = await api.http.put(f"{BASE}/photos/selfie", files=upload("straight"), headers=client)
+    check_id = selfie.json()["id"]
+    async with api.database.actor_transaction(new_staff()) as session:
+        client_id = (
+            await session.execute(
+                text("SELECT client_id FROM kyc_checks WHERE id = :id"), {"id": check_id}
+            )
+        ).scalar_one()
+    owner = Actor("client", client_id)
+
+    async def keep(session: AsyncSession) -> str:
+        frame = await poses.add_frame(
+            session,
+            owner,
+            Pose.UP,
+            frame_id=push_id(),
+            content_type="image/jpeg",
+            byte_size=10,
+            sha256="b" * 64,
+            reading=READINGS["up"],
+            clock=api.clock,
+        )
+        return frame.id
+
+    async def second() -> str:
+        async with api.database.actor_transaction(owner) as session:
+            return await keep(session)
+
+    async with api.database.actor_transaction(owner) as first:
+        first_id = await keep(first)
+        racing = asyncio.create_task(second())
+        await asyncio.sleep(0.3)
+        # The second waits on the check's lock while the first is open.
+        assert not racing.done()
+    second_id = await racing
+    async with api.database.actor_transaction(new_staff()) as session:
+        rows = (
+            await session.execute(
+                text(
+                    "SELECT id, replaced_at IS NULL AS current FROM kyc_pose_frames "
+                    "WHERE check_id = :id"
+                ),
+                {"id": check_id},
+            )
+        ).all()
+    assert {(r.id, r.current) for r in rows} == {(first_id, False), (second_id, True)}

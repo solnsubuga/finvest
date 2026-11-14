@@ -1,7 +1,7 @@
 """Add pose frames: the client's head turned left and right and tilted up and down.
 
 Revision ID: 0371_kyc_pose_frames
-Revises: 0410_custodian_statement_checks
+Revises: 0401_goal_interest_savings
 
 With the guided selfie, the client takes a frame for each of four poses after the straight-on
 selfie. The API keeps a frame only after the face quality service passed it, with the angles it
@@ -16,7 +16,7 @@ from collections.abc import Sequence
 from alembic import op
 
 revision: str = "0371_kyc_pose_frames"
-down_revision: str | None = "0410_custodian_statement_checks"
+down_revision: str | None = "0401_goal_interest_savings"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 

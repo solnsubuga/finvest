@@ -102,6 +102,8 @@ async def add_frame(
     key = frame_key(row.id, frame_id)
     await session.execute(_RETIRE, {"check_id": row.id, "pose": pose.value, "now": now})
     yaw, pitch = round(reading.yaw), round(reading.pitch)
+    # The check's row is locked first (`_frame_row`), so two uploads for one check take turns:
+    # the later retires the earlier, and the unique index never sees two current frames.
     await session.execute(
         _INSERT,
         {
