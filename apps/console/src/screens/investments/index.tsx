@@ -13,6 +13,7 @@ import {
   type InvestmentStatus,
   type InvestmentsApi,
 } from "./api.ts";
+import { CorrectionsPanel } from "./corrections/index.tsx";
 import { createStubInvestmentsApi } from "./stub.ts";
 
 const SUMMARY = "Client investments, what they have earned so far, and the daily interest run.";
@@ -323,5 +324,10 @@ export default function InvestmentsPage() {
       ? createStubInvestmentsApi(new URLSearchParams(window.location.search).get("sample") === "empty" ? "empty" : "default")
       : notConnectedInvestmentsApi,
   );
-  return <InvestmentsScreen api={api} />;
+  return (
+    <>
+      <InvestmentsScreen api={api} />
+      <CorrectionsPanel />
+    </>
+  );
 }
