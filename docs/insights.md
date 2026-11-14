@@ -10,7 +10,7 @@ What a client put in, earned and was paid, month by month, and what comes next f
 | --- | --- |
 | Invested in a month | Credits to the client's `client.holding` accounts by `investment.started` entries: new money that started earning. A rollover is not new money, so it is not counted. |
 | Earned in a month | Credits to the client's `client.interest_accrued` accounts by `investment.interest_accrued` entries. That account holds interest after tax, so the figure is after tax. |
-| Paid out in a month | Debits from the client's `client.payout_in_flight` accounts by `payout.settle` entries: money the provider confirmed reached the client's mobile money or bank account. |
+| Paid out in a month | Debits from the client's `client.payout_in_flight` accounts by `payout.settle` entries: money the provider confirmed reached the client's mobile money or bank account. Less credits to `client.payout_pending` by `payout.returned` entries, in the month the payout came back: a paid payout the bank or network sent back is not paid out. |
 | Invested now | The principal of the client's active investments. |
 | Earned so far | Interest earned after tax on those investments, as posted to the ledger. |
 | Coming up | The next five maturities, with what comes back after tax and whether it rolls over or pays out. |

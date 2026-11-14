@@ -42,6 +42,7 @@ export type PhoneChangeErrorCode =
   | "waiting"
   | "expired"
   | "not_found"
+  | "no_client"
   | "forbidden"
   | "not_confirmed"
   | "not_connected"
@@ -64,6 +65,7 @@ const MESSAGES: Record<PhoneChangeErrorCode, string> = {
   waiting: "A change of number is already waiting for this client. Approve or reject it first.",
   expired: "That proposal lapsed after 24 hours. Propose the number again if it is still needed.",
   not_found: "That proposal has already been decided. The page now shows where it stands.",
+  no_client: "Finvest could not find this client. Reload the page; the account may have been closed.",
   forbidden: "You proposed this change, so someone else must decide it.",
   not_confirmed: "Nothing was changed, because you did not confirm it is you.",
   not_connected: "Number changes are not connected to the Finvest service yet.",
@@ -150,6 +152,9 @@ export function createHttpPhoneChangesApi(http: Http, directory: Directory, me: 
     propose: (clientId, phone, reason) =>
       call(async () => {
         await http.request("POST", `/staff/clients/${encodeURIComponent(clientId)}/phone-changes`, { phone, reason });
+      }).catch((error: unknown) => {
+        // On a proposal, not found means the client, not a proposal someone else decided.
+        throw error instanceof PhoneChangeError && error.code === "not_found" ? new PhoneChangeError("no_client") : error;
       }),
     approve: (changeId) =>
       call(async () => {

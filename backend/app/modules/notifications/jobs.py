@@ -82,7 +82,9 @@ def handlers(
                 raise RetryableJobError(error.safe_message, code=error.code) from None
             return _Sent(result.provider, result.provider_message_id)
         text_message = SmsMessage(
-            to=recipient, text=render_sms(template, values), idempotency_key=key
+            to=recipient,
+            text=render_sms(template, values, link_origins=link_origins),
+            idempotency_key=key,
         )
         try:
             sent = await sms.send(text_message)

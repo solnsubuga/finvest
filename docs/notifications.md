@@ -6,7 +6,7 @@ The code is `backend/app/modules/notifications` and migration `0090_notification
 
 **Not built yet: nothing is sent by push, SMS or email.** Today a notification appears in the app's notification centre only. Do not rely on `notify` to text or email anyone until the sending work has merged and this paragraph is gone.
 
-**Who owns which words.** This module's catalogue (`domain/wording.py`) holds every notice to a client, and staff may change it with a second person's approval. `domain/templates.py` holds only the messages that carry a code or a set-up link (sign-in and signup codes, password reset, the staff set-up link). Those are fixed in code, so no change in Settings can turn them into a phishing message. Neither adds text of the other kind.
+**Who owns which words.** This module's catalogue (`domain/wording.py`) holds every notice to a client, and staff may change it with a second person's approval. `domain/templates.py` holds only the messages that carry a code or a set-up link (sign-in and signup codes, password reset, the staff set-up link, and the link that invites a Finvest 1.0 client to claim their account). Those are fixed in code, so no change in Settings can turn them into a phishing message. A link in any of them, by email or by text, must point to the console or the client app, or the worker refuses to send it. Neither adds text of the other kind.
 
 ## Raising an event from another module
 

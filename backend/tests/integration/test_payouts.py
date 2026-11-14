@@ -512,7 +512,11 @@ async def test_a_large_withdrawal_is_held_until_staff_approve_it(
             session, checker, release.id, reason="Agree", idempotency_key=key(), clock=fake_clock
         )
     assert (approved.status, approved.reviewed_by) == (S.QUEUED, checker.id)
-    assert (await world.worker_event(held.id, E.SEND_CONFIRMED)).status is S.PAID
+    # A bank payout is never sent by the worker: it waits, queued, for a bank batch.
+    with pytest.raises(DBAPIError):
+        await world.worker_event(held.id, E.SEND_CONFIRMED)
+    async with app_database.actor_transaction(checker) as session:
+        assert (await payouts.get_payout(session, held.id)).status is S.QUEUED
 
 
 async def test_declining_or_cancelling_a_held_payout_gives_the_money_back(

@@ -4,7 +4,7 @@ import { describe, expect, it, vi } from "vitest";
 import { createHttp } from "@/api/http.ts";
 import type { Directory } from "@/directory/api.ts";
 import { PhoneSection } from "./Phone.tsx";
-import { createHttpPhoneChangesApi, createStubPhoneChangesApi, normalisePhone, type PhoneChangesApi } from "./phone.ts";
+import { createHttpPhoneChangesApi, createStubPhoneChangesApi, normalisePhone, phoneChangeErrorMessage, type PhoneChangesApi } from "./phone.ts";
 
 const ME = { id: "stub-operations" };
 const NOW = Date.parse("2026-11-14T09:00:00Z");
@@ -149,5 +149,13 @@ describe("number changes over HTTP", () => {
   ])("turns a %i %s into %s", async (status, code, fields, expected) => {
     const fetch = vi.fn<typeof globalThis.fetch>(() => refusal(status, code, fields));
     await expect(apiWith(fetch).approve(CHANGE.id)).rejects.toMatchObject({ code: expected });
+  });
+
+  it("reads a not found as the proposal when deciding, and as the client when proposing", async () => {
+    const fetch = vi.fn<typeof globalThis.fetch>(() => refusal(404, "not_found"));
+    await expect(apiWith(fetch).approve(CHANGE.id)).rejects.toMatchObject({ code: "not_found" });
+    const error = await apiWith(fetch).propose("-Ngone", "0701 234 567", "Stolen SIM").catch((caught: unknown) => caught);
+    expect(error).toMatchObject({ code: "no_client" });
+    expect(phoneChangeErrorMessage(error)).toMatch(/could not find this client/);
   });
 });

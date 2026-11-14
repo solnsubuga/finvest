@@ -56,6 +56,12 @@ describe("automatic investing screen", () => {
     expect(buttons).toEqual(["All", "Due", "Prompt sent", "Invested", "Payment failed", "Missed"]);
   });
 
+  it("says so when the week was too busy to list in full", async () => {
+    const stub = createStubAutoinvestApi(0);
+    renderScreen({ getOverview: async (today) => ({ ...(await stub.getOverview(today)), cut: true }) });
+    expect(await screen.findByText(/more runs than the screen can show/)).toBeInTheDocument();
+  });
+
   it("shows an empty week", async () => {
     renderScreen(createStubAutoinvestApi(0, "empty"));
     expect(await screen.findByText("No runs this week")).toBeInTheDocument();

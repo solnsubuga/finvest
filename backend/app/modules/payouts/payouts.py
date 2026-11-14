@@ -297,8 +297,9 @@ async def apply_event(
     payout, and must give a reason. A client cancels their own held payout. The database
     refuses any other pairing of actor and step.
     """
-    if event in machine.NEEDS_TWO_PEOPLE:
-        # Only `resolutions.approve` settles a payout by hand, through `settle_by_hand`.
+    if event in machine.NEEDS_TWO_PEOPLE or event in machine.BANK_EVENTS:
+        # Only `resolutions.approve` settles a payout by hand, through `settle_by_hand`, and only
+        # the bank payout approvals move a bank payout, through `move_bank_payout`.
         raise ApplicationError("forbidden")
     if (event in _PERSON_EVENTS) != (actor.kind != "system"):
         raise ApplicationError("forbidden")
@@ -340,6 +341,23 @@ async def settle_by_hand(
     failed = event is PayoutEvent.STAFF_RESOLVED_FAILED
     return await _move(
         session, staff, payout_id, event, clock, failure_code="staff_resolved" if failed else None
+    )
+
+
+async def move_bank_payout(
+    session: AsyncSession, staff: Actor, payout_id: str, event: PayoutEvent, clock: Clock
+) -> PayoutView:
+    """Send a bank payout, or settle it as paid or failed, with its ledger entry.
+
+    Called only by `bank_payouts`, in the transaction where a second person approves someone
+    else's batch or settlement. The database refuses the step without that approval, and
+    refuses the approval if the payout does not move with it.
+    """
+    if event not in machine.BANK_EVENTS or staff.kind != "staff":
+        raise ApplicationError("forbidden")
+    failed = event is PayoutEvent.BANK_SETTLED_FAILED
+    return await _move(
+        session, staff, payout_id, event, clock, failure_code="bank_refused" if failed else None
     )
 
 
