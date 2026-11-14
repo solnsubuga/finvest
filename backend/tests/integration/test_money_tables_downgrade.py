@@ -11,8 +11,8 @@ account, the journals sent to the accounting system, who set the bank account cl
 into, why a payout send waited, the account code maps, the deposits taken back as mistakes,
 what clients owe for them, the runs staff asked for again, staff notes and actions on a
 client, the account freezes, why an investment was sent to another client, the platform
-settings, the withdrawal limit changes, the paydays clients named or the custodian statement
-checks."""
+settings, the withdrawal limit changes, the paydays clients named, the custodian statement
+checks or the choice to save an investment's interest to a goal."""
 
 import os
 from collections.abc import Iterator
@@ -1268,6 +1268,21 @@ ROWS = {
         "VALUES ('-Nabc0000000000000C1', current_date - 1, 'custodian/a/b', repeat('ab', 32), "
         "'text/csv', 10, '-Nabc0000000000000S1', now(), now()); COMMIT",
         "refusing to drop custodian statement checks",
+    ),
+    "0400_maturity_interest_to_goal": (
+        "BEGIN; SELECT set_config('finvest.actor_kind', 'client', true); "
+        "SELECT set_config('finvest.actor_id', '-Nabc0000000000000B1', true); "
+        "INSERT INTO goals (id, client_id, name, category, currency, target_minor, "
+        "product_code, created_at, updated_at) VALUES ('-Nabc0000000000000G1', "
+        "'-Nabc0000000000000B1', 'School fees', 'school_fees', 'UGX', 2000000, 'TREA-182', "
+        "now(), now()); "
+        "INSERT INTO investments (id, client_id, product_id, currency, principal_minor, "
+        "annual_rate_bps, tax_bps, term_days, at_maturity, created_at, pay_by, updated_at) "
+        "VALUES ('-Nabc0000000000000A1', '-Nabc0000000000000B1', 'FvProduct1TREA91_001', "
+        "'UGX', 1000000, 1250, 1500, 91, 'roll_over', now(), now() + interval '72 hours', "
+        "now()); UPDATE investments SET at_maturity = 'interest_to_goal', "
+        "interest_goal_id = '-Nabc0000000000000G1'; COMMIT",
+        "refusing to drop the choice clients made to save their interest",
     ),
 }
 
