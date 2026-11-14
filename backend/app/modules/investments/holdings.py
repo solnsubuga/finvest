@@ -160,6 +160,8 @@ class ClientInvestment:
     # Whether the client may ask to withdraw it early now, and when they did.
     can_withdraw: bool = False
     withdrawal_requested_at: datetime | None = None
+    # Whether the client may send part or all of it to another client now.
+    can_send: bool = False
 
 
 _COLUMNS = (
@@ -726,6 +728,9 @@ def _client_view(investment: Investment, today: date) -> ClientInvestment:
             requested=investment.withdrawal_requested_at is not None,
         ),
         withdrawal_requested_at=investment.withdrawal_requested_at,
+        can_send=investment.status is InvestmentStatus.ACTIVE
+        and investment.withdrawal_requested_at is None
+        and (investment.maturity_date is None or today < investment.maturity_date),
     )
 
 

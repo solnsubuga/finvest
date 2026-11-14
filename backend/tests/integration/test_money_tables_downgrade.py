@@ -1,14 +1,14 @@
 """A downgrade must never delete the books, the issued numbers, the audit trail, the job history,
 the receipts that stop a command running twice, the identity records, the payout destinations,
 their two-person checks and network name lookups, the withdrawal limits, the payouts, their send
-attempts, their resolutions and their bank batches, the migration checks, the imported
+attempts, their resolutions, their bank batches and bulk debits, the migration checks, the imported
 statements, the day closes and their recorded matches, the pot transfers, the help chat, the
 complaints register, the goals, the email delivery records, the unclaimed accounts, the
 complaint outcomes, the suppression lifts, the client locks, the announcements, the team
 changes, Finvest's own money in the buffer, the payments of tax to URA, the payments moved to
 the right client, next of kin, the answers to the investing questions, the requests to close an
-account, the journals sent to the accounting system or who set the bank account clients pay
-into."""
+account, the journals sent to the accounting system, who set the bank account clients pay
+into or why a payout send waited."""
 
 import os
 from collections.abc import Iterator
@@ -479,6 +479,31 @@ ROWS = {
         "'-Nabc0000000000000S1', now())",
         "refusing to drop the batches of bank payouts",
     ),
+    "0280_payout_bank_bulk_debits": (
+        "ALTER TABLE payout_bank_batches DISABLE TRIGGER payout_bank_batches_guard; "
+        "INSERT INTO payout_bank_batches (id, currency, reason, status, prepared_by, "
+        "prepared_at) VALUES ('-Nabc0000000000000A1', 'UGX', 'Today', 'prepared', "
+        "'-Nabc0000000000000S1', now()); "
+        "INSERT INTO reconciliation_statements (id, source, account_reference, business_date, "
+        "currency, opening_minor, closing_minor, line_count, file_sha256, imported_by, "
+        "imported_at) VALUES ('-Nabc0000000000000C1', 'bank', 'trust', DATE '2026-11-10', "
+        "'UGX', 1100, 100, 1, repeat('0', 64), '-Nabc0000000000000B1', now()); "
+        "INSERT INTO reconciliation_statement_lines (id, statement_id, line_no, value_date, "
+        "direction, amount_minor, reference, narrative, fingerprint) VALUES "
+        "('-Nabc0000000000000L1', '-Nabc0000000000000C1', 1, DATE '2026-11-10', 'out', 1000, "
+        "'r', 'n', repeat('0', 64)); "
+        # The guard admits only staff proposing for an approved batch, and the deferred check
+        # wants its payouts to add up to the line.
+        "ALTER TABLE payout_bank_bulk_settlements "
+        "DISABLE TRIGGER payout_bank_bulk_settlements_guard; "
+        "ALTER TABLE payout_bank_bulk_settlements "
+        "DISABLE TRIGGER payout_bank_bulk_settlements_adds_up; "
+        "INSERT INTO payout_bank_bulk_settlements (id, batch_id, statement_line_id, reason, "
+        "status, proposed_by, proposed_at) VALUES ('-Nabc0000000000000U1', "
+        "'-Nabc0000000000000A1', '-Nabc0000000000000L1', 'One debit', 'proposed', "
+        "'-Nabc0000000000000S1', now())",
+        "refusing to drop the bulk settlements of bank payouts",
+    ),
     "0044_payout_returns": (
         "INSERT INTO payout_destinations (id, client_id, kind, network, account_number, "
         "holder_name, status, created_at, updated_at) VALUES ('-Nabc0000000000000D1', "
@@ -758,6 +783,31 @@ ROWS = {
         "('-Nabc0000000000000L1', '-Nabc0000000000000A1', 'iotec-faces', now(), now())",
         "refusing to drop liveness records",
     ),
+    "0241_investment_transfers": (
+        "BEGIN; ALTER TABLE investments DISABLE TRIGGER USER; "
+        "ALTER TABLE investment_transfers DISABLE TRIGGER USER; "
+        "INSERT INTO investments (id, client_id, product_id, currency, principal_minor, "
+        "annual_rate_bps, tax_bps, term_days, at_maturity, created_at, pay_by, updated_at) "
+        "VALUES ('-Nabc0000000000000A1', '-Nabc0000000000000B1', 'FvProduct1TREA91_001', "
+        "'UGX', 1000000, 1250, 1500, 91, 'roll_over', now(), now() + interval '72 hours', "
+        "now()); "
+        "INSERT INTO investment_transfers (id, investment_id, sender_client_id, "
+        "recipient_client_id, sender_name, recipient_name, currency, amount_minor, whole, "
+        "status, held, requested_at) VALUES ('-Nabc0000000000000T1', '-Nabc0000000000000A1', "
+        "'-Nabc0000000000000B1', '-Nabc0000000000000B2', 'Amara N.', 'Brian K.', 'UGX', "
+        "500000, false, 'waiting', false, now()); "
+        "ALTER TABLE investment_transfers ENABLE TRIGGER USER; "
+        "ALTER TABLE investments ENABLE TRIGGER USER; COMMIT",
+        "refusing to drop the record of investment transfers",
+    ),
+    "0242_organisations": (
+        "BEGIN; ALTER TABLE organisations DISABLE TRIGGER USER; "
+        "INSERT INTO organisations (id, kind, name, applicant_id, approvals_needed, created_at) "
+        "VALUES ('-Nabc0000000000000O1', 'group', 'Ntinda Savings Group', "
+        "'-Nabc0000000000000B1', 2, now()); "
+        "ALTER TABLE organisations ENABLE TRIGGER USER; COMMIT",
+        "refusing to drop the record of company and group applications",
+    ),
     "0152_client_locks": (
         "BEGIN; SELECT set_config('finvest.actor_kind', 'staff', true); "
         "SELECT set_config('finvest.actor_id', '-Nabc0000000000000S1', true); "
@@ -861,6 +911,24 @@ ROWS = {
         "INSERT INTO identity_app_pins (session_id, pin_hash, created_at) "
         "VALUES ('-Nabc0000000000000A1', 'x', now())",
         "refusing to drop app PINs that are in use",
+    ),
+    "0270_payout_wallet_short": (
+        "BEGIN; SELECT set_config('finvest.actor_kind', 'system', true); "
+        "INSERT INTO payout_destinations (id, client_id, kind, network, account_number, "
+        "holder_name, status, created_at, updated_at) VALUES ('-Nabc0000000000000D1', "
+        "'-Nabc0000000000000B1', 'mobile_money', 'mtn', '256772000000', 'Test', "
+        "'awaiting_code', now(), now()); "
+        "INSERT INTO payouts (id, client_id, destination_id, kind, amount_minor, currency, "
+        "status, business_date, source_account_id, source_reference, in_flight_account_id, "
+        "request_key, created_at, updated_at) VALUES ('-Nabc0000000000000A1', "
+        "'-Nabc0000000000000B1', '-Nabc0000000000000D1', 'mobile_money', 1000, 'UGX', "
+        "'queued', DATE '2026-11-10', '-Nabc0000000000000E1', 'investment-1', "
+        "'-Nabc0000000000000F1', 'request-key-1', now(), now()); "
+        "INSERT INTO payout_send_attempts (payout_id, attempt, provider, started_at) VALUES "
+        "('-Nabc0000000000000A1', 1, 'iotec', now()); "
+        "UPDATE payout_send_attempts SET outcome = 'deferred', finished_at = now(), "
+        "deferred_for = 'wallet_short' WHERE payout_id = '-Nabc0000000000000A1'; COMMIT",
+        "refusing to drop why payout sends were deferred",
     ),
     "0222_identity_recovery_requests": (
         "INSERT INTO identity_clients (id, phone, status, created_at) VALUES "

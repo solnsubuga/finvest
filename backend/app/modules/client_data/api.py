@@ -10,6 +10,7 @@ from app.infrastructure.sealing import Sealer
 from app.modules.client_data.export import client_copy
 from app.modules.identity.api import CurrentClient
 from app.modules.identity.passkeys import RECENT_SIGN_IN
+from app.shared.business_day import business_date
 from app.shared.clock import Clock
 from app.shared.errors import ApplicationError, ErrorEnvelope
 
@@ -50,7 +51,7 @@ def create_router(sealer: Sealer | None) -> APIRouter:
             raise ApplicationError("sign_in_again")
         async with db.actor_transaction(client.actor) as session:
             copy = await client_copy(session, sealer, client.actor, now)
-        day = now.now().date().isoformat()
+        day = business_date(now.now()).isoformat()  # The client's day in Kampala, not UTC.
         return Response(
             content=json.dumps(copy, ensure_ascii=False, indent=2),
             media_type="application/json",

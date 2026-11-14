@@ -23,7 +23,14 @@ from app.infrastructure.jobs import (
     PermanentJobError,
 )
 from app.infrastructure.jobs import queue as job_queue
-from app.modules.investments import accrual, corrections, holdings, maturity, withdrawal
+from app.modules.investments import (
+    accrual,
+    corrections,
+    holdings,
+    maturity,
+    transfers,
+    withdrawal,
+)
 from app.modules.investments.events import PAY_EARLY_WITHDRAWAL_KIND, START_KIND, WITHDRAW_KIND
 from app.modules.payouts import payouts
 from app.shared.actors import SYSTEM
@@ -53,6 +60,7 @@ class InvestmentJobs:
             corrections.APPLY_KIND: self.apply_correction,
             WITHDRAW_KIND: self.withdraw_early,
             PAY_EARLY_WITHDRAWAL_KIND: self.pay_early_withdrawal,
+            transfers.CARRY_OUT_KIND: self.carry_out_transfer,
         }
 
     async def start_from_deposit(self, job: ClaimedJob, context: JobContext) -> None:
@@ -95,6 +103,25 @@ class InvestmentJobs:
             except ApplicationError as error:
                 raise PermanentJobError(code=f"investment_{error.code}") from error
             return {"investment_id": investment.id, "status": investment.status.value}
+
+        await context.apply(effect)
+
+    async def carry_out_transfer(self, job: ClaimedJob, context: JobContext) -> None:
+        """A client sent an investment to another, and it is not held for staff: move it.
+
+        A transfer that can no longer be made is marked failed, with nothing moved, inside the
+        same transaction, so the job itself still completes.
+        """
+        transfer_id = job.payload.get("transfer_id")
+        if not isinstance(transfer_id, str):
+            raise PermanentJobError(code="transfer_id_missing")
+
+        async def effect(session: AsyncSession) -> Mapping[str, object]:
+            try:
+                transfer = await transfers.carry_out(session, transfer_id, self._clock)
+            except ApplicationError as error:
+                raise PermanentJobError(code=f"transfer_{error.code}") from error
+            return {"transfer_id": transfer.id, "status": transfer.status.value}
 
         await context.apply(effect)
 

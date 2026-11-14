@@ -317,12 +317,17 @@ How each answer is sorted:
 | ioTec answered | Send | Status read |
 | --- | --- | --- |
 | No token, the connection was never made, 401 after a new token, 404, 429 | Deferred, tried again | Unavailable, read again |
-| 400 about Finvest's wallet or its balance | Deferred, so the client's payout waits and staff see it held up after two hours | |
+| Before the send, the wallet's `actualBalance` is below the payout | Deferred for `wallet_short`, nothing sent | |
+| 400 about the wallet's balance or funds | Deferred for `wallet_short` | |
+| Any other 400 about Finvest's wallet, such as "Invalid wallet" | Deferred, so the client's payout waits and staff see it held up after two hours | |
 | Any other 400 | Rejected | |
 | No answer after sending, a dropped connection, a 5xx, or an answer that cannot be read | Uncertain, read and never sent again | Unavailable |
 | `Pending`, `SentToVendor`, `AwaitingApproval`, `Scheduled` or a status we do not know | Accepted | Pending |
 | `Success` | Accepted | Paid, if the amount is the payout's |
+| `Failed` with a `statusCode` or `statusMessage` about the wallet's balance or funds | Deferred for `wallet_short` | Failed |
 | `Failed`, `Rejected`, `Cancelled`, `RolledBack` | Rejected | Failed |
+
+**When Finvest's wallet is short.** A payout the wallet cannot pay is never failed back to the client. Before each send the adapter reads the wallet's balance. If the balance is below the payout, nothing is sent and the attempt ends `deferred` with `deferred_for = 'wallet_short'` (migration `0270_payout_wallet_short`). A refusal or a `Failed` answer to the send that is about the balance ends the same way. A balance that cannot be read does not stop the send, because ioTec refuses one it cannot pay. The payout stays queued with its money in flight, and the sweep sends it again every 10 minutes. It shows on `GET /staff/payouts/held-up` straight away with `waiting_for: "wallet_short"`, not after two hours, and `/health/operations` fails with `payouts_waiting_on_wallet` until the wallet is topped up ([observability.md](observability.md)). A `Failed` status read after ioTec accepted a payout still fails it as usual: by then the provider took the request, and the client can send it again.
 
 ioTec's statuses and refusal texts are not codes we have seen from the live service yet, so a refusal reads as `other`. ioTec's test numbers (`011177777x` paid, `011177799x` failed, `011177778x` pending) start with no network's prefix, so a payout destination cannot hold one. Against a test wallet (`FINVEST_IOTEC_CURRENCY_CODE=ITX`) they are tried by hand, not by the worker.
 
@@ -373,7 +378,7 @@ The worker sends mobile money only. A queued bank payout is paid by staff from t
 
 | Outcome | Evidence |
 | --- | --- |
-| Paid | The trust statement line that took the money: going out, for the payout's amount and currency, dated on or after the day the batch was approved, and named by no other open or approved settlement. One line per payout |
+| Paid | The trust statement line that took the money: going out, for the payout's amount and currency, dated on or after the day the batch was approved, and named by no other open or approved settlement. When the bank took the whole file in one debit, see "One bulk debit for many payouts" below |
 | Failed | A trust statement dated at least two days after the batch was approved. Every day from the approval to it must be imported, and none may hold a line going out for the payout's amount that no approved settlement accounts for. A payout that did leave is never parked, so it can never be paid twice |
 
 Seeing needs `money_movement.view` (admin, operations and finance). Every step needs `bank_payouts.change` (admin and finance). Approving and declining need the second step in the last ten minutes (403 `confirm_it_is_you`). Every step needs a reason. Preparing, approving and declining a batch, and proposing and approving a settlement, take an `Idempotency-Key`: a retried request returns what the first one did, and a key reused for a different request is refused with `idempotency_key_reused`.
@@ -403,11 +408,42 @@ What the database enforces:
 | An approver approves what was prepared | Items are added only in the transaction that prepared their batch, by its preparer, and are never changed or deleted |
 | One batch at a time | A payout joins a batch only while queued, a bank payout in the batch's currency, and in no other prepared or approved batch. Its row is locked, so two batches cannot both take it |
 | Settled from the statement | A settlement's evidence is checked at proposal and again at approval, and the payouts guard admits sent to paid or failed for a bank payout only with an approved settlement for that outcome by the same person |
-| One line, one payout | A statement line is named by at most one open or approved settlement |
+| One line, one settlement | A statement line is named by at most one open or approved settlement: one payout's, or one bulk's |
 | The worker never moves a bank payout | The payouts guard refuses every worker step for one |
 | Nothing changes afterwards | A decided batch or settlement never changes, and nothing is deleted. Only staff and the worker can read them |
 
-Not built yet: a bank that debits a whole batch as one statement line (each payout needs its own line for now), and matching the settle entries with their lines in the day close automatically. The console's Money movement screen prepares, approves and settles batches and downloads the file.
+### One bulk debit for many payouts
+
+A bank often takes the money for an uploaded file in one debit rather than one line per payout. Those payouts are settled together from that line (`bulk_settlements.py`, routes in `staff_bulk_api.py`, migration 0280), two people as every money step:
+
+1. One member of staff opens the approved batch's bulk debit: its sent payouts that no open settlement names, and the trust statement lines going out since it was approved that no settlement names and that are no more than those payouts together. They pick the line and the payouts it paid, with a reason. The payouts' amounts must add up to the line exactly. A payout the bank did not pay is left out and settled on its own, usually as failed.
+2. A different member of staff approves it. In the same transaction every payout in it becomes paid (`payout.settle` for each), and each client is told `payout_sent`. They may instead decline it, or the proposer may withdraw it; its payouts stay sent.
+
+A paid settlement is written for each payout as the bulk is proposed, naming the bulk and its line. It shows as the payout's open settlement in `GET /staff/payouts/bank/sent` (with `bulk_id`), and is decided only with its bulk (409 `settlement_in_bulk` on the single settlement routes).
+
+| Route | What it does |
+| --- | --- |
+| `GET /staff/payout-bank-batches/{id}/bulk-debit` | `{batch, payouts, lines}`: the payouts still to settle and the lines that could be their debit. 409 `batch_not_approved` |
+| `POST /staff/payout-bank-batches/{id}/bulk-settlements` | `{statement_line_id, payout_ids, reason}`. 201. 422 `bulk_payouts_invalid`; 409 `batch_not_approved`, `payout_not_in_batch`, `payout_not_to_settle`, `statement_line_in_use`, `statement_line_not_this_batch` or `amounts_do_not_add_up` |
+| `GET /staff/payout-bank-bulk-settlements` | Bulk settlements waiting for a second person, oldest first, at most 100 |
+| `GET /staff/payout-bank-bulk-settlements/{id}` | One bulk settlement |
+| `POST /staff/payout-bank-bulk-settlements/{id}/approve` | `{reason}`, with an `Idempotency-Key` and a recent second step. Every payout in it is paid. 403 `proposed_by_you`; 409 `settlement_already_decided` or `payout_not_sent` |
+| `POST /staff/payout-bank-bulk-settlements/{id}/decline` | `{reason}`, with a recent second step. 403 `proposed_by_you` |
+| `POST /staff/payout-bank-bulk-settlements/{id}/withdraw` | `{reason}`, by the proposer only (403 `not_proposed_by_you`) |
+
+What the database enforces, on top of the rules above:
+
+| Rule | How |
+| --- | --- |
+| The line is the batch's | Money out of the trust account, in the batch's currency, dated on or after the day the batch was approved, checked at proposal and again at approval |
+| It adds up | At commit, the payouts named by a bulk add up to its line exactly, and there is at least one |
+| One batch, named once | A bulk's payouts are of its batch, and are written only in the transaction that proposed it, by its proposer |
+| Decided together | A payout's settlement in a bulk is decided only after its bulk, to the same decision by the same person, and at commit every one matches the bulk |
+| One claim on a line | A live bulk and a live single settlement never name the same line. Both take the same lock on the line before they look |
+
+The bulk's line, once approved, accounts for its payouts, so the failed check above does not see it as a payout that may have left. Bank charges taken in the same debit are not handled: the line must equal the payouts exactly.
+
+Not built yet: matching the settle entries with their lines in the day close automatically. The console's Money movement screen prepares, approves and settles batches, one payout or one bulk debit at a time, and downloads the file.
 
 ## A payout that came back
 

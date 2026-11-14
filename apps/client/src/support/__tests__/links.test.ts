@@ -1,6 +1,13 @@
 import { hrefFor } from "../links";
 
 describe("hrefFor", () => {
+  it("opens the company or group account a notification names", () => {
+    expect(hrefFor({ kind: "organisation", id: "O1" })).toEqual({
+      pathname: "/account/organisations/[organisationId]",
+      params: { organisationId: "O1" },
+    });
+  });
+
   it("opens the goal a goal notification names", () => {
     expect(hrefFor({ kind: "goal", id: "G1" })).toEqual({
       pathname: "/goals/[goalId]",

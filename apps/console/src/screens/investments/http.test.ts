@@ -77,6 +77,7 @@ describe("investments over HTTP", () => {
       "awaiting_payment",
       "cancelled",
       "matured",
+      "transferred",
       "unwound",
       "withdrawn",
     ]);

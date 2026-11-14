@@ -21,6 +21,7 @@ from app.modules.investments.domain.rates import ProposalStatus
 from app.modules.ledger import corrections
 from app.modules.migration import service as migration
 from app.modules.notifications import announcements, suppression_lifts, wording_store
+from app.modules.organisations import service as organisations
 from app.modules.payments import bank_accounts, bank_transfers, reassignments
 from app.modules.payouts import destinations, resolutions, reviews
 from app.modules.reconciliation import day_close, transfers
@@ -76,6 +77,10 @@ async def waiting_for(session: AsyncSession, staff: StaffSession, now: datetime)
         found += await _reassignments(session)
     if "payout_release" in kinds:
         found += await _payout_releases(session)
+    if "investment_transfer" in kinds:
+        found += await _investment_transfers(session, staff)
+    if "organisation" in kinds:
+        found += await _organisations(session)
     if "account_closure" in kinds:
         found += await _closures(session)
     if "compliance_case" in kinds:
@@ -332,9 +337,29 @@ async def _payout_releases(session: AsyncSession) -> list[Waiting]:
     ]
 
 
+async def _investment_transfers(session: AsyncSession, staff: StaffSession) -> list[Waiting]:
+    # Only those with a release proposed wait for a second person. The subject is the
+    # transfer's ID, never the clients or the amount.
+    return [
+        Waiting("investment_transfer", t.id, t.id, t.release_proposed_by, t.release_proposed_at)
+        for t in await investments.held_transfers(session, staff.actor)
+        if t.release_proposed_by is not None and t.release_proposed_at is not None
+    ]
+
+
 async def _compliance_cases(session: AsyncSession) -> list[Waiting]:
     # The subject is the proposed outcome, never the client or what the case is about.
     return [
         Waiting("compliance_case", p.id, p.outcome.value, p.proposed_by, p.proposed_at)
         for p in await screening.waiting_proposals(session)
+    ]
+
+
+async def _organisations(session: AsyncSession) -> list[Waiting]:
+    # Only checked applications wait for a second person. The subject is the kind, never the
+    # organisation's or a person's name.
+    return [
+        Waiting("organisation", o.id, o.kind.value, o.checked_by, o.checked_at)
+        for o in await organisations.waiting(session)
+        if o.checked_by is not None and o.checked_at is not None
     ]

@@ -156,6 +156,8 @@ class ClientInvestmentOut(Contract):
     # withdrawal pays `value_minor`: interest stops when it is asked for.
     can_withdraw: bool
     withdrawal_requested_at: datetime | None
+    # Whether the client may send part or all of it to another client now.
+    can_send: bool = False
 
 
 class RateOut(Contract):
@@ -397,6 +399,7 @@ def _client_out(view: service.ClientInvestment, request: Request) -> ClientInves
         waiting_for_destination=view.waiting_for_destination,
         can_withdraw=view.can_withdraw and _withdrawals_open(request),
         withdrawal_requested_at=view.withdrawal_requested_at,
+        can_send=view.can_send,
     )
 
 

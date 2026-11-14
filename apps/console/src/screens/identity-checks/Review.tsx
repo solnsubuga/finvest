@@ -142,7 +142,8 @@ export function Review({ check, busy, error, onDecide, onShowNumber, canDecide =
                       type="button"
                       onClick={toggleNumber}
                       disabled={number.state === "loading"}
-                      className="cursor-pointer text-xs font-bold text-muted underline"
+                      // 44 by 44 to tap, without making the row taller.
+                      className="-my-3 inline-flex min-h-11 min-w-11 cursor-pointer items-center justify-center px-1 text-xs font-bold text-muted underline"
                     >
                       {number.state === "shown" ? "Hide" : number.state === "failed" ? "Try again" : "Show"}
                     </button>
